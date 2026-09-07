@@ -1966,6 +1966,49 @@ mod tests {
     }
 
     #[test]
+    fn native_exact_message_id_peek_ignores_session_chat_scope() {
+        let caller = PyAgentAddress::new(
+            TEST_RECIPIENT.to_string(),
+            TEST_TEAM.to_string(),
+            Some("recipient-session".to_owned()),
+        )
+        .expect("caller");
+        let session = PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(None),
+            receiver: Mutex::new(None),
+            fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
+                atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
+            )),
+            reconnect_replacement: Mutex::new(None),
+            reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
+        };
+
+        let operation = session
+            .build_tool_read_query(
+                "all",
+                Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S"),
+                None,
+                None,
+                None,
+                None,
+                true,
+            )
+            .expect("native peek query");
+        let crate::query::ReadOperation::Peek(query) = operation else {
+            panic!("peek option must build a non-mutating query")
+        };
+        let query_json = serde_json::to_value(&query).expect("serialized query");
+
+        assert_eq!(
+            query_json["mailbox"]["message_id_filter"],
+            serde_json::json!("01KRFK5QTF2R6NRS3Q0F8Z9K0S")
+        );
+        assert!(query_json["mailbox"]["participant_filter"].is_null());
+    }
+
+    #[test]
     fn native_read_marks_messages_read_without_changing_ack_state() {
         Python::initialize();
         let outcomes = Arc::new(Mutex::new(vec![

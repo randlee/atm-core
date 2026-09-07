@@ -462,6 +462,111 @@ class CliParityTests(unittest.TestCase):
             self.assertNotIn(native_send["message_id"], pending_ids)
             self.assertNotIn(cli_send["message_id"], pending_ids)
 
+    def test_native_default_uds_write_survives_idle_server_header_timeout(self) -> None:
+        # Warm this session's reqwest client, then exceed the daemon's default
+        # three-second HTTP/1 header timer. This generated fixture deliberately
+        # leaves ATM_LOCAL_TRANSPORT unset, so Unix exercises the production
+        # UDS connector. The next native request must open a fresh connection
+        # rather than write to the stale pool.
+        self.assertNotIn("ATM_LOCAL_TRANSPORT", self.environment)
+        self._native(self.native_tools, "atm_list", {"selection": "all"})
+        time.sleep(4)
+        result = self._native(
+            self.native_tools,
+            "atm_send",
+            {
+                "to": f"{self.second_identity}@{self.team}",
+                "body": "idle-loopback-regression",
+            },
+        )
+        self.assertIn("message_id", result)
+
+    def test_native_read_by_listed_id_marks_bare_agent_message_read(self) -> None:
+        sent = self._native(
+            self.second_native_tools,
+            "atm_send",
+            {
+                "to": f"{self.identity}@{self.team}",
+                "body": "native-exact-read-regression",
+            },
+        )
+        message_id = sent["message_id"]
+        listed = self._native(self.native_tools, "atm_list", {"selection": "all"})
+        self.assertIn(message_id, {row["message_id"] for row in listed["rows"]})
+
+        read = self._native(
+            self.native_tools,
+            "atm_read",
+            {"selection": "all", "message_id": message_id},
+        )
+        self.assertEqual(read["count"], 1)
+        self.assertTrue(read["mutation_applied"])
+
+        # Read acceptance is intentionally asynchronous; poll only the
+        # disposable daemon's list projection for the bounded handoff.
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            current = self._native(self.native_tools, "atm_list", {"selection": "all"})
+            matching = [row for row in current["rows"] if row["message_id"] == message_id]
+            if matching and matching[0]["read"]:
+                break
+            time.sleep(0.05)
+        else:
+            self.fail("native exact-ID read was not visible after the bounded handoff")
+
+    def test_cli_read_by_listed_id_reaches_bare_agent_message_from_chat(self) -> None:
+        sent = self._native(
+            self.second_native_tools,
+            "atm_send",
+            {
+                "to": f"{self.identity}@{self.team}",
+                "body": "cli-exact-read-regression",
+            },
+        )
+        message_id = sent["message_id"]
+        listed = self._native(self.native_tools, "atm_list", {"selection": "all"})
+        self.assertIn(message_id, {row["message_id"] for row in listed["rows"]})
+
+        read = self._cli("read", "--message-id", message_id, identity=self.identity)
+        self.assertEqual(read["count"], 1)
+        self.assertTrue(read["mutation_applied"])
+
+    def test_native_peek_by_listed_id_reaches_bare_agent_message_from_chat(self) -> None:
+        sent = self._native(
+            self.second_native_tools,
+            "atm_send",
+            {
+                "to": f"{self.identity}@{self.team}",
+                "body": "native-exact-peek-regression",
+            },
+        )
+        message_id = sent["message_id"]
+        listed = self._native(self.native_tools, "atm_list", {"selection": "all"})
+        self.assertIn(message_id, {row["message_id"] for row in listed["rows"]})
+
+        peek = self._native(
+            self.native_tools,
+            "atm_read",
+            {"selection": "all", "message_id": message_id, "peek": True},
+        )
+        self.assertEqual(peek["count"], 1)
+        self.assertFalse(peek["mutation_applied"])
+
+    def test_cli_peek_by_id_reaches_other_session_message_from_chat(self) -> None:
+        sent = self._native(
+            self.second_native_tools,
+            "atm_send",
+            {
+                "to": f"{self.identity}:other-session@{self.team}",
+                "body": "cli-exact-peek-regression",
+            },
+        )
+        message_id = sent["message_id"]
+
+        peek = self._cli("peek", "--message-id", message_id, identity=self.identity)
+        self.assertEqual(peek["count"], 1)
+        self.assertFalse(peek["mutation_applied"])
+
 
 if __name__ == "__main__":
     unittest.main()

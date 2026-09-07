@@ -63,6 +63,14 @@ impl PyGraftSession {
                 )))
             })?;
         let selection = Self::read_selection(selection)?;
+        // Exact-ID reads resolve within the caller's mailbox scope,
+        // irrespective of the host session's chat identifier. The
+        // session-chat filter is appropriate for bucket scans, but would hide
+        // a bare-agent-addressed message that list just returned.
+        let caller_chat_id = message_id
+            .is_none()
+            .then(|| self.caller.chat_id().cloned())
+            .flatten();
         if peek {
             PeekQuery::new(
                 home_dir,
@@ -80,9 +88,7 @@ impl PyGraftSession {
                 None,
             )
             .map_err(atm_error)
-            .map(|query| {
-                ReadOperation::Peek(query.with_caller_chat_id(self.caller.chat_id().cloned()))
-            })
+            .map(|query| ReadOperation::Peek(query.with_caller_chat_id(caller_chat_id)))
         } else {
             ReadQuery::new(
                 home_dir,
@@ -104,7 +110,7 @@ impl PyGraftSession {
             .map(|query| {
                 ReadOperation::Read(
                     query
-                        .with_caller_chat_id(self.caller.chat_id().cloned())
+                        .with_caller_chat_id(caller_chat_id)
                         .with_activity_observation(activity_observation_for_resolved_caller(
                             self.caller.agent(),
                             &team,
