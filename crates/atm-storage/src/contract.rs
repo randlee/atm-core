@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
@@ -549,6 +550,67 @@ pub struct RosterSnapshot {
     pub refreshed_at: Option<IsoTimestamp>,
 }
 
+/// One durable roster identity in the database-wide Herdr namespace.
+///
+/// `unique_name` is the trimmed roster alias when present, otherwise the
+/// canonical member name.  It deliberately remains a `String`: old databases
+/// must remain readable even when a legacy alias needs remediation on the
+/// next roster write.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RosterUniqueName {
+    pub team_name: TeamName,
+    pub agent_name: AgentName,
+    pub unique_name: String,
+}
+
+impl RosterUniqueName {
+    #[must_use]
+    pub fn from_member(member: &RosterMember) -> Self {
+        let unique_name = member
+            .metadata_json
+            .get("alias")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|alias| !alias.is_empty())
+            .unwrap_or(member.agent_name.as_str())
+            .to_owned();
+        Self {
+            team_name: member.team_name.clone(),
+            agent_name: member.agent_name.clone(),
+            unique_name,
+        }
+    }
+}
+
+/// Builds the single operator-facing diagnostic for durable roster identity
+/// collisions.  Both preflight and transaction enforcement use this wording
+/// so a race cannot change the error contract seen by CLI or HTTP callers.
+#[must_use]
+pub fn roster_unique_name_collision_error(collisions: &[RosterUniqueName]) -> AtmError {
+    let mut by_name = BTreeMap::<&str, Vec<(&TeamName, &AgentName)>>::new();
+    for collision in collisions {
+        by_name
+            .entry(&collision.unique_name)
+            .or_default()
+            .push((&collision.team_name, &collision.agent_name));
+    }
+    let details = by_name
+        .into_iter()
+        .map(|(unique_name, owners)| {
+            let owners = owners
+                .into_iter()
+                .map(|(team, member)| format!("({team}, {member})"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("`{unique_name}`: {owners}")
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    AtmError::validation(format!(
+        "roster unique-name collision(s): {details}; choose a distinct --alias for one conflicting member"
+    ))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MessageReceivedEvent {
     pub team: TeamName,
@@ -791,6 +853,23 @@ pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
+
+    /// Lists every effective roster name across the durable database.
+    ///
+    /// Backends with a native projection should override this with one query.
+    /// The fallback preserves the contract for narrow test doubles.
+    fn unique_names(&self) -> Result<Vec<RosterUniqueName>, AtmError> {
+        let mut names = Vec::new();
+        for team in self.list_teams()? {
+            names.extend(
+                self.load_roster(&team)?
+                    .members
+                    .iter()
+                    .map(RosterUniqueName::from_member),
+            );
+        }
+        Ok(names)
+    }
 }
 
 /// Ephemeral per-member roster state that never round-trips through the
