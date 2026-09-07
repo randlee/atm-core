@@ -11,6 +11,11 @@ use crate::protocol::{ReleaseVersion, RuntimeStatusSnapshot};
 use crate::team_admin::MembersList;
 use crate::types::{AgentName, TeamName};
 
+use super::{
+    HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay, HerdrEndpointObservation,
+    HerdrEndpointProvenance, HerdrMemberPresence, HerdrTransportKind,
+};
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DoctorSeverity {
@@ -293,6 +298,62 @@ pub struct HerdrQueuePumpDoctorReport {
     pub breaker: HerdrBreakerDoctorReport,
 }
 
+/// The capability subset of a Herdr endpoint which is useful to an operator.
+/// Keeping this nested leaves the endpoint state solely responsible for health
+/// and its remedy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HerdrEndpointCapabilitiesDoctorReport {
+    #[serde(default)]
+    pub live_handoff: Option<bool>,
+}
+
+/// One privacy-safe endpoint result rendered by `atm doctor`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HerdrEndpointDoctorReport {
+    pub session: Option<crate::delivery_channel::HerdrSession>,
+    pub provenance: HerdrEndpointProvenance,
+    pub transport: HerdrTransportKind,
+    pub endpoint: Option<HerdrEndpointDisplay>,
+    pub binary: Option<HerdrBinaryResolution>,
+    pub state: HerdrDoctorState,
+    pub remedy: String,
+    pub capabilities: HerdrEndpointCapabilitiesDoctorReport,
+    pub members: Vec<HerdrMemberPresence>,
+}
+
+impl From<HerdrEndpointObservation> for HerdrEndpointDoctorReport {
+    fn from(observation: HerdrEndpointObservation) -> Self {
+        let remedy = observation.state.remedy().to_owned();
+        Self {
+            session: observation.session,
+            provenance: observation.provenance,
+            transport: observation.transport,
+            endpoint: observation.endpoint,
+            binary: observation.binary,
+            state: observation.state,
+            remedy,
+            capabilities: HerdrEndpointCapabilitiesDoctorReport {
+                live_handoff: observation.live_handoff,
+            },
+            members: observation.members,
+        }
+    }
+}
+
+/// The complete Herdr surface in a doctor report. `configured` remains null
+/// only when the roster/configuration input was unavailable; a missing Herdr
+/// backend on an available roster is represented by `false`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HerdrDoctorReport {
+    pub configured: Option<bool>,
+    #[serde(default)]
+    pub endpoints: Vec<HerdrEndpointDoctorReport>,
+    #[serde(default)]
+    pub breaker: HerdrBreakerDoctorReport,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<DoctorFinding>,
+}
+
 /// Live metrics snapshot for the single shared reader pool, surfaced
 /// alongside its effective capacity.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -349,6 +410,8 @@ pub struct DoctorReport {
     #[serde(default)]
     pub herdr_queue_pump: HerdrQueuePumpDoctorReport,
     #[serde(default)]
+    pub herdr: HerdrDoctorReport,
+    #[serde(default)]
     pub post_send: PostSendDoctorReport,
     #[serde(default)]
     pub escalation_recipients: EscalationRecipientsDoctorReport,
@@ -373,7 +436,7 @@ impl DoctorReport {
 
 #[cfg(test)]
 mod tests {
-    use super::PeerWireSecurityStatus;
+    use super::{HerdrEndpointCapabilitiesDoctorReport, PeerWireSecurityStatus};
     use crate::peer_wire::PeerWireSecurity;
 
     #[test]
@@ -387,5 +450,14 @@ mod tests {
                 .expect("diagnostic status serializes"),
             "\"plaintext-test\""
         );
+    }
+
+    #[test]
+    fn herdr_capability_serializes_unknown_as_explicit_null() {
+        let value = serde_json::to_value(HerdrEndpointCapabilitiesDoctorReport::default())
+            .expect("capability report serializes");
+
+        assert!(value.get("live_handoff").is_some());
+        assert!(value["live_handoff"].is_null());
     }
 }

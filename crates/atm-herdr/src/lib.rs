@@ -9,9 +9,13 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::AgentName;
 use atm_core::{HerdrSession, RequestDeadline};
 
+mod doctor_probe;
 mod transport;
 mod transport_cli;
 mod transport_socket;
+
+pub use doctor_probe::HerdrDoctorProbe;
+pub use transport::HerdrClientConfig;
 
 use transport::{
     HerdrIo, HerdrOp, get_from_envelope, list_from_envelope, prompt_from_envelope,
@@ -92,13 +96,16 @@ pub enum HerdrError {
     AgentNotRunning,
     AgentPromptStalled,
     ServerNotRunning,
-    ProtocolMismatch,
+    ProtocolMismatch {
+        message: String,
+    },
     Timeout,
     InvalidAgentName,
     EmptyAgentPrompt,
     ServerUnavailable {
         message: String,
         retry_after: Option<Duration>,
+        io_error_kind: Option<std::io::ErrorKind>,
     },
     InternalError {
         message: String,
@@ -140,12 +147,17 @@ impl From<HerdrError> for AtmError {
                 AtmErrorCode::HerdrPromptFailed,
                 "Herdr prompt stalled".to_owned(),
             ),
-            HerdrError::ServerNotRunning
-            | HerdrError::ProtocolMismatch
-            | HerdrError::TimedOut
-            | HerdrError::Timeout => (
+            HerdrError::ServerNotRunning | HerdrError::TimedOut | HerdrError::Timeout => (
                 AtmErrorCode::HerdrUnavailable,
                 "Herdr server is unavailable".to_owned(),
+            ),
+            HerdrError::ProtocolMismatch { message } => (
+                AtmErrorCode::HerdrUnavailable,
+                if message.is_empty() {
+                    "Herdr server is unavailable".to_owned()
+                } else {
+                    format!("Herdr protocol mismatch: {message}")
+                },
             ),
             HerdrError::ServerUnavailable { message, .. } => (
                 AtmErrorCode::HerdrUnavailable,
@@ -201,7 +213,7 @@ impl HerdrError {
             Self::AgentNotReady => "not_ready",
             Self::AgentPromptStalled => "prompt_stalled",
             Self::ServerNotRunning | Self::ServerUnavailable { .. } => "server_outage",
-            Self::ProtocolMismatch => "protocol_incompatible",
+            Self::ProtocolMismatch { .. } => "protocol_incompatible",
             Self::Timeout | Self::TimedOut => "timed_out",
             Self::InvalidAgentName => "invalid_target",
             Self::EmptyAgentPrompt => "invalid_prompt",
@@ -215,7 +227,7 @@ impl HerdrError {
         matches!(
             self,
             Self::ServerNotRunning
-                | Self::ProtocolMismatch
+                | Self::ProtocolMismatch { .. }
                 | Self::ServerUnavailable { .. }
                 | Self::TimedOut
         )
@@ -442,10 +454,10 @@ pub struct HerdrProcessInvoker {
 
 impl HerdrProcessInvoker {
     #[must_use]
-    pub fn new(breaker: Arc<HerdrSpawnBreaker>) -> Self {
+    pub fn new(breaker: Arc<HerdrSpawnBreaker>, config: HerdrClientConfig) -> Self {
         Self {
             breaker,
-            io: HerdrIo::default(),
+            io: HerdrIo::from_config(&config),
         }
     }
 
@@ -1033,6 +1045,7 @@ mod tests {
             Err(HerdrError::ServerUnavailable {
                 message: "server is draining".to_owned(),
                 retry_after: Some(Duration::from_millis(12_345)),
+                io_error_kind: None,
             })
         );
 
@@ -1210,7 +1223,12 @@ mod tests {
             ("agent_not_running", HerdrError::AgentNotRunning),
             ("agent_prompt_stalled", HerdrError::AgentPromptStalled),
             ("server_not_running", HerdrError::ServerNotRunning),
-            ("protocol_mismatch", HerdrError::ProtocolMismatch),
+            (
+                "protocol_mismatch",
+                HerdrError::ProtocolMismatch {
+                    message: String::new(),
+                },
+            ),
             ("timeout", HerdrError::Timeout),
             ("invalid_agent_name", HerdrError::InvalidAgentName),
             ("empty_agent_prompt", HerdrError::EmptyAgentPrompt),
@@ -1219,6 +1237,7 @@ mod tests {
                 HerdrError::ServerUnavailable {
                     message: String::new(),
                     retry_after: None,
+                    io_error_kind: None,
                 },
             ),
             (

@@ -1,6 +1,6 @@
 //! Tokio process implementation of the private Herdr transport seam.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ impl CliIo {
     pub(crate) fn new(config: &HerdrClientConfig) -> Self {
         let _ = config.socket_path();
         Self {
-            binary_path: config.binary_path().cloned(),
+            binary_path: config.binary_path().map(Path::to_path_buf),
             extra_environment: Vec::new(),
         }
     }
@@ -86,6 +86,11 @@ pub(crate) fn command_args(op: HerdrOp<'_>) -> Vec<String> {
         }
         HerdrOp::Get { agent } => vec!["agent".to_owned(), "get".to_owned(), agent.to_string()],
         HerdrOp::List => vec!["agent".to_owned(), "list".to_owned()],
+        HerdrOp::StatusServer => vec![
+            "status".to_owned(),
+            "server".to_owned(),
+            "--json".to_owned(),
+        ],
         HerdrOp::Notify { title, body } => vec![
             "notification".to_owned(),
             "show".to_owned(),
@@ -119,19 +124,11 @@ async fn run_command(
     if let Some(session) = session {
         command.env("HERDR_SESSION", session.as_str());
     }
-    let mut child = command.spawn().map_err(|_| HerdrError::ServerUnavailable {
-        message: String::new(),
-        retry_after: None,
-    })?;
+    let mut child = command.spawn().map_err(server_unavailable)?;
     let status =
         match tokio::time::timeout(effective_process_timeout(remaining), child.wait()).await {
             Ok(Ok(status)) => status,
-            Ok(Err(_)) => {
-                return Err(HerdrError::ServerUnavailable {
-                    message: String::new(),
-                    retry_after: None,
-                });
-            }
+            Ok(Err(error)) => return Err(server_unavailable(error)),
             Err(_) => {
                 let _ = child.kill().await;
                 let _ = child.wait().await;
@@ -144,6 +141,14 @@ async fn run_command(
         stderr,
         success: status.success(),
     })
+}
+
+fn server_unavailable(error: std::io::Error) -> HerdrError {
+    HerdrError::ServerUnavailable {
+        message: error.to_string(),
+        retry_after: None,
+        io_error_kind: Some(error.kind()),
+    }
 }
 
 pub(crate) fn effective_process_timeout(remaining: Duration) -> Duration {
@@ -196,7 +201,9 @@ fn decode_envelope(output: &CommandOutput) -> Result<HerdrEnvelope, HerdrError> 
     } else {
         &output.stderr
     })
-    .map_err(|_| HerdrError::ProtocolMismatch)?;
+    .map_err(|error| HerdrError::ProtocolMismatch {
+        message: format!("failed to decode Herdr response: {error}"),
+    })?;
     let error = value.get("error").and_then(|error| {
         Some(HerdrErrorEnvelope {
             code: error.get("code")?.as_str()?.to_owned(),
@@ -212,4 +219,48 @@ fn decode_envelope(output: &CommandOutput) -> Result<HerdrEnvelope, HerdrError> 
         result: value.get("result").cloned(),
         error,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::ErrorKind;
+
+    use super::server_unavailable;
+    use crate::HerdrError;
+
+    #[test]
+    fn spawn_not_found_preserves_io_error_kind() {
+        assert!(matches!(
+            server_unavailable(std::io::Error::from(ErrorKind::NotFound)),
+            HerdrError::ServerUnavailable {
+                io_error_kind: Some(ErrorKind::NotFound),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn spawn_permission_denied_preserves_io_error_kind() {
+        assert!(matches!(
+            server_unavailable(std::io::Error::from(ErrorKind::PermissionDenied)),
+            HerdrError::ServerUnavailable {
+                io_error_kind: Some(ErrorKind::PermissionDenied),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn malformed_response_preserves_json_parse_diagnostic() {
+        let result = super::decode_envelope(&super::CommandOutput {
+            stdout: "{".to_owned(),
+            stderr: String::new(),
+            success: true,
+        });
+
+        match result {
+            Err(HerdrError::ProtocolMismatch { message }) => assert!(!message.is_empty()),
+            _ => panic!("malformed JSON must preserve a protocol mismatch diagnostic"),
+        }
+    }
 }

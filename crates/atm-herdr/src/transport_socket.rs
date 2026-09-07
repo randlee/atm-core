@@ -128,26 +128,32 @@ pub(crate) fn herdr_api_endpoint(
 ) -> HerdrEndpoint {
     match env.platform {
         Platform::Unix => {
-            let raw = cfg.socket_path().cloned().or_else(|| {
-                session.map(|session| {
-                    config_dir(env)
-                        .join("sessions")
-                        .join(session.as_str())
-                        .join("herdr.sock")
-                })
-            });
+            let raw = cfg
+                .socket_path()
+                .map(std::path::Path::to_path_buf)
+                .or_else(|| {
+                    session.map(|session| {
+                        config_dir(env)
+                            .join("sessions")
+                            .join(session.as_str())
+                            .join("herdr.sock")
+                    })
+                });
             HerdrEndpoint::UnixSocket(raw.unwrap_or_else(|| config_dir(env).join("herdr.sock")))
         }
         Platform::Windows => {
-            let raw = cfg.socket_path().cloned().or_else(|| {
-                session.map(|session| {
-                    PathBuf::from(format!(
-                        r"{}\sessions\{}\herdr.sock",
-                        config_dir(env).display(),
-                        session.as_str()
-                    ))
-                })
-            });
+            let raw = cfg
+                .socket_path()
+                .map(std::path::Path::to_path_buf)
+                .or_else(|| {
+                    session.map(|session| {
+                        PathBuf::from(format!(
+                            r"{}\sessions\{}\herdr.sock",
+                            config_dir(env).display(),
+                            session.as_str()
+                        ))
+                    })
+                });
             let raw = raw.unwrap_or_else(|| {
                 PathBuf::from(format!(r"{}\herdr.sock", config_dir(env).display()))
             });
@@ -230,6 +236,11 @@ fn encode_request(op: HerdrOp<'_>) -> Result<Vec<u8>, HerdrError> {
             "method": "agent.list",
             "params": {},
         }),
+        HerdrOp::StatusServer => {
+            return Err(HerdrError::InternalError {
+                message: "Herdr socket server status must use the ping probe".to_owned(),
+            });
+        }
         HerdrOp::Notify { title, body } => json!({
             "id": "atm:agent:notify",
             "method": "notification.show",
@@ -311,6 +322,7 @@ fn socket_io_error(error: io::Error) -> HerdrError {
     HerdrError::ServerUnavailable {
         message: format!("Herdr socket transport failed: {error}"),
         retry_after: None,
+        io_error_kind: Some(error.kind()),
     }
 }
 
@@ -393,7 +405,9 @@ async fn retry_pipe_busy<T>(
 fn decode_envelope(bytes: &[u8]) -> Result<HerdrEnvelope, HerdrError> {
     let value = serde_json::from_slice::<Value>(bytes).map_err(|error| {
         eprintln!("Herdr socket response JSON decode failed: {error}");
-        HerdrError::ProtocolMismatch
+        HerdrError::ProtocolMismatch {
+            message: format!("failed to decode Herdr socket response: {error}"),
+        }
     })?;
     let error = value.get("error").and_then(|error| {
         Some(HerdrErrorEnvelope {
@@ -533,7 +547,7 @@ mod tests {
     fn malformed_response_remains_a_protocol_mismatch() {
         assert!(matches!(
             decode_envelope(b"{"),
-            Err(HerdrError::ProtocolMismatch)
+            Err(HerdrError::ProtocolMismatch { .. })
         ));
     }
 

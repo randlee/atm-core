@@ -1735,6 +1735,7 @@ mod tests {
         fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
             message: String::new(),
             retry_after: None,
+            io_error_kind: None,
         }));
         pump.tick_once().await;
         assert_eq!(notifications(&fake), 0);
@@ -2269,6 +2270,7 @@ mod tests {
         fake.queue_prompt_result(Err(atm_herdr::HerdrError::ServerUnavailable {
             message: String::new(),
             retry_after: None,
+            io_error_kind: None,
         }));
         pump.tick_once().await;
         let task_id = "AX5-TASK-00".parse().expect("task id");
@@ -2758,6 +2760,7 @@ mod tests {
         fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
             message: String::new(),
             retry_after: None,
+            io_error_kind: None,
         }));
         let selector = Arc::new(FakeSelector {
             emitter: FakeEmitter {

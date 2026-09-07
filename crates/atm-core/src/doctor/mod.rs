@@ -1,5 +1,6 @@
 mod ax6;
 pub mod health;
+mod herdr_state;
 pub mod report;
 
 #[cfg(test)]
@@ -25,39 +26,37 @@ use crate::types::{AgentName, TeamName};
 use atm_storage::PeerConfigStore;
 use std::sync::Arc;
 
+pub use crate::boundary::HerdrEndpointDoctor;
+pub use herdr_state::{
+    HerdrBinaryProvenance, HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay,
+    HerdrEndpointDisplayRoot, HerdrEndpointObservation, HerdrEndpointProvenance,
+    HerdrMemberPresence, HerdrPresenceOutcome, HerdrRosterMember, HerdrTransportKind, HerdrVersion,
+};
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
     DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientsDoctorReport,
     GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport, HerdrBreakerDoctor,
-    HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport,
+    HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrDoctorReport,
+    HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDoctorReport, HerdrQueuePumpDoctorReport,
     LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
     PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
     ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RecipientDeliveryPath,
     RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
 };
 
-/// Async application port for the live Herdr visibility checks performed by
-/// the replacement daemon's doctor route. The core report owns finding shape;
-/// the composition root owns the concrete Herdr adapter.
-pub trait HerdrPresenceDoctor: Send + Sync {
-    fn probe<'a>(
-        &'a self,
-        roster: &'a MembersList,
-        caller_deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>>;
-}
-
 #[derive(Debug, Default)]
-pub struct ClosedHerdrPresenceDoctor;
+pub struct ClosedHerdrEndpointDoctor;
 
-impl HerdrPresenceDoctor for ClosedHerdrPresenceDoctor {
-    fn probe<'a>(
+impl crate::boundary::sealed::Sealed for ClosedHerdrEndpointDoctor {}
+
+impl HerdrEndpointDoctor for ClosedHerdrEndpointDoctor {
+    fn observe<'a>(
         &'a self,
         _roster: &'a MembersList,
         _caller_deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>> {
         Box::pin(async { Vec::new() })
     }
 }
@@ -101,7 +100,7 @@ pub struct RuntimeDoctorPorts {
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
     pub herdr_breaker: Arc<dyn HerdrBreakerDoctor>,
-    pub herdr_presence: Arc<dyn HerdrPresenceDoctor>,
+    pub herdr_endpoint: Arc<dyn HerdrEndpointDoctor>,
 }
 
 impl std::fmt::Debug for RuntimeDoctorPorts {
@@ -111,9 +110,41 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
             .field("herdr_breaker", &"dyn HerdrBreakerDoctor")
-            .field("herdr_presence", &"dyn HerdrPresenceDoctor")
+            .field("herdr_endpoint", &"dyn HerdrEndpointDoctor")
             .finish()
     }
+}
+
+/// Flattens endpoint observations into the retained doctor-finding surface.
+/// Member order follows the nonserialized roster ordinal, and infrastructure
+/// trouble remains one global informational finding after member findings.
+#[must_use]
+pub fn presence_findings(observations: &[HerdrEndpointObservation]) -> Vec<DoctorFinding> {
+    let mut members = observations
+        .iter()
+        .flat_map(|observation| observation.members.iter())
+        .collect::<Vec<_>>();
+    members.sort_by_key(|member| member.ordinal);
+    let mut findings = Vec::new();
+    let mut infrastructure = None;
+    for member in members {
+        match &member.outcome {
+            HerdrPresenceOutcome::Visible => {}
+            HerdrPresenceOutcome::Finding { finding } => findings.push(finding.clone()),
+            HerdrPresenceOutcome::Infrastructure { code, detail } => {
+                infrastructure.get_or_insert((*code, detail.clone()));
+            }
+        }
+    }
+    if let Some((_code, detail)) = infrastructure {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Info,
+            code: AtmErrorCode::HerdrUnavailable,
+            message: format!("Herdr presence probe skipped: {detail}"),
+            remediation: None,
+        });
+    }
+    findings
 }
 
 /// Run the ATM doctor checks for config, roster, and observability health.
@@ -433,6 +464,10 @@ fn build_doctor_report(
         herdr_queue_pump: HerdrQueuePumpDoctorReport {
             breaker: herdr_breaker.clone(),
             ..HerdrQueuePumpDoctorReport::default()
+        },
+        herdr: HerdrDoctorReport {
+            breaker: herdr_breaker.clone(),
+            ..HerdrDoctorReport::default()
         },
         herdr_breaker,
         post_send,
@@ -915,16 +950,22 @@ fn member_summary(
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
     use std::sync::Arc;
+    use std::{
+        net::SocketAddr,
+        path::{Path, PathBuf},
+    };
 
     use super::{
         legacy_literal_ip_peer_reports, ordered_member_summaries, peer_config_doctor_report,
+        presence_findings,
     };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
-        DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
+        DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, HerdrDoctorState,
+        HerdrEndpointObservation, HerdrEndpointProvenance, HerdrMemberPresence,
+        HerdrPresenceOutcome, HerdrTransportKind, run_doctor_with_runtime,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -974,6 +1015,95 @@ mod tests {
                 StubHealth::Err(error) => Err(error.clone()),
             }
         }
+    }
+
+    #[test]
+    fn presence_findings_preserve_roster_order_and_emit_one_infrastructure_notice() {
+        let finding = |message: &str| DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::HerdrAgentNotVisible,
+            message: message.to_owned(),
+            remediation: Some("inspect Herdr".to_owned()),
+        };
+        let member = |ordinal: usize, name: &str, outcome| HerdrMemberPresence {
+            ordinal,
+            name: AgentName::from_validated(name.to_owned()),
+            outcome,
+        };
+        let observation = |members| HerdrEndpointObservation {
+            session: None,
+            provenance: HerdrEndpointProvenance::HerdrDefault,
+            transport: HerdrTransportKind::Cli,
+            endpoint: None,
+            binary: None,
+            state: HerdrDoctorState::NotConfigured,
+            live_handoff: None,
+            members,
+        };
+        let observations = vec![
+            observation(vec![
+                member(
+                    2,
+                    "third",
+                    HerdrPresenceOutcome::Finding {
+                        finding: finding("third finding"),
+                    },
+                ),
+                member(
+                    0,
+                    "first",
+                    HerdrPresenceOutcome::Infrastructure {
+                        code: AtmErrorCode::HerdrUnavailable,
+                        detail: "first endpoint unavailable".to_owned(),
+                    },
+                ),
+            ]),
+            observation(vec![
+                member(
+                    1,
+                    "second",
+                    HerdrPresenceOutcome::Finding {
+                        finding: finding("second finding"),
+                    },
+                ),
+                member(
+                    3,
+                    "fourth",
+                    HerdrPresenceOutcome::Infrastructure {
+                        code: AtmErrorCode::HerdrUnavailable,
+                        detail: "later endpoint unavailable".to_owned(),
+                    },
+                ),
+                member(4, "visible", HerdrPresenceOutcome::Visible),
+            ]),
+        ];
+
+        let findings = presence_findings(&observations);
+
+        assert_eq!(
+            findings
+                .iter()
+                .map(|finding| finding.message.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "second finding",
+                "third finding",
+                "Herdr presence probe skipped: first endpoint unavailable",
+            ]
+        );
+        assert_eq!(findings[2].severity, DoctorSeverity::Info);
+        assert_eq!(findings[2].code, AtmErrorCode::HerdrUnavailable);
+        let member_json =
+            serde_json::to_value(&observations[0].members[0]).expect("member presence serializes");
+        assert_eq!(
+            member_json
+                .as_object()
+                .expect("member presence is an object")
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["name", "outcome"]
+        );
     }
 
     struct UnusedMailStore;
@@ -1041,7 +1171,7 @@ mod tests {
             unreachable!("doctor test never mutates peer configuration")
         }
 
-        fn remove_interface(&self, _bind_addr: std::net::SocketAddr) -> Result<bool, AtmError> {
+        fn remove_interface(&self, _bind_addr: SocketAddr) -> Result<bool, AtmError> {
             unreachable!("doctor test never mutates peer configuration")
         }
 

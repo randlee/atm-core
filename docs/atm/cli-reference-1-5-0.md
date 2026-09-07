@@ -78,6 +78,18 @@ Run ATM health and configuration diagnostics
 | `--json` |  | no | Emit the doctor report as JSON. |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
+**Herdr diagnostics:**
+
+`atm doctor --json` includes a `herdr` object. `configured` is `true` or
+`false` when the roster was read, and `null` only when its configuration input
+was unavailable; `error` then gives the typed doctor finding. `endpoints` are
+ordered with the default endpoint first and named sessions bytewise. Each entry
+reports provenance, transport, an optional privacy-safe endpoint display,
+binary resolution, typed `state`, `remedy`, `capabilities.live_handoff`, and
+the exact routed member outcomes. Endpoint displays never expose raw home,
+config-root, socket, or named-pipe paths. The pre-existing host-wide breaker
+report remains available as `herdr.breaker` (and under its legacy report field).
+
 ### `atm escalation`
 
 Manage daemon-wide and per-team escalation recipients
@@ -623,5 +635,3 @@ Show the stored schema/frontmatter for one exact immutable SHA
 | `<sha>` |  | yes |  |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
-
-

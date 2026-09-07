@@ -216,10 +216,12 @@ dependencies = [
  "chrono",
  "fs4",
  "peer-tls",
+ "serde",
  "serde_json",
  "serial_test",
  "tempfile",
  "tokio",
+ "toml",
  "tracing",
  "ulid",
 ]
@@ -279,6 +281,7 @@ name = "atm-herdr"
 version = "1.5.5"
 dependencies = [
  "agent-team-mail-core",
+ "semver",
  "serde_json",
  "tokio",
 ]

@@ -11,9 +11,10 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::doctor::{
     DoctorExecutionContext, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
-    HerdrPresenceDoctor, ReaderPoolDoctorReport, RuntimeDoctorPorts, append_doctor_findings,
-    run_doctor_with_runtime_ports,
+    HerdrEndpointDoctor, ReaderPoolDoctorReport, RuntimeDoctorPorts, append_doctor_findings,
+    presence_findings, run_doctor_with_runtime_ports,
 };
+use atm_core::herdr_configured::herdr_is_configured;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::RuntimeStatusSnapshot;
 use atm_storage::AtmError;
@@ -64,7 +65,7 @@ pub trait DoctorProjection: Send + Sync {
 #[derive(Clone)]
 pub struct StorageDoctorProjection {
     sender: tokio::sync::mpsc::Sender<DoctorJob>,
-    presence: Arc<dyn HerdrPresenceDoctor>,
+    endpoint_doctor: Arc<dyn HerdrEndpointDoctor>,
     reader_lanes: Option<ReaderPoolDoctorReport>,
     workers: Arc<DoctorWorkers>,
 }
@@ -102,7 +103,7 @@ impl StorageDoctorProjection {
             AtmError::daemon_unavailable("doctor projection must start inside the Tokio runtime")
         })?;
         let (sender, receiver) = tokio::sync::mpsc::channel(config.queue_depth);
-        let presence = Arc::clone(&doctor_ports.herdr_presence);
+        let endpoint_doctor = Arc::clone(&doctor_ports.herdr_endpoint);
         let reader_lanes = config.reader_lanes;
         let receiver = Arc::new(tokio::sync::Mutex::new(receiver));
         let mut handles = Vec::with_capacity(config.worker_count);
@@ -117,7 +118,7 @@ impl StorageDoctorProjection {
         }
         Ok(Self {
             sender,
-            presence,
+            endpoint_doctor,
             reader_lanes,
             workers: Arc::new(DoctorWorkers { handles }),
         })
@@ -153,8 +154,13 @@ impl DoctorProjection for StorageDoctorProjection {
             .map_err(|_| AtmError::daemon_unavailable("doctor request deadline expired"))?
             .map_err(|_| AtmError::daemon_unavailable("doctor control lane stopped"))??;
         if let Some(roster) = report.member_roster.clone() {
-            self.append_presence_findings(&mut report, &roster, deadline)
+            self.append_herdr_report(&mut report, &roster, deadline)
                 .await?;
+        } else {
+            // Without a resolved team there is no Herdr-backed member to
+            // inspect. This is a known, unconfigured state rather than a
+            // guessed endpoint result.
+            report.herdr.configured = Some(false);
         }
         append_context_findings(&mut report, context);
         report.reader_lanes = self.reader_lanes;
@@ -163,7 +169,7 @@ impl DoctorProjection for StorageDoctorProjection {
 }
 
 impl StorageDoctorProjection {
-    async fn append_presence_findings(
+    async fn append_herdr_report(
         &self,
         report: &mut DoctorReport,
         roster: &atm_core::team_admin::MembersList,
@@ -172,11 +178,16 @@ impl StorageDoctorProjection {
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable("doctor request deadline expired before Herdr projection")
         })?;
-        match tokio::time::timeout(remaining, self.presence.probe(roster, deadline)).await {
-            Ok(findings) => append_doctor_findings(report, findings),
-            Err(_) => append_doctor_findings(
-                report,
-                vec![DoctorFinding {
+        report.herdr.configured = Some(herdr_is_configured(roster));
+        match tokio::time::timeout(remaining, self.endpoint_doctor.observe(roster, deadline)).await
+        {
+            Ok(observations) => {
+                let findings = presence_findings(&observations);
+                report.herdr.endpoints = observations.into_iter().map(Into::into).collect();
+                append_doctor_findings(report, findings);
+            }
+            Err(_) => {
+                let finding = DoctorFinding {
                     severity: DoctorSeverity::Warning,
                     code: atm_storage::AtmErrorCode::DaemonUnavailable,
                     message: "Herdr presence projection exceeded the doctor request deadline"
@@ -184,8 +195,10 @@ impl StorageDoctorProjection {
                     remediation: Some(
                         "Inspect the Herdr service, then rerun `atm doctor`.".to_owned(),
                     ),
-                }],
-            ),
+                };
+                report.herdr.error = Some(finding.clone());
+                append_doctor_findings(report, vec![finding]);
+            }
         }
         Ok(())
     }

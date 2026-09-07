@@ -98,7 +98,7 @@ pub(crate) fn runtime_doctor_ports(
         mail_store_doctor: Arc::new(DefaultMailStoreDoctor),
         roster_store_doctor: Arc::new(DefaultRosterStoreDoctor),
         herdr_breaker: Arc::new(atm_core::doctor::ClosedHerdrBreakerDoctor),
-        herdr_presence: Arc::new(atm_core::doctor::ClosedHerdrPresenceDoctor),
+        herdr_endpoint: Arc::new(atm_core::doctor::ClosedHerdrEndpointDoctor),
     }
 }
 impl boundary::sealed::Sealed for BoundaryMailStoreView {}

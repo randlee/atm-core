@@ -1,8 +1,10 @@
 //! Private, transport-neutral Herdr request and response contract.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use atm_core::doctor::HerdrVersion;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::AgentName;
 use atm_core::{HerdrSession, RequestDeadline};
 use serde_json::Value;
@@ -14,15 +16,36 @@ use crate::{
     HerdrWaitOutcome,
 };
 
-/// Default-only private transport configuration. AY.3 owns validation and
-/// public composition of explicit client settings.
-#[derive(Clone, Debug, Default)]
-pub(crate) struct HerdrClientConfig {
+/// Validated Herdr client configuration. Construction is pure and performs no
+/// endpoint or filesystem I/O.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct HerdrClientConfig {
     binary_path: Option<PathBuf>,
     socket_path: Option<PathBuf>,
 }
 
 impl HerdrClientConfig {
+    pub fn try_new(
+        binary_path: Option<PathBuf>,
+        socket_path: Option<PathBuf>,
+    ) -> Result<Self, AtmError> {
+        for (key, path) in [
+            ("binary_path", binary_path.as_ref()),
+            ("socket_path", socket_path.as_ref()),
+        ] {
+            if let Some(path) = path.filter(|path| !path.is_absolute()) {
+                return Err(AtmError::new(
+                    AtmErrorCode::ConfigParseFailed,
+                    format!("[herdr] {key} must be absolute: {}", path.display()),
+                ));
+            }
+        }
+        Ok(Self {
+            binary_path,
+            socket_path,
+        })
+    }
+
     #[cfg(any(test, feature = "test-utils"))]
     pub(crate) fn with_socket_path(socket_path: PathBuf) -> Self {
         Self {
@@ -31,12 +54,12 @@ impl HerdrClientConfig {
         }
     }
 
-    pub(crate) fn binary_path(&self) -> Option<&PathBuf> {
-        self.binary_path.as_ref()
+    pub fn binary_path(&self) -> Option<&Path> {
+        self.binary_path.as_deref()
     }
 
-    pub(crate) fn socket_path(&self) -> Option<&PathBuf> {
-        self.socket_path.as_ref()
+    pub fn socket_path(&self) -> Option<&Path> {
+        self.socket_path.as_deref()
     }
 }
 
@@ -55,10 +78,17 @@ pub(crate) enum HerdrOp<'a> {
         agent: &'a AgentName,
     },
     List,
+    StatusServer,
     Notify {
         title: &'a str,
         body: &'a str,
     },
+}
+
+pub(crate) struct HerdrServerStatus {
+    pub(crate) version: HerdrVersion,
+    pub(crate) protocol: u32,
+    pub(crate) live_handoff: bool,
 }
 
 /// Transport response before it is decoded into a public domain outcome.
@@ -91,6 +121,10 @@ impl Default for HerdrIo {
 }
 
 impl HerdrIo {
+    pub(crate) fn from_config(config: &HerdrClientConfig) -> Self {
+        Self::Cli(CliIo::new(config))
+    }
+
     pub(crate) async fn call(
         &self,
         op: HerdrOp<'_>,
@@ -143,11 +177,44 @@ pub(crate) fn list_from_envelope(envelope: HerdrEnvelope) -> Result<HerdrListOut
     let agents = result
         .get("agents")
         .and_then(Value::as_array)
-        .ok_or(HerdrError::ProtocolMismatch)?
+        .ok_or_else(|| protocol_mismatch("response did not contain an agents array"))?
         .iter()
         .map(snapshot_from_value)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(HerdrListOutcome { agents })
+}
+
+pub(crate) fn server_status_from_envelope(
+    envelope: HerdrEnvelope,
+) -> Result<HerdrServerStatus, HerdrError> {
+    let error = error_from_envelope(&envelope);
+    let result = envelope.result.ok_or(error)?;
+    let version = result
+        .get("version")
+        .and_then(Value::as_str)
+        .ok_or_else(|| protocol_mismatch("response did not contain a version"))
+        .and_then(|version| {
+            HerdrVersion::parse(version).map_err(|error| protocol_mismatch(error.to_string()))
+        })?;
+    let protocol = result
+        .get("protocol")
+        .and_then(Value::as_u64)
+        .and_then(|protocol| u32::try_from(protocol).ok())
+        .ok_or_else(|| protocol_mismatch("response did not contain a protocol number"))?;
+    let live_handoff = result
+        .get("capabilities")
+        .and_then(Value::as_array)
+        .map(|capabilities| {
+            capabilities
+                .iter()
+                .any(|capability| capability.as_str() == Some("live_handoff"))
+        })
+        .unwrap_or(false);
+    Ok(HerdrServerStatus {
+        version,
+        protocol,
+        live_handoff,
+    })
 }
 
 pub(crate) fn unit_from_envelope(envelope: HerdrEnvelope) -> Result<(), HerdrError> {
@@ -163,7 +230,7 @@ fn snapshot_from_value(value: &Value) -> Result<AgentSnapshot, HerdrError> {
         .get("agent_status")
         .or_else(|| value.get("status"))
         .and_then(Value::as_str)
-        .ok_or(HerdrError::ProtocolMismatch)?;
+        .ok_or_else(|| protocol_mismatch("agent response did not contain a status"))?;
     Ok(AgentSnapshot {
         name: value.get("name").and_then(Value::as_str).map(str::to_owned),
         status: parse_status(status),
@@ -186,7 +253,7 @@ fn parse_status(status: &str) -> HerdrAgentStatus {
 
 fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
     let Some(error) = &envelope.error else {
-        return HerdrError::ProtocolMismatch;
+        return protocol_mismatch("response contained neither a result nor an error");
     };
     let message = error.message.clone();
     let retry_after = error.retry_after_ms.map(Duration::from_millis);
@@ -198,18 +265,25 @@ fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
         "agent_not_running" => HerdrError::AgentNotRunning,
         "agent_prompt_stalled" => HerdrError::AgentPromptStalled,
         "server_not_running" => HerdrError::ServerNotRunning,
-        "protocol_mismatch" => HerdrError::ProtocolMismatch,
+        "protocol_mismatch" => protocol_mismatch(&message),
         "timeout" => HerdrError::Timeout,
         "invalid_agent_name" => HerdrError::InvalidAgentName,
         "empty_agent_prompt" => HerdrError::EmptyAgentPrompt,
         "server_unavailable" => HerdrError::ServerUnavailable {
             message,
             retry_after,
+            io_error_kind: None,
         },
         "internal_error" | "agent_prompt_failed" => HerdrError::InternalError { message },
         other => HerdrError::Advisory {
             code: other.to_owned(),
             message,
         },
+    }
+}
+
+fn protocol_mismatch(message: impl Into<String>) -> HerdrError {
+    HerdrError::ProtocolMismatch {
+        message: message.into(),
     }
 }

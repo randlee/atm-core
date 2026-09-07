@@ -40,6 +40,8 @@ pub mod error_codes;
 pub mod escalation_admin;
 /// Thin graft-facing daemon client traits.
 pub mod graft;
+/// Pure doctor configuration decision derived from one roster snapshot.
+pub mod herdr_configured;
 /// Public ATM home and team-path resolution helpers.
 pub mod home;
 /// Internal identity resolution and hook lookup helpers.

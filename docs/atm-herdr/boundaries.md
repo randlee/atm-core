@@ -29,6 +29,10 @@ Purpose:
   codes (ADR-058 D8)
 - own the per-host `HerdrSpawnBreaker` circuit-breaker type
   (ADR-058 D10.1)
+- own the validated `HerdrClientConfig` and concrete `HerdrDoctorProbe`
+  public surface used by the daemon bootstrap's sealed endpoint-doctor
+  adapter; probe construction is pure, while its bounded status/member calls
+  map every closed `HerdrError` variant into core-owned typed observations
 - own a `test-utils`-gated fake adapter for use by every consumer crate's
   tests
 
@@ -132,7 +136,10 @@ create a cycle.
 
 - `AtmError` — the workspace-wide error type a caller may fold a
   `HerdrError` into at its own boundary via `From<HerdrError> for
-  AtmError`; `atm-herdr` itself never constructs an `AtmError` internally
+  AtmError`. From AY.3 (P-E(a) ruling) this crate has exactly two
+  `AtmError` construction sites — `From<HerdrError> for AtmError` and
+  `HerdrClientConfig::try_new` (`AtmErrorCode::ConfigParseFailed`) — and
+  adds no other construction site and no new error family
 - `HerdrError` — this crate's own closed error enum (see
   [`architecture.md`](./architecture.md) §4, §7), covering every Herdr
   `error.code` this crate's contract parses plus this crate's own
