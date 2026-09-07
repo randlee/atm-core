@@ -373,6 +373,29 @@ Satisfied by:
   native `atm doctor --json`: `configured: true` is required for install,
   `false` is a safe refusal, and null, missing, malformed, or nonzero doctor
   output is `HERDR_DOCTOR_UNREADABLE` (exit 4), never a Python fallback.
+  
+  Herdr restart-coordination addendum (AY.6): `restart --restart-herdr
+  [<default-or-session>]` is a distinct, explicit operator action. It selects
+  exactly one endpoint from native doctor data and the AY.5 owned-entry
+  projection; an omitted selector is valid only for one configured endpoint.
+  Socket-path, foreign/missing, or journal-active entries fail closed. When
+  the doctor reports that the installed client is newer than the running
+  server and `capabilities.live_handoff` is exactly true, it invokes the
+  selected scoped `herdr server live-handoff`; otherwise it emits a pane-loss
+  warning and requires `--stop-herdr-panes` before scoped `server stop` and
+  entry-owned relaunch. It never invokes `herdr update`, starts or restarts
+  ATM, takes ownership of Herdr, or runs implicitly during switch, restore, or
+  ordinary restart. Every command and the whole operation are deadline-bound;
+  a fresh native doctor read must report the selected endpoint `ok` before
+  success. The single JSON envelope uses exit 0/3/4. Exact refusals are
+  `HERDR_NOT_CONFIGURED`, `HERDR_DOCTOR_UNREADABLE`,
+  `HERDR_RESTART_ENDPOINT_REQUIRED`, `HERDR_RESTART_ENDPOINT_UNKNOWN`,
+  `HERDR_RESTART_SOCKET_PATH`, `HERDR_RESTART_PANES_ACK_REQUIRED`,
+  `HERDR_RESTART_NO_LIVE_HANDOFF`, `HERDR_RESTART_TIMEOUT`, and
+  `HERDR_RESTART_VERIFY_TIMEOUT`; an Herdr/entry failure is
+  `HERDR_RESTART_HERDR_FAILED`. Before an ordinary ATM restart mutates its
+  managed service, daemon-switch re-reads doctor and refuses all
+  `client_server_mismatch` endpoints with `HERDR_RESTART_ENDPOINTS_PENDING`.
   Default and named sessions receive deterministic per-user native entry
   identifiers; an endpoint configured with explicit socket-path provenance is
   externally owned and is refused. Every owned object carries
