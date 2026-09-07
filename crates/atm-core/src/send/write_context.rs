@@ -18,7 +18,6 @@ use super::{
     DeliveryPersistenceResult, ResolvedRecipient, SendCommandOutcome, SendOutcome, SendRequest,
     WarningEntry, resolve_recipient, validate_non_self_recipient,
 };
-use crate::caller_context::resolve_roster_alias;
 
 #[expect(
     clippy::too_many_arguments,
@@ -89,17 +88,23 @@ pub(crate) fn prepare_send_context<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     runtime: &R,
-    request: &SendRequest,
+    request: &mut SendRequest,
 ) -> Result<SendExecutionContext, AtmError> {
     // This is the durable-admission half of the pipeline. A daemon must not
     // inspect caller workspace or hook configuration before a durable reply.
     let warnings = Vec::new();
-    let sender_roster = runtime.load_team_roster(&request.caller_team);
-    let canonical_sender = resolve_roster_alias(
-        &request.caller_identity,
+    if let Some((team, member)) = runtime.resolve_roster_member_at_ingress(
         &request.caller_team,
-        &sender_roster,
-    );
+        &request.caller_identity,
+        true,
+    ) {
+        if member != request.caller_identity {
+            request.activity_observation = None;
+        }
+        request.caller_team = team;
+        request.caller_identity = member;
+    }
+    let canonical_sender = request.caller_identity.clone();
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
@@ -112,14 +117,15 @@ pub(crate) fn prepare_send_context<
             origin_timestamp: request.origin_timestamp.is_some(),
         },
     )?;
-    let config = runtime.load_config(&request.current_dir)?;
-    let mut recipient = resolve_recipient(target, &request.caller_team, config.as_ref())?;
-    let recipient_roster = if recipient.team == request.caller_team {
-        sender_roster
-    } else {
-        runtime.load_team_roster(&recipient.team)
-    };
-    recipient.agent = resolve_roster_alias(&recipient.agent, &recipient.team, &recipient_roster);
+    let mut recipient = resolve_recipient(target, &request.caller_team, None)?;
+    if let Some((team, member)) = runtime.resolve_roster_member_at_ingress(
+        &recipient.team,
+        &recipient.agent,
+        target.team().is_none(),
+    ) {
+        recipient.team = team;
+        recipient.agent = member;
+    }
     validate_non_self_recipient(
         &canonical_sender,
         &request.caller_team,

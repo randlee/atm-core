@@ -213,6 +213,11 @@ pub struct HerdrMemberPresence {
     #[serde(skip)]
     pub ordinal: usize,
     pub name: AgentName,
+    /// Effective Herdr identity used for this probe. This differs from the
+    /// canonical roster name when the member has a durable roster alias. A
+    /// v1.1.0 peer omits this additive v1.2.0 field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub herdr_agent: Option<crate::HerdrAgentName>,
     pub outcome: HerdrPresenceOutcome,
 }
 

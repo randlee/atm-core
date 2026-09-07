@@ -330,6 +330,7 @@ pub fn add_member_with_roster_store(
     )?;
     let created_inbox = filesystem::ensure_inbox_exists(&inbox_path)?;
     existing_roster.push(build_member_add_roster_record(&request));
+    preflight_roster_unique_names(roster_store, &request.team, &existing_roster)?;
     replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
 
     Ok(AddMemberOutcome {
@@ -362,14 +363,9 @@ pub fn update_member_with_roster_store(
         .find(|existing_member| existing_member.agent_name == member_name)
         .ok_or_else(|| AtmError::member_not_found(member_name.as_str(), request.team.as_str()))?;
 
-    if request.alias == Some(None) {
-        ensure_canonical_member_name_available(roster_store, &request.team, &member_name)?;
-    }
     validate_effective_herdr_agent_name(member, &request)?;
-    if let Some(alias) = request.alias.as_ref().and_then(|value| value.as_deref()) {
-        ensure_alias_available(roster_store, alias)?;
-    }
     apply_member_metadata_update(member, &request);
+    preflight_roster_unique_names(roster_store, &request.team, &existing_roster)?;
     roster_store.replace_roster(&request.team, &existing_roster)?;
 
     Ok(UpdateMemberOutcome {
@@ -428,12 +424,6 @@ fn load_member_add_context(
 ) -> Result<MemberAddContext, AtmError> {
     let existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     ensure_member_absent(&existing_roster, &request.team, &request.member)?;
-    if request.alias.is_none() {
-        ensure_canonical_member_name_available(roster_store, &request.team, &request.member)?;
-    }
-    if let Some(alias) = request.alias.as_deref() {
-        ensure_alias_available(roster_store, alias)?;
-    }
     Ok(MemberAddContext { existing_roster })
 }
 
@@ -455,46 +445,31 @@ fn ensure_member_absent(
     Ok(())
 }
 
-fn ensure_alias_available(roster_store: &dyn RosterStore, alias: &str) -> Result<(), AtmError> {
-    for conflicting_team in roster_store.list_teams()? {
-        for entry in roster_store.load_roster(&conflicting_team)? {
-            if entry.agent_name.as_str() == alias
-                || entry
-                    .metadata_json
-                    .get("alias")
-                    .and_then(serde_json::Value::as_str)
-                    == Some(alias)
-            {
-                return Err(AtmError::validation(format!(
-                    "alias '{alias}' is already assigned in team '{conflicting_team}'"
-                )));
-            }
-        }
-    }
-    Ok(())
-}
-
-fn ensure_canonical_member_name_available(
+/// Produces the same collision diagnostic as durable enforcement without
+/// claiming authority over the write. The caller's proposed roster replaces
+/// its persisted snapshot while every other team's database-owned projection
+/// stays in the comparison.
+fn preflight_roster_unique_names(
     roster_store: &dyn RosterStore,
     team: &TeamName,
-    member: &AgentName,
+    proposed_roster: &[RosterEntry],
 ) -> Result<(), AtmError> {
-    for conflicting_team in roster_store.list_teams()? {
-        if conflicting_team == *team {
-            continue;
-        }
-        if roster_store
-            .load_roster(&conflicting_team)?
+    let mut names = roster_store
+        .unique_names()?
+        .into_iter()
+        .filter(|name| name.team_name != *team)
+        .collect::<Vec<_>>();
+    names.extend(
+        proposed_roster
             .iter()
-            .any(|entry| entry.agent_name == *member)
-        {
-            return Err(AtmError::validation(format!(
-                "member '{}' already exists in team '{conflicting_team}'; add it with a unique --alias",
-                member
-            )));
-        }
+            .map(atm_storage::RosterUniqueName::from_member),
+    );
+    let collisions = atm_storage::roster_unique_name_collisions(&names);
+    if collisions.is_empty() {
+        Ok(())
+    } else {
+        Err(atm_storage::roster_unique_name_collision_error(&collisions))
     }
-    Ok(())
 }
 
 fn validate_effective_herdr_agent_name(
@@ -881,7 +856,7 @@ fn parse_backend(
 fn parse_alias(
     alias: Option<&str>,
     clear_alias: bool,
-    allow_clear: bool,
+    _allow_clear: bool,
 ) -> Result<Option<Option<String>>, AtmError> {
     if clear_alias && alias.is_some_and(|value| !value.trim().is_empty()) {
         return Err(AtmError::validation(
@@ -889,16 +864,20 @@ fn parse_alias(
         ));
     }
     if clear_alias || alias.is_some_and(|value| value.trim().is_empty()) {
-        return if allow_clear {
-            Ok(Some(None))
-        } else {
-            Err(AtmError::validation("add-member --alias must not be blank"))
-        };
+        // A blank add-member alias means no alias; on update the same inner
+        // `None` remains the established explicit-clear request shape.
+        return Ok(Some(None));
     }
     let Some(alias) = alias else {
         return Ok(None);
     };
     crate::address::validate_path_segment(alias, "alias")?;
+    if alias == atm_storage::DAEMON_ACTOR_NAME {
+        return Err(AtmError::new(
+            AtmErrorCode::MessageValidationFailed,
+            "atm-daemon is a reserved sender name",
+        ));
+    }
     Ok(Some(Some(alias.to_owned())))
 }
 
@@ -1023,6 +1002,14 @@ mod tests {
         member
     }
 
+    fn roster_member_with_alias(team: &str, agent: &str, alias: &str) -> RosterEntry {
+        let mut member = roster_member(team, agent);
+        member
+            .metadata_json
+            .insert("alias".to_owned(), json!(alias));
+        member
+    }
+
     #[test]
     fn add_member_rejects_reserved_daemon_name_without_changing_roster() {
         let store = TestRosterStore::default();
@@ -1135,7 +1122,7 @@ mod tests {
                 backend: None,
                 target: None,
                 session: None,
-                alias: Some("team-lead_atm-dev"),
+                alias: Some("Team_Lead"),
                 clear_alias: false,
             },
         )
@@ -1148,10 +1135,93 @@ mod tests {
             .into_iter()
             .find(|member| member.agent_name.as_str() == "worker")
             .expect("worker record");
-        assert_eq!(
-            worker.metadata_json.get("alias"),
-            Some(&json!("team-lead_atm-dev"))
-        );
+        assert_eq!(worker.metadata_json.get("alias"), Some(&json!("Team_Lead")));
+    }
+
+    #[test]
+    fn unique_name_b03_rejects_invalid_canonical_herdr_member_name() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let error = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "Team-Lead",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("worker-home"),
+            BackendOptions {
+                backend: Some("herdr"),
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: false,
+            },
+        )
+        .expect_err("canonical Herdr name must meet Herdr grammar");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    }
+
+    #[test]
+    fn unique_name_b06_rejects_switching_an_invalid_canonical_name_to_herdr() {
+        let error = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("team"),
+            TEST_TEAM,
+            "Team-Lead",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: Some("herdr"),
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: false,
+            },
+        )
+        .expect_err("Herdr backend requires a valid effective name");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    }
+
+    #[test]
+    fn unique_name_b07_rejects_reserved_daemon_alias_at_add_and_update() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let options = BackendOptions {
+            backend: None,
+            target: None,
+            session: None,
+            alias: Some(atm_storage::DAEMON_ACTOR_NAME),
+            clear_alias: false,
+        };
+        let add_error = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "worker",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("worker-home"),
+            options,
+        )
+        .expect_err("reserved alias must be rejected at add-member");
+        assert_eq!(add_error.code(), AtmErrorCode::MessageValidationFailed);
+
+        let update_error = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("team"),
+            TEST_TEAM,
+            "worker",
+            None,
+            None,
+            None,
+            None,
+            None,
+            options,
+        )
+        .expect_err("reserved alias must be rejected at set-member");
+        assert_eq!(update_error.code(), AtmErrorCode::MessageValidationFailed);
     }
 
     #[test]
@@ -1178,24 +1248,16 @@ mod tests {
     }
 
     #[test]
-    fn alias_must_not_collide_with_member_name_or_team_alias() {
-        let store = TestRosterStore::default();
-        let team: TeamName = TEST_TEAM.parse().expect("team");
-        let mut worker = roster_member(TEST_TEAM, "worker");
-        worker
-            .metadata_json
-            .insert("alias".to_string(), json!("worker_atm-dev"));
-        store.seed(&team, vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD), worker]);
+    fn unique_name_b01_rejects_invalid_atm_aliases_at_add_and_update() {
         let root = tempfile::tempdir().expect("tempdir");
-
-        for alias in ["worker", "worker_atm-dev"] {
-            let request = AddMemberRequest::new_with_backend(
+        for alias in ["bad/name", "has space", "member@team", "member.name"] {
+            let add_error = AddMemberRequest::new_with_backend(
                 root.path().to_path_buf(),
                 TEST_TEAM,
-                "other",
+                "worker",
                 "worker".to_owned(),
                 "gpt-5".to_owned(),
-                root.path().join("other-home"),
+                root.path().join("worker-home"),
                 BackendOptions {
                     backend: None,
                     target: None,
@@ -1204,17 +1266,352 @@ mod tests {
                     clear_alias: false,
                 },
             )
-            .expect("request");
+            .expect_err("invalid ATM alias must be rejected at add-member");
+            assert_eq!(
+                add_error.code(),
+                AtmErrorCode::AddressParseFailed,
+                "{alias}"
+            );
 
-            let error = add_member_with_roster_store(&store, request).expect_err("alias collision");
-            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+            let update_error = UpdateMemberRequest::new_with_backend(
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                TEST_TEAM.parse().expect("team"),
+                TEST_TEAM,
+                "worker",
+                None,
+                None,
+                None,
+                None,
+                None,
+                BackendOptions {
+                    backend: None,
+                    target: None,
+                    session: None,
+                    alias: Some(alias),
+                    clear_alias: false,
+                },
+            )
+            .expect_err("invalid ATM alias must be rejected at set-member");
+            assert_eq!(
+                update_error.code(),
+                AtmErrorCode::AddressParseFailed,
+                "{alias}"
+            );
         }
+    }
+
+    #[test]
+    fn unique_name_b04_rejects_invalid_herdr_aliases_at_add_and_update() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let too_long = "a".repeat(33);
+        for alias in [too_long.as_str(), "1member", "-member"] {
+            let add_error = AddMemberRequest::new_with_backend(
+                root.path().to_path_buf(),
+                TEST_TEAM,
+                "worker",
+                "worker".to_owned(),
+                "gpt-5".to_owned(),
+                root.path().join("worker-home"),
+                BackendOptions {
+                    backend: Some("herdr"),
+                    target: None,
+                    session: None,
+                    alias: Some(alias),
+                    clear_alias: false,
+                },
+            )
+            .expect_err("invalid Herdr alias must be rejected at add-member");
+            assert_eq!(
+                add_error.code(),
+                AtmErrorCode::MessageValidationFailed,
+                "{alias}"
+            );
+
+            let update_error = UpdateMemberRequest::new_with_backend(
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                TEST_TEAM.parse().expect("team"),
+                TEST_TEAM,
+                "worker",
+                None,
+                None,
+                None,
+                None,
+                None,
+                BackendOptions {
+                    backend: Some("herdr"),
+                    target: None,
+                    session: None,
+                    alias: Some(alias),
+                    clear_alias: false,
+                },
+            )
+            .expect_err("invalid Herdr alias must be rejected at set-member");
+            assert_eq!(
+                update_error.code(),
+                AtmErrorCode::MessageValidationFailed,
+                "{alias}"
+            );
+        }
+    }
+
+    #[test]
+    fn unique_name_a09_canonical_name_of_aliased_member_is_available() {
+        let store = TestRosterStore::default();
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let worker_alias = format!("worker_{TEST_TEAM}");
+        let mut worker = roster_member(TEST_TEAM, "worker");
+        worker
+            .metadata_json
+            .insert("alias".to_string(), json!(&worker_alias));
+        store.seed(&team, vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD), worker]);
+        let root = tempfile::tempdir().expect("tempdir");
+
+        let allowed = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "other",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("other-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("worker"),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        add_member_with_roster_store(&store, allowed).expect("canonical name is hidden by alias");
+
+        let rejected = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "another",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("another-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some(worker_alias.as_str()),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        let error =
+            add_member_with_roster_store(&store, rejected).expect_err("effective-name collision");
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains(&format!("({TEST_TEAM}, worker)")));
+        assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
+    fn unique_name_g02_preflight_collision_names_alias_owner_and_team() {
+        let store = TestRosterStore::default();
+        let owner_team: TeamName = "team-a".parse().expect("team");
+        store.seed(
+            &owner_team,
+            vec![roster_member_with_alias("team-a", "robert", "bob")],
+        );
+        let root = tempfile::tempdir().expect("tempdir");
+        let request = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            "team-b",
+            "bob",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("bob-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+
+        let error = add_member_with_roster_store(&store, request)
+            .expect_err("canonical name must not collide with another team's alias");
+        let expected = atm_storage::roster_unique_name_collision_error(&[
+            atm_storage::RosterUniqueName {
+                team_name: "team-a".parse().expect("team"),
+                agent_name: "robert".parse().expect("agent"),
+                unique_name: "bob".to_owned(),
+            },
+            atm_storage::RosterUniqueName {
+                team_name: "team-b".parse().expect("team"),
+                agent_name: "bob".parse().expect("agent"),
+                unique_name: "bob".to_owned(),
+            },
+        ]);
+
+        assert_eq!(error.code(), expected.code());
+        assert_eq!(error.message(), expected.message());
+        assert!(error.message().contains("(team-a, robert)"));
+        assert!(error.message().contains("(team-b, bob)"));
+        assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
+    fn unique_name_a14_update_alias_rejects_other_team_alias() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(
+            &team_a,
+            vec![roster_member_with_alias("team-a", "bob", "bobby")],
+        );
+        store.seed(
+            &team_b,
+            vec![
+                lead_member("team-b", ROLE_TEAM_LEAD),
+                roster_member("team-b", "sam"),
+            ],
+        );
+
+        let request = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team_b.clone(),
+            "team-b",
+            "sam",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("bobby"),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        let error = update_member_with_roster_store(&store, request)
+            .expect_err("other-team effective alias collision");
+
+        assert!(error.message().contains("(team-a, bob)"));
+        assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
+    fn unique_name_a15_update_alias_may_match_aliased_member_canonical() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(
+            &team_a,
+            vec![roster_member_with_alias("team-a", "bob", "bobby")],
+        );
+        store.seed(
+            &team_b,
+            vec![
+                lead_member("team-b", ROLE_TEAM_LEAD),
+                roster_member("team-b", "sam"),
+            ],
+        );
+
+        let request = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team_b.clone(),
+            "team-b",
+            "sam",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("bob"),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        update_member_with_roster_store(&store, request)
+            .expect("aliased canonical name is available");
+
+        let sam = store
+            .members(&team_b)
+            .into_iter()
+            .find(|member| member.agent_name.as_str() == "sam")
+            .expect("updated member");
+        assert_eq!(sam.metadata_json.get("alias"), Some(&json!("bob")));
+    }
+
+    #[test]
+    fn unique_name_a16_update_alias_rejects_other_team_canonical() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(&team_a, vec![roster_member("team-a", "bob")]);
+        store.seed(
+            &team_b,
+            vec![
+                lead_member("team-b", ROLE_TEAM_LEAD),
+                roster_member("team-b", "sam"),
+            ],
+        );
+
+        let request = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team_b.clone(),
+            "team-b",
+            "sam",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("bob"),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        let error = update_member_with_roster_store(&store, request)
+            .expect_err("other-team canonical effective name collision");
+
+        assert!(error.message().contains("(team-a, bob)"));
+        assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
+    fn unique_name_a18_blank_add_alias_is_normalized_to_none() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let request = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "worker",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("worker-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("  "),
+                clear_alias: false,
+            },
+        )
+        .expect("blank alias is no alias");
+        assert_eq!(request.alias, None);
     }
 
     #[test]
     fn cross_team_member_names_require_alias_but_first_occurrence_does_not() {
         let store = TestRosterStore::default();
         let first_team: TeamName = "other-team".parse().expect("team");
+        let team_lead_alias = format!("{ROLE_TEAM_LEAD}_{TEST_TEAM}");
         store.seed(&first_team, vec![lead_member("other-team", ROLE_TEAM_LEAD)]);
         let root = tempfile::tempdir().expect("tempdir");
         let no_alias = AddMemberRequest::new_with_backend(
@@ -1248,7 +1645,7 @@ mod tests {
                 backend: None,
                 target: None,
                 session: None,
-                alias: Some("team-lead_atm-dev"),
+                alias: Some(team_lead_alias.as_str()),
                 clear_alias: false,
             },
         )
@@ -1261,10 +1658,11 @@ mod tests {
         let store = TestRosterStore::default();
         let team: TeamName = TEST_TEAM.parse().expect("team");
         let other: TeamName = "other-team".parse().expect("team");
+        let team_lead_alias = format!("{ROLE_TEAM_LEAD}_{TEST_TEAM}");
         let mut local = lead_member(TEST_TEAM, ROLE_TEAM_LEAD);
         local
             .metadata_json
-            .insert("alias".to_string(), json!("team-lead_atm-dev"));
+            .insert("alias".to_string(), json!(&team_lead_alias));
         store.seed(&team, vec![local]);
         store.seed(&other, vec![lead_member("other-team", ROLE_TEAM_LEAD)]);
         let request = UpdateMemberRequest::new_with_backend(
@@ -1295,10 +1693,11 @@ mod tests {
     fn update_member_can_clear_an_existing_alias() {
         let store = TestRosterStore::default();
         let team: TeamName = TEST_TEAM.parse().expect("team");
+        let worker_alias = format!("worker_{TEST_TEAM}");
         let mut worker = roster_member(TEST_TEAM, "worker");
         worker
             .metadata_json
-            .insert("alias".to_string(), json!("worker_atm-dev"));
+            .insert("alias".to_string(), json!(&worker_alias));
         store.seed(&team, vec![lead_member(TEST_TEAM, ROLE_TEAM_LEAD), worker]);
         let request = UpdateMemberRequest::new_with_backend(
             ROLE_TEAM_LEAD.parse().expect("caller"),

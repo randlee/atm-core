@@ -23,7 +23,7 @@
         "responses": {
           "200": {
             "error": false,
-            "schema": null
+            "schema": "#/components/schemas/DoctorResponse"
           },
           "default": {
             "error": true,
@@ -272,6 +272,12 @@
       "properties": [],
       "required": []
     },
+    "DoctorResponse": {
+      "properties": [
+        "herdr"
+      ],
+      "required": []
+    },
     "GraftReceiverLease": {
       "properties": [
         "capability",
@@ -346,6 +352,29 @@
     "HeartbeatResponse": {
       "properties": [],
       "required": []
+    },
+    "HerdrDoctorReport": {
+      "properties": [
+        "endpoints"
+      ],
+      "required": []
+    },
+    "HerdrEndpointDoctorReport": {
+      "properties": [
+        "members"
+      ],
+      "required": []
+    },
+    "HerdrMemberPresence": {
+      "properties": [
+        "herdr_agent",
+        "name",
+        "outcome"
+      ],
+      "required": [
+        "name",
+        "outcome"
+      ]
     },
     "ListQuery": {
       "properties": [],

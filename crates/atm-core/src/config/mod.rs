@@ -8,7 +8,6 @@
 //! runtime sender identity resolution. Set `ATM_IDENTITY` instead and remove
 //! the deprecated config keys once the environment-based identity is in place.
 
-pub mod aliases;
 pub mod bridge;
 pub mod discovery;
 pub mod types;
@@ -62,7 +61,6 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         obsolete_identity: parsed.atm.identity.or(parsed.identity),
         default_team: parse_default_team(parsed.atm.default_team.or(parsed.default_team), &path)?,
         team_members: normalize_team_members(parsed.atm.team_members, &path)?,
-        aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
         max_message_bytes: normalize_max_message_bytes(parsed.atm.max_message_bytes, &path)?,
         claude_jsonl_body_export_max_bytes: normalize_claude_jsonl_body_export_max_bytes(
@@ -225,8 +223,6 @@ struct RawAtmSection {
     #[serde(default)]
     team_members: Vec<String>,
     #[serde(default)]
-    aliases: std::collections::BTreeMap<String, String>,
-    #[serde(default)]
     post_send_hooks: Vec<RawPostSendHookRule>,
     #[serde(default)]
     max_message_bytes: Option<u64>,
@@ -358,16 +354,6 @@ fn normalize_team_members(values: Vec<String>, path: &Path) -> Result<Vec<TeamNa
                 )
             })
         })
-        .collect()
-}
-
-fn normalize_aliases(
-    aliases: std::collections::BTreeMap<String, String>,
-) -> std::collections::BTreeMap<String, String> {
-    aliases
-        .into_iter()
-        .map(|(alias, canonical)| (alias.trim().to_string(), canonical.trim().to_string()))
-        .filter(|(alias, canonical)| !alias.is_empty() && !canonical.is_empty())
         .collect()
 }
 
@@ -504,7 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn load_config_reads_team_members_aliases_and_post_send_hooks() {
+    fn load_config_ignores_retired_aliases_and_reads_team_members_and_hooks() {
         let root = unique_temp_dir("atm-config-surface");
         fs::write(
             root.path().join(".atm.toml"),
@@ -564,12 +550,6 @@ blank = ""
             ByteCount::new(128 * 1024)
         );
         assert_eq!(config.max_message_bytes, ByteCount::new(MAX_MESSAGE_BYTES));
-        assert_eq!(
-            config.aliases.get("tl").map(String::as_str),
-            Some(ROLE_TEAM_LEAD)
-        );
-        assert_eq!(config.aliases.get("qa").map(String::as_str), Some(TEST_QA));
-        assert!(!config.aliases.contains_key("blank"));
     }
 
     #[test]

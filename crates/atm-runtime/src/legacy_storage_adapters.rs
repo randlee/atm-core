@@ -282,6 +282,10 @@ impl boundary::RosterStore for BoundaryRosterStoreView {
         self.store.list_teams()
     }
 
+    fn unique_names(&self) -> Result<Vec<atm_storage::RosterUniqueName>, AtmError> {
+        self.store.unique_names()
+    }
+
     fn health_snapshot(
         &self,
         team: &TeamName,

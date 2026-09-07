@@ -2,6 +2,7 @@ mod ax6;
 pub mod health;
 mod herdr_state;
 pub mod report;
+mod roster_names;
 mod team_scope;
 
 #[cfg(test)]
@@ -905,7 +906,7 @@ fn summarize_doctor_findings(findings: &[DoctorFinding]) -> DoctorSummary {
 }
 
 fn load_member_roster(
-    runtime: &impl RetainedServiceRuntime,
+    runtime: &LocalServiceRuntime,
     team: &TeamName,
     caller_identity: Option<&AgentName>,
     live_cwd: Option<&Path>,
@@ -923,6 +924,13 @@ fn load_member_roster(
     }
     let roster = runtime.load_team_roster(team);
     push_mixed_local_backend_warning(team, &roster, findings);
+    roster_names::push_duplicate_effective_name_warnings(
+        runtime,
+        team,
+        &roster,
+        team_context,
+        findings,
+    );
     let members = ordered_roster_member_summaries(&roster, caller_identity, live_cwd);
 
     Some(MembersList {
@@ -1131,6 +1139,7 @@ mod tests {
         let member = |ordinal: usize, name: &str, outcome| HerdrMemberPresence {
             ordinal,
             name: AgentName::from_validated(name.to_owned()),
+            herdr_agent: Some(crate::HerdrAgentName::new(name).expect("valid Herdr test name")),
             outcome,
         };
         let observation = |members| HerdrEndpointObservation {
@@ -1204,15 +1213,42 @@ mod tests {
         );
         let member_json =
             serde_json::to_value(&observations[0].members[0]).expect("member presence serializes");
-        assert_eq!(
-            member_json
-                .as_object()
-                .expect("member presence is an object")
-                .keys()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-            vec!["name", "outcome"]
-        );
+        let mut member_keys = member_json
+            .as_object()
+            .expect("member presence is an object")
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        member_keys.sort_unstable();
+        assert_eq!(member_keys, vec!["herdr_agent", "name", "outcome"]);
+    }
+
+    #[test]
+    fn unique_name_c05_presence_serializes_the_effective_herdr_agent() {
+        let presence = HerdrMemberPresence {
+            ordinal: 0,
+            name: AgentName::from_validated("canonical-member"),
+            herdr_agent: Some(crate::HerdrAgentName::new("herdr-alias").expect("valid alias")),
+            outcome: HerdrPresenceOutcome::Visible,
+        };
+
+        let serialized = serde_json::to_value(presence).expect("presence serializes");
+
+        assert_eq!(serialized["name"], "canonical-member");
+        assert_eq!(serialized["herdr_agent"], "herdr-alias");
+    }
+
+    #[test]
+    fn herdr_member_presence_accepts_v1_1_payload_without_herdr_agent() {
+        let presence: HerdrMemberPresence = serde_json::from_value(serde_json::json!({
+            "name": "canonical-member",
+            "outcome": { "kind": "visible" }
+        }))
+        .expect("v1.1 payload remains readable");
+
+        assert_eq!(presence.name.as_str(), "canonical-member");
+        assert_eq!(presence.herdr_agent, None);
+        assert_eq!(presence.outcome, HerdrPresenceOutcome::Visible);
     }
 
     struct UnusedMailStore;
@@ -1805,6 +1841,38 @@ mod tests {
                 .team_rosters
                 .iter()
                 .all(|roster| roster.members.len() == 1)
+        );
+    }
+
+    #[test]
+    fn unique_name_f07_reports_legacy_effective_name_conflicts_for_the_scoped_team() {
+        let paths = TestPaths::new();
+        let mut store =
+            roster_store_for_teams(&[(TEST_TEAM, "local-member"), ("other", "remote-member")]);
+        for member in &mut store.members {
+            member.metadata_json.insert(
+                "alias".to_owned(),
+                serde_json::Value::String("shared-herdr-name".to_owned()),
+            );
+        }
+        let runtime = test_runtime_from_store(store);
+
+        let report =
+            run_doctor_with_runtime(query(&paths), &healthy_observability(&paths), &runtime)
+                .expect("doctor report");
+
+        let finding = report
+            .findings
+            .iter()
+            .find(|finding| finding.message.contains("shared-herdr-name"))
+            .expect("duplicate effective-name finding");
+        assert_eq!(finding.code, AtmErrorCode::WarningRosterDrift);
+        assert!(finding.message.contains("remote-member@other"));
+        assert!(
+            finding
+                .remediation
+                .as_deref()
+                .is_some_and(|remediation| remediation.contains("--alias"))
         );
     }
 

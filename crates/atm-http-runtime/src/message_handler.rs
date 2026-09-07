@@ -1771,7 +1771,11 @@ mod tests {
         .expect_err("different-major peer version is incompatible");
         assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
         assert!(error.message().contains("sender 2.0.0"));
-        assert!(error.message().contains("receiver 1.1.0"));
+        assert!(
+            error
+                .message()
+                .contains(&format!("receiver {}", atm_core::api::HTTP_API_VERSION))
+        );
     }
 
     #[test]

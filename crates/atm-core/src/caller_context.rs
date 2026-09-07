@@ -61,24 +61,50 @@ pub fn resolve_roster_alias(
     team: &TeamName,
     roster: &[RosterEntry],
 ) -> AgentName {
-    if roster
-        .iter()
-        .any(|member| member.team_name == *team && member.agent_name == *candidate)
-    {
-        return candidate.clone();
-    }
+    resolve_roster_alias_with_owner(candidate, team, roster, roster, false).1
+}
 
-    roster
+/// Resolves a roster identity at daemon ingress from the runtime-owned roster
+/// mirror. A canonical member in the addressed team wins. When the address
+/// did not name a team, a unique roster alias may select its owning team;
+/// explicit `@team` callers pass `allow_database_wide_alias = false`.
+#[must_use]
+pub fn resolve_roster_alias_with_owner(
+    candidate: &AgentName,
+    addressed_team: &TeamName,
+    addressed_roster: &[RosterEntry],
+    all_rosters: &[RosterEntry],
+    allow_database_wide_alias: bool,
+) -> (TeamName, AgentName) {
+    if addressed_roster
         .iter()
-        .find(|member| {
-            member.team_name == *team
-                && member
-                    .metadata_json
-                    .get("alias")
-                    .and_then(serde_json::Value::as_str)
-                    == Some(candidate.as_str())
+        .any(|member| member.agent_name == *candidate)
+    {
+        return (addressed_team.clone(), candidate.clone());
+    }
+    if let Some(member) = addressed_roster.iter().find(|member| {
+        member
+            .metadata_json
+            .get("alias")
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            == Some(candidate.as_str())
+    }) {
+        return (addressed_team.clone(), member.agent_name.clone());
+    }
+    if allow_database_wide_alias
+        && let Some(member) = all_rosters.iter().find(|member| {
+            member
+                .metadata_json
+                .get("alias")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                == Some(candidate.as_str())
         })
-        .map_or_else(|| candidate.clone(), |member| member.agent_name.clone())
+    {
+        return (member.team_name.clone(), member.agent_name.clone());
+    }
+    (addressed_team.clone(), candidate.clone())
 }
 
 /// Replaces a caller alias with its canonical durable roster identity before

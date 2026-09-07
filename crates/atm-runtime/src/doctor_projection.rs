@@ -396,11 +396,12 @@ mod tests {
 
     fn roster(team: &str) -> RosterSnapshot {
         let team = TeamName::from_validated(team);
+        let member = AgentName::from_validated(format!("{team}-member"));
         RosterSnapshot {
             team_name: team.clone(),
             members: vec![RosterMember {
                 team_name: team,
-                agent_name: AgentName::from_validated("member"),
+                agent_name: member,
                 member_kind: RosterMemberKind::Permanent,
                 harness: RosterHarness::ClaudeCode,
                 agent_type: atm_storage::AgentType::Worker,

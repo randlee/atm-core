@@ -44,9 +44,9 @@ pub use contract::{
     MessageQuery, MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
     PeerConfigStore, PendingNudgeStore, PrivateKeyRef, ReadDeadline, ReadLaneError,
     RosterChangedEvent, RosterHarness, RosterMember, RosterMemberEphemeralState, RosterMemberKind,
-    RosterRuntimeMirror, RosterSnapshot, RosterStore, StorageNotifier,
+    RosterRuntimeMirror, RosterSnapshot, RosterStore, RosterUniqueName, StorageNotifier,
     TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
-    derive_ack_requirement,
+    derive_ack_requirement, roster_unique_name_collision_error, roster_unique_name_collisions,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
