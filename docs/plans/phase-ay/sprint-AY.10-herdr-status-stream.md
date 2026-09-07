@@ -9,7 +9,7 @@ integration_branch: integrate/phase-ay
 stack_parent: AY.8
 pr_target: feature/ay8-herdr-socket-transport
 target: integrate/phase-ay
-status: draft
+status: gated (dispatch only after "Decision (Rand, YYYY-MM-DD): accept N-per-100ms" is recorded in phase-ay-plan.md item 7; "herdr change first" re-plans this sprint, "stop AY.10" retires it)
 recommended_agent: cipher
 recommended_model: fast
 added: 2026-09-06 (subscription socket; see phase-ay-plan.md "Rework record" item 7)
@@ -124,6 +124,18 @@ feature/ay8-herdr-socket-transport feature/ay10-herdr-status-stream`. If
 the AY.8a/AY.8b split is exercised, the parent is AY.8b. Never merge an
 unmerged parallel sibling into this branch.
 
+Two preconditions gate dispatch. First, the decision line under rework
+item 7 of phase-ay-plan.md reads `accept N-per-100ms` (frontmatter
+`status`); fenix refuses to render the dev-task while
+`grep -E '^   Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): accept N-per-100ms$'`
+finds no line in that file, and quality-mgr refuses the AY.10 PR on the
+same check. Second, P-E(c): the
+`boundaries/atm-herdr/herdr-process-adapter.toml` diff this sprint makes
+(D7) is reviewed by boundary-guard against AY.8's head before dispatch,
+exactly as AY.8 D1 was reviewed against `integrate/phase-ay`; the approved
+diff is this sprint's first commit (Required work 1). If AY.8's TOML
+changes after that review, the review is redone before the first commit.
+
 ## Deliverables
 
 - [ ] D1 — `pub trait HerdrStatusStream` and the C1 event types in
@@ -165,7 +177,9 @@ unmerged parallel sibling into this branch.
 - [ ] D7 — `boundaries/atm-herdr/herdr-process-adapter.toml`: the AY.8
   `herdr_local_socket_client` key also owns `status_stream.rs`; no other
   boundary field changes. Composed-file rule P-E(b) applies (this sprint
-  is the third editor; see phase-ay-plan.md P-E).
+  is the third editor; see phase-ay-plan.md P-E), and the diff is
+  approved by boundary-guard against AY.8's head before dispatch (P-E(c),
+  "Dispatch and PR topology").
 - [ ] D8 — `docs/atm-herdr/requirements.md` gains one requirement id,
   HR-CORE-011 (status stream: socket-only, one held connection per
   session, one unfiltered `PaneAgentStatusChanged` subscription per pane,
@@ -288,8 +302,13 @@ drain rules are AY.8 C2's.
 The reconnect budget is the stream's own. Stream failures never call into
 the ADR-058 D10.1 nudge breaker (HR-SAFE-005..007), never open it, and
 never read its state; the poll path's breaker is untouched by this sprint.
-Whether stream failures should feed a breaker is decided in AY.12, when
-the stream becomes a state source, not here.
+This holds for the whole phase, including AY.12 when the stream becomes
+the state source: the breaker guards request-path infrastructure failures
+(HR-CORE-009), while a stream that exhausts its budget already surfaces as
+`Closed` and the consumer falls back to its last `Baseline` (AY.11 D2,
+AY.12 D4). Coupling the two would open the nudge breaker, and block
+prompts that the request socket could still deliver, on a stream-only
+fault. HR-CORE-011 records "no nudge-breaker coupling" as final.
 
 ### C3 — changed-file allowlist
 
@@ -304,21 +323,47 @@ the stream becomes a state source, not here.
 - `boundaries/atm-herdr/herdr-process-adapter.toml`
 - `docs/atm-herdr/herdr-versions.md`
 - `docs/atm-herdr/requirements.md` (HR-CORE-011)
-- `docs/adr/` ADR-058 file (amendment paragraph)
+- `docs/adr/ADR-058-herdr-local-steer-backend-contract.md` (amendment paragraph)
 
 No file under `crates/atm-daemon-bootstrap`, `crates/atm-http-runtime`,
 or `crates/atm-daemon` changes. `transport_cli.rs` does not change.
 
-### Size
+### Size and pre-declared split
 
 One crate, one new module, one fixture mode, one test file, two doc
-edits: expected to fit one context window. No split is pre-declared; if it
-does not fit, that is a plan amendment, not a dispatch-time decision.
+edits: expected to fit one context window. If it does not, the split point
+is fixed in advance, the same way as AY.8's: sprint AY.10a lands D1, D3,
+D7 and D8 with C1 (trait and event types, factory return that is `None`
+for both transports until AY.10b flips the socket branch to `Some`, pin,
+boundary key, HR-CORE-011, ADR-058 paragraph) and acceptance 1, 5 and 6,
+and AY.10b lands D2, D4, D5 and D6 with C2 (`status_stream.rs`, fake
+server streaming mode, the protocol test file, herdr-versions column) and
+acceptance 2, 3, 3a and 4, stacked on AY.10a. If the split is exercised:
+AY.10a keeps this sprint's branch (`feature/ay10-herdr-status-stream`,
+`pr_target` AY.8's branch, `stack_parent` AY.8) and AY.10b is
+`feature/ay10b-herdr-status-stream-protocol` (`stack_parent` AY.10a,
+`pr_target` AY.10a's branch, linked with `gh stack link --base
+integrate/phase-ay feature/ay8-herdr-socket-transport
+feature/ay10-herdr-status-stream
+feature/ay10b-herdr-status-stream-protocol`); both dispatch gates above
+apply at AY.10a only (AY.10b edits no boundary TOML and needs no new
+decision); C3 splits by deliverable (AY.10a: lib.rs, transport.rs,
+boundary_enforcement.rs, the boundary TOML, requirements.md, the ADR-058
+file; AY.10b: status_stream.rs, transport_socket.rs,
+tests/status_stream.rs, tests/support/fake_herdr_socket/**,
+tests/fixtures/herdr-versions/0.8.2/events/**, herdr-versions.md);
+AY.11's `must_follow` retargets to AY.10b (AY.11 consumes the working
+stream, not the trait alone), and the stack becomes AY.8 -> AY.10a ->
+AY.10b. Exercising the split is a plan amendment PR that updates this
+section's status, AY.11's dependency_relations and frontmatter, and the
+sprint map and wave tables in phase-ay-plan.md in the same commit. No
+other split is permitted without a plan amendment.
 
 ## Required work
 
 1. Land D1/D3/D7/D8 (trait, factory return, pin, boundary, requirement
-   id, ADR amendment) as the first commit.
+   id, ADR amendment) as the first commit; the D7 TOML hunk is the
+   boundary-guard-approved P-E(c) diff, byte for byte.
 2. Implement C2 against the fake server's streaming mode (sequential
    scripted-latency probes, replayed history, duplicate-valued events);
    close every handover, reconnect, resubscribe, cap, handshake-budget,

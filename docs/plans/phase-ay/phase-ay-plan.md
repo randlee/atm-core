@@ -1126,6 +1126,16 @@ finds no line in this file, or while
 finds no line under rework item 7. This is the forcing function that
 AQ2.6 and ADR-058 lacked (see AW-READY-W1).
 
+AY.10's dispatch gate uses the same mechanism one step earlier: fenix
+refuses to render AY.10's dev-task, and quality-mgr refuses the AY.10 PR,
+while
+`grep -E '^   Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): accept N-per-100ms$'`
+finds no line under rework item 7. The three item-7 answers are distinct
+strings (`accept N-per-100ms`, `herdr change first`, `stop AY.10`) so no
+pattern here matches another line's answer; `herdr change first` re-plans
+AY.10 by plan amendment and `stop AY.10` retires AY.10 to AY.12 and the
+socket stream with it.
+
 ## Request set the transport must carry (from phase AX contract)
 
 Source of truth: feature/ax6-lead-notification-doctor (PR #1204, head
@@ -1141,7 +1151,7 @@ transport derives the endpoint from that same configured session.
 | HR-CORE-005 | list | `herdr agent list` |
 | HR-CORE-010 (AX.6) | notify | `herdr notification show <title> --body <body> --sound request`; mail body forbidden (HR-SAFE-003); sound fixed |
 | doctor (AY.3) | server_status | `herdr status server --json` (JSON `version`, `protocol`; verified present at v0.8.0 346411fa, v0.8.2 9eb52145 and master `src/cli/status.rs`); socket: `ping`. Doctor only, never on the nudge path |
-| HR-CORE-011 (AY.10, added 2026-09-06) | status stream | No CLI equivalent. Socket only: `events.subscribe` held connection, one per session, subscriptions `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.exited` (re-list triggers only; they replay retained hub history), and one unfiltered `pane.agent_status_changed { pane_id }` per discovered pane; baseline from `agent.list` taken after `SubscriptionStarted`, stream value wins when newer, changes deduped by held value. Herdr-side cost: one in-process `pane_get` per subscribed pane per 100 ms while the hub is quiet (AY.10 "Herdr facts"), accepted by Rand under rework item 7 before dispatch. Exposed by `HerdrStatusStream`, separate from `HerdrProcessAdapter`; CLI composition provides `None` |
+| HR-CORE-011 (AY.10, added 2026-09-06) | status stream | No CLI equivalent. Socket only: `events.subscribe` held connection, one per session, subscriptions `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.exited` (re-list triggers only; they replay retained hub history), and one unfiltered `pane.agent_status_changed { pane_id }` per discovered pane; baseline from `agent.list` taken after `SubscriptionStarted`, stream value wins when newer, changes deduped by held value. Herdr-side cost: one in-process `pane_get` per subscribed pane per 100 ms while the hub is quiet (AY.10 "Herdr facts"), acceptance is gated on the decision line under rework item 7, recorded before AY.10 is dispatched (see AY.10 frontmatter `status`). Exposed by `HerdrStatusStream`, separate from `HerdrProcessAdapter`; CLI composition provides `None` |
 
 Responses: HR-CORE-007 AgentSnapshot from `result.agent`; HR-CORE-008
 closed HerdrError enum keyed by Herdr error codes (unchanged by AY,
@@ -1842,3 +1852,23 @@ round below is PASS or every finding has an accepted disposition.
   name transient windows (fixed: ledger entry qualified above; AY.11 D2
   logs a rebuilt-since-last-tick flag and the exit condition excludes
   those ticks); CRIT-4M1 lost r3 M1 (retired above).
+- plan-scope-reviewer r5 (FAIL, 0 blocking / 2 important / 1 minor;
+  reviewed cb073fdfd; SCOPE-401 confirmed fixed): PLAN-SCOPE-501 AY.10
+  had no pre-declared split despite eight deliverables (fixed: AY.10a
+  trait/factory/pin/docs and AY.10b protocol/fake streaming/tests, branch
+  and stack fields, C3 split, AY.11 retarget, same amendment rule as
+  AY.8); PLAN-SCOPE-502 AY.10 did not state the P-E(c) precondition
+  (fixed: "Dispatch and PR topology" names the boundary-guard review
+  against AY.8's head, D7 and Required work 1 bind the approved diff to
+  the first commit); PLAN-SCOPE-M2 ADR-058 path unnamed (fixed: exact
+  file in C3).
+- critical-plan-reviewer r5 (FAIL, 0 blocking / 2 important / 1 minor;
+  reviewed cb073fdfd; CRIT-401..404 confirmed fixed, CRIT-4M1 retired):
+  PLAN-CRIT-501 AY.10's item-7 decision had no forcing function (fixed:
+  AY.10 frontmatter `status: gated`, mechanical grep in the exit-gate
+  section, both fenix dispatch and quality-mgr PR refusal); PLAN-CRIT-502
+  AY.12 carried an unforced breaker-coupling decision and no Size section
+  (fixed: decision resolved in AY.10 C2 as no coupling for the phase with
+  rationale, AY.12 allowlist conditional removed, `crates/atm-herdr`
+  excluded, Size section added); PLAN-CRIT-M1 HR-CORE-011 row read as
+  already accepted (fixed: reworded as gated on the item-7 line).

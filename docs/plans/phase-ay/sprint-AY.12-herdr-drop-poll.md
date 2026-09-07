@@ -54,10 +54,19 @@ sending due prompts and reminders from queued mail. On the CLI transport
 - `crates/atm-http-runtime/tests/**` for the two files above
 - doctor projection file (counter removal)
 - `docs/atm-herdr/architecture.md` (operator section)
-- `crates/atm-herdr/src/status_stream.rs` only if this sprint decides that
-  stream failures feed the nudge breaker (AY.10 C2 defers that decision
-  here); `docs/atm-herdr/requirements.md` HR-CORE-011 is amended in the
-  same commit if so
+
+No file under `crates/atm-herdr` changes. Stream failures do not feed the
+nudge breaker; AY.10 C2 and HR-CORE-011 settle that for the phase (a
+stream fault surfaces as `Closed` and the map falls back to its last
+`Baseline`, which D4 exercises). This sprint carries no open design
+decision beyond the drop-poll line that gates it.
+
+### Size
+
+Two production files in one crate, their tests, one doctor projection
+edit, one doc section: expected to fit one context window. No split is
+pre-declared; if it does not fit, that is a plan amendment, not a
+dispatch-time decision.
 
 ## Acceptance criteria
 
@@ -70,6 +79,5 @@ sending due prompts and reminders from queued mail. On the CLI transport
 ## Out of scope
 
 - Any change to prompt/reminder policy.
-- Any `atm-herdr` change other than the breaker-coupling decision named
-  in the allowlist.
+- Any `atm-herdr` change; the breaker question is closed in AY.10 C2.
 - The legacy synchronous daemon.
