@@ -89,6 +89,31 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py quiesce --yes \
   --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 ```
 
+## Explicit Herdr start-at-login entries
+
+Herdr entry management is independent of the selected ATM CLI/daemon pair and
+is always operator-invoked. It never runs during `switch`, `restart`,
+`restore`, or daemon startup. The command reads only `atm doctor --json`; do
+not supply a roster, backend, binary, or socket value by hand.
+
+```sh
+# Install every doctor-reported configured non-socket endpoint, then inspect it.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py herdr-entry install
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py herdr-entry status
+
+# Limit an explicit action to one native-doctor endpoint.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py herdr-entry remove --endpoint <session>
+
+# An interrupted entry transaction blocks mutation until this explicit repair.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py herdr-entry status --repair
+```
+
+The manager owns only definitions marked `managed-by=atm daemon-switch` whose
+canonical digest matches. A foreign collision, digest mismatch, explicit
+socket-path endpoint, or Windows account/session mismatch is a safe refusal;
+it never overwrites or deletes the object. Each invocation emits exactly one
+JSON result on stdout (exit 0 success, 3 refusal, 4 operational failure).
+
 On systems without Homebrew, provide `--default-cli` and `--default-daemon` to
 `restore`. Use `--dry-run` before the first switch on an unfamiliar host.
 
