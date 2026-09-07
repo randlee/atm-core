@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY8-QA-005>
+  a triage:Finding ;
+  triage:findingId "AY8-QA-005" ;
+  triage:title "D10 construction-site pin is gameable (string-match on 'HerdrIo::Socket(') and scope-incomplete" ;
+  triage:description "crates/atm-herdr/tests/socket_construction_pin.rs enforces confinement via literal substring match on 'HerdrIo::Socket('. This misses: (1) type alias construction (use ... as H; H::Socket(...)), (2) tuple-variant-as-fn-pointer (let ctor = HerdrIo::Socket; ctor(socket)), (3) file-splitting logic only honors first #[cfg(test)], exempting all subsequent production code; (4) only scans crates/atm-herdr/src/**, not the tests/ half of the allowlist. D10 acceptance criterion violated; construction-site guard is not mechanical." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-pin" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY8 ;
+  triage:foundAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-005/ay8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-005/ay8-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY8-QA-005/ay8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/socket_construction_pin.rs" ;
+  triage:line 35 ;
+  triage:snippet "contains(HerdrIo::Socket string check line 35)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+
+<urn:atm:triage:occurrence/AY8-QA-005/ay8-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/socket_construction_pin.rs" ;
+  triage:line 41 ;
+  triage:snippet "contains(HerdrIo::Socket string check line 41)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+
+<urn:atm:triage:worktree/ay8-696bc1061>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/ay8-herdr-socket-transport" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:orderIndex 1 .
