@@ -1048,8 +1048,11 @@ Definitions:
   to the existing canonical parse/lookup error unchanged. An ambient
   activity observation attested to an alias is dropped on replacement.
 - `REQ-ROSTER-NAME-008` `.atm.toml` pane `alias` keys are spawner input
-  only; `atm doctor` compares them with roster aliases for the caller's team
-  as validation (§3.3), and nothing else in `atm-core` reads them.
+  only. Rand (2026-09-07): ".atm.toml alias is ONLY read in doctor as a
+  diagnostic message IF alias in roster != alias in .atm.toml". `atm
+  doctor` emits one diagnostic line per pane whose alias differs from (or
+  is missing in) the roster alias for the caller's team (§3.3); nothing
+  else in `atm` reads a `.atm.toml` alias.
 - `REQ-ROSTER-NAME-009` Upgrade. Rand (2026-09-07): "where we will run
   into issues are when upgrade occurs. if non-unique names show up in
   database, hmux launch will certainly fail (hmux calls add member), so that
