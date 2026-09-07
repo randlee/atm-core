@@ -205,11 +205,21 @@ earlier D8 draft that had `add-member` reading the pane alias is
 withdrawn. Document the key in docs/requirements.md next to the existing
 `[atm].aliases` rules as a spawner-consumed key that atm ignores.
 
-Noted, not in scope (Rand, 2026-09-07, verbatim): "the only place it might
-make sense would be for doctor to read it and report if it did not match."
-That is: `atm doctor` reads the pane alias from `.atm.toml` and reports a
-mismatch against the roster alias. Not an AY.14 deliverable; no dispatch
-until Rand asks for it.
+Rand, 2026-09-07, verbatim: "the only place it might make sense would be
+for doctor to read it and report if it did not match."; "I think that would
+be an acceptable level of rust integration.  That makes it an 'official'
+setting and in rust code it is used for comparison/validation only."
+
+D9 (in scope, from the above): the pane `alias` key becomes an official
+`.atm.toml` setting, read by Rust in exactly one place: `atm doctor`. For
+each `[[rmux.windows.panes]]` entry that declares `alias`, doctor looks up
+the member (pane `name`, pane `ATM_TEAM` env) in the roster and reports a
+mismatch when the roster alias differs or is absent; a pane alias that
+matches, or a pane without the key, produces no line. The value is never
+used as input to any write, resolution or send path; comparison and
+validation only. Text and `--json` output both carry it (field name
+`alias_mismatches`, entries `{team, member, config_alias, roster_alias}`).
+Missing or unparsable `.atm.toml` is not a doctor failure for this check.
 
 ## Acceptance criteria
 
@@ -241,9 +251,15 @@ until Rand asks for it.
   member-add path so the CLI cannot be bypassed.
 - AC9 atm-core `.atm.toml` declares `alias` on the team-lead, quality-mgr
   and publisher panes only (`atm-lead`, `atm-quality`, `atm-publisher`).
-  `rg alias` over `crates/` shows no reader of the pane `alias` key; the
+  `rg alias` over `crates/` shows no reader of the pane `alias` key other
+  than the doctor check in D9/AC10; the
   existing `.atm.toml` parsing tests still pass with the key present
   (unknown-key tolerance, no new struct field).
+- AC10 `atm doctor` reports D9 mismatches: tests cover pane alias equal to
+  roster (no line), differing (one line, both values), roster alias absent
+  (one line), pane without key (no line), and no `.atm.toml` (check
+  skipped, doctor otherwise unchanged). `rg` shows the doctor path as the
+  only reader of the pane `alias` key under `crates/`.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 
