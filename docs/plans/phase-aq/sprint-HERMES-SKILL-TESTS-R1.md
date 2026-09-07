@@ -108,6 +108,7 @@ The fixture (local host or colima container) is observable and addressable:
 | Hermes agent under test | a Hermes agent of the host's hermes team (today: skillrx); the container's Hermes agents in the testbed | runs `atm-smoke` natively, responds in `atm-nudge-roundtrip` |
 | testbed maintainer | loki@hermes | bakes the byte-identical skill files into the image; changes no test content |
 | QA | quality-mgr | reads the reports against the skill text; may reject a run for interference |
+| oversight | one agent per run (today: fenix) | watches the whole run-book with best effort to get the code verified: when a step fails for an environment reason (roster, gateway, receiver, path, permission) it fixes that and has the step re-run, so a run ends with the code's real result, not an environment hiccup; records every intervention for the post-mortem |
 | decisions | Rand | approves this plan, authorizes any build/rollout and any publish |
 
 ## Steps
@@ -131,6 +132,12 @@ The fixture (local host or colima container) is observable and addressable:
    and gateway logs when a line says FAIL.
 6. **Verdict.** All reports PASS on both fixtures for the same ATM version = the integration test
    passes for that version. Publication remains Rand's decision.
+7. **Post-mortem report.** After every complete run (each fixture, each version) the oversight
+   agent writes one report, `docs/plans/phase-aq/reports/hermes-skill-tests-<version>-<fixture>.md`:
+   the eight report summaries (skill, agent, PASS/FAIL, elapsed), every FAIL with its cause line,
+   every oversight intervention (what broke, why, what was changed, whether the step then passed),
+   product defects found (issue numbers), and recommended changes in three lists: to the skills,
+   to the fixture/testbed, to ATM. The report is what Rand reads; nothing else is.
 
 ## Exact targets
 
@@ -138,6 +145,7 @@ The fixture (local host or colima container) is observable and addressable:
   `atm-hermes-ready/SKILL.md`, `atm-nudge-roundtrip/SKILL.md`, `atm-troubleshoot/SKILL.md`
 - `.codex/skills/atm-*` symlinks; `AGENTS.md` "ATM Integration Test Skills" section
 - this document; `docs/project-plan.md` entry
+- after each run: `docs/plans/phase-aq/reports/hermes-skill-tests-<version>-<fixture>.md` (post-mortem)
 - No source, harness, runtime, requirement, ADR or testbed file changes in this PR.
 
 ## Acceptance
@@ -149,3 +157,6 @@ The fixture (local host or colima container) is observable and addressable:
   Hermes install, and inside the testbed image. No host name appears in any skill or report
   template; the fixture name comes from `$ATM_TEST_FIXTURE` or `hostname` at run time.
 - Nothing was added that is not used by a step in a skill.
+- Every run ends with the code verified or with a post-mortem naming the product defect that
+  prevented it; an environment hiccup never ends a run.
+- Each run has its post-mortem with recommended changes before the next version is tested.
