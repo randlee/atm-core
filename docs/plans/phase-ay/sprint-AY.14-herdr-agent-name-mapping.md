@@ -184,7 +184,12 @@ The alias for a shared role name is declared in the repo's `.atm.toml`, and
 atm-core's own `.atm.toml` is the model other repos copy. D8: add an
 optional `alias` key to each `[[rmux.windows.panes]]` entry and set it only
 on the roles that appear on many teams (`team-lead`, `quality-mgr`,
-`publisher`), e.g. `alias = "team-lead_atm-dev"`; members with unique names
+`publisher`). Rand's chosen values for atm-core (2026-09-07, verbatim: "I
+would like alias's to be:  team-lead -> atm-lead, publisher ->
+atm-publisher, quality-mgr -> atm-quality"): `team-lead` ->
+`alias = "atm-lead"`, `quality-mgr` -> `alias = "atm-quality"`,
+`publisher` -> `alias = "atm-publisher"`. The `<identity>_<team>` convention
+above is a suggestion for other repos, not a rule. Members with unique names
 (`arch-ctm`, `cipher`, `fenix`) get none. `atm teams add-member` run from a
 repo whose `.atm.toml` declares an alias for that pane name uses it as the
 default `--alias` (explicit `--alias` overrides); spawners that pass
@@ -222,7 +227,7 @@ CLI-only shorthand.
   the database is accepted without an alias. Same check on the daemon
   member-add path so the CLI cannot be bypassed.
 - AC9 atm-core `.atm.toml` declares `alias` on the team-lead, quality-mgr
-  and publisher panes only; `add-member` picks the pane alias up as the
+  and publisher panes only (`atm-lead`, `atm-quality`, `atm-publisher`); `add-member` picks the pane alias up as the
   default when run from that repo root, and a test covers default,
   explicit override, and no-alias-declared paths.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
