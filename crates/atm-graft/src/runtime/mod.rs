@@ -768,13 +768,11 @@ fn handle_graft_receiver_connection(
     let event = request.event;
     let kind = request.kind;
     let rendered_nudge = request.rendered_nudge;
-    let message_body = request.message_body;
     let dispatch = BuiltInPostSendDispatch {
         target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
             recipient: event.recipient.clone(),
             recipient_team: event.recipient_team.clone(),
             rendered_nudge,
-            message_body,
         }),
         event,
         kind,
@@ -962,7 +960,6 @@ mod tests {
                 event,
                 kind: NudgeKind::Steer,
                 rendered_nudge: "<atm>test nudge</atm>".to_string(),
-                message_body: "full immutable body".to_string(),
             },
             DELIVER_CONNECT_DEADLINE,
             DELIVER_IO_DEADLINE,

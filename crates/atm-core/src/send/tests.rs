@@ -357,7 +357,6 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         &runtime,
         &tmux_snapshot,
         &event,
-        "message body",
         crate::send::NudgeMode::Immediate,
     )
     .expect("tmux dispatch result")
@@ -369,7 +368,6 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         &runtime,
         &herdr_snapshot,
         &event,
-        "message body",
         crate::send::NudgeMode::Immediate,
     )
     .expect("Herdr dispatch result")

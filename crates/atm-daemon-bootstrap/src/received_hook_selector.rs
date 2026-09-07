@@ -823,7 +823,6 @@ mod tests {
             recipient: dispatch.event.recipient.clone(),
             recipient_team: dispatch.event.recipient_team.clone(),
             rendered_nudge: "<atm>queue</atm>".to_owned(),
-            message_body: "queue body".to_owned(),
         });
         assert!(selector.select_emitter(&dispatch).is_some());
     }

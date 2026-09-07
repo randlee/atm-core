@@ -1924,7 +1924,6 @@ mod tests {
                 recipient: "recipient".parse().expect("recipient"),
                 recipient_team: "test-team".parse().expect("team"),
                 rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
-                message_body: "message body".to_owned(),
             }),
             kind: NudgeKind::Steer,
         };
@@ -5280,7 +5279,6 @@ mod tests {
                 recipient: "recipient".parse().expect("recipient"),
                 recipient_team: "test-team".parse().expect("team"),
                 rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
-                message_body: "message body".to_owned(),
             }),
             kind: NudgeKind::Steer,
         };

@@ -20,7 +20,6 @@ pub(crate) fn build_built_in_dispatch<R>(
     runtime: &R,
     delivery_snapshot: &DeliveryRecipientSnapshot,
     event: &PostSendHookEvent,
-    message_body: &str,
     nudge_mode: NudgeMode,
 ) -> Result<Option<BuiltInPostSendDispatch>, AtmError>
 where
@@ -72,25 +71,33 @@ where
                 recipient: event.recipient.clone(),
                 recipient_team: event.recipient_team.clone(),
                 rendered_nudge,
-                message_body: message_body.to_owned(),
-            }),
-            kind,
-        }));
-    }
-    if delivery_snapshot.bare_cli_post_send {
-        return Ok(Some(BuiltInPostSendDispatch {
-            event: event.clone(),
-            target: PostSendBuiltInTarget::QueuePull(QueuePullTarget {
-                team: event.recipient_team.clone(),
-                agent: event.recipient.clone(),
-                kind,
-                msg_id: event.message_id,
-                body: message_body.to_owned(),
             }),
             kind,
         }));
     }
     Ok(None)
+}
+
+/// Builds the retained bare-CLI queue handoff. This path intentionally keeps
+/// the admitted message body because its governed queue-pull contract has not
+/// yet moved to rendered-template delivery.
+pub(crate) fn build_bare_cli_dispatch(
+    event: &PostSendHookEvent,
+    body: &str,
+    nudge_mode: NudgeMode,
+) -> BuiltInPostSendDispatch {
+    let kind = nudge_kind_for_mode(nudge_mode);
+    BuiltInPostSendDispatch {
+        event: event.clone(),
+        target: PostSendBuiltInTarget::QueuePull(QueuePullTarget {
+            team: event.recipient_team.clone(),
+            agent: event.recipient.clone(),
+            kind,
+            msg_id: event.message_id,
+            body: body.to_owned(),
+        }),
+        kind,
+    }
 }
 
 /// Maps the write-time delivery mode to the dispatch's `NudgeKind`.
