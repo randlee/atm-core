@@ -1,0 +1,93 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY8-QA-005>
+  a triage:Finding ;
+  triage:findingId "AY8-QA-005" ;
+  triage:title "D10 construction-site pin is gameable (string-match on 'HerdrIo::Socket(') and scope-incomplete" ;
+  triage:description "crates/atm-herdr/tests/socket_construction_pin.rs enforces confinement via literal substring match on 'HerdrIo::Socket('. This misses: (1) type alias construction (use ... as H; H::Socket(...)), (2) tuple-variant-as-fn-pointer (let ctor = HerdrIo::Socket; ctor(socket)), (3) file-splitting logic only honors first #[cfg(test)], exempting all subsequent production code; (4) only scans crates/atm-herdr/src/**, not the tests/ half of the allowlist. D10 acceptance criterion violated; construction-site guard is not mechanical." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-pin" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY8 ;
+  triage:foundAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-005/ay8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-005/ay8-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-005/ay8-3> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY8-QA-005/1> ;
+  triage:closedAt "2026-09-07T07:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY8-QA-005/ay8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/socket_construction_pin.rs" ;
+  triage:line 35 ;
+  triage:snippet "contains(HerdrIo::Socket string check line 35)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+
+<urn:atm:triage:occurrence/AY8-QA-005/ay8-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/socket_construction_pin.rs" ;
+  triage:line 41 ;
+  triage:snippet "contains(HerdrIo::Socket string check line 41)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
+
+<urn:atm:triage:occurrence/AY8-QA-005/ay8-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/socket_construction_pin.rs" ;
+  triage:line 130 ;
+  triage:snippet "let is_integration_test = source.starts_with(manifest.join(\"tests\")); if is_integration_test { continue; }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> ;
+  triage:note "quality-mgr qa-pr1280-r3: sub-issues (1) type-alias construction and (2) fn-pointer-style construction are now genuinely fixed — socket_construction_pin.rs replaces the substring match with a real syn::visit::Visit-based SocketConstructorVisitor that resolves use-aliases and syn::Item::Type aliases of HerdrIo, and a collect_aliases/cfg_test_attribute pass replaces the old first-cfg(test)-only logic, closing sub-issue (3) as well. Sub-issue (4) is NOT fixed: socket_variant_constructed_only_in_tests (lines 117-140) collects sources from both src/ and tests/, but then unconditionally `continue`s past every file under tests/ before running construction_findings on it, so the tests/ half of the allowlist is still never actually scanned — the exact literal defect originally reported. Additionally, the fix for sub-issues 1-3 added crates/atm-herdr/Cargo.toml dev-dependency syn.workspace=true without updating boundaries/atm-herdr/herdr-process-adapter.toml's allowed_dependencies, causing a new live blocking CI regression — see AY8-QA-007. Finding stays open (important); 3 of 4 sub-issues genuinely fixed, 1 remains and 1 side-effect regression introduced." .
+
+<urn:atm:triage:worktree/ay8-696bc1061>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/ay8-herdr-socket-transport" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ay8-26ea2806a>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r3" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ay8-690f86ea5>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r4" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "690f86ea5" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/AY8-QA-005/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T07:10:00Z"^^xsd:dateTime ;
+  triage:fixCommit "690f86ea583f80b975e5ef019c77bb1befacd33e" ;
+  triage:fixBranch "feature/ay8-herdr-socket-transport" ;
+  triage:verifiedInRound "qa-pr1280-r4" ;
+  triage:resolutionNote "Out of this round's assigned fix scope, but independently verified fully resolved as an incidental side effect of the AY8-QA-007 syn-removal rewrite, so closing on direct evidence rather than leaving ambiguous. Sub-issues (1)-(3) were already fixed in r3 and remain intact under the new dependency-free lexer (construction_pin_detects_aliases_and_variant_function_pointers explicitly re-proves alias and function-pointer-form detection plus comment/string-literal false-positive avoidance). Sub-issue (4), the literal originally-reported defect ('tests/ half of the allowlist is never actually scanned'), is now fixed: read socket_variant_constructed_only_in_tests (lines 152-184) directly -- `lex_rust(&contents)` and `construction_findings` now run unconditionally on every source including everything under tests/, with `is_integration_test` files given a full-file allowed range (`vec![(0, contents.len())]`) rather than being `continue`d past unprocessed. This both scans tests/ (fixing the literal complaint) and matches D10's own stated intent that HerdrIo::Socket construction is permitted throughout crates/atm-herdr/tests/. Verified locally: `cargo test -p atm-herdr --all-features` -- all 3 socket_construction_pin tests pass, including socket_variant_constructed_only_in_tests. All 3 occurrences closed." .

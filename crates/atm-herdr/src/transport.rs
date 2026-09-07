@@ -10,6 +10,7 @@ use atm_core::{HerdrSession, RequestDeadline};
 use serde_json::Value;
 
 use crate::transport_cli::CliIo;
+use crate::transport_socket::SocketIo;
 use crate::{
     AgentSnapshot, HerdrAgentStatus, HerdrError, HerdrListOutcome, HerdrPromptOutcome,
     HerdrWaitOutcome,
@@ -43,6 +44,14 @@ impl HerdrClientConfig {
             binary_path,
             socket_path,
         })
+    }
+
+    #[cfg(any(test, feature = "test-utils"))]
+    pub(crate) fn with_socket_path(socket_path: PathBuf) -> Self {
+        Self {
+            socket_path: Some(socket_path),
+            ..Self::default()
+        }
     }
 
     pub fn binary_path(&self) -> Option<&Path> {
@@ -95,10 +104,14 @@ pub(crate) struct HerdrErrorEnvelope {
     pub retry_after_ms: Option<u64>,
 }
 
-/// Private transport selection. AY.2 intentionally constructs only CLI.
+/// Private transport selection. AY.9 owns production selection; AY.8 keeps
+/// the socket variant available for the direct transport and equivalence
+/// tests without changing the composition root.
 #[derive(Clone, Debug)]
 pub(crate) enum HerdrIo {
     Cli(CliIo),
+    #[allow(dead_code)]
+    Socket(SocketIo),
 }
 
 impl Default for HerdrIo {
@@ -120,6 +133,7 @@ impl HerdrIo {
     ) -> Result<HerdrEnvelope, HerdrError> {
         match self {
             Self::Cli(cli) => cli.call(op, session, deadline).await,
+            Self::Socket(socket) => socket.call(op, session, deadline).await,
         }
     }
 }

@@ -19,6 +19,7 @@ roots = ["atm_herdr::HerdrProcessInvoker::new"]
 io_owns = [
   "tokio_process_spawn",
   "herdr_argv_construction",
+  "herdr_local_socket_client",
   "herdr_json_error_parsing",
   "herdr_spawn_breaker",
 ]
