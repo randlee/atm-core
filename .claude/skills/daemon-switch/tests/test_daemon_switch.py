@@ -1520,7 +1520,7 @@ class LegacyDaemonSwitchRegressionTests(unittest.TestCase):
 
     def test_restart_requires_a_single_live_pair_after_controlled_stop(self) -> None:
         args = argparse.Namespace(yes=True)
-        with (mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)), mock.patch.object(self.module, "require_executable", side_effect=[self.old_cli, self.old_daemon]), mock.patch.object(self.module, "require_macos_development_signatures"), mock.patch.object(self.module, "run_service") as service, mock.patch.object(self.module, "require_stopped_daemon") as stopped, mock.patch.object(self.module, "live_pair_matches", return_value=(True, "matched"))):
+        with (mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)), mock.patch.object(self.module, "require_executable", side_effect=[self.old_cli, self.old_daemon]), mock.patch.object(self.module, "require_macos_development_signatures"), mock.patch.object(self.module, "herdr_restart_pending_endpoints", return_value=[]), mock.patch.object(self.module, "run_service") as service, mock.patch.object(self.module, "require_stopped_daemon") as stopped, mock.patch.object(self.module, "live_pair_matches", return_value=(True, "matched"))):
             self.module.restart(args)
         stopped.assert_called_once_with(args, self.old_cli)
         self.assertEqual(service.call_args_list, [mock.call(args, "stop", allow_absent=True), mock.call(args, "start")])
@@ -1577,6 +1577,7 @@ class HerdrEntryPlatformFake:
         self.name = name
         self.registered: set[str] = set()
         self.account_is_current = True
+        self.started: list[str] = []
 
     def path_for(self, identifier: str) -> Path:
         return self.root / identifier
@@ -1589,6 +1590,11 @@ class HerdrEntryPlatformFake:
 
     def is_registered(self, identifier: str) -> bool:
         return identifier in self.registered
+
+    def start(self, identifier: str, _timeout: float = 30.0) -> None:
+        if identifier not in self.registered:
+            raise RuntimeError("entry is not registered")
+        self.started.append(identifier)
 
     def account_matches(self, _identifier: str) -> bool:
         return self.account_is_current
@@ -1701,6 +1707,177 @@ class HerdrEntryTests(unittest.TestCase):
         self.assertNotIn("run_herdr_entry", switch_block)
         self.assertNotIn("run_herdr_entry", restore_block)
         self.assertNotIn("run_herdr_entry", restart_block)
+
+
+class HerdrRestartTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.platform = HerdrEntryPlatformFake(self.root / "objects")
+        self.manager = DAEMON_SWITCH.HerdrEntryManager(self.root / "journal", self.platform)
+        self.default = DAEMON_SWITCH.HerdrEndpoint("default")
+        self.session = DAEMON_SWITCH.HerdrEndpoint("blue")
+        self.manager.install(self.default)
+        self.manager.install(self.session)
+        self.args = argparse.Namespace(restart_herdr="", stop_herdr_panes=False, restart_timeout_secs=120.0)
+        self.cli = Path("/selected/atm")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    @staticmethod
+    def endpoint(name: str = "default", *, state: str = "client_server_mismatch", handoff: bool | None = True, client: str | None = "0.8.2", server: str | None = "0.8.0", provenance: str = "herdr_default") -> dict[str, object]:
+        return {
+            "session": name,
+            "provenance": provenance,
+            "endpoint": "/safe/socket" if provenance == "socket_path" else None,
+            "state": {"kind": state, "client": client, "server": server},
+            "capabilities": {"live_handoff": handoff},
+        }
+
+    @classmethod
+    def doctor_payload(cls, *endpoints: dict[str, object]) -> dict[str, object]:
+        return {"herdr": {"configured": True, "endpoints": list(endpoints)}}
+
+    def test_selector_refusals_and_socket_path_are_exact(self) -> None:
+        with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=self.doctor_payload(self.endpoint(), self.endpoint("blue"))):
+            with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "more than one") as error:
+                DAEMON_SWITCH.select_herdr_restart_endpoint(self.cli, None)
+            self.assertEqual(error.exception.code, "HERDR_RESTART_ENDPOINT_REQUIRED")
+            with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "not configured") as error:
+                DAEMON_SWITCH.select_herdr_restart_endpoint(self.cli, "missing")
+            self.assertEqual(error.exception.code, "HERDR_RESTART_ENDPOINT_UNKNOWN")
+        with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=self.doctor_payload(self.endpoint(provenance="socket_path"))):
+            with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "externally owned") as error:
+                DAEMON_SWITCH.select_herdr_restart_endpoint(self.cli, None)
+            self.assertEqual(error.exception.code, "HERDR_RESTART_SOCKET_PATH")
+
+    def test_restart_entry_argv_and_identifiers_are_platform_specific(self) -> None:
+        cases = {
+            "Darwin": ("com.randlee.atm.herdr-server.blue", ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/com.randlee.atm.herdr-server.blue"]),
+            "Linux": ("atm-herdr-server@blue.service", ["systemctl", "--user", "restart", "atm-herdr-server@blue.service"]),
+            "Windows": ("ATM Herdr Server (blue)", ["schtasks.exe", "/Run", "/TN", "ATM Herdr Server (blue)"]),
+        }
+        for platform_name, (entry_id, expected) in cases.items():
+            with self.subTest(platform=platform_name):
+                runner = mock.Mock(return_value=subprocess.CompletedProcess([], 0, "", ""))
+                adapter = DAEMON_SWITCH.NativeEntryPlatform(self.root / platform_name, runner)
+                adapter.name = platform_name
+                self.assertEqual(DAEMON_SWITCH.identifier(platform_name, "blue"), entry_id)
+                adapter.start(entry_id, 30.0)
+                self.assertEqual(runner.call_args.args[0], expected)
+
+    def test_live_handoff_scopes_default_and_never_restarts_atm(self) -> None:
+        mismatch = self.doctor_payload(self.endpoint())
+        ready = self.doctor_payload(self.endpoint(state="ok", client=None, server=None))
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(self.cli, Path("/selected/atm-daemon"))),
+            mock.patch.object(DAEMON_SWITCH, "herdr_entry_manager", return_value=self.manager),
+            mock.patch.object(DAEMON_SWITCH, "doctor", side_effect=[mismatch, ready]),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=subprocess.CompletedProcess([], 0, "", "")) as runner,
+            mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+        ):
+            DAEMON_SWITCH.run_herdr_restart(self.args)
+        runner.assert_called_once_with(["herdr", "server", "live-handoff"], timeout=mock.ANY)
+        service.assert_not_called()
+        self.assertEqual(self.platform.started, [])
+
+    def test_stop_requires_ack_then_relaunches_scoped_session_and_verifies(self) -> None:
+        self.args.restart_herdr = "blue"
+        mismatch = self.doctor_payload(self.endpoint("blue", handoff=None))
+        ready = self.doctor_payload(self.endpoint("blue", state="ok", handoff=None, client=None, server=None))
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(self.cli, Path("/selected/atm-daemon"))),
+            mock.patch.object(DAEMON_SWITCH, "herdr_entry_manager", return_value=self.manager),
+            mock.patch.object(DAEMON_SWITCH, "doctor", return_value=mismatch),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "terminates") as error:
+                DAEMON_SWITCH.run_herdr_restart(self.args)
+        self.assertEqual(error.exception.code, "HERDR_RESTART_NO_LIVE_HANDOFF")
+        self.args.stop_herdr_panes = True
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(self.cli, Path("/selected/atm-daemon"))),
+            mock.patch.object(DAEMON_SWITCH, "herdr_entry_manager", return_value=self.manager),
+            mock.patch.object(DAEMON_SWITCH, "doctor", side_effect=[mismatch, ready]),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=subprocess.CompletedProcess([], 0, "", "")) as runner,
+        ):
+            DAEMON_SWITCH.run_herdr_restart(self.args)
+        runner.assert_called_once_with(["herdr", "--session", "blue", "server", "stop"], timeout=mock.ANY)
+        self.assertEqual(self.platform.started, ["atm-herdr-server@blue.service"])
+
+    def test_hung_command_and_slow_ready_fixture_are_bounded_without_real_sleep(self) -> None:
+        mismatch = self.doctor_payload(self.endpoint(handoff=True))
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(self.cli, Path("/selected/atm-daemon"))),
+            mock.patch.object(DAEMON_SWITCH, "herdr_entry_manager", return_value=self.manager),
+            mock.patch.object(DAEMON_SWITCH, "doctor", return_value=mismatch),
+            mock.patch.object(DAEMON_SWITCH, "run", side_effect=subprocess.TimeoutExpired(["herdr"], 30)),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "timed out") as error:
+                DAEMON_SWITCH.run_herdr_restart(self.args)
+        self.assertEqual(error.exception.code, "HERDR_RESTART_TIMEOUT")
+
+        ready = self.doctor_payload(self.endpoint(state="ok", client=None, server=None))
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(self.cli, Path("/selected/atm-daemon"))),
+            mock.patch.object(DAEMON_SWITCH, "herdr_entry_manager", return_value=self.manager),
+            mock.patch.object(DAEMON_SWITCH, "doctor", side_effect=[mismatch, mismatch, mismatch, ready]),
+            mock.patch.object(DAEMON_SWITCH, "run", return_value=subprocess.CompletedProcess([], 0, "", "")),
+            mock.patch.object(DAEMON_SWITCH.time, "sleep") as sleeper,
+        ):
+            DAEMON_SWITCH.run_herdr_restart(self.args)
+        self.assertEqual(sleeper.call_args_list, [mock.call(2.0), mock.call(4.0)])
+
+    def test_ordinary_restart_refuses_every_protocol_mismatch_before_service_mutation(self) -> None:
+        args = argparse.Namespace(command="restart", yes=True)
+        payload = self.doctor_payload(self.endpoint(), self.endpoint("blue"), self.endpoint("green", state="ok", client=None, server=None))
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(self.cli, Path("/selected/atm-daemon"))),
+            mock.patch.object(DAEMON_SWITCH, "require_executable", side_effect=[self.cli, Path("/selected/atm-daemon")]),
+            mock.patch.object(DAEMON_SWITCH, "require_macos_development_signatures"),
+            mock.patch.object(DAEMON_SWITCH, "doctor", return_value=payload),
+            mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "parser",
+                return_value=mock.Mock(parse_args=mock.Mock(return_value=args)),
+            ),
+        ):
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = DAEMON_SWITCH.main()
+        service.assert_not_called()
+        self.assertEqual(exit_code, 3)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(
+            json.loads(stdout.getvalue()),
+            {
+                "ok": False,
+                "code": "HERDR_RESTART_ENDPOINTS_PENDING",
+                "message": "restart Herdr endpoints first: default, blue",
+                "remedy": "Restart every listed Herdr endpoint first, then rerun the ordinary ATM restart",
+                "entries": [
+                    {
+                        "endpoint": name,
+                        "identifier": DAEMON_SWITCH.identifier(DAEMON_SWITCH.platform.system(), name),
+                    }
+                    for name in ("default", "blue")
+                ],
+            },
+        )
+
+    def test_restart_refusal_envelope_has_only_safe_endpoint_identifiers(self) -> None:
+        with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=self.doctor_payload(self.endpoint(), self.endpoint("blue"))):
+            with self.assertRaises(DAEMON_SWITCH.HerdrEntryError) as captured:
+                DAEMON_SWITCH.select_herdr_restart_endpoint(self.cli, None)
+        self.assertEqual(
+            captured.exception.entries,
+            [
+                {"endpoint": "default", "identifier": DAEMON_SWITCH.identifier(DAEMON_SWITCH.platform.system(), "default")},
+                {"endpoint": "blue", "identifier": DAEMON_SWITCH.identifier(DAEMON_SWITCH.platform.system(), "blue")},
+            ],
+        )
 
 
 if __name__ == "__main__":

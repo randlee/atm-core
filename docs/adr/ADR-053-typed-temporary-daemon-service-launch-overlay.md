@@ -186,3 +186,32 @@ closed. Repair is explicit: it completes a verified registration or rolls back
 only the marker-bearing partial object. The public machine contract is exactly
 one JSON envelope on stdout and exit 0 (success), 3 (safe refusal), or 4
 (operational failure).
+
+## Addendum 2026-09-07 — coordinated Herdr endpoint restart
+
+`daemon-switch restart --restart-herdr [<default-or-session>]` is the only
+restart coordinator. It is never part of `switch`, `restore`, ordinary
+`restart`, daemon startup, or an entry install. It reads one native doctor
+projection to select a configured endpoint, resolves the AY.5 deterministic
+identifier and owned/complete entry, and rejects socket-path or unowned
+endpoints without mutation. A default is inferred only when doctor returns one
+endpoint.
+
+When the installed client is newer than the reported running server and the
+endpoint advertises `capabilities.live_handoff: true`, the coordinator invokes
+the endpoint-scoped `herdr server live-handoff` command. Capability `false` or
+`null`, equal/unknown versions, and every other condition take the destructive
+stop path: stdout remains machine JSON, stderr warns that agent panes exit,
+and `--stop-herdr-panes` is required before scoped `server stop` and the
+already-owned native entry is relaunched. The coordinator neither updates
+Herdr nor supervises it. A failed handoff stops immediately because Herdr owns
+its own rollback.
+
+The operation has one 120-second overall deadline, 30-second child-command
+deadline, and injected-time bounded verification reads; only fresh doctor
+state `ok` yields success. Timeout, selection, acknowledgement, doctor, and
+entry failures retain a stable code and the 0/3/4 JSON exit classes. Ordinary
+ATM restart has a separate read-only preflight: it refuses before any service
+mutation while any configured endpoint is `client_server_mismatch`, listing
+only endpoint names and identifiers. No daemon code, transport selection,
+polling loop, startup dependency, or process ownership is introduced.
