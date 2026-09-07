@@ -634,3 +634,23 @@ Herdr lifecycle and endpoint ownership  ->  Herdr
 ATM transport/client + bounded failures ->  atm-herdr
 ATM startup, messaging, doctor policy   ->  atm-http-runtime / composition root
 ```
+
+### 12.3 AY.9 transport selection
+
+AY.9 makes the native endpoint transport the production default. The
+bootstrap reader accepts the closed optional `[herdr].transport` value:
+`"socket"` (the omitted-value default) or `"cli"` (the permanent explicit
+alternative). It constructs one validated `HerdrClientConfig` at startup, and
+the one crate-private `atm-herdr` factory selects either the Unix-domain
+socket/Windows named pipe transport or the existing Tokio CLI transport.
+
+This is a startup choice, not a retry policy. A socket connection failure is
+reported through the same typed unavailable/breaker path as other transport
+failures; it never starts a CLI process as a hidden fallback. The private
+transport enum and the raw endpoint type remain inside `atm-herdr`. Doctor
+receives only the active transport kind and a sanitized symbolic endpoint
+display, never a raw user path or a transport implementation value.
+
+The CLI alternative has no removal release or ownership-key cleanup planned.
+AY.9 records automated compatibility and lifecycle gates only; release
+readiness, not this sprint, owns live proof.

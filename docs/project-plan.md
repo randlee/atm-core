@@ -1676,6 +1676,14 @@ AY.3 merge; it is parallel-safe with AY.4–AY.7. AY.9 is the standalone
 AY.7+AY.8 code join and the phase's last sprint; the live macOS/Windows
 matrix runs under release readiness once the phase is on develop.
 
+AY.9's production contract is closed and explicit: native socket transport is
+the default, while `herdr.transport = "cli"` remains a permanent explicit
+alternative. The transport is selected once at Tokio bootstrap; a socket
+failure is a typed availability/breaker outcome, never a hidden CLI fallback.
+Doctor displays the active transport and a sanitized endpoint. No CLI removal
+release or ownership-key cleanup is planned, and AY.9 contains no live
+evidence; release readiness owns the live gate.
+
 The authoritative umbrella is
 [Phase AY plan](./plans/phase-ay/phase-ay-plan.md), with one
 authoritative sprint file per sprint under `docs/plans/phase-ay/`.
