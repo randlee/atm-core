@@ -197,6 +197,11 @@ file and offending key/value named according to AY.3's error contract.
   socket default and explicit CLI)
 - `crates/atm-core/src/doctor/**` files that AY.3 D4 created for the Herdr
   section (transport/endpoint fields and snapshots)
+- `crates/atm-herdr/src/doctor_probe.rs` (the one assignment/call site that
+  hard-codes doctor transport CLI and endpoint None; added by fenix
+  2026-09-07 as a C1a plan defect found during AY.9 D4, arch-ctm msg
+  01M1Y9F78Z4Q1W4K5NHHA294AQ; conversion stays in transport.rs so
+  `HerdrEndpoint` never crosses the crate)
 - `crates/atm-architecture/tests/boundary_enforcement.rs` (forbidden-edge
   grep for `HerdrEndpoint`, factory pin)
 - `docs/atm-herdr/architecture.md`, `docs/atm-herdr/requirements.md`,
