@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY8 ;
@@ -24,6 +24,10 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-002/ay8-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-002/ay8-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-002/ay8-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-002/ay8-5> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY8-QA-002/1> ;
+  triage:closedAt "2026-09-07T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY8-QA-002/ay8-1>
@@ -72,6 +76,34 @@
   triage:headSha "6ac58fe44" ;
   triage:occursIn <urn:atm:triage:worktree/ay8-6ac58fe44> ;
   triage:note "quality-mgr qa-pr1280-r5, ruling per explicit non-negotiable directive: cipher's FIX-AY8-R4-20260907 claims the D7 matrix now covers bounded stalled connect/write/read, cancellation, and a Windows named-pipe round-trip with ERROR_PIPE_BUSY retry, with the fixture compiling on both Unix and Windows. Source-level, the stalled-connect/write, cancellation, and pipe-busy-retry unit tests in crates/atm-herdr/src/transport_socket.rs (stalled_connect_honors_the_absolute_deadline, stalled_write_honors_the_absolute_deadline, cancelling_connect_write_and_read_futures_is_clean, named_pipe_busy_retry_is_covered_with_a_bounded_deadline) are real, deterministic (tokio::test(start_paused=true), no wall-clock sleeps) and genuinely close 3 of the 4 remaining r4 gaps -- this is real progress, not a rubber stamp. HOWEVER the claimed Windows named-pipe round-trip does not hold: live CI at this exact pin (gh run list --branch feature/ay8-herdr-socket-transport, run 34089817741, job 101641633365, Test (windows-latest)) FAILS TO COMPILE -- rustc E0599 'no method named `read` found for struct `NamedPipeServer`' at fake_herdr_socket/mod.rs:158, because `use tokio::io::AsyncReadExt;` is missing from that file's imports (AsyncWriteExt appears to be in scope given no write-side error, but AsyncReadExt is not). This means the Windows named-pipe path was never actually validated on the windows-latest toolchain before being reported fixed -- the whole windows-gated portion of the D7 matrix (round-trip test plus the pipe-busy-retry test, both of which live in the same file/module and therefore share this same compile failure on Windows) is unverified dead-on-arrival at this pin. Finding stays open (blocking). Scoping for the next fix round: add `use tokio::io::AsyncReadExt;` (or equivalent) to fake_herdr_socket/mod.rs so the cfg(windows) NamedPipeServer read path compiles, then re-verify the Windows Test-matrix leg goes green at the new pin before claiming this scenario closed." .
+
+<urn:atm:triage:occurrence/AY8-QA-002/ay8-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/support/fake_herdr_socket/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "use tokio::io::AsyncReadExt;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "6102354a5" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-6102354a5> ;
+  triage:note "quality-mgr qa-pr1280-r6: cipher's fix adds the missing `use tokio::io::AsyncReadExt;` import to fake_herdr_socket/mod.rs's Windows cfg(windows) module, restoring compilation of the NamedPipeServer read path. Verified this is not merely a compile fix: live CI at pin 6102354a5bfadcc6be8f40226671fece03191217, run 34091661579, job 101647017086 (Test (windows-latest)) is green, and its log shows `test windows_named_pipe_fixture_round_trips_in_the_platform_lane ... ok` and `test named_pipe_busy_retry_is_covered_with_a_bounded_deadline ... ok` actually executing and passing (not merely compiling). This closes the last remaining r5 gap for this finding -- the Windows-gated portion of the D7 matrix is now compiled, executed, and green in CI." .
+
+<urn:atm:triage:resolution/AY8-QA-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T07:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6102354a5bfadcc6be8f40226671fece03191217" ;
+  triage:fixBranch "feature/ay8-herdr-socket-transport" ;
+  triage:verifiedInRound "qa-pr1280-r6" ;
+  triage:resolutionNote "Missing `use tokio::io::AsyncReadExt;` import added to fake_herdr_socket/mod.rs, fixing the E0599 compile failure on the Windows cfg(windows) NamedPipeServer read path identified in r5 at run 34089817741/job 101641633365. Confirmed on live CI at 6102354a5, run 34091661579: Test (windows-latest) job 101647017086 is green, with the job log showing windows_named_pipe_fixture_round_trips_in_the_platform_lane and named_pipe_busy_retry_is_covered_with_a_bounded_deadline both actually executing and passing, not merely compiling. All four D7 sub-requirements this finding tracked (stalled connect/write, cancellation, pipe-busy-retry, Windows compile+execute) are now closed across r5/r6." .
+
+<urn:atm:triage:worktree/ay8-6102354a5>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r6" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "6102354a5" ;
+  triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/ay8-6ac58fe44>
   a triage:WorktreeSnapshot ;

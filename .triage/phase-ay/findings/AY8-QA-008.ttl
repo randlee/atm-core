@@ -15,13 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T07:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY8 ;
   triage:foundAt "2026-09-07T07:10:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-008/ay8-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-008/ay8-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-008/ay8-3> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY8-QA-008/1> ;
+  triage:closedAt "2026-09-07T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY8-QA-008/ay8-1>
@@ -47,6 +51,34 @@
   triage:headSha "6ac58fe44" ;
   triage:occursIn <urn:atm:triage:worktree/ay8-6ac58fe44> ;
   triage:note "quality-mgr qa-pr1280-r5: cipher's FIX-AY8-R4-20260907 report claims explicit request/response synchronization plus deliberate BrokenPipe/ConnectionReset handling and 50 local iterations green. NOT REPRODUCIBLE AS FIXED -- live CI at this exact pin (gh run list --branch feature/ay8-herdr-socket-transport, run 34089817741) shows socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read FAILING on BOTH Test (ubuntu-latest) job 101641633364 and Test (macos-latest) job 101641633350, in each case with the identical panic 'thread ... panicked at crates/atm-herdr/tests/transport_fixture.rs:314:9: assertion failed: matches!(result, Err(HerdrError::InternalError { .. }))', stdout 'Herdr socket response ended before LF after 2 bytes'. This is a different manifestation than the original BrokenPipe panic (the .expect(\"request\") propagation route from r4 does appear to have been removed/reworked, consistent with cipher's claimed BrokenPipe-tolerance change), but the underlying race is not resolved: the client is now observing a malformed/truncated 2-byte partial line instead of the intended oversized-response InternalError, meaning the server/client shutdown-ordering issue still produces a wrong, non-deterministic outcome under CI-level scheduling -- it has moved, not closed. Per the standing no-race-conditions-tolerated / no-flaky-test-patches ruling, finding stays open (blocking). Ruling is affirmative, not ambiguous: cipher's claimed fix does not hold at 6ac58fe44 on live CI, full stop -- the 50-iteration local-green claim does not reproduce under CI's scheduling and cannot be accepted as fixed evidence. Scoping for the next fix round: the fix must guarantee (via explicit synchronization -- e.g. the server signaling the client only after the full oversized write completes or is known to have failed, not by racing partial reads) that the client observes one specific, correct outcome (HerdrError::InternalError for the 1MiB-cap violation) regardless of scheduling, rather than adding new BrokenPipe tolerance that merely shifts which malformed intermediate state the assertion can now observe." .
+
+<urn:atm:triage:occurrence/AY8-QA-008/ay8-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_socket.rs" ;
+  triage:line 21 ;
+  triage:snippet "read_response_line: chunked reads (8192 bytes) plus a server-write-completion oneshot barrier" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "6102354a5" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-6102354a5> ;
+  triage:note "quality-mgr qa-pr1280-r6, ruling per explicit non-negotiable directive: this is a genuine deterministic-by-design architectural fix, not a race-symptom patch. read_response_line in transport_socket.rs replaced its prior byte-at-a-time ([0_u8; 1]) async read loop with 8192-byte chunked reads under the existing RequestDeadline; the HERDR_MAX_SOCKET_LINE_BYTES=1MiB cap constant and the oversized_response() error construction are byte-for-byte unchanged in the diff -- only the internal read-loop chunking mechanism changed, the 1MiB response-cap contract itself is untouched. Manually traced the existing oversized_response_is_rejected_at_the_line_boundary unit test (input b\"abcd\\n\", max_line_bytes=3) through the new chunked algorithm and confirmed it still produces the identical expected error message. Separately, transport_fixture.rs's socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read now adds an explicit tokio::sync::oneshot write-completion barrier between server and client (write_completed_tx/rx) so the client only proceeds once the server has actually finished writing (or failed to) -- this is explicit bounded synchronization, not a sleep/retry/timeout-widening/either-of-two-outcomes accommodation; the test asserts exactly one guaranteed outcome (Err(HerdrError::InternalError)). Root cause: the original byte-at-a-time loop required up to ~1,048,577 individual read syscalls to consume a 1MiB+1 oversized response under a 1s deadline, plausibly slow enough under CI-level scheduling contention to intermittently miss the intended completion path; chunked reads (~128 syscalls) make the deadline reliably sufficient. Live CI confirms all three Test-matrix legs green at pin 6102354a5bfadcc6be8f40226671fece03191217, run 34091661579: Test (ubuntu-latest) job 101647017100, Test (macos-latest) job 101647017042, and Test (windows-latest) job 101647017086 all show `test socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read ... ok`. Finding closed." .
+
+<urn:atm:triage:resolution/AY8-QA-008/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T07:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6102354a5bfadcc6be8f40226671fece03191217" ;
+  triage:fixBranch "feature/ay8-herdr-socket-transport" ;
+  triage:verifiedInRound "qa-pr1280-r6" ;
+  triage:resolutionNote "read_response_line (crates/atm-herdr/src/transport_socket.rs) redesigned from a byte-at-a-time read loop to 8192-byte chunked reads under the same RequestDeadline, eliminating the CI-scheduling-dependent race that previously let the deadline expire (or a malformed partial read be observed) before the oversized-response path completed; the 1MiB response-cap contract (HERDR_MAX_SOCKET_LINE_BYTES, oversized_response()) is unchanged. transport_fixture.rs's flaky test gained an explicit tokio::sync::oneshot write-completion barrier guaranteeing one deterministic outcome. Confirmed a genuine architectural redesign (not a retry/sleep/timeout-widening band-aid) by direct diff review and manual trace of the existing boundary unit test. Confirmed on live CI at 6102354a5, run 34091661579: Test (ubuntu-latest) 101647017100, Test (macos-latest) 101647017042, and Test (windows-latest) 101647017086 all green with the target test passing." .
+
+<urn:atm:triage:worktree/ay8-6102354a5>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r6" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "6102354a5" ;
+  triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/ay8-6ac58fe44>
   a triage:WorktreeSnapshot ;
