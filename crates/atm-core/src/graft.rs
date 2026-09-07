@@ -1141,10 +1141,7 @@ mod tests {
         let object = serialized.as_object().expect("request object");
         let mut keys = object.keys().map(String::as_str).collect::<Vec<_>>();
         keys.sort_unstable();
-        assert_eq!(
-            keys,
-            vec!["event", "kind", "rendered_nudge"]
-        );
+        assert_eq!(keys, vec!["event", "kind", "rendered_nudge"]);
         assert!(!serialized.to_string().contains("full immutable body"));
     }
 
