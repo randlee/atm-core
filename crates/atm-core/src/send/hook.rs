@@ -27,10 +27,7 @@ where
 {
     let kind = nudge_kind_for_mode(nudge_mode);
     if delivery_snapshot.local_tmux_post_send {
-        let pane_id = event
-            .recipient_pane_id
-            .clone()
-            .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned());
+        let pane_id = tmux_pane_id(event, delivery_snapshot);
         let Some(pane_id) = pane_id else {
             return Ok(None);
         };
@@ -49,17 +46,7 @@ where
         }));
     }
     if delivery_snapshot.local_herdr_post_send {
-        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
-            return Ok(None);
-        };
-        return Ok(Some(BuiltInPostSendDispatch {
-            event: event.clone(),
-            target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
-                session: delivery_snapshot.herdr_session.clone(),
-                rendered_nudge,
-            })),
-            kind,
-        }));
+        return build_herdr_dispatch(runtime, delivery_snapshot, event, kind);
     }
     if delivery_snapshot.graft_post_send {
         let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
@@ -92,6 +79,46 @@ where
         }));
     }
     Ok(None)
+}
+
+fn build_herdr_dispatch<R>(
+    runtime: &R,
+    delivery_snapshot: &DeliveryRecipientSnapshot,
+    event: &PostSendHookEvent,
+    kind: NudgeKind,
+) -> Result<Option<BuiltInPostSendDispatch>, AtmError>
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    let Some(agent) = crate::delivery_channel::resolve_herdr_agent_target(
+        &event.recipient,
+        delivery_snapshot.herdr_agent.clone(),
+        "post_send_herdr_dispatch",
+    ) else {
+        return Ok(None);
+    };
+    let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+        return Ok(None);
+    };
+    Ok(Some(BuiltInPostSendDispatch {
+        event: event.clone(),
+        target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
+            agent,
+            session: delivery_snapshot.herdr_session.clone(),
+            rendered_nudge,
+        })),
+        kind,
+    }))
+}
+
+fn tmux_pane_id(
+    event: &PostSendHookEvent,
+    delivery_snapshot: &DeliveryRecipientSnapshot,
+) -> Option<crate::types::PaneId> {
+    event
+        .recipient_pane_id
+        .clone()
+        .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned())
 }
 
 /// Maps the write-time delivery mode to the dispatch's `NudgeKind`.

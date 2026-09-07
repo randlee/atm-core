@@ -223,6 +223,7 @@ mod tests {
             recipient_pane_id: None,
             local_tmux_post_send: false,
             local_herdr_post_send: false,
+            herdr_agent: None,
             herdr_session: None,
             graft_post_send: false,
             bare_cli_post_send: false,

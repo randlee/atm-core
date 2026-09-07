@@ -127,7 +127,9 @@ fn herdr_roster_groups(
         .members
         .iter()
         .filter_map(|member| match member.local_message_received_backend() {
-            Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) => Some(session.clone()),
+            Some(atm_core::LocalMessageReceivedBackend::Herdr { session, .. }) => {
+                Some(session.clone())
+            }
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -149,10 +151,19 @@ fn herdr_roster_groups(
                     |(ordinal, member)| match member.local_message_received_backend() {
                         Some(atm_core::LocalMessageReceivedBackend::Herdr {
                             session: member_session,
-                        }) if *member_session == session => Some(HerdrRosterMember {
-                            ordinal,
-                            name: member.name.clone(),
-                        }),
+                            agent,
+                        }) if *member_session == session => {
+                            atm_core::delivery_channel::resolve_herdr_agent_target(
+                                &member.name,
+                                agent.clone(),
+                                "herdr_endpoint_doctor",
+                            )
+                            .map(|herdr_agent| HerdrRosterMember {
+                                ordinal,
+                                name: member.name.clone(),
+                                herdr_agent,
+                            })
+                        }
                         _ => None,
                     },
                 )
@@ -382,8 +393,10 @@ mod tests {
             tmux_pane_id: None,
             backend: None,
             herdr_session: None,
+            alias: None,
             local_backend: Some(LocalMessageReceivedBackend::Herdr {
                 session: session.map(|value| HerdrSession::new(value).expect("valid test session")),
+                agent: None,
             }),
             home_dir: HomeDirPath::default(),
             live_cwd: None,
@@ -430,6 +443,21 @@ mod tests {
                 .map(|member| member.ordinal)
                 .collect::<Vec<_>>(),
             vec![1, 4]
+        );
+    }
+
+    #[test]
+    fn herdr_endpoint_doctor_skips_a_nonconforming_canonical_name_without_panicking() {
+        let roster = atm_core::team_admin::MembersList {
+            team: TeamName::from_validated("test-team"),
+            members: vec![herdr_member("TeamLead", None)],
+        };
+
+        let groups = herdr_roster_groups(&roster);
+        assert_eq!(groups.len(), 1, "the endpoint partition is retained");
+        assert!(
+            groups[0].1.is_empty(),
+            "an invalid fallback target must not reach the Herdr doctor probe"
         );
     }
 }

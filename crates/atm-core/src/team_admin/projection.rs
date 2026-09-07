@@ -99,7 +99,7 @@ fn member_summary_from_roster(
 ) -> MemberSummary {
     let local_backend = local_message_received_backend(record);
     let (backend, herdr_session) = match local_backend.as_ref() {
-        Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { session }) => (
+        Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { session, .. }) => (
             Some("herdr".to_string()),
             session.as_ref().map(ToString::to_string),
         ),
@@ -116,6 +116,7 @@ fn member_summary_from_roster(
         tmux_pane_id: record.recipient_pane_id.clone(),
         backend,
         herdr_session,
+        alias: metadata_string(&record.metadata_json, "alias"),
         local_backend,
         home_dir: canonical_home_dir(&record.metadata_json).unwrap_or_default(),
         live_cwd: runtime_live_cwd(record, caller_identity, live_cwd),

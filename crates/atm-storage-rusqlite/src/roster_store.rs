@@ -101,6 +101,7 @@ impl RosterStore for SqliteRosterStore {
 
         let updated_at = chrono::Utc::now().to_rfc3339();
         self.db.with_transaction(|transaction| {
+            validate_database_wide_aliases(transaction, roster)?;
             transaction
                 .execute(
                     "DELETE FROM team_roster WHERE team_name = ?1;",
@@ -181,6 +182,87 @@ impl RosterStore for SqliteRosterStore {
             Ok(teams)
         })
     }
+}
+
+/// Reject aliases that would make the durable roster namespace ambiguous.
+///
+/// This deliberately executes in the same immediate SQLite transaction as
+/// the replacement.  The preflight in the CLI gives a prompt diagnostic, but
+/// this is the authority that prevents two concurrent writers from claiming
+/// the same alias.
+fn validate_database_wide_aliases(
+    transaction: &rusqlite::Transaction<'_>,
+    roster: &RosterSnapshot,
+) -> Result<(), AtmError> {
+    let team = &roster.team_name;
+    let aliases = roster
+        .members
+        .iter()
+        .filter_map(|member| member.metadata_json.get("alias").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+
+    for (index, alias) in aliases.iter().enumerate() {
+        if roster
+            .members
+            .iter()
+            .any(|candidate| candidate.agent_name.as_str() == *alias)
+        {
+            return Err(alias_conflict_error(alias, team));
+        }
+        if aliases[..index].contains(alias) {
+            return Err(alias_conflict_error(alias, team));
+        }
+    }
+
+    let mut statement = transaction
+        .prepare(
+            "SELECT team_name, agent_name, metadata_json
+             FROM team_roster
+             WHERE team_name != ?1;",
+        )
+        .map_err(|error| {
+            AtmError::validation(format!(
+                "failed to prepare database-wide roster alias validation: {error}"
+            ))
+        })?;
+    let rows = statement
+        .query_map(params![team.as_str()], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|error| {
+            AtmError::validation(format!(
+                "failed to query database-wide roster alias validation: {error}"
+            ))
+        })?;
+    for row in rows {
+        let (conflicting_team, canonical_name, metadata_json) = row.map_err(|error| {
+            AtmError::validation(format!(
+                "failed to decode database-wide roster alias validation: {error}"
+            ))
+        })?;
+        let metadata = deserialize_json::<Map<String, Value>>(
+            &metadata_json,
+            "team-roster metadata during alias validation",
+        )?;
+        for alias in &aliases {
+            if canonical_name == *alias
+                || metadata.get("alias").and_then(Value::as_str) == Some(*alias)
+            {
+                return Err(alias_conflict_error(alias, &conflicting_team));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn alias_conflict_error(alias: &str, conflicting_team: impl std::fmt::Display) -> AtmError {
+    AtmError::validation(format!(
+        "alias '{alias}' is already assigned in team '{conflicting_team}'"
+    ))
 }
 
 fn build_roster_member(

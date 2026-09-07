@@ -316,6 +316,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     print_doctor_environment(report);
     print_doctor_findings(report);
     print_doctor_roster(report);
+    print_doctor_alias_mismatches(report);
     print_doctor_recommendations(report);
 
     Ok(())
@@ -624,6 +625,33 @@ fn print_doctor_roster(report: &DoctorReport) {
         "{}",
         render_doctor_rosters(report.member_roster.as_ref(), &report.team_rosters)
     );
+}
+
+fn print_doctor_alias_mismatches(report: &DoctorReport) {
+    let rendered = render_doctor_alias_mismatches(&report.alias_mismatches);
+    if rendered.is_empty() {
+        return;
+    }
+    print!("{rendered}");
+}
+
+fn render_doctor_alias_mismatches(mismatches: &[atm_core::doctor::DoctorAliasMismatch]) -> String {
+    if mismatches.is_empty() {
+        return String::new();
+    }
+
+    let mut rendered = String::from("\nAlias mismatches:\n");
+    for mismatch in mismatches {
+        let _ = writeln!(
+            rendered,
+            "  team={} member={} config_alias={} roster_alias={}",
+            mismatch.team,
+            mismatch.member,
+            mismatch.config_alias,
+            empty_dash_opt(mismatch.roster_alias.as_deref()),
+        );
+    }
+    rendered
 }
 
 fn render_doctor_rosters(
@@ -1057,7 +1085,7 @@ mod tests {
     use atm_core::ack::AckOutcome;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-        BootstrapTraceReport, HerdrDoctorReport, HerdrDoctorState,
+        BootstrapTraceReport, DoctorAliasMismatch, HerdrDoctorReport, HerdrDoctorState,
         HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDisplay, HerdrEndpointDisplayRoot,
         HerdrEndpointDoctorReport, HerdrEndpointProvenance, HerdrTransportKind, HerdrVersion,
         PeerConfigDoctorReport,
@@ -1070,8 +1098,9 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        render_bootstrap_trace_section, render_doctor_herdr, render_doctor_peer_config,
-        render_doctor_rosters, render_send_stdout, render_warnings_to_stderr,
+        render_bootstrap_trace_section, render_doctor_alias_mismatches, render_doctor_herdr,
+        render_doctor_peer_config, render_doctor_rosters, render_send_stdout,
+        render_warnings_to_stderr,
     };
 
     #[test]
@@ -1119,6 +1148,21 @@ mod tests {
         assert_eq!(rendered.matches("Members: ").count(), 2);
         assert!(rendered.contains("Members: team-a"));
         assert!(rendered.contains("Members: team-b"));
+    }
+
+    #[test]
+    fn doctor_alias_mismatch_text_includes_both_alias_values() {
+        let rendered = render_doctor_alias_mismatches(&[DoctorAliasMismatch {
+            team: "workspace".parse().expect("team"),
+            member: "member-a".parse().expect("member"),
+            config_alias: "alias-a".to_owned(),
+            roster_alias: Some("stale-alias".to_owned()),
+        }]);
+
+        assert!(rendered.contains("Alias mismatches:"));
+        assert!(rendered.contains("team=workspace member=member-a"));
+        assert!(rendered.contains("config_alias=alias-a"));
+        assert!(rendered.contains("roster_alias=stale-alias"));
     }
 
     #[test]

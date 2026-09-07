@@ -12,7 +12,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::boundary;
+use crate::address::AgentAddress;
+use crate::boundary::{self, RosterEntry};
+use crate::caller_context::{CallerContext, canonicalize_caller_context, resolve_roster_alias};
 use crate::error::AtmError;
 use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
@@ -33,6 +35,75 @@ pub use request::{
     MAX_CONTAINS_FILTER_LEN, MAX_TIMEOUT_SECS, MailboxQueryFields, MailboxQueryFilters, PeekQuery,
     ReadQuery,
 };
+
+/// Canonicalizes every roster alias carried by a mailbox request before the
+/// request reaches either reader implementation. This covers the caller,
+/// owner target, and sender filter, leaving durable mailbox keys and audit
+/// records in canonical ATM identity form.
+pub fn canonicalize_roster_aliases<F>(query: &mut ReadQuery, roster_for_team: F)
+where
+    F: Fn(&TeamName) -> Vec<RosterEntry>,
+{
+    let original_caller = query.caller_identity.clone();
+    let caller_roster = roster_for_team(&query.caller_team);
+    let caller = canonicalize_caller_context(
+        CallerContext {
+            caller_identity: query.caller_identity.clone(),
+            caller_chat_id: query.caller_chat_id.clone(),
+            caller_team: query.caller_team.clone(),
+            activity_observation: query.activity_observation.clone(),
+        },
+        &caller_roster,
+    );
+    query.caller_identity = caller.caller_identity;
+    query.caller_chat_id = caller.caller_chat_id;
+    query.activity_observation = caller.activity_observation;
+    if let Some(participant) = query.mailbox.participant_filter.as_mut()
+        && participant.agent == original_caller
+    {
+        participant.agent = query.caller_identity.clone();
+    }
+
+    let target_team = query
+        .mailbox
+        .target_address
+        .as_ref()
+        .and_then(|address| address.team().cloned())
+        .unwrap_or_else(|| query.caller_team.clone());
+    let target_roster = roster_for_team(&target_team);
+    if let Some(target) = query.mailbox.target_address.as_ref() {
+        let canonical_target = resolve_roster_alias(target.agent(), &target_team, &target_roster);
+        if let Ok(canonical_address) = AgentAddress::new(
+            canonical_target,
+            target.chat_id().cloned(),
+            target.team().cloned(),
+            target.host().cloned(),
+        ) {
+            query.mailbox.target_address = Some(canonical_address);
+        }
+    }
+    if let Some(sender) = query.mailbox.sender_filter.as_mut() {
+        *sender = resolve_roster_alias(sender, &target_team, &target_roster);
+    }
+}
+
+/// Canonicalizes a read-only peek request through the same ingress resolver.
+pub fn canonicalize_peek_roster_aliases<F>(query: &mut PeekQuery, roster_for_team: F)
+where
+    F: Fn(&TeamName) -> Vec<RosterEntry>,
+{
+    let mut read = ReadQuery {
+        mailbox: query.mailbox.clone(),
+        caller_identity: query.caller_identity.clone(),
+        caller_chat_id: query.caller_chat_id.clone(),
+        caller_team: query.caller_team.clone(),
+        seen_state_update: false,
+        activity_observation: None,
+    };
+    canonicalize_roster_aliases(&mut read, roster_for_team);
+    query.mailbox = read.mailbox;
+    query.caller_identity = read.caller_identity;
+}
 
 /// Bucket counts for one classified mailbox surface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,10 +194,11 @@ pub fn peek_mail_with_runtime(
 }
 
 fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
-    query: PeekQuery,
+    mut query: PeekQuery,
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<ReadOutcome, AtmError> {
+    canonicalize_peek_roster_aliases(&mut query, |team| runtime.load_team_roster(team));
     let synthesized = ReadQuery {
         mailbox: query.mailbox,
         caller_identity: query.caller_identity,
@@ -188,10 +260,11 @@ fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
 }
 
 fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
-    query: ReadQuery,
+    mut query: ReadQuery,
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<ReadOutcome, AtmError> {
+    canonicalize_roster_aliases(&mut query, |team| runtime.load_team_roster(team));
     let ReadRuntimeContext {
         actor,
         actor_team,
@@ -735,10 +808,10 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        BucketCounts, ClassifiedMessage, PeekQuery, ReadQuery, metadata_selection,
-        peek_mail_with_runtime_impl, read_mail_with_runtime_impl, state,
+        BucketCounts, ClassifiedMessage, PeekQuery, ReadQuery, canonicalize_roster_aliases,
+        metadata_selection, peek_mail_with_runtime_impl, read_mail_with_runtime_impl, state,
     };
-    use crate::boundary::{self, MessageKey, RosterHarness, RosterMemberKind};
+    use crate::boundary::{self, MessageKey, RosterEntry, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
     use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
@@ -755,6 +828,57 @@ mod tests {
         AgentName, ChatId, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
         TaskId, TeamName,
     };
+
+    #[test]
+    fn read_ingress_canonicalizes_alias_caller_target_and_from_filter() {
+        let root = tempdir().expect("root");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let mut metadata_json = Map::new();
+        metadata_json.insert("alias".to_owned(), Value::String("atm-lead".to_owned()));
+        let roster = vec![RosterEntry {
+            team_name: team.clone(),
+            agent_name: AgentName::from_validated(ROLE_TEAM_LEAD),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Lead,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json,
+        }];
+        let mut query = ReadQuery::new(
+            root.path().to_path_buf(),
+            root.path().to_path_buf(),
+            AgentName::from_validated("atm-lead"),
+            Some("atm-lead"),
+            team,
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            Some("atm-lead"),
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("query");
+
+        canonicalize_roster_aliases(&mut query, |_| roster.clone());
+
+        assert_eq!(query.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(
+            query
+                .mailbox
+                .target_address
+                .as_ref()
+                .map(|target| target.agent().as_str()),
+            Some(ROLE_TEAM_LEAD)
+        );
+        assert_eq!(
+            query.mailbox.sender_filter.as_ref().map(AgentName::as_str),
+            Some(ROLE_TEAM_LEAD)
+        );
+    }
 
     fn selection_state_for_source_files(
         source_files: &[SourceFile],

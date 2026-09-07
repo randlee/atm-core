@@ -429,7 +429,7 @@ fn decode_envelope(bytes: &[u8]) -> Result<HerdrEnvelope, HerdrError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use atm_core::types::AgentName;
+    use atm_core::HerdrAgentName;
 
     fn env(platform: Platform) -> HerdrHostEnv {
         HerdrHostEnv {
@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn request_ids_and_ndjson_framing_are_stable() {
-        let agent: AgentName = "alice".parse().expect("agent");
+        let agent = HerdrAgentName::new("alice").expect("agent");
         let request = encode_request(HerdrOp::Get { agent: &agent }).expect("request");
         assert_eq!(request.last(), Some(&b'\n'));
         let value: Value = serde_json::from_slice(&request).expect("request JSON");
@@ -595,7 +595,7 @@ mod tests {
             in_flight: Arc::new(Semaphore::new(SOCKET_PERMITS)),
             pipe_busy_retry_delay: PIPE_BUSY_RETRY_DELAY,
         };
-        let agent: AgentName = "alice".parse().expect("agent");
+        let agent = HerdrAgentName::new("alice").expect("agent");
         let envelope = io
             .call(
                 HerdrOp::Get { agent: &agent },

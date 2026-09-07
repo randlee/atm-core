@@ -15,7 +15,7 @@ use atm_core::boundary::{
     TaskRow, TaskState,
 };
 use atm_core::delivery_channel::{
-    DeliveryChannel, GraftLeaseState, HerdrSession, classify_delivery_channel,
+    DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
     local_message_received_backend,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
@@ -395,12 +395,13 @@ impl HerdrQueueWakePump {
             .filter_map(|snapshot| snapshot.name.as_deref().map(|name| (name, snapshot)))
             .collect();
         for member in members {
-            let Some(snapshot) = snapshots.get(member.key.agent().as_str()) else {
+            let Some(snapshot) = snapshots.get(member.herdr_agent.as_str()) else {
                 if member.pending {
                     stats.not_present += 1;
                     tracing::info!(
                         event = "herdr_queue_poll_outcome",
                         member = %member.key,
+                        herdr_agent = %member.herdr_agent,
                         queue_kind = NudgeKind::Queue.as_str(),
                         outcome = "held_target_not_present",
                         "Herdr queue target was absent from the poll result"
@@ -723,6 +724,7 @@ impl crate::RuntimeMaintenance for HerdrQueueWakePump {
 #[derive(Clone)]
 struct HerdrCandidate {
     key: MemberKey,
+    herdr_agent: HerdrAgentName,
     session: Option<HerdrSession>,
     pending: bool,
 }
@@ -765,15 +767,24 @@ fn herdr_candidates(
             {
                 continue;
             }
-            let session = match backend {
-                atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr { session } => {
-                    session
-                }
+            let (configured_agent, session) = match backend {
+                atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr {
+                    session,
+                    agent,
+                } => (agent, session),
                 atm_core::delivery_channel::LocalMessageReceivedBackend::Tmux { .. } => continue,
+            };
+            let Some(herdr_agent) = atm_core::delivery_channel::resolve_herdr_agent_target(
+                key.agent(),
+                configured_agent,
+                "herdr_queue_wake",
+            ) else {
+                continue;
             };
             candidates.push(HerdrCandidate {
                 pending: pending.contains(&key),
                 key,
+                herdr_agent,
                 session,
             });
         }
@@ -1003,7 +1014,7 @@ mod tests {
                 };
                 process
                     .prompt(
-                        &dispatch.event.recipient,
+                        &target.agent,
                         target.session.as_ref(),
                         &target.rendered_nudge,
                         deadline,
@@ -1034,6 +1045,14 @@ mod tests {
 
     fn herdr_member(team: &TeamName, agent: &str) -> RosterEntry {
         herdr_member_with_session(team, agent, "aq27-test")
+    }
+
+    fn herdr_member_with_alias(team: &TeamName, agent: &str, alias: &str) -> RosterEntry {
+        let mut member = herdr_member(team, agent);
+        member
+            .metadata_json
+            .insert("alias".to_string(), json!(alias));
+        member
     }
 
     fn queue_message(
@@ -1293,6 +1312,94 @@ mod tests {
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         }])
+    }
+
+    #[tokio::test]
+    async fn shared_herdr_server_prompts_each_team_by_its_roster_alias() {
+        let root = tempfile::tempdir().expect("temporary root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+        let team_a: TeamName = "a-team".parse().expect("team");
+        let team_b: TeamName = "b-team".parse().expect("team");
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team_a.clone(),
+                members: vec![herdr_member_with_alias(
+                    &team_a,
+                    atm_core::roles::ROLE_TEAM_LEAD,
+                    "team-lead_a-team",
+                )],
+                refreshed_at: None,
+            })
+            .expect("team a roster");
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team_b.clone(),
+                members: vec![herdr_member_with_alias(
+                    &team_b,
+                    atm_core::roles::ROLE_TEAM_LEAD,
+                    "team-lead_b-team",
+                )],
+                refreshed_at: None,
+            })
+            .expect("team b roster");
+        queue_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team_a,
+            atm_core::roles::ROLE_TEAM_LEAD,
+        );
+        queue_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team_b,
+            atm_core::roles::ROLE_TEAM_LEAD,
+        );
+
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        fake.queue_list_result(Ok(HerdrListOutcome {
+            agents: vec![
+                AgentSnapshot {
+                    name: Some("team-lead_a-team".to_owned()),
+                    status: HerdrAgentStatus::Idle,
+                    workspace_id: None,
+                },
+                AgentSnapshot {
+                    name: Some("team-lead_b-team".to_owned()),
+                    status: HerdrAgentStatus::Idle,
+                    workspace_id: None,
+                },
+            ],
+        }));
+        let selector = Arc::new(FakeSelector {
+            emitter: FakeEmitter {
+                process: Arc::clone(&fake),
+            },
+        });
+        let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
+        let pump = HerdrQueueWakePump::new(
+            assembly.service_runtime,
+            selector,
+            super::RuntimeHealth::default(),
+            process,
+        );
+
+        pump.tick_once().await;
+
+        let prompted: Vec<String> = fake
+            .calls()
+            .into_iter()
+            .filter_map(|call| match call {
+                atm_herdr::testing::FakeHerdrCall::Prompt { agent, .. } => Some(agent),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(prompted.len(), 2);
+        assert!(prompted.contains(&"team-lead_a-team".to_owned()));
+        assert!(prompted.contains(&"team-lead_b-team".to_owned()));
     }
 
     type TaskOnlyPumpFixture = (
@@ -3484,5 +3591,37 @@ mod tests {
             1,
             "herdr_candidates must not call load_roster on the durable store"
         );
+    }
+
+    #[test]
+    fn herdr_queue_wake_skips_a_nonconforming_canonical_name_without_panicking() {
+        let team: TeamName = "aq27-invalid-herdr-name".parse().expect("team");
+        let member = herdr_member(&team, "TeamLead");
+        let durable = std::sync::Arc::new(CountingRosterStore {
+            roster: RosterSnapshot {
+                team_name: team,
+                members: vec![member],
+                refreshed_at: None,
+            },
+            load_roster_calls: std::sync::atomic::AtomicUsize::new(0),
+            list_teams_calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let (roster_store, roster_runtime_mirror) =
+            atm_runtime_test_support::build_write_through_roster_for_test(durable)
+                .expect("write-through roster fixture hydrates");
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            std::sync::Arc::new(UnusedMailStore),
+            roster_store,
+            roster_runtime_mirror,
+            std::sync::Arc::new(NoopNudgeTemplateOverrideStore),
+            std::sync::Arc::new(UnusedNonClaudeOutbound),
+        );
+
+        let pending = std::collections::HashSet::new();
+        let candidates =
+            super::herdr_candidates(runtime.shared_roster_store_arc().as_ref(), &pending)
+                .expect("invalid Herdr fallback is skipped, not surfaced as a failure");
+
+        assert!(candidates.is_empty());
     }
 }

@@ -545,7 +545,7 @@ impl StorageAndNudgeRouter {
 
     async fn peek_messages(
         &self,
-        query: PeekQuery,
+        mut query: PeekQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
@@ -553,6 +553,9 @@ impl StorageAndNudgeRouter {
                 "async mailbox runtime was not installed at daemon startup",
             )
         })?;
+        atm_core::read::canonicalize_peek_roster_aliases(&mut query, |team| {
+            self.service_runtime.load_team_roster(team)
+        });
         let command = atm_core::read::async_projection::prepare_async_peek(&query)?;
         runtime
             .peek_command(command, deadline)
@@ -564,7 +567,7 @@ impl StorageAndNudgeRouter {
 
     async fn receive_messages(
         &self,
-        query: ReadQuery,
+        mut query: ReadQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
@@ -572,6 +575,9 @@ impl StorageAndNudgeRouter {
                 "async mailbox runtime was not installed at daemon startup",
             )
         })?;
+        atm_core::read::canonicalize_roster_aliases(&mut query, |team| {
+            self.service_runtime.load_team_roster(team)
+        });
         let command = atm_core::read::async_projection::prepare_async_read(&query)?;
         runtime
             .read_command(command, deadline)

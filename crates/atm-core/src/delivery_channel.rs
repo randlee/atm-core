@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::error::AtmError;
-use crate::types::PaneId;
+use crate::types::{AgentName, PaneId};
 
 pub(crate) const BACKEND_TYPE_METADATA_KEY: &str = "backendType";
 
@@ -63,6 +63,78 @@ impl fmt::Display for HerdrSession {
     }
 }
 
+/// One validated live-agent name on a shared Herdr server.
+///
+/// This is deliberately distinct from an ATM [`AgentName`]: a roster member
+/// keeps its ATM identity while its roster `alias` selects its unique server-side
+/// target.  It lives in atm-core because durable roster metadata and runtime
+/// target selection must not introduce an atm-core -> atm-herdr dependency.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct HerdrAgentName(String);
+
+impl HerdrAgentName {
+    /// Constructs a Herdr-side agent name using Herdr's live-agent grammar.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the name is not `[a-z][a-z0-9_-]{0,31}`.
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        let valid = (1..=32).contains(&value.len())
+            && value.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
+            && value.bytes().all(|byte| {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+            });
+        if !valid {
+            return Err(AtmError::validation(
+                "Herdr agent name must match ^[a-z][a-z0-9_-]{0,31}$",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    /// Returns the validated server-side name.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for HerdrAgentName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Resolves the server-side target for a roster member without allowing a
+/// historical ATM canonical name to panic a Herdr delivery path.
+///
+/// A configured roster alias has already passed Herdr validation. When it is
+/// absent, the canonical ATM name retains the established fallback behavior
+/// only when it also satisfies the Herdr grammar. Otherwise the caller must
+/// skip that best-effort Herdr operation; persisted mailbox state remains
+/// canonical and untouched.
+#[must_use]
+pub fn resolve_herdr_agent_target(
+    member: &AgentName,
+    configured_alias: Option<HerdrAgentName>,
+    warning_site: &'static str,
+) -> Option<HerdrAgentName> {
+    configured_alias.or_else(|| match HerdrAgentName::new(member.as_str()) {
+        Ok(agent) => Some(agent),
+        Err(error) => {
+            tracing::warn!(
+                warning_site,
+                member = %member,
+                %error,
+                "skipping Herdr operation because the canonical member name is not a valid Herdr target"
+            );
+            None
+        }
+    })
+}
+
 /// The first-party local delivery backend a recipient's roster entry
 /// resolves to, if any.
 ///
@@ -72,8 +144,13 @@ impl fmt::Display for HerdrSession {
 /// launches sessions and its own env is irrelevant (Rand, 2026-08-26).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LocalMessageReceivedBackend {
-    Tmux { pane_id: PaneId },
-    Herdr { session: Option<HerdrSession> },
+    Tmux {
+        pane_id: PaneId,
+    },
+    Herdr {
+        session: Option<HerdrSession>,
+        agent: Option<HerdrAgentName>,
+    },
 }
 
 /// Whether the recipient's process currently holds an active Graft receiver
@@ -148,8 +225,8 @@ pub fn test_backend_type_metadata(backend: &str) -> serde_json::Map<String, Valu
 /// Derives the local backend from durable roster data. No schema migration:
 /// `recipient_pane_id` selects `Tmux`;
 /// `metadata_json["backendType"] == "herdr"` selects `Herdr`, reading an
-/// optional `metadata_json["herdrSession"]` string. An unparsable
-/// `herdrSession` value is treated as absent and logged, not rejected.
+/// optional `metadata_json["herdrSession"]` and `metadata_json["alias"]`
+/// string. An unparsable value is treated as absent and logged, not rejected.
 #[must_use]
 pub fn local_message_received_backend(
     member: &crate::boundary::RosterEntry,
@@ -184,7 +261,26 @@ pub fn local_message_received_backend(
                 None
             }
         });
-    Some(LocalMessageReceivedBackend::Herdr { session })
+    let agent = member
+        .metadata_json
+        .get("alias")
+        .and_then(Value::as_str)
+        .and_then(|raw| match HerdrAgentName::new(raw) {
+            Ok(agent) => Some(agent),
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "atm_core.delivery_channel",
+                    action = "herdr_alias_parse",
+                    outcome = "failed",
+                    agent = %member.agent_name,
+                    team = %member.team_name,
+                    %error,
+                    "ignoring invalid Herdr roster alias metadata"
+                );
+                None
+            }
+        });
+    Some(LocalMessageReceivedBackend::Herdr { session, agent })
 }
 
 #[cfg(test)]
@@ -224,11 +320,55 @@ mod tests {
     }
 
     #[test]
+    fn herdr_agent_name_uses_the_live_agent_grammar() {
+        let name = HerdrAgentName::new("team_lead-1").expect("valid Herdr agent");
+        assert_eq!(name.as_str(), "team_lead-1");
+        assert_eq!(name.to_string(), "team_lead-1");
+
+        for invalid in [
+            "",
+            "TeamLead",
+            "team lead",
+            "team.lead",
+            "1team",
+            "a".repeat(33).as_str(),
+        ] {
+            assert!(
+                HerdrAgentName::new(invalid).is_err(),
+                "{invalid} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn herdr_target_skips_a_nonconforming_canonical_name_without_panicking() {
+        let member = AgentName::from_validated("TeamLead");
+
+        assert_eq!(
+            resolve_herdr_agent_target(&member, None, "delivery_channel test"),
+            None
+        );
+        assert_eq!(
+            resolve_herdr_agent_target(
+                &member,
+                Some(HerdrAgentName::new("team-lead_atm-dev").expect("alias")),
+                "delivery_channel test",
+            )
+            .as_ref()
+            .map(HerdrAgentName::as_str),
+            Some("team-lead_atm-dev")
+        );
+    }
+
+    #[test]
     fn classify_delivery_channel_covers_all_four_rows() {
         let tmux = LocalMessageReceivedBackend::Tmux {
             pane_id: PaneId::from_cli("%1").expect("pane"),
         };
-        let herdr = LocalMessageReceivedBackend::Herdr { session: None };
+        let herdr = LocalMessageReceivedBackend::Herdr {
+            session: None,
+            agent: None,
+        };
         assert_eq!(
             classify_delivery_channel(Some(&tmux), GraftLeaseState::Absent),
             DeliveryChannel::TmuxSteer
@@ -293,9 +433,49 @@ mod tests {
 
         let backend = local_message_received_backend(&member).expect("backend");
         match backend {
-            LocalMessageReceivedBackend::Herdr { session } => {
+            LocalMessageReceivedBackend::Herdr { session, .. } => {
                 assert_eq!(session.expect("session").as_str(), "session-7");
             }
+            LocalMessageReceivedBackend::Tmux { .. } => panic!("expected herdr backend"),
+        }
+    }
+
+    #[test]
+    fn local_message_received_backend_reads_optional_herdr_alias() {
+        let mut member = roster_entry();
+        member.metadata_json.insert(
+            BACKEND_TYPE_METADATA_KEY.to_owned(),
+            Value::String("herdr".to_owned()),
+        );
+        member.metadata_json.insert(
+            "alias".to_owned(),
+            Value::String("shared_team_lead".to_owned()),
+        );
+
+        let backend = local_message_received_backend(&member).expect("backend");
+        match backend {
+            LocalMessageReceivedBackend::Herdr { agent, .. } => {
+                assert_eq!(agent.expect("agent").as_str(), "shared_team_lead");
+            }
+            LocalMessageReceivedBackend::Tmux { .. } => panic!("expected herdr backend"),
+        }
+    }
+
+    #[test]
+    fn local_message_received_backend_treats_invalid_herdr_alias_as_absent() {
+        let mut member = roster_entry();
+        member.metadata_json.insert(
+            BACKEND_TYPE_METADATA_KEY.to_owned(),
+            Value::String("herdr".to_owned()),
+        );
+        member.metadata_json.insert(
+            "alias".to_owned(),
+            Value::String("Not-A-Herdr-Agent".to_owned()),
+        );
+
+        let backend = local_message_received_backend(&member).expect("backend");
+        match backend {
+            LocalMessageReceivedBackend::Herdr { agent, .. } => assert!(agent.is_none()),
             LocalMessageReceivedBackend::Tmux { .. } => panic!("expected herdr backend"),
         }
     }
@@ -314,7 +494,7 @@ mod tests {
 
         let backend = local_message_received_backend(&member).expect("backend");
         match backend {
-            LocalMessageReceivedBackend::Herdr { session } => assert!(session.is_none()),
+            LocalMessageReceivedBackend::Herdr { session, .. } => assert!(session.is_none()),
             LocalMessageReceivedBackend::Tmux { .. } => panic!("expected herdr backend"),
         }
     }

@@ -40,6 +40,7 @@ mod tests {
             tmux_pane_id: None,
             backend: None,
             herdr_session: None,
+            alias: None,
             local_backend,
             home_dir: HomeDirPath::default(),
             live_cwd: None,
@@ -64,6 +65,7 @@ mod tests {
                     "herdr-agent",
                     Some(LocalMessageReceivedBackend::Herdr {
                         session: Some(session),
+                        agent: None,
                     }),
                 ),
             ],

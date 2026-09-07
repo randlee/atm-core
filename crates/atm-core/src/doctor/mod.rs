@@ -39,7 +39,7 @@ pub use herdr_state::{
 };
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
+    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport, DoctorAliasMismatch,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
     DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientSource,
     EscalationRecipientsDoctorReport, GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport,
@@ -526,6 +526,7 @@ fn build_doctor_report(
         resolved_team_scope: team_scope,
         member_roster,
         team_rosters,
+        alias_mismatches: Vec::new(),
         graft_receivers,
         observability: observability_health,
         herdr_queue_pump: HerdrQueuePumpDoctorReport {
@@ -1036,6 +1037,7 @@ fn member_summary(
         tmux_pane_id: member.tmux_pane_id.clone(),
         backend: None,
         herdr_session: None,
+        alias: None,
         local_backend: None,
         home_dir: member.home_dir.clone(),
         live_cwd: match (caller_identity, live_cwd) {
@@ -1610,6 +1612,7 @@ mod tests {
                 tmux_pane_id: None,
                 backend: None,
                 herdr_session: None,
+                alias: None,
                 local_backend: None,
                 home_dir: PathBuf::from("/workspace").into(),
                 live_cwd: None,

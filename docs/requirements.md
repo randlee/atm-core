@@ -910,7 +910,15 @@ Runtime caller-context rules:
   must be rejected with migration guidance directing operators to
   `[[atm.post_send_hooks]]`
 - config sections outside ATM-owned config, such as `[rmux]` or future
-  `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`
+  `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`,
+  with one diagnostic-only exception: `atm doctor` may read
+  `[[rmux.windows.panes]].alias` from the `.atm.toml` discovered from its
+  caller cwd and compare it with the durable alias of the named pane member
+  for that caller's `ATM_TEAM`
+- that doctor comparison is validation only: it never supplies an alias to
+  member creation, identity or recipient resolution, sends, or writes; it
+  does not widen under `--all-teams`, and a missing or unparsable `.atm.toml`
+  skips the comparison without failing doctor
 
 ### 3.3.1 Config And Schema Recovery
 

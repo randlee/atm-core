@@ -96,7 +96,7 @@ impl HerdrDoctorProbe {
                 .io
                 .call(
                     HerdrOp::Get {
-                        agent: &member.name,
+                        agent: &member.herdr_agent,
                     },
                     session,
                     member_deadline,

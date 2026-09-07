@@ -55,6 +55,7 @@ layout = "even-horizontal"
 
 [[rmux.windows.panes]]
 name = "team-lead"
+alias = "atm-lead"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
@@ -66,6 +67,7 @@ env = { ATM_IDENTITY = "arch-ctm", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_I
 
 [[rmux.windows.panes]]
 name = "quality-mgr"
+alias = "atm-quality"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
@@ -92,6 +94,7 @@ layout = "even-horizontal"
 
 [[rmux.windows.panes]]
 name = "publisher"
+alias = "atm-publisher"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "publisher", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
