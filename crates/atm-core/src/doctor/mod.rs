@@ -1182,7 +1182,7 @@ mod tests {
         let member = |ordinal: usize, name: &str, outcome| HerdrMemberPresence {
             ordinal,
             name: AgentName::from_validated(name.to_owned()),
-            herdr_agent: crate::HerdrAgentName::new(name).expect("valid Herdr test name"),
+            herdr_agent: Some(crate::HerdrAgentName::new(name).expect("valid Herdr test name")),
             outcome,
         };
         let observation = |members| HerdrEndpointObservation {
@@ -1271,7 +1271,7 @@ mod tests {
         let presence = HerdrMemberPresence {
             ordinal: 0,
             name: AgentName::from_validated("canonical-member"),
-            herdr_agent: crate::HerdrAgentName::new("herdr-alias").expect("valid alias"),
+            herdr_agent: Some(crate::HerdrAgentName::new("herdr-alias").expect("valid alias")),
             outcome: HerdrPresenceOutcome::Visible,
         };
 
@@ -1279,6 +1279,19 @@ mod tests {
 
         assert_eq!(serialized["name"], "canonical-member");
         assert_eq!(serialized["herdr_agent"], "herdr-alias");
+    }
+
+    #[test]
+    fn herdr_member_presence_accepts_v1_1_payload_without_herdr_agent() {
+        let presence: HerdrMemberPresence = serde_json::from_value(serde_json::json!({
+            "name": "canonical-member",
+            "outcome": { "kind": "visible" }
+        }))
+        .expect("v1.1 payload remains readable");
+
+        assert_eq!(presence.name.as_str(), "canonical-member");
+        assert_eq!(presence.herdr_agent, None);
+        assert_eq!(presence.outcome, HerdrPresenceOutcome::Visible);
     }
 
     struct UnusedMailStore;
