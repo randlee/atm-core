@@ -15,12 +15,16 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope ".claude/skills/daemon-switch/scripts/daemon-switch.py restart()/herdr_restart_pending_endpoints(), .claude/skills/daemon-switch/tests/test_daemon_switch.py HerdrRestartTests" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY6 ;
   triage:foundAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY6-QA-001/AY6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY6-QA-001/AY6-2> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY6-QA-001/1> ;
+  triage:closedAt "2026-09-07T08:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY6-QA-001/AY6-1>
@@ -28,11 +32,22 @@
   triage:file ".claude/skills/daemon-switch/scripts/daemon-switch.py" ;
   triage:line 723 ;
   triage:snippet "raise SwitchError(f\"HERDR_RESTART_ENDPOINTS_PENDING: restart Herdr endpoints first: {names}\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay6-herdr-restart-coordination" ;
   triage:headSha "bc32fdf92" ;
   triage:occursIn <urn:atm:triage:worktree/AY6/bc32fdf92> .
+
+<urn:atm:triage:occurrence/AY6-QA-001/AY6-2>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/daemon-switch/scripts/daemon-switch.py" ;
+  triage:line 723 ;
+  triage:snippet "HERDR_RESTART_ENDPOINTS_PENDING now emits AY.5's one-object stdout JSON envelope and exit code 3; test_ordinary_restart_refuses_every_protocol_mismatch_before_service_mutation asserts the code string, exit status, and JSON shape" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay6-herdr-restart-coordination" ;
+  triage:headSha "1845f1471" ;
+  triage:occursIn <urn:atm:triage:worktree/AY6/1845f1471> .
 
 <urn:atm:triage:worktree/AY6/bc32fdf92>
   a triage:WorktreeSnapshot ;
@@ -40,3 +55,19 @@
   triage:branch "feature/ay6-herdr-restart-coordination" ;
   triage:headSha "bc32fdf92" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AY6/1845f1471>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1284-r2" ;
+  triage:branch "feature/ay6-herdr-restart-coordination" ;
+  triage:headSha "1845f1471" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AY6-QA-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T08:05:00Z"^^xsd:dateTime ;
+  triage:fixCommit "1845f1471118af86827e2cfda3f5dca142f4c4d9c" ;
+  triage:fixBranch "feature/ay6-herdr-restart-coordination" ;
+  triage:verifiedInRound "qa-pr1284-r3" ;
+  triage:resolutionNote "qa-pr1284-r2 confirmed the fix content correct on direct code/test inspection at 1845f1471 (C3/C4/A6 contract match, exact-JSON test, 102/102 local tests) but held closure open pending CI evidence -- PR #1284/#1285 had a mergeable=unknown GitHub topology gap producing zero CI runs at the pin, escalated to Rand by fenix. This round (qa-pr1284-r3, CI-only, no code re-review) confirms the topology gap has resolved: gh run list --branch feature/ay6-herdr-restart-coordination shows a completed/success run 34094199961 at head e26a24f7f3 (merge of feature/ay5-herdr-entry-control-plane into feature/ay6-herdr-restart-coordination); gh pr checks 1284 confirms all 17 checks pass including all three Test-matrix legs (ubuntu/macos/windows), Clippy, and Format check; git merge-base --is-ancestor 1845f147118af86827e2cfda3f5dca142f4c4d9c e26a24f7f38010fa0e2fb81a637dcf39a8a231dd confirms YES -- the pinned fix commit is an ancestor of the green CI head, so this run genuinely exercises the fix content; gh pr view 1284 now reports mergeable=MERGEABLE. Closing on this evidence." .
