@@ -19,8 +19,8 @@ use atm_core::observability::ObservabilityPort;
 use atm_core::peer_wire::PeerWireMode;
 use atm_core::team_admin::MembersList;
 use atm_herdr::{
-    BreakerPolicy, HerdrBreakerState, HerdrError, HerdrProcessAdapter, HerdrProcessInvoker,
-    HerdrSpawnBreaker,
+    BreakerPolicy, HerdrBreakerState, HerdrClientConfig, HerdrError, HerdrProcessAdapter,
+    HerdrProcessInvoker, HerdrSpawnBreaker,
 };
 use atm_http_runtime::{
     HerdrQueueWakePump, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, RuntimeHealth,
@@ -51,6 +51,7 @@ pub(crate) struct ReplacementHandlerConfig<F> {
     pub(crate) diagnostic_counters:
         Option<Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>>,
     pub(crate) bare_cli: BareCliRuntime,
+    pub(crate) herdr_config: HerdrClientConfig,
     pub(crate) herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 }
 
@@ -227,9 +228,10 @@ pub(crate) fn build_replacement_handler(
         runtime_health,
         diagnostic_counters,
         bare_cli,
+        herdr_config,
         herdr_process,
     } = config;
-    let herdr_process = resolve_herdr_process(&mut assembly, herdr_process);
+    let herdr_process = resolve_herdr_process(&mut assembly, herdr_process, herdr_config);
     let queue_wake_process = Arc::clone(&herdr_process);
     let (selector, recovery_sweep) = compose_queue_workers(
         assembly.service_runtime.clone(),
@@ -358,6 +360,7 @@ fn add_peer_connection_pool(
 fn resolve_herdr_process(
     assembly: &mut RuntimeAssembly,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+    herdr_config: HerdrClientConfig,
 ) -> Arc<dyn HerdrProcessAdapter> {
     match herdr_process {
         Some(process) => process,
@@ -365,7 +368,7 @@ fn resolve_herdr_process(
             let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
             let process: Arc<dyn HerdrProcessAdapter> = Arc::new(HerdrProcessInvoker::new(
                 Arc::clone(&herdr_breaker),
-                atm_herdr::HerdrClientConfig::default(),
+                herdr_config,
             ));
             assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
                 breaker: Arc::clone(&herdr_breaker),

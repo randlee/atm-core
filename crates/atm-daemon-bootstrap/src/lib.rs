@@ -45,6 +45,7 @@ mod atm_temp_sweeper_runtime;
 mod bare_cli_runtime;
 mod daemon_observability;
 mod diagnostic_timeline;
+mod herdr_config;
 mod owner_gate;
 mod peer_launch_config;
 mod queue_drain;
@@ -55,6 +56,7 @@ mod sqlite_observability;
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 use bare_cli_runtime::BareCliRuntime;
+use herdr_config::daemon_herdr_client_config;
 use replacement_handler::{
     ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
 };
@@ -435,6 +437,7 @@ async fn run_replacement_daemon_with_selector(
     let bare_cli = BareCliRuntime::default();
     let atm_temp_sweeper =
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
+    let herdr_config = daemon_herdr_client_config(&ProcessEnvSource)?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
@@ -454,6 +457,7 @@ async fn run_replacement_daemon_with_selector(
             runtime_health: runtime_health.clone(),
             diagnostic_counters: diagnostic_counters.clone(),
             bare_cli,
+            herdr_config,
             herdr_process,
         },
     )?;
@@ -1188,6 +1192,7 @@ mod replacement_runtime_tests {
                 runtime_health: runtime_health.clone(),
                 diagnostic_counters: None,
                 bare_cli: Default::default(),
+                herdr_config: atm_herdr::HerdrClientConfig::default(),
                 herdr_process: None,
             },
         )
@@ -1381,6 +1386,7 @@ mod replacement_runtime_tests {
                 runtime_health: runtime_health.clone(),
                 diagnostic_counters: None,
                 bare_cli: Default::default(),
+                herdr_config: atm_herdr::HerdrClientConfig::default(),
                 herdr_process: Some(fake.clone()),
             },
         )
