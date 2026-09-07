@@ -1591,7 +1591,7 @@ class HerdrEntryPlatformFake:
     def is_registered(self, identifier: str) -> bool:
         return identifier in self.registered
 
-    def start(self, identifier: str) -> None:
+    def start(self, identifier: str, _timeout: float = 30.0) -> None:
         if identifier not in self.registered:
             raise RuntimeError("entry is not registered")
         self.started.append(identifier)
@@ -1764,7 +1764,7 @@ class HerdrRestartTests(unittest.TestCase):
                 adapter = DAEMON_SWITCH.NativeEntryPlatform(self.root / platform_name, runner)
                 adapter.name = platform_name
                 self.assertEqual(DAEMON_SWITCH.identifier(platform_name, "blue"), entry_id)
-                adapter.start(entry_id)
+                adapter.start(entry_id, 30.0)
                 self.assertEqual(runner.call_args.args[0], expected)
 
     def test_live_handoff_scopes_default_and_never_restarts_atm(self) -> None:
