@@ -34,7 +34,7 @@ pub(crate) fn validate_non_self_recipient(
 pub(crate) fn resolve_recipient(
     target_address: &AgentAddress,
     caller_team: &TeamName,
-    config: Option<&config::AtmConfig>,
+    _config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedRecipient, AtmError> {
     // `AgentAddress` has already validated the explicit team segment. Never
     // parse it again and silently substitute the caller team on failure.
@@ -44,7 +44,7 @@ pub(crate) fn resolve_recipient(
         .unwrap_or_else(|| caller_team.clone());
 
     Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent_name(target_address.agent(), config)?,
+        agent: target_address.agent().clone(),
         team,
     })
 }

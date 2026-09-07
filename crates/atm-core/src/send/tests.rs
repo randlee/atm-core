@@ -1124,22 +1124,17 @@ fn send_request_new_rejects_invalid_caller_team_before_command_execution() {
 }
 
 #[test]
-fn resolve_recipient_rejects_invalid_alias_target() {
-    let mut aliases = std::collections::BTreeMap::new();
-    aliases.insert("tl".to_string(), "../bad-agent".to_string());
-    let config = AtmConfig {
-        aliases,
-        ..Default::default()
-    };
+fn resolve_recipient_forwards_member_token_without_config_alias_resolution() {
+    let config = AtmConfig::default();
 
-    let error = super::resolve_recipient(
+    let recipient = super::resolve_recipient(
         &"tl".parse().expect("address"),
         &TEST_TEAM.parse().expect("team"),
         Some(&config),
     )
-    .expect_err("invalid alias target");
+    .expect("recipient");
 
-    assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
+    assert_eq!(recipient.agent.as_str(), "tl");
 }
 
 #[test]
