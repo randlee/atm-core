@@ -28,6 +28,7 @@ use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
+use crate::herdr_breaker_escalation::HerdrBreakerEscalationGate;
 use crate::herdr_escalation::EscalationState;
 use crate::runtime_health::RuntimeHealth;
 
@@ -73,6 +74,8 @@ pub struct HerdrQueueWakePump {
     clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>,
     last_task_attempt: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
     pub(crate) escalation_state: EscalationState,
+    breaker_escalation_gate: Arc<Mutex<HerdrBreakerEscalationGate>>,
+    breaker_cycle_opened_at: Arc<Mutex<HashMap<Option<HerdrSession>, IsoTimestamp>>>,
     pub(crate) daemon_home: PathBuf,
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
@@ -101,6 +104,10 @@ impl HerdrQueueWakePump {
             clock: Arc::new(IsoTimestamp::now),
             last_task_attempt: Arc::new(Mutex::new(HashMap::new())),
             escalation_state: EscalationState::default(),
+            breaker_escalation_gate: Arc::new(Mutex::new(HerdrBreakerEscalationGate::new(
+                Duration::from_secs(1_800),
+            ))),
+            breaker_cycle_opened_at: Arc::new(Mutex::new(HashMap::new())),
             daemon_home: PathBuf::new(),
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
@@ -115,6 +122,14 @@ impl HerdrQueueWakePump {
     #[must_use]
     pub fn with_daemon_home(mut self, daemon_home: PathBuf) -> Self {
         self.daemon_home = daemon_home;
+        self
+    }
+
+    /// Applies the bootstrap-validated breaker escalation cooldown.
+    #[must_use]
+    pub fn with_breaker_escalation_min_interval(mut self, min_interval: Duration) -> Self {
+        self.breaker_escalation_gate =
+            Arc::new(Mutex::new(HerdrBreakerEscalationGate::new(min_interval)));
         self
     }
 
@@ -251,6 +266,53 @@ impl HerdrQueueWakePump {
         );
     }
 
+    fn breaker_cycle_opened_at(
+        &self,
+        session: &Option<HerdrSession>,
+        now: IsoTimestamp,
+    ) -> IsoTimestamp {
+        *self
+            .breaker_cycle_opened_at
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(session.clone())
+            .or_insert(now)
+    }
+
+    fn close_breaker_cycle(&self, session: &Option<HerdrSession>) {
+        self.breaker_cycle_opened_at
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(session);
+    }
+
+    async fn maybe_escalate_breaker(
+        &self,
+        session: &Option<HerdrSession>,
+        members: &[HerdrCandidate],
+        now: IsoTimestamp,
+    ) -> bool {
+        if self.daemon_home.as_os_str().is_empty() {
+            return false;
+        }
+        let Some(team) = members.first().map(|member| member.key.team().clone()) else {
+            return false;
+        };
+        let opened_at = self.breaker_cycle_opened_at(session, now);
+        let task_store = self.service_runtime.task_store().ok();
+        crate::herdr_breaker_escalation::maybe_escalate_breaker_cycle(
+            &self.breaker_escalation_gate,
+            &self.service_runtime,
+            self.herdr_process.as_ref(),
+            task_store.as_ref(),
+            &self.daemon_home,
+            &team,
+            opened_at,
+            now,
+        )
+        .await
+    }
+
     async fn list_eligible(
         &self,
         candidates: Vec<HerdrCandidate>,
@@ -276,17 +338,22 @@ impl HerdrQueueWakePump {
                 )
                 .await
             {
-                Ok(outcome) => self.collect_idle_members(
-                    outcome.agents,
-                    members,
-                    stats,
-                    &mut eligible,
-                    &mut task_candidates,
-                ),
+                Ok(outcome) => {
+                    self.close_breaker_cycle(&session);
+                    self.collect_idle_members(
+                        outcome.agents,
+                        members,
+                        stats,
+                        &mut eligible,
+                        &mut task_candidates,
+                    );
+                }
                 Err(error) => {
                     complete = false;
                     if error.is_infrastructure() {
                         stats.breaker_open += 1;
+                        let now = (self.clock)();
+                        let _ = self.maybe_escalate_breaker(&session, &members, now).await;
                     }
                     tracing::warn!(
                         subsystem = "herdr_queue_wake",

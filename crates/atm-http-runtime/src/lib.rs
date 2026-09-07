@@ -55,6 +55,7 @@ mod client;
 mod diagnostics_route;
 mod doctor_observability;
 mod health_route;
+mod herdr_breaker_escalation;
 mod herdr_escalation;
 mod herdr_queue_wake;
 mod herdr_queue_wake_escalation;
