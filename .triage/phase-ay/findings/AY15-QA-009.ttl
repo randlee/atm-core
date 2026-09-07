@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY15-QA-009>
+  a triage:Finding ;
+  triage:findingId "AY15-QA-009" ;
+  triage:title "Matrix row A-17 cites a deleted function and an unrelated line, and no named test exercises the same-team alias-duplicate rejection" ;
+  triage:description "quality-mgr qa-pr1310-r8 (PR #1310, AY.15 herdr-name-uniqueness, head 715ab21ea; report: PR #1310 issuecomment 5576239134). quality-mgr ATM-QA-001 (req-qa). docs/plans/phase-ay/herdr-naming-test-matrix.md:36 row A-17 (T1:bob alias bobby, add T1:sam alias bobby, expect reject) cites 'validate_database_wide_aliases in-roster check (roster_store.rs:204)': validate_database_wide_aliases has zero matches in crates/ and roster_store.rs:204 is inside load_unique_names. No named test covers the A-17 scenario, so AC1 (every section-A row maps to a named test) is violated for this row only. Correction: add a named test for same-team alias duplicate rejection through enforce_roster_unique_names and update the A-17 citation to that test." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test_coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ay/herdr-naming-test-matrix.md section A citations, crates/atm-storage-rusqlite/src/roster_store.rs tests" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:37:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T22:31:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-009/AY15-QA-009/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY15-QA-009/AY15-QA-009/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/herdr-naming-test-matrix.md" ;
+  triage:line 36 ;
+  triage:snippet "| A-17 | T1:bob (bobby) | add T1:sam (bobby) | reject, same-team alias duplicate |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "715ab21ea" ;
+  triage:occursIn <urn:atm:triage:worktree/ay15-r8> .
+
+<urn:atm:triage:worktree/ay15-r8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r8" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "715ab21ea" ;
+  triage:orderIndex 0 .

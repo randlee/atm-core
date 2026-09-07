@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY15-ARCH-003>
+  a triage:Finding ;
+  triage:findingId "AY15-ARCH-003" ;
+  triage:title "service_runtime.rs exceeds the 1000 non-test-line decomposition threshold after AY.15 added the roster-ingress resolver" ;
+  triage:description "quality-mgr qa-pr1310-r8 (PR #1310, AY.15 herdr-name-uniqueness, head 715ab21ea; report: PR #1310 issuecomment 5576239134). arch-qa ARCH-003. crates/atm-core/src/service_runtime.rs is about 1059 non-test lines, over the 1000-line decomposition threshold; this sprint added the RetainedServiceRuntime::resolve_roster_member_at_ingress trait method and LocalServiceRuntime implementation (lines 301-312 and 704-726). Overage is modest (about 60 lines). Correction: move a cohesive unit (for example the roster-member resolution logic) into its own module so the file returns under the threshold, with no behavior change." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "complexity" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/service_runtime.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:37:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T22:31:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-ARCH-003/AY15-ARCH-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY15-ARCH-003/AY15-ARCH-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 1 ;
+  triage:snippet "#![allow(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "715ab21ea" ;
+  triage:occursIn <urn:atm:triage:worktree/ay15-r8> .
+
+<urn:atm:triage:worktree/ay15-r8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r8" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "715ab21ea" ;
+  triage:orderIndex 0 .
