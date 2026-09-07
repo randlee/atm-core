@@ -11,6 +11,7 @@ use atm_core::{HerdrSession, RequestDeadline};
 
 mod transport;
 mod transport_cli;
+mod transport_socket;
 
 use transport::{
     HerdrIo, HerdrOp, get_from_envelope, list_from_envelope, prompt_from_envelope,
@@ -666,6 +667,37 @@ pub mod testing {
             breaker: Arc::new(HerdrSpawnBreaker::default()),
             io: HerdrIo::Cli(CliIo::with_test_binary_and_environment(binary, environment)),
         }
+    }
+
+    /// Builds the same public adapter facade over the direct socket transport
+    /// for the cross-transport fixture suite. Production composition remains
+    /// CLI-only until AY.9 owns transport selection.
+    #[must_use]
+    pub fn production_invoker_with_test_socket(socket_path: PathBuf) -> HerdrProcessInvoker {
+        let config = transport::HerdrClientConfig::with_socket_path(socket_path);
+        HerdrProcessInvoker {
+            breaker: Arc::new(HerdrSpawnBreaker::default()),
+            io: HerdrIo::Socket(crate::transport_socket::SocketIo::new(&config)),
+        }
+    }
+
+    /// Exercises a prompt through the test-only socket facade without adding
+    /// a direct prompt call site to an integration fixture.
+    pub async fn socket_prompt(
+        invoker: &HerdrProcessInvoker,
+        agent: &AgentName,
+        text: &str,
+        deadline: RequestDeadline,
+    ) -> Result<HerdrPromptOutcome, HerdrError> {
+        invoker
+            .call(
+                HerdrOp::Prompt { agent, text },
+                None,
+                deadline,
+                BreakerPolicy::Shared,
+            )
+            .await
+            .and_then(prompt_from_envelope)
     }
 
     impl FakeHerdrProcessAdapter {

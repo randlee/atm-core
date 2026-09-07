@@ -31,6 +31,25 @@ found the same six-operation surface and error-code set, with one material
 `agent_prompt_stalled`. ATM maps both by stable code and does not inspect
 message text.
 
+## Direct socket NDJSON matrix
+
+AY.8 uses the same compact NDJSON envelope for every supported release. The
+socket client keys compatibility on `ping.version` and the advertised
+capabilities; `protocol` is recorded for diagnosis only and is never the
+compatibility gate. The request and response columns show the canonical
+shapes; additional fields are tolerated.
+
+| Release | Ping NDJSON | Request NDJSON | Response NDJSON | Error codes |
+| --- | --- | --- | --- | --- |
+| v0.8.0 | `{"id":"atm:agent:ping","result":{"type":"pong","version":"0.8.0","protocol":19,"capabilities":{"live_handoff":true}}}` | `{"id":"atm:agent:get","method":"agent.get","params":{"target":"<agent>"}}` | `{"id":"atm:agent:get","result":{"type":"agent_info","agent":{"name":"<agent>","agent_status":"idle"}}}` | `agent_blocked`, `agent_not_found`, `agent_not_running`, `agent_target_ambiguous`, `server_not_running`, `timeout`, `agent_prompt_stalled`, `protocol_mismatch` |
+| v0.8.2 | `{"id":"atm:agent:ping","result":{"type":"pong","version":"0.8.2","protocol":20,"capabilities":{"live_handoff":true}}}` | `{"id":"atm:agent:get","method":"agent.get","params":{"target":"<agent>"}}` | `{"id":"atm:agent:get","result":{"type":"agent_info","agent":{"name":"<agent>","agent_status":"idle"}}}` | `agent_blocked`, `agent_not_found`, `agent_not_running`, `agent_target_ambiguous`, `server_not_running`, `timeout`, `agent_prompt_stalled`, `protocol_mismatch` |
+| master `3a822e81` | `{"id":"atm:agent:ping","result":{"type":"pong","version":"<release>","protocol":22,"capabilities":{"live_handoff":true}}}` | `{"id":"atm:agent:get","method":"agent.get","params":{"target":"<agent>"}}` | `{"id":"atm:agent:get","result":{"type":"agent_info","agent":{"name":"<agent>","agent_status":"idle"}}}` | `agent_blocked`, `agent_not_found`, `agent_not_running`, `agent_target_ambiguous`, `server_not_running`, `timeout`, `agent_prompt_stalled`, `protocol_mismatch` |
+
+The same request-id and envelope rules apply to `agent.prompt`, `agent.wait`,
+`agent.list`, and `notification.show`; the operation-specific fields are
+listed in the six-operation manifest below. The v0.8.0 blocked-prompt delta
+and the master wait-gate delta do not change the socket envelope shape.
+
 ## Six-operation contract manifest
 
 The following manifest is repeated for each supported release. The v0.8.2
