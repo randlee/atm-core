@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY-QA-003>
+  a triage:Finding ;
+  triage:findingId "AY-QA-003" ;
+  triage:title "herdr-naming-test-matrix.md rows A-01, A-05, A-08 cite tests that do not verify the claimed scenario" ;
+  triage:description "quality-mgr/req-qa, qa-naming-req-review (fenix task, integrate/phase-ay 10b044c0c). docs/plans/phase-ay/herdr-naming-test-matrix.md marks three section-A rows 'covered' with citations that do not substantiate the claim: (1) row A-01 (add T1:bob when T1:bob exists, same-team duplicate, REQ-ROSTER-NAME-001) cites `ensure_member_absent` (crates/atm-core/src/team_admin/member_mutation.rs:441) -- this is a production function, not a test. A repo-wide grep for any test asserting `AtmErrorCode::MemberAlreadyExists`/`member_already_exists` found none; there is no test exercising 'add a member whose canonical name already exists in the same team'. (2) Rows A-05 and A-08 (both explicitly cross-team scenarios: 'T1:bob, add T2:robert (bob)' and 'T1:robert (bob), add T2:sam (bob)') cite `alias_must_not_collide_with_member_name_or_team_alias` (member_mutation.rs:1181-1212), which seeds only a single team (TEST_TEAM) and never constructs two distinct teams -- it proves same-team alias collision only (already separately covered by A-17). The underlying production function (`ensure_alias_available`, lines 458-475) does iterate `roster_store.list_teams()` and is plausibly cross-team-correct, but the cited test does not prove it for these two rows. Consequence: AY.15's AC1 ('every matrix row A-01..A-25 has a named passing test') will appear satisfied for A-01/A-05/A-08 without any code change, because the matrix already claims coverage -- these rows should be corrected to GAP (or given a genuinely matching citation) before AY.15's QA relies on the matrix as its checklist, or AY.15 should add the missing/corrected tests directly. Not a runtime defect: REQ-ROSTER-NAME-001's same-team rejection and REQ-ROSTER-NAME-002's cross-team alias check are very likely already enforced by existing production code (member_mutation.rs) -- this finding is about verification coverage and matrix accuracy, not a behavioral regression." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "phase_end" ;
+  triage:category "matrix-accuracy" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ay/herdr-naming-test-matrix.md (rows A-01, A-05, A-08), crates/atm-core/src/team_admin/member_mutation.rs (ensure_member_absent:441, alias_must_not_collide_with_member_name_or_team_alias:1181)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T21:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY ;
+  triage:foundAt "2026-09-07T21:00:00Z"^^xsd:dateTime ;
+  triage:note "Owed by AY.15 (feature/ay15-herdr-name-uniqueness): AY.15's AC1 requires every A-section row to have a genuinely passing named test; correct these three citations or add the missing tests as part of D4." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY-QA-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY-QA-003/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/herdr-naming-test-matrix.md" ;
+  triage:line 20 ;
+  triage:snippet "A-01 cites ensure_member_absent (a production function, not a test); A-05/A-08 cite a same-team-only test for a claimed cross-team scenario" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "42918d82b" ;
+  triage:occursIn <urn:atm:triage:worktree/AY-QA-003/42918d82b> .
+
+<urn:atm:triage:worktree/AY-QA-003/42918d82b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "42918d82b" ;
+  triage:orderIndex 0 .

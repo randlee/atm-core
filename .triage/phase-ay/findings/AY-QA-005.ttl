@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY-QA-005>
+  a triage:Finding ;
+  triage:findingId "AY-QA-005" ;
+  triage:title "Legacy .atm.toml [atm].aliases resolver is still actively consulted at three production ingress points, contradicting REQ-ROSTER-NAME-007/-008/-010 and matrix H-05 today, not just left inert as D-06 describes" ;
+  triage:description "quality-mgr/req-qa, qa-naming-req-review (fenix task, integrate/phase-ay 10b044c0c). docs/requirements.md declares the legacy `.atm.toml [atm].aliases` table retired: REQ-ROSTER-NAME-007 ('.atm.toml is not an input'), REQ-ROSTER-NAME-008 ('nothing else in atm reads a .atm.toml alias' besides the doctor diagnostic), REQ-ROSTER-NAME-010 ('the substitution point is daemon ingress... cli doesn't need to query for alias before sending'), and matrix row H-05 ('NOTHING else in atm uses .atm.toml alias'). In fact the legacy resolver (`config::aliases::resolve_agent_name`, crates/atm-core/src/config/aliases.rs:5-14, backed by `AtmConfig.aliases` populated at crates/atm-core/src/config/mod.rs:65 from `[atm.aliases]`) is live in production at three separate call sites, confirmed by tracing the actual call chain, not just grepping: (1) crates/atm-core/src/send/recipient.rs:34-50 `resolve_recipient` line 47 calls `config::aliases::resolve_agent_name(target_address.agent(), config)`, invoked from crates/atm-core/src/send/write_context.rs:115-122 `prepare_send_context`, which loads `.atm.toml` via `runtime.load_config(&request.current_dir)` and resolves the legacy alias BEFORE the roster-based `resolve_roster_alias` call on line 122; (2) crates/atm-core/src/identity/mod.rs `resolve_sender_identity` (around test lines 195-225) for `--as`/sender-identity resolution; (3) crates/atm-core/src/mailbox/source.rs `resolve_target` (lines 252-270, 272-289) for read/peek/inbox target resolution. This is a broader defect than matrix row D-06 describes: D-06 frames `.atm.toml [atm].aliases` as merely 'present but should be ignored' (one GAP row), but it is actively consulted ahead of the roster-alias mechanism at three independent call sites, each requiring its own removal -- a single central fix will not close all three. Required correction: remove the `config::aliases::resolve_agent_name` call (and the underlying `AtmConfig.aliases` field/config parsing it depends on, per REQ-ROSTER-NAME-008's 'retired' framing) from all three call sites, leaving only the roster-based `resolve_roster_alias` mechanism and the doctor pane-alias diagnostic (REQ-ROSTER-NAME-008) as legitimate `.atm.toml`-alias consumers." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "phase_end" ;
+  triage:category "requirements-compliance" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/config/aliases.rs, crates/atm-core/src/config/mod.rs:65, crates/atm-core/src/send/recipient.rs:34-50, crates/atm-core/src/send/write_context.rs:115-122, crates/atm-core/src/identity/mod.rs, crates/atm-core/src/mailbox/source.rs:252-289" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T21:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY ;
+  triage:foundAt "2026-09-07T21:00:00Z"^^xsd:dateTime ;
+  triage:note "Owed by AY.15 (feature/ay15-herdr-name-uniqueness), widening D-06: verify all three call sites (send/recipient.rs, identity/mod.rs, mailbox/source.rs) are addressed, not only the send path." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY-QA-005/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY-QA-005/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/write_context.rs" ;
+  triage:line 116 ;
+  triage:snippet "prepare_send_context loads .atm.toml and calls resolve_recipient (legacy config::aliases::resolve_agent_name) before resolve_roster_alias" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "42918d82b" ;
+  triage:occursIn <urn:atm:triage:worktree/AY-QA-005/42918d82b> .
+
+<urn:atm:triage:worktree/AY-QA-005/42918d82b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "42918d82b" ;
+  triage:orderIndex 0 .

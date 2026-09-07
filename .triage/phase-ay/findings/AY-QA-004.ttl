@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY-QA-004>
+  a triage:Finding ;
+  triage:findingId "AY-QA-004" ;
+  triage:title "herdr-naming-test-matrix.md rows B-01, B-04 cite tests of the deprecated .atm.toml [atm].aliases resolver, not the roster-alias grammar check REQ-ROSTER-NAME-005 requires" ;
+  triage:description "quality-mgr/req-qa, qa-naming-req-review (fenix task, integrate/phase-ay 10b044c0c). Matrix rows B-01 ('alias with /, space, @, . -> reject, ATM segment rule') and B-04 ('Herdr member, alias 33 chars / leading digit / leading - -> reject') mark themselves 'covered' citing `resolve_agent_name_rejects_invalid_alias_target` / `resolve_recipient_rejects_invalid_alias_target` (crates/atm-core/src/send/tests.rs:1127) and `herdr_agent_name_uses_the_live_agent_grammar` (crates/atm-core/src/delivery_channel.rs:323). Both cited tests exercise `config::aliases::resolve_agent_name` (crates/atm-core/src/config/aliases.rs:5-14) -- the legacy `.atm.toml [atm].aliases`-based resolver -- not the roster-stored-alias grammar validation on add-member/set-member that REQ-ROSTER-NAME-005 governs. This is a category error, not partial coverage: as a direct result, there is currently no test anywhere in the codebase asserting ATM-segment-grammar rejection (`/`, space, `@`, `.`) on an alias supplied through `add-member`/`set-member` against the roster store. Both rows already flag their 'add-member path' half as GAP in the matrix's own text, but the 'covered' half is misleading because it proves a different, retirement-bound code path (see AY-QA-006, which found this legacy `.atm.toml [atm].aliases` mechanism is still live in production, not just present in stale tests). Consequence: AY.15's AC1/AC2 could treat B-01/B-04 as already satisfied and skip writing the real roster-alias grammar test. Required correction: reclassify B-01/B-04 as fully GAP for REQ-ROSTER-NAME-005 (or add an explicit caveat distinguishing the two mechanisms), and AY.15 must add a genuine roster-alias-grammar rejection test as part of its D4 permutation coverage." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "phase_end" ;
+  triage:category "matrix-accuracy" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ay/herdr-naming-test-matrix.md (rows B-01, B-04), crates/atm-core/src/config/aliases.rs, crates/atm-core/src/send/tests.rs:1127, crates/atm-core/src/delivery_channel.rs:323" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T21:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY ;
+  triage:foundAt "2026-09-07T21:00:00Z"^^xsd:dateTime ;
+  triage:note "Owed by AY.15 (feature/ay15-herdr-name-uniqueness): fold the missing roster-alias-grammar test into D4's permutation coverage; correct the matrix row labels." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY-QA-004/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY-QA-004/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/herdr-naming-test-matrix.md" ;
+  triage:line 54 ;
+  triage:snippet "B-01/B-04 cite tests of the legacy .atm.toml [atm].aliases resolver, not roster-alias grammar validation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "42918d82b" ;
+  triage:occursIn <urn:atm:triage:worktree/AY-QA-004/42918d82b> .
+
+<urn:atm:triage:worktree/AY-QA-004/42918d82b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "42918d82b" ;
+  triage:orderIndex 0 .
