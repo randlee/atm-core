@@ -21,12 +21,12 @@ dependency_relations:
     rationale: lifecycle assertions consume AY.3's fully composed client configuration, typed endpoint doctor, presence correlation, and deterministic doctor projection; AY.4 is stacked directly on AY.3.
   - prerequisite: AY.4
     dependent: AY.5
-    relation: must_follow
-    rationale: operator entry ownership starts only after the optional-startup and Herdr-failure model is proven end to end, preventing the installer control plane from becoming an implicit runtime repair mechanism.
+    relation: parallel_safe
+    rationale: AY.4 owns Tokio/Axum breaker escalation, bootstrap escalation config and real-composition lifecycle tests; AY.5 owns daemon-switch entry scripts/tests, requirements, ADR-053 and skill docs. The files are disjoint, so development runs in parallel. The design rule that the installer control plane never becomes an implicit runtime repair mechanism is enforced by AY.5's own acceptance (no daemon lifecycle code path calls entry repair) and by AY.5 merging after AY.4 (rework 2026-09-06).
   - prerequisite: AY.4
     dependent: AY.8
     relation: parallel_safe
-    rationale: AY.4 owns Tokio/Axum breaker escalation, bootstrap escalation config, CLI-reference text, and real-composition lifecycle tests after AY.3; AY.8 owns atm-herdr socket transport, socket fixtures, version-ledger text, boundary revisions, and its architecture exemption, so their exact paths and artifacts do not intersect.
+    rationale: AY.4 owns Tokio/Axum breaker escalation, bootstrap escalation config, CLI-reference text, and real-composition lifecycle tests after AY.3; AY.8 owns atm-herdr socket transport, socket fixtures, version-ledger text, and one boundary-ownership key, so their exact paths and artifacts do not intersect.
 ---
 
 # AY.4 — Herdr breaker escalation and failure lifecycle
