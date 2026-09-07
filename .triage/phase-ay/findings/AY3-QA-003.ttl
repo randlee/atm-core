@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY3-QA-003>
+  a triage:Finding ;
+  triage:findingId "AY3-QA-003" ;
+  triage:title "transport_cli.rs spawn() io::Error discarded; doctor cannot distinguish BinaryNotFound from BinaryNotExecutable" ;
+  triage:description "crates/atm-herdr/src/transport_cli.rs:127 command.spawn().map_err(|_| HerdrError::ServerUnavailable{..}) drops the io::Error kind, so crates/atm-herdr/src/doctor_probe.rs:116-130 cannot map NotFound vs PermissionDenied to HerdrDoctorState::BinaryNotFound vs BinaryNotExecutable per the C4 contract. Fix: match err.kind() before mapping (RBP-F001, rust-best-practices-agent)." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-herdr/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T17:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY3 ;
+  triage:foundAt "2026-09-07T03:42:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-003/AY3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-003/AY3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY3-QA-003/AY3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 127 ;
+  triage:snippet "let mut child = command.spawn().map_err(|_| HerdrError::ServerUnavailable {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:occursIn <urn:atm:triage:worktree/AY3-feature-1> .
+
+<urn:atm:triage:occurrence/AY3-QA-003/AY3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 122 ;
+  triage:snippet "let mut child = command.spawn().map_err(|_| HerdrError::ServerUnavailable {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "1770ac80e" ;
+  triage:occursIn <urn:atm:triage:worktree/AY3-integrate-2> .
+
+<urn:atm:triage:worktree/AY3-feature-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AY3-integrate-2>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "1770ac80e" ;
+  triage:orderIndex 2 .
