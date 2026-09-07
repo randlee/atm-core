@@ -21,6 +21,7 @@
   triage:foundIn triage:AY8 ;
   triage:foundAt "2026-09-07T07:10:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-008/ay8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-008/ay8-2> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY8-QA-008/ay8-1>
@@ -34,6 +35,25 @@
   triage:headSha "690f86ea5" ;
   triage:occursIn <urn:atm:triage:worktree/ay8-690f86ea5> ;
   triage:note "Live CI evidence: run 34087584965 at commit 690f86ea5 -- Test (ubuntu-latest) job 101635332778 FAILURE and Test (macos-latest) job 101635332822 FAILURE, both with identical panic 'thread socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read panicked at crates/atm-herdr/tests/transport_fixture.rs:290:33: request: Os { code: 32, kind: BrokenPipe, message: \"Broken pipe\" }'. Test (windows-latest) did not reach a terminal state before this record was written. Local run (this fork, same commit) passed cleanly (7/7 transport_fixture tests ok), confirming the race is timing-dependent rather than deterministic." .
+
+<urn:atm:triage:occurrence/AY8-QA-008/ay8-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/transport_fixture.rs" ;
+  triage:line 314 ;
+  triage:snippet "assertion failed: matches!(result, Err(HerdrError::InternalError { .. }))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "6ac58fe44" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-6ac58fe44> ;
+  triage:note "quality-mgr qa-pr1280-r5: cipher's FIX-AY8-R4-20260907 report claims explicit request/response synchronization plus deliberate BrokenPipe/ConnectionReset handling and 50 local iterations green. NOT REPRODUCIBLE AS FIXED -- live CI at this exact pin (gh run list --branch feature/ay8-herdr-socket-transport, run 34089817741) shows socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read FAILING on BOTH Test (ubuntu-latest) job 101641633364 and Test (macos-latest) job 101641633350, in each case with the identical panic 'thread ... panicked at crates/atm-herdr/tests/transport_fixture.rs:314:9: assertion failed: matches!(result, Err(HerdrError::InternalError { .. }))', stdout 'Herdr socket response ended before LF after 2 bytes'. This is a different manifestation than the original BrokenPipe panic (the .expect(\"request\") propagation route from r4 does appear to have been removed/reworked, consistent with cipher's claimed BrokenPipe-tolerance change), but the underlying race is not resolved: the client is now observing a malformed/truncated 2-byte partial line instead of the intended oversized-response InternalError, meaning the server/client shutdown-ordering issue still produces a wrong, non-deterministic outcome under CI-level scheduling -- it has moved, not closed. Per the standing no-race-conditions-tolerated / no-flaky-test-patches ruling, finding stays open (blocking). Ruling is affirmative, not ambiguous: cipher's claimed fix does not hold at 6ac58fe44 on live CI, full stop -- the 50-iteration local-green claim does not reproduce under CI's scheduling and cannot be accepted as fixed evidence. Scoping for the next fix round: the fix must guarantee (via explicit synchronization -- e.g. the server signaling the client only after the full oversized write completes or is known to have failed, not by racing partial reads) that the client observes one specific, correct outcome (HerdrError::InternalError for the 1MiB-cap violation) regardless of scheduling, rather than adding new BrokenPipe tolerance that merely shifts which malformed intermediate state the assertion can now observe." .
+
+<urn:atm:triage:worktree/ay8-6ac58fe44>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r5" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "6ac58fe44" ;
+  triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/ay8-690f86ea5>
   a triage:WorktreeSnapshot ;
