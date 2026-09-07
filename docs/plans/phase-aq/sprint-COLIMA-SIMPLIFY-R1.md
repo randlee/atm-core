@@ -8,10 +8,12 @@ branch: plan/colima-simplify
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/plan/colima-simplify
 target: develop
 pr_target: develop
+integration_branch: develop
+execution_track: docs
+parallel_with: [HERMES-PATCH-MODEL-R1]
+stack_parent: none
 one_command: "./run.sh --atm-ref prerelease/vX.Y.Z --hermes-ref <sha>"
 target_minutes: 30
-recommended_agent: any agent with Colima
-recommended_model: fast or local
 dependency_relations:
   - prerequisite: COLIMA-SIMPLIFY-R1
     dependent: HERMES-PATCH-MODEL-R1
@@ -45,8 +47,10 @@ missing, malformed, or timed-out default fixture makes the harness verdict
 ## Hard Dependencies
 
 - None. This planning sprint is independent of the v1.5.6 build and rollout.
-  Implementation requires only a machine with Colima and immutable ATM/Hermes
-  refs; it does not require a live ATM team or a second host.
+  Implementation requires a machine with Colima, immutable ATM/Hermes refs,
+  and a configured fast/local prompt backend. A provider-backed backend needs
+  its harness-scoped credential; the local backend does not. It never requires
+  a live ATM team or a second host.
 
 ## Dependency Relations
 
@@ -97,10 +101,14 @@ AT3/AT4/AT8 skipped, so the correct overall verdict was `FAIL` even though no
 ATM product defect was demonstrated.
 
 The required cold command-to-verdict target is **≤30 minutes**; the warm-cache
-goal is **≤20 minutes**. The implementation records elapsed milliseconds for
+goal is **≤20 minutes**. The separate hard safety ceiling is 60 minutes, after
+which the harness terminates its children, writes `FAIL`, and cleans up. The
+implementation records elapsed milliseconds for
 resolution, download, image build/cache lookup, startup, matrix, prompts, DB
 queries, evidence write, and total. A target miss is reported as a diagnostic
-and optimization issue; timing never changes the product `PASS`/`FAIL` verdict.
+`target_met` value and optimization issue; exceeding 30 minutes never changes
+the product `PASS`/`FAIL` verdict. The 60-minute ceiling is a stuck-harness
+failure, not a performance assertion.
 
 Concrete execution choices:
 
@@ -131,6 +139,7 @@ Telegram IDs. Internal log serialization is diagnostic only.
 
 | Yesterday's drift or missing fixture | Disposition in the default gate |
 | --- | --- |
+| E0, AT0, AT2, and AT5–AT7 passed without identified drift | **Retain as required.** Run them through the same bounded child interface and product-observable oracle; any skip, timeout, malformed report, or nonzero child exit fails the harness. |
 | AT1 second team/member was never registered | **Fix.** The runner creates both isolated rosters, proves them through the CLI, and removes them during automatic cleanup. |
 | AT1 required an exact phrase in help text | **Drop.** Assert the documented exit/result behavior; retain help text only as an artifact for humans. |
 | AT3 peer was absent | **Move to diagnostics-only.** Cross-host trust mutates a second machine and cannot satisfy the one-host unattended contract. It is not invoked or skipped by the default command. |
@@ -140,9 +149,12 @@ Telegram IDs. Internal log serialization is diagnostic only.
 | D7 parsed a private daemon log shape | **Fix.** Correlate the CLI message ID with the durable DB row and recipient state; keep logs only in the evidence directory. |
 | A1 assumed synchronous read-state visibility | **Fix.** Assert `mutation_applied` acceptance, then bounded-poll the list/DB projection as required by §§7.12–7.13. |
 
-Default-gate fixtures declare `required: true`. The aggregator fails closed if
-any required fixture is absent from the manifest or returns `skip`. Optional
-diagnostics are declared separately and cannot contribute a passing count.
+Default-gate fixtures declare `required: true`: all 27 A–D rows plus E0, AT0,
+AT1, AT2, AT4, AT5, AT6, AT7, and AT8. The manifest, rather than a handwritten
+expected count in the aggregator, is authoritative. The aggregator fails
+closed if any required fixture is absent or returns `skip`. AT3 and any qemu
+probe declare `classification: diagnostic`; optional diagnostics cannot
+contribute a passing count.
 
 ### Provenance without coordination
 
@@ -179,9 +191,9 @@ image, file, result, log, or container-wide environment.
    is not resumed. Product fixes and harness fixes use normal PRs, then a new
    clean invocation produces a new result directory.
 
-The command must be suitable for a scheduled job. It takes no agent-specific
-identity, has no interactive prompts, enforces a total timeout, and leaves no
-fixture teams, containers, ports, or host trust changes behind.
+The command must be suitable for a scheduled job. It takes no coordinator
+identity, has no interactive prompts, enforces the 60-minute safety timeout,
+and leaves no fixture teams, containers, ports, or host trust changes behind.
 
 ### Documentation replacement
 
@@ -202,19 +214,20 @@ fixture teams, containers, ports, or host trust changes behind.
 ### Future testbed implementation sprints
 
 Each row becomes its own mandatory-frontmatter sprint file when dispatched.
-Each PR targets testbed `main`, is independently mergeable, and leaves the
-existing entry points usable until replaced. The first PR is intentionally a
-thin wrapper so unattended use arrives before internal cleanup. No stack is
-required for these non-overlapping PRs; if a later split introduces a linear
-PR dependency, manage that chain with the `/gh-stack` skill.
+Each PR targets the then-current testbed `main`, has no dependency on another
+open PR, and leaves existing entry points usable until replaced. The first PR
+is intentionally a thin wrapper so unattended use arrives before internal
+cleanup. No stack is required for these sequentially rebased, disjoint PRs; if
+a later split introduces a linear open-PR dependency, manage that chain with
+the `/gh-stack` skill.
 
-| Sprint/PR | Independently mergeable scope | Required validation |
+| Sprint/PR | Owned paths and independently mergeable scope | Required validation |
 | --- | --- | --- |
-| CS.1 single-command entry point | Extend `run.sh` with `--atm-ref`/`--hermes-ref`; call today's scripts; enforce total/child timeouts; emit one aggregate JSON and exit 0/1. | Shell tests for args, timeout, skip→fail, child-exit propagation, fresh result directory. |
-| CS.2 immutable assets and cache | Resolve tag/SHA and matching CI artifacts, verify hashes, native arm64 build, content-addressed base/thin-layer cache, complete stage timings/provenance. | Cold and warm dry fixtures; cache-key and provenance mismatch tests. |
-| CS.3 deterministic product oracle | Repair AT1 and B2a–c; replace D7 log parsing and A1 synchronous assumption with exit/JSON/DB assertions. | Fixture tests plus A–D matrix on a disposable container. |
-| CS.4 self-contained prompt fixtures | Repair AT4/AT8 setup, isolate child secrets, use fast/local agents where compatible, exclude AT3 from the default manifest, and fail every required skip. | Offline fake-agent suite and one real-provider prompt run. |
-| CS.5 unattended operation and docs | Add scheduled invocation/issue posting, automatic cleanup/residue check, new concise README/runbook, and delete the ceremonial documents named above. | Cron-like no-TTY run; forced failure proves one JSON, issue payload, and clean teardown. |
+| CS.1 single-command entry point | `run.sh`, new `harness/aggregate-result.*`, and runner tests: accept refs, call today's scripts, enforce child/60-minute timeouts, emit the complete aggregate schema below, and exit 0/1. | Shell tests for args, timeout, skip→fail, child-exit propagation, fresh result directory. |
+| CS.2 immutable assets and cache | `build.sh`, asset resolver/cache helper, and its tests: resolve tag/SHA and matching CI artifacts, verify hashes, use native arm64, and key base/thin-layer caches by content. | Cold and warm dry fixtures; cache-key and provenance mismatch tests. |
+| CS.3 deterministic product oracle | `testbed/test-tier-{a,b,d}.py`, shared result/DB-query helper, and tests: repair B2a–c, D7, and A1 without changing the aggregate schema. | Fixture tests plus A–D matrix on a disposable container. |
+| CS.4 self-contained prompt fixtures | `harness/run-prompts.sh`, prompt manifests/hooks, and tests: repair AT1/AT4/AT8, isolate child secrets, default to a fast/local backend, classify AT3 diagnostic, and fail every required skip. | Offline fake-agent suite and one real-provider prompt run. |
+| CS.5 unattended operation and docs | Scheduled workflow/poster, cleanup/residue tests, `README.md`, concise runbook, and deletion of the ceremonial documents named above. | Cron-like no-TTY run; forced failure proves one JSON, issue payload, and clean teardown. |
 
 CS.1 may merge first without waiting for any other row. CS.2–CS.4 touch
 separate asset, oracle, and prompt-fixture surfaces and can proceed in
@@ -234,23 +247,42 @@ The future runner's stable entry point and aggregate result shape are:
   "schema": "colima-result-1",
   "verdict": "pass",
   "exit_code": 0,
+  "started_at": "<UTC timestamp>",
+  "finished_at": "<UTC timestamp>",
   "duration_ms": 839000,
+  "target_minutes": 30,
+  "target_met": true,
+  "safety_timeout_minutes": 60,
   "provenance": {
     "atm_ref": "prerelease/vX.Y.Z",
     "atm_sha": "<sha>",
     "hermes_sha": "<sha>",
     "testbed_sha": "<sha>",
-    "image_digest": "sha256:<digest>"
+    "suite_manifest_sha256": "<sha256>",
+    "ci_run_ids": [0],
+    "archive_sha256": "<sha256>",
+    "wheel_sha256": {"hermes_atm": "<sha256>", "atm_graft": "<sha256>"},
+    "image_digest": "sha256:<digest>",
+    "platform": "linux/arm64",
+    "emulation": "native"
   },
-  "stages": {},
-  "fixtures": {"required": 34, "pass": 34, "fail": 0, "skip": 0},
+  "stages": [{"name": "matrix", "duration_ms": 59970}],
+  "fixtures": {
+    "manifest_sha256": "<sha256>",
+    "counts": {"required": 36, "pass": 36, "fail": 0, "skip": 0},
+    "results": [
+      {"id": "A1", "classification": "required", "verdict": "pass", "evidence": "evidence/<run-id>/A1.json"}
+    ]
+  },
   "evidence_dir": "evidence/<run-id>"
 }
 ```
 
-The real schema also carries CI run IDs and archive/wheel hashes described
-above. Stdout ends in exactly one verdict line; `result.json` is the sole
-machine-readable summary and links subordinate evidence artifacts.
+Every field shown is required. Each manifest fixture has one `results` entry;
+the abbreviated array above illustrates its fixed row shape. Failed rows add a
+sanitized `reason`; no result contains a secret or receiver endpoint. Stdout
+ends in exactly one verdict line; `result.json` is the sole machine-readable
+summary and links subordinate evidence artifacts.
 
 ## This Sprint Does Not Close
 
@@ -272,6 +304,8 @@ machine-readable summary and links subordinate evidence artifacts.
 - [x] Provenance is derived from resolved artifacts and runtime observations,
   never mutable checkout state or messaging.
 - [x] The operator procedure fits on one screen and has no human gate.
+- [x] At 2,500 words or fewer (five 500-word rendered pages), this plan stays
+  within the six-page limit.
 - [x] This PR changes documentation only.
 
 ## Required Validation
@@ -282,5 +316,6 @@ rg -n '^---$|^id: COLIMA-SIMPLIFY-R1$|^status: complete$|^branch: plan/colima-si
   docs/plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md
 rg -n 'COLIMA-SIMPLIFY-R1' docs/project-plan.md \
   docs/plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md
+test "$(wc -w < docs/plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md)" -le 2500
 git diff --name-only origin/develop...HEAD | grep -Ev '^(docs/|$)' && exit 1 || true
 ```
