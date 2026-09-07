@@ -114,6 +114,19 @@ error unchanged).
   documents `--herdr-session`) gains the key, the CLI flag, and the naming
   convention.
 
+## Requirement (Rand, 2026-09-07, verbatim)
+
+- "adding a roster persisted alias makes a lot of sense.  For requirements,
+  the alias should never be used in database."
+
+The alias is stored once, as the member's roster attribute (`alias` in
+`metadata_json`). It is resolved to the canonical name at the CLI/runtime
+edge and never written anywhere else: message rows (`from`, `to`,
+recipients), queue and outbox rows, audit and delivery records, task-state
+rows, graft and cross-host envelopes all carry the canonical name only. No
+table gains an alias column and no query matches on the alias. A resolver
+that leaks the alias past the edge is a blocking finding.
+
 ## Acceptance criteria
 
 - AC1 Members without `herdrAgent` behave exactly as before (existing
@@ -128,6 +141,11 @@ error unchanged).
   `HerdrProcessAdapter` trait signature change is the only public API
   change; record it as a minor bump under ADR-061 in the PR description
   (additive metadata, no wire or SQLite schema change).
+- AC6 Alias never persisted outside the member's roster attribute: a test
+  sends via alias and as an alias identity and asserts every stored
+  message/audit row carries canonical names only; `rg alias` over
+  crates/atm-storage and crates/atm-core/src/mailbox shows no write path
+  other than the roster metadata.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 
