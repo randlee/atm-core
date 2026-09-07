@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY15-QA-003>
+  a triage:Finding ;
+  triage:findingId "AY15-QA-003" ;
+  triage:title "Hardcoded production team literal atm-dev in member_mutation.rs test-fixture alias strings although TEST_TEAM is already imported and used in the same file" ;
+  triage:description "quality-mgr qa-pr1310-r7 (PR #1310, AY.15 herdr-name-uniqueness, FINAL head 10bc123f8; report: PR #1310 issuecomment 5575994618). arch-qa ARCH-001, carried and re-confirmed at 10bc123f8. crates/atm-core/src/team_admin/member_mutation.rs lines 1376, 1409, 1658, 1674 and 1708 build alias fixture strings such as worker_atm-dev and team-lead_atm-dev with the production team name embedded as a literal, while the same file already imports and uses the TEST_TEAM constant. Required correction: derive the fixture alias strings from TEST_TEAM (or a neutral fixture team) at all five sites and sweep the sprint's other new tests for the same literal." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hygiene" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/team_admin/member_mutation.rs tests; other tests added by AY.15 that embed a production team name" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T21:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-003/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-003/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-003/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-003/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-003/5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY15-QA-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 1376 ;
+  triage:snippet ".insert('alias'.to_string(), json!('worker_atm-dev'))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-003/10bc123f8> .
+
+<urn:atm:triage:occurrence/AY15-QA-003/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 1409 ;
+  triage:snippet "alias: Some('worker_atm-dev')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-003/10bc123f8> .
+
+<urn:atm:triage:occurrence/AY15-QA-003/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 1658 ;
+  triage:snippet "alias: Some('team-lead_atm-dev')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-003/10bc123f8> .
+
+<urn:atm:triage:occurrence/AY15-QA-003/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 1674 ;
+  triage:snippet ".insert('alias'.to_string(), json!('team-lead_atm-dev'))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-003/10bc123f8> .
+
+<urn:atm:triage:occurrence/AY15-QA-003/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 1708 ;
+  triage:snippet ".insert('alias'.to_string(), json!('worker_atm-dev'))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-003/10bc123f8> .
+
+<urn:atm:triage:worktree/AY15-QA-003/10bc123f8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r7" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:orderIndex 0 .

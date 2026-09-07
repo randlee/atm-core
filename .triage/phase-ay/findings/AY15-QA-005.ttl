@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY15-QA-005>
+  a triage:Finding ;
+  triage:findingId "AY15-QA-005" ;
+  triage:title "Sprint doc D6a cites ATM-QA-AY-002, a triage record that does not exist, and conflates the roster-collision closure with the unrelated already-closed RBQA-AY1-F001" ;
+  triage:description "quality-mgr qa-pr1310-r7 (PR #1310, AY.15 herdr-name-uniqueness, FINAL head 10bc123f8; report: PR #1310 issuecomment 5575994618). req-qa, arch-qa and quality-mgr (three independent passes) confirm no ATM-QA-AY-002.ttl exists anywhere in the worktree, yet docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md line 183 (D6a) names it as a record this sprint closes. The same line names RBQA-AY-F001; the only matching-id record on disk is RBQA-AY1-F001, an unrelated, already-fixed docs finding about HerdrProcessAdapter::notify. The live defect the text was reaching for (collision-check algorithm duplicated between member_mutation.rs::preflight_roster_unique_names and roster_store.rs::enforce_roster_unique_names) is filed separately as RBQA-AY15-F001. Required correction: rewrite the D6a sentence to cite only records that exist under .triage/phase-ay/findings/ (AY-QA-001 for the HTTP_API_VERSION bump; drop ATM-QA-AY-002 and RBQA-AY-F001) and leave the duplication finding to RBQA-AY15-F001." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-traceability" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md D6a and any other record ids cited in the sprint doc" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T21:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-005/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY15-QA-005/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md" ;
+  triage:line 183 ;
+  triage:snippet "Also closes RBQA-AY-F001 and ATM-QA-AY-002 (matrix A-06/A-07 at the store layer, D-03)." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-005/10bc123f8> .
+
+<urn:atm:triage:worktree/AY15-QA-005/10bc123f8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r7" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:orderIndex 0 .

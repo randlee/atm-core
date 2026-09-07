@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY15-QA-007>
+  a triage:Finding ;
+  triage:findingId "AY15-QA-007" ;
+  triage:title "D4a table-driven permutation test covers only 8 of about 19 section-A matrix rows; the remaining rows are discrete tests rather than the single table the deliverable specified" ;
+  triage:description "quality-mgr qa-pr1310-r7 (PR #1310, AY.15 herdr-name-uniqueness, FINAL head 10bc123f8; report: PR #1310 issuecomment 5575994618). req-qa. Sprint doc D4a (docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md:127) specifies one table-driven permutation test named unique_name_permutations covering the herdr-naming-test-matrix.md section-A rows. At 10bc123f8 that table covers 8 rows; the other section-A rows are covered by separate discrete tests. Matrix-row coverage is real (AC1 satisfied) but the specified test architecture was not followed as written. Correction: either fold the remaining section-A rows into the unique_name_permutations table or amend D4a to record the discrete-test split explicitly." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/team_admin/member_mutation.rs and crates/atm-storage-rusqlite/src/roster_store.rs tests; docs/plans/phase-ay/herdr-naming-test-matrix.md section A" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T21:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-007/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY15-QA-007/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md" ;
+  triage:line 127 ;
+  triage:snippet "D4a One table-driven permutation test (unique_name_permutations) ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-007/10bc123f8> .
+
+<urn:atm:triage:worktree/AY15-QA-007/10bc123f8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r7" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:orderIndex 0 .
