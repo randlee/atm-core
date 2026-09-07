@@ -1618,6 +1618,16 @@ class HerdrEntryTests(unittest.TestCase):
         self.assertTrue(all(entry["owned"] and entry["registered"] and entry["digest_matches"] for entry in entries))
         self.assertFalse(self.manager.journal_path.exists())
 
+    def test_each_platform_fake_supports_install_status_remove(self) -> None:
+        for name in ("Darwin", "Linux", "Windows"):
+            with self.subTest(platform=name):
+                platform_fake = HerdrEntryPlatformFake(self.root / name, name)
+                manager = DAEMON_SWITCH.HerdrEntryManager(self.root / f"{name}-journal", platform_fake)
+                installed = manager.install(self.default)
+                self.assertTrue(installed["owned"] and installed["registered"])
+                removed = manager.remove(self.default)
+                self.assertFalse(removed["owned"] or removed["registered"])
+
     def test_foreign_digest_and_socket_path_refuse_without_mutation(self) -> None:
         path = self.platform.path_for(DAEMON_SWITCH.identifier("Linux", "default"))
         path.parent.mkdir(parents=True)
@@ -1665,11 +1675,32 @@ class HerdrEntryTests(unittest.TestCase):
             with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "not configured"):
                 DAEMON_SWITCH.herdr_entry_endpoints(Path("/selected/atm"), install=True)
 
+    def test_doctor_ingestion_rejects_null_missing_malformed_and_error(self) -> None:
+        invalid_payloads = [
+            {"herdr": {"configured": None, "endpoints": []}},
+            {"herdr": {"configured": True}},
+            {"herdr": {"configured": True, "endpoints": ["not-an-object"]}},
+            {"error": "doctor failed"},
+        ]
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload), mock.patch.object(DAEMON_SWITCH, "doctor", return_value=payload):
+                with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "doctor"):
+                    DAEMON_SWITCH.herdr_entry_endpoints(Path("/selected/atm"), install=True)
+
     def test_entry_result_is_exactly_one_json_object(self) -> None:
         output = io.StringIO()
         with redirect_stdout(output):
             DAEMON_SWITCH.herdr_entry_result(True, "HERDR_ENTRY_STATUS_OK", "ok", "none", [])
         self.assertEqual(json.loads(output.getvalue()), {"ok": True, "code": "HERDR_ENTRY_STATUS_OK", "message": "ok", "remedy": "none", "entries": []})
+
+    def test_ordinary_switch_lifecycle_has_no_implicit_entry_invocation(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        switch_block = source.split('elif args.command == "switch":', 1)[1].split('elif args.command == "restore":', 1)[0]
+        restore_block = source.split('elif args.command == "restore":', 1)[1].split('elif args.command == "restart":', 1)[0]
+        restart_block = source.split('elif args.command == "restart":', 1)[1].split('elif args.command == "temporary-launch":', 1)[0]
+        self.assertNotIn("run_herdr_entry", switch_block)
+        self.assertNotIn("run_herdr_entry", restore_block)
+        self.assertNotIn("run_herdr_entry", restart_block)
 
 
 if __name__ == "__main__":
