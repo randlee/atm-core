@@ -1,0 +1,124 @@
+---
+id: AY.15
+phase: AY
+sprint: AY.15
+title: unique_name invariant — alias ?? name unique across the ATM database
+branch: feature/ay15-herdr-name-uniqueness
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay15-herdr-name-uniqueness
+integration_branch: integrate/phase-ay
+stack_parent: none
+pr_target: integrate/phase-ay
+target: integrate/phase-ay
+status: dispatched
+recommended_agent: arch-ctm
+recommended_model: deep-reasoning
+execution_track: serial
+parallel_with: []
+dependency_relations:
+  - prerequisite: AY.14
+    dependent: AY.15
+    relation: must_follow
+    rationale: closes AY14-QA-003 (blocking) and the naming permutation gaps found on integrate/phase-ay f6c9d47b8; AY.14 is merged (#1305).
+---
+
+# AY.15 — unique_name invariant
+
+## Requirement (Rand, 2026-09-07, verbatim)
+
+- "the requirement comes from herdr agent name MUST be unique which means
+  herdr agent name must be unique on atm database."
+- "herdr agent name = alias.  if alias is null/empty, alias would be equal
+  to member name"
+- "this allows us to have the same name on different teams (we should
+  guarantee uniqueness of names per team already) by simply adding an alias
+  for the conflicting name."
+- "we call this 'alias' because using the alias for cross-team messaging
+  has value independent of herdr."
+- "so basically, there should be a query across all team roster for
+  'unique-name' which would return alias ?? name."
+- "if the list of unique-name collides with a proposed alias ?? name, add
+  member must fail"
+
+Requirements text: `docs/requirements.md` §3.3.2 `REQ-ROSTER-NAME-001..008`.
+Permutation matrix: `docs/plans/phase-ay/herdr-naming-test-matrix.md`.
+Every row marked **GAP** there is owed by this sprint, except D-13
+(cross-host alias, needs Rand's ruling; leave out).
+
+## Defects on integrate/phase-ay f6c9d47b8
+
+- AY14-QA-003 (blocking, quality-mgr): `ensure_canonical_member_name_available`
+  (`crates/atm-core/src/team_admin/member_mutation.rs:480`) ignores other
+  members' alias fields and skips the caller's own team, so a new canonical
+  name equal to an existing alias is accepted (matrix A-06, A-07).
+- The canonical-name check runs in `team_admin` outside the roster store
+  transaction: concurrent writers and non-CLI write paths bypass it (A-21,
+  A-22, A-23, A-24).
+- `ensure_canonical_member_name_available` and `ensure_alias_available`
+  are stricter than the rule: they compare against canonical names of
+  members that carry an alias, whose unique_name is the alias (A-09, A-10).
+- Empty/whitespace alias is not normalised to "no alias" (A-18).
+- Bare alias resolution is team-scoped (`resolve_roster_alias`,
+  `crates/atm-core/src/caller_context.rs:59`); a database-wide unique alias
+  must resolve without `@team` from any team (D-03).
+
+## Deliverables
+
+- D1 `crates/atm-storage/src` + `crates/atm-storage-rusqlite/src/roster_store.rs`:
+  one roster-store query `unique_names()` across every team returning
+  `(team, agent_name, unique_name)` where
+  `unique_name = COALESCE(NULLIF(TRIM(json_extract(metadata_json,'$.alias')),''), agent_name)`.
+  `save_roster` validates, inside its write transaction, that every
+  unique_name of the roster being written is absent from every other
+  team's unique_names and unique within the roster. This replaces
+  `validate_database_wide_aliases`. No SQLite schema change; if you choose a
+  generated column + UNIQUE index instead, record it as an ADR-061 minor
+  bump in the PR body and say why.
+- D2 `crates/atm-core/src/team_admin/member_mutation.rs`: delete
+  `ensure_canonical_member_name_available` and `ensure_alias_available`;
+  `add_member_with_roster_store` and `update_member` pre-check with the same
+  `unique_names()` query only to produce the operator error (REQ-ROSTER-NAME-003:
+  conflicting team, member, `--alias` remedy); the store transaction is the
+  enforcement. Empty/whitespace `--alias` is `None` at parse time (CLI and
+  request DTO). Error code and text identical from CLI and daemon paths.
+- D3 `crates/atm-core/src/caller_context.rs` `resolve_roster_alias` and its
+  callers: a canonical name in the addressed team wins; otherwise a roster
+  alias resolves database-wide to its owner's `(team, agent_name)`; the
+  resolved team replaces the implicit caller team for the recipient. Explicit
+  `@team` still restricts to that team. `.atm.toml` `[atm].aliases` is
+  consulted before the roster alias (D-06).
+- D4 Tests for every **GAP** row in the matrix (A-06, A-07, A-09, A-10,
+  A-14..A-16, A-18..A-25, B-01, B-03..B-07, C-05, D-03, D-06, D-08, D-10,
+  D-12, D-14, E-02, F-06, G-02, G-03). Name each test after its matrix id
+  (`unique_name_a06_...`). Concurrency tests (A-21, A-22) use explicit
+  synchronisation and a hard bounded deadline, never retries or widened
+  timeouts. Update the matrix file: flip each row from **GAP** to
+  `covered <test>` with path:line.
+- D5 `docs/requirements.md` §3.3.2 wording corrections only if the
+  implementation forces one; quote Rand, never author a rule.
+- D6 Close AY14-QA-003: quality-mgr owns closure; reference the record in
+  the PR body.
+
+## Out of scope
+
+- D-13 cross-host alias forwarding (needs Rand's ruling).
+- B-08 alias equal to a team name: accept as today, no new check.
+- `crates/atm-daemon/**` (frozen legacy): empty diff.
+- Any change to what is persisted in message/ack/audit/task rows beyond
+  asserting they are canonical (E-02).
+
+## Acceptance criteria
+
+- AC1 Every matrix row A-01..A-25 has a named passing test; A-06 and A-07
+  fail on f6c9d47b8 and pass on the sprint head.
+- AC2 Every GAP row in sections B–G (minus D-13, B-08) has a named passing
+  test and the matrix file shows no remaining **GAP** except D-13/B-08.
+- AC3 `rg 'ensure_canonical_member_name_available|ensure_alias_available|validate_database_wide_aliases' crates/` returns nothing; the store transaction is the only enforcement point (A-23 test drives the store directly).
+- AC4 `just validate && cargo test -p atm-core -p atm -p atm-herdr -p atm-http-runtime -p atm-storage-rusqlite -p atm-daemon-bootstrap --all-features` green; fmt and clippy clean before every push.
+- AC5 Empty diff under `crates/atm-daemon/`.
+- AC6 PR body: ADR-061 statement (no governed-interface change, or the minor bump from D1), and the list of matrix ids covered.
+
+## Dispatch and PR topology
+
+- Worktree from `integrate/phase-ay` at f6c9d47b8 or later; single branch,
+  PR targets `integrate/phase-ay`; push with `gh stack push` after
+  `gh stack link --base integrate/phase-ay`.

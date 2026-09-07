@@ -965,6 +965,80 @@ Required diagnostics:
 Operator examples and safe repair guidance live in
 [`persisted-data-repair.md`](./persisted-data-repair.md).
 
+### 3.3.2 Member Naming, Alias, And Herdr Agent Name
+
+Product requirement IDs: `REQ-ROSTER-NAME-001` through `REQ-ROSTER-NAME-008`.
+
+Source rulings (Rand, 2026-09-07, verbatim): "the requirement comes from
+herdr agent name MUST be unique which means herdr agent name must be unique
+on atm database."; "herdr agent name = alias. if alias is null/empty, alias
+would be equal to member name"; "this allows us to have the same name on
+different teams (we should guarantee uniqueness of names per team already)
+by simply adding an alias for the conflicting name."; "we call this 'alias'
+because using the alias for cross-team messaging has value independent of
+herdr."; "so basically, there should be a query across all team roster for
+'unique-name' which would return alias ?? name."; "if the list of unique-name collides with a
+proposed alias ?? name, add member must fail"; "the alias should never be
+used in database."; "alias would be
+acceptable at all user/agent facing interfaces and would immediately be
+replaced at the ingress interface."
+
+Definitions:
+- canonical member name: the roster `agent_name`; the only name stored in
+  any non-roster row
+- alias: the optional roster attribute `metadata_json["alias"]`; an empty or
+  whitespace-only alias is the same as no alias
+- effective name (the Herdr agent name): the alias when present, otherwise
+  the canonical member name; `effective(member) = alias ?? agent_name`
+
+- `REQ-ROSTER-NAME-001` Canonical member names are unique within a team.
+  `add-member` rejects a canonical name already present in the same team.
+- `REQ-ROSTER-NAME-002` Effective names are unique across the whole ATM
+  database: for any two distinct roster rows in any teams,
+  `effective(a) != effective(b)`. The check covers every combination:
+  canonical vs canonical, canonical vs alias, alias vs canonical, alias vs
+  alias. It applies to members of every backend, not only Herdr members,
+  because the backend may change later.
+- `REQ-ROSTER-NAME-003` The same canonical name may exist in several teams
+  when the effective names differ. The first member of a name in the
+  database needs no alias; a later member of that name in another team must
+  carry an alias, or an alias must already be on the earlier member. The
+  rejection error names the conflicting team and member and states the
+  `--alias` remedy.
+- `REQ-ROSTER-NAME-004` Uniqueness is enforced inside the roster store's
+  write transaction on every write path (`add-member`, `set-member`
+  including alias change and alias clear, restore/import, daemon and HTTP
+  member mutation), not only in the CLI. Two concurrent writers of the same
+  effective name: exactly one succeeds. Removing a member or deleting a team
+  frees its effective name.
+- `REQ-ROSTER-NAME-005` Grammar: canonical names and aliases follow the ATM
+  segment rules (ASCII letters, digits, `-`, `_`; non-empty). A member whose
+  backend is Herdr additionally requires its effective name to satisfy
+  Herdr's live-agent grammar `[a-z][a-z0-9_-]{0,31}`; this is validated when
+  the member is added, when its alias changes, and when its backend becomes
+  Herdr. Comparison is exact (case-sensitive); ATM does not fold case.
+- `REQ-ROSTER-NAME-006` Every Herdr call for a member (prompt, get, wait,
+  list matching, presence probe) targets the effective name, never the
+  canonical name directly when an alias exists. Logs and doctor output show
+  both (`member = team/agent`, `herdr_agent = <effective>`).
+- `REQ-ROSTER-NAME-007` Ingress replacement: an alias is accepted wherever a
+  member name is accepted (send recipient, `--as`, `ATM_IDENTITY`, read and
+  peek filters, ack, `set-member`/`remove-member` arguments) and is replaced
+  by the canonical name at the ingress edge, before validation, self-send
+  checks, mailbox lookup, routing, audit and persistence. Resolution order:
+  a canonical name in the addressed team wins; then the `.atm.toml`
+  `[atm].aliases` table; then the roster alias. Because aliases are unique
+  database-wide, a bare alias with no `@team` resolves to its member in any
+  team (cross-team addressing by alias alone). An unknown name falls through
+  to the existing canonical parse/lookup error unchanged. An ambient
+  activity observation attested to an alias is dropped on replacement.
+- `REQ-ROSTER-NAME-008` `.atm.toml` pane `alias` keys are spawner input
+  only; `atm doctor` compares them with roster aliases for the caller's team
+  as validation (§3.3), and nothing else in `atm-core` reads them.
+
+The full permutation matrix and its test mapping live in
+`docs/plans/phase-ay/herdr-naming-test-matrix.md`.
+
 ### 3.4 Claude Settings Resolution
 
 The system must resolve Claude settings for file-reference policy checks.
@@ -1135,9 +1209,13 @@ Alias rules:
 - sender aliases may be accepted on input, but canonical sender identity
   remains the routing and validation identity
 - same-team messages keep current canonical sender projection behavior
-- cross-team messages may project an alias-oriented sender in the persisted
-  `from` field only when ATM also stores the canonical sender identity in
-  SQLite-owned state for routing, validation, and audit
+- the persisted `from` and `to` of every message, acknowledgement, audit and
+  task-state row carry canonical member names only, for same-team and
+  cross-team messages alike; an alias is never written to the database
+  (superseded 2026-09-07 by Rand's ruling in §3.3.2: "the alias should
+  never be used in database")
+- roster aliases (§3.3.2) are resolved the same way, after the `.atm.toml`
+  `[atm].aliases` table
 
 Post-send-hook rules:
 - ATM always has one shipped default post-send path in the installed binary:

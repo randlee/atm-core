@@ -1714,6 +1714,7 @@ Phase AY sprint status:
 | `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `merged` (#1295, 7ad3ad7e5, disposition Ship) | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
 | `AY.13` | Doctor | standalone; Rand 2026-09-07 doctor team-scope requirement; parallel with AY.14 | `merged` (#1300, dd809c15e) | `feature/ay13-doctor-team-scope` | `docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md` |
 | `AY.14` | Herdr/roster | standalone; Rand 2026-09-07 name-collision ruling (roster alias); parallel with AY.13 | `merged` (#1305, 271b387ed) | `feature/ay14-herdr-agent-name-mapping` | `docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md` |
+| `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `dispatched` | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
 
 ## Daemon-Switch Scope Reduction
 
