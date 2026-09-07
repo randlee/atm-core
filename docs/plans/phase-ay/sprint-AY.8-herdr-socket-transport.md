@@ -264,7 +264,20 @@ not, the split point is fixed in advance: sprint AY.8a lands D1–D6 and C1–C2
 (TOML, `SocketIo`, endpoint resolver, NDJSON framing, cancellation and
 permits, macOS/Linux UDS lane) and AY.8b lands D7–D8 (fake socket server,
 Windows named-pipe lane, equivalence suite) stacked on AY.8a. D9 and D10
-ride AY.8a. No other split is permitted without a plan amendment.
+ride AY.8a. If the split is exercised: AY.8a keeps this sprint's branch
+(`feature/ay8-herdr-socket-transport`, target `integrate/phase-ay`, stack
+parent none) and AY.8b is `feature/ay8b-herdr-socket-equivalence`
+(`stack_parent` AY.8a, `pr_target` AY.8a's branch, linked with `gh stack
+link --base integrate/phase-ay`); the P-E(b) composed-TOML rule applies at
+AY.8a only (D1 rides there; AY.8b edits no boundary TOML); C3 splits by
+deliverable (AY.8a: Cargo.toml, boundary TOML, transport_socket.rs,
+transport.rs, lib.rs, tests/socket_construction_pin.rs, herdr-versions.md;
+AY.8b: tests/support/fake_herdr_socket/** and the equivalence tests); and
+AY.9's `must_follow` retargets to AY.8b, because AY.9 needs the equivalence
+suite. Exercising the split is a plan amendment PR that updates this
+section's status, AY.9's dependency_relations, and the sprint map and wave
+tables in phase-ay-plan.md in the same commit. No other split is permitted
+without a plan amendment.
 
 ## Required work
 

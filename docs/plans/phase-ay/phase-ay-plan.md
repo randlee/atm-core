@@ -1663,8 +1663,20 @@ process cost; it does not remove the per-member call count. AY.4 (breaker
 lifecycle) and AY.6 (restart coordination) must not add per-member calls,
 and the tick should skip `list` when nothing is pending and no task is
 open, and reuse the `list` snapshot instead of a per-member `get` where the
-snapshot already carries the state. Recorded as a design constraint, not a
-new sprint.
+snapshot already carries the state. The negative constraint (no new
+per-member calls in AY.4/AY.6) is in force now. The tick optimization itself
+is not owned by any AY sprint: Rand (2026-09-06) has since asked for a push
+model (the daemon must know every agent state change, sourced from either
+Herdr or schook HTTP POSTs from hook triggers), which supersedes optimizing
+the poll. It is tracked as rework item 7 below, open pending Rand's ruling.
+
+7. (open) Agent-state push model. Rand, 2026-09-06: "we need to 'know' every
+   time an agent state changes"; "it's either herdr or schooks and track it
+   as http posts from hook triggers." Herdr 0.8.2 offers `herdr agent wait`
+   (one held wait per agent, no session-wide subscription); hooks give
+   agent-originated transitions over HTTP for any harness, including
+   non-tmux hermes agents. Ruling and owning sprint to be recorded here; no
+   AY sprint may add poll-side machinery in the meantime.
 
 ### Hardening rounds
 
@@ -1693,3 +1705,16 @@ round below is PASS or every finding has an accepted disposition.
   PLAN-CRIT-004 D10 pin unnamed (fixed). Both reviewers noted the
   handoff-JSON input contract was not supplied; these rounds were run as
   direct plan reviews, and the r2 dispatch names the reviewed commit.
+- plan-scope-reviewer r2 (FAIL, 1 blocking; reviewed 66f34c462): all r1
+  ids confirmed fixed; PLAN-SCOPE-005 AY.9 AC5 and out-of-scope still
+  required an "exact removal release" (fixed in 57ebeb7ce: AC5 and the
+  out-of-scope bullet now state no removal release exists; plan line ~67
+  and AY.9 intro/L-suite wording aligned to daemon-start selection).
+- critical-plan-reviewer r2 (FAIL, 1 blocking / 2 important; reviewed
+  66f34c462): all r1 ids confirmed fixed; PLAN-CRIT-005 same as
+  PLAN-SCOPE-005 (fixed); PLAN-CRIT-006 AY.8a/AY.8b split had no branch,
+  stack, TOML or AY.9-retarget rule (fixed: split contingency now names
+  branches, stack fields, C3 per half, AY.9 must_follow retarget, and the
+  amendment scope); PLAN-CRIT-007 scaling-note tick optimization unowned
+  (disposition: superseded by Rand's push-model direction, tracked as
+  rework item 7, open).
