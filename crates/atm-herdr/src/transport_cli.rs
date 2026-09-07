@@ -8,8 +8,18 @@ use atm_core::{HerdrSession, RequestDeadline};
 use serde_json::Value;
 use tokio::io::AsyncReadExt;
 
+#[cfg(windows)]
+use std::future::Future;
+#[cfg(windows)]
+use std::pin::Pin;
+
 use crate::transport::{HerdrClientConfig, HerdrEnvelope, HerdrErrorEnvelope, HerdrOp};
 use crate::{HERDR_MAX_OUTPUT_BYTES, HERDR_PROCESS_CAP, HerdrError};
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+#[cfg(windows)]
+const WINDOWS_CHILD_CLEANUP_GRACE: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Debug)]
 pub(crate) struct CliIo {
@@ -113,25 +123,34 @@ async fn run_command(
     let Some(remaining) = deadline.remaining() else {
         return Err(HerdrError::TimedOut);
     };
-    let binary = configured_binary.unwrap_or_else(|| std::path::Path::new("herdr"));
+    let binary = command_binary(configured_binary);
     let mut command = tokio::process::Command::new(binary);
     command
         .args(args)
         .kill_on_drop(true)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    #[cfg(windows)]
+    configure_windows_command(&mut command);
     command.envs(extra_environment.iter().map(|(key, value)| (key, value)));
     if let Some(session) = session {
         command.env("HERDR_SESSION", session.as_str());
     }
-    let mut child = command.spawn().map_err(server_unavailable)?;
+    let mut child = command
+        .spawn()
+        .map_err(|error| spawn_unavailable(error, configured_binary))?;
     let status =
         match tokio::time::timeout(effective_process_timeout(remaining), child.wait()).await {
             Ok(Ok(status)) => status,
             Ok(Err(error)) => return Err(server_unavailable(error)),
             Err(_) => {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
+                #[cfg(windows)]
+                cleanup_after_timeout(&mut child, WINDOWS_CHILD_CLEANUP_GRACE).await?;
+                #[cfg(not(windows))]
+                {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                }
                 return Err(HerdrError::TimedOut);
             }
         };
@@ -143,11 +162,113 @@ async fn run_command(
     })
 }
 
+fn command_binary(configured_binary: Option<&Path>) -> PathBuf {
+    #[cfg(windows)]
+    {
+        return configured_binary.map_or_else(
+            || PathBuf::from("herdr.exe"),
+            |path| {
+                if path.is_dir() {
+                    path.join("herdr.exe")
+                } else {
+                    path.to_path_buf()
+                }
+            },
+        );
+    }
+
+    #[cfg(not(windows))]
+    configured_binary
+        .unwrap_or_else(|| Path::new("herdr"))
+        .to_path_buf()
+}
+
+#[cfg(windows)]
+fn configure_windows_command(command: &mut tokio::process::Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+fn spawn_unavailable(error: std::io::Error, configured_binary: Option<&Path>) -> HerdrError {
+    #[cfg(windows)]
+    {
+        let source = configured_binary.map_or_else(
+            || "Windows PATH search for herdr.exe".to_owned(),
+            |path| format!("configured Herdr binary {}", path.display()),
+        );
+        return HerdrError::ServerUnavailable {
+            message: format!("{source}: {error}"),
+            retry_after: None,
+            io_error_kind: Some(error.kind()),
+        };
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = configured_binary;
+        server_unavailable(error)
+    }
+}
+
 fn server_unavailable(error: std::io::Error) -> HerdrError {
     HerdrError::ServerUnavailable {
         message: error.to_string(),
         retry_after: None,
         io_error_kind: Some(error.kind()),
+    }
+}
+
+#[cfg(windows)]
+trait ChildHandle {
+    fn pid(&self) -> Option<u32>;
+    fn kill<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>>;
+    fn wait_for_exit<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>>;
+}
+
+#[cfg(windows)]
+impl ChildHandle for tokio::process::Child {
+    fn pid(&self) -> Option<u32> {
+        self.id()
+    }
+
+    fn kill<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
+        Box::pin(tokio::process::Child::kill(self))
+    }
+
+    fn wait_for_exit<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
+        Box::pin(async move { self.wait().await.map(|_| ()) })
+    }
+}
+
+#[cfg(windows)]
+async fn cleanup_after_timeout(
+    child: &mut dyn ChildHandle,
+    grace: Duration,
+) -> Result<(), HerdrError> {
+    let pid = child.pid();
+    match tokio::time::timeout(grace, async {
+        let kill_result = child.kill().await;
+        let wait_result = child.wait_for_exit().await;
+        kill_result.and(wait_result)
+    })
+    .await
+    {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(error)) => Err(server_unavailable(error)),
+        Err(_) => {
+            eprintln!(
+                "event=herdr_child_cleanup_timeout cause=child_cleanup_timeout pid={}",
+                pid.map_or_else(|| "unknown".to_owned(), |value| value.to_string())
+            );
+            Err(HerdrError::ServerUnavailable {
+                message: "child_cleanup_timeout".to_owned(),
+                retry_after: None,
+                io_error_kind: None,
+            })
+        }
     }
 }
 
@@ -177,9 +298,21 @@ async fn capture_command_output(
         });
     }
     Ok((
-        String::from_utf8_lossy(&stdout).into_owned(),
-        String::from_utf8_lossy(&stderr).into_owned(),
+        decode_command_output(stdout)?,
+        decode_command_output(stderr)?,
     ))
+}
+
+fn decode_command_output(bytes: Vec<u8>) -> Result<String, HerdrError> {
+    #[cfg(windows)]
+    {
+        return String::from_utf8(bytes).map_err(|_| HerdrError::ProtocolMismatch {
+            message: "Herdr process output was not valid UTF-8".to_owned(),
+        });
+    }
+
+    #[cfg(not(windows))]
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 pub(crate) async fn read_capped(reader: impl tokio::io::AsyncRead + Unpin) -> (Vec<u8>, bool) {
@@ -262,5 +395,150 @@ mod tests {
             Err(HerdrError::ProtocolMismatch { message }) => assert!(!message.is_empty()),
             _ => panic!("malformed JSON must preserve a protocol mismatch diagnostic"),
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_binary_resolution_is_per_spawn_and_uses_the_stable_alias() {
+        let root = std::env::temp_dir().join(format!("atm-herdr-cli-{}", std::process::id()));
+        let alias = root.join("bin");
+        std::fs::create_dir_all(&alias).expect("temporary alias directory");
+
+        assert_eq!(
+            super::command_binary(Some(&alias)),
+            alias.join("herdr.exe"),
+            "a directory configuration resolves the executable for this spawn"
+        );
+        std::fs::remove_dir(&alias).expect("remove alias directory");
+        std::fs::write(&alias, b"stand-in executable").expect("replace alias with executable");
+        assert_eq!(
+            super::command_binary(Some(&alias)),
+            alias,
+            "the next spawn re-resolves rather than caching the old directory result"
+        );
+        assert_eq!(
+            super::command_binary(None),
+            std::path::PathBuf::from("herdr.exe"),
+            "an omitted configuration delegates lookup to Windows PATH"
+        );
+        std::fs::remove_dir_all(root).expect("remove temporary alias root");
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_missing_binary_names_its_configured_source() {
+        let missing = std::env::temp_dir().join(format!(
+            "atm-herdr-missing-{}-{}.exe",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let result = super::run_command(
+            Some(&missing),
+            &[],
+            &[],
+            None,
+            atm_core::RequestDeadline::after(std::time::Duration::from_secs(1)),
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(crate::HerdrError::ServerUnavailable { ref message, .. })
+                if message.contains(&missing.display().to_string())
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_output_requires_utf8_and_accepts_lf_or_crlf() {
+        assert_eq!(
+            super::decode_command_output(b"{\"result\":{}}\n".to_vec()),
+            Ok("{\"result\":{}}\n".to_owned())
+        );
+        assert_eq!(
+            super::decode_command_output(b"{\"result\":{}}\r\n".to_vec()),
+            Ok("{\"result\":{}}\r\n".to_owned())
+        );
+        assert!(matches!(
+            super::decode_command_output(vec![0xff]),
+            Err(crate::HerdrError::ProtocolMismatch { .. })
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_spawn_site_sets_create_no_window_once() {
+        let source = include_str!("transport_cli.rs");
+        assert_eq!(super::CREATE_NO_WINDOW, 0x0800_0000);
+        assert_eq!(
+            source
+                .matches("command.creation_flags(CREATE_NO_WINDOW)")
+                .count(),
+            1
+        );
+    }
+
+    #[cfg(windows)]
+    struct DelayedWaitChild {
+        killed: bool,
+    }
+
+    #[cfg(windows)]
+    impl super::ChildHandle for DelayedWaitChild {
+        fn pid(&self) -> Option<u32> {
+            Some(42)
+        }
+
+        fn kill<'a>(
+            &'a mut self,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<()>> + Send + 'a>>
+        {
+            self.killed = true;
+            Box::pin(async { Ok(()) })
+        }
+
+        fn wait_for_exit<'a>(
+            &'a mut self,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<()>> + Send + 'a>>
+        {
+            Box::pin(std::future::pending())
+        }
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_cleanup_grace_returns_typed_failure_when_wait_stalls() {
+        let mut child = DelayedWaitChild { killed: false };
+        let result = super::cleanup_after_timeout(&mut child, std::time::Duration::ZERO).await;
+        assert!(child.killed);
+        assert_eq!(
+            super::WINDOWS_CHILD_CLEANUP_GRACE,
+            std::time::Duration::from_secs(5)
+        );
+        assert!(matches!(
+            result,
+            Err(crate::HerdrError::ServerUnavailable { ref message, .. })
+                if message == "child_cleanup_timeout"
+        ));
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_timeout_cleanup_kills_and_reaps_a_real_child() {
+        let mut child = tokio::process::Command::new("cmd.exe")
+            .args(["/C", "timeout", "/T", "60", "/NOBREAK"])
+            .spawn()
+            .expect("long-running Windows stand-in child");
+        super::cleanup_after_timeout(&mut child, super::WINDOWS_CHILD_CLEANUP_GRACE)
+            .await
+            .expect("kill then reap completes inside the cleanup grace period");
+        assert!(
+            child
+                .try_wait()
+                .expect("inspect child exit after reap")
+                .is_some()
+        );
     }
 }
