@@ -1630,10 +1630,14 @@ six sprints were serialized behind it. Rand's rulings, applied verbatim:
    heads the control-plane stack AY.5 -> AY.6 -> AY.7. AY.6 and AY.7 start
    contracts-first on their parent's pushed contracts, as AY.3 did on AY.2.
 6. The CLI transport is not deprecated or scheduled for removal. It has
-   worked from the start and stays as the permanent fallback: selected only
-   by `herdr.transport = "cli"`, reported by doctor, never chosen at runtime
-   when a socket connect fails (a connect failure is a Herdr-unavailable
-   breaker event, exactly like a spawn failure today). Both transports run
+   worked from the start and stays as the permanent alternative. The
+   transport is chosen exactly once, at daemon start, from
+   `herdr.transport` (`socket` default, `cli` explicit) in the AY.9
+   composition factory; it is reported by doctor and never changes while
+   the daemon runs. There is no per-call or runtime fallback: a socket
+   connect failure is a Herdr-unavailable breaker event, exactly like a
+   spawn failure today, and switching transports means editing config and
+   restarting the daemon. Both transports run
    the AY.8 equivalence suite on every CI lane for as long as both exist.
    The atm 1.6.0 removal clauses are withdrawn from the plan, AY.8 and AY.9.
 

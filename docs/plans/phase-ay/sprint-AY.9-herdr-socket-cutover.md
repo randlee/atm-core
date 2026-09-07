@@ -66,9 +66,11 @@ completion fails the sprint.
   production factory inside `atm-herdr`. No second composition site is
   introduced.
 - [ ] D2 — retain CLI as a permanent, explicit, documented fallback (rework
-  2026-09-06). It is selected only by `herdr.transport = "cli"`; doctor
-  reports the active transport; runtime failure never silently falls back
-  from socket to CLI (a socket connect failure is a Herdr-unavailable breaker
+  2026-09-06). The transport is chosen exactly once at daemon start by the
+  D1 factory from `herdr.transport`; `cli` is selected only by explicit
+  config; doctor reports the active transport; the choice never changes
+  while the daemon runs and runtime failure never falls back from socket
+  to CLI (a socket connect failure is a Herdr-unavailable breaker
   event with the same mapping as a CLI spawn failure). No removal release is
   scheduled and no ownership-key cleanup is recorded.
 - [ ] D3 — rerun AY.4's authoritative lifecycle matrix L1–L12 against the
