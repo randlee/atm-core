@@ -39,7 +39,7 @@ pub use herdr_state::{
 };
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
+    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport, DoctorAliasMismatch,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
     DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientSource,
     EscalationRecipientsDoctorReport, GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport,
@@ -526,6 +526,7 @@ fn build_doctor_report(
         resolved_team_scope: team_scope,
         member_roster,
         team_rosters,
+        alias_mismatches: Vec::new(),
         graft_receivers,
         observability: observability_health,
         herdr_queue_pump: HerdrQueuePumpDoctorReport {

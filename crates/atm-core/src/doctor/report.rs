@@ -404,6 +404,19 @@ pub struct ReaderPoolDoctorReport {
     pub metrics: Option<ReaderPoolMetricsDoctorReport>,
 }
 
+/// A difference between a local rmux pane alias and durable roster metadata.
+///
+/// This is diagnostic-only. The configuration alias is never used to resolve
+/// an ATM recipient or identity, and it is never persisted outside the roster.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DoctorAliasMismatch {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub config_alias: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roster_alias: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
@@ -428,6 +441,9 @@ pub struct DoctorReport {
     /// One roster block for every team when the effective scope is all teams.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub team_rosters: Vec<MembersList>,
+    /// Local rmux aliases that differ from the durable roster alias.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alias_mismatches: Vec<DoctorAliasMismatch>,
     #[serde(default)]
     pub graft_receivers: GraftReceiversDoctorReport,
     pub observability: AtmObservabilityHealth,

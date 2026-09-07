@@ -160,7 +160,7 @@ pub struct BenchmarkNoopHerdrProcessAdapter;
 impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
     fn prompt<'a>(
         &'a self,
-        agent: &'a atm_core::types::AgentName,
+        agent: &'a atm_core::HerdrAgentName,
         _session: Option<&'a HerdrSession>,
         _text: &'a str,
         _deadline: RequestDeadline,
@@ -175,7 +175,7 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
 
     fn wait<'a>(
         &'a self,
-        agent: &'a atm_core::types::AgentName,
+        agent: &'a atm_core::HerdrAgentName,
         _session: Option<&'a HerdrSession>,
         _until: &'a [HerdrAgentStatus],
         _timeout: std::time::Duration,
@@ -192,7 +192,7 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
 
     fn get<'a>(
         &'a self,
-        agent: &'a atm_core::types::AgentName,
+        agent: &'a atm_core::HerdrAgentName,
         _session: Option<&'a HerdrSession>,
         _deadline: RequestDeadline,
         _breaker_policy: atm_herdr::BreakerPolicy,
@@ -793,7 +793,8 @@ mod tests {
         dispatch.kind = kind;
         dispatch.target =
             PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
-                agent: atm_core::HerdrAgentName::new("team-lead").expect("agent"),
+                agent: atm_core::HerdrAgentName::new(atm_core::roles::ROLE_TEAM_LEAD)
+                    .expect("agent"),
                 session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
                 rendered_nudge: "test".to_owned(),
             }));

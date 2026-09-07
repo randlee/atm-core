@@ -1323,7 +1323,7 @@ mod tests {
                 team_name: team_a.clone(),
                 members: vec![herdr_member_with_alias(
                     &team_a,
-                    "team-lead",
+                    atm_core::roles::ROLE_TEAM_LEAD,
                     "team-lead_a-team",
                 )],
                 refreshed_at: None,
@@ -1336,14 +1336,24 @@ mod tests {
                 team_name: team_b.clone(),
                 members: vec![herdr_member_with_alias(
                     &team_b,
-                    "team-lead",
+                    atm_core::roles::ROLE_TEAM_LEAD,
                     "team-lead_b-team",
                 )],
                 refreshed_at: None,
             })
             .expect("team b roster");
-        queue_message(root.path(), &assembly.service_runtime, &team_a, "team-lead");
-        queue_message(root.path(), &assembly.service_runtime, &team_b, "team-lead");
+        queue_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team_a,
+            atm_core::roles::ROLE_TEAM_LEAD,
+        );
+        queue_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team_b,
+            atm_core::roles::ROLE_TEAM_LEAD,
+        );
 
         let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
         fake.queue_list_result(Ok(HerdrListOutcome {

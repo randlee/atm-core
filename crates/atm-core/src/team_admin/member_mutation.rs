@@ -1196,12 +1196,12 @@ mod tests {
     fn cross_team_member_names_require_alias_but_first_occurrence_does_not() {
         let store = TestRosterStore::default();
         let first_team: TeamName = "other-team".parse().expect("team");
-        store.seed(&first_team, vec![lead_member("other-team", "team-lead")]);
+        store.seed(&first_team, vec![lead_member("other-team", ROLE_TEAM_LEAD)]);
         let root = tempfile::tempdir().expect("tempdir");
         let no_alias = AddMemberRequest::new_with_backend(
             root.path().to_path_buf(),
             TEST_TEAM,
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "lead".to_owned(),
             "gpt-5".to_owned(),
             root.path().join("duplicate-home"),
@@ -1221,7 +1221,7 @@ mod tests {
         let with_alias = AddMemberRequest::new_with_backend(
             root.path().to_path_buf(),
             TEST_TEAM,
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "lead".to_owned(),
             "gpt-5".to_owned(),
             root.path().join("aliased-home"),
@@ -1242,17 +1242,17 @@ mod tests {
         let store = TestRosterStore::default();
         let team: TeamName = TEST_TEAM.parse().expect("team");
         let other: TeamName = "other-team".parse().expect("team");
-        let mut local = lead_member(TEST_TEAM, "team-lead");
+        let mut local = lead_member(TEST_TEAM, ROLE_TEAM_LEAD);
         local
             .metadata_json
             .insert("alias".to_string(), json!("team-lead_atm-dev"));
         store.seed(&team, vec![local]);
-        store.seed(&other, vec![lead_member("other-team", "team-lead")]);
+        store.seed(&other, vec![lead_member("other-team", ROLE_TEAM_LEAD)]);
         let request = UpdateMemberRequest::new_with_backend(
-            "team-lead".parse().expect("caller"),
+            ROLE_TEAM_LEAD.parse().expect("caller"),
             team.clone(),
             TEST_TEAM,
-            "team-lead",
+            ROLE_TEAM_LEAD,
             None,
             None,
             None,

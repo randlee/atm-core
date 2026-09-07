@@ -87,6 +87,7 @@ mod tests {
     use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
     use crate::error_codes::AtmErrorCode;
     use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::types::{AgentName, TeamName};
 
     fn member(team: &TeamName, name: &str, alias: Option<&str>) -> RosterEntry {
@@ -109,7 +110,7 @@ mod tests {
     #[test]
     fn roster_alias_resolves_to_canonical_member() {
         let team = TeamName::from_validated("test-team");
-        let roster = vec![member(&team, "team-lead", Some("team-lead_atm-dev"))];
+        let roster = vec![member(&team, ROLE_TEAM_LEAD, Some("team-lead_atm-dev"))];
 
         assert_eq!(
             resolve_roster_alias(
@@ -117,14 +118,14 @@ mod tests {
                 &team,
                 &roster,
             ),
-            AgentName::from_validated("team-lead")
+            AgentName::from_validated(ROLE_TEAM_LEAD)
         );
     }
 
     #[test]
     fn roster_alias_resolves_for_implicit_and_explicit_team_targets() {
         let team = TeamName::from_validated("test-team");
-        let roster = vec![member(&team, "team-lead", Some("team-lead_atm-dev"))];
+        let roster = vec![member(&team, ROLE_TEAM_LEAD, Some("team-lead_atm-dev"))];
 
         for raw_target in ["team-lead_atm-dev", "team-lead_atm-dev@test-team"] {
             let target = raw_target.parse::<AgentAddress>().expect("target");
@@ -132,7 +133,7 @@ mod tests {
             assert_eq!(resolved.team, team);
             assert_eq!(
                 resolve_roster_alias(&resolved.agent, &resolved.team, &roster),
-                AgentName::from_validated("team-lead"),
+                AgentName::from_validated(ROLE_TEAM_LEAD),
                 "{raw_target} must resolve through roster alias"
             );
         }
@@ -156,7 +157,7 @@ mod tests {
     fn canonical_name_wins_over_historical_alias_collision() {
         let team = TeamName::from_validated("test-team");
         let roster = vec![
-            member(&team, "team-lead", Some("worker")),
+            member(&team, ROLE_TEAM_LEAD, Some("worker")),
             member(&team, "worker", None),
         ];
 
