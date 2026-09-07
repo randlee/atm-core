@@ -155,8 +155,21 @@ TODO-specific rule:
    - fall back to `gh pr checks <PR> --watch` and
      `gh pr view <PR> --json mergeStateStatus,reviewDecision` if the repo-level
      `atm gh` flow is unavailable
-10. Publish the PR update using the templates from
-   `.claude/skills/quality-management-gh/`.
+10. Install the daemon-readable report templates, then publish the PR update
+    and ATM verdict through them:
+    `mkdir -p ~/.atm/templates/quality-management-gh && cp .claude/skills/quality-management-gh/*.j2 ~/.atm/templates/quality-management-gh/`.
+    Build the report vars for this QA run from the selected template's
+    `required_variables` frontmatter; every value must come from this run.
+    Write the vars file outside the repository working tree (in the session
+    scratchpad or a temp directory); never commit or stage it, and delete it
+    or let it expire after the send.
+    Render the PR comment with
+    `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr comment <PR> --body-file -`
+    for `FAIL`/`IN-FLIGHT`, or replace `findings-report.md.j2` with
+    `quality-report.md.j2` for `PASS`. Send the verdict to team-lead with
+    `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
+    for `FAIL`/`IN-FLIGHT`, or the `quality-report.md.j2` path for `PASS`.
+    A PR comment remains required; ATM template admission does not replace it.
 11. Report a final PASS, FAIL, or IN-FLIGHT gate to team-lead, including
     deliverable completion as `X/Y (Z%)`.
 
@@ -235,11 +248,21 @@ All ATM messages must follow the required sequence:
 3. final QA verdict
 
 For PR updates:
-- use `.claude/skills/quality-management-gh/findings-report.md.j2` for
-  `FAIL` and `IN-FLIGHT`
-- use `.claude/skills/quality-management-gh/quality-report.md.j2` for final
-  `PASS`
+- install the templates with
+  `mkdir -p ~/.atm/templates/quality-management-gh && cp .claude/skills/quality-management-gh/*.j2 ~/.atm/templates/quality-management-gh/`
+- use `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr comment <PR> --body-file -`
+  and `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
+  for `FAIL` and `IN-FLIGHT`
+- replace `findings-report.md.j2` with `quality-report.md.j2` in both
+  commands for final `PASS`
+- build `<scratch>/qa-<pr>-vars.json` from the selected template's
+  `required_variables` frontmatter using values from this QA run; never reuse
+  a previous or sample report's vars. Write it outside the repository working
+  tree (in the session scratchpad or a temp directory), never commit or stage
+  it, and delete it or let it expire after the send
 - include the fenced JSON machine-status block rendered by those templates
+- always post the rendered report to the PR; template admission never replaces
+  that REST/GitHub comment
 
 Use concise ATM summaries to team-lead.
 
@@ -269,7 +292,9 @@ After a FAIL verdict, include a short flat list of blocking findings with:
 - Never silently skip a required reviewer.
 - Keep all fix routing through team-lead.
 - Prefer structured reviewer outputs over narrative summaries.
-- Use `quality-management-gh` for PR reporting rather than ad hoc markdown.
+- Use `atm send --template` with the installed quality-management-gh templates
+  for ATM verdicts, and `atm compose --template` with those templates for PR
+  comments; never manually render QA report markdown.
 - Never declare PASS when deliverable completion is below 100%.
 - Never accept boundary relaxation as a fix. If any change loosens an
   established boundary requirement — widens visibility of sealed types or

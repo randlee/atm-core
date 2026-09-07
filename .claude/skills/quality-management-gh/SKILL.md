@@ -21,6 +21,26 @@ This skill is intentionally generic. Team-specific teammate names, branch
 policy, and background-agent ownership stay in the repo’s `quality-mgr` agent
 prompt.
 
+## Template Installation and Vars
+
+Before composing or sending a QA report, install daemon-readable copies with:
+
+```bash
+mkdir -p ~/.atm/templates/quality-management-gh && cp .claude/skills/quality-management-gh/*.j2 ~/.atm/templates/quality-management-gh/
+```
+
+Build the `--vars` JSON for this run from the selected template's frontmatter
+`required_variables`; both templates list them. Every value comes from the
+run: `task_id` from the QA assignment, `commit` from `git rev-parse`, and
+counts from the reviewer outputs. Keep numeric fields as JSON numbers and
+`blocking_ids_json` as a JSON string because the templates embed it as JSON.
+Write the vars file outside the repository working tree (in the session
+scratchpad or a temp directory); never commit or stage it, and delete it or
+let it expire after the send.
+A vars file must never be copied from a previous report or a sample; a report
+whose `sprint_id`, `task_id`, or `commit` do not match the assignment is a
+false report.
+
 ## Required QA Status Contract
 
 Every QA update, both ATM and PR, must include:
@@ -91,43 +111,38 @@ one-shot PR report data.
 ## Findings Report to PR (Blocking)
 
 Template:
-- `.claude/skills/quality-management-gh/findings-report.md.j2`
+- `~/.atm/templates/quality-management-gh/findings-report.md.j2`
 
 Recommended flow:
 1. Gather findings from QA agents.
-2. Render markdown from the template with required variables.
+2. Render the installed template with required variables.
 3. When rechecking prior findings, include a resolved-findings section for
    items closed since the previous pass.
 4. Post to the PR as a blocking review or status comment.
 
 Suggested commands:
 - blocking review:
-  `sc-compose render --root .claude/skills/quality-management-gh --file findings-report.md.j2 --var-file <vars.json> | gh pr review <PR> --request-changes --body-file -`
+  `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr review <PR> --request-changes --body-file -`
 - in-flight update:
-  `sc-compose render --root .claude/skills/quality-management-gh --file findings-report.md.j2 --var-file <vars.json> | gh pr comment <PR> --body-file -`
-
-Fallback when render fails:
-- post plain markdown preserving the same machine-status fields
-
-`<vars.json>` must be a flat JSON map of strings for `sc-compose`.
-Use raw JSON strings for array-valued machine-status fields, for example:
-- `blocking_ids_json: "[\"QA-001\"]"`
-
-Use numeric strings for count fields so the templates can render them as JSON
-numbers without quotes.
+  `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr comment <PR> --body-file -`
+- ATM verdict:
+  `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
 
 ## Final Quality Report to PR (Closeout)
 
 Template:
-- `.claude/skills/quality-management-gh/quality-report.md.j2`
+- `~/.atm/templates/quality-management-gh/quality-report.md.j2`
 
 Recommended flow:
 1. Confirm final QA pass and summarize validation scope.
-2. Render markdown from the template with required variables.
+2. Render the installed template with required variables.
 3. Post as final closeout review or comment.
 
 Suggested command:
-- `sc-compose render --root .claude/skills/quality-management-gh --file quality-report.md.j2 --var-file <vars.json> | gh pr review <PR> --approve --body-file -`
+- PR closeout:
+  `atm compose --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr review <PR> --approve --body-file -`
+- ATM verdict:
+  `atm send team-lead --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
 
 Use the final template only for `PASS` closeout.
 
