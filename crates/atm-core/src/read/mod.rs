@@ -13,11 +13,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
-use crate::boundary::{self, RosterEntry};
-use crate::caller_context::{
-    CallerContext, canonicalize_caller_context, resolve_roster_alias,
-    resolve_roster_alias_with_owner,
-};
+use crate::boundary;
 use crate::error::AtmError;
 use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
@@ -43,24 +39,18 @@ pub use request::{
 /// request reaches either reader implementation. This covers the caller,
 /// owner target, and sender filter, leaving durable mailbox keys and audit
 /// records in canonical ATM identity form.
-pub fn canonicalize_roster_aliases<F>(query: &mut ReadQuery, roster_for_team: F)
+pub fn canonicalize_roster_aliases<F>(query: &mut ReadQuery, mut resolve_member: F)
 where
-    F: Fn(&TeamName) -> Vec<RosterEntry>,
+    F: FnMut(&TeamName, &AgentName, bool) -> Option<(TeamName, AgentName)>,
 {
     let original_caller = query.caller_identity.clone();
-    let caller_roster = roster_for_team(&query.caller_team);
-    let caller = canonicalize_caller_context(
-        CallerContext {
-            caller_identity: query.caller_identity.clone(),
-            caller_chat_id: query.caller_chat_id.clone(),
-            caller_team: query.caller_team.clone(),
-            activity_observation: query.activity_observation.clone(),
-        },
-        &caller_roster,
-    );
-    query.caller_identity = caller.caller_identity;
-    query.caller_chat_id = caller.caller_chat_id;
-    query.activity_observation = caller.activity_observation;
+    if let Some((team, member)) = resolve_member(&query.caller_team, &query.caller_identity, true) {
+        if member != query.caller_identity {
+            query.activity_observation = None;
+        }
+        query.caller_team = team;
+        query.caller_identity = member;
+    }
     if let Some(participant) = query.mailbox.participant_filter.as_mut()
         && participant.agent == original_caller
     {
@@ -73,100 +63,33 @@ where
         .as_ref()
         .and_then(|address| address.team().cloned())
         .unwrap_or_else(|| query.caller_team.clone());
-    let target_roster = roster_for_team(&target_team);
-    if let Some(target) = query.mailbox.target_address.as_ref() {
-        let canonical_target = resolve_roster_alias(target.agent(), &target_team, &target_roster);
-        if let Ok(canonical_address) = AgentAddress::new(
-            canonical_target,
-            target.chat_id().cloned(),
-            target.team().cloned(),
-            target.host().cloned(),
-        ) {
-            query.mailbox.target_address = Some(canonical_address);
-        }
-    }
-    if let Some(sender) = query.mailbox.sender_filter.as_mut() {
-        *sender = resolve_roster_alias(sender, &target_team, &target_roster);
-    }
-}
-
-/// Canonicalizes a mailbox request at daemon ingress using the complete RAM
-/// roster mirror.  A bare roster alias may select its owning team; an
-/// explicit `@team` remains constrained to that team's roster.
-pub fn canonicalize_roster_aliases_at_ingress<F, G>(
-    query: &mut ReadQuery,
-    roster_for_team: F,
-    all_rosters: G,
-) where
-    F: Fn(&TeamName) -> Vec<RosterEntry>,
-    G: FnOnce() -> Vec<RosterEntry>,
-{
-    let all_rosters = all_rosters();
-    let original_caller = query.caller_identity.clone();
-    let caller_roster = roster_for_team(&query.caller_team);
-    let (caller_team, caller_identity) = resolve_roster_alias_with_owner(
-        &query.caller_identity,
-        &query.caller_team,
-        &caller_roster,
-        &all_rosters,
-        true,
-    );
-    if caller_identity != query.caller_identity {
-        query.activity_observation = None;
-    }
-    query.caller_identity = caller_identity;
-    query.caller_team = caller_team;
-    if let Some(participant) = query.mailbox.participant_filter.as_mut()
-        && participant.agent == original_caller
-    {
-        participant.agent = query.caller_identity.clone();
-    }
-
     let explicit_team = query
         .mailbox
         .target_address
         .as_ref()
         .is_some_and(|address| address.team().is_some());
-    let target_team = query
-        .mailbox
-        .target_address
-        .as_ref()
-        .and_then(|address| address.team().cloned())
-        .unwrap_or_else(|| query.caller_team.clone());
-    let target_roster = roster_for_team(&target_team);
-    if let Some(target) = query.mailbox.target_address.as_ref() {
-        let (resolved_team, canonical_target) = resolve_roster_alias_with_owner(
-            target.agent(),
-            &target_team,
-            &target_roster,
-            &all_rosters,
-            !explicit_team,
-        );
-        if let Ok(canonical_address) = AgentAddress::new(
-            canonical_target,
+    if let Some(target) = query.mailbox.target_address.as_ref()
+        && let Some((team, member)) = resolve_member(&target_team, target.agent(), !explicit_team)
+        && let Ok(canonical_address) = AgentAddress::new(
+            member,
             target.chat_id().cloned(),
-            Some(resolved_team.clone()),
+            Some(team),
             target.host().cloned(),
-        ) {
-            query.mailbox.target_address = Some(canonical_address);
-        }
+        )
+    {
+        query.mailbox.target_address = Some(canonical_address);
     }
-    if let Some(sender) = query.mailbox.sender_filter.as_mut() {
-        let (_, canonical_sender) = resolve_roster_alias_with_owner(
-            sender,
-            &target_team,
-            &target_roster,
-            &all_rosters,
-            !explicit_team,
-        );
-        *sender = canonical_sender;
+    if let Some(sender) = query.mailbox.sender_filter.as_mut()
+        && let Some((_, member)) = resolve_member(&target_team, sender, !explicit_team)
+    {
+        *sender = member;
     }
 }
 
 /// Canonicalizes a read-only peek request through the same ingress resolver.
-pub fn canonicalize_peek_roster_aliases<F>(query: &mut PeekQuery, roster_for_team: F)
+pub fn canonicalize_peek_roster_aliases<F>(query: &mut PeekQuery, resolve_member: F)
 where
-    F: Fn(&TeamName) -> Vec<RosterEntry>,
+    F: FnMut(&TeamName, &AgentName, bool) -> Option<(TeamName, AgentName)>,
 {
     let mut read = ReadQuery {
         mailbox: query.mailbox.clone(),
@@ -176,32 +99,9 @@ where
         seen_state_update: false,
         activity_observation: None,
     };
-    canonicalize_roster_aliases(&mut read, roster_for_team);
+    canonicalize_roster_aliases(&mut read, resolve_member);
     query.mailbox = read.mailbox;
     query.caller_identity = read.caller_identity;
-}
-
-/// Applies daemon-ingress roster resolution to a peek request.
-pub fn canonicalize_peek_roster_aliases_at_ingress<F, G>(
-    query: &mut PeekQuery,
-    roster_for_team: F,
-    all_rosters: G,
-) where
-    F: Fn(&TeamName) -> Vec<RosterEntry>,
-    G: FnOnce() -> Vec<RosterEntry>,
-{
-    let mut read = ReadQuery {
-        mailbox: query.mailbox.clone(),
-        caller_identity: query.caller_identity.clone(),
-        caller_chat_id: query.caller_chat_id.clone(),
-        caller_team: query.caller_team.clone(),
-        seen_state_update: false,
-        activity_observation: None,
-    };
-    canonicalize_roster_aliases_at_ingress(&mut read, roster_for_team, all_rosters);
-    query.mailbox = read.mailbox;
-    query.caller_identity = read.caller_identity;
-    query.caller_team = read.caller_team;
 }
 
 /// Bucket counts for one classified mailbox surface.
@@ -297,7 +197,9 @@ fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<ReadOutcome, AtmError> {
-    canonicalize_peek_roster_aliases(&mut query, |team| runtime.load_team_roster(team));
+    canonicalize_peek_roster_aliases(&mut query, |team, member, allow_database_wide_alias| {
+        runtime.resolve_roster_member_at_ingress(team, member, allow_database_wide_alias)
+    });
     let synthesized = ReadQuery {
         mailbox: query.mailbox,
         caller_identity: query.caller_identity,
@@ -363,7 +265,9 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<ReadOutcome, AtmError> {
-    canonicalize_roster_aliases(&mut query, |team| runtime.load_team_roster(team));
+    canonicalize_roster_aliases(&mut query, |team, member, allow_database_wide_alias| {
+        runtime.resolve_roster_member_at_ingress(team, member, allow_database_wide_alias)
+    });
     let ReadRuntimeContext {
         actor,
         actor_team,
@@ -908,8 +812,7 @@ mod tests {
 
     use super::{
         BucketCounts, ClassifiedMessage, PeekQuery, ReadQuery, canonicalize_roster_aliases,
-        canonicalize_roster_aliases_at_ingress, metadata_selection, peek_mail_with_runtime_impl,
-        read_mail_with_runtime_impl, state,
+        metadata_selection, peek_mail_with_runtime_impl, read_mail_with_runtime_impl, state,
     };
     use crate::boundary::{self, MessageKey, RosterEntry, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
@@ -935,7 +838,7 @@ mod tests {
         let team = TeamName::from_validated(TEST_TEAM);
         let mut metadata_json = Map::new();
         metadata_json.insert("alias".to_owned(), Value::String("atm-lead".to_owned()));
-        let roster = vec![RosterEntry {
+        let roster = [RosterEntry {
             team_name: team.clone(),
             agent_name: AgentName::from_validated(ROLE_TEAM_LEAD),
             member_kind: RosterMemberKind::Permanent,
@@ -963,7 +866,16 @@ mod tests {
         )
         .expect("query");
 
-        canonicalize_roster_aliases(&mut query, |_| roster.clone());
+        canonicalize_roster_aliases(&mut query, |_, candidate, _| {
+            roster
+                .iter()
+                .find(|member| {
+                    member.agent_name == *candidate
+                        || member.metadata_json.get("alias").and_then(Value::as_str)
+                            == Some(candidate.as_str())
+                })
+                .map(|member| (member.team_name.clone(), member.agent_name.clone()))
+        });
 
         assert_eq!(query.caller_identity.as_str(), ROLE_TEAM_LEAD);
         assert_eq!(
@@ -1026,17 +938,19 @@ mod tests {
             None,
         )
         .expect("bare query");
-        canonicalize_roster_aliases_at_ingress(
-            &mut bare,
-            |team| {
-                if *team == local_team {
-                    local.clone()
-                } else {
-                    remote.clone()
-                }
-            },
-            || all.clone(),
-        );
+        canonicalize_roster_aliases(&mut bare, |team, candidate, allow_database_wide_alias| {
+            let addressed = if *team == local_team { &local } else { &remote };
+            let (resolved_team, canonical) = crate::caller_context::resolve_roster_alias_with_owner(
+                candidate,
+                team,
+                addressed,
+                &all,
+                allow_database_wide_alias,
+            );
+            all.iter()
+                .any(|member| member.team_name == resolved_team && member.agent_name == canonical)
+                .then_some((resolved_team, canonical))
+        });
         assert_eq!(
             bare.mailbox
                 .target_address
@@ -1058,16 +972,24 @@ mod tests {
                 .parse()
                 .expect("explicit address"),
         );
-        canonicalize_roster_aliases_at_ingress(
+        canonicalize_roster_aliases(
             &mut explicit,
-            |team| {
-                if *team == local_team {
-                    local.clone()
-                } else {
-                    remote.clone()
-                }
+            |team, candidate, allow_database_wide_alias| {
+                let addressed = if *team == local_team { &local } else { &remote };
+                let (resolved_team, canonical) =
+                    crate::caller_context::resolve_roster_alias_with_owner(
+                        candidate,
+                        team,
+                        addressed,
+                        &all,
+                        allow_database_wide_alias,
+                    );
+                all.iter()
+                    .any(|member| {
+                        member.team_name == resolved_team && member.agent_name == canonical
+                    })
+                    .then_some((resolved_team, canonical))
             },
-            || all,
         );
         assert_eq!(
             explicit

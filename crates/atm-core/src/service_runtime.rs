@@ -293,6 +293,23 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         agent: &AgentName,
     ) -> Option<crate::boundary::RosterEntry>;
     fn load_team_roster(&self, team: &TeamName) -> Vec<crate::boundary::RosterEntry>;
+
+    /// Validates a member token against the immutable roster and returns the
+    /// canonical member that downstream code must use. Implementations that
+    /// own the complete RAM mirror may also resolve an unqualified alias in
+    /// another team.
+    fn resolve_roster_member_at_ingress(
+        &self,
+        addressed_team: &TeamName,
+        candidate: &AgentName,
+        _allow_database_wide_alias: bool,
+    ) -> Option<(TeamName, AgentName)> {
+        let roster = self.load_team_roster(addressed_team);
+        let canonical =
+            crate::caller_context::resolve_roster_alias(candidate, addressed_team, &roster);
+        self.load_roster_member(addressed_team, &canonical)
+            .map(|_| (addressed_team.clone(), canonical))
+    }
 }
 
 #[derive(Clone)]
@@ -680,6 +697,34 @@ impl LocalServiceRuntime {
         self.roster_runtime.list_teams()
     }
 
+    /// Validates one ingress member token against the daemon's immutable RAM
+    /// roster and returns its owning team plus canonical name. A bare alias
+    /// may select its owner globally; an explicit team remains local.
+    #[must_use]
+    pub fn resolve_roster_member_at_ingress(
+        &self,
+        addressed_team: &TeamName,
+        candidate: &AgentName,
+        allow_database_wide_alias: bool,
+    ) -> Option<(TeamName, AgentName)> {
+        let addressed_roster = self.load_team_roster(addressed_team);
+        let all_rosters = allow_database_wide_alias.then(|| {
+            self.list_roster_teams()
+                .into_iter()
+                .flat_map(|team| self.load_team_roster(&team))
+                .collect::<Vec<_>>()
+        });
+        let (team, canonical) = crate::caller_context::resolve_roster_alias_with_owner(
+            candidate,
+            addressed_team,
+            &addressed_roster,
+            all_rosters.as_deref().unwrap_or(&[]),
+            allow_database_wide_alias,
+        );
+        self.load_roster_member(&team, &canonical)
+            .map(|_| (team, canonical))
+    }
+
     /// Reads one member's ephemeral (non-durable) roster state from RAM.
     /// Returns `None` when the member is not present in the current roster
     /// snapshot.
@@ -947,6 +992,20 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
 
     fn load_team_roster(&self, team: &TeamName) -> Vec<crate::boundary::RosterEntry> {
         Self::load_team_roster(self, team)
+    }
+
+    fn resolve_roster_member_at_ingress(
+        &self,
+        addressed_team: &TeamName,
+        candidate: &AgentName,
+        allow_database_wide_alias: bool,
+    ) -> Option<(TeamName, AgentName)> {
+        Self::resolve_roster_member_at_ingress(
+            self,
+            addressed_team,
+            candidate,
+            allow_database_wide_alias,
+        )
     }
 
     fn deliver_non_claude_payloads(

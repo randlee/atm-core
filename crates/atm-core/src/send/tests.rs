@@ -10,7 +10,7 @@ use tempfile::tempdir;
 
 use super::{
     ResolvedRecipient, SendExecutionContext, WarningEntry, build_send_delivery_plan,
-    persist_message, prepare_threaded_message,
+    persist_message, prepare_send_context, prepare_threaded_message,
 };
 use crate::boundary::{
     HerdrNudgeTarget, LocalSteerTarget, LocalTmuxNudgeTarget, MailMessageState,
@@ -217,6 +217,28 @@ impl RetainedServiceRuntime for TestRuntime {
             self.recipient_harness,
         )]
     }
+
+    fn resolve_roster_member_at_ingress(
+        &self,
+        addressed_team: &TeamName,
+        candidate: &AgentName,
+        allow_database_wide_alias: bool,
+    ) -> Option<(TeamName, AgentName)> {
+        let addressed = self.load_team_roster(addressed_team);
+        let all = self
+            .team_roster_override
+            .clone()
+            .unwrap_or_else(|| addressed.clone());
+        let (team, member) = crate::caller_context::resolve_roster_alias_with_owner(
+            candidate,
+            addressed_team,
+            &addressed,
+            &all,
+            allow_database_wide_alias,
+        );
+        self.load_roster_member(&team, &member)
+            .map(|_| (team, member))
+    }
 }
 
 fn roster_entry(agent_name: AgentName, harness: DeliveryHarnessPath) -> RosterEntry {
@@ -338,6 +360,91 @@ impl RetainedMailboxRuntime for TestRuntime {
             .push(state);
         Ok(())
     }
+}
+
+#[test]
+fn write_ingress_carries_canonical_roster_members_forward() {
+    let root = tempdir().expect("root");
+    let team = TeamName::from_validated(TEST_TEAM);
+    let roster = [("sender", "sender-alias"), ("recipient", "recipient-alias")]
+        .into_iter()
+        .map(|(name, alias)| {
+            let mut metadata_json = Map::new();
+            metadata_json.insert(
+                "alias".to_owned(),
+                serde_json::Value::String(alias.to_owned()),
+            );
+            RosterEntry {
+                team_name: team.clone(),
+                agent_name: AgentName::from_validated(name),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: crate::schema::AgentType::Worker,
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json,
+            }
+        })
+        .collect();
+    let runtime = TestRuntime {
+        team_roster_override: Some(roster),
+        ..TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode)
+    };
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("sender-alias");
+    request.to = Some("recipient-alias".parse().expect("alias target"));
+
+    let context = prepare_send_context(&runtime, &mut request).expect("admitted context");
+
+    assert_eq!(request.caller_identity.as_str(), "sender");
+    assert_eq!(context.canonical_sender.as_str(), "sender");
+    assert_eq!(context.recipient.agent.as_str(), "recipient");
+}
+
+#[test]
+fn write_ingress_resolves_a_bare_alias_to_its_remote_owner() {
+    let root = tempdir().expect("root");
+    let local_team = TeamName::from_validated(TEST_TEAM);
+    let remote_team = TeamName::from_validated("remote-team");
+    let mut alias_metadata = Map::new();
+    alias_metadata.insert(
+        "alias".to_owned(),
+        serde_json::Value::String("remote-alias".to_owned()),
+    );
+    let runtime = TestRuntime {
+        team_roster_override: Some(vec![
+            RosterEntry {
+                team_name: local_team.clone(),
+                agent_name: AgentName::from_validated("sender"),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: crate::schema::AgentType::Worker,
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: Map::new(),
+            },
+            RosterEntry {
+                team_name: remote_team.clone(),
+                agent_name: AgentName::from_validated("recipient"),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: crate::schema::AgentType::Worker,
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: alias_metadata,
+            },
+        ]),
+        ..TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode)
+    };
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("sender");
+    request.caller_team = local_team;
+    request.to = Some("remote-alias".parse().expect("bare alias target"));
+
+    let context = prepare_send_context(&runtime, &mut request).expect("admitted context");
+
+    assert_eq!(context.recipient.team, remote_team);
+    assert_eq!(context.recipient.agent.as_str(), "recipient");
 }
 
 pub(super) fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {

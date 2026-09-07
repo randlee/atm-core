@@ -553,15 +553,14 @@ impl StorageAndNudgeRouter {
                 "async mailbox runtime was not installed at daemon startup",
             )
         })?;
-        atm_core::read::canonicalize_peek_roster_aliases_at_ingress(
+        atm_core::read::canonicalize_peek_roster_aliases(
             &mut query,
-            |team| self.service_runtime.load_team_roster(team),
-            || {
-                self.service_runtime
-                    .list_roster_teams()
-                    .into_iter()
-                    .flat_map(|team| self.service_runtime.load_team_roster(&team))
-                    .collect()
+            |team, member, allow_database_wide_alias| {
+                self.service_runtime.resolve_roster_member_at_ingress(
+                    team,
+                    member,
+                    allow_database_wide_alias,
+                )
             },
         );
         let command = atm_core::read::async_projection::prepare_async_peek(&query)?;
@@ -583,15 +582,14 @@ impl StorageAndNudgeRouter {
                 "async mailbox runtime was not installed at daemon startup",
             )
         })?;
-        atm_core::read::canonicalize_roster_aliases_at_ingress(
+        atm_core::read::canonicalize_roster_aliases(
             &mut query,
-            |team| self.service_runtime.load_team_roster(team),
-            || {
-                self.service_runtime
-                    .list_roster_teams()
-                    .into_iter()
-                    .flat_map(|team| self.service_runtime.load_team_roster(&team))
-                    .collect()
+            |team, member, allow_database_wide_alias| {
+                self.service_runtime.resolve_roster_member_at_ingress(
+                    team,
+                    member,
+                    allow_database_wide_alias,
+                )
             },
         );
         let command = atm_core::read::async_projection::prepare_async_read(&query)?;

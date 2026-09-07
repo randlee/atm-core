@@ -543,7 +543,7 @@ fn prepare_persisted_write<
     acknowledgement: Option<ResolvedAcknowledgement>,
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
-    let mut context = prepare_send_context(runtime, &request)?;
+    let mut context = prepare_send_context(runtime, &mut request)?;
     crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
@@ -614,7 +614,7 @@ async fn prepare_persisted_write_async(
     acknowledgement: Option<ResolvedAcknowledgement>,
     source_preflight: WriteSourcePreflight,
 ) -> Result<PreparedWrite, AtmError> {
-    let mut context = prepare_send_context(runtime, &request)?;
+    let mut context = prepare_send_context(runtime, &mut request)?;
     crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
