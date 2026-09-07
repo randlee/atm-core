@@ -967,7 +967,7 @@ Operator examples and safe repair guidance live in
 
 ### 3.3.2 Member Naming, Alias, And Herdr Agent Name
 
-Product requirement IDs: `REQ-ROSTER-NAME-001` through `REQ-ROSTER-NAME-009`.
+Product requirement IDs: `REQ-ROSTER-NAME-001` through `REQ-ROSTER-NAME-010`.
 
 Source rulings (Rand, 2026-09-07, verbatim): "the requirement comes from
 herdr agent name MUST be unique which means herdr agent name must be unique
@@ -1048,6 +1048,20 @@ Definitions:
   and the `--alias` remedy, so the operator reconstructs the team with
   aliases before it goes live in Herdr. `atm doctor` reports pre-existing
   duplicates for the caller's team as a finding.
+- `REQ-ROSTER-NAME-010` Alias parity at every CLI argument. Rand
+  (2026-09-07): "From any cli command accepting team-member name, alias must
+  be allowed AND substituted before sending over wire. i.e. atm send
+  team-lead-alias <message> || atm send team-lead-alias@team <message> or
+  any args i.e. --as team-lead-alias, --from team-lead-alias ..."; "basically
+  if all prompts are written for either member name or alias, it will work
+  the same". Every `atm` argument, option, or environment variable that
+  names a team member (positional recipients, `name@team` forms, `--as`,
+  `--from`, `--to`, member arguments of `atm teams`, nudge and doctor
+  targets, chat-id and qualified-identity forms) accepts the alias, and the
+  canonical name is substituted before the request leaves the CLI (HTTP
+  runtime request, peer wire, roster write, mailbox row). A prompt or
+  script written with aliases and the same prompt written with canonical
+  names produce identical wire payloads and identical persisted rows.
 
 The full permutation matrix and its test mapping live in
 `docs/plans/phase-ay/herdr-naming-test-matrix.md`.

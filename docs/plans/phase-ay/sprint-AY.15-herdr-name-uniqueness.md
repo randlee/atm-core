@@ -42,6 +42,12 @@ dependency_relations:
   names show up in database, hmux launch will certainly fail (hmux calls add
   member), so that should force team to be re-constructed before team can
   actually go live in herdr."
+- "From any cli command accepting team-member name, alias must be allowed
+  AND substituted before sending over wire.  i.e. atm send team-lead-alias
+  <message> || atm send team-lead-alias@team <message> or any args i.e. --as
+  team-lead-alias, --from team-lead-alias ..."
+- "basically if all prompts are written for either member name or alias, it
+  will work the same"
 
 Requirements text: `docs/requirements.md` §3.3.2 `REQ-ROSTER-NAME-001..008`.
 Permutation matrix: `docs/plans/phase-ay/herdr-naming-test-matrix.md`.
@@ -117,6 +123,12 @@ Every row marked **GAP** there is owed by this sprint, except D-13
   colliding with T1 (A-27), and succeed once T2's own conflict is aliased
   (A-28). `atm doctor` (team scope, existing pane-alias section) lists
   pre-existing duplicates for the caller's team.
+- D4c Alias parity (REQ-ROSTER-NAME-010, matrix D-15..D-17): inventory
+  every clap argument, option and env var in `crates/atm/src` that names a
+  member (write the inventory into matrix row D-15), route each through the
+  one ingress canonicalisation point, and add a parity test that runs each
+  entry with the canonical name and with the alias (bare and `@team`) and
+  asserts identical outbound request and persisted rows.
 - D5 `docs/requirements.md` §3.3.2 wording corrections only if the
   implementation forces one; quote Rand, never author a rule.
 - D6 Close AY14-QA-003: quality-mgr owns closure; reference the record in

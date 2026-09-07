@@ -88,6 +88,9 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | D-12 | self-send via own alias | rejected as self-send after replacement | **GAP** |
 | D-13 | alias@team.remote-host (cross-host) | forwarded unresolved; receiver ingress replaces | **GAP** — behaviour to confirm with Rand before test |
 | D-14 | alias used as `--chat-id`/qualified identity forms | canonical | **GAP** |
+| D-15 | inventory: every clap argument/option/env var in `crates/atm/src` that names a member, listed here by command and flag | each entry is exercised by D-16 | **GAP** — arch-ctm produces the inventory in this row's sub-table (REQ-ROSTER-NAME-010) |
+| D-16 | for every D-15 entry: run once with canonical name, once with alias (bare and `@team`) | identical outbound request/wire payload and identical persisted rows; observation attested to alias dropped | **GAP** (REQ-ROSTER-NAME-010; Rand: "if all prompts are written for either member name or alias, it will work the same") |
+| D-17 | `--from <alias>` and `--to <alias>` filters on read/peek/inbox | same result set as canonical | **GAP** (D-09 covers `--from` on read only) |
 
 ## E. Persistence (REQ-ROSTER-NAME-007, "never in the database")
 
