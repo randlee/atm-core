@@ -12,7 +12,7 @@ visibility = "trait_only"
 constructor = "none"
 
 [composition]
-roots = ["atm_daemon_bootstrap::replacement_handler", "atm_herdr::doctor_probe"]
+roots = ["atm_herdr::doctor_probe"]
 
 [ownership]
 io_owns = [
