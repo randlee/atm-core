@@ -156,7 +156,7 @@ impl HerdrDoctorProbe {
             HerdrError::ServerNotRunning => HerdrDoctorState::ServerNotRunning {
                 endpoint_named_by_herdr: None,
             },
-            HerdrError::ProtocolMismatch => HerdrDoctorState::ClientServerMismatch {
+            HerdrError::ProtocolMismatch { .. } => HerdrDoctorState::ClientServerMismatch {
                 client: None,
                 server: None,
             },
@@ -247,7 +247,9 @@ mod tests {
             crate::HerdrError::AgentNotRunning,
             crate::HerdrError::AgentPromptStalled,
             crate::HerdrError::ServerNotRunning,
-            crate::HerdrError::ProtocolMismatch,
+            crate::HerdrError::ProtocolMismatch {
+                message: String::new(),
+            },
             crate::HerdrError::Timeout,
             crate::HerdrError::InvalidAgentName,
             crate::HerdrError::EmptyAgentPrompt,
@@ -279,7 +281,12 @@ mod tests {
             );
         }
         assert!(matches!(
-            probe.state_for_error(crate::HerdrError::ProtocolMismatch, Duration::ZERO),
+            probe.state_for_error(
+                crate::HerdrError::ProtocolMismatch {
+                    message: String::new(),
+                },
+                Duration::ZERO,
+            ),
             HerdrDoctorState::ClientServerMismatch { .. }
         ));
     }

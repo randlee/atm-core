@@ -201,7 +201,9 @@ fn decode_envelope(output: &CommandOutput) -> Result<HerdrEnvelope, HerdrError> 
     } else {
         &output.stderr
     })
-    .map_err(|_| HerdrError::ProtocolMismatch)?;
+    .map_err(|error| HerdrError::ProtocolMismatch {
+        message: format!("failed to decode Herdr response: {error}"),
+    })?;
     let error = value.get("error").and_then(|error| {
         Some(HerdrErrorEnvelope {
             code: error.get("code")?.as_str()?.to_owned(),
@@ -246,5 +248,19 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn malformed_response_preserves_json_parse_diagnostic() {
+        let result = super::decode_envelope(&super::CommandOutput {
+            stdout: "{".to_owned(),
+            stderr: String::new(),
+            success: true,
+        });
+
+        match result {
+            Err(HerdrError::ProtocolMismatch { message }) => assert!(!message.is_empty()),
+            _ => panic!("malformed JSON must preserve a protocol mismatch diagnostic"),
+        }
     }
 }

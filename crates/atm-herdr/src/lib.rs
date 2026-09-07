@@ -95,7 +95,9 @@ pub enum HerdrError {
     AgentNotRunning,
     AgentPromptStalled,
     ServerNotRunning,
-    ProtocolMismatch,
+    ProtocolMismatch {
+        message: String,
+    },
     Timeout,
     InvalidAgentName,
     EmptyAgentPrompt,
@@ -144,12 +146,17 @@ impl From<HerdrError> for AtmError {
                 AtmErrorCode::HerdrPromptFailed,
                 "Herdr prompt stalled".to_owned(),
             ),
-            HerdrError::ServerNotRunning
-            | HerdrError::ProtocolMismatch
-            | HerdrError::TimedOut
-            | HerdrError::Timeout => (
+            HerdrError::ServerNotRunning | HerdrError::TimedOut | HerdrError::Timeout => (
                 AtmErrorCode::HerdrUnavailable,
                 "Herdr server is unavailable".to_owned(),
+            ),
+            HerdrError::ProtocolMismatch { message } => (
+                AtmErrorCode::HerdrUnavailable,
+                if message.is_empty() {
+                    "Herdr server is unavailable".to_owned()
+                } else {
+                    format!("Herdr protocol mismatch: {message}")
+                },
             ),
             HerdrError::ServerUnavailable { message, .. } => (
                 AtmErrorCode::HerdrUnavailable,
@@ -205,7 +212,7 @@ impl HerdrError {
             Self::AgentNotReady => "not_ready",
             Self::AgentPromptStalled => "prompt_stalled",
             Self::ServerNotRunning | Self::ServerUnavailable { .. } => "server_outage",
-            Self::ProtocolMismatch => "protocol_incompatible",
+            Self::ProtocolMismatch { .. } => "protocol_incompatible",
             Self::Timeout | Self::TimedOut => "timed_out",
             Self::InvalidAgentName => "invalid_target",
             Self::EmptyAgentPrompt => "invalid_prompt",
@@ -219,7 +226,7 @@ impl HerdrError {
         matches!(
             self,
             Self::ServerNotRunning
-                | Self::ProtocolMismatch
+                | Self::ProtocolMismatch { .. }
                 | Self::ServerUnavailable { .. }
                 | Self::TimedOut
         )
@@ -1184,7 +1191,12 @@ mod tests {
             ("agent_not_running", HerdrError::AgentNotRunning),
             ("agent_prompt_stalled", HerdrError::AgentPromptStalled),
             ("server_not_running", HerdrError::ServerNotRunning),
-            ("protocol_mismatch", HerdrError::ProtocolMismatch),
+            (
+                "protocol_mismatch",
+                HerdrError::ProtocolMismatch {
+                    message: String::new(),
+                },
+            ),
             ("timeout", HerdrError::Timeout),
             ("invalid_agent_name", HerdrError::InvalidAgentName),
             ("empty_agent_prompt", HerdrError::EmptyAgentPrompt),

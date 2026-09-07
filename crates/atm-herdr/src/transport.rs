@@ -163,7 +163,7 @@ pub(crate) fn list_from_envelope(envelope: HerdrEnvelope) -> Result<HerdrListOut
     let agents = result
         .get("agents")
         .and_then(Value::as_array)
-        .ok_or(HerdrError::ProtocolMismatch)?
+        .ok_or_else(|| protocol_mismatch("response did not contain an agents array"))?
         .iter()
         .map(snapshot_from_value)
         .collect::<Result<Vec<_>, _>>()?;
@@ -178,15 +178,15 @@ pub(crate) fn server_status_from_envelope(
     let version = result
         .get("version")
         .and_then(Value::as_str)
-        .ok_or(HerdrError::ProtocolMismatch)
+        .ok_or_else(|| protocol_mismatch("response did not contain a version"))
         .and_then(|version| {
-            HerdrVersion::parse(version).map_err(|_| HerdrError::ProtocolMismatch)
+            HerdrVersion::parse(version).map_err(|error| protocol_mismatch(error.to_string()))
         })?;
     let protocol = result
         .get("protocol")
         .and_then(Value::as_u64)
         .and_then(|protocol| u32::try_from(protocol).ok())
-        .ok_or(HerdrError::ProtocolMismatch)?;
+        .ok_or_else(|| protocol_mismatch("response did not contain a protocol number"))?;
     let live_handoff = result
         .get("capabilities")
         .and_then(Value::as_array)
@@ -216,7 +216,7 @@ fn snapshot_from_value(value: &Value) -> Result<AgentSnapshot, HerdrError> {
         .get("agent_status")
         .or_else(|| value.get("status"))
         .and_then(Value::as_str)
-        .ok_or(HerdrError::ProtocolMismatch)?;
+        .ok_or_else(|| protocol_mismatch("agent response did not contain a status"))?;
     Ok(AgentSnapshot {
         name: value.get("name").and_then(Value::as_str).map(str::to_owned),
         status: parse_status(status),
@@ -239,7 +239,7 @@ fn parse_status(status: &str) -> HerdrAgentStatus {
 
 fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
     let Some(error) = &envelope.error else {
-        return HerdrError::ProtocolMismatch;
+        return protocol_mismatch("response contained neither a result nor an error");
     };
     let message = error.message.clone();
     let retry_after = error.retry_after_ms.map(Duration::from_millis);
@@ -251,7 +251,7 @@ fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
         "agent_not_running" => HerdrError::AgentNotRunning,
         "agent_prompt_stalled" => HerdrError::AgentPromptStalled,
         "server_not_running" => HerdrError::ServerNotRunning,
-        "protocol_mismatch" => HerdrError::ProtocolMismatch,
+        "protocol_mismatch" => protocol_mismatch(&message),
         "timeout" => HerdrError::Timeout,
         "invalid_agent_name" => HerdrError::InvalidAgentName,
         "empty_agent_prompt" => HerdrError::EmptyAgentPrompt,
@@ -265,5 +265,11 @@ fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
             code: other.to_owned(),
             message,
         },
+    }
+}
+
+fn protocol_mismatch(message: impl Into<String>) -> HerdrError {
+    HerdrError::ProtocolMismatch {
+        message: message.into(),
     }
 }

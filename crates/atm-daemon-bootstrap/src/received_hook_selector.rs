@@ -1566,7 +1566,10 @@ mod tests {
         );
         assert_eq!(HerdrError::AgentNotReady.emission_outcome(), "not_ready");
         assert_ne!(
-            HerdrError::ProtocolMismatch.emission_outcome(),
+            HerdrError::ProtocolMismatch {
+                message: String::new(),
+            }
+            .emission_outcome(),
             "advisory_failure"
         );
         assert_eq!(HerdrError::TimedOut.emission_outcome(), "timed_out");
