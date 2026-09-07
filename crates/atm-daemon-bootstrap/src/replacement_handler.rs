@@ -361,7 +361,7 @@ fn resolve_herdr_process(
 mod tests {
     use atm_core::schema::HomeDirPath;
     use atm_core::team_admin::MemberSummary;
-    use atm_core::types::{AgentName, ModelName};
+    use atm_core::types::{AgentName, ModelName, TeamName};
     use atm_core::{HerdrSession, LocalMessageReceivedBackend, RosterHarness};
 
     use super::herdr_roster_groups;
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn herdr_roster_groups_deduplicate_sessions_and_preserve_member_ordinals() {
         let roster = atm_core::team_admin::MembersList {
-            team: "atm-dev".parse().expect("valid test team"),
+            team: TeamName::from_validated("test-team"),
             members: vec![
                 herdr_member("default-first", None),
                 herdr_member("beta", Some("beta")),

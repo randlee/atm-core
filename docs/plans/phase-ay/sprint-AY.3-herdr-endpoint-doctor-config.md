@@ -235,7 +235,6 @@ impl HerdrEndpointDisplay {
     pub fn from_relative(
         root: HerdrEndpointDisplayRoot,
         relative: &Path,
-        named_pipe: bool,
     ) -> Result<Self, AtmError>;
 
     pub fn as_str(&self) -> &str;
@@ -399,10 +398,10 @@ reduces it to a validated root plus relative components, and calls
 `from_relative`; an architecture pin permits this construction only in the
 atm-herdr sanitizer. The formatter emits `$XDG_CONFIG_HOME`, `$HOME`, or
 `%APPDATA%`; an explicit path outside those roots emits
-`<configured>/<file-name>`. The Windows `\\.\pipe\` prefix is retained after
-the path portion is sanitized. Custom deserialization accepts only those
-symbolic prefixes, and raw values remain transport inputs that never enter
-atm-core, JSON, human output, snapshots, or logs.
+`<configured>/<file-name>`. Custom deserialization accepts only those symbolic
+prefixes, and raw values remain transport inputs that never enter atm-core,
+JSON, human output, snapshots, or logs. Windows pipe and local-socket
+transport details are intentionally outside this DTO.
 
 ```json
 {

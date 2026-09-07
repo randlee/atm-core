@@ -24,6 +24,7 @@ mod tests {
     use crate::delivery_channel::{HerdrSession, LocalMessageReceivedBackend};
     use crate::schema::HomeDirPath;
     use crate::team_admin::{MemberSummary, MembersList};
+    use crate::test_support::TEST_TEAM;
     use crate::types::{AgentName, ModelName, TeamName};
 
     use super::herdr_is_configured;
@@ -49,7 +50,7 @@ mod tests {
 
     #[test]
     fn configured_is_derived_only_from_the_snapshot_backend_projection() {
-        let team = "atm-dev".parse::<TeamName>().expect("valid test team");
+        let team = TeamName::from_validated(TEST_TEAM);
         let absent = MembersList {
             team: team.clone(),
             members: vec![member("tmux-agent", None)],

@@ -1092,7 +1092,6 @@ mod tests {
             HerdrEndpointDisplay::from_relative(
                 HerdrEndpointDisplayRoot::Configured,
                 Path::new("herdr/socket"),
-                false,
             )
             .expect("safe endpoint")
         };
@@ -1177,7 +1176,6 @@ mod tests {
         let configured_endpoint = HerdrEndpointDisplay::from_relative(
             HerdrEndpointDisplayRoot::Configured,
             Path::new("private/socket"),
-            false,
         )
         .expect("safe endpoint");
         let version = HerdrVersion::parse("0.8.2").expect("valid version");
@@ -1224,7 +1222,6 @@ mod tests {
                         endpoint: HerdrEndpointDisplay::from_relative(
                             HerdrEndpointDisplayRoot::Configured,
                             Path::new("private/socket"),
-                            false,
                         )
                         .expect("safe endpoint"),
                     },
