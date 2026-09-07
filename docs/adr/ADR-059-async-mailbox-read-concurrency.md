@@ -122,6 +122,14 @@ retry-deadline exhaustion, and buffered depth to `atm doctor`. Operators can
 therefore distinguish a safely re-presented message from a runtime that has
 failed closed.
 
+### D6. Read JSON observation contract addendum
+
+`mutation_applied = true` reports acceptance into the state handoff, not
+durable completion. The returned message and bucket counts are the reader-lane
+snapshot and may be pre-handoff. Bare reads and exact-message reads share this
+contract. Consumers that need durable visibility poll `atm list --json` with a
+bounded deadline; they must not demand read-your-writes from a read response.
+
 ## Consequences
 
 * Read/list/peek/doctor/query capacity is independently bounded and can make

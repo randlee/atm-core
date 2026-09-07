@@ -1761,10 +1761,17 @@ Every list row must include:
 When `mutation_applied = true` and `message` is present:
 - `message.message_id` and `selected_message_id` must identify the same
   durable message
-- `bucket_counts` must reflect the mailbox state after the read-side mutation
-  completes
+- it means the read/seen transition was accepted by the supervised,
+  non-blocking read-state handoff; it does **not** mean that transition is
+  durable or visible in this response
+- `message.read` and `bucket_counts` are the reader-lane snapshot and MAY
+  still show the pre-handoff state. Both bare `atm read --json` and
+  `atm read --json --message-id <id>` use the same acceptance semantics.
+- consumers requiring durable visibility MUST poll `atm list --json` with a
+  bounded deadline. A handoff overflow or process exit leaves the message
+  unread/unseen and re-presented; `atm doctor` reports handoff degradation.
 - the read-side mutation contract is distinct from `atm ack`; read may mark a
-  message `read = true`, but only ack clears `pending_ack_at` and sets
+  message read after the handoff drains, but only ack clears `pending_ack_at` and sets
   `acknowledged_at`
 
 Human-readable `atm peek` and `atm read` output must render one message body
