@@ -98,7 +98,8 @@ P0 exit gate:
 - The first P2 infrastructure run is preserved with no reruns. Tier C passed
   6/6; Tier A passed 7/8 with A1 failed, Tier B passed 3/6 with B2a/B2b/B2c
   failed, and Tier D passed 5/6 with D7 failed. The prompt suite remains
-  unstarted until the authorized `suite/v2` full-matrix confirmation passes.
+  unstarted until the authorized `suite/v2` full-matrix confirmation passes
+  and HGC-023 supplies the missing AT8 calibration handoff.
 
 ## P1 — full review of the frozen Hermes fork
 
@@ -467,6 +468,7 @@ Every issue becomes a row before work continues.
 | HGC-020 | P2 | B2a/B2b/B2c byte-exact envelope checks failed on the first run | Testbed `expected_envelope` still uses `read atm --team` and gives Task a `<when>` element; ATM commit `b84a9d2ef0cb7a3911ffe84642cb3e6f05b033e9` changed the accepted contract to `atm read --message-id <MID>` and intentionally omits `<when>` for Task | Preserve the failed first-run JSON; Fenix authorized Loki to update only the testbed expectations, bump `suite/v2`, add the commit-attributed CATALOG entry, and run the full matrix once on the pinned image | confirmed testbed drift; repair authorized |
 | HGC-021 | P2 | D7 routing completed but its message-ID log grep failed | The test couples routing success to an obsolete observability serialization even though its own contract is roster metadata, successful dispatch, sent outcome, and Herdr reachability | Preserve the failed row; Fenix authorized Loki to assert the supported routing contract without requiring the ULID in that log record, then include D7 in the one full-matrix confirmation | confirmed testbed drift; repair authorized |
 | HGC-022 | P2 | A1 reports an accepted mutation handoff but the returned message and immediate list still show unread state | Phase AV deliberately removed read-your-writes: `mutation_applied` means the supervised handoff accepted the transition, while durability is asynchronous. The requirements 7.12 post-mutation-count sentence conflicts with requirements 7.13 and ADR-059 | Fenix/`arch-ctm` ruled no behavior change: correct the conflicting docs/tests separately; Loki may assert acceptance and then poll `atm list --json` to durable state with a bounded deadline, applying accepted-vs-durable to every read-state assertion | resolved contract; suite/v2 repair authorized |
+| HGC-023 | P2/P3 | AT8 requires the outer coordinator to derive Phase-B `--after` from the fixture agent's warm-up RTT, but exposes no value before Phase B | The prompt records `warmup_rtt_ms` only in its final report; `freeze-daemon.sh` exposes only armed/done markers, so the blocking coordinator has no executable calibration input | Keep prompts held. Add a sanitized integer calibration marker written after warm-up; the coordinator boundedly waits, validates it, computes `clamp(half RTT, 300, 1500)`, and passes that exact value to `freeze-daemon.sh`. Clear the marker before each run and document its success/failure markers | blocking harness/runbook gap; Fenix authorization requested |
 
 ## Stop/escalate decision table
 
