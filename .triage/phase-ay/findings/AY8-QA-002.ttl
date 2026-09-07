@@ -21,6 +21,7 @@
   triage:foundIn triage:AY8 ;
   triage:foundAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-002/ay8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-002/ay8-2> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY8-QA-002/ay8-1>
@@ -34,9 +35,28 @@
   triage:headSha "696bc1061" ;
   triage:occursIn <urn:atm:triage:worktree/ay8-696bc1061> .
 
+<urn:atm:triage:occurrence/AY8-QA-002/ay8-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/transport_fixture.rs" ;
+  triage:line 170 ;
+  triage:snippet "socket_fixture_matrix_covers_late_start_and_one_request_connections / socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read (partial matrix)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> ;
+  triage:note "quality-mgr qa-pr1280-r3: FakeHerdrSocket is now wired (no longer dead code) and exercised by every_manifest_is_equivalent_over_cli_and_socket_transports plus two new fixture tests covering: absent endpoint, late-start with server accepting after client dispatch, rejection of a second request on the same one-request connection, no-newline response, oversized (>1MiB) response, and stalled-read timeout+cancellation. Still missing from the required D7 scenario matrix: Windows pipe-busy retry under paused Tokio time, 16/17-caller permit-saturation proving resource release, cancellation specifically at the permit-wait and connect stages (only write/read-stage timeout is covered), and an AY.2-style version-recording replay run through the socket fixture. Finding stays open (blocking); this is real, substantial progress, not a rubber stamp." .
+
 <urn:atm:triage:worktree/ay8-696bc1061>
   a triage:WorktreeSnapshot ;
   triage:path "worktrees/feature/ay8-herdr-socket-transport" ;
   triage:branch "feature/ay8-herdr-socket-transport" ;
   triage:headSha "696bc1061" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ay8-26ea2806a>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r3" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:orderIndex 2 .

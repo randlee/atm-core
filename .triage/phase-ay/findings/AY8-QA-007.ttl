@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY8-QA-007>
+  a triage:Finding ;
+  triage:findingId "AY8-QA-007" ;
+  triage:title "syn dev-dependency added to atm-herdr for the AY8-QA-005 AST construction-site guard is not boundary-allowlisted; required Just lint (boundaries) CI check fails" ;
+  triage:description "commit f3731606b (fix round for AY8-QA-005) adds [dev-dependencies] syn.workspace = true to crates/atm-herdr/Cargo.toml so socket_construction_pin.rs can parse Rust source via syn::visit::Visit. boundaries/atm-herdr/herdr-process-adapter.toml's [dependencies] allowed_dependencies list (atm-core, tokio, serde_json) was never updated to include syn. Live reproduction: python3 .just/lint_boundaries.py at pin 26ea2806a fails with \"crates/atm-herdr/Cargo.toml [manifest-dependency-allowlist]: Cargo dependency 'syn' is not allowlisted\". Confirmed on live GitHub Actions: PR #1280, run 34086204073, job 101630670160 (\"Just lint (ubuntu-latest)\") = FAILURE at commit 26ea2806a. This is a required check; PR #1280 cannot merge to integrate/phase-ay while it fails." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "qa_round" ;
+  triage:category "ci-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T06:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY8 ;
+  triage:foundAt "2026-09-07T06:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-007/ay8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-007/ay8-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY8-QA-007/ay8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/Cargo.toml" ;
+  triage:snippet "[dev-dependencies]\nsyn.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> .
+
+<urn:atm:triage:occurrence/AY8-QA-007/ay8-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-herdr/herdr-process-adapter.toml" ;
+  triage:snippet "[dependencies]\nallowed_dependencies = [\"atm-core\", \"tokio\", \"serde_json\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> ;
+  triage:note "quality-mgr qa-pr1280-r3: discovered live during round-3 re-verification, not previously triaged. Fix is either (a) add syn to allowed_dependencies for this dev-only usage, or (b) move the AST-guard logic to a location/crate that already carries syn, or (c) gate the guard behind a workspace-level xtask/tool crate outside atm-herdr's own manifest. Any of these resolves both this finding and completes AY8-QA-005 sub-issue 4 cleanup in the same fix pass." .
+
+<urn:atm:triage:worktree/ay8-26ea2806a>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r3" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:orderIndex 1 .

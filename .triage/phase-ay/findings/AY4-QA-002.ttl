@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY4-QA-002>
+  a triage:Finding ;
+  triage:findingId "AY4-QA-002" ;
+  triage:title "No test coverage for L4 (connection reset during wait -> no duplicate prompt on unknown submission)" ;
+  triage:description "Sprint doc L4 requires: 'Connection resets during wait -> No automatic prompt retry or duplicate prompt; pending mail remains and queue wake re-nudges it', and A4 explicitly names 'L4 proves no duplicate prompt on unknown submission' as a required acceptance criterion. crates/atm-daemon-bootstrap/src/herdr_lifecycle_tests.rs contains ay4_l1_l2_missing_or_unavailable_herdr_does_not_stop_queue_wake, ay4_l3_l9_protocol_failure_recovers_on_the_first_success, ay4_l5_shutdown_stops_new_queue_wake_admissions, ay4_l7_notification_failure_keeps_durable_lead_mail, ay4_l10_l11_flapping_is_suppressed_but_restart_gets_one_new_claim -- no ay4_l4_* function or any other test anywhere in the changed-files list or a workspace-wide grep for duplicate_prompt/unknown_submission/UnknownSubmission exercises the L4 scenario. Independently re-verified by quality-mgr via `grep -rn` across crates/ against the pinned worktree at 296376da0, confirming req-qa's finding: L4/A4 has zero test coverage." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T23:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY4 ;
+  triage:foundAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY4-QA-002/AY4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY4-QA-002/AY4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/herdr_lifecycle_tests.rs" ;
+  triage:line 1 ;
+  triage:snippet "ay4_l1_l2_*, ay4_l3_l9_*, ay4_l5_*, ay4_l7_*, ay4_l10_l11_* present; no ay4_l4_* test function exists" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "296376da0" ;
+  triage:occursIn <urn:atm:triage:worktree/AY4/296376da0> .
+
+<urn:atm:triage:worktree/AY4/296376da0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay4-herdr-breaker-lifecycle" ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "296376da0" ;
+  triage:orderIndex 1 .
