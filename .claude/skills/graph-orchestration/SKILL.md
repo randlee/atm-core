@@ -297,9 +297,9 @@ Invalidation below).
 Findings live exclusively in `.triage/*/findings/*.ttl` and are managed by the
 triaging-findings skill. Do not append raw finding data to events.ttl.
 
-## sc-compose Integration
+## Template Dispatch
 
-`next-dev-task` returns JSON shaped for direct sc-compose consumption:
+`next-dev-task` returns JSON shaped for direct use as `atm send --vars` input:
 
 ```json
 {
@@ -333,6 +333,9 @@ must use this JSON to verify the rendered node and any assigned Blocking
 finding ids before editing.
 
 The orchestrator saves `vars` to a temp file and adds non-graph variables.
+Every assignment (dev, fix, QA) is sent with
+`atm send <agent> --template <template> --vars <json>`; that is the only
+sanctioned dispatch form.
 Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
 consulting triaging-findings:
 
@@ -353,10 +356,14 @@ SPRINT=$(echo "$RESULT" | jq -r .vars.sprint)
 # If blocking findings exist, use dev-fix.xml.j2; otherwise dev-task.xml.j2
 TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
 
-# Render via sc-compose (orchestrator supplies remaining vars)
-sc-compose render \
-  --file ".claude/skills/graph-orchestration/$TEMPLATE" \
-  --var-file /tmp/graph-vars.json \
+# Dispatch via atm send --template (orchestrator supplies remaining vars).
+# Always use this form; never render the template yourself and paste or
+# --stdin the output. To preview/validate the exact body first, run
+# `atm compose` with the same --template/--vars/--var arguments. The daemon-owned template admission path records the
+# template and vars structurally, so the dispatch is queryable from outside.
+atm send arch-ctm \
+  --template ".claude/skills/graph-orchestration/$TEMPLATE" \
+  --vars /tmp/graph-vars.json \
   --var task_id="GO-$(date +%s)" \
   --var worktree_path="$WORKTREE_PATH" \
   --var branch="$BRANCH" \
@@ -414,7 +421,7 @@ deviate if a finding is completely isolated to an early sprint with no
 forward merge dependency and re-merging would be higher churn than fixing
 in place.
 
-**CLEANUP branch variables for sc-compose:**
+**CLEANUP branch template variables (`atm send --template --vars`):**
 - `worktree_path` = highest-order sprint's worktree
 - `branch` = highest-order sprint's branch
 - `pr_target` = phase integration branch

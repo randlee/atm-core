@@ -1,6 +1,6 @@
 ---
 name: graph-dev-task
-version: 1.0.0
+version: 1.1.0
 description: Initial dev pass for a sprint node in graph-orchestration. No prior findings on this node.
 format: xml
 required_variables:
@@ -43,14 +43,15 @@ defaults:
     <step id="b">Before reading code or editing, update from `{{ pr_target }}` first (`git fetch origin && git merge origin/{{ pr_target }}`) so `{{ ttl_dir }}/events.ttl` reflects team-lead's latest writes, then run `.claude/skills/graph-orchestration/scripts/next-dev-task {{ phase_local }} {{ ttl_dir }}` and retain its JSON. Note: once team-lead appends this task's Assignment event, `{{ node_id }}` is "in-flight" and the cursor query correctly advances past it — do not expect `vars.sprint` to equal `{{ node_id }}`. Instead confirm directly against `{{ ttl_dir }}/events.ttl` that a `triage:Assignment` exists with `triage:ofSprint triage:{{ node_id }}` and `triage:assignedTo` naming you, and that no `triage:Completion` for `triage:{{ node_id }}` exists yet — that is what makes this a valid, currently-assigned task. With an empty `findings` array this is a new/greenfield sprint. Otherwise, `{{ finding_ids }}` must be non-empty and every listed id must appear in `findings` with severity `blocking`; any other result is an invalid assignment—stop and report it. The array is ordered Blocking, Important, Minor.</step>
     <step id="c">Read `{{ criteria_doc }}` before coding. This is the authoritative acceptance criteria for this node. Satisfy every criterion completely — do not weaken or skip any.</step>
     <step id="d">Update the worktree from `{{ pr_target }}` before any edits: `git fetch origin && git merge origin/{{ pr_target }}`.</step>
-    <step id="e">Implement the work. Commit incrementally on `{{ branch }}`.</step>
+    <step id="e">Create a private worktree-local task list for this node (not committed; keep it outside the tracked tree). Derive it from `{{ criteria_doc }}`: the deliverables D1..Dn in order, the acceptance tests, and final validation. Do not add items outside the sprint's scope.</step>
+    <step id="f">Set a `/goal` to complete all items in the task list. Work through the deliverables, acceptance tests, and final validation in order, updating the list as each item is actually verified (implemented, criterion re-read and satisfied, tests passing). Commit incrementally on `{{ branch }}` as items land. Report a real blocker to team-lead rather than dropping items.</step>
   </workflow>
 
   <final-actions>
     <step id="0">Critically review the sprint plan and your implementation. Read `{{ criteria_doc }}` again and confirm every acceptance criterion is fully and completely met. Do not proceed if any criterion is unresolved or partially met.</step>
     <step id="1">Run `{{ test_command }}` and confirm it passes with zero failures. Fix any failures before continuing — do not proceed with a failing test suite.</step>
     <step id="2">Commit all remaining changes and push to remote: `git push origin {{ branch }}`. Note the full commit SHA.</step>
-    <step id="3">Send a completion message to team-lead via ATM including: node `{{ node_id }}`, branch `{{ branch }}`, and the full commit SHA from the push. Do NOT append any triage events — team-lead handles all TTL event writes.</step>
+    <step id="3">Send a completion message to team-lead via ATM including: node `{{ node_id }}`, branch `{{ branch }}`, the full final commit SHA from the push, and confirmation that every task-list item is complete. Do NOT append any triage events — team-lead handles all TTL event writes.</step>
     <step id="4">Merge this branch into the next sprint worktree: from within the next sprint's worktree, run `git fetch origin && git merge origin/{{ branch }}`.</step>
   </final-actions>
 </atm-task>
