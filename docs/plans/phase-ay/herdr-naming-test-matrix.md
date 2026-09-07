@@ -42,6 +42,10 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | A-23 | T1:bob | daemon/HTTP member-add T2:bob, no alias | reject in the store, CLI not bypassable | **GAP** — check lives in `team_admin` only; must move into `save_roster` transaction (roster_store.rs:91) |
 | A-24 | T1:bob | restore/import a roster containing T2:bob | reject | **GAP** |
 | A-25 | T1:Bob | add T2:bob | accept, exact comparison, no case folding | **GAP** — document; Herdr grammar excludes uppercase anyway (B-03) |
+| A-26 | pre-upgrade db already holds T1:bob and T2:bob (no aliases) | open db, `atm members`/read paths | no error, no migration, rows unchanged | **GAP** (REQ-ROSTER-NAME-009) |
+| A-27 | same seed | add T2:carol (the hmux launch add-member) | reject naming (T1,bob)/(T2,bob) and `--alias` remedy; roster unchanged | **GAP** (REQ-ROSTER-NAME-009) |
+| A-28 | same seed | set T2:bob alias=bobby, then add T2:carol | both accept | **GAP** (REQ-ROSTER-NAME-009) |
+| A-29 | same seed | remove T2:bob, then add T2:carol | both accept | **GAP** (REQ-ROSTER-NAME-009) |
 
 ## B. Grammar (REQ-ROSTER-NAME-005)
 
@@ -103,6 +107,7 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | F-04 | pane without alias key / other team's pane | ignored | covered (commands/doctor.rs:346) |
 | F-05 | no `.atm.toml` | check skipped | covered (commands/doctor.rs:369) |
 | F-06 | `--all-teams` | check not widened | **GAP** |
+| F-07 | db holds duplicate effective names involving the caller's team | doctor lists each conflicting `(team, member)` pair and the `--alias` remedy | **GAP** (REQ-ROSTER-NAME-009) |
 
 ## G. Operator-facing errors (REQ-ROSTER-NAME-003)
 

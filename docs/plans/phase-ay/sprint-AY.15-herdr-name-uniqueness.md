@@ -38,6 +38,10 @@ dependency_relations:
   'unique-name' which would return alias ?? name."
 - "if the list of unique-name collides with a proposed alias ?? name, add
   member must fail"
+- "where we will run into issues are when upgrade occurs.  if non-unique
+  names show up in database, hmux launch will certainly fail (hmux calls add
+  member), so that should force team to be re-constructed before team can
+  actually go live in herdr."
 
 Requirements text: `docs/requirements.md` §3.3.2 `REQ-ROSTER-NAME-001..008`.
 Permutation matrix: `docs/plans/phase-ay/herdr-naming-test-matrix.md`.
@@ -103,6 +107,16 @@ Every row marked **GAP** there is owed by this sprint, except D-13
   synchronisation and a hard bounded deadline, never retries or widened
   timeouts. Update the matrix file: flip each row from **GAP** to
   `covered <test>` with path:line.
+- D4b Upgrade (REQ-ROSTER-NAME-009, matrix A-26..A-29, F-07): no
+  migration touches existing rows; a database seeded with duplicate
+  effective names opens and reads normally; the next roster write that
+  leaves a duplicate in place fails with the REQ-ROSTER-NAME-003 error
+  listing every conflicting pair; aliasing or removing one side clears it.
+  Because the check is on the written roster's unique_names against other
+  teams, a write to T2 must also fail while T2 itself still contains a row
+  colliding with T1 (A-27), and succeed once T2's own conflict is aliased
+  (A-28). `atm doctor` (team scope, existing pane-alias section) lists
+  pre-existing duplicates for the caller's team.
 - D5 `docs/requirements.md` §3.3.2 wording corrections only if the
   implementation forces one; quote Rand, never author a rule.
 - D6 Close AY14-QA-003: quality-mgr owns closure; reference the record in
@@ -121,7 +135,7 @@ Every row marked **GAP** there is owed by this sprint, except D-13
 - AC1 Every matrix row A-01..A-25 has a named passing test; A-06 and A-07
   fail on f6c9d47b8 and pass on the sprint head.
 - AC2 Every GAP row in sections B–G (minus D-13, B-08) has a named passing
-  test and the matrix file shows no remaining **GAP** except D-13/B-08.
+  test, A-26..A-29 and F-07 included, and the matrix file shows no remaining **GAP** except D-13/B-08.
 - AC3 `rg 'ensure_canonical_member_name_available|ensure_alias_available|validate_database_wide_aliases' crates/` returns nothing; the store transaction is the only enforcement point (A-23 test drives the store directly).
 - AC4 `just validate && cargo test -p atm-core -p atm -p atm-herdr -p atm-http-runtime -p atm-storage-rusqlite -p atm-daemon-bootstrap --all-features` green; fmt and clippy clean before every push.
 - AC5 Empty diff under `crates/atm-daemon/`.

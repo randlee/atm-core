@@ -967,7 +967,7 @@ Operator examples and safe repair guidance live in
 
 ### 3.3.2 Member Naming, Alias, And Herdr Agent Name
 
-Product requirement IDs: `REQ-ROSTER-NAME-001` through `REQ-ROSTER-NAME-008`.
+Product requirement IDs: `REQ-ROSTER-NAME-001` through `REQ-ROSTER-NAME-009`.
 
 Source rulings (Rand, 2026-09-07, verbatim): "the requirement comes from
 herdr agent name MUST be unique which means herdr agent name must be unique
@@ -1035,6 +1035,19 @@ Definitions:
 - `REQ-ROSTER-NAME-008` `.atm.toml` pane `alias` keys are spawner input
   only; `atm doctor` compares them with roster aliases for the caller's team
   as validation (§3.3), and nothing else in `atm-core` reads them.
+- `REQ-ROSTER-NAME-009` Upgrade. Rand (2026-09-07): "where we will run
+  into issues are when upgrade occurs. if non-unique names show up in
+  database, hmux launch will certainly fail (hmux calls add member), so that
+  should force team to be re-constructed before team can actually go live in
+  herdr." No migration rewrites, renames, aliases, or deletes existing roster
+  rows, and opening a database that already holds duplicate effective names
+  must not fail. The invariant is enforced on the next roster write: any
+  write (including the add-member call hmux makes at launch) whose resulting
+  roster still contains a duplicate effective name fails with the
+  `REQ-ROSTER-NAME-003` error naming every conflicting `(team, member)` pair
+  and the `--alias` remedy, so the operator reconstructs the team with
+  aliases before it goes live in Herdr. `atm doctor` reports pre-existing
+  duplicates for the caller's team as a finding.
 
 The full permutation matrix and its test mapping live in
 `docs/plans/phase-ay/herdr-naming-test-matrix.md`.
