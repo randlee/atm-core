@@ -121,3 +121,14 @@ Substitution point (Rand, 2026-09-07): daemon ingress against the in-memory rost
 | G-01 | A-03 error text | names conflicting team and member, states `--alias` remedy | covered (member_mutation.rs:1215) |
 | G-02 | A-06 error text | names the member that owns the alias and its team | **GAP** |
 | G-03 | error is identical from CLI and daemon paths | same code and message | **GAP** |
+
+## H. Open decision points (fenix critical review, 2026-09-07; awaiting Rand)
+
+| ID | Question | Default until ruled |
+|----|----------|---------------------|
+| H-01 | `atm teams add-member`/`set-member` write the roster store from the CLI; with substitution at daemon ingress, do they route through the daemon or carve out roster mutation? | AY.15 keeps roster mutation CLI-direct with the store's own resolution |
+| H-02 | bare canonical name of an aliased member used from a third team (two candidates, no unique_name match) | error requiring `@team` |
+| H-03 | pre-upgrade duplicate unique_names in teams already live in Herdr, no write pending | Herdr targeting skips the duplicated member with a log; doctor reports (F-07) |
+| H-04 | `set-member --alias` on a member live in Herdr renames its Herdr agent | reject while live |
+| H-05 | `.atm.toml [atm].aliases` is a CLI-side table resolved before roster aliases; conflicts with "cli doesn't need to query" | keep as-is in AY.15; retire in a follow-up if Rand agrees |
+| H-06 | "alias never in the database" scope | roster row holds it; message/ack/audit/task rows never do (§3.3.2 wording) |
