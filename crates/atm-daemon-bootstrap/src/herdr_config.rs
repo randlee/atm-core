@@ -106,6 +106,20 @@ mod tests {
     }
 
     #[test]
+    fn preserves_the_io_cause_when_the_config_file_is_unreadable() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let path = home.path().join(".atm.toml");
+        std::fs::create_dir(&path).expect("directory at config path");
+
+        let error =
+            daemon_herdr_client_config(&env_for(&home)).expect_err("directory is unreadable");
+
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+        assert!(error.detail().contains(path.to_str().expect("utf8 path")));
+        assert!(error.cause().is_some());
+    }
+
+    #[test]
     fn rejects_unknown_herdr_key_with_file_context() {
         let home = tempfile::tempdir().expect("tempdir");
         let path = home.path().join(".atm.toml");
