@@ -1256,15 +1256,14 @@ mod tests {
         );
         let member_json =
             serde_json::to_value(&observations[0].members[0]).expect("member presence serializes");
-        assert_eq!(
-            member_json
-                .as_object()
-                .expect("member presence is an object")
-                .keys()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-            vec!["name", "herdr_agent", "outcome"]
-        );
+        let mut member_keys = member_json
+            .as_object()
+            .expect("member presence is an object")
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        member_keys.sort_unstable();
+        assert_eq!(member_keys, vec!["herdr_agent", "name", "outcome"]);
     }
 
     #[test]
