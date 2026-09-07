@@ -47,7 +47,7 @@ complicated ceremony." Nothing in this plan may add ceremony back.
 
 | order | skill | who runs it | proves |
 | --- | --- | --- | --- |
-| 1 | `atm-setup-environment` | the ATM test agent | daemon answers, every expected team member is in the roster (adds missing ones), `atm doctor` has 0 errors, self round trip |
+| 1 | `atm-setup-environment` | the ATM test agent | daemon answers, every expected team member is in the roster (adds missing ones), `atm doctor` has 0 errors, self round trip, cross-host peer trust to the oversight host |
 | 2 | `atm-smoke` | the ATM test agent (CLI), then each Hermes agent (native) | send, list, read by id (count=1), read marks read, peek does not mutate, 5 s idle stale-connection probe, ack-required send to a partner and its ack |
 | 3 | `atm-hermes-ready` | the ATM test agent | Hermes agents in roster, graft receivers registered and fresh, each answers a ping with an ack |
 | 4 | `atm-nudge-roundtrip` | tester = ATM test agent, responder = Hermes agent | the hermes-atm path: ack-required send → nudge → native read by exact id → native ack → tester sees the ack and the pending-ack state clears |
@@ -172,8 +172,8 @@ on this list was part of that four hours.
    Product findings go to the open issues, not to this sprint.
 4. **Repeat step 2 on 1.5.7** after PR #1299 merges and Rand authorizes the local rollout. Expected:
    all PASS. Tag per the patch-bump-per-test rule.
-5. **Run in the testbed, as a cross-host peer.** The container starts in the testbed's peer mode
-   (`run.sh --peer <host-name>`): the container daemon and the host daemon trust each other as
+5. **Run in the testbed, as a cross-host peer.** Peer mode is the testbed default (`run.sh`; `--no-peer`
+   only for a deliberately walled run), configured from the start: the container daemon and the host daemon trust each other as
    peers, so the oversight agent on the host sends the seven sentences with
    `atm send <agent>@<team> --host <fixture-host>` and the seven reports arrive in its own inbox over
    ATM. No docker exec, no log scraping, no second channel: the fixture is one more host. The
