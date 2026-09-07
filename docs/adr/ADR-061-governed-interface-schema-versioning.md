@@ -24,7 +24,7 @@ optional parameter is a minor bump; breaking changes need explicit recorded
 approval; breaking changes that force every host to upgrade in lockstep are
 unacceptable; new capability must be expressed as optional arguments
 wherever possible; there is no 2.0, the HTTP wire as of v1.4.13 / 1.5.1 is
-defined as `1.1.0`; Herdr drifts outside our control and every Herdr
+defined as `1.1.0` before AY.15; Herdr drifts outside our control and every Herdr
 release at or above `HERDR_MINIMUM_VERSION` must stay supported; the SQLite
 schema gets the same scrutiny; "all should be managed by the same
 gates/rules"; "all have the potential to cause breaking changes on
@@ -95,10 +95,19 @@ migration functions directly.
   migrations already are: a pre-change fixture, the change, and a test that
   the older consumer still works.
 
+### D5. HTTP API version record
+
+- **2026-09-07 — AY.15:** `HTTP_API_VERSION` moves from `1.1.0` to `1.2.0`.
+  The additive doctor-presence field `herdr_agent` reports the durable
+  effective Herdr identity. It is optional when deserializing and omitted
+  when absent, so 1.2.0 readers accept 1.1.0 payloads and older readers may
+  ignore the new field. This is therefore a minor, backward-compatible bump.
+
 ## Consequences
 
-- `HTTP_API_VERSION` moves to `1.1.0` as the first act of the versioning
-  plan, defined as the current wire, and is bumped on every later change.
+- `HTTP_API_VERSION` first moved to `1.1.0` as the current wire, and AY.15
+  moves it to `1.2.0` for the additive doctor-presence field; it is bumped on
+  every later governed-interface change.
 - Herdr support becomes a matrix, not a single version; per-release
   conformance fixtures are required.
 - SQLite migrations gain a declared version and an explicit rollback test
