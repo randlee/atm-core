@@ -131,9 +131,17 @@ impl HerdrDoctorProbe {
             HerdrError::ServerNotRunning => HerdrDoctorState::ServerNotRunning {
                 endpoint_named_by_herdr: None,
             },
+            HerdrError::ProtocolMismatch => HerdrDoctorState::ClientServerMismatch {
+                client: None,
+                server: None,
+            },
             HerdrError::Timeout | HerdrError::TimedOut => {
                 HerdrDoctorState::ProbeTimedOut { after: elapsed }
             }
+            HerdrError::Advisory { code, .. } => HerdrDoctorState::UnexpectedResponse {
+                code: Some(code),
+                detail: "Herdr status query returned an unrecognized advisory response".to_owned(),
+            },
             error => HerdrDoctorState::UnexpectedResponse {
                 code: Some(error.emission_outcome().to_owned()),
                 detail: "Herdr status query did not return a supported response".to_owned(),
@@ -181,6 +189,8 @@ fn presence_for_error(error: HerdrError) -> HerdrPresenceOutcome {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::{HerdrDoctorProbe, presence_for_error, state_for_server};
     use atm_core::doctor::{HerdrDoctorState, HerdrPresenceOutcome, HerdrVersion};
 
@@ -198,6 +208,53 @@ mod tests {
         assert!(matches!(
             state_for_server(HerdrVersion::parse("0.7.9").expect("version"), 20),
             HerdrDoctorState::BelowMinimum { .. }
+        ));
+    }
+
+    #[test]
+    fn every_known_transport_error_maps_to_a_typed_doctor_state() {
+        let probe = HerdrDoctorProbe::new(Default::default());
+        let errors = vec![
+            crate::HerdrError::AgentBlocked,
+            crate::HerdrError::AgentNotFound,
+            crate::HerdrError::AgentNotReady,
+            crate::HerdrError::AgentTargetAmbiguous,
+            crate::HerdrError::AgentNotRunning,
+            crate::HerdrError::AgentPromptStalled,
+            crate::HerdrError::ServerNotRunning,
+            crate::HerdrError::ProtocolMismatch,
+            crate::HerdrError::Timeout,
+            crate::HerdrError::InvalidAgentName,
+            crate::HerdrError::EmptyAgentPrompt,
+            crate::HerdrError::ServerUnavailable {
+                message: "unavailable".to_owned(),
+                retry_after: None,
+            },
+            crate::HerdrError::InternalError {
+                message: "internal".to_owned(),
+            },
+            crate::HerdrError::TimedOut,
+            crate::HerdrError::Unavailable {
+                retry_after: Duration::from_secs(1),
+            },
+            crate::HerdrError::Advisory {
+                code: "future_code".to_owned(),
+                message: "future detail".to_owned(),
+            },
+        ];
+
+        for error in errors {
+            assert!(
+                !matches!(
+                    probe.state_for_error(error, Duration::from_millis(5)),
+                    HerdrDoctorState::Other { .. }
+                ),
+                "a closed HerdrError variant must not degrade to Other"
+            );
+        }
+        assert!(matches!(
+            probe.state_for_error(crate::HerdrError::ProtocolMismatch, Duration::ZERO),
+            HerdrDoctorState::ClientServerMismatch { .. }
         ));
     }
 

@@ -29,6 +29,10 @@ Purpose:
   codes (ADR-058 D8)
 - own the per-host `HerdrSpawnBreaker` circuit-breaker type
   (ADR-058 D10.1)
+- own the validated `HerdrClientConfig` and concrete `HerdrDoctorProbe`
+  public surface used by the daemon bootstrap's sealed endpoint-doctor
+  adapter; probe construction is pure, while its bounded status/member calls
+  map every closed `HerdrError` variant into core-owned typed observations
 - own a `test-utils`-gated fake adapter for use by every consumer crate's
   tests
 
