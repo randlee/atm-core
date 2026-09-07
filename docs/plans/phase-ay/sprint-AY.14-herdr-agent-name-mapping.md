@@ -169,6 +169,35 @@ rows, graft and cross-host envelopes all carry the canonical name only. No
 table gains an alias column and no query matches on the alias. A resolver
 that leaks the alias past the edge is a blocking finding.
 
+## Spawn-side alias source (Rand, 2026-09-07, verbatim)
+
+- "My concern really is every team launches w/ duplicate members.  how do
+  we manage this?"
+- "i do not want every member to have team appended to their name"
+- "ok, so this is an hmux issue for me.  other users (that don't use hmux)
+  would get a hard fail on launch"
+- "ok, let's add alias to .atm.toml on atm-core since this is the model
+  repo others follow."
+
+Decision as recorded: AC8 stays a reject (no automatic alias derivation).
+The alias for a shared role name is declared in the repo's `.atm.toml`, and
+atm-core's own `.atm.toml` is the model other repos copy. D8: add an
+optional `alias` key to each `[[rmux.windows.panes]]` entry and set it only
+on the roles that appear on many teams (`team-lead`, `quality-mgr`,
+`publisher`). Rand's chosen values for atm-core (2026-09-07, verbatim: "I
+would like alias's to be:  team-lead -> atm-lead, publisher ->
+atm-publisher, quality-mgr -> atm-quality"): `team-lead` ->
+`alias = "atm-lead"`, `quality-mgr` -> `alias = "atm-quality"`,
+`publisher` -> `alias = "atm-publisher"`. The `<identity>_<team>` convention
+above is a suggestion for other repos, not a rule. Members with unique names
+(`arch-ctm`, `cipher`, `fenix`) get none. `atm teams add-member` run from a
+repo whose `.atm.toml` declares an alias for that pane name uses it as the
+default `--alias` (explicit `--alias` overrides); spawners that pass
+`--alias` themselves (hmux) are unaffected. Document the key in
+docs/requirements.md next to the existing `[atm].aliases` rules, stating
+that the roster alias is the addressing alias and `[atm].aliases` remains
+CLI-only shorthand.
+
 ## Acceptance criteria
 
 - AC1 Members without `herdrAgent` behave exactly as before (existing
@@ -197,6 +226,10 @@ that leaks the alias past the edge is a blocking finding.
   call with a unique `--alias` succeeds; the first member of that name in
   the database is accepted without an alias. Same check on the daemon
   member-add path so the CLI cannot be bypassed.
+- AC9 atm-core `.atm.toml` declares `alias` on the team-lead, quality-mgr
+  and publisher panes only (`atm-lead`, `atm-quality`, `atm-publisher`); `add-member` picks the pane alias up as the
+  default when run from that repo root, and a test covers default,
+  explicit override, and no-alias-declared paths.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 
