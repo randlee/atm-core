@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-herdr/tests/, crates/atm-herdr/src/transport.rs, crates/atm-herdr/src/transport_cli.rs, docs/plans/phase-ay/sprint-AY.2-*.md D5/AC6" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-06T23:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY2 ;
@@ -25,6 +25,9 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-002/ay3-2-ay2qa002> ;
   triage:hasResolution <urn:atm:triage:resolution/AY2-QA-002/1> ;
   triage:hasResolution <urn:atm:triage:resolution/AY2-QA-002/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-002/3> ;
+  triage:closedAt "2026-09-07T00:25:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY2-QA-002/integrate-0-ay2qa002>
@@ -32,11 +35,11 @@
   triage:file "crates/atm-herdr/src/transport_cli.rs" ;
   triage:line 162 ;
   triage:snippet "fn decode_envelope - missing transport-seam tests" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
-  triage:headSha "d084bb2ff" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-ay-d084bb2ff> .
+  triage:headSha "c172f521b" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ay-c172f521b> .
 
 <urn:atm:triage:occurrence/AY2-QA-002/ay2-1-ay2qa002>
   a triage:Occurrence ;
@@ -67,6 +70,13 @@
   triage:branch "integrate/phase-ay" ;
   triage:headSha "d084bb2ff" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-ay-c172f521b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "c172f521b" ;
+  triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/ay2-9839b90c5>
   a triage:WorktreeSnapshot ;
@@ -113,3 +123,12 @@
   triage:fixBranch "feature/ay3-herdr-endpoint-doctor-config" ;
   triage:verifiedInRound "qa-pr1269-r3" ;
   triage:resolutionNote "feature/ay3-herdr-endpoint-doctor-config was rebased by gh stack sync onto #1269's current head, carrying feature/ay2-herdr-transport-seam's fix forward. Verified via git merge-base --is-ancestor origin/feature/ay2-herdr-transport-seam origin/feature/ay3-herdr-endpoint-doctor-config (YES at ay3 head 086319459) plus direct content checks on ay3's tree. No merge-forward action was pending; closing the ay3-2-ay2qa002 occurrence on that basis. The integrate-0-ay2qa002 occurrence (branch integrate/phase-ay itself) remains open until the AY2/AY3 stack actually merges into integrate/phase-ay; Finding-level status stays fixed_partial for that reason." .
+
+<urn:atm:triage:resolution/AY2-QA-002/3>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T00:25:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c172f521b" ;
+  triage:fixBranch "integrate/phase-ay" ;
+  triage:verifiedInRound "qa-pr1269-r4" ;
+  triage:resolutionNote "PR #1269 merged into integrate/phase-ay at 1195614ba (fenix), evidence-master update landed at c172f521b. Verified via git merge-base --is-ancestor 5e7dd50e13ea62ab27673a68c886b9c44af22593 HEAD (YES) plus direct grep of integrate/phase-ay's transport_fixture.rs confirming HerdrProcessInvoker/CliIo/decode_envelope are exercised by the fixture tests. The integrate-0-ay2qa002 occurrence is now closed on that basis; all three occurrences are closed and Finding-level status is fully fixed." .
