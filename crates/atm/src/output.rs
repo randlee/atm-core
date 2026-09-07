@@ -620,15 +620,32 @@ fn print_doctor_escalation_recipients(report: &DoctorReport) {
 }
 
 fn print_doctor_roster(report: &DoctorReport) {
-    let Some(roster) = &report.member_roster else {
-        return;
-    };
-    println!();
-    println!("Members: {}", roster.team);
+    print!(
+        "{}",
+        render_doctor_rosters(report.member_roster.as_ref(), &report.team_rosters)
+    );
+}
+
+fn render_doctor_rosters(
+    member_roster: Option<&atm_core::team_admin::MembersList>,
+    team_rosters: &[atm_core::team_admin::MembersList],
+) -> String {
+    let mut rendered = String::new();
+    if let Some(roster) = member_roster {
+        rendered.push_str(&render_doctor_roster_block(roster));
+    }
+    for roster in team_rosters {
+        rendered.push_str(&render_doctor_roster_block(roster));
+    }
+    rendered
+}
+
+fn render_doctor_roster_block(roster: &atm_core::team_admin::MembersList) -> String {
+    let mut rendered = format!("\nMembers: {}\n", roster.team);
     for member in &roster.members {
         let home_dir = member.home_dir.as_path().display().to_string();
-        println!(
-            "  {} | type={} harness={} model={} home_dir={} live_cwd={} pane={}",
+        rendered.push_str(&format!(
+            "  {} | type={} harness={} model={} home_dir={} live_cwd={} pane={}\n",
             member.name,
             empty_dash(&member.agent_type),
             member.harness,
@@ -636,8 +653,9 @@ fn print_doctor_roster(report: &DoctorReport) {
             empty_dash(&home_dir),
             empty_dash_opt(member.live_cwd.as_deref()),
             empty_dash_opt(member.tmux_pane_id.as_deref())
-        );
+        ));
     }
+    rendered
 }
 
 fn print_doctor_graft_receivers(report: &DoctorReport) {
@@ -1045,6 +1063,7 @@ mod tests {
         PeerConfigDoctorReport,
     };
     use atm_core::error_codes::AtmErrorCode;
+    use atm_core::team_admin::MembersList;
     use atm_core::types::HostName;
     use serde_json::json;
     use std::path::{Path, PathBuf};
@@ -1052,7 +1071,7 @@ mod tests {
 
     use super::{
         render_bootstrap_trace_section, render_doctor_herdr, render_doctor_peer_config,
-        render_send_stdout, render_warnings_to_stderr,
+        render_doctor_rosters, render_send_stdout, render_warnings_to_stderr,
     };
 
     #[test]
@@ -1084,6 +1103,22 @@ mod tests {
         assert!(rendered.contains("Remedy: Configure Herdr only if desired"));
         assert_eq!(json["endpoints"][0]["capabilities"]["live_handoff"], true);
         assert!(json["endpoints"][0].get("live_handoff").is_none());
+    }
+
+    #[test]
+    fn doctor_roster_rendering_prints_one_heading_per_team() {
+        let rosters = ["team-a", "team-b"]
+            .into_iter()
+            .map(|team| MembersList {
+                team: team.parse().expect("team"),
+                members: Vec::new(),
+            })
+            .collect::<Vec<_>>();
+        let rendered = render_doctor_rosters(None, &rosters);
+
+        assert_eq!(rendered.matches("Members: ").count(), 2);
+        assert!(rendered.contains("Members: team-a"));
+        assert!(rendered.contains("Members: team-b"));
     }
 
     #[test]

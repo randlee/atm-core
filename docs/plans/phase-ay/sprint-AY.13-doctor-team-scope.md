@@ -80,6 +80,10 @@ filesystem or from `~/.claude/teams/`.
 - D4 `crates/atm/src/output.rs`: text rendering prints one roster block per
   team in scope with the team name as the block heading; single-team output
   is unchanged.
+- D4a Supporting scope plumbing: `crates/atm/src/commands/members.rs`,
+  `crates/atm/src/commands/teams.rs`, and
+  `crates/atm-runtime/src/doctor_projection.rs` carry the all-teams query and
+  project each scoped roster without re-reading caller state.
 - D5 Tests (`crates/atm-core/src/doctor/` unit tests against the existing
   stub roster store, never the live database): single team unchanged;
   `all_teams` with three teams yields three roster sections and presence

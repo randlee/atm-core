@@ -408,6 +408,17 @@
       "args": [
         {
           "has_default": true,
+          "id": "all_teams",
+          "long": "all-teams",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
           "id": "json",
           "long": "json",
           "num_args": {

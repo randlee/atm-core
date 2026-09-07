@@ -11,8 +11,8 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::doctor::{
     DoctorExecutionContext, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
-    HerdrEndpointDoctor, ReaderPoolDoctorReport, RuntimeDoctorPorts, append_doctor_findings,
-    presence_findings, run_doctor_with_runtime_ports,
+    DoctorTeamScope, HerdrEndpointDoctor, ReaderPoolDoctorReport, RuntimeDoctorPorts,
+    append_doctor_findings, presence_findings_for_team, run_doctor_with_runtime_ports,
 };
 use atm_core::herdr_configured::herdr_is_configured;
 use atm_core::observability::ObservabilityPort;
@@ -95,12 +95,16 @@ impl StorageDoctorProjection {
         observability: Arc<dyn ObservabilityPort + Send + Sync>,
     ) -> Result<Self, AtmError> {
         if config.worker_count == 0 || config.queue_depth == 0 {
-            return Err(AtmError::validation(
+            return Err(AtmError::validation_with_recovery(
                 "doctor projection worker count and queue depth must be non-zero",
+                "configure at least one doctor worker and one queue slot, then restart the runtime.",
             ));
         }
         tokio::runtime::Handle::try_current().map_err(|_| {
-            AtmError::daemon_unavailable("doctor projection must start inside the Tokio runtime")
+            AtmError::daemon_unavailable_with_recovery(
+                "doctor projection must start inside the Tokio runtime",
+                "start the HTTP runtime under Tokio and retry the doctor request.",
+            )
         })?;
         let (sender, receiver) = tokio::sync::mpsc::channel(config.queue_depth);
         let endpoint_doctor = Arc::clone(&doctor_ports.herdr_endpoint);
@@ -134,8 +138,9 @@ impl DoctorProjection for StorageDoctorProjection {
         deadline: RequestDeadline,
     ) -> Result<DoctorReport, AtmError> {
         let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable(
+            AtmError::daemon_unavailable_with_recovery(
                 "doctor request deadline expired before control-lane admission",
+                "increase the request deadline or retry when the daemon is ready.",
             )
         })?;
         let (response, response_receiver) = tokio::sync::oneshot::channel();
@@ -143,24 +148,59 @@ impl DoctorProjection for StorageDoctorProjection {
             .try_send(DoctorJob { query, response })
             .map_err(|error| match error {
                 tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                    AtmError::daemon_connection_saturated("doctor control lane is saturated")
+                    AtmError::daemon_connection_saturated_with_recovery(
+                        "doctor control lane is saturated",
+                        "wait for an in-flight doctor request to finish, then retry.",
+                    )
                 }
                 tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-                    AtmError::daemon_unavailable("doctor control lane is unavailable")
+                    AtmError::daemon_unavailable_with_recovery(
+                        "doctor control lane is unavailable",
+                        "restart the HTTP runtime and retry the doctor request.",
+                    )
                 }
             })?;
         let mut report = tokio::time::timeout(remaining, response_receiver)
             .await
-            .map_err(|_| AtmError::daemon_unavailable("doctor request deadline expired"))?
-            .map_err(|_| AtmError::daemon_unavailable("doctor control lane stopped"))??;
-        if let Some(roster) = report.member_roster.clone() {
-            self.append_herdr_report(&mut report, &roster, deadline)
-                .await?;
-        } else {
+            .map_err(|_| {
+                AtmError::daemon_unavailable_with_recovery(
+                    "doctor request deadline expired",
+                    "increase the request deadline or retry when the daemon is ready.",
+                )
+            })?
+            .map_err(|_| {
+                AtmError::daemon_unavailable_with_recovery(
+                    "doctor control lane stopped",
+                    "restart the HTTP runtime and retry the doctor request.",
+                )
+            })??;
+        let rosters = report
+            .member_roster
+            .clone()
+            .into_iter()
+            .chain(report.team_rosters.clone())
+            .collect::<Vec<_>>();
+        if rosters.is_empty() {
             // Without a resolved team there is no Herdr-backed member to
             // inspect. This is a known, unconfigured state rather than a
             // guessed endpoint result.
             report.herdr.configured = Some(false);
+        } else {
+            let per_team_budget = deadline
+                .remaining()
+                .map(|remaining| remaining / rosters.len() as u32);
+            let scope = report.resolved_team_scope.clone();
+            for roster in rosters {
+                if deadline.expired() {
+                    append_deadline_finding(
+                        &mut report,
+                        "doctor request deadline expired before the next Herdr team projection",
+                    );
+                    break;
+                }
+                self.append_herdr_report(&mut report, &roster, &scope, deadline, per_team_budget)
+                    .await;
+            }
         }
         append_context_findings(&mut report, context);
         report.reader_lanes = self.reader_lanes;
@@ -173,35 +213,67 @@ impl StorageDoctorProjection {
         &self,
         report: &mut DoctorReport,
         roster: &atm_core::team_admin::MembersList,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError> {
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable("doctor request deadline expired before Herdr projection")
-        })?;
-        report.herdr.configured = Some(herdr_is_configured(roster));
-        match tokio::time::timeout(remaining, self.endpoint_doctor.observe(roster, deadline)).await
+        scope: &DoctorTeamScope,
+        caller_deadline: RequestDeadline,
+        budget: Option<std::time::Duration>,
+    ) {
+        let configured = herdr_is_configured(roster);
+        report.herdr.configured = Some(report.herdr.configured.unwrap_or(false) || configured);
+        let Some(remaining) = caller_deadline.remaining() else {
+            append_deadline_finding(
+                report,
+                "doctor request deadline expired before Herdr projection",
+            );
+            return;
+        };
+        let timeout_budget = budget.map_or(remaining, |budget| budget.min(remaining));
+        match tokio::time::timeout(
+            timeout_budget,
+            self.endpoint_doctor.observe(roster, caller_deadline),
+        )
+        .await
         {
             Ok(observations) => {
-                let findings = presence_findings(&observations);
-                report.herdr.endpoints = observations.into_iter().map(Into::into).collect();
+                let findings = if scope.is_all_teams() {
+                    presence_findings_for_team(&observations, &roster.team)
+                } else {
+                    atm_core::doctor::presence_findings(&observations)
+                };
+                report
+                    .herdr
+                    .endpoints
+                    .extend(observations.into_iter().map(Into::into));
                 append_doctor_findings(report, findings);
             }
             Err(_) => {
-                let finding = DoctorFinding {
-                    severity: DoctorSeverity::Warning,
-                    code: atm_storage::AtmErrorCode::DaemonUnavailable,
-                    message: "Herdr presence projection exceeded the doctor request deadline"
-                        .to_owned(),
-                    remediation: Some(
-                        "Inspect the Herdr service, then rerun `atm doctor`.".to_owned(),
-                    ),
-                };
+                let finding = herdr_deadline_finding();
                 report.herdr.error = Some(finding.clone());
                 append_doctor_findings(report, vec![finding]);
             }
         }
-        Ok(())
     }
+}
+
+fn herdr_deadline_finding() -> DoctorFinding {
+    DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: atm_storage::AtmErrorCode::DaemonUnavailable,
+        message: "Herdr presence projection exceeded its per-team doctor budget".to_owned(),
+        remediation: Some("Inspect the Herdr service, then rerun `atm doctor`.".to_owned()),
+    }
+}
+
+fn append_deadline_finding(report: &mut DoctorReport, message: &str) {
+    let finding = DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: atm_storage::AtmErrorCode::DaemonUnavailable,
+        message: message.to_owned(),
+        remediation: Some(
+            "Increase the doctor request deadline, then rerun `atm doctor`.".to_owned(),
+        ),
+    };
+    report.herdr.error = Some(finding.clone());
+    append_doctor_findings(report, vec![finding]);
 }
 
 fn append_context_findings(report: &mut DoctorReport, context: DoctorProjectionContext) {
@@ -273,7 +345,140 @@ async fn run_doctor_worker(
             )
         })
         .await
-        .map_err(|error| AtmError::daemon_unavailable(format!("doctor worker failed: {error}")));
+        .map_err(|error| {
+            AtmError::daemon_unavailable_with_recovery(
+                format!("doctor worker failed: {error}"),
+                "restart the HTTP runtime and retry the doctor request.",
+            )
+        });
         let _ = job.response.send(result.and_then(|report| report));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use atm_core::api::RequestDeadline;
+    use atm_core::doctor::{DoctorQuery, HerdrEndpointDoctor, RuntimeDoctorPorts};
+    use atm_core::observability::NullObservability;
+    use atm_core::team_admin::MembersList;
+    use atm_core::types::{AgentName, TeamName};
+    use atm_runtime_test_support::open_isolated_sqlite_boundary;
+    use atm_storage::{RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot};
+
+    use super::{
+        DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, StorageDoctorProjection,
+    };
+
+    #[derive(Clone)]
+    struct CountingEndpoint {
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for CountingEndpoint {}
+
+    impl HerdrEndpointDoctor for CountingEndpoint {
+        fn observe<'a>(
+            &'a self,
+            _roster: &'a MembersList,
+            _caller_deadline: RequestDeadline,
+        ) -> Pin<
+            Box<dyn Future<Output = Vec<atm_core::doctor::HerdrEndpointObservation>> + Send + 'a>,
+        > {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Vec::new() })
+        }
+    }
+
+    fn roster(team: &str) -> RosterSnapshot {
+        let team = TeamName::from_validated(team);
+        RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![RosterMember {
+                team_name: team,
+                agent_name: AgentName::from_validated("member"),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: atm_storage::AgentType::Worker,
+                model: Default::default(),
+                recipient_pane_id: None,
+                metadata_json: serde_json::Map::new(),
+            }],
+            refreshed_at: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn all_team_projection_aggregates_each_roster_through_the_async_loop() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-doctor-projection-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("temporary runtime root");
+        let assembly = open_isolated_sqlite_boundary(&root).expect("runtime assembly");
+        let roster_store = assembly.shared_roster_store_arc();
+        roster_store
+            .save_roster(&roster("team-a"))
+            .expect("team-a roster");
+        roster_store
+            .save_roster(&roster("team-b"))
+            .expect("team-b roster");
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let endpoint = Arc::new(CountingEndpoint {
+            calls: Arc::clone(&calls),
+        });
+        let ports = RuntimeDoctorPorts {
+            config_doctor: Arc::clone(&assembly.doctor_ports.config_doctor),
+            mail_store_doctor: Arc::clone(&assembly.doctor_ports.mail_store_doctor),
+            roster_store_doctor: Arc::clone(&assembly.doctor_ports.roster_store_doctor),
+            herdr_breaker: Arc::clone(&assembly.doctor_ports.herdr_breaker),
+            herdr_endpoint: endpoint,
+        };
+        let projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly.service_runtime.clone(),
+            ports,
+            Arc::new(NullObservability),
+        )
+        .expect("doctor projection");
+
+        let report = projection
+            .project(
+                DoctorQuery {
+                    home_dir: root.clone(),
+                    current_dir: root.clone(),
+                    all_teams: true,
+                    ..DoctorQuery::default()
+                },
+                DoctorProjectionContext::default(),
+                RequestDeadline::after(std::time::Duration::from_secs(5)),
+            )
+            .await
+            .expect("all-team projection");
+
+        assert_eq!(report.team_rosters.len(), 2);
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+
+        // Release every SQLite handle before deleting the root: Windows
+        // refuses to remove a directory whose files are still open. The
+        // worker tasks own port clones, so wait (bounded) for the aborted
+        // tasks to drop them before the assembly itself goes away.
+        drop(projection);
+        drop(roster_store);
+        let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while Arc::strong_count(&assembly.doctor_ports.roster_store_doctor) > 1 {
+            assert!(
+                std::time::Instant::now() < release_deadline,
+                "doctor workers still hold roster ports after 5s"
+            );
+            tokio::task::yield_now().await;
+        }
+        drop(assembly);
+        std::fs::remove_dir_all(root).expect("remove temporary runtime root");
     }
 }

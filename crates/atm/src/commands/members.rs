@@ -72,6 +72,7 @@ impl MembersCommand {
             home_dir,
             current_dir,
             team_override: Some(team.clone()),
+            all_teams: false,
             caller_team,
             caller_identity,
         };
