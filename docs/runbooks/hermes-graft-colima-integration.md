@@ -94,6 +94,9 @@ P0 exit gate:
   `b468321`; the peer authority, 4 CPU / 4 GiB Colima
   allocation, `suite/v2`, no-`sudo` marker protocol, and primary matrix are
   frozen.
+- The first P2 infrastructure run is preserved with no reruns. Tier C passed
+  6/6; A1, B2a, B2b, B2c, and D7 reported failures. The prompt suite remains
+  unstarted while the A1 contract conflict awaits architecture disposition.
 
 ## P1 — full review of the frozen Hermes fork
 
@@ -286,6 +289,33 @@ The current testbed catalog describes E1 as E0's acceptance shape but has no
 separate E1 prompt file. P0 must decide whether E0 is the Tier E live transcript
 or Loki will add a distinct E1 artifact before the run.
 
+### Current first-run disposition
+
+The `prerelease/v1.5.3` first run is evidence, not a tuning pass. Preserve its
+five failure rows and do not rerun until their dispositions are durable:
+
+- Tier C passed 6/6.
+- B2a, B2b, and B2c are testbed expectation drift. The accepted ATM templates
+  use `atm read --message-id <MID>` for every built-in nudge; the Task template
+  intentionally omits `<when>`, while Delivery and DeliveryAck retain it.
+- D7 routing passed its roster, send, no-`ATM_HERDR_UNAVAILABLE`, sent-outcome,
+  and post-send reachability checks. Its remaining failure is a testbed-only
+  assertion that the message ID appears in a particular daemon log shape; that
+  assertion is outside D7's documented routing contract.
+- A1 combines stale immediate-consistency assertions with an unresolved ATM
+  contract conflict. `R-STATE-HANDOFF-1` makes read-state persistence a
+  non-blocking handoff and `R-STATE-RACE-1` forbids requiring read-your-writes,
+  so the immediate `message.read == true` and immediately following
+  `unread == 0` assertions are not valid after Phase AV. However, the older
+  read-output invariant still says `mutation_applied == true` implies
+  post-mutation bucket counts, while the Tokio path uses that field for handoff
+  acceptance and returns the reader snapshot. Architecture must reconcile the
+  meaning before A1 changes.
+
+Fenix owns authorization to update the B2/D7 expectations and must dispatch
+the A1 contract question to `arch-ctm`. This runbook author makes no ATM product
+change and no synchronous-daemon change.
+
 ### Result handling
 
 Copy results out of the container into a new versioned directory without
@@ -379,6 +409,9 @@ Every issue becomes a row before work continues.
 | HGC-017 | P0/P2 | A stale host-side fixture roster row remained from the prior AT3 cycle | Cross-host fixture cleanup had awaited an ownership ruling | Rand authorized removal; Loki removed it and verified the host held-state list is empty before the new run | resolved |
 | HGC-018 | P2 | Cross-team fixture-member removal is rejected | ATM roster mutation is caller-team scoped | Run `atm teams remove-member` under the fixture member identity or another member of the fixture team, then verify absence with a sanitized roster/list check. This is an ATM authorization rule, not a Hermes fork defect | resolved rule; apply at teardown |
 | HGC-019 | P2 | First image reported ATM 1.4.6 despite a 1.5.3 override | Testbed `build.sh` selected the alphabetically first stale `atm_*` archive instead of the explicit override | Discard image `670edd12`; testbed commit `b468321` pins override artifacts exactly and purges stale archives. Accept only the rebuilt image whose in-container version triple and baked digests match P0 | resolved before test evidence |
+| HGC-020 | P2 | B2a/B2b/B2c byte-exact envelope checks failed on the first run | Testbed `expected_envelope` still uses `read atm --team` and gives Task a `<when>` element; current ATM uses `atm read --message-id <MID>` and intentionally omits `<when>` for Task | Preserve the failed first-run JSON; after Fenix authorization, update only the testbed expectations from the accepted built-in templates and run the affected confirmation once | confirmed testbed drift; awaiting authorization |
+| HGC-021 | P2 | D7 routing completed but its message-ID log grep failed | The test couples routing success to an obsolete observability serialization even though its own contract is roster metadata, successful dispatch, sent outcome, and Herdr reachability | Preserve the failed row; after Fenix authorization, assert the supported structured sent outcome without requiring the ULID in that log record | confirmed testbed drift; awaiting authorization |
+| HGC-022 | P2 | A1 reports an accepted mutation handoff but the returned message and immediate list still show unread state | Phase AV deliberately removed read-your-writes via a non-blocking writer handoff, but the older `mutation_applied` post-mutation-count invariant was not reconciled with handoff-acceptance semantics | Keep the prompt suite held and make no product edit. Fenix dispatches `arch-ctm` to define and reconcile the contract; Loki changes A1 only after that ruling | blocked on architecture disposition |
 
 ## Stop/escalate decision table
 
