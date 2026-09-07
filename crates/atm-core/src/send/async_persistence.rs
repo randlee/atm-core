@@ -13,17 +13,33 @@ type TemplateAdmissionParts = (
     Option<atm_storage::WorkflowSnapshot>,
 );
 
-pub(crate) fn verify_template_request(
+/// Opaque proof that a template request was verified before durable admission.
+///
+/// The HTTP runtime may obtain this proof on its bounded blocking pool, while
+/// the core writer remains runtime-agnostic.  The verified source stays
+/// private so every caller must use the same admission path.
+#[derive(Debug)]
+pub struct TemplateVerification(Option<template::VerifiedTemplateSend>);
+
+pub fn verify_template_request(
     runtime: &LocalServiceRuntime,
     request: &SendRequest,
-) -> Result<Option<template::VerifiedTemplateSend>, AtmError> {
+) -> Result<TemplateVerification, AtmError> {
     let SendMessageSource::Template(source) = &request.message_source else {
-        return Ok(None);
+        return Ok(TemplateVerification(None));
     };
     let composer = runtime.template_composer().ok_or_else(|| {
         AtmError::daemon_unavailable("Tokio template admission was not installed in this runtime")
     })?;
-    verify_template_send(composer.as_ref(), source, request.max_message_bytes).map(Some)
+    verify_template_send(composer.as_ref(), source, request.max_message_bytes)
+        .map(Some)
+        .map(TemplateVerification)
+}
+
+impl TemplateVerification {
+    pub(crate) fn into_inner(self) -> Option<template::VerifiedTemplateSend> {
+        self.0
+    }
 }
 
 pub(crate) fn resolve_async_body(

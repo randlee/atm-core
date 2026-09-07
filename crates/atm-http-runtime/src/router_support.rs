@@ -8,8 +8,12 @@ use std::sync::Arc;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
+use atm_core::send::{
+    SendMessageSource, TemplateVerification, WriteRequest, verify_template_request,
+};
 
 use atm_core::error::AtmError;
+use atm_core::request_budget::RESPONSE_HANDOFF_GRACE;
 
 use atm_core::protocol::{RequestId, ResponseEnvelope, SendResponseEnvelope};
 
@@ -55,6 +59,82 @@ where
 pub(crate) struct ControlPathSyncBridge {
     permits: Arc<tokio::sync::Semaphore>,
     pub(crate) runtime_health: RuntimeHealth,
+}
+
+/// Bounded blocking admission for template verification.
+///
+/// The selected template adapter must re-open the canonical caller path to
+/// prove it did not change after the CLI captured its bytes.  That work can
+/// block on host filesystem policy, so it is isolated from Tokio workers and
+/// capped independently of reads.  A timed-out task retains its permit until
+/// it exits, preventing an unbounded blocked-task buildup.
+#[derive(Clone)]
+pub(crate) struct TemplateVerificationBridge {
+    permits: Arc<tokio::sync::Semaphore>,
+}
+
+impl Default for TemplateVerificationBridge {
+    fn default() -> Self {
+        Self {
+            permits: Arc::new(tokio::sync::Semaphore::new(2)),
+        }
+    }
+}
+
+impl TemplateVerificationBridge {
+    pub(crate) async fn verify(
+        &self,
+        deadline: RequestDeadline,
+        runtime: LocalServiceRuntime,
+        request: WriteRequest,
+    ) -> Result<Option<TemplateVerification>, AtmError> {
+        let SendMessageSource::Template(source) = &request.message_source else {
+            return Ok(None);
+        };
+        let path = source.canonical_template_path.clone();
+        let remaining = deadline
+            .remaining()
+            .ok_or_else(|| template_verification_deadline_error(&path, "start"))?;
+        let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
+            .await
+            .map_err(|_| template_verification_deadline_error(&path, "start"))?
+            .map_err(|_| {
+                AtmError::daemon_unavailable("template verification bridge is shutting down")
+            })?;
+        let remaining = deadline
+            .remaining()
+            .ok_or_else(|| template_verification_deadline_error(&path, "start"))?;
+        let verification = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            verify_template_request(&runtime, &request)
+        });
+        match tokio::time::timeout(remaining, verification).await {
+            Ok(Ok(result)) => result.map(Some),
+            Ok(Err(source)) => Err(AtmError::daemon_unavailable(
+                "template verification task ended unexpectedly",
+            )
+            .with_cause(source)),
+            Err(_) => Err(template_verification_deadline_error(&path, "finish")),
+        }
+    }
+}
+
+fn template_verification_deadline_error(path: &std::path::Path, phase: &str) -> AtmError {
+    AtmError::daemon_unavailable(format!(
+        "template verification for {} did not {phase} before the request deadline",
+        path.display()
+    ))
+}
+
+/// Reserves response encoding and loopback handoff time before a local
+/// receiver hook begins.  A hook remains advisory after durable persistence;
+/// it must never consume the daemon's final response budget.
+pub(super) fn receiver_hook_deadline(deadline: RequestDeadline) -> Option<RequestDeadline> {
+    deadline
+        .remaining()
+        .and_then(|remaining| remaining.checked_sub(RESPONSE_HANDOFF_GRACE))
+        .filter(|remaining| !remaining.is_zero())
+        .map(RequestDeadline::after)
 }
 
 impl ControlPathSyncBridge {

@@ -2,7 +2,7 @@
 //! entry family, and persisted-write preparation.
 
 use super::*;
-use crate::send::{NudgeMode, send_mode_for_task_request};
+use crate::send::{NudgeMode, TemplateVerification, send_mode_for_task_request};
 
 /// Result of the one canonical write operation.
 ///
@@ -378,6 +378,40 @@ pub async fn prepare_write_with_async_runtime(
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
 ) -> Result<PreparedWrite, AtmError> {
+    prepare_write_with_optional_template_verification_async_runtime(
+        request,
+        observability,
+        runtime,
+        None,
+    )
+    .await
+}
+
+/// Prepares one canonical write using a template proof obtained before this
+/// async writer path.  The replacement HTTP runtime uses this after bounded
+/// blocking template verification so no filesystem operation can pin a Tokio
+/// worker.
+pub async fn prepare_write_with_preverified_template_async_runtime(
+    request: WriteRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    template_verification: TemplateVerification,
+) -> Result<PreparedWrite, AtmError> {
+    prepare_write_with_optional_template_verification_async_runtime(
+        request,
+        observability,
+        runtime,
+        Some(template_verification),
+    )
+    .await
+}
+
+async fn prepare_write_with_optional_template_verification_async_runtime(
+    request: WriteRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    template_verification: Option<TemplateVerification>,
+) -> Result<PreparedWrite, AtmError> {
     validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {
@@ -393,10 +427,24 @@ pub async fn prepare_write_with_async_runtime(
                 "message write is missing a destination",
             ));
         }
-        return prepare_persisted_write_async(request, observability, runtime, None).await;
+        return prepare_persisted_write_async(
+            request,
+            observability,
+            runtime,
+            None,
+            template_verification,
+        )
+        .await;
     }
     if has_authenticated_peer_provenance(&request) {
-        return prepare_persisted_write_async(request, observability, runtime, None).await;
+        return prepare_persisted_write_async(
+            request,
+            observability,
+            runtime,
+            None,
+            template_verification,
+        )
+        .await;
     }
     let acknowledgement = admit_acknowledgement_write_async(request, runtime).await?;
     prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
@@ -597,14 +645,17 @@ async fn prepare_persisted_write_async(
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
     acknowledgement: Option<ResolvedAcknowledgement>,
+    template_verification: Option<TemplateVerification>,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &request)?;
     crate::send::validate_task_request(&request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
-    let verified_template =
-        crate::send::async_persistence::verify_template_request(runtime, &request)?;
+    let verified_template = match template_verification {
+        Some(verification) => verification.into_inner(),
+        None => crate::send::verify_template_request(runtime, &request)?.into_inner(),
+    };
     let body = crate::send::async_persistence::resolve_async_body(
         &request,
         &context,

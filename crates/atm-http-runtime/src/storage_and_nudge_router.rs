@@ -27,7 +27,10 @@ use atm_core::protocol::{
     RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
-use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
+use atm_core::send::{
+    NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime,
+    prepare_write_with_preverified_template_async_runtime,
+};
 use atm_runtime::{AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext};
 
 use crate::CanonicalWriteHandler;
@@ -36,8 +39,9 @@ use crate::RuntimeHealth;
 use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
 use crate::doctor_observability::{append_counter_finding, project_counter_health};
 use crate::router_support::{
-    ControlPathSyncBridge, DetachedReceivedHooks, append_warnings, hook_warning,
-    retry_deferred_marker, validate_graft_receiver_member, write_response,
+    ControlPathSyncBridge, DetachedReceivedHooks, TemplateVerificationBridge, append_warnings,
+    hook_warning, receiver_hook_deadline, retry_deferred_marker, validate_graft_receiver_member,
+    write_response,
 };
 
 /// The replacement implementation of the canonical write operation.
@@ -51,6 +55,7 @@ pub struct StorageAndNudgeRouter {
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
     control_path_sync_bridge: ControlPathSyncBridge,
+    template_verification_bridge: TemplateVerificationBridge,
     async_mailbox_runtime: Option<Arc<dyn AsyncMailboxRuntime>>,
     doctor_projection: Option<Arc<dyn DoctorProjection>>,
     daemon_home: PathBuf,
@@ -85,6 +90,7 @@ impl StorageAndNudgeRouter {
                 NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
                 runtime_health.clone(),
             ),
+            template_verification_bridge: TemplateVerificationBridge::default(),
             async_mailbox_runtime: None,
             doctor_projection: None,
             daemon_home,
@@ -239,12 +245,29 @@ impl StorageAndNudgeRouter {
         request: atm_core::send::WriteRequest,
         deadline: RequestDeadline,
     ) -> Result<CommittedWrite, AtmError> {
-        let mut prepared = prepare_write_with_async_runtime(
-            request,
-            self.observability.as_ref(),
-            &self.service_runtime,
-        )
-        .await?;
+        let template_verification = self
+            .template_verification_bridge
+            .verify(deadline, self.service_runtime.clone(), request.clone())
+            .await?;
+        let mut prepared = match template_verification {
+            Some(verification) => {
+                prepare_write_with_preverified_template_async_runtime(
+                    request,
+                    self.observability.as_ref(),
+                    &self.service_runtime,
+                    verification,
+                )
+                .await?
+            }
+            None => {
+                prepare_write_with_async_runtime(
+                    request,
+                    self.observability.as_ref(),
+                    &self.service_runtime,
+                )
+                .await?
+            }
+        };
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
@@ -402,6 +425,11 @@ impl StorageAndNudgeRouter {
         dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
         deadline: RequestDeadline,
     ) -> Vec<WarningEntry> {
+        let Some(deadline) = receiver_hook_deadline(deadline) else {
+            return vec![hook_warning(AtmError::daemon_unavailable(
+                "received-message hook was skipped to reserve the durable write response handoff",
+            ))];
+        };
         if deadline.expired() {
             return vec![hook_warning(AtmError::daemon_unavailable(
                 "received-message hook was skipped because the request deadline was exhausted after persistence",
@@ -1024,8 +1052,8 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::pin::Pin;
     use std::sync::Arc;
-    use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::{Condvar, Mutex};
     use std::time::Duration;
 
     use atm_core::LocalServiceRuntime;
@@ -1274,6 +1302,75 @@ mod tests {
             source: &atm_core::TemplateSource,
         ) -> Result<atm_core::TemplateInspection, AtmError> {
             assert_eq!(source.raw_file_bytes, self.source_bytes);
+            Ok(self.inspection.clone())
+        }
+
+        fn render_within_root(
+            &self,
+            source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+            _root: &atm_core::TemplateRoot,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            let text = std::str::from_utf8(&source.raw_file_bytes)
+                .map_err(|_| AtmError::template_content_not_utf8())?
+                .to_owned();
+            Ok(atm_core::RenderedBody { text })
+        }
+
+        fn render_without_includes(
+            &self,
+            _source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            unreachable!("HTTP runtime tests require confinement-aware rendering")
+        }
+    }
+
+    struct BlockingTemplateComposer {
+        source_bytes: Vec<u8>,
+        inspection: atm_core::TemplateInspection,
+        release: Arc<(Mutex<bool>, Condvar)>,
+        started: AtomicUsize,
+    }
+
+    impl BlockingTemplateComposer {
+        fn new(body: &str) -> Self {
+            let fixture = FixtureTemplateComposer::new(body);
+            Self {
+                source_bytes: fixture.source_bytes,
+                inspection: fixture.inspection,
+                release: Arc::new((Mutex::new(false), Condvar::new())),
+                started: AtomicUsize::new(0),
+            }
+        }
+
+        fn release(&self) {
+            let (released, wake) = &*self.release;
+            *released
+                .lock()
+                .expect("release stalled template verification") = true;
+            wake.notify_all();
+        }
+    }
+
+    impl atm_core::boundary::sealed::Sealed for BlockingTemplateComposer {}
+
+    impl atm_core::TemplateComposer for BlockingTemplateComposer {
+        fn inspect(
+            &self,
+            source: &atm_core::TemplateSource,
+        ) -> Result<atm_core::TemplateInspection, AtmError> {
+            assert_eq!(source.raw_file_bytes, self.source_bytes);
+            self.started.fetch_add(1, Ordering::SeqCst);
+            let (released, wake) = &*self.release;
+            let mut released = released
+                .lock()
+                .expect("wait for stalled template verification");
+            while !*released {
+                released = wake
+                    .wait(released)
+                    .expect("stalled template verification wait");
+            }
             Ok(self.inspection.clone())
         }
 
@@ -3022,6 +3119,173 @@ mod tests {
         )
         .await
         .expect("infallible Axum service")
+    }
+
+    #[tokio::test]
+    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist() {
+        let composer = Arc::new(BlockingTemplateComposer::new("template body"));
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(composer.clone()),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let first_request = template_write_request(&fixture, "template body");
+        let second_request = template_write_request(&fixture, "template body");
+        let first_router = fixture.router.clone();
+        let second_router = fixture.router.clone();
+        let first = tokio::spawn(async move {
+            first_router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(first_request))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_millis(250)),
+                )
+                .await
+        });
+        let second = tokio::spawn(async move {
+            second_router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(second_request))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_millis(250)),
+                )
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while composer.started.load(Ordering::SeqCst) != 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("two template verifications occupy the bounded preflight");
+
+        let list = atm_core::list::ListQuery::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            "sender".parse().expect("sender"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("task-ledger list query")
+        .with_task_ledger(atm_core::list::TaskLedgerQuery::Tasks { member: None });
+        let listed = tokio::time::timeout(
+            Duration::from_millis(100),
+            fixture.router.dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    list,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            ),
+        )
+        .await
+        .expect("list stays schedulable while template verification is stalled")
+        .expect("list succeeds while template verification is stalled")
+        .into_inner();
+        assert!(matches!(listed, ResponseEnvelope::List(_)));
+
+        let blocked = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
+                    &fixture,
+                    "template body",
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_millis(25)),
+            )
+            .await
+            .expect_err("a saturated template preflight fails before durable admission");
+        assert_eq!(
+            blocked.code(),
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert!(
+            blocked.message().contains("notice.j2"),
+            "the bounded error identifies the caller template path"
+        );
+        assert!(
+            fixture
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("recipient"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("inspect persisted template messages")
+                .is_empty(),
+            "a template verification deadline cannot persist a partial message"
+        );
+
+        composer.release();
+        let _first_result = first.await.expect("first stalled request joins");
+        let _second_result = second.await.expect("second stalled request joins");
+    }
+
+    #[tokio::test]
+    async fn ten_concurrent_template_writes_persist_before_each_receiver_hook() {
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for("template body")),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let mut writes = tokio::task::JoinSet::new();
+        for _ in 0..10 {
+            let router = fixture.router.clone();
+            let request = template_write_request(&fixture, "template body");
+            writes.spawn(async move {
+                router
+                    .dispatch(
+                        ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(Duration::from_secs(2)),
+                    )
+                    .await
+            });
+        }
+        while let Some(result) = writes.join_next().await {
+            result
+                .expect("concurrent template write joins")
+                .expect("concurrent template write persists");
+        }
+        assert_eq!(
+            fixture
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect receiver hooks")
+                .len(),
+            10,
+            "every durable write reaches the accepted receiver hook"
+        );
+        assert!(
+            fixture
+                .received_hook
+                .saw_durable_record
+                .load(Ordering::SeqCst),
+            "receiver hooks observe only already-persisted writes"
+        );
     }
 
     #[tokio::test]
@@ -5293,7 +5557,7 @@ mod tests {
             .router
             .emit_received_hook(
                 Ok(vec![dispatch]),
-                RequestDeadline::after(Duration::from_millis(50)),
+                RequestDeadline::after(Duration::from_millis(300)),
             )
             .await;
 
