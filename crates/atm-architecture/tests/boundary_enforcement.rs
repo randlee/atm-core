@@ -3909,6 +3909,155 @@ fn herdr_prompt_calls_stay_behind_the_selector_emitter_boundary() {
     );
 }
 
+#[test]
+fn ay3_herdr_endpoint_doctor_contract_has_only_closed_and_bootstrap_implementations() {
+    let root = workspace_root();
+    let boundary = read_source(&root.join("crates/atm-core/src/boundary/herdr_endpoint.rs"));
+    assert!(
+        boundary.contains("pub trait HerdrEndpointDoctor")
+            && boundary.contains("sealed::Sealed + Send + Sync"),
+        "AY3 requires the core-owned HerdrEndpointDoctor port to retain the ADR-001 seal"
+    );
+
+    let mut implementations = BTreeSet::new();
+    for path in [
+        root.join("crates/atm-core/src/doctor/mod.rs"),
+        root.join("crates/atm-daemon-bootstrap/src/replacement_handler.rs"),
+    ] {
+        let source = read_source(&path);
+        let syntax = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let mut visitor = HerdrEndpointDoctorImplementationVisitor::default();
+        visitor.visit_file(&syntax);
+        implementations.extend(visitor.implementations.into_iter().map(|implementation| {
+            format!(
+                "{}::{implementation}",
+                path.strip_prefix(&root)
+                    .expect("AY3 implementation is inside the workspace")
+                    .display()
+                    .to_string()
+                    .replace('\\', "/")
+            )
+        }));
+    }
+    assert_eq!(
+        implementations,
+        BTreeSet::from([
+            "crates/atm-core/src/doctor/mod.rs::ClosedHerdrEndpointDoctor".to_owned(),
+            "crates/atm-daemon-bootstrap/src/replacement_handler.rs::HerdrEndpointDoctorAdapter"
+                .to_owned(),
+        ]),
+        "AY3 permits exactly the closed core double and sole bootstrap production adapter"
+    );
+
+    let herdr_lib = read_source(&root.join("crates/atm-herdr/src/lib.rs"));
+    let client_config = read_source(&root.join("crates/atm-herdr/src/transport.rs"));
+    let probe = read_source(&root.join("crates/atm-herdr/src/doctor_probe.rs"));
+    assert!(
+        herdr_lib.contains("pub use doctor_probe::HerdrDoctorProbe;")
+            && herdr_lib.contains("pub use transport::HerdrClientConfig;"),
+        "AY3 pins the only two new public atm-herdr items"
+    );
+    assert!(
+        client_config.contains("pub struct HerdrClientConfig {")
+            && !client_config.contains("pub binary_path:")
+            && !client_config.contains("pub socket_path:")
+            && client_config.contains("pub fn try_new(")
+            && client_config.contains("pub fn binary_path(&self) -> Option<&Path>")
+            && client_config.contains("pub fn socket_path(&self) -> Option<&Path>"),
+        "HerdrClientConfig must retain private fields and its validated read-only API"
+    );
+    assert!(
+        probe.contains("pub struct HerdrDoctorProbe")
+            && probe.contains("pub fn new(config: HerdrClientConfig) -> Self")
+            && probe.contains("pub async fn observe("),
+        "HerdrDoctorProbe must retain its public construction and observation signatures"
+    );
+}
+
+#[derive(Default)]
+struct HerdrEndpointDoctorImplementationVisitor {
+    implementations: Vec<String>,
+    in_test_module: bool,
+}
+
+impl<'ast> Visit<'ast> for HerdrEndpointDoctorImplementationVisitor {
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        if !self.in_test_module
+            && item.trait_.as_ref().is_some_and(|(_, path, _)| {
+                path.segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "HerdrEndpointDoctor")
+            })
+        {
+            self.implementations
+                .push(item.self_ty.to_token_stream().to_string());
+        }
+        syn::visit::visit_item_impl(self, item);
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || item.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, item);
+        self.in_test_module = previous;
+    }
+}
+
+#[test]
+fn ay3_composition_never_spawns_a_long_lived_herdr_child() {
+    let root = workspace_root();
+    let mut spawned_programs = BTreeSet::new();
+    for crate_name in ["atm-daemon-bootstrap", "atm-http-runtime"] {
+        let mut files = Vec::new();
+        collect_rust_files(&root.join(format!("crates/{crate_name}/src")), &mut files);
+        for path in files {
+            let source = read_source(&path);
+            let syntax = syn::parse_file(&source)
+                .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+            let mut visitor = CommandProgramVisitor::default();
+            visitor.visit_file(&syntax);
+            spawned_programs.extend(visitor.programs);
+        }
+    }
+    assert!(
+        !spawned_programs.contains("herdr"),
+        "AY3 bootstrap and HTTP composition must delegate Herdr requests to atm-herdr, never spawn a long-lived `herdr server` child: {spawned_programs:?}"
+    );
+}
+
+#[derive(Default)]
+struct CommandProgramVisitor {
+    programs: BTreeSet<String>,
+    in_test_module: bool,
+}
+
+impl<'ast> Visit<'ast> for CommandProgramVisitor {
+    fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+        if !self.in_test_module
+            && call
+                .func
+                .to_token_stream()
+                .to_string()
+                .ends_with("Command :: new")
+            && let Some(syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(program),
+                ..
+            })) = call.args.first()
+        {
+            self.programs.insert(program.value());
+        }
+        syn::visit::visit_expr_call(self, call);
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || item.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, item);
+        self.in_test_module = previous;
+    }
+}
+
 #[derive(Default)]
 struct HerdrPromptCallVisitor {
     calls: Vec<String>,
