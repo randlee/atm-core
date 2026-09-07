@@ -207,6 +207,26 @@ async fn ay4_l7_notification_failure_keeps_durable_lead_mail() {
     );
 }
 
+#[tokio::test(start_paused = true)]
+async fn ay4_l12_notification_stall_times_out_without_losing_durable_mail() {
+    let fixture = fixture();
+    let _notify_gate = fixture.fake.block_next_notify();
+    fixture.fake.queue_list_result(Err(outage()));
+
+    fixture.pump.tick_once().await;
+
+    assert_eq!(
+        notify_count(&fixture.fake),
+        1,
+        "the stalled notification was attempted once"
+    );
+    assert_eq!(
+        lead_mail_count(&fixture),
+        1,
+        "the five-second notification deadline cannot roll back durable lead mail"
+    );
+}
+
 #[tokio::test]
 async fn ay4_l10_l11_flapping_is_suppressed_but_restart_gets_one_new_claim() {
     let fixture = fixture();
