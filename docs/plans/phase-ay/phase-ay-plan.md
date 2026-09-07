@@ -1744,7 +1744,14 @@ item 7 below, not optimized.
    AY.10's scope and would need a HERDR_MINIMUM_VERSION bump. AY.10 is
    dispatched only after this line is filled in:
 
-   Decision (Rand, YYYY-MM-DD): accept N-per-100ms | herdr change first | stop AY.10
+   Decision (Rand, 2026-09-07): stop AY.10
+   Rand: "if we can get status of entire session w/ a single socket call
+   every 5 seconds, I don't see a need to use the 'notification' feature
+   today." The socket path (AY.8/AY.9) does that: one `agent.list` per
+   Herdr server per tick returns every live agent with workspace/pane ids.
+   AY.10, AY.11 and AY.12 are not dispatched; the item-7 line below stays
+   unfilled and the exit gate no longer waits on it (recorded by fenix
+   2026-09-07). The AY.13 doctor-scope sprint runs in their place.
    The earlier planning statement that notification needed one
    subscription per agent was wrong; one connection carries them all.
    Rand: "yes, I think we need to add the subscription socket."; "are you
