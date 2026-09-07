@@ -864,8 +864,9 @@ Required config fields:
 
 Supported optional config fields:
 - `[atm].team_members`
-- `[atm].aliases`
 - `[[atm.post_send_hooks]]`
+- `[atm].aliases` is retired (below, and `REQ-ROSTER-NAME-007/008`): atm
+  ignores it except for the doctor pane-alias diagnostic
 
 Runtime caller-context rules:
 - repo-local `.atm.toml` `[atm].identity` and the legacy top-level `identity`

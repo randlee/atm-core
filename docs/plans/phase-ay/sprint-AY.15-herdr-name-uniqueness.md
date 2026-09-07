@@ -90,6 +90,14 @@ since Rand's 2026-09-07 ruling).
   `crates/atm-core/src/send/recipient.rs`, `send/write_context.rs`,
   `identity/mod.rs` and `mailbox/source.rs`. Owed by D4d: all four call
   sites go, not only the send path.
+- CIPHER-NAME-001..009 (cipher, independent review at 10b044c0c, filed at
+  105a75489): 001 store transaction enforcement (blocking, D1); 002 raw
+  canonical/alias collision checks (D2, A-09/A-10); 003 blank alias
+  normalisation (D2, A-18); 004 reserved `atm-daemon` alias (D2, B-07); 005
+  bare alias database-wide (blocking, D3, D-03); 006 `.atm.toml` alias use
+  (D4d, same defect as AY-QA-005); 007 doctor Herdr presence omits effective
+  name (C-05); 008 doctor legacy duplicate scan (D4b, F-07); 009 conflict
+  error text (D2). All owed by this sprint.
 
 ## Deliverables
 
