@@ -1436,6 +1436,7 @@ provenance.
 ### Colima release integration simplification
 
 `COLIMA-SIMPLIFY-R1` is a complete documentation sprint on branch
+`Hermes/ATM integration tests as agent skills
 `plan/colima-simplify`, targeting `develop`. Its authoritative
 [sprint plan](./plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md) replaces the
 multi-party Colima exercise with one unattended testbed command, one aggregate
