@@ -281,6 +281,7 @@ name = "atm-herdr"
 version = "1.5.2"
 dependencies = [
  "agent-team-mail-core",
+ "semver",
  "serde_json",
  "tokio",
 ]
