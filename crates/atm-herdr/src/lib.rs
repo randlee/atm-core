@@ -9,9 +9,11 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::AgentName;
 use atm_core::{HerdrSession, RequestDeadline};
 
+mod doctor_probe;
 mod transport;
 mod transport_cli;
 
+pub use doctor_probe::HerdrDoctorProbe;
 pub use transport::HerdrClientConfig;
 
 use transport::{

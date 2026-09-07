@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use atm_core::doctor::HerdrVersion;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::AgentName;
 use atm_core::{HerdrSession, RequestDeadline};
@@ -68,10 +69,17 @@ pub(crate) enum HerdrOp<'a> {
         agent: &'a AgentName,
     },
     List,
+    StatusServer,
     Notify {
         title: &'a str,
         body: &'a str,
     },
+}
+
+pub(crate) struct HerdrServerStatus {
+    pub(crate) version: HerdrVersion,
+    pub(crate) protocol: u32,
+    pub(crate) live_handoff: bool,
 }
 
 /// Transport response before it is decoded into a public domain outcome.
@@ -160,6 +168,39 @@ pub(crate) fn list_from_envelope(envelope: HerdrEnvelope) -> Result<HerdrListOut
         .map(snapshot_from_value)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(HerdrListOutcome { agents })
+}
+
+pub(crate) fn server_status_from_envelope(
+    envelope: HerdrEnvelope,
+) -> Result<HerdrServerStatus, HerdrError> {
+    let error = error_from_envelope(&envelope);
+    let result = envelope.result.ok_or(error)?;
+    let version = result
+        .get("version")
+        .and_then(Value::as_str)
+        .ok_or(HerdrError::ProtocolMismatch)
+        .and_then(|version| {
+            HerdrVersion::parse(version).map_err(|_| HerdrError::ProtocolMismatch)
+        })?;
+    let protocol = result
+        .get("protocol")
+        .and_then(Value::as_u64)
+        .and_then(|protocol| u32::try_from(protocol).ok())
+        .ok_or(HerdrError::ProtocolMismatch)?;
+    let live_handoff = result
+        .get("capabilities")
+        .and_then(Value::as_array)
+        .map(|capabilities| {
+            capabilities
+                .iter()
+                .any(|capability| capability.as_str() == Some("live_handoff"))
+        })
+        .unwrap_or(false);
+    Ok(HerdrServerStatus {
+        version,
+        protocol,
+        live_handoff,
+    })
 }
 
 pub(crate) fn unit_from_envelope(envelope: HerdrEnvelope) -> Result<(), HerdrError> {

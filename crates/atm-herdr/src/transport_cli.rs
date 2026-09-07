@@ -86,6 +86,11 @@ pub(crate) fn command_args(op: HerdrOp<'_>) -> Vec<String> {
         }
         HerdrOp::Get { agent } => vec!["agent".to_owned(), "get".to_owned(), agent.to_string()],
         HerdrOp::List => vec!["agent".to_owned(), "list".to_owned()],
+        HerdrOp::StatusServer => vec![
+            "status".to_owned(),
+            "server".to_owned(),
+            "--json".to_owned(),
+        ],
         HerdrOp::Notify { title, body } => vec![
             "notification".to_owned(),
             "show".to_owned(),
