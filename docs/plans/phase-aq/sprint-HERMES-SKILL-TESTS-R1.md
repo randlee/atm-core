@@ -202,12 +202,24 @@ on this list was part of that four hours.
    all PASS. Tag per the patch-bump-per-test rule.
 5. **Run in the testbed, as a cross-host peer.** Peer mode is the testbed default (`run.sh`; `--no-peer`
    only for a deliberately walled run), configured from the start: the container daemon and the host daemon trust each other as
-   peers, so the oversight agent on the host sends the seven sentences with
-   `atm send <agent>@<team> --host <fixture-host>` and the seven reports arrive in its own inbox over
-   ATM. No docker exec, no log scraping, no second channel: the fixture is one more host. The
-   container's agents run the byte-identical skills synced from `/opt/hermes/skills`; the fixture
-   name is the container's peer host name. When a report line says FAIL, the oversight agent may
-   still query the container's `mail.db` and gateway logs as the plan's non-black-box channels;
+   peers, so the seven reports arrive in the oversight agent's own inbox over ATM
+   (`<agent>@<team>.<host>` addressing; verified 2026-09-07 from both a Claude Code tester and a
+   Hermes agent inside the container). The exact command sequence is the testbed repo's
+   `SMOKE-TEST-RUNBOOK.md` (`./run.sh --gateway` = mTLS, peer trust both ways, host daemon restart,
+   `harness/bringup.sh` inside the container), rehearsed by the oversight agent before any run.
+   Two product gaps, found in that rehearsal, shape the inbound direction until they land:
+   - #1309: the daemon dials every peer on the fixed port 43101 and ignores the trust entry's
+     `https_port`; on one machine 43101 is the host daemon's, so host → container sends over the
+     peer link fail. Sentences go into the fixture with `docker exec -i … atm send` (ATM inside the
+     container, same nudge path); the link carries the reports out.
+   - #1307: the hermes-atm receiver injects only into a Telegram adapter; the fixture gateway has
+     only `api_server`, so ATM nudges do not wake the Hermes agent. It runs its sentences through the
+     headless CLI (`hermes -p default chat --skills <skill> …` as the hermes user from the profile
+     dir), the same skills, the same report.
+   The container's agents run the byte-identical skills (synced to `$HERMES_HOME/skills` for Hermes,
+   copied to `/opt/testbed/.claude/skills` and `.codex/skills` for the Claude Code / Codex tester);
+   the fixture name is the container's peer host name. When a report line says FAIL, the oversight
+   agent may still query the container's ATM and gateway logs as the plan's non-black-box channels;
    normal runs never need them.
 6. **Verdict.** All reports PASS on both fixtures for the same ATM version = the integration test
    passes for that version. Publication remains Rand's decision.
@@ -220,12 +232,14 @@ on this list was part of that four hours.
 
 ## Exact targets
 
-- atm-hermes-testbed: `.claude/skills/atm-setup-environment/SKILL.md`, `atm-smoke/SKILL.md`,
+- atm-hermes-testbed (PR #5): `.claude/skills/atm-setup-environment/SKILL.md`, `atm-smoke/SKILL.md`,
   `atm-smoke/REPORT.md`, `atm-hermes-ready/SKILL.md`, `atm-nudge-roundtrip/SKILL.md`,
-  `atm-troubleshoot/SKILL.md`; `.codex/skills/atm-*` symlinks; `AGENTS.md`; one Dockerfile `COPY`
+  `atm-troubleshoot/SKILL.md`; `.codex/skills/atm-*` symlinks; `AGENTS.md` + `CLAUDE.md`;
+  `SMOKE-TEST-RUNBOOK.md`; `run.sh`, `testbed/harness/bringup.sh`, `setup-peer.sh`, `run-tester.sh`,
+  `testbed/atm.toml` (alpha-prime), Dockerfile (skills, hmux, herdr, Claude Code)
 - this document; `docs/project-plan.md` entry
 - after each run: `docs/plans/phase-aq/reports/hermes-skill-tests-<version>-<fixture>.md` (post-mortem)
-- No source, harness, runtime, requirement, ADR or testbed file changes in this PR.
+- No atm-core source, runtime, requirement or ADR changes in this PR; product findings are issues (#1307, #1309).
 
 ## Acceptance
 
