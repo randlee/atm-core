@@ -23,20 +23,6 @@ Always follow this sequence for every ATM message:
 
 No silent processing.
 
-## ATM Integration Test Skills
-
-The ATM integration tests are skills. Any agent (Claude, Codex, Hermes) runs one when told
-"run the <skill> skill … and send the report to <agent@team>"; every skill ends in one report in
-the shape of `.claude/skills/atm-smoke/REPORT.md`. The tests are identical on every fixture
-(local host, colima testbed); only the report's `fixture` line changes. Run in this order:
-- `.claude/skills/atm-setup-environment/SKILL.md` — daemon, roster, doctor
-- `.claude/skills/atm-smoke/SKILL.md` — send/list/read/peek/ack smoke (CLI or native tools)
-- `.claude/skills/atm-hermes-ready/SKILL.md` — Hermes agents registered and answering
-- `.claude/skills/atm-nudge-roundtrip/SKILL.md` — tester ↔ Hermes native read/ack round trip
-- `.claude/skills/atm-troubleshoot/SKILL.md` — root-cause one FAIL line from DB rows, `atm log`, doctor, probe, gateway log
-Every FAIL is root-caused with `atm-troubleshoot`, fixed where the agent can, and retested before it
-is reported (rule in `REPORT.md`). The same directories are linked from `.codex/skills/`.
-
 ## Rust Guidance
 
 For Rust design and review work, also read:

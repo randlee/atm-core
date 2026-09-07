@@ -58,12 +58,14 @@ running, then the hermes-atm tests.
 
 ## Where the skills live
 
-- Canonical: this repo, `.claude/skills/atm-*/SKILL.md` (+ `atm-smoke/REPORT.md`).
-- Codex agents: `.codex/skills/<name>` symlinks to the same directories, and `AGENTS.md` names
-  every skill, so a Codex agent runs the identical file.
-- Hermes agents: a copy at the Hermes home, `~/.hermes/skills/<name>/SKILL.md` on any developer
-  host, and `/root/.hermes/skills/<name>/SKILL.md` baked into the atm-hermes-testbed image. Copies are
-  byte-identical to the repo files; nobody edits a copy.
+- Canonical: the colima repo `randlee/atm-hermes-testbed`, `.claude/skills/atm-*/SKILL.md`
+  (+ `atm-smoke/REPORT.md`). The tests belong to the testbed and run from it, on every host and
+  inside the container. atm-core carries only this plan.
+- Codex agents: `.codex/skills/<name>` symlinks to the same directories, and the testbed `AGENTS.md`
+  names every skill with its one sentence, so a Codex agent runs the identical file.
+- Hermes agents: the image `COPY`s the same directories into `/opt/hermes/skills/`, which the fork's
+  boot hook syncs into `$HERMES_HOME/skills/`; on a developer host the same files are copied to
+  `~/.hermes/skills/<name>/`. Copies are byte-identical; nobody edits a copy.
 
 ## Not a black box
 
@@ -87,6 +89,35 @@ The fixture (local host or colima container) is observable and addressable:
 - quality-mgr may reject a run because an outside agent interfered, and says so. That is different
   from a product defect; the report's cause line makes the difference visible instead of
   "FAIL, stop everything" on the first hiccup.
+
+## The run-book, verbatim
+
+Three agents take part: the oversight agent, the ATM test agent (CLI only), one Hermes agent. The
+oversight agent sends exactly these seven messages with `atm send --stdin`, in this order, and then
+waits for seven reports. `<T>` is the test agent, `<H>` the Hermes agent, `<O>` the oversight agent,
+`<F>` the fixture name.
+
+```
+to <T>: run the atm-setup-environment skill on fixture <F> and send the report to <O>
+to <H>: run the atm-setup-environment skill on fixture <F> and send the report to <O>
+to <T>: run the atm-smoke skill against <H> on fixture <F> and send the report to <O>
+to <H>: run the atm-smoke skill against <T> on fixture <F> and send the report to <O>
+to <T>: run the atm-hermes-ready skill for <H> on fixture <F> and send the report to <O>
+to <T>: run the atm-nudge-roundtrip skill as tester against <H> on fixture <F> and send the report to <O>
+to <H>: run the atm-nudge-roundtrip skill as responder on fixture <F> and send the report to <O>
+```
+
+The two `atm-smoke` sentences go out together; the two `atm-nudge-roundtrip` sentences go out
+together. Everything else is sequential: the next sentence goes out when the previous report is in.
+Seven reports in, the oversight agent writes the post-mortem. Expected wall clock after the build is
+installed: about 10 minutes.
+
+What a test run does **not** have, by rule: no task ids, no j2 templates, no acknowledgement
+messages, no holds or go-gates, no phases, no finding ids or triage records, no QA rounds, no
+reviewer in the loop, no scripts written, no code edited, no messages between agents other than
+the seven sentences, the test traffic the skills themselves send, and the seven reports. The
+2026-09-07 baseline this replaces spent four hours of coordination on a 25-minute run; every item
+on this list was part of that four hours.
 
 ## Budget and no code churn
 
@@ -116,23 +147,25 @@ The fixture (local host or colima container) is observable and addressable:
 | role | agent | does |
 | --- | --- | --- |
 | orchestrator | fenix@atm-dev | sends the one-sentence run-book, collects reports, dispatches fixes to arch-ctm, merges |
-| ATM test agent | a CLI-only agent of the local ATM team (today: cipher) | runs skills 1–4 as tester on the host; the same role inside the testbed is the container's tester agent |
-| Hermes agent under test | a Hermes agent of the host's hermes team (today: skillrx); the container's Hermes agents in the testbed | runs `atm-smoke` natively, responds in `atm-nudge-roundtrip` |
-| testbed maintainer | loki@hermes | bakes the byte-identical skill files into the image; changes no test content |
+| ATM test agent (`<T>`) | a CLI-only agent of the local ATM team (today: cipher) | runs skills 1–4 as tester on the host; the same role inside the testbed is the container's tester agent |
+| Hermes agent under test (`<H>`) | a Hermes agent of the host's hermes team (today: skillrx); the container's Hermes agents in the testbed | runs `atm-smoke` natively, responds in `atm-nudge-roundtrip` |
 | QA | quality-mgr | reads the reports against the skill text; may reject a run for interference |
-| oversight | one agent per run (today: fenix) | watches the whole run-book with best effort to get the code verified: when a step fails for an environment reason (roster, gateway, receiver, path, permission) it fixes that and has the step re-run, so a run ends with the code's real result, not an environment hiccup; records every intervention for the post-mortem |
+| oversight (`<O>`) | one agent per run (today: fenix) | watches the whole run-book with best effort to get the code verified: when a step fails for an environment reason (roster, gateway, receiver, path, permission) it fixes that and has the step re-run, so a run ends with the code's real result, not an environment hiccup; records every intervention for the post-mortem |
 | decisions | Rand | approves this plan, authorizes any build/rollout and any publish |
 
 ## Steps
 
-1. **Skills land** (this PR, #1304): five skills, report template, `.codex/skills` links,
-   `AGENTS.md` section, this plan. Docs-only; no code.
+1. **Skills land**: five skills, report template, `.codex/skills` links, `AGENTS.md` section and
+   the image `COPY` in the testbed repo (one PR there); this plan in atm-core (PR #1304). No code.
 2. **Verify outside the fixture, current install (1.5.6).** Copies at `~/.hermes/skills`. The ATM
    test agent runs 1 → 2 → 3 → 4 as tester against the Hermes agent; the Hermes agent runs 1 and 2
    natively and responds in 4.
-   Eight reports to fenix. Expected: the known 1.5.6 defects (#1297 stale connection after >3 s
+   Seven reports to the oversight agent. Expected: the known 1.5.6 defects (#1297 stale connection after >3 s
    idle, #1298 native read by id count=0) appear as FAIL lines with cause lines. That proves the
    skills catch them. This step is "does the run-book work", not "is 1.5.6 good".
+   First result (2026-09-07, oversight agent running `atm-setup-environment` by hand): the CLI rejects
+   self-addressed sends (`SelfAddressedSendInvalid`), so every self-send step was replaced by a
+   partner step before any agent ran the skills. That is what step 2 is for.
 3. **Fix what step 2 finds in the skills** (wording, wrong flag, unreachable observable): same PR.
    Product findings go to the open issues, not to this sprint.
 4. **Repeat step 2 on 1.5.7** after PR #1299 merges and Rand authorizes the local rollout. Expected:
@@ -146,16 +179,16 @@ The fixture (local host or colima container) is observable and addressable:
    passes for that version. Publication remains Rand's decision.
 7. **Post-mortem report.** After every complete run (each fixture, each version) the oversight
    agent writes one report, `docs/plans/phase-aq/reports/hermes-skill-tests-<version>-<fixture>.md`:
-   the eight report summaries (skill, agent, PASS/FAIL, elapsed), every FAIL with its cause line,
+   the seven report summaries (skill, agent, PASS/FAIL, elapsed), every FAIL with its cause line,
    every oversight intervention (what broke, why, what was changed, whether the step then passed),
    product defects found (issue numbers), and recommended changes in three lists: to the skills,
    to the fixture/testbed, to ATM. The report is what Rand reads; nothing else is.
 
 ## Exact targets
 
-- `.claude/skills/atm-setup-environment/SKILL.md`, `atm-smoke/SKILL.md`, `atm-smoke/REPORT.md`,
-  `atm-hermes-ready/SKILL.md`, `atm-nudge-roundtrip/SKILL.md`, `atm-troubleshoot/SKILL.md`
-- `.codex/skills/atm-*` symlinks; `AGENTS.md` "ATM Integration Test Skills" section
+- atm-hermes-testbed: `.claude/skills/atm-setup-environment/SKILL.md`, `atm-smoke/SKILL.md`,
+  `atm-smoke/REPORT.md`, `atm-hermes-ready/SKILL.md`, `atm-nudge-roundtrip/SKILL.md`,
+  `atm-troubleshoot/SKILL.md`; `.codex/skills/atm-*` symlinks; `AGENTS.md`; one Dockerfile `COPY`
 - this document; `docs/project-plan.md` entry
 - after each run: `docs/plans/phase-aq/reports/hermes-skill-tests-<version>-<fixture>.md` (post-mortem)
 - No source, harness, runtime, requirement, ADR or testbed file changes in this PR.
