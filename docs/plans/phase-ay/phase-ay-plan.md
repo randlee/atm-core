@@ -1092,10 +1092,14 @@ readiness on the develop build (Rand, 2026-09-05; closes AYP-R13-002).
 - **Ship**: AY.9 merged and its automated gates met; live macOS/Windows
   proof follows under release readiness.
 
-  Decision (recorded by fenix, 2026-09-07): **Ship**. AY.9 merged to
+  Evidence (recorded by fenix, 2026-09-07): AY.9 merged to
   integrate/phase-ay at 7ad3ad7e5 via PR #1295 with all three CI lanes
   green (17/17 checks); qa-pr1295 r2 and r3 PASS; AY9-QA-001 closed.
   Live macOS/Windows proof deferred to release readiness per this gate.
+  Rand (2026-09-07), asked to choose Ship / Defer / Cancel: "we need to
+  cutover as part of phase-ay".
+
+Decision (Rand, 2026-09-07): Ship
 - **Defer**: the socket cutover is deferred to a named phase and ADR-058 D3
   is amended to say the CLI transport is the supported design until then.
   Because AY.9 has already made socket the omitted-config default, Defer
