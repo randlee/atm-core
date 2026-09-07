@@ -136,7 +136,14 @@ since Rand's 2026-09-07 ruling).
   member (write the inventory into matrix row D-15). The single
   substitution point is daemon ingress (`atm-http-runtime` request
   handlers and peer receive) against the in-memory roster; the CLI
-  forwards tokens unchanged and performs no alias query. Existing CLI-side
+  forwards tokens unchanged and performs no alias query. Rand
+  (2026-09-07): "the substitution point should be the point where
+  team-member is checked against immutable roster in RAM already."; "It
+  should simply change to instead of returning a bool/enum
+  (member-valid), it would return (member-valid, member-name)". Do not
+  add a separate resolution pass: change the existing RAM-roster
+  membership check to return `(valid, canonical member name)` and make
+  its callers carry the returned name forward. Existing CLI-side
   canonicalisation may stay only where it is not a roster query; any
   CLI-side roster lookup for alias resolution is removed. Add a parity
   test that drives each D-15 entry through the daemon request boundary

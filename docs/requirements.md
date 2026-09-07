@@ -1086,7 +1086,14 @@ Definitions:
   translate." The CLI passes the token through unchanged; the daemon's
   request ingress (HTTP runtime, peer receive) replaces every member-name
   field against the in-memory roster before validation, self-send checks,
-  mailbox lookup, routing, audit and persistence. A prompt or script
+  mailbox lookup, routing, audit and persistence. The substitution point
+  is the existing check, not a new one. Rand (2026-09-07): "the
+  substitution point should be the point where team-member is checked
+  against immutable roster in RAM already."; "It should simply change to
+  instead of returning a bool/enum (member-valid), it would return
+  (member-valid, member-name)". That membership check returns the
+  canonical member name alongside validity, and every caller uses the
+  returned canonical name from there on. A prompt or script
   written with aliases and the same prompt written with canonical names
   produce identical daemon-side handling and identical persisted rows.
   Cross-host: Rand (2026-09-07): "alias@team.host works". The sending
