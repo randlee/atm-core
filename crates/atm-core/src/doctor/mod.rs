@@ -1036,6 +1036,7 @@ fn member_summary(
         tmux_pane_id: member.tmux_pane_id.clone(),
         backend: None,
         herdr_session: None,
+        herdr_agent: None,
         local_backend: None,
         home_dir: member.home_dir.clone(),
         live_cwd: match (caller_identity, live_cwd) {
@@ -1610,6 +1611,7 @@ mod tests {
                 tmux_pane_id: None,
                 backend: None,
                 herdr_session: None,
+                herdr_agent: None,
                 local_backend: None,
                 home_dir: PathBuf::from("/workspace").into(),
                 live_cwd: None,

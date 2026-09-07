@@ -65,6 +65,12 @@ pub struct MemberSummary {
         skip_serializing_if = "Option::is_none"
     )]
     pub herdr_session: Option<String>,
+    #[serde(
+        rename = "herdrAgent",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub herdr_agent: Option<String>,
     /// Canonical typed backend projection used by runtime doctor consumers.
     /// This is an internal transport detail and never changes the JSON shape.
     #[serde(skip)]

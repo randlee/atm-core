@@ -497,10 +497,13 @@ fn build_member_add_roster_record(request: &AddMemberRequest) -> RosterEntry {
             extra.insert("backendType".to_string(), json!("tmux"));
             extra.insert("isActive".to_string(), json!(true));
         }
-        Some(LocalMessageReceivedBackend::Herdr { session }) => {
+        Some(LocalMessageReceivedBackend::Herdr { session, agent }) => {
             extra.insert("backendType".to_string(), json!("herdr"));
             if let Some(session) = session {
                 extra.insert("herdrSession".to_string(), json!(session.as_str()));
+            }
+            if let Some(agent) = agent {
+                extra.insert("herdrAgent".to_string(), json!(agent.as_str()));
             }
         }
         None if normalized_tmux_pane_id.is_some() => {
@@ -594,7 +597,7 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
                 .insert("isActive".to_string(), json!(true));
             member.metadata_json.remove("herdrSession");
         }
-        Some(LocalMessageReceivedBackend::Herdr { session }) => {
+        Some(LocalMessageReceivedBackend::Herdr { session, agent }) => {
             member.recipient_pane_id = None;
             member
                 .metadata_json
@@ -608,6 +611,16 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
                 }
                 None => {
                     member.metadata_json.remove("herdrSession");
+                }
+            }
+            match agent {
+                Some(agent) => {
+                    member
+                        .metadata_json
+                        .insert("herdrAgent".to_string(), json!(agent.as_str()));
+                }
+                None => {
+                    member.metadata_json.remove("herdrAgent");
                 }
             }
         }
@@ -731,7 +744,10 @@ fn parse_backend(
                     HerdrSession::new(value)
                 })
                 .transpose()?;
-            Ok(Some(LocalMessageReceivedBackend::Herdr { session }))
+            Ok(Some(LocalMessageReceivedBackend::Herdr {
+                session,
+                agent: None,
+            }))
         }
         Some(other) => Err(AtmError::validation(format!(
             "unsupported local backend '{other}'; expected tmux or herdr"

@@ -93,9 +93,9 @@ impl DeliveryRecipientSnapshot {
         let local_tmux_post_send = delivery_channel == DeliveryChannel::TmuxSteer;
         let local_herdr_post_send = delivery_channel == DeliveryChannel::HerdrSteer;
         let herdr_session = match local_backend.as_ref() {
-            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { session }) => {
-                session.clone()
-            }
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr {
+                session, ..
+            }) => session.clone(),
             _ => None,
         };
         let graft_post_send = delivery_channel == DeliveryChannel::Graft;
