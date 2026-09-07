@@ -198,6 +198,15 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   upgrade. Missing, late, unreachable, or crashed Herdr is reported as a
   bounded per-call failure on the Herdr harness while ATM messaging, tmux,
   Hermes, and doctor remain up.
+- `HR-CORE-011` AY.9 selects the Herdr transport exactly once during Tokio
+  bootstrap from the closed `[herdr].transport` configuration value. Omitted
+  and `"socket"` select the native Unix-domain socket/Windows named-pipe
+  transport; `"cli"` selects the permanent explicit Tokio CLI alternative;
+  every other value fails configuration parsing. A socket failure remains a
+  typed Herdr-unavailable/breaker event and never falls back to CLI at runtime.
+  Doctor reports the selected transport and a sanitized endpoint display; raw
+  endpoint values and private transport types do not cross the crate boundary.
+  The CLI alternative has no removal release or ownership-key cleanup planned.
 
 ### 3.2 Safety Requirements
 

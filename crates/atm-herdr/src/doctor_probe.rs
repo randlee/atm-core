@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use atm_core::doctor::{
     DoctorFinding, DoctorSeverity, HerdrBinaryProvenance, HerdrBinaryResolution, HerdrDoctorState,
     HerdrEndpointObservation, HerdrEndpointProvenance, HerdrMemberPresence, HerdrPresenceOutcome,
-    HerdrRosterMember, HerdrTransportKind, HerdrVersion,
+    HerdrRosterMember, HerdrVersion,
 };
 use atm_core::error::AtmError;
 use atm_core::{HerdrSession, RequestDeadline};
@@ -49,8 +49,8 @@ impl HerdrDoctorProbe {
             } else {
                 HerdrEndpointProvenance::HerdrDefault
             },
-            transport: HerdrTransportKind::Cli,
-            endpoint: None,
+            transport: self.config.transport().clone(),
+            endpoint: self.io.endpoint_display(session),
             binary: self.binary_resolution(),
             state: HerdrDoctorState::NotConfigured,
             live_handoff: None,
@@ -65,7 +65,7 @@ impl HerdrDoctorProbe {
         let status = match status {
             Ok(status) => status,
             Err(error) => {
-                observation.state = self.state_for_error(error, started.elapsed());
+                observation.state = self.state_for_error(error, started.elapsed(), session);
                 return observation;
             }
         };
@@ -114,7 +114,21 @@ impl HerdrDoctorProbe {
         observations
     }
 
-    fn state_for_error(&self, error: HerdrError, elapsed: Duration) -> HerdrDoctorState {
+    fn state_for_error(
+        &self,
+        error: HerdrError,
+        elapsed: Duration,
+        session: Option<&HerdrSession>,
+    ) -> HerdrDoctorState {
+        if let HerdrError::ServerUnavailable { io_error_kind, .. } = &error
+            && let Some(endpoint) = self.io.endpoint_display(session)
+        {
+            return if *io_error_kind == Some(ErrorKind::PermissionDenied) {
+                HerdrDoctorState::PermissionDenied { endpoint }
+            } else {
+                HerdrDoctorState::EndpointUnreachable { endpoint }
+            };
+        }
         match error {
             HerdrError::ServerUnavailable {
                 io_error_kind: Some(ErrorKind::NotFound),
@@ -274,7 +288,7 @@ mod tests {
         for error in errors {
             assert!(
                 !matches!(
-                    probe.state_for_error(error, Duration::from_millis(5)),
+                    probe.state_for_error(error, Duration::from_millis(5), None),
                     HerdrDoctorState::Other { .. }
                 ),
                 "a closed HerdrError variant must not degrade to Other"
@@ -286,6 +300,7 @@ mod tests {
                     message: String::new(),
                 },
                 Duration::ZERO,
+                None,
             ),
             HerdrDoctorState::ClientServerMismatch { .. }
         ));
@@ -299,8 +314,22 @@ mod tests {
         ));
     }
 
+    /// Platform-invariant sanitization check: Unix sockets render as
+    /// `$HOME/`, `$XDG_CONFIG_HOME/` or `<configured>/`; Windows named pipes
+    /// render as `\\.\pipe\%APPDATA%/`, `\\.\pipe\$HOME/` or
+    /// `\\.\pipe\<configured>/`.
+    fn is_sanitized(endpoint: &atm_core::doctor::HerdrEndpointDisplay) -> bool {
+        let display = endpoint
+            .as_str()
+            .strip_prefix(r"\\.\pipe\")
+            .unwrap_or(endpoint.as_str());
+        ["$HOME/", "$XDG_CONFIG_HOME/", "%APPDATA%/", "<configured>/"]
+            .iter()
+            .any(|prefix| display.starts_with(prefix))
+    }
+
     #[test]
-    fn not_found_spawn_error_maps_to_binary_not_found() {
+    fn socket_unavailable_maps_to_a_sanitized_endpoint() {
         let probe = HerdrDoctorProbe::new(Default::default());
         assert!(matches!(
             probe.state_for_error(
@@ -310,14 +339,14 @@ mod tests {
                     io_error_kind: Some(std::io::ErrorKind::NotFound),
                 },
                 Duration::ZERO,
+                None,
             ),
-            HerdrDoctorState::BinaryNotFound { searched }
-                if searched == vec![std::path::PathBuf::from("herdr")]
+            HerdrDoctorState::EndpointUnreachable { endpoint } if is_sanitized(&endpoint)
         ));
     }
 
     #[test]
-    fn permission_denied_spawn_error_maps_to_binary_not_executable() {
+    fn socket_permission_denied_maps_to_a_sanitized_endpoint() {
         let probe = HerdrDoctorProbe::new(Default::default());
         assert!(matches!(
             probe.state_for_error(
@@ -327,10 +356,9 @@ mod tests {
                     io_error_kind: Some(std::io::ErrorKind::PermissionDenied),
                 },
                 Duration::ZERO,
+                None,
             ),
-            HerdrDoctorState::BinaryNotExecutable { path, cause }
-                if path == std::path::Path::new("herdr")
-                    && cause == "permission denied"
+            HerdrDoctorState::PermissionDenied { endpoint } if is_sanitized(&endpoint)
         ));
     }
 }
