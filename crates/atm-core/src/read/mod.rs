@@ -14,7 +14,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
 use crate::boundary::{self, RosterEntry};
-use crate::caller_context::{CallerContext, canonicalize_caller_context, resolve_roster_alias};
+use crate::caller_context::{
+    CallerContext, canonicalize_caller_context, resolve_roster_alias,
+    resolve_roster_alias_with_owner,
+};
 use crate::error::AtmError;
 use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
@@ -87,6 +90,79 @@ where
     }
 }
 
+/// Canonicalizes a mailbox request at daemon ingress using the complete RAM
+/// roster mirror.  A bare roster alias may select its owning team; an
+/// explicit `@team` remains constrained to that team's roster.
+pub fn canonicalize_roster_aliases_at_ingress<F, G>(
+    query: &mut ReadQuery,
+    roster_for_team: F,
+    all_rosters: G,
+) where
+    F: Fn(&TeamName) -> Vec<RosterEntry>,
+    G: FnOnce() -> Vec<RosterEntry>,
+{
+    let all_rosters = all_rosters();
+    let original_caller = query.caller_identity.clone();
+    let caller_roster = roster_for_team(&query.caller_team);
+    let (caller_team, caller_identity) = resolve_roster_alias_with_owner(
+        &query.caller_identity,
+        &query.caller_team,
+        &caller_roster,
+        &all_rosters,
+        true,
+    );
+    if caller_identity != query.caller_identity {
+        query.activity_observation = None;
+    }
+    query.caller_identity = caller_identity;
+    query.caller_team = caller_team;
+    if let Some(participant) = query.mailbox.participant_filter.as_mut()
+        && participant.agent == original_caller
+    {
+        participant.agent = query.caller_identity.clone();
+    }
+
+    let explicit_team = query
+        .mailbox
+        .target_address
+        .as_ref()
+        .is_some_and(|address| address.team().is_some());
+    let target_team = query
+        .mailbox
+        .target_address
+        .as_ref()
+        .and_then(|address| address.team().cloned())
+        .unwrap_or_else(|| query.caller_team.clone());
+    let target_roster = roster_for_team(&target_team);
+    if let Some(target) = query.mailbox.target_address.as_ref() {
+        let (resolved_team, canonical_target) = resolve_roster_alias_with_owner(
+            target.agent(),
+            &target_team,
+            &target_roster,
+            &all_rosters,
+            !explicit_team,
+        );
+        if let Ok(canonical_address) = AgentAddress::new(
+            canonical_target,
+            target.chat_id().cloned(),
+            Some(resolved_team.clone()),
+            target.host().cloned(),
+        ) {
+            query.mailbox.target_address = Some(canonical_address);
+        }
+    }
+    if let Some(sender) = query.mailbox.sender_filter.as_mut() {
+        let (_, canonical_sender) = resolve_roster_alias_with_owner(
+            sender,
+            &target_team,
+            &target_roster,
+            &all_rosters,
+            !explicit_team,
+        );
+        *sender = canonical_sender;
+    }
+}
+
 /// Canonicalizes a read-only peek request through the same ingress resolver.
 pub fn canonicalize_peek_roster_aliases<F>(query: &mut PeekQuery, roster_for_team: F)
 where
@@ -103,6 +179,29 @@ where
     canonicalize_roster_aliases(&mut read, roster_for_team);
     query.mailbox = read.mailbox;
     query.caller_identity = read.caller_identity;
+}
+
+/// Applies daemon-ingress roster resolution to a peek request.
+pub fn canonicalize_peek_roster_aliases_at_ingress<F, G>(
+    query: &mut PeekQuery,
+    roster_for_team: F,
+    all_rosters: G,
+) where
+    F: Fn(&TeamName) -> Vec<RosterEntry>,
+    G: FnOnce() -> Vec<RosterEntry>,
+{
+    let mut read = ReadQuery {
+        mailbox: query.mailbox.clone(),
+        caller_identity: query.caller_identity.clone(),
+        caller_chat_id: query.caller_chat_id.clone(),
+        caller_team: query.caller_team.clone(),
+        seen_state_update: false,
+        activity_observation: None,
+    };
+    canonicalize_roster_aliases_at_ingress(&mut read, roster_for_team, all_rosters);
+    query.mailbox = read.mailbox;
+    query.caller_identity = read.caller_identity;
+    query.caller_team = read.caller_team;
 }
 
 /// Bucket counts for one classified mailbox surface.
@@ -809,7 +908,8 @@ mod tests {
 
     use super::{
         BucketCounts, ClassifiedMessage, PeekQuery, ReadQuery, canonicalize_roster_aliases,
-        metadata_selection, peek_mail_with_runtime_impl, read_mail_with_runtime_impl, state,
+        canonicalize_roster_aliases_at_ingress, metadata_selection, peek_mail_with_runtime_impl,
+        read_mail_with_runtime_impl, state,
     };
     use crate::boundary::{self, MessageKey, RosterEntry, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
@@ -877,6 +977,113 @@ mod tests {
         assert_eq!(
             query.mailbox.sender_filter.as_ref().map(AgentName::as_str),
             Some(ROLE_TEAM_LEAD)
+        );
+    }
+
+    #[test]
+    fn unique_name_d03_bare_alias_resolves_globally_but_explicit_team_stays_local() {
+        let root = tempdir().expect("root");
+        let local_team = TeamName::from_validated(TEST_TEAM);
+        let remote_team = TeamName::from_validated("remote-team");
+        let local = vec![RosterEntry {
+            team_name: local_team.clone(),
+            agent_name: AgentName::from_validated("bob"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Worker,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: Map::new(),
+        }];
+        let mut remote_metadata = Map::new();
+        remote_metadata.insert("alias".to_owned(), Value::String("lead-alias".to_owned()));
+        let remote = vec![RosterEntry {
+            team_name: remote_team.clone(),
+            agent_name: AgentName::from_validated(ROLE_TEAM_LEAD),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Lead,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: remote_metadata,
+        }];
+        let all = [local.clone(), remote.clone()].concat();
+
+        let mut bare = ReadQuery::new(
+            root.path().to_path_buf(),
+            root.path().to_path_buf(),
+            AgentName::from_validated("bob"),
+            Some("lead-alias"),
+            local_team.clone(),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("bare query");
+        canonicalize_roster_aliases_at_ingress(
+            &mut bare,
+            |team| {
+                if *team == local_team {
+                    local.clone()
+                } else {
+                    remote.clone()
+                }
+            },
+            || all.clone(),
+        );
+        assert_eq!(
+            bare.mailbox
+                .target_address
+                .as_ref()
+                .and_then(|address| address.team()),
+            Some(&remote_team)
+        );
+        assert_eq!(
+            bare.mailbox
+                .target_address
+                .as_ref()
+                .map(|address| address.agent().as_str()),
+            Some(ROLE_TEAM_LEAD)
+        );
+
+        let mut explicit = bare.clone();
+        explicit.mailbox.target_address = Some(
+            format!("lead-alias@{local_team}")
+                .parse()
+                .expect("explicit address"),
+        );
+        canonicalize_roster_aliases_at_ingress(
+            &mut explicit,
+            |team| {
+                if *team == local_team {
+                    local.clone()
+                } else {
+                    remote.clone()
+                }
+            },
+            || all,
+        );
+        assert_eq!(
+            explicit
+                .mailbox
+                .target_address
+                .as_ref()
+                .and_then(|address| address.team()),
+            Some(&local_team)
+        );
+        assert_eq!(
+            explicit
+                .mailbox
+                .target_address
+                .as_ref()
+                .map(|address| address.agent().as_str()),
+            Some("lead-alias")
         );
     }
 

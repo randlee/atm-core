@@ -553,9 +553,17 @@ impl StorageAndNudgeRouter {
                 "async mailbox runtime was not installed at daemon startup",
             )
         })?;
-        atm_core::read::canonicalize_peek_roster_aliases(&mut query, |team| {
-            self.service_runtime.load_team_roster(team)
-        });
+        atm_core::read::canonicalize_peek_roster_aliases_at_ingress(
+            &mut query,
+            |team| self.service_runtime.load_team_roster(team),
+            || {
+                self.service_runtime
+                    .list_roster_teams()
+                    .into_iter()
+                    .flat_map(|team| self.service_runtime.load_team_roster(&team))
+                    .collect()
+            },
+        );
         let command = atm_core::read::async_projection::prepare_async_peek(&query)?;
         runtime
             .peek_command(command, deadline)
@@ -575,9 +583,17 @@ impl StorageAndNudgeRouter {
                 "async mailbox runtime was not installed at daemon startup",
             )
         })?;
-        atm_core::read::canonicalize_roster_aliases(&mut query, |team| {
-            self.service_runtime.load_team_roster(team)
-        });
+        atm_core::read::canonicalize_roster_aliases_at_ingress(
+            &mut query,
+            |team| self.service_runtime.load_team_roster(team),
+            || {
+                self.service_runtime
+                    .list_roster_teams()
+                    .into_iter()
+                    .flat_map(|team| self.service_runtime.load_team_roster(&team))
+                    .collect()
+            },
+        );
         let command = atm_core::read::async_projection::prepare_async_read(&query)?;
         runtime
             .read_command(command, deadline)
