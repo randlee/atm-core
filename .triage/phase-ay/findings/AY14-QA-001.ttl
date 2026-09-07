@@ -15,11 +15,14 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-core/src/caller_context.rs, crates/atm/src/commands/read.rs, crates/atm/src/commands (update-member, remove-member and every other agent-name argument), crates/atm-core/src/send/write_context.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T18:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY14 ;
   triage:foundAt "2026-09-07T18:12:56Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T19:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "qa-pr1305-r2 (PR #1305, head 109fdad1e). Fixed under AY14-FIX-R1: resolve_roster_alias/canonicalize_caller_context consolidated in caller_context.rs; alias canonicalization now wired into every ingress named in sweepScope -- read/mod.rs (canonicalize_roster_aliases, covers atm read --as, --from, and target address, both direct and daemon-router paths), send/write_context.rs (prepare_send_context, covers atm ack via the shared write pipeline), and team_admin/member_mutation.rs (canonicalize_member_mutation_aliases / canonicalize_remove_member_aliases, covers update-member and remove-member). Independently confirmed by req-qa and arch-qa (both PASS) with file:line evidence at every site; no duplicate alias-resolution logic introduced." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY14-QA-001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY14-QA-001/2> ;
   triage:triageRecordVersion "1" .
@@ -29,10 +32,11 @@
   triage:file "crates/atm-core/src/caller_context.rs" ;
   triage:line 1 ;
   triage:snippet "resolve_cli_caller_context / resolve_cli_mutation_caller_context never call resolve_roster_alias" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay14-herdr-agent-name-mapping" ;
   triage:headSha "23cebc85f" ;
+  triage:fixedAtHeadSha "109fdad1e" ;
   triage:occursIn <urn:atm:triage:worktree/AY14-QA-001/23cebc85f> .
 
 <urn:atm:triage:occurrence/AY14-QA-001/2>
@@ -40,10 +44,11 @@
   triage:file "crates/atm/src/commands/read.rs" ;
   triage:line 132 ;
   triage:snippet "--from <alias> passed raw into MailboxQueryFilters::sender_opt" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay14-herdr-agent-name-mapping" ;
   triage:headSha "23cebc85f" ;
+  triage:fixedAtHeadSha "109fdad1e" ;
   triage:occursIn <urn:atm:triage:worktree/AY14-QA-001/23cebc85f> .
 
 <urn:atm:triage:worktree/AY14-QA-001/23cebc85f>
