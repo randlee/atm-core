@@ -768,13 +768,11 @@ fn handle_graft_receiver_connection(
     let event = request.event;
     let kind = request.kind;
     let rendered_nudge = request.rendered_nudge;
-    let message_body = request.message_body;
     let dispatch = BuiltInPostSendDispatch {
         target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
             recipient: event.recipient.clone(),
             recipient_team: event.recipient_team.clone(),
             rendered_nudge,
-            message_body,
         }),
         event,
         kind,
@@ -962,7 +960,6 @@ mod tests {
                 event,
                 kind: NudgeKind::Steer,
                 rendered_nudge: "<atm>test nudge</atm>".to_string(),
-                message_body: "full immutable body".to_string(),
             },
             DELIVER_CONNECT_DEADLINE,
             DELIVER_IO_DEADLINE,
@@ -1266,10 +1263,7 @@ mod tests {
         }
         let nudges = injector.nudges.lock().expect("nudges lock");
         assert_eq!(nudges.len(), 100);
-        assert_eq!(
-            nudges[0].body,
-            "<atm>test nudge</atm>\n\nfull immutable body"
-        );
+        assert_eq!(nudges[0].body, "<atm>test nudge</atm>");
         assert_eq!(
             read_snapshot(&snapshot).expect("snapshot").state,
             GraftSessionState::Listening

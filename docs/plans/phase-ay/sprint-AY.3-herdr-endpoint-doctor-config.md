@@ -25,8 +25,8 @@ dependency_relations:
     rationale: AY.4 consumes the complete typed endpoint observations, doctor projection, configuration wiring, and presence correlation delivered here.
   - prerequisite: AY.3
     dependent: AY.8
-    relation: must_follow
-    rationale: AY.8 extends the endpoint/transport contracts and edits the architecture gate established here, so its independent multi-parent branch is created only after AY.1, AY.2, and AY.3 merge.
+    relation: parallel_safe
+    rationale: (rework 2026-09-06) AY.8 changes no behavior and stays inside atm-herdr behind HerdrProcessAdapter; the architecture gate this sprint retires needs no exemption. AY.8 starts once AY.1 and AY.2 merge and never waits on AY.3. Both sprints edit the atm-herdr boundary TOML and lib.rs; whichever merges second resolves at merge-forward and re-runs the composed-TOML check named in the plan's P-E section.
 ---
 
 # AY.3 — Herdr endpoint doctor and daemon configuration
@@ -66,9 +66,9 @@ pushed, not QA completion, triggers a merge commit from AY.2 into AY.3 before
 every development or fix round. Parent PRs merge into `integrate/phase-ay`
 first.
 
-AY.8 socket work is not in this stack. It becomes eligible only after AY.1,
-AY.2, and AY.3 have merged and then runs independently in parallel with
-AY.4–AY.7.
+AY.8 socket work is not in this stack. It is dispatched once AY.1 and AY.2
+have merged and P-E(b) is approved, never waits on AY.3, and runs
+independently in parallel with AY.3–AY.7 (rework 2026-09-06).
 
 ## Preconditions
 

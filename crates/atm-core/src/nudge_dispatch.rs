@@ -147,13 +147,7 @@ pub fn rebuild_received_hook_dispatch(
         NudgeKind::Queue => NudgeMode::Deferred,
     };
 
-    build_built_in_dispatch(
-        runtime,
-        &delivery_snapshot,
-        &event,
-        &message.envelope.text,
-        nudge_mode,
-    )
+    build_built_in_dispatch(runtime, &delivery_snapshot, &event, nudge_mode)
 }
 
 /// Builds a deferred Task reminder without requiring the assignment message
@@ -196,11 +190,5 @@ pub fn build_task_reminder_dispatch(
         task_id: Some(row.task_id.clone()),
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };
-    build_built_in_dispatch(
-        runtime,
-        &delivery_snapshot,
-        &event,
-        &row.description,
-        NudgeMode::Deferred,
-    )
+    build_built_in_dispatch(runtime, &delivery_snapshot, &event, NudgeMode::Deferred)
 }

@@ -11,14 +11,19 @@ recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: core
 parallel_with: [AY.8]
-stack_parent: feature/ay4-herdr-breaker-lifecycle
-pr_target: feature/ay4-herdr-breaker-lifecycle
-target: feature/ay4-herdr-breaker-lifecycle
+stack_parent: none
+pr_target: integrate/phase-ay
+target: integrate/phase-ay
+rework: 2026-09-06 (AY.5 is the bottom of the control-plane stack; see phase-ay-plan.md "Rework record")
 dependency_relations:
-  - prerequisite: AY.4
+  - prerequisite: AY.3
     dependent: AY.5
     relation: must_follow
-    rationale: the operator control plane is introduced only after AY.4 proves that Herdr absence/failure remains a bounded Tokio/Axum runtime condition and is never repaired implicitly by daemon lifecycle code.
+    rationale: every entry operation consumes the native Herdr doctor state and composed client configuration that AY.3 lands; AY.5 branches from `integrate/phase-ay` once AY.3 has merged.
+  - prerequisite: AY.4
+    dependent: AY.5
+    relation: parallel_safe
+    rationale: disjoint files (AY.4: atm-http-runtime/bootstrap breaker escalation; AY.5: daemon-switch entry scripts/tests, requirements, ADR-053, skill docs). AY.5 develops in parallel with AY.4 from `integrate/phase-ay` and merges after AY.4. Acceptance here must prove no daemon lifecycle code path invokes entry repair, which is the invariant the old serial ordering protected (rework 2026-09-06).
   - prerequisite: AY.5
     dependent: AY.6
     relation: must_follow
@@ -26,7 +31,7 @@ dependency_relations:
   - prerequisite: AY.5
     dependent: AY.8
     relation: parallel_safe
-    rationale: AY.5 edits daemon-switch scripts/tests, requirements, ADR-053, and skill documentation; AY.8 edits atm-herdr socket transport, fixtures, boundary revision, and architecture exemption after their shared AY.3 contracts merge.
+    rationale: AY.5 edits daemon-switch scripts/tests, requirements, ADR-053, and skill documentation; AY.8 edits atm-herdr socket transport, fixtures, and one boundary-ownership key; no file is shared.
 ---
 
 # AY.5 — Transactional Herdr entry control plane
@@ -39,10 +44,14 @@ restart, restore, or daemon startup.
 
 ## Delivery topology and `/gh-stack`
 
-AY.5 is stacked between breaker lifecycle and coordinated restart:
+AY.5 is the bottom of the control-plane stack (rework 2026-09-06). It
+branches from `integrate/phase-ay` after AY.3 merges and develops in
+parallel with AY.4, which lives in the separate core stack:
 
 ```text
-integrate/phase-ay <- AY.2 <- AY.3 <- AY.4 <- AY.5 <- AY.6 <- AY.7
+integrate/phase-ay <- AY.2 <- AY.3 <- AY.4          (core stack)
+integrate/phase-ay <- AY.5 <- AY.6 <- AY.7          (control-plane stack)
+integrate/phase-ay <- AY.8                          (transport track)
 ```
 
 Use the `/gh-stack` skill only through noninteractive forms:
@@ -51,9 +60,6 @@ Use the `/gh-stack` skill only through noninteractive forms:
 git config rerere.enabled true
 git config remote.pushDefault origin
 gh stack link --base integrate/phase-ay \
-  feature/ay2-herdr-transport-seam \
-  feature/ay3-herdr-endpoint-doctor-config \
-  feature/ay4-herdr-breaker-lifecycle \
   feature/ay5-herdr-entry-control-plane
 gh pr view feature/ay5-herdr-entry-control-plane \
   --json headRefName,baseRefName,state
@@ -63,8 +69,9 @@ Append AY.6 and AY.7 with `gh stack link <stack-number> <branch>`. Phase AY
 uses `link` for its external-worktree stack and verifies bases with
 `gh pr view --json`.
 It forbids `gh stack rebase`, `gh stack sync`, and `gh stack merge`; use merge
-commits, no force-push, and parent-first PR completion. AY.4 development pushed
-triggers merge-forward into AY.5 before every development/fix round.
+commits, no force-push, and parent-first PR completion. AY.4 and AY.5 share
+no files; AY.5 merges after AY.4, and any AY.4 merge into
+`integrate/phase-ay` is merged forward into AY.5 before its next round.
 
 AY.8 is a separate branch from `integrate/phase-ay` and is parallel-safe with
 AY.5. Neither branch merges an unmerged sibling.
@@ -72,10 +79,9 @@ AY.5. Neither branch merges an unmerged sibling.
 ## Preconditions
 
 - P-A and P-B from the Phase AY plan are satisfied.
-- AY.4 development is pushed, and AY.5 is created from
-  `feature/ay4-herdr-breaker-lifecycle`.
-- AY.3's `atm doctor --json` schema and AY.4's optional/failure lifecycle are
-  green on the parent stack.
+- AY.3 has merged into `integrate/phase-ay`, and AY.5 is created from that
+  integration head (never from AY.4; the two develop in parallel).
+- AY.3's `atm doctor --json` schema is green on `integrate/phase-ay`.
 - The implementer has read the current `.claude/skills/daemon-switch/SKILL.md`,
   `scripts/daemon-switch.py`, its tests, REQ-P-DAEMON-SWITCH-001, and ADR-053.
 
@@ -266,8 +272,8 @@ This is the authoritative validation list.
 - [ ] V3 — `just lint spell` and `just lint adr-index` exit zero.
 - [ ] V4 — `just validate` exits zero.
 - [ ] V5 — `gh pr view feature/ay5-herdr-entry-control-plane --json
-  headRefName,baseRefName,state` reports base
-  `feature/ay4-herdr-breaker-lifecycle`; AY.8 is not in this stack.
+  headRefName,baseRefName,state` reports base `integrate/phase-ay`; neither
+  AY.4 nor AY.8 is in this stack.
 
 ## Non-closure and out of scope
 

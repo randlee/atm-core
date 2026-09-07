@@ -62,8 +62,10 @@ owning or supervising Herdr, excluded by ruling 1. Compatibility
 ownership: AY.8's equivalence suite proves the socket client emits the
 same request set and error mapping as the CLI transport for every Herdr
 release at or above `HERDR_MINIMUM_VERSION`; AY.9 keeps the CLI transport
-as an explicit fallback for one minor release so a Herdr drift can be
-absorbed without a hotfix. AY.8 and AY.9 are therefore the design answer to
+as a permanent alternative selected once at daemon start (Rand,
+2026-09-06: the CLI implementation has worked from the start; pick CLI or
+UDS/named pipe in config, never switch at runtime) so a socket defect or
+Herdr drift is absorbed by a config edit plus restart, never by a hotfix. AY.8 and AY.9 are therefore the design answer to
 the phase's transport and failure-model drivers, not a separate modernization.
 
 Post-mortem entry: filed as AW-READY-W1 (blocking) with a
@@ -372,7 +374,7 @@ grounded in the tag rather than assumed.
 | `herdr server` | Entry unchanged (`src/main.rs:542`); `run_server` moved to `src/server/headless/bootstrap.rs` (207be3c7) with identical duplicate detection and restore | No change |
 | Endpoint resolution: `ipc.rs`, `session.rs`, `api/client.rs`, `socket_paths.rs` | Byte-identical across the range | No change |
 | NDJSON envelope, `agent.*` shapes, limits, `notification show`, CLI argv and exit codes | No change; additive methods and fields only (`ping.capabilities.endpoint_protocol_generation`, `workspace.close.close_group`, `worktree.*.trust_repository`, new `pane.*`, `command.invoke`, `integration.list`) | Parsers must tolerate unknown fields; AY.1 asserts it |
-| `events.subscribe` | Starts at the live sequence, no replay (20a500a7) | Irrelevant unless AY.8 subscribes; documented |
+| `events.subscribe` | Starts at the live sequence, no replay (20a500a7); present since fbd20ad6 (v0.8.2), absent at v0.8.0 | AY.10 subscribes; no replay is why every (re)subscribe takes an `agent.list` baseline |
 | Autostart | Still none at HEAD (grep for login item / LaunchAgent / RunAtLoad / autostart / schtasks / Register-ScheduledTask / systemd / SMAppService: only SSH keepalive hits) | Confirms the installer-owned start-at-login entry design |
 | API pipe ACL | Unchanged: `restrict_socket_permissions` is a no-op on Windows (`src/ipc.rs:342-345`); the SDDL DACL at `ipc.rs:141-167` serves only the remote-attach bridge | AY.8 boundary revision records the API pipe as default-DACL |
 
@@ -608,7 +610,8 @@ installed, doctor prints one line "herdr: not configured".
   nothing is configured the child inherits the daemon's ambient
   environment unmodified. HR-CORE-006 is **retained unchanged**; the
   previous revision's deletion of it is withdrawn. The CLI fallback is
-  retained through atm 1.5.x and removed in atm 1.6.0. atm never reads
+  retained permanently as an explicit operator selection (no removal
+  release; superseded 2026-09-06). atm never reads
   `HERDR_SESSION` or `HERDR_SOCKET_PATH` from its own environment to
   synthesize a choice (requirements.md:153-160). Tests: AY.2 (env
   mapping and exclusivity, relative-path rejection), AY.3 (doctor
@@ -623,7 +626,10 @@ installed, doctor prints one line "herdr: not configured".
   `server_not_running` code), `ServerUnavailable` (binary not found;
   cause names what was searched), `ProtocolMismatch`, `Timeout`. **No new
   variant is introduced**; the previous revision's
-  `HerdrError::NotRunning` is `ServerNotRunning`.
+  `HerdrError::NotRunning` is `ServerNotRunning`. AY.10 keeps this true:
+  the CLI transport has no status stream, so the composition returns
+  `None` for it instead of an error (AY.10 D3), and stream reconnects use
+  the stream's own budget, never the nudge breaker below (AY.10 C2).
 - Direct socket calls share a 16-permit per-invoker cap. Permit acquisition,
   connect, Windows `ERROR_PIPE_BUSY` retry, write, flush, and read all consume
   the caller's one absolute deadline; busy-pipe attempts wait 10 ms (clipped to
@@ -848,7 +854,8 @@ User-experience contract (AY.3 through AY.6 acceptance, verified by req-qa):
 
 ## Sprint map, parallel tracks and stacking
 
-Nine sprints, numbered sequentially. Each row maps to exactly one
+Twelve sprints, numbered sequentially (AY.10–AY.12 added 2026-09-06 for the
+subscription socket; see rework item 7). Each row maps to exactly one
 authoritative sprint file. Relations follow
 `.claude/skills/plan-hardening/sprint-planning-guidelines.md`:
 `must_follow` names a development/merge dependency, while
@@ -860,12 +867,15 @@ contracts, artifacts, and ownership.
 | AY.1 | Audit, version ledger, requirements, ADR, architecture/history correction | S | Docs | P-A, P-B | AY.2 | any |
 | AY.2 | Private CLI transport foundation plus portable fake/replay fixtures | M | Core stack | P-A, P-B | AY.1 | macOS/Linux + Windows CI |
 | AY.3 | Endpoint doctor/config boundary and end-to-end activation | M | Core stack | AY.2, P-E(a) | none | macOS/Linux + Windows CI |
-| AY.4 | Breaker escalation and real-composition failure/recovery lifecycle | M | Core stack | AY.3 | AY.8 | macOS/Linux + Windows CI |
-| AY.5 | Transactional Herdr entry install/remove/status/repair | M | Core stack | AY.4 | AY.8 | macOS/Linux + platform fakes |
-| AY.6 | Coordinated Herdr restart/live-handoff and ATM-restart preflight | M | Core stack | AY.5 | AY.8 | macOS/Linux + platform fakes |
-| AY.7 | Windows process correctness and installer Windows branch | S | Core/Windows stack | AY.6 | AY.8 | Windows CI lane |
-| AY.8 | Direct socket/pipe transport, fake server, compatibility/equivalence | L | Socket | AY.1, AY.2, AY.3, P-E(b) | AY.4, AY.5, AY.6, AY.7 | macOS/Linux + Windows CI |
-| AY.9 | Socket-default cutover, CLI fallback, doctor projection, lifecycle/CI | M | Join | AY.7, AY.8 | none | all CI lanes |
+| AY.4 | Breaker escalation and real-composition failure/recovery lifecycle | M | Core stack | AY.3 | AY.5, AY.6, AY.7, AY.8 | macOS/Linux + Windows CI |
+| AY.5 | Transactional Herdr entry install/remove/status/repair | M | Control-plane stack | AY.3 | AY.4, AY.8 | macOS/Linux + platform fakes |
+| AY.6 | Coordinated Herdr restart/live-handoff and ATM-restart preflight | M | Control-plane stack | AY.5 | AY.4, AY.8 | macOS/Linux + platform fakes |
+| AY.7 | Windows process correctness and installer Windows branch | S | Control-plane/Windows stack | AY.6 | AY.4, AY.8 | Windows CI lane |
+| AY.8 | Direct socket/pipe transport, fake server, compatibility/equivalence | L | Transport | AY.1, AY.2, P-E(b) | AY.3, AY.4, AY.5, AY.6, AY.7 | macOS/Linux + Windows CI |
+| AY.9 | Socket-default cutover, CLI fallback, doctor projection, lifecycle/CI | M | Join | AY.7, AY.8 | AY.10 | all CI lanes |
+| AY.10 | Held `events.subscribe` stream in atm-herdr behind `HerdrStatusStream` | M | Transport (stacked on AY.8) | AY.8 | AY.4, AY.5, AY.6, AY.7, AY.9 | macOS/Linux + Windows CI |
+| AY.11 | Daemon shadow consumption of the stream; poll stays authoritative; parity counters | M | Join | AY.9, AY.10 | none | all CI lanes |
+| AY.12 | Stream becomes the state source; poll removed on the socket path | S | Join (gated on Rand's decision on AY.11 evidence) | AY.11 | none | all CI lanes |
 
 Execution waves are explicit:
 
@@ -873,15 +883,19 @@ Execution waves are explicit:
 | --- | --- | --- |
 | 1 | AY.1 and AY.2 | Both start after P-A/P-B; AY.1 is standalone and AY.2 is the stack bottom. |
 | 2 | AY.1 completion, AY.2 review, AY.3 development | AY.3 starts after AY.2 development/contracts are pushed and P-E(a) is approved; AY.2 merges before AY.3. |
-| 3 | AY.3 review and AY.4 development | AY.4 is stacked after AY.3 development is pushed; AY.3 merges before AY.4. |
-| 4 | AY.4 and AY.8 | AY.8 starts independently only after AY.1, AY.2, and AY.3 merge and P-E(b) is approved. |
-| 5 | AY.5 and AY.8 | AY.5 stays in the linear stack; AY.8 remains an independent sibling. |
-| 6 | AY.6 and AY.8 | Same independent concurrency; neither branch merges the unmerged sibling. |
-| 7 | AY.7 and AY.8 | Neither has a physical-host gate; AY.7's gate is the Windows CI lane (ruling 5). |
-| 8 | AY.9 | Starts from `integrate/phase-ay` only after AY.7 and AY.8 merge; the last sprint. |
+| 3 | AY.3 review, AY.4 development, AY.8 development | AY.4 is stacked after AY.3 development is pushed; AY.3 merges before AY.4. AY.8 starts from `integrate/phase-ay` the moment AY.1 and AY.2 have merged and P-E(b) is approved (both true 2026-09-06); it never waits on AY.3. |
+| 4 | AY.4, AY.5, AY.8 | AY.5 starts from `integrate/phase-ay` when AY.3 merges and develops in parallel with AY.4 (disjoint files); AY.4 merges before AY.5. |
+| 5 | AY.6, AY.7, AY.8, AY.10 | Contracts first: AY.6 is stacked on AY.5 as soon as AY.5's contracts are pushed, AY.7 on AY.6 likewise; AY.10 on AY.8 as soon as AY.8's `SocketIo` and fake server are pushed. Neither stack merges the unmerged sibling; AY.7's gate is the Windows CI lane (ruling 5). |
+| 6 | AY.9, AY.10 | AY.9 starts from `integrate/phase-ay` only after AY.7 and AY.8 merge; AY.10 completes on its stack and merges after AY.8. |
+| 7 | AY.11 | Starts from `integrate/phase-ay` after AY.9 and AY.10 merge. |
+| 8 | AY.12 | Dispatched only after a dated "Decision (Rand, ...): drop poll" is recorded under rework item 7; the last sprint. |
 
-The sole linear stack is AY.2 -> AY.3 -> AY.4 -> AY.5 -> AY.6 ->
-AY.7. Use the `/gh-stack` skill for every operation on that stack.
+There are two linear stacks (rework 2026-09-06): the core stack AY.2 ->
+AY.3 -> AY.4 and the control-plane stack AY.5 -> AY.6 -> AY.7, each
+based on `integrate/phase-ay`. AY.8 is a standalone transport branch with
+AY.10 stacked on it (AY.8 -> AY.10); AY.9 and AY.11 are joins and AY.12
+the gated last sprint. Use the `/gh-stack` skill for every operation on
+either stack.
 Branches are created with `sc-git-worktree` from the immediate parent so
 each child carries the parent's unmerged work. Because this is an external
 worktree/PR workflow, use `gh stack link` to create or update remote stack
@@ -891,10 +905,14 @@ state, then verify actual PR bases directly:
 gh stack link --base integrate/phase-ay \
   feature/ay2-herdr-transport-seam \
   feature/ay3-herdr-endpoint-doctor-config \
-  feature/ay4-herdr-breaker-lifecycle \
+  feature/ay4-herdr-breaker-lifecycle
+gh stack link --base integrate/phase-ay \
   feature/ay5-herdr-entry-control-plane \
   feature/ay6-herdr-restart-coordination \
   feature/ay7-windows-herdr-process-installer
+gh stack link --base integrate/phase-ay \
+  feature/ay8-herdr-socket-transport \
+  feature/ay10-herdr-status-stream
 
 gh pr view feature/ay2-herdr-transport-seam --json headRefName,baseRefName,state
 gh pr view feature/ay3-herdr-endpoint-doctor-config --json headRefName,baseRefName,state
@@ -902,6 +920,8 @@ gh pr view feature/ay4-herdr-breaker-lifecycle --json headRefName,baseRefName,st
 gh pr view feature/ay5-herdr-entry-control-plane --json headRefName,baseRefName,state
 gh pr view feature/ay6-herdr-restart-coordination --json headRefName,baseRefName,state
 gh pr view feature/ay7-windows-herdr-process-installer --json headRefName,baseRefName,state
+gh pr view feature/ay8-herdr-socket-transport --json headRefName,baseRefName,state
+gh pr view feature/ay10-herdr-status-stream --json headRefName,baseRefName,state
 ```
 
 All commands are noninteractive. The parent-development-pushed event,
@@ -911,10 +931,11 @@ policy narrows the general `/gh-stack` workflow: never run `gh stack
 rebase`, `gh stack sync`, or `gh stack merge`; do not force-push; merge
 each PR in dependency order with `gh pr merge --merge`.
 
-AY.1 is standalone. AY.8 is a standalone three-parent join created from
-the merged integration head; AY.9 is a standalone two-parent join and the
-phase's last sprint. None is passed to `gh stack link`, and no unmerged
-sibling is ever merged into one of those branches.
+AY.1 is standalone. AY.8 is a standalone transport branch (with AY.10
+stacked on it); AY.9 is a standalone two-parent join; AY.11 is a
+standalone join after AY.9 and AY.10; AY.12 is gated. AY.1, AY.9, AY.11
+and AY.12 are never passed to `gh stack link`, and no unmerged sibling is
+ever merged into one of those branches.
 
 The sprint files below are authoritative. Each has the template's literal
 mandatory YAML keys `id`, `title`, `status`, `branch`, and `target`, plus exact
@@ -933,6 +954,9 @@ umbrella:
 - [`sprint-AY.7-windows-herdr-process-installer.md`](./sprint-AY.7-windows-herdr-process-installer.md)
 - [`sprint-AY.8-herdr-socket-transport.md`](./sprint-AY.8-herdr-socket-transport.md)
 - [`sprint-AY.9-herdr-socket-cutover.md`](./sprint-AY.9-herdr-socket-cutover.md)
+- [`sprint-AY.10-herdr-status-stream.md`](./sprint-AY.10-herdr-status-stream.md)
+- [`sprint-AY.11-herdr-stream-shadow-parity.md`](./sprint-AY.11-herdr-stream-shadow-parity.md)
+- [`sprint-AY.12-herdr-drop-poll.md`](./sprint-AY.12-herdr-drop-poll.md)
 
 Not a sprint: [`release-readiness-herdr-live-proof.md`](./release-readiness-herdr-live-proof.md)
 is the live macOS/Windows checklist run under release readiness after the
@@ -1000,14 +1024,32 @@ Common preconditions:
   public-contract inventory update to the atm-herdr boundary record,
   reviewed after AY.2's transport foundation and recordings are pushed and before AY.3
   development starts; AY.2 still merges before AY.3. The approved file is
-  AY.3's first commit. (b) AY.8: the revision below, reviewed after AY.3
-  merges and before AY.8 dispatch; the approved diff is AY.8's first commit.
+  AY.3's first commit. (b) AY.8: the revision below, reviewed before AY.8 dispatch; the approved
+  diff is AY.8's first commit. Ruled 2026-09-06 by boundary-guard: approved
+  as written; the endpoint resolver and its types stay crate-private, no
+  architecture-test exemption exists, and AY.8 does not wait on AY.3.
+  Composed-file rule: AY.3 (P-E(a)), AY.8 (P-E(b)) and AY.10 (D7, added
+  2026-09-06) all edit `boundaries/atm-herdr/herdr-process-adapter.toml`
+  and `crates/atm-herdr/src/lib.rs`; AY.9 and AY.10 both edit
+  `crates/atm-herdr/src/transport.rs`, `lib.rs`, and
+  `crates/atm-architecture/tests/boundary_enforcement.rs` (AY.9: forbidden-
+  edge grep and factory pin; AY.10: the C1 public items in the pin list).
+  Whichever of any such pair merges into `integrate/phase-ay` later merges
+  the integration head forward, resolves the TOML by keeping every earlier
+  inventory line and adding only its own key (P-E(b) `io_owns`; AY.10 the
+  `status_stream.rs` path under that same key), resolves `lib.rs`,
+  `transport.rs`, and `boundary_enforcement.rs` by keeping both sides'
+  items and pinned entries, then reruns `just lint boundaries` and `cargo
+  test -p atm-architecture -p atm-herdr`, and fenix (boundary-guard)
+  confirms the composed files before that PR merges. AY.10 is stacked on AY.8, so its
+  TOML diff is reviewed by boundary-guard against AY.8's head before AY.10
+  dispatch (P-E(c)); the approved diff is AY.10's first commit.
   Proposed diff to `boundaries/atm-herdr/herdr-process-adapter.toml`:
 
   ```toml
   [ownership]
   io_owns = [
-    "tokio_process_spawn",          # CLI transport (retained until the AY.9 fallback window closes)
+    "tokio_process_spawn",          # CLI transport (permanent explicit fallback)
     "herdr_argv_construction",      # CLI transport (same)
     "herdr_local_socket_client",    # new: UDS / named-pipe NDJSON client, transport_socket.rs only
     "herdr_json_error_parsing",
@@ -1015,8 +1057,8 @@ Common preconditions:
   ]
   ```
 
-  `io_forbidden` is unchanged. The two CLI keys are dropped in the sprint
-  that removes the CLI fallback (atm 1.6.0, after AY.9), not in AY.8.
+  `io_forbidden` is unchanged. The two CLI keys are permanent: the CLI
+  transport is the retained explicit fallback (ruled 2026-09-06).
 
 AYP-R2-011 (approval blocker on P-C/P-D placeholders) is closed by
 ruling 5 (r23): no sprint depends on P-C or P-D, so plan approval (P-B)
@@ -1028,12 +1070,22 @@ Common acceptance for every sprint: merge gate 0 blocking / 0 important /
 time (never a dispatch gate), no flaky-test tolerance, frozen files
 untouched without a written ruling, no tokio in atm-core.
 
-## Phase AY exit gate (AY.9 disposition)
+## Phase AY exit gate (AY.9 disposition, then AY.11 and item 7)
 
-Phase AY is not complete until a dated decision, after the AY.9 cutover
+Phase completion (2026-09-06, with AY.10–AY.12 added): the
+integrate/phase-ay to develop PR opens only after (1) the AY.9 cutover
+decision below is recorded, (2) AY.11 has merged and its parity evidence
+from the rand-m4 dogfood run is recorded under rework item 7, and (3)
+item 7's own decision line is filled in. If that decision is "drop poll",
+AY.12 merges into integrate/phase-ay before the develop PR opens; "keep
+both" and "stop subscription work" close the phase without AY.12. There is no interim
+develop merge between AY.9 and AY.11. quality-mgr's phase-ending gate
+refuses the develop PR while either decision line below is missing.
+
+The AY.9 cutover decision is a dated decision, after the AY.9 cutover
 has merged with all three CI lanes green, the socket-default and
 explicit-CLI lifecycle suites passing, and the AY.8 equivalence suite
-unchanged, is recorded here and in `docs/project-plan.md`, chosen by Rand
+unchanged, recorded here and in `docs/project-plan.md`, chosen by Rand
 from exactly these. No live run is an input to this decision (ruling 5);
 the phase-ending critical review on the integrate head is. The official
 benchmark is not part of this gate either: it runs once at release
@@ -1059,8 +1111,7 @@ readiness on the develop build (Rand, 2026-09-05; closes AYP-R13-002).
   public types, pins and exports; the Tokio `net` feature; the `transport`
   and `socket_path` configuration keys and their validation; the socket
   values of the doctor `transport`/`endpoint` fields and their snapshots;
-  the `herdr_local_socket_client` ownership key, the AI.11 exemption line
-  and the NDJSON columns; operator documentation of the socket default.
+  the `herdr_local_socket_client` ownership key and the NDJSON columns; operator documentation of the socket default.
   The AY.8 and AY.9 sprint docs are marked superseded. Gate checks for
   Cancel are mechanical on the integrate head: `test ! -e
   crates/atm-herdr/src/transport_socket.rs`; `grep -rn
@@ -1077,8 +1128,20 @@ Decision (Rand, YYYY-MM-DD): Ship|Defer <phase>|Cancel
 
 quality-mgr's phase-ending gate must refuse the integrate/phase-ay to
 develop PR while `grep -E '^Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): (Ship|Defer [A-Z]+|Cancel)$'`
-finds no line in this file. This is the forcing function that AQ2.6 and
-ADR-058 lacked (see AW-READY-W1).
+finds no line in this file, or while
+`grep -E '^   Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): (drop poll|keep both|stop subscription work)$'`
+finds no line under rework item 7. This is the forcing function that
+AQ2.6 and ADR-058 lacked (see AW-READY-W1).
+
+AY.10's dispatch gate uses the same mechanism one step earlier: fenix
+refuses to render AY.10's dev-task, and quality-mgr refuses the AY.10 PR,
+while
+`grep -E '^   Decision \(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\): accept N-per-100ms$'`
+finds no line under rework item 7. The three item-7 answers are distinct
+strings (`accept N-per-100ms`, `herdr change first`, `stop AY.10`) so no
+pattern here matches another line's answer; `herdr change first` re-plans
+AY.10 by plan amendment and `stop AY.10` retires AY.10 to AY.12 and the
+socket stream with it.
 
 ## Request set the transport must carry (from phase AX contract)
 
@@ -1095,9 +1158,11 @@ transport derives the endpoint from that same configured session.
 | HR-CORE-005 | list | `herdr agent list` |
 | HR-CORE-010 (AX.6) | notify | `herdr notification show <title> --body <body> --sound request`; mail body forbidden (HR-SAFE-003); sound fixed |
 | doctor (AY.3) | server_status | `herdr status server --json` (JSON `version`, `protocol`; verified present at v0.8.0 346411fa, v0.8.2 9eb52145 and master `src/cli/status.rs`); socket: `ping`. Doctor only, never on the nudge path |
+| HR-CORE-011 (AY.10, added 2026-09-06) | status stream | No CLI equivalent. Socket only: `events.subscribe` held connection, one per session, subscriptions `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.exited` (re-list triggers only; they replay retained hub history), and one unfiltered `pane.agent_status_changed { pane_id }` per discovered pane; baseline from `agent.list` taken after `SubscriptionStarted`, stream value wins when newer, changes deduped by held value. Herdr-side cost: one in-process `pane_get` per subscribed pane per 100 ms while the hub is quiet (AY.10 "Herdr facts"), acceptance is gated on the decision line under rework item 7, recorded before AY.10 is dispatched (see AY.10 frontmatter `status`). Exposed by `HerdrStatusStream`, separate from `HerdrProcessAdapter`; CLI composition provides `None` |
 
 Responses: HR-CORE-007 AgentSnapshot from `result.agent`; HR-CORE-008
-closed HerdrError enum keyed by Herdr error codes (unchanged by AY);
+closed HerdrError enum keyed by Herdr error codes (unchanged by AY,
+including AY.10);
 HR-CORE-009 and HR-SAFE-005..007 breaker on infrastructure-class failures
 (connect/IO class on a socket). HR-SAFE-001 no send-keys fallback;
 HR-SAFE-002 every call bounded; HR-SAFE-004 no durable Herdr state in
@@ -1107,7 +1172,8 @@ Boundary: `boundaries/atm-herdr/herdr-process-adapter.toml` io_owns
 `tokio_process_spawn` and `herdr_argv_construction`. AY.2 changes neither
 (pure motion inside the crate). AY.8 adds `herdr_local_socket_client`
 under the P-E revision and keeps both CLI keys while the CLI path exists
-(additive, AYP-R2-002); the CLI keys go when the CLI code goes. forbidden_edges stay (no
+(additive, AYP-R2-002); the CLI keys are permanent because the CLI
+transport is the retained explicit fallback (2026-09-06). forbidden_edges stay (no
 atm-core/atm-storage/rusqlite into atm-herdr; no atm-herdr into
 daemon/runtime crates).
 
@@ -1591,3 +1657,251 @@ version, and lifecycle-label shapes.
   a bounded kill-then-reap grace period, per-call binary re-resolution, and
   CRLF-tolerant decoding) alongside its documentation and Windows-CI coverage;
   no live-hardware sprint gate was introduced.
+
+## Rework record (2026-09-06, PR from `plan/phase-ay-rework` to develop)
+
+Trigger: AY.3 ran for three hours in one dev session and the remaining
+six sprints were serialized behind it. Rand's rulings, applied verbatim:
+
+1. Sprints are designed to complete in one context window. AY.3's shape
+   (twenty commits, five crates) is the reference for "too large"; no
+   remaining sprint may exceed it, and any sprint that grows past one
+   window is split at the next contract boundary rather than continued.
+2. An eight-item serial plan is a design smell: work written against code
+   rather than traits. All Herdr implementation lives in the independent
+   `atm-herdr` crate behind `HerdrProcessAdapter`.
+3. Swapping CLI calls for UDS/named-pipe is completely hidden from the
+   rest of the application, changes no functionality, and is developed
+   independently of every feature sprint. AY.8 therefore depends only on
+   AY.1, AY.2 and P-E(b), is parallel-safe with AY.3 through AY.7, and is
+   dispatched now (cipher, fast model). AY.9 remains the composition flip.
+4. The AI.11 retired-transport guard kept named pipes out of daemon HTTP on
+   Windows; it has nothing to do with Herdr, which requires a named pipe
+   there. It is obsolete and was deleted on AY.3 (PR #1273, 45701a81e).
+   There are no named pipes in the repo other than the ones Herdr requires,
+   and AY.8 needs no exemption (D2 removed; endpoint types crate-private;
+   public-item pin unchanged).
+5. The AY.4 -> AY.5 edge was a design principle, not a file dependency.
+   AY.5 now depends on AY.3 only, branches from `integrate/phase-ay`, and
+   heads the control-plane stack AY.5 -> AY.6 -> AY.7. AY.6 and AY.7 start
+   contracts-first on their parent's pushed contracts, as AY.3 did on AY.2.
+6. The CLI transport is not deprecated or scheduled for removal. It has
+   worked from the start and stays as the permanent alternative. The
+   transport is chosen exactly once, at daemon start, from
+   `herdr.transport` (`socket` default, `cli` explicit) in the AY.9
+   composition factory; it is reported by doctor and never changes while
+   the daemon runs. There is no per-call or runtime fallback: a socket
+   connect failure is a Herdr-unavailable breaker event, exactly like a
+   spawn failure today, and switching transports means editing config and
+   restarting the daemon. Both transports run
+   the AY.8 equivalence suite on every CI lane for as long as both exist.
+   The atm 1.6.0 removal clauses are withdrawn from the plan, AY.8 and AY.9.
+
+Resulting concurrency after AY.3 merges: AY.4 (arch-ctm), AY.5 (arch-ctm
+or cipher), AY.8 (cipher) run at once; AY.6/AY.7 follow AY.5's contracts;
+AY.9 joins. Orchestration state in `.sprints/AY/structure.ttl` on
+`integrate/phase-ay` is updated to this order after this PR merges.
+
+Files changed by the rework: this plan (sprint map, waves, stack
+description, P-E(b) and its composed-file rule, the Cancel disposition
+under "Phase AY exit gate", this record), sprint-AY.1 (superseded
+exemption note), sprint-AY.3 (AY.8 edge and dispatch prose),
+sprint-AY.4/AY.5/AY.6/AY.7 (edges, rationales, stack topology,
+preconditions, V5), sprint-AY.8 (D2 removed, D4/D9/D10/C1/C3, required
+work 1, acceptance 1 and 7, dispatch section, size/split, recommended
+agent), sprint-AY.9 (permanent CLI fallback, D10 pin name). Subscription
+socket (2026-09-06): sprint-AY.10, AY.11, AY.12 added; this plan (sprint
+map, waves, stack description, request-set table, drift row, scaling
+note, item 7); sprint-AY.8 (AY.10 edge, out of scope, split clause);
+sprint-AY.9 (out of scope, AY.10/AY.11 edges, C1a allowlist, AC 9a,
+intro); this plan again after round 3 (Failure behaviour, P-E composed
+rule and P-E(c), gh stack example, exit gate, request-set row).
+
+Scaling note (Rand, 2026-09-06, 30–50 agents): today's queue-wake tick
+(5 s) spawns one `herdr list` per session every tick whether or not any
+member is pending, plus one `herdr get` per member with an open task and
+one `herdr prompt` per eligible member. The socket removes the per-call
+process cost; it does not remove the per-member call count. Rand: "we
+shouldn't be creating 50 sockets every 5 seconds"; "I would expect all
+agent queries would be done on a single socket." AY.4 (breaker lifecycle)
+and AY.6 (restart coordination) must not add per-member calls; that
+negative constraint is in force now. The tick itself is replaced through
+item 7 below, not optimized.
+
+7. Agent state changes. Rand, 2026-09-06: "I really want herdr to simply
+   tell us when an agent state changes"; "we need to 'know' every time an
+   agent state changes". Finding (fenix, from Herdr v0.8.2 `src/api`):
+   Herdr already ships this as `events.subscribe`, one held NDJSON
+   connection per session streaming every subscribed pane's agent-status
+   changes plus pane create/close; it is socket-only and has no CLI form.
+   Correction (fenix, 2026-09-07, critical review r4 CRIT-401/402, verified
+   in v0.8.2 `src/api/subscriptions.rs` and `server.rs`): Herdr's stream
+   is not push-based. Each per-pane agent-status subscription is polled by
+   Herdr every 100 ms and, when the event hub is quiet, runs one
+   in-process `pane_get`; hub-only pane subscriptions replay retained
+   history on every subscribe. AY.10 C2 therefore uses one unfiltered
+   subscription per pane (N `pane_get` per 100 ms inside Herdr, 500/s at
+   50 panes, no new sockets) with the baseline from `agent.list` after
+   `SubscriptionStarted`. The only zero-poll form is a Herdr change (a
+   hub-only agent-status subscription without a pane id), which is out of
+   AY.10's scope and would need a HERDR_MINIMUM_VERSION bump. AY.10 is
+   dispatched only after this line is filled in:
+
+   Decision (Rand, YYYY-MM-DD): accept N-per-100ms | herdr change first | stop AY.10
+   The earlier planning statement that notification needed one
+   subscription per agent was wrong; one connection carries them all.
+   Rand: "yes, I think we need to add the subscription socket."; "are you
+   proposing we do both and verify they match. once they match we can drop
+   the polling?"; "this is a prudent solution."; "and probably lowest
+   risk". Done as three sprints, each one context window: AY.10 (stream in
+   atm-herdr behind `HerdrStatusStream`, stacked on AY.8), AY.11 (daemon
+   holds the stream in shadow mode, poll stays the authority, parity
+   counters logged and projected by doctor), AY.12 (stream becomes the
+   state source, poll removed on the socket path; CLI path keeps the
+   poll). AY.12 dispatches only after this line is filled in from AY.11's
+   dogfood evidence:
+
+   Decision (Rand, YYYY-MM-DD): drop poll | keep both | stop subscription work
+
+### Hardening rounds
+
+Recorded inline as each reviewer returns; the PR does not merge before every
+round below is PASS or every finding has an accepted disposition.
+
+- boundary-guard r1 on f72b8be1b (document-level; no shell in that session,
+  so `cargo test -p atm-architecture` and the AY.3-head TOML diff were run
+  by fenix instead: architecture suite green on 45701a81e, TOML on the AY.3
+  head differs from develop only by AY.3's own contract inventory). P-E(b)
+  landed verbatim; no relaxation of any boundary field. Findings: AY.5
+  Preconditions still branched from AY.4 (fixed: branch from integrate
+  after AY.3 merges); AY.6 topology diagram and gh stack link chained all
+  six branches as one stack (fixed: control-plane stack only); AY.7 D3
+  cited boundary_enforcement.rs as being in AY.8's allowlist (fixed).
+- plan-scope-reviewer r1 (FAIL, 2 blocking / 2 important / 1 minor):
+  PLAN-SCOPE-001 AY.5 Preconditions and V5 still on AY.4 (fixed);
+  PLAN-SCOPE-002 AY.6/AY.7 narrate the old six-branch stack (fixed);
+  PLAN-SCOPE-003 D10 allowlist had no named file (fixed: named pin test
+  added to C3, AY.9 cites it); PLAN-SCOPE-004 AY.8 split risk (fixed:
+  pre-declared AY.8a/AY.8b split); M1 "Cancel gate" wording (fixed).
+- critical-plan-reviewer r1 (FAIL, 2 blocking / 2 important):
+  PLAN-CRIT-001 sprint-AY.3 still declared AY.8 must_follow (fixed);
+  PLAN-CRIT-002 AY.5 preconditions/V5 (same as above, fixed);
+  PLAN-CRIT-003 no composed-TOML rule for AY.3+AY.8 (fixed in P-E(b));
+  PLAN-CRIT-004 D10 pin unnamed (fixed). Both reviewers noted the
+  handoff-JSON input contract was not supplied; these rounds were run as
+  direct plan reviews, and the r2 dispatch names the reviewed commit.
+- plan-scope-reviewer r2 (FAIL, 1 blocking; reviewed 66f34c462): all r1
+  ids confirmed fixed; PLAN-SCOPE-005 AY.9 AC5 and out-of-scope still
+  required an "exact removal release" (fixed in 57ebeb7ce: AC5 and the
+  out-of-scope bullet now state no removal release exists; plan line ~67
+  and AY.9 intro/L-suite wording aligned to daemon-start selection).
+- critical-plan-reviewer r2 (FAIL, 1 blocking / 2 important; reviewed
+  66f34c462): all r1 ids confirmed fixed; PLAN-CRIT-005 same as
+  PLAN-SCOPE-005 (fixed); PLAN-CRIT-006 AY.8a/AY.8b split had no branch,
+  stack, TOML or AY.9-retarget rule (fixed: split contingency now names
+  branches, stack fields, C3 per half, AY.9 must_follow retarget, and the
+  amendment scope); PLAN-CRIT-007 scaling-note tick optimization unowned
+  (disposition: superseded by Rand's push-model direction, tracked as
+  rework item 7, open).
+- plan-scope-reviewer r3 (FAIL, 1 blocking / 3 important / 1 minor;
+  reviewed 01b4d4e10): SCOPE-301 AY.9 frontmatter had no AY.10 relation
+  and `parallel_with: []` (fixed); SCOPE-302 AY.10 C3 named an unverified
+  pin file (fixed: `crates/atm-architecture/tests/boundary_enforcement.rs`);
+  SCOPE-303 AY.9 had no changed-file allowlist and the factory file was
+  unnamed (fixed: C1a names `crates/atm-herdr/src/transport.rs`, AC 9a);
+  SCOPE-304 AY.8 split clause did not retarget AY.10 (fixed); SCOPE-305
+  AY.11/AY.12 cited a nonexistent `docs/atm-herdr/operations.md` (fixed:
+  `docs/atm-herdr/architecture.md` operator section); M1 AY.9 "last
+  sprint" sentence (fixed).
+- critical-plan-reviewer r3 (FAIL, 4 blocking / 3 important; reviewed
+  01b4d4e10): CRIT-301 AY.9 "last sprint"/disposition prose contradicted
+  AY.11/AY.12 (fixed); CRIT-302 AY.10 D3 added `HerdrError::Unsupported`
+  against "No new variant" and HR-CORE-008 (fixed: composition returns
+  `Option<Arc<dyn HerdrStatusStream>>`, `None` on CLI, enum unchanged);
+  CRIT-303 C2 took the `agent.list` baseline on a separate connection
+  before subscribing, losing transitions in the window (fixed in r3 as
+  scoped by five status-filtered per-pane subscriptions; that design was
+  itself withdrawn in r4, CRIT-401/402, and replaced by one unfiltered
+  subscription per pane with the snapshot taken after
+  `SubscriptionStarted`; replacement connection started before the old
+  one closes; acceptance 2 injects transitions in every window); CRIT-304 stream reconnects coupled to the host-wide nudge
+  breaker (fixed: own bounded budget, no breaker access; acceptance 4);
+  CRIT-305 no requirement id or ADR-058 amendment for the stream (fixed:
+  D8 HR-CORE-011 plus ADR-058 paragraph); CRIT-306 exit gate was AY.9-only
+  with no phase-completion definition after AY.11/AY.12 (fixed: exit gate
+  rewritten, second mechanical decision-line check); CRIT-307 P-E
+  composed-file rule covered two editors only (fixed: three-editor rule,
+  transport.rs/lib.rs pairs, P-E(c) for AY.10).
+  M1 (minor): text not retained across the context compaction that
+  followed r3; r4 found no candidate defect to attribute to it. Retired
+  as unrecoverable (CRIT-4M1); not carried forward.
+- plan-scope-reviewer r4 (FAIL, 0 blocking / 1 important; reviewed
+  7d8a03d75): SCOPE-301..305 and M1 confirmed fixed; SCOPE-401 AY.9 C1a
+  and AY.10 C3 both edit
+  `crates/atm-architecture/tests/boundary_enforcement.rs` with no
+  composition procedure (fixed: P-E composed-file rule and both sprints'
+  rationales name it as a composed file, keep-both-sides resolution).
+- critical-plan-reviewer r4 (FAIL, 2 blocking / 2 important / 1 minor;
+  reviewed 7d8a03d75; CRIT-301..307 confirmed fixed): CRIT-401 Herdr's
+  stream is server-polled and the five-filter design drove 5N `pane_get`
+  per 100 ms inside Herdr (fixed: verified in v0.8.2 source, design
+  replaced by one unfiltered subscription per pane, bound stated in AY.10
+  "Herdr facts" and HR-CORE-011, accepted-cost decision line under rework
+  item 7 gates dispatch, AY.11 evidence records Herdr CPU with and
+  without the stream); CRIT-402 per-filter sequential probes made the
+  baseline undecidable on the wire (fixed: baseline from `agent.list`
+  after `SubscriptionStarted`, stream value wins when newer, dedupe by
+  held value, D4 fake server models sequential probes, replay, and
+  duplicates, acceptance 2 covers each window); CRIT-403 no handshake
+  latency budget (fixed: C2 budget `min(deadline, 2 s + 20 ms x N)`,
+  acceptance 3a with scripted probe latency at 50 panes); CRIT-404
+  CRIT-303 recorded as unqualified fixed and AY.11 exit condition did not
+  name transient windows (fixed: ledger entry qualified above; AY.11 D2
+  logs a rebuilt-since-last-tick flag and the exit condition excludes
+  those ticks); CRIT-4M1 lost r3 M1 (retired above).
+- plan-scope-reviewer r5 (FAIL, 0 blocking / 2 important / 1 minor;
+  reviewed cb073fdfd; SCOPE-401 confirmed fixed): PLAN-SCOPE-501 AY.10
+  had no pre-declared split despite eight deliverables (fixed: AY.10a
+  trait/factory/pin/docs and AY.10b protocol/fake streaming/tests, branch
+  and stack fields, C3 split, AY.11 retarget, same amendment rule as
+  AY.8); PLAN-SCOPE-502 AY.10 did not state the P-E(c) precondition
+  (fixed: "Dispatch and PR topology" names the boundary-guard review
+  against AY.8's head, D7 and Required work 1 bind the approved diff to
+  the first commit); PLAN-SCOPE-M2 ADR-058 path unnamed (fixed: exact
+  file in C3).
+- critical-plan-reviewer r5 (FAIL, 0 blocking / 2 important / 1 minor;
+  reviewed cb073fdfd; CRIT-401..404 confirmed fixed, CRIT-4M1 retired):
+  PLAN-CRIT-501 AY.10's item-7 decision had no forcing function (fixed:
+  AY.10 frontmatter `status: gated`, mechanical grep in the exit-gate
+  section, both fenix dispatch and quality-mgr PR refusal); PLAN-CRIT-502
+  AY.12 carried an unforced breaker-coupling decision and no Size section
+  (fixed: decision resolved in AY.10 C2 as no coupling for the phase with
+  rationale, AY.12 allowlist conditional removed, `crates/atm-herdr`
+  excluded, Size section added); PLAN-CRIT-M1 HR-CORE-011 row read as
+  already accepted (fixed: reworded as gated on the item-7 line).
+- plan-scope-reviewer r6 (FAIL, 0 blocking / 1 important; reviewed
+  651f6c5b0; PLAN-SCOPE-501/502/M2 confirmed fixed): PLAN-SCOPE-601 the
+  authoritative sprint-file list stopped at AY.9 (fixed: AY.10, AY.11,
+  AY.12 links added).
+- critical-plan-reviewer r6 (FAIL, 1 blocking / 2 important / 2 minor;
+  reviewed 651f6c5b0; PLAN-CRIT-501/502/M1 confirmed fixed, three
+  decision-line greps verified disjoint): PLAN-CRIT-601 the AY.10a/b
+  split gave acceptance 1 to AY.10a, which cannot satisfy it (fixed:
+  AY.10a-scoped form of 1, full 1 moved to AY.10b); PLAN-CRIT-602
+  acceptance 7 and 8 unassigned in the split (fixed: 7 with D8 on AY.10a,
+  8 on each half); PLAN-CRIT-603 AY.10 out-of-scope still said the breaker
+  question is decided in AY.12 (fixed); PLAN-CRIT-M2 split section did not
+  restate the AY.8b parent override (fixed); PLAN-CRIT-M3 AY.12 option
+  `stop` easy to confuse with `stop AY.10` (fixed: renamed `stop
+  subscription work`, grep updated).
+- plan-scope-reviewer r7 (PASS, 0 findings; reviewed 17244c653;
+  PLAN-SCOPE-601 confirmed fixed; AY.10 split acceptance mapping, AY.10
+  out-of-scope wording, and the AY.12 option rename verified consistent).
+- critical-plan-reviewer r7 (FAIL, 0 blocking / 1 important; reviewed
+  17244c653; PLAN-CRIT-601/602/603/M2 and PLAN-SCOPE-601 confirmed fixed):
+  PLAN-CRIT-701 (M3 reopened) exit-gate prose still said bare "stop"
+  (fixed: "stop subscription work"; no bare "stop" reference remains).
+- critical-plan-reviewer r8 (PASS, 0 findings; reviewed f555ca75f;
+  PLAN-CRIT-701 confirmed fixed). Both reviewers PASS: plan-scope r7 on
+  17244c653, critical r8 on f555ca75f. Amendment hardening closed pending
+  Rand's approval of PR #1277 and the item-7 AY.10 decision line.

@@ -50,7 +50,7 @@ There is no architectural ownership yet for:
 - detecting that a just-arrived message is an idle notification from sender X
 - replacing/removing the older unread idle notification from sender X in the
   target inbox during send/append
-- purging a displayed idle notification during the read writeback phase
+- purging a displayed idle notification through the read-state handoff
 
 ### 2.3 Cross-Cutting Read Behavior Doc
 
@@ -83,7 +83,7 @@ That means the existing docs are inadequate in four places:
 - requirements: no functional requirement for idle-notification replacement and
   the auto-purge behavior remains deferred
 - architecture: no service ownership for idle-notification lifecycle rules
-- read behavior: no classification/writeback rule for the deferred
+- read behavior: no classification/handoff rule for the deferred
   auto-purge-on-read follow-on
 - schema/workflow notes: no explicit way to identify an idle notification as a
   first-class mailbox concept
@@ -111,17 +111,18 @@ Why this belongs here:
 - the replacement must be atomic with the new append to avoid races that retain
   duplicates
 
-### 4.2 Read Path / Read Writeback Boundary
+### 4.2 Read Path / Read-State Handoff Boundary
 
 Likely ownership:
-- `atm-core` read service and mailbox writeback logic
+- `atm-core` read service and supervised state-handoff logic
 
 Needed behavior:
 - when a displayed message is an idle notification and the read operation is
-  performing normal mark-as-read mutation, remove the message from the owning
-  inbox file instead of preserving it as `(Read, NoAckRequired)` or history
-- apply this removal during the same atomic writeback phase that would
-  otherwise persist `read = true`
+  accepts its normal read/seen transition, offer removal through the writer
+  handoff instead of preserving it as `(Read, NoAckRequired)` or history
+- do not await that removal's durable application before returning the read
+  response; consumers requiring durable visibility use the normal bounded
+  later `atm list` poll
 
 Why this belongs here:
 - the requested behavior is specifically tied to `atm read`
@@ -219,8 +220,8 @@ Deferred from PG.1:
   architecture
 - send-path ownership note that mailbox append performs sender-scoped idle
   dedup atomically
-- read-pipeline ownership note that read writeback may delete a displayed idle
-  notification instead of persisting a read-state mutation
+- read-pipeline ownership note that the read-state handoff may delete a
+  displayed idle notification instead of applying a read-state transition
 - clear-pipeline note that idle-only clear is manual cleanup, not the primary
   lifecycle path
 
@@ -303,7 +304,7 @@ Resolved detection rule:
    deduplication rule.
 3. Record the resolved text-field JSON detection rule in the product docs.
 4. Keep read-time auto-purge deferred until a later sprint defines the exact
-   read/writeback semantics.
+   read/handoff semantics.
 5. Update `docs/architecture.md` to assign send/read/mailbox ownership for
    dedup and the deferred auto-purge follow-on.
 6. Update `docs/read-behavior.md` to explain how idle notifications interact
@@ -314,5 +315,5 @@ Resolved detection rule:
    so cleanup semantics remain internally consistent.
 8. After the doc update, create the follow-on implementation sprint that owns:
    - mailbox append dedup
-   - read writeback auto-purge
+   - read-handoff auto-purge
    - compatibility cleanup behavior for legacy duplicate idle notifications

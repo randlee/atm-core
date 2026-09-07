@@ -1089,11 +1089,12 @@ Each list row contains:
 Read-mutation output invariants:
 - when `mutation_applied = true` and a selected message is present, that
   message and `selected_message_id` must identify the same durable message
-- read-side mutation may mark the selected message `read = true`, but it must
-  still return that same message in the payload instead of re-running unread
-  selection and swapping in a different unread message
-- `bucket_counts` must describe the post-mutation mailbox state produced by
-  that command execution
+- a read-side transition may later mark the selected message `read = true`;
+  the returned payload retains that selected-message identity rather than
+  re-running unread selection and swapping in a different unread message
+- `bucket_counts` describe the reader-lane snapshot. Read-side state-handoff
+  acceptance does not promise durable visibility in that response; consumers
+  use a bounded later list poll when durability matters.
 - ack-side mutation remains separate; only `atm ack` clears
   `pending_ack_at` and sets `acknowledged_at`
 
@@ -1129,9 +1130,10 @@ The queue-query services derive `MessageClass` from `(ReadState, AckState)` and
 apply display-bucket selection to the derived class, not to raw persisted
 fields.
 
-For merged inbox surfaces, any displayed-message mutation must be written back
-to the physical inbox file that contributed the displayed record. The merged
-view is a read projection, not a synthetic write target.
+For merged inbox surfaces, a displayed message's legal read/seen transition is
+offered to the supervised non-blocking handoff for the authoritative ATM store.
+The merged view is a read projection, not a mutation target; retained origin
+inbox files are compatibility inputs rather than the write destination.
 
 ### 6.3 Ack Service
 
@@ -1440,13 +1442,16 @@ The accepted read pipeline stages are:
 4. apply sender, timestamp, selection-mode, and seen-state filters
 5. sort newest-first and apply limit
 6. apply legal read/seen mutations for displayed messages
-7. persist any read/seen state changes atomically
-8. return outcome
+7. offer any legal read/seen state changes to the supervised non-blocking
+   handoff without awaiting durable application
+8. return the reader-lane outcome and handoff-acceptance result
 
 Architectural rules:
 - no accepted read path depends on watcher events, reconcile completion, or
   mailbox-file ingest
 - durable ATM state, not merged mailbox-file truth, is authoritative for read
+- accepted handoff does not promise durable visibility in the returned read
+  outcome; a consumer that requires it uses a bounded later `atm list` poll
 - any retained mailbox-file compatibility readers are historical or
   repair-only surfaces and do not redefine the accepted read contract
 

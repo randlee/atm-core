@@ -130,7 +130,9 @@ Retained tests and requirements establish these rules:
 Mutation belongs to `atm read`, not to `atm list` or `atm peek`.
 
 Required `atm read` behavior:
-- the selected displayed message is always written back with `read = true`
+- the selected displayed message's legal read/seen transition is offered to
+  the supervised non-blocking handoff; `mutation_applied = true` reports
+  acceptance, not durable `read = true` visibility
 - selected unread messages that do not already require acknowledgement remain
   `NoAckRequired` after display
 - selected unread messages that already require acknowledgement remain
@@ -384,8 +386,10 @@ Shared query phases:
 11. Re-run selection and choose one selected message.
 12. Apply legal read-axis and ack-axis transitions for that one message if
     allowed.
-13. Persist state changes atomically.
-14. Update seen-state from the selected message when enabled.
+13. Offer state changes to the supervised non-blocking handoff; the response
+    does not await durable application.
+14. Offer any selected-message seen-state update when enabled, without
+    awaiting durable application.
 15. Return `ReadOutcome` with match metadata.
 
 This order matters.
@@ -394,12 +398,14 @@ In particular:
 - selection must happen before mutation
 - `atm list` must not materialize or render multiple full message bodies
 - `atm read` must choose one message before mutation
-- mutation must happen before final `atm read` output is returned
+- mutation handoff acceptance happens before final `atm read` output is
+  returned; durable visibility may follow later and is observed with a bounded
+  list poll
 - seen-state updates must use the selected/displayed message, not the full
   inbox
-- when the merged inbox surface includes origin inbox files, each
-  selected-message mutation must be written back to the physical source file
-  for that record
+- accepted read/seen transitions target the authoritative ATM store through
+  the supervised handoff; origin inbox files are compatibility inputs, not the
+  mutation destination
 
 ## 11. Output Contract
 
@@ -436,6 +442,7 @@ Each list row:
 - `selected_message_id`
 - `match_count`
 - `additional_match_count`
+- `mutation_applied`
 - `bucket_counts`
 
 `match_count` is the total number of logical current-message matches after all
@@ -443,7 +450,10 @@ filters and successor-chain collapse are applied. `additional_match_count` is
 `match_count - 1` for a successful read.
 
 Cross-document invariants:
-- displayed/read messages always persist `read = true`
+- `mutation_applied = true` means the selected message's legal read/seen
+  transition was accepted into the supervised non-blocking handoff, not that
+  `read = true` is already durable; consumers use a bounded later `atm list`
+  poll when durable visibility matters
 - task-linked messages are ack-required from send time
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages

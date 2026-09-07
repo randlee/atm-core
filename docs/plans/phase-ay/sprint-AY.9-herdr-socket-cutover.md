@@ -13,8 +13,16 @@ status: draft
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: join
-parallel_with: []
+parallel_with: [AY.10]
 dependency_relations:
+  - prerequisite: AY.9
+    dependent: AY.10
+    relation: parallel_safe
+    rationale: AY.10 changes only atm-herdr, its fixtures, the architecture pin, and Herdr docs; AY.9 owns the composition, config reader, and doctor files. Neither reads the other's diff; the shared `crates/atm-herdr/src/lib.rs`, `transport.rs`, and `crates/atm-architecture/tests/boundary_enforcement.rs` edits are composed under the P-E rule in phase-ay-plan.md.
+  - prerequisite: AY.9
+    dependent: AY.11
+    relation: must_follow
+    rationale: AY.11 spawns the shadow task only on the socket composition AY.9 selects.
   - prerequisite: AY.7
     dependent: AY.9
     relation: must_follow
@@ -28,11 +36,15 @@ dependency_relations:
 # AY.9 — Herdr socket cutover, doctor projection, and lifecycle validation
 
 Select the AY.8 socket transport in the Tokio/Axum production composition,
-make it the default with an explicit one-minor CLI fallback, and close its
+make it the default with the CLI transport as the permanent explicit
+alternative, and close its
 configuration, doctor, and automated lifecycle contracts on all three CI
-lanes. AY.9 is the phase's last sprint; live macOS/Windows operator proof
-is release readiness after the phase lands on develop (ruling 5), and the
-phase disposition is taken on AY.9's automated gates.
+lanes. AY.9 is the socket-cutover join; AY.10 runs beside it and AY.11
+(and AY.12 if Rand decides to drop the poll) follow it before the phase
+lands on develop. Live macOS/Windows operator proof is release readiness
+after the phase lands on develop (ruling 5); the Ship/Defer/Cancel
+disposition of the cutover is taken on AY.9's automated gates, and phase
+completion is defined under "Phase AY exit gate" in phase-ay-plan.md.
 
 ## Dispatch and PR topology
 
@@ -60,21 +72,25 @@ completion fails the sprint.
   `atm-herdr`, the invoker factory builds `HerdrIo::Socket` or `HerdrIo::Cli`;
   the crate-private enum never crosses the crate boundary. Default to `socket`;
   reject every other string with `AtmErrorCode::ConfigParseFailed`. Replace
-  AY.8's test-only construction-site allowlist with a pin that permits the one
+  AY.8's `socket_variant_constructed_only_in_tests` pin
+  (`crates/atm-herdr/tests/socket_construction_pin.rs`) with a pin that permits the one
   production factory inside `atm-herdr`. No second composition site is
   introduced.
-- [ ] D2 — retain CLI as an explicit, documented fallback through atm 1.5.x
-  and remove it in atm 1.6.0. It is selected only by
-  `herdr.transport = "cli"`; runtime failure never silently falls back from
-  socket to CLI. Add the 1.6.0 removal and ownership-key cleanup to
-  `docs/project-plan.md`.
+- [ ] D2 — retain CLI as a permanent, explicit, documented fallback (rework
+  2026-09-06). The transport is chosen exactly once at daemon start by the
+  D1 factory from `herdr.transport`; `cli` is selected only by explicit
+  config; doctor reports the active transport; the choice never changes
+  while the daemon runs and runtime failure never falls back from socket
+  to CLI (a socket connect failure is a Herdr-unavailable breaker
+  event with the same mapping as a CLI spawn failure). No removal release is
+  scheduled and no ownership-key cleanup is recorded.
 - [ ] D3 — rerun AY.4's authoritative lifecycle matrix L1–L12 against the
   socket default on all three CI lanes. Adapt only: no binary becomes endpoint
   not configured or
   unreachable; `server_not_running` becomes refused/absent endpoint; the old
   protocol-mismatch case becomes a server-recording/version switch between
   calls with no daemon restart. Keep the distinct below-minimum case and keep
-  CLI variants green while fallback exists. L5 shutdown/drain and resource
+  CLI variants green permanently (both transports are supported). L5 shutdown/drain and resource
   release, L10 restart dedup, L11 flapping suppression, and L12 stalled-
   notification deadline are explicitly included after the transport swap.
 - [ ] D4 — extend doctor without crossing crate boundaries: each endpoint
@@ -99,8 +115,8 @@ completion fails the sprint.
   `HerdrIo::Socket(` construction. Replace it with the production-factory pin
   in D1; do not delete the underlying architecture assertion.
 
-No other path is deleted in the Ship case. CLI transport removal is the
-atm 1.6.0 follow-up recorded by D2, not part of AY.9.
+No other path is deleted in the Ship case. The CLI transport is never
+removed (D2).
 
 ## Code and configuration contracts
 
@@ -166,6 +182,30 @@ fixture matrix adds omitted, `socket`, `cli`, unknown string, and unknown key.
 The unknown string and unknown key both fail with `ConfigParseFailed`, with the
 file and offending key/value named according to AY.3's error contract.
 
+### C1a — changed-file allowlist
+
+- `crates/atm-herdr/src/transport.rs` (the one production factory; the
+  AY.9 pin names this file)
+- `crates/atm-herdr/src/lib.rs` (factory export only)
+- `crates/atm-herdr/tests/socket_construction_pin.rs` (AY.8 D10 allowlist
+  replaced by the production-factory pin)
+- `crates/atm-daemon-bootstrap/src/herdr_config.rs` (closed transport enum,
+  `socket_path`, validation matrix)
+- `crates/atm-daemon-bootstrap/src/replacement_handler.rs` (composition
+  selects the factory)
+- `crates/atm-daemon-bootstrap/src/herdr_lifecycle_tests.rs` (L1–L12 under
+  socket default and explicit CLI)
+- `crates/atm-core/src/doctor/**` files that AY.3 D4 created for the Herdr
+  section (transport/endpoint fields and snapshots)
+- `crates/atm-architecture/tests/boundary_enforcement.rs` (forbidden-edge
+  grep for `HerdrEndpoint`, factory pin)
+- `docs/atm-herdr/architecture.md`, `docs/atm-herdr/requirements.md`,
+  `docs/project-plan.md`, user configuration reference
+- `.sprints/AY/events.ttl`
+
+No file under `crates/atm-daemon` changes; `transport_socket.rs`,
+`transport_cli.rs`, and `status_stream.rs` do not change.
+
 ### C2 — doctor projection
 
 The existing endpoint schema is extended by populated values, not new keys:
@@ -221,7 +261,7 @@ serialized JSON, human output, snapshots, or transport logs.
    production-factory pin, then run socket-default and explicit-CLI lifecycle
    suites on every CI platform.
 3. Align doctor snapshots and operator docs with the canonical tagged schema,
-   record the atm 1.6.0 fallback-removal obligation, and keep all live evidence
+   document the permanent explicit CLI fallback, and keep all live evidence
    out of this sprint (ruling 5).
 
 ## Acceptance criteria
@@ -239,20 +279,26 @@ serialized JSON, human output, snapshots, or transport logs.
    forbidden-edge grep proves `HerdrEndpoint` does not enter atm-core or
    atm-daemon-bootstrap.
 4. The AY.2 zero-regression oracle passes through the socket default.
-5. The CLI fallback, cutover release, exact removal release, and later deletion
-   of CLI ownership keys are recorded in user docs and `docs/project-plan.md`.
+5. User docs and `docs/project-plan.md` record the CLI transport as a
+   permanent, explicitly selected alternative (`herdr.transport = "cli"`),
+   the cutover release, and that no removal release and no CLI ownership-key
+   cleanup are scheduled.
 6. The temporary AY.8 test-only allowlist is replaced and the one production
    Socket factory inside `atm-herdr` is pinned; `HerdrIo` does not cross its
    crate boundary.
 7. The AY.3 config-reader matrix includes omitted, `socket`, `cli`, unknown
    string, and unknown key; only the two supported values parse through
-   `HerdrClientConfig::try_new`, its fields remain private, and 1.6.0 is the
-   pinned CLI-removal release.
+   `HerdrClientConfig::try_new`, its fields remain private, and no removal
+   release for the CLI transport is recorded anywhere in the plan.
 8. `gh pr view feature/ay9-herdr-socket-cutover --json
    headRefName,baseRefName,state` reports base `integrate/phase-ay` after both
    parent PRs merged; AY.9 is not linked into the implementation stack.
 9. No path under `docs/plans/phase-ay/evidence/` is added or changed by AY.9;
    no sprint carries live evidence.
+9a. The PR file set is a subset of C1a (`git diff --name-only <base>..HEAD`
+    compared mechanically), and `git diff <base>..HEAD -- crates/atm-daemon
+    crates/atm-herdr/src/transport_socket.rs crates/atm-herdr/src/transport_cli.rs
+    crates/atm-herdr/src/status_stream.rs` is empty.
 10. The sprint meets the common phase merge gate: zero blocking, important, or
     in-scope minor findings; quality-mgr posts PASS; all three CI lanes are
     green at merge time; no flaky-test allowance applies.
@@ -265,7 +311,9 @@ serialized JSON, human output, snapshots, or transport logs.
 ## Out of scope
 
 - New Herdr capabilities or a change to Herdr's protocol.
-- Removing the CLI fallback in the same release as cutover.
+- Consuming the AY.10 status stream or changing the queue-wake poll
+  (AY.11, AY.12). AY.9 selects the transport; it does not hold a stream.
+- Removing or deprecating the CLI transport (no removal release exists).
 - Live macOS/Windows proof (release readiness) and the phase disposition
   (Rand, on AY.9's automated gates and the phase-ending review).
 - Any patch, hardening, or remodeling of the legacy synchronous daemon. D1 is

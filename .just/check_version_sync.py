@@ -234,6 +234,110 @@ def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
                     )
 
 
+SIMPLE_SPECIFIER_CLAUSE = re.compile(r"(>=|<=|==|!=|>|<)\s*(\d+(?:\.\d+)*)")
+
+
+def version_tuple(value: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in value.split("."))
+
+
+def specifier_admits(version: str, specifier: str) -> bool:
+    """Evaluate a simple comma-separated PEP 440-style specifier (>=, <=, ==, !=, >, <).
+
+    Deliberately minimal (no pre-releases, no ~=, no packaging dependency) --
+    this repo's own pyproject.toml dependency pins only ever use this shape.
+    """
+
+    candidate = version_tuple(version)
+    clauses = SIMPLE_SPECIFIER_CLAUSE.findall(specifier)
+    if not clauses:
+        fail(f"unsupported version specifier shape: {specifier!r}")
+    for operator, bound in clauses:
+        bound_tuple = version_tuple(bound)
+        # Compare on the shorter length so "1.5" bounds admit "1.5.3" candidates.
+        length = min(len(candidate), len(bound_tuple))
+        lhs, rhs = candidate[:length], bound_tuple[:length]
+        if operator == ">=" and not lhs >= rhs:
+            return False
+        if operator == "<=" and not lhs <= rhs:
+            return False
+        if operator == "==" and not lhs == rhs:
+            return False
+        if operator == "!=" and not lhs != rhs:
+            return False
+        if operator == ">" and not lhs > rhs:
+            return False
+        if operator == "<" and not lhs < rhs:
+            return False
+    return True
+
+
+PYTHON_DEPENDENCY_ENTRY = re.compile(r"^([A-Za-z0-9_.-]+)\s*(.*)$")
+
+
+def workspace_dynamic_python_packages(repo_root: Path, workspace_version: str) -> dict[str, str]:
+    """Map Python package name -> version for every workspace pyproject.toml whose
+    version is derived from the Cargo workspace version (``dynamic = ["version"]``),
+    e.g. the atm-graft wheel. These are the packages other in-workspace pyproject.toml
+    dependency pins must track when the workspace version bumps.
+    """
+
+    packages: dict[str, str] = {}
+    for pyproject in sorted((repo_root / "crates").glob("*/pyproject.toml")):
+        manifest = tomllib.loads(read_text(pyproject))
+        project = manifest.get("project", {})
+        if not isinstance(project, dict):
+            continue
+        name = project.get("name")
+        dynamic = project.get("dynamic", [])
+        if isinstance(name, str) and isinstance(dynamic, list) and "version" in dynamic:
+            packages[name] = workspace_version
+    return packages
+
+
+def validate_python_dependency_pins(repo_root: Path, workspace_version: str) -> bool:
+    """Fail if any in-workspace pyproject.toml pins a workspace-tracked Python
+    package (e.g. hermes-atm's ``atm-graft`` dependency) with a specifier the
+    current workspace version no longer satisfies. Prevents the class of bug
+    where a crate's own ``version`` field is bumped but a sibling's dependency
+    range on it is left stale (e.g. ``atm-graft>=1.4,<1.5`` after atm-graft
+    itself moved to 1.5.x).
+    """
+
+    dynamic_packages = workspace_dynamic_python_packages(repo_root, workspace_version)
+    if not dynamic_packages:
+        return False
+
+    checked_any = False
+    for pyproject in sorted((repo_root / "crates").glob("*/pyproject.toml")):
+        manifest = tomllib.loads(read_text(pyproject))
+        project = manifest.get("project", {})
+        if not isinstance(project, dict):
+            continue
+        dependencies = project.get("dependencies", [])
+        if not isinstance(dependencies, list):
+            continue
+        rel_manifest = pyproject.relative_to(repo_root).as_posix()
+        for entry in dependencies:
+            if not isinstance(entry, str):
+                continue
+            match = PYTHON_DEPENDENCY_ENTRY.match(entry.strip())
+            if match is None:
+                continue
+            dependency_name, specifier = match.group(1), match.group(2).strip()
+            target_version = dynamic_packages.get(dependency_name)
+            if target_version is None or not specifier:
+                continue
+            checked_any = True
+            if not specifier_admits(target_version, specifier):
+                fail(
+                    f"{rel_manifest} dependency {entry!r}: specifier does not admit "
+                    f'the current workspace-tracked "{dependency_name}" version '
+                    f'"{target_version}" -- update the pin (e.g. to track the workspace minor)'
+                )
+    return checked_any
+
+
 def validate_lockfile(repo_root: Path, workspace_version: str) -> None:
     lock = tomllib.loads(read_text(repo_root / "Cargo.lock"))
     packages = lock.get("package", [])
@@ -398,6 +502,8 @@ def main() -> int:
         executed_checks.append("winget")
     if validate_release_wiring(repo_root, config):
         executed_checks.append("release wiring")
+    if validate_python_dependency_pins(repo_root, workspace_version):
+        executed_checks.append("Python registry dependency pins")
 
     for line in workspace_crate_section_lines(repo_root):
         print(line)

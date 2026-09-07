@@ -43,8 +43,8 @@ AY.7 dispatches when AY.6 development is pushed; it has no physical-machine
 precondition. Its branch is created from
 `feature/ay6-herdr-restart-coordination`, not from the integration branch.
 
-Use the `/gh-stack` skill for the phase's linear implementation stack. After
-the `AY.2 -> AY.3 -> AY.4 -> AY.5 -> AY.6 -> AY.7` branches and PRs exist,
+Use the `/gh-stack` skill for the control-plane stack. After the
+`AY.5 -> AY.6 -> AY.7` branches and PRs exist,
 append AY.7 to the already-linked remote stack with explicit non-interactive
 arguments, then verify the PR base with ordinary GitHub JSON:
 
@@ -97,7 +97,7 @@ completion fails the sprint.
   `CREATE_NO_WINDOW`, `herdr.exe`, `cfg(windows)` process handling) appears
   outside `crates/atm-herdr/src/transport_cli.rs`.
   `crates/atm-architecture/tests/boundary_enforcement.rs` is not touched by
-  AY.7 (it is in AY.8's C3 allowlist; this keeps AY.7/AY.8 `parallel_safe`).
+  AY.7 or AY.8 (the AI.11 gate it once carried was retired on AY.3).
   The public `HerdrProcessAdapter` signatures and the `HerdrError` enum
   remain unchanged.
 - [ ] D4 — verify the Windows branches of AY.5 entry management and AY.6
