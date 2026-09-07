@@ -14,12 +14,15 @@ row or log line is not a finding.
 
 ## Steps
 
-1. **Message state.** For the message id in the FAIL line, query the mail database read-only:
-   `sqlite3 -readonly ~/.atm/db/mail.db "select message_id, sender, recipient, read_at, acked_at, created_at from messages where message_id='<id>'"`
-   (adapt column names from `.schema messages` if they differ). Observable: the row, or "no row".
-   No row after a successful send return = admission/write defect; row present but the reader
-   saw count=0 = read-path or scope defect; row present with `read_at` null after a read =
-   read-mark handoff defect.
+1. **Message state.** For the message id in the FAIL line, read the mail database read-only
+   (default `~/.atm/db/mail.db`; the fixture README names any other path):
+   ```
+   sqlite3 -readonly ~/.atm/db/mail.db "select m.team, m.agent, m.from_agent, m.message_at, s.read, s.pending_ack_at, s.acknowledged_at, s.nudge_pending_at, s.nudge_attempts from mail_messages m left join mail_message_states s on s.team=m.team and s.agent=m.agent and s.message_key=m.message_key where m.message_id='<id>'"
+   ```
+   Observable: the row (never `message_text`, `envelope_json`, chat ids), or "no row".
+   No row after a successful send return = admission/write defect; row present but the reader saw
+   count=0 = read-path or scope defect; row with `read=0` after a normal read = read-mark handoff
+   defect; `nudge_attempts` > 0 with no agent reaction = nudge delivery or agent side.
 2. **Daemon log.** `atm log --agent <agent> --since <5 min before the FAIL>` and
    `atm log --type error --since <same>`; keep the lines carrying the message id, the request id or
    the error code. Observable: the matching lines (ids redacted to `<id>`).

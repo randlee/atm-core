@@ -17,5 +17,14 @@ steps:
 elapsed: <seconds>s
 ```
 
+On any FAIL, before sending the report:
+1. run `../atm-troubleshoot/SKILL.md` for that step and get the cause;
+2. if the fix is within your reach on the fixture (roster entry, your own gateway or tool session,
+   a stale receiver registration, an environment variable, a wrong command form), apply it;
+3. re-run the failed step once and record the retest;
+4. the step line becomes `FAIL <step> — cause: <component/evidence>; fix: <what you did | none possible>; retest: PASS|FAIL`.
+A FAIL without a cause line is not a finished report. Never change ATM code or binaries; a cause
+in those goes to the requester as-is.
+
 Rules: never include message bodies, addresses beyond `agent@team`, chat ids, tokens,
 capability values or raw config. A FAIL line carries the error code or count, not narrative.

@@ -34,7 +34,8 @@ the shape of `.claude/skills/atm-smoke/REPORT.md`. The tests are identical on ev
 - `.claude/skills/atm-hermes-ready/SKILL.md` — Hermes agents registered and answering
 - `.claude/skills/atm-nudge-roundtrip/SKILL.md` — tester ↔ Hermes native read/ack round trip
 - `.claude/skills/atm-troubleshoot/SKILL.md` — root-cause one FAIL line from DB rows, `atm log`, doctor, probe, gateway log
-The same directories are linked from `.codex/skills/`.
+Every FAIL is root-caused with `atm-troubleshoot`, fixed where the agent can, and retested before it
+is reported (rule in `REPORT.md`). The same directories are linked from `.codex/skills/`.
 
 ## Rust Guidance
 
