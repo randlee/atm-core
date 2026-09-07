@@ -11,6 +11,7 @@ use atm_core::{HerdrSession, RequestDeadline};
 
 mod transport;
 mod transport_cli;
+mod transport_socket;
 
 use transport::{
     HerdrIo, HerdrOp, get_from_envelope, list_from_envelope, prompt_from_envelope,
