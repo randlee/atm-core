@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY6-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY6-QA-001" ;
+  triage:title "HERDR_RESTART_ENDPOINTS_PENDING (C3 ATM restart preflight) does not honor C4's JSON envelope / exit-3 contract, and no test asserts its code or exit status" ;
+  triage:description "quality-mgr qa-pr1284-r1 (PR #1284 @ bc32fdf92). The sprint's own error inventory table (docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md) lists HERDR_RESTART_ENDPOINTS_PENDING with Exit 3, and C4/A6 require every error row to reuse AY.5's one-object stdout JSON envelope with exact stdout JSON and exit assertions. In .claude/skills/daemon-switch/scripts/daemon-switch.py's restart(), the C3 preflight (herdr_restart_pending_endpoints) raises a bare SwitchError(f\"HERDR_RESTART_ENDPOINTS_PENDING: ...\") which is caught by main()'s generic `except SwitchError` handler: it prints plain text to stderr and always returns exit code 2, never emitting the JSON envelope and never returning exit class 3. The only test for this path, test_ordinary_restart_refuses_every_protocol_mismatch_before_service_mutation, only asserts assertRaisesRegex(SwitchError, \"default, blue\") on the exception message -- it does not assert the code string, the exit code, or any JSON output. A6 ('every error row has exact stdout JSON and exit assertions') is therefore unmet for this row. Note: the ordinary `restart` command's SwitchError path is pre-existing (predates AY.6, e.g. the '--yes' guard uses the same catch-all with exit 2), so this may reflect a doc/implementation mismatch inherited from an implicit assumption that C4's envelope only covers --restart-herdr's own errors, rather than a functional regression -- the preflight correctly refuses and blocks the mutation either way. Recorded as Important, not Blocking: functional behavior (refusal before service mutation) is correct and covered; the gap is contract-fidelity (exit code, JSON shape) and test-assertion completeness against the sprint's own A6." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "contract-fidelity" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope ".claude/skills/daemon-switch/scripts/daemon-switch.py restart()/herdr_restart_pending_endpoints(), .claude/skills/daemon-switch/tests/test_daemon_switch.py HerdrRestartTests" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY6 ;
+  triage:foundAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY6-QA-001/AY6-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY6-QA-001/AY6-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/daemon-switch/scripts/daemon-switch.py" ;
+  triage:line 723 ;
+  triage:snippet "raise SwitchError(f\"HERDR_RESTART_ENDPOINTS_PENDING: restart Herdr endpoints first: {names}\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay6-herdr-restart-coordination" ;
+  triage:headSha "bc32fdf92" ;
+  triage:occursIn <urn:atm:triage:worktree/AY6/bc32fdf92> .
+
+<urn:atm:triage:worktree/AY6/bc32fdf92>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1284-r1" ;
+  triage:branch "feature/ay6-herdr-restart-coordination" ;
+  triage:headSha "bc32fdf92" ;
+  triage:orderIndex 0 .

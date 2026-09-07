@@ -15,13 +15,16 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T06:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY8 ;
   triage:foundAt "2026-09-07T06:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-007/ay8-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-007/ay8-2> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY8-QA-007/1> ;
+  triage:closedAt "2026-09-07T07:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AY8-QA-007/ay8-1>
@@ -38,8 +41,8 @@
   a triage:Occurrence ;
   triage:file "boundaries/atm-herdr/herdr-process-adapter.toml" ;
   triage:snippet "[dependencies]\nallowed_dependencies = [\"atm-core\", \"tokio\", \"serde_json\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay8-herdr-socket-transport" ;
   triage:headSha "26ea2806a" ;
   triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> ;
@@ -51,3 +54,19 @@
   triage:branch "feature/ay8-herdr-socket-transport" ;
   triage:headSha "26ea2806a" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ay8-690f86ea5>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r4" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "690f86ea5" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/AY8-QA-007/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T07:10:00Z"^^xsd:dateTime ;
+  triage:fixCommit "690f86ea583f80b975e5ef019c77bb1befacd33e" ;
+  triage:fixBranch "feature/ay8-herdr-socket-transport" ;
+  triage:verifiedInRound "qa-pr1280-r4" ;
+  triage:resolutionNote "cipher removed syn entirely (option not among the three originally offered: crates/atm-herdr/Cargo.toml's [dev-dependencies] block, containing only syn.workspace = true, is deleted outright; boundaries/atm-herdr/herdr-process-adapter.toml's allowed_dependencies was never touched, confirming no allowlist workaround was used). Verified directly: (1) crates/atm-herdr/Cargo.toml read in full -- no [dev-dependencies] section exists; (2) Cargo.lock's remaining syn 2.0.119/3.0.3 entries are transitive deps of unrelated workspace crates (agent-team-mail, atm-graft, atm-http-runtime, axum, reqwest, pyo3-macros, etc via awk package-ownership scan), not atm-herdr; (3) socket_construction_pin.rs's AST guard was rewritten as a dependency-free hand-rolled lexer (lex_rust/aliases/socket_construction_offsets) with a new explicit self-test construction_pin_detects_aliases_and_variant_function_pointers proving it still catches `X as Y` aliasing and `Alias::Socket` function-pointer-style construction and correctly ignores comment/string-literal false positives -- not a regression to naive substring matching; (4) local .just/run_lint.py boundaries: 'boundaries passed [19.4s]'; (5) live CI empirically confirmed green at this exact pin: gh pr checks 1280 shows 'Just lint (ubuntu-latest)' = SUCCESS, job https://github.com/randlee/atm-core/actions/runs/34087584965/job/101634497492, run 34087584965, commit 690f86ea5 -- this is the same job that was FAILURE at 26ea2806a (run 34086204073, job 101630670160). Both occurrences closed. Note: this closes only the boundaries/CI-gate concern; it does not certify the PR's overall CI state -- see AY8-QA-008 (new, blocking) for a live, reproducible, unrelated test-race failure discovered on the Test (ubuntu-latest) and Test (macos-latest) jobs of this same CI run." .
