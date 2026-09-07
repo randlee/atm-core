@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY13-QA-012>
+  a triage:Finding ;
+  triage:findingId "AY13-QA-012" ;
+  triage:title "ruthless-boundary-qa RBQA-F002: team-attribution message prefix ('team {team}: ...') is hand-written in three separate call sites" ;
+  triage:description "quality-mgr qa-pr1300-r1 (PR #1300, AY.13 doctor team scope). The 'attribute this finding/error message to its team' decision is implemented independently in three places introduced by this sprint: scope_finding (crates/atm-core/src/doctor/mod.rs), push_doctor_error_for_team (moved to crates/atm-core/src/doctor/team_scope.rs by the r2 split), and an inline format!(\"team {team}: skipped graft-receiver lease lookups: doctor budget exhausted\") literal inside graft_receivers_doctor_report (crates/atm-core/src/doctor/mod.rs). Each site hand-writes the same 'team {team}: ' prefix convention with no shared owner. Confirmed still present after the r2 doctor/mod.rs -> team_scope.rs split (the duplication crossed the new module boundary rather than being consolidated)." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "duplication" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/doctor/mod.rs, crates/atm-core/src/doctor/team_scope.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY13 ;
+  triage:foundAt "2026-09-07T17:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY13-QA-012/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY13-QA-012/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 572 ;
+  triage:snippet "format!(\"team {team}: skipped graft-receiver lease lookups: doctor budget exhausted\") -- duplicated attribution prefix, also in scope_finding and team_scope.rs::push_doctor_error_for_team" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:occursIn <urn:atm:triage:worktree/AY13-QA-012/98ac5c7d2> .
+
+<urn:atm:triage:worktree/AY13-QA-012/98ac5c7d2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay13-doctor-team-scope" ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:orderIndex 0 .

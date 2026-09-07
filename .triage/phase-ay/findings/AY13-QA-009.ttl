@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY13-QA-009>
+  a triage:Finding ;
+  triage:findingId "AY13-QA-009" ;
+  triage:title "rust-service-hardening RSH-002: per-team Herdr loop passes the full remaining deadline to each team in sequence, letting earlier teams starve later teams' time budget" ;
+  triage:description "quality-mgr qa-pr1300-r1 (PR #1300, AY.13 doctor team scope). The per-team loop in doctor_projection.rs passes deadline.remaining() (the full remaining budget, not a divided share) into each team's tokio::time::timeout(...) call in sequence, so earlier teams can consume the entire shared deadline before later teams get a chance to run -- a new risk introduced by the per-team loop that did not exist when there was only ever one roster." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "resource-fairness" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-runtime/src/doctor_projection.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY13 ;
+  triage:foundAt "2026-09-07T17:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY13-QA-009/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY13-QA-009/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/doctor_projection.rs" ;
+  triage:line 178 ;
+  triage:snippet "tokio::time::timeout(deadline.remaining()..., ...) called per team in sequence, sharing one undivided deadline" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:occursIn <urn:atm:triage:worktree/AY13-QA-009/98ac5c7d2> .
+
+<urn:atm:triage:worktree/AY13-QA-009/98ac5c7d2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay13-doctor-team-scope" ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:orderIndex 0 .

@@ -64,8 +64,9 @@ metadata key is `alias` (not `herdrAgent`), persisted in the members table
 
 Alias validation: ATM name rules (`validate_path_segment`) and, when the
 member backend is Herdr, also Herdr's `[a-z][a-z0-9_-]{0,31}`. An alias
-must be unique within the team and must not equal another member's
-canonical name in that team. CLI flag is `--alias <name>` (D2), not
+must be unique across the whole ATM database (every team in the roster
+store, not just the member's team; see Requirement below) and must not
+equal any member's canonical name in any team. CLI flag is `--alias <name>` (D2), not
 `--herdr-agent`. Convention for Herdr collisions: `<identity>_<team>`,
 e.g. `team-lead_atm-dev`. Add D7: recipient and identity resolution tests
 for alias, alias@team, and unknown alias (falls through to canonical parse
@@ -114,6 +115,60 @@ error unchanged).
   documents `--herdr-session`) gains the key, the CLI flag, and the naming
   convention.
 
+## Requirement (Rand, 2026-09-07, verbatim)
+
+- "adding a roster persisted alias makes a lot of sense.  For requirements,
+  the alias should never be used in database."
+- "i.e. if team-lead = atm-dev-lead (alias), all entries in database should
+  continue to use team-lead.  alias would be aceptable at all user/agent
+  facing interfaces and would be immediately replaced" ... "and would
+  immediately be replaced at the ingress interface."
+- "additional requirements:  alias MUST be unique for atm database (meets
+  herdr requirements)"
+- "if an alias is used, the alias would be the herdr agent name."
+
+There is exactly one name field: when a member has an alias, that alias is
+the Herdr agent name the adapter targets (prompt/wait/get, `agent.list`
+snapshot matching, wake loop keys); when it has none, the canonical name is.
+No separate Herdr-name key exists or is accepted.
+
+- "what this really means is that 'alias' is always used by herdr IF it is
+  present.  And all agents can use it in place of agent name."
+
+So the alias is not Herdr-collision-only: any agent may address or identify
+a member by alias wherever an agent name is accepted (send recipient,
+`--as`/`ATM_IDENTITY`, `--team`-scoped member arguments, ack/read filters,
+roster commands), and Herdr always uses it when present.
+
+- "one more requirement: atm teams add_member must reject a duplicate name
+  w/out an alias"
+
+`atm teams add-member` rejects a member whose canonical name already exists
+in any other team of the roster store unless `--alias` is given (and that
+alias passes the database-wide uniqueness rule above). The error names the
+conflicting team and the `--alias` remedy. Applies to every backend, as
+written. Consequence for operators: a second team gaining `team-lead` or
+`quality-mgr` must supply an alias at add time; the hmux spawn path that
+creates teams outside ATM must pass one.
+- Considered and withdrawn (Rand, 2026-09-07): rejecting `team-lead`,
+  `quality-mgr`, `publisher` by name. Rand: "this is probably extreme for
+  requirements, naming hardcoded commonly used names." No hardcoded name
+  list; AC8's duplicate-name rule is the only gate.
+
+Uniqueness is enforced where the alias is written (`add-member --alias`,
+`set-member --alias`): the roster store rejects an alias already held by
+any member of any team, and an alias equal to any canonical member name in
+any team, with an error naming the conflicting team. Enforced under the
+roster write lane so two concurrent writers cannot both succeed.
+
+The alias is stored once, as the member's roster attribute (`alias` in
+`metadata_json`). It is resolved to the canonical name at the CLI/runtime
+edge and never written anywhere else: message rows (`from`, `to`,
+recipients), queue and outbox rows, audit and delivery records, task-state
+rows, graft and cross-host envelopes all carry the canonical name only. No
+table gains an alias column and no query matches on the alias. A resolver
+that leaks the alias past the edge is a blocking finding.
+
 ## Acceptance criteria
 
 - AC1 Members without `herdrAgent` behave exactly as before (existing
@@ -128,6 +183,20 @@ error unchanged).
   `HerdrProcessAdapter` trait signature change is the only public API
   change; record it as a minor bump under ADR-061 in the PR description
   (additive metadata, no wire or SQLite schema change).
+- AC6 Alias never persisted outside the member's roster attribute: a test
+  sends via alias and as an alias identity and asserts every stored
+  message/audit row carries canonical names only; `rg alias` over
+  crates/atm-storage and crates/atm-core/src/mailbox shows no write path
+  other than the roster metadata.
+- AC7 Alias uniqueness is database-wide: a test adds `alias` to a member of
+  team A, then attempts the same alias on a member of team B and on a
+  member whose canonical name equals it; both are rejected. Concurrent
+  writers of the same alias: exactly one succeeds.
+- AC8 `add-member` with a canonical name already present in another team
+  and no `--alias` is rejected with an error naming that team; the same
+  call with a unique `--alias` succeeds; the first member of that name in
+  the database is accepted without an alias. Same check on the daemon
+  member-add path so the CLI cannot be bypassed.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 
