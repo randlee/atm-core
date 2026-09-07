@@ -933,9 +933,9 @@ pub mod testing {
                 let Some(remaining) = deadline.remaining() else {
                     return Err(HerdrError::TimedOut);
                 };
-                tokio::select! {
-                    _ = gate.notified() => result,
-                    _ = tokio::time::sleep(remaining) => Err(HerdrError::TimedOut),
+                match tokio::time::timeout(remaining, gate.notified()).await {
+                    Ok(()) => result,
+                    Err(_) => Err(HerdrError::TimedOut),
                 }
             })
         }

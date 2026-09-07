@@ -7,8 +7,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::active_received_hook_selector_with_health;
 use atm_core::LocalServiceRuntime;
-use atm_core::boundary::{BuiltInPostSendDispatch, MessageReceivedHookSelector, RosterEntry};
+use atm_core::boundary::RosterEntry;
 use atm_core::delivery_channel::test_backend_type_metadata;
 use atm_core::observability::NullObservability;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
@@ -19,19 +20,6 @@ use atm_herdr::{
 use atm_http_runtime::{HerdrQueueWakePump, RuntimeHealth};
 use atm_runtime_test_support::open_isolated_sqlite_boundary;
 use atm_storage::{MessageQuery, MessageStore, RosterHarness, RosterMemberKind, RosterSnapshot};
-
-struct NoopSelector;
-
-impl atm_core::boundary::sealed::Sealed for NoopSelector {}
-
-impl MessageReceivedHookSelector for NoopSelector {
-    fn select_emitter(
-        &self,
-        _dispatch: &BuiltInPostSendDispatch,
-    ) -> Option<&dyn atm_core::boundary::AsyncMessageReceivedHookEmitter> {
-        None
-    }
-}
 
 struct Fixture {
     root: tempfile::TempDir,
@@ -100,7 +88,11 @@ fn fixture() -> Fixture {
     let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
     let pump = HerdrQueueWakePump::new(
         runtime.clone(),
-        Arc::new(NoopSelector),
+        active_received_hook_selector_with_health(
+            runtime.clone(),
+            Arc::clone(&process),
+            RuntimeHealth::default(),
+        ),
         RuntimeHealth::default(),
         process,
     )
@@ -132,6 +124,24 @@ fn notify_count(fake: &atm_herdr::testing::FakeHerdrProcessAdapter) -> usize {
         .iter()
         .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Notify { .. }))
         .count()
+}
+
+fn prompt_count(fake: &atm_herdr::testing::FakeHerdrProcessAdapter) -> usize {
+    fake.calls()
+        .iter()
+        .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+        .count()
+}
+
+fn pending_worker(fixture: &Fixture) -> bool {
+    fixture
+        .runtime
+        .pending_nudge_store()
+        .expect("pending store")
+        .list_pending_members()
+        .expect("list pending members")
+        .iter()
+        .any(|member| member.team() == &fixture.team && member.agent() == &fixture.worker)
 }
 
 fn lead_mail_count(fixture: &Fixture) -> usize {
@@ -185,6 +195,39 @@ async fn ay4_l3_l9_protocol_failure_recovers_on_the_first_success() {
         notify_count(&fixture.fake),
         1,
         "first successful list closes the failed cycle without another escalation"
+    );
+}
+
+#[tokio::test]
+async fn ay4_l4_connection_reset_keeps_unknown_prompt_pending_without_duplicate_submission() {
+    let fixture = fixture();
+    fixture.fake.queue_list_result(Ok(idle(&fixture.worker)));
+    fixture
+        .fake
+        .queue_prompt_result(Err(HerdrError::ServerUnavailable {
+            message: "connection reset after prompt submission".to_owned(),
+            retry_after: None,
+            io_error_kind: Some(std::io::ErrorKind::ConnectionReset),
+        }));
+
+    fixture.pump.tick_once().await;
+
+    assert_eq!(
+        prompt_count(&fixture.fake),
+        1,
+        "a connection reset leaves one unknown prompt submission, never a duplicate"
+    );
+    assert!(
+        pending_worker(&fixture),
+        "unknown prompt keeps durable mail pending"
+    );
+
+    fixture.fake.queue_list_result(Ok(idle(&fixture.worker)));
+    fixture.pump.tick_once().await;
+    assert_eq!(
+        prompt_count(&fixture.fake),
+        2,
+        "a later queue-wake admission re-nudges the retained pending mail"
     );
 }
 
@@ -245,7 +288,11 @@ async fn ay4_l10_l11_flapping_is_suppressed_but_restart_gets_one_new_claim() {
     let process: Arc<dyn HerdrProcessAdapter> = fixture.fake.clone();
     let restarted = HerdrQueueWakePump::new(
         fixture.runtime.clone(),
-        Arc::new(NoopSelector),
+        active_received_hook_selector_with_health(
+            fixture.runtime.clone(),
+            Arc::clone(&process),
+            RuntimeHealth::default(),
+        ),
         RuntimeHealth::default(),
         process,
     )
