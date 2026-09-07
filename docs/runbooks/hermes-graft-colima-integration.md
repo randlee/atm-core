@@ -314,6 +314,82 @@ The daemon log must prove persistence happened before SIGSTOP. Otherwise record
 `FAIL: freeze preceded persist`; never tune and rerun until green. AT8 step 1
 must capture the same structural no-`sudo` evidence as AT4.
 
+Marker ownership is part of the protocol, not an implementation detail:
+
+| Marker | Writer | Reader | Content and lifetime |
+| --- | --- | --- | --- |
+| `at4-ready` | fixture agent | restart helper | presence only; cleared at suite start and helper arm |
+| `at4-done` | restart helper | fixture agent | UTC timestamp; cleared at suite start and helper arm |
+| `at8-rtt` | fixture agent | outer coordinator | ASCII integer milliseconds plus newline; cleared at suite start |
+| `at8-armed` | freeze helper | fixture agent | UTC timestamp; Phase B also records validated `after_ms` and `source_rtt_ms`; cleared at suite start and helper arm |
+| `at8-trigger` | fixture agent | freeze helper | presence only; cleared at suite start and Phase-B helper arm |
+| `at8-done` | freeze helper | fixture agent | UTC timestamp; cleared at suite start and helper arm |
+
+Clear only the fixed fixture markers before the prompt suite:
+
+```sh
+docker exec hermes-testbed rm -f \
+  /opt/testbed/results/markers/at4-ready \
+  /opt/testbed/results/markers/at4-done \
+  /opt/testbed/results/markers/at8-rtt \
+  /opt/testbed/results/markers/at8-armed \
+  /opt/testbed/results/markers/at8-trigger \
+  /opt/testbed/results/markers/at8-done
+```
+
+AT4 uses two operator terminals. Start the helper in terminal 1, then the
+prompt in terminal 2:
+
+```sh
+docker exec hermes-testbed /opt/testbed/harness/restart-daemon.sh
+```
+
+```sh
+docker exec hermes-testbed /opt/testbed/harness/run-prompts.sh AT4
+```
+
+The helper must print `daemon restarted (endpoint record published);
+at4-done written`; the prompt command must print `VERDICT AT4: pass`.
+
+For AT8, start `docker exec hermes-testbed
+/opt/testbed/harness/run-prompts.sh AT8` in terminal 1. In terminal 2, execute
+the complete coordinator sequence:
+
+```sh
+at8_marker=/opt/testbed/results/markers/at8-rtt
+at8_seen=0
+for at8_wait_second in $(seq 1 120); do
+  if docker exec hermes-testbed test -f "$at8_marker"; then
+    at8_seen=1
+    break
+  fi
+  sleep 1
+done
+if [ "$at8_seen" -ne 1 ]; then
+  echo 'FAIL: calibration marker missing/invalid' >&2
+  exit 1
+fi
+at8_rtt_ms="$(docker exec hermes-testbed cat "$at8_marker" | tr -d '\r\n')"
+if ! printf '%s\n' "$at8_rtt_ms" | grep -Eq '^[0-9]+$' || \
+   [ "$at8_rtt_ms" -lt 1 ] || [ "$at8_rtt_ms" -gt 60000 ]; then
+  echo 'FAIL: calibration marker missing/invalid' >&2
+  exit 1
+fi
+at8_after_ms=$(( (at8_rtt_ms + 1) / 2 ))
+[ "$at8_after_ms" -lt 300 ] && at8_after_ms=300
+[ "$at8_after_ms" -gt 1500 ] && at8_after_ms=1500
+docker exec hermes-testbed /opt/testbed/harness/freeze-daemon.sh 4
+docker exec hermes-testbed /opt/testbed/harness/freeze-daemon.sh 4 \
+  --after "$at8_after_ms" --source-rtt "$at8_rtt_ms" \
+  --trigger /opt/testbed/results/markers/at8-trigger
+```
+
+The first helper invocation must report a four-second freeze and resume. The
+second must report the same plus the computed delay; its fresh `at8-armed`
+marker must contain the same `after_ms` and `source_rtt_ms`. Terminal 1 must
+finish with `VERDICT AT8: pass`. A missing or invalid calibration marker is a
+hard failure; never substitute a default and never tune and retry.
+
 The authoritative operating procedure remains the testbed repository's
 `SMOKE-TEST-RUNBOOK.md`; this readiness record intentionally does not duplicate
 its mutable command sequence. The approved prompt changes and their CATALOG
@@ -468,7 +544,7 @@ Every issue becomes a row before work continues.
 | HGC-020 | P2 | B2a/B2b/B2c byte-exact envelope checks failed on the first run | Testbed `expected_envelope` still uses `read atm --team` and gives Task a `<when>` element; ATM commit `b84a9d2ef0cb7a3911ffe84642cb3e6f05b033e9` changed the accepted contract to `atm read --message-id <MID>` and intentionally omits `<when>` for Task | Preserve the failed first-run JSON; Fenix authorized Loki to update only the testbed expectations, bump `suite/v2`, add the commit-attributed CATALOG entry, and run the full matrix once on the pinned image | confirmed testbed drift; repair authorized |
 | HGC-021 | P2 | D7 routing completed but its message-ID log grep failed | The test couples routing success to an obsolete observability serialization even though its own contract is roster metadata, successful dispatch, sent outcome, and Herdr reachability | Preserve the failed row; Fenix authorized Loki to assert the supported routing contract without requiring the ULID in that log record, then include D7 in the one full-matrix confirmation | confirmed testbed drift; repair authorized |
 | HGC-022 | P2 | A1 reports an accepted mutation handoff but the returned message and immediate list still show unread state | Phase AV deliberately removed read-your-writes: `mutation_applied` means the supervised handoff accepted the transition, while durability is asynchronous. The requirements 7.12 post-mutation-count sentence conflicts with requirements 7.13 and ADR-059 | Fenix/`arch-ctm` ruled no behavior change: correct the conflicting docs/tests separately; Loki may assert acceptance and then poll `atm list --json` to durable state with a bounded deadline, applying accepted-vs-durable to every read-state assertion | resolved contract; suite/v2 repair authorized |
-| HGC-023 | P2/P3 | AT8 requires the outer coordinator to derive Phase-B `--after` from the fixture agent's warm-up RTT, but exposes no value before Phase B | The prompt records `warmup_rtt_ms` only in its final report; `freeze-daemon.sh` exposes only armed/done markers, so the blocking coordinator has no executable calibration input | Keep prompts held. Add a sanitized integer calibration marker written after warm-up; the coordinator boundedly waits, validates it, computes `clamp(half RTT, 300, 1500)`, and passes that exact value to `freeze-daemon.sh`. Clear the marker before each run and document its success/failure markers | blocking harness/runbook gap; Fenix authorization requested |
+| HGC-023 | P2/P3 | AT8 requires the outer coordinator to derive Phase-B `--after` from the fixture agent's warm-up RTT, but exposes no value before Phase B | The prompt records `warmup_rtt_ms` only in its final report; `freeze-daemon.sh` exposes only armed/done markers, so the blocking coordinator has no executable calibration input | Fenix authorized an `at8-rtt` agent-to-coordinator marker, a 120-second fail-closed wait, validation over 1..60000 ms, `clamp(round(rtt/2), 300, 1500)`, and `at8-armed` provenance. Loki applies the prompt/harness/CATALOG changes; no product code changes | confirmed; repair authorized in `01M1WXW9R9Z7KH69CDVR4F6122` |
 
 ## Stop/escalate decision table
 
