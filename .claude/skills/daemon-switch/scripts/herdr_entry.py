@@ -55,6 +55,7 @@ class EntryPlatform(Protocol):
     def register(self, identifier: str, object_path: Path) -> None: ...
     def unregister(self, identifier: str) -> None: ...
     def is_registered(self, identifier: str) -> bool: ...
+    def start(self, identifier: str) -> None: ...
     def account_matches(self, identifier: str) -> bool: ...
 
 
@@ -220,6 +221,22 @@ class HerdrEntryManager:
         owned, matching = self._owned(path, digest)
         return {"endpoint": endpoint.name, "identifier": entry_id, "owned": owned, "registered": self.platform.is_registered(entry_id), "digest_matches": matching if owned else False, "journal_phase": (self._load_journal().phase if self._load_journal() else None)}
 
+    def start_owned(self, endpoint: HerdrEndpoint) -> dict[str, object]:
+        """Explicitly relaunch one verified AY.5 entry; never create or repair it."""
+        self._assert_no_active_journal()
+        status = self.entry_status(endpoint)
+        if not status["owned"]:
+            raise HerdrEntryError("HERDR_ENTRY_FOREIGN", "entry is missing or not owned", "Install the owned entry before restarting Herdr", 3)
+        if not status["digest_matches"]:
+            raise HerdrEntryError("HERDR_ENTRY_DIGEST_MISMATCH", "owned entry has a different canonical digest", "Inspect and explicitly repair the entry", 3)
+        if not status["registered"]:
+            raise HerdrEntryError("HERDR_ENTRY_REGISTER_FAILED", "owned entry is not registered", "Repair the entry before restarting Herdr", 4)
+        try:
+            self.platform.start(str(status["identifier"]))
+        except Exception as error:
+            raise HerdrEntryError("HERDR_ENTRY_REGISTER_FAILED", "owned entry could not be relaunched", "Correct the native entry and retry", 4) from error
+        return status
+
 
 class NativeEntryPlatform:
     """Native file/registration adapter; all calls are explicit operator actions."""
@@ -259,6 +276,17 @@ class NativeEntryPlatform:
         # time. The object cannot be assumed registered merely because it exists.
         command = (["launchctl", "print", f"gui/{os.getuid()}/{entry_id}"] if self.name == "Darwin" else (["schtasks.exe", "/Query", "/TN", entry_id] if self.name == "Windows" else ["systemctl", "--user", "is-enabled", entry_id]))
         return getattr(self.runner(command, timeout=5.0), "returncode", 1) == 0
+
+    def start(self, entry_id: str) -> None:
+        if self.name == "Darwin":
+            command = ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{entry_id}"]
+        elif self.name == "Windows":
+            command = ["schtasks.exe", "/Run", "/TN", entry_id]
+        else:
+            command = ["systemctl", "--user", "restart", entry_id]
+        result = self.runner(command, timeout=30.0)
+        if getattr(result, "returncode", 1) != 0:
+            raise RuntimeError(getattr(result, "stderr", "platform entry start failed"))
 
     def account_matches(self, _entry_id: str) -> bool:
         return True

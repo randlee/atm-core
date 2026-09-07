@@ -90,6 +90,9 @@ from herdr_entry import (  # noqa: E402
 
 
 LIVE_PAIR_READINESS_ATTEMPTS = 200
+HERDR_RESTART_OVERALL_TIMEOUT = 120.0
+HERDR_RESTART_COMMAND_TIMEOUT = 30.0
+HERDR_RESTART_VERIFY_DELAYS = (0.0, 2.0, 4.0, 8.0, 8.0)
 MACOS_LAUNCH_AGENT_PATH = re.compile(r"^path = (.+)$")
 # [cass: helpful starter-rust-logging] - retains the bounded readiness state
 # as one named operational contract rather than an unexplained retry literal.
@@ -713,6 +716,9 @@ def restore_pair(args: argparse.Namespace) -> tuple[Path, Path]:
 
 
 def restart(args: argparse.Namespace) -> None:
+    if getattr(args, "restart_herdr", None) is not None:
+        run_herdr_restart(args)
+        return
     if not args.yes:
         raise SwitchError("restart changes the singleton daemon; re-run with --yes")
     require_no_active_temporary_launch_session()
@@ -720,6 +726,10 @@ def restart(args: argparse.Namespace) -> None:
     cli = require_executable(cli, "selected atm CLI")
     daemon = require_executable(daemon, "selected atm daemon")
     require_macos_development_signatures(cli, daemon)
+    pending = herdr_restart_pending_endpoints(cli)
+    if pending:
+        names = ", ".join(endpoint.name for endpoint in pending)
+        raise SwitchError(f"HERDR_RESTART_ENDPOINTS_PENDING: restart Herdr endpoints first: {names}")
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
     run_service(args, "start")
@@ -933,9 +943,7 @@ def herdr_entry_endpoints(cli: Path, *, install: bool) -> list[HerdrEndpoint]:
     for value in values:
         if not isinstance(value, dict):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint was malformed", "Fix native doctor and rerun", 4)
-        name = value.get("endpoint", value.get("session", "default"))
-        if name is None:
-            name = "default"
+        name = value.get("session") or value.get("endpoint") or "default"
         if not isinstance(name, str) or not name or not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint identifier was invalid", "Fix native doctor and rerun", 4)
         socket_path = value.get("socket_path")
@@ -983,6 +991,172 @@ def run_herdr_entry(args: argparse.Namespace) -> None:
     herdr_entry_result(True, success, "Herdr entries processed", "none", entries)
 
 
+class HerdrRestartEndpoint:
+    """One validated, privacy-safe AY.3 doctor endpoint for restart control."""
+
+    def __init__(
+        self,
+        entry: HerdrEndpoint,
+        provenance: str,
+        state_kind: str,
+        client_version: str | None,
+        running_server: str | None,
+        live_handoff: bool | None,
+    ) -> None:
+        self.entry = entry
+        self.provenance = provenance
+        self.state_kind = state_kind
+        self.client_version = client_version
+        self.running_server = running_server
+        self.live_handoff = live_handoff
+
+    @property
+    def name(self) -> str:
+        return self.entry.name
+
+
+def herdr_restart_endpoints(cli: Path) -> list[HerdrRestartEndpoint]:
+    """Validate the AY.3 doctor projection used by the explicit coordinator."""
+    payload = doctor(cli)
+    if not isinstance(payload, dict) or "error" in payload:
+        raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native atm doctor --json could not be read", "Fix native doctor and rerun", 4)
+    herdr = payload.get("herdr")
+    if not isinstance(herdr, dict) or herdr.get("configured") is None:
+        raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor did not provide herdr.configured", "Fix native doctor and rerun", 4)
+    if herdr.get("configured") is not True:
+        raise HerdrEntryError("HERDR_NOT_CONFIGURED", "native doctor reports Herdr is not configured", "Configure Herdr or omit restart request", 3)
+    raw_endpoints = herdr.get("endpoints")
+    if not isinstance(raw_endpoints, list):
+        raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor did not provide herdr.endpoints", "Fix native doctor and rerun", 4)
+    endpoints: list[HerdrRestartEndpoint] = []
+    for raw in raw_endpoints:
+        if not isinstance(raw, dict):
+            raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint was malformed", "Fix native doctor and rerun", 4)
+        name = raw.get("session") or raw.get("endpoint") or "default"
+        state = raw.get("state")
+        capabilities = raw.get("capabilities")
+        provenance = raw.get("provenance")
+        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", name) or not isinstance(state, dict) or not isinstance(state.get("kind"), str) or not isinstance(capabilities, dict) or not isinstance(provenance, str):
+            raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor restart fields were malformed", "Fix native doctor and rerun", 4)
+        live_handoff = capabilities.get("live_handoff")
+        if live_handoff is not None and not isinstance(live_handoff, bool):
+            raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor handoff capability was malformed", "Fix native doctor and rerun", 4)
+        client = state.get("client")
+        server = state.get("server")
+        if client is not None and not isinstance(client, str) or server is not None and not isinstance(server, str):
+            raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor version data was malformed", "Fix native doctor and rerun", 4)
+        socket_path = raw.get("endpoint") if provenance == "socket_path" else None
+        endpoints.append(HerdrRestartEndpoint(HerdrEndpoint(name, socket_path if isinstance(socket_path, str) else "socket-path" if provenance == "socket_path" else None), provenance, str(state["kind"]), client, server, live_handoff))
+    return endpoints
+
+
+def select_herdr_restart_endpoint(cli: Path, selector: str | None) -> HerdrRestartEndpoint:
+    endpoints = herdr_restart_endpoints(cli)
+    entries = [{"endpoint": endpoint.name, "identifier": identifier(platform.system(), endpoint.name)} for endpoint in endpoints]
+    if selector is None:
+        if len(endpoints) != 1:
+            error = HerdrEntryError("HERDR_RESTART_ENDPOINT_REQUIRED", "more than one Herdr endpoint is configured", "rerun with --restart-herdr <default-or-session>", 3)
+            error.entries = entries
+            raise error
+        selected = endpoints[0]
+    else:
+        selected = next((endpoint for endpoint in endpoints if endpoint.name == selector), None)
+        if selected is None:
+            error = HerdrEntryError("HERDR_RESTART_ENDPOINT_UNKNOWN", "requested Herdr endpoint is not configured", "Use a returned default or session endpoint", 3)
+            error.entries = entries
+            raise error
+    if selected.provenance == "socket_path" or selected.entry.socket_path is not None:
+        raise HerdrEntryError("HERDR_RESTART_SOCKET_PATH", "socket-path endpoint is externally owned", "Restart through the external owner", 3)
+    return selected
+
+
+def _version_key(value: str | None) -> tuple[int, ...] | None:
+    if value is None or not re.fullmatch(r"\d+(?:\.\d+){1,2}", value):
+        return None
+    return tuple(int(part) for part in value.split("."))
+
+
+def restart_uses_live_handoff(endpoint: HerdrRestartEndpoint) -> bool:
+    client = _version_key(endpoint.client_version)
+    server = _version_key(endpoint.running_server)
+    return client is not None and server is not None and client > server and endpoint.live_handoff is True
+
+
+def scoped_herdr_command(endpoint: HerdrRestartEndpoint, action: str) -> list[str]:
+    prefix = ["herdr"] if endpoint.name == "default" else ["herdr", "--session", endpoint.name]
+    return [*prefix, "server", action]
+
+
+def _restart_entries(endpoints: list[HerdrRestartEndpoint]) -> list[dict[str, object]]:
+    return [{"endpoint": endpoint.name, "identifier": identifier(platform.system(), endpoint.name)} for endpoint in endpoints]
+
+
+def _restart_command(command: list[str], deadline: float) -> None:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise HerdrEntryError("HERDR_RESTART_TIMEOUT", f"restart deadline expired before {' '.join(command[-2:])}", "Retry the explicit restart", 4)
+    try:
+        result = run(command, timeout=min(HERDR_RESTART_COMMAND_TIMEOUT, remaining))
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise HerdrEntryError("HERDR_RESTART_TIMEOUT", f"timed out running {' '.join(command[-2:])}", "Retry the explicit restart", 4) from error
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip() or "Herdr command failed"
+        raise HerdrEntryError("HERDR_RESTART_HERDR_FAILED", f"{' '.join(command[-2:])} failed: {detail}", "Correct Herdr and retry", 4)
+
+
+def _verify_herdr_restart(cli: Path, selected: HerdrRestartEndpoint, deadline: float) -> None:
+    last_state = "unreadable"
+    for delay in HERDR_RESTART_VERIFY_DELAYS:
+        if delay:
+            if time.monotonic() + delay >= deadline:
+                break
+            time.sleep(delay)
+        try:
+            observed = next(endpoint for endpoint in herdr_restart_endpoints(cli) if endpoint.name == selected.name)
+            last_state = observed.state_kind
+            if observed.state_kind == "ok":
+                return
+        except (HerdrEntryError, StopIteration):
+            last_state = "unreadable"
+    raise HerdrEntryError("HERDR_RESTART_VERIFY_TIMEOUT", f"endpoint did not become ok; last state={last_state}", "Inspect Herdr health and retry", 4)
+
+
+def run_herdr_restart(args: argparse.Namespace) -> None:
+    cli, _daemon = selected_links(args)
+    selector = args.restart_herdr or None
+    selected = select_herdr_restart_endpoint(cli, selector)
+    if args.restart_timeout_secs <= 0:
+        raise HerdrEntryError("HERDR_RESTART_TIMEOUT", "restart timeout must be positive", "Pass a positive --restart-timeout-secs value", 4)
+    manager = herdr_entry_manager()
+    status = manager.entry_status(selected.entry)
+    if status["journal_phase"] is not None:
+        raise HerdrEntryError("HERDR_ENTRY_JOURNAL_ACTIVE", "an entry transaction is incomplete", "Run herdr-entry status --repair", 3)
+    if not status["owned"]:
+        raise HerdrEntryError("HERDR_ENTRY_FOREIGN", "selected entry is missing or unowned", "Install the owned entry before restarting Herdr", 3)
+    deadline = time.monotonic() + args.restart_timeout_secs
+    if restart_uses_live_handoff(selected):
+        _restart_command(scoped_herdr_command(selected, "live-handoff"), deadline)
+    else:
+        if not args.stop_herdr_panes:
+            print("warning: stopping Herdr exits panes for the selected endpoint", file=sys.stderr)
+            code = "HERDR_RESTART_NO_LIVE_HANDOFF" if selected.state_kind == "client_server_mismatch" else "HERDR_RESTART_PANES_ACK_REQUIRED"
+            raise HerdrEntryError(code, "stopping Herdr terminates the selected endpoint panes", "Accept impact and pass --stop-herdr-panes", 3)
+        print("warning: stopping Herdr exits panes for the selected endpoint", file=sys.stderr)
+        _restart_command(scoped_herdr_command(selected, "stop"), deadline)
+        manager.start_owned(selected.entry)
+    _verify_herdr_restart(cli, selected, deadline)
+    herdr_entry_result(True, "HERDR_RESTARTED", "selected Herdr endpoint restarted and verified", "none", _restart_entries([selected]))
+
+
+def herdr_restart_pending_endpoints(cli: Path) -> list[HerdrRestartEndpoint]:
+    try:
+        return [endpoint for endpoint in herdr_restart_endpoints(cli) if endpoint.state_kind == "client_server_mismatch"]
+    except HerdrEntryError as error:
+        if error.code == "HERDR_NOT_CONFIGURED":
+            return []
+        raise SwitchError(f"{error.code}: {error.message}") from error
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     selectors = argparse.ArgumentParser(add_help=False)
@@ -1021,6 +1195,9 @@ def parser() -> argparse.ArgumentParser:
     restore.add_argument("--dry-run", action="store_true")
     restart_parser = sub.add_parser("restart", parents=[selectors])
     restart_parser.add_argument("--yes", action="store_true")
+    restart_parser.add_argument("--restart-herdr", nargs="?", const="", metavar="ENDPOINT")
+    restart_parser.add_argument("--stop-herdr-panes", action="store_true")
+    restart_parser.add_argument("--restart-timeout-secs", type=float, default=HERDR_RESTART_OVERALL_TIMEOUT)
     quiesce_parser = sub.add_parser("quiesce", parents=[selectors])
     quiesce_parser.add_argument("--yes", action="store_true")
     temporary = sub.add_parser("temporary-launch", parents=[selectors])
@@ -1095,7 +1272,7 @@ def main() -> int:
         else:
             quiesce(args)
     except HerdrEntryError as error:
-        herdr_entry_result(False, error.code, error.message, error.remedy, [])
+        herdr_entry_result(False, error.code, error.message, error.remedy, getattr(error, "entries", []))
         return error.exit_code
     except SwitchError as error:
         print(f"daemon-switch: {error}", file=sys.stderr)
