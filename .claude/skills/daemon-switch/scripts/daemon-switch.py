@@ -729,7 +729,14 @@ def restart(args: argparse.Namespace) -> None:
     pending = herdr_restart_pending_endpoints(cli)
     if pending:
         names = ", ".join(endpoint.name for endpoint in pending)
-        raise SwitchError(f"HERDR_RESTART_ENDPOINTS_PENDING: restart Herdr endpoints first: {names}")
+        error = HerdrEntryError(
+            "HERDR_RESTART_ENDPOINTS_PENDING",
+            f"restart Herdr endpoints first: {names}",
+            "Restart every listed Herdr endpoint first, then rerun the ordinary ATM restart",
+            3,
+        )
+        error.entries = _restart_entries(pending)
+        raise error
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
     run_service(args, "start")

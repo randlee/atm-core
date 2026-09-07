@@ -1829,18 +1829,43 @@ class HerdrRestartTests(unittest.TestCase):
         self.assertEqual(sleeper.call_args_list, [mock.call(2.0), mock.call(4.0)])
 
     def test_ordinary_restart_refuses_every_protocol_mismatch_before_service_mutation(self) -> None:
-        args = argparse.Namespace(yes=True)
+        args = argparse.Namespace(command="restart", yes=True)
         payload = self.doctor_payload(self.endpoint(), self.endpoint("blue"), self.endpoint("green", state="ok", client=None, server=None))
+        stdout = io.StringIO()
+        stderr = io.StringIO()
         with (
             mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(self.cli, Path("/selected/atm-daemon"))),
             mock.patch.object(DAEMON_SWITCH, "require_executable", side_effect=[self.cli, Path("/selected/atm-daemon")]),
             mock.patch.object(DAEMON_SWITCH, "require_macos_development_signatures"),
             mock.patch.object(DAEMON_SWITCH, "doctor", return_value=payload),
             mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "parser",
+                return_value=mock.Mock(parse_args=mock.Mock(return_value=args)),
+            ),
         ):
-            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "default, blue"):
-                DAEMON_SWITCH.restart(args)
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = DAEMON_SWITCH.main()
         service.assert_not_called()
+        self.assertEqual(exit_code, 3)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(
+            json.loads(stdout.getvalue()),
+            {
+                "ok": False,
+                "code": "HERDR_RESTART_ENDPOINTS_PENDING",
+                "message": "restart Herdr endpoints first: default, blue",
+                "remedy": "Restart every listed Herdr endpoint first, then rerun the ordinary ATM restart",
+                "entries": [
+                    {
+                        "endpoint": name,
+                        "identifier": DAEMON_SWITCH.identifier(DAEMON_SWITCH.platform.system(), name),
+                    }
+                    for name in ("default", "blue")
+                ],
+            },
+        )
 
     def test_restart_refusal_envelope_has_only_safe_endpoint_identifiers(self) -> None:
         with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=self.doctor_payload(self.endpoint(), self.endpoint("blue"))):
