@@ -577,7 +577,9 @@ Acceptance:
 
 Cross-document invariants that must stay locked during implementation:
 - `taskId` implies ack-required send behavior
-- displayed messages always persist `read = true`
+- `mutation_applied = true` means a displayed message's legal read/seen
+  transition was accepted into the supervised non-blocking handoff; durable
+  `read = true` visibility may follow later
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
 - `atm clear` never removes pending-ack messages

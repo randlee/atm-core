@@ -789,8 +789,8 @@ mod tests {
     use atm_core::types::ReadSelection;
     use atm_storage::testing::InMemoryMailboxReader;
     use atm_storage::{
-        AgentName, AtmError, AtmErrorCode, IsoTimestamp, Message, MessageEnvelope, ReadLaneError,
-        TeamName,
+        AgentName, AtmError, AtmErrorCode, AtmMessageId, IsoTimestamp, Message, MessageEnvelope,
+        ReadLaneError, TeamName,
     };
 
     use super::{
@@ -1047,6 +1047,10 @@ mod tests {
             .expect("runtime selects through reader lane");
         assert_eq!(outcome.count, 1);
         assert!(outcome.mutation_applied, "handoff admission is reported");
+        assert!(
+            !outcome.message.expect("selected message").envelope.read,
+            "the response remains the pre-handoff reader snapshot"
+        );
 
         let list = ListQuery::new(
             query_root.clone(),
@@ -1075,6 +1079,54 @@ mod tests {
             writer.applied().len(),
             0,
             "list never uses the writer handoff"
+        );
+    }
+
+    #[tokio::test]
+    async fn exact_message_read_reports_handoff_acceptance_not_durability() {
+        let writer = Arc::new(RecordingWriter::default());
+        let mut selected = message("unread", false);
+        let message_id = AtmMessageId::new();
+        selected.envelope.message_id = Some(message_id);
+        let runtime = StorageAsyncMailboxRuntime::new(
+            Arc::new(InMemoryMailboxReader::with_messages(vec![selected])),
+            writer,
+        )
+        .with_state_handoff(HandoffConfig::default())
+        .expect("runtime handoff starts");
+        let root = PathBuf::from("/daemon-owned");
+        let id = message_id.to_string();
+        let read = ReadQuery::new(
+            root.clone(),
+            root,
+            agent(),
+            None,
+            team(),
+            ReadSelection::Unread,
+            false,
+            true,
+            Some(&id),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("exact read query");
+        let outcome = runtime
+            .read_command(
+                prepare_async_read(&read).expect("core prepares exact policy"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("runtime selects exact message");
+        assert!(
+            outcome.mutation_applied,
+            "acceptance is reported for exact reads"
+        );
+        assert!(
+            !outcome.message.expect("selected message").envelope.read,
+            "exact reads share the pre-handoff snapshot contract"
         );
     }
 
