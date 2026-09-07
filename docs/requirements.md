@@ -903,6 +903,13 @@ Runtime caller-context rules:
   should always be present in `config.json`
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
   canonical member identities
+- `[[rmux.windows.panes]]` may declare an optional `alias` for its canonical
+  pane name; `atm teams add-member` uses that value as its default durable
+  roster alias when invoked from that repository, unless `--alias` explicitly
+  overrides it
+- a durable roster alias is the addressing alias recorded in roster metadata;
+  `[atm].aliases` remains CLI-only shorthand and never supplies durable roster
+  metadata
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
   best-effort recipient-scoped post-send automation
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,

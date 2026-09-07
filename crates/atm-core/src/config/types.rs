@@ -75,6 +75,9 @@ pub struct AtmConfig {
     /// Alias destination values are free-form routing strings; no domain constraint is applied at
     /// the config layer, so no newtype wrapper is needed here.
     pub aliases: BTreeMap<String, String>,
+    /// Optional durable roster aliases declared by the repo's rmux pane
+    /// definitions, keyed by the canonical pane/member name.
+    pub rmux_pane_aliases: BTreeMap<String, String>,
     pub post_send_hooks: Vec<PostSendHookRule>,
     /// Bounded message payload policy shared by inline, stdin, and daemon
     /// admission. It deliberately is not a SQLite row-size limit.
@@ -110,6 +113,7 @@ impl Default for AtmConfig {
             default_team: None,
             team_members: Vec::new(),
             aliases: BTreeMap::new(),
+            rmux_pane_aliases: BTreeMap::new(),
             post_send_hooks: Vec::new(),
             max_message_bytes: ByteCount::new(DEFAULT_MAX_MESSAGE_BYTES),
             claude_jsonl_body_export_max_bytes: ByteCount::new(
