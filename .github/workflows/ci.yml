@@ -344,6 +344,20 @@ jobs:
       - name: Run Herdr transport fixtures
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: cargo test -p atm-herdr --all-features --verbose
+        env:
+          # AY.7's Windows-only integration test writes a deterministic
+          # doctor-contract fixture here. It is CI evidence, not live Herdr
+          # evidence, and is uploaded only from the Windows lane below.
+          ATM_WINDOWS_PROCESS_AUDIT_DIR: ${{ runner.temp }}/atm-herdr-process-audit
+
+      - name: Upload Windows Herdr process-audit doctor fixture
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-herdr-process-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/atm-herdr-process-audit/windows-ci-doctor.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Run ATM CLI surface compatibility contract
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
