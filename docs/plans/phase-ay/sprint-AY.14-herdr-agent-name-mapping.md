@@ -64,8 +64,9 @@ metadata key is `alias` (not `herdrAgent`), persisted in the members table
 
 Alias validation: ATM name rules (`validate_path_segment`) and, when the
 member backend is Herdr, also Herdr's `[a-z][a-z0-9_-]{0,31}`. An alias
-must be unique within the team and must not equal another member's
-canonical name in that team. CLI flag is `--alias <name>` (D2), not
+must be unique across the whole ATM database (every team in the roster
+store, not just the member's team; see Requirement below) and must not
+equal any member's canonical name in any team. CLI flag is `--alias <name>` (D2), not
 `--herdr-agent`. Convention for Herdr collisions: `<identity>_<team>`,
 e.g. `team-lead_atm-dev`. Add D7: recipient and identity resolution tests
 for alias, alias@team, and unknown alias (falls through to canonical parse
@@ -122,6 +123,13 @@ error unchanged).
   continue to use team-lead.  alias would be aceptable at all user/agent
   facing interfaces and would be immediately replaced" ... "and would
   immediately be replaced at the ingress interface."
+- "additional requirements:  alias MUST be unitque for atm database"
+
+Uniqueness is enforced where the alias is written (`add-member --alias`,
+`set-member --alias`): the roster store rejects an alias already held by
+any member of any team, and an alias equal to any canonical member name in
+any team, with an error naming the conflicting team. Enforced under the
+roster write lane so two concurrent writers cannot both succeed.
 
 The alias is stored once, as the member's roster attribute (`alias` in
 `metadata_json`). It is resolved to the canonical name at the CLI/runtime
@@ -150,6 +158,10 @@ that leaks the alias past the edge is a blocking finding.
   message/audit row carries canonical names only; `rg alias` over
   crates/atm-storage and crates/atm-core/src/mailbox shows no write path
   other than the roster metadata.
+- AC7 Alias uniqueness is database-wide: a test adds `alias` to a member of
+  team A, then attempts the same alias on a member of team B and on a
+  member whose canonical name equals it; both are rejected. Concurrent
+  writers of the same alias: exactly one succeeds.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 
