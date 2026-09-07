@@ -1,5 +1,6 @@
 //! Concrete endpoint diagnostics over the private Herdr transport seam.
 
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -115,6 +116,30 @@ impl HerdrDoctorProbe {
 
     fn state_for_error(&self, error: HerdrError, elapsed: Duration) -> HerdrDoctorState {
         match error {
+            HerdrError::ServerUnavailable {
+                io_error_kind: Some(ErrorKind::NotFound),
+                ..
+            } => HerdrDoctorState::BinaryNotFound {
+                searched: self
+                    .config
+                    .binary_path()
+                    .map_or_else(|| vec![PathBuf::from("herdr")], |path| vec![path.to_path_buf()]),
+            },
+            HerdrError::ServerUnavailable {
+                io_error_kind: Some(ErrorKind::PermissionDenied),
+                message,
+                ..
+            } => HerdrDoctorState::BinaryNotExecutable {
+                path: self
+                    .config
+                    .binary_path()
+                    .map_or_else(|| PathBuf::from("herdr"), PathBuf::from),
+                cause: if message.is_empty() {
+                    "the Herdr binary could not be executed".to_owned()
+                } else {
+                    message
+                },
+            },
             HerdrError::ServerUnavailable { .. } if self.config.binary_path().is_some() => {
                 HerdrDoctorState::BinaryNotExecutable {
                     path: self
@@ -229,6 +254,7 @@ mod tests {
             crate::HerdrError::ServerUnavailable {
                 message: "unavailable".to_owned(),
                 retry_after: None,
+                io_error_kind: None,
             },
             crate::HerdrError::InternalError {
                 message: "internal".to_owned(),
@@ -263,6 +289,41 @@ mod tests {
         assert!(matches!(
             presence_for_error(crate::HerdrError::ServerNotRunning),
             HerdrPresenceOutcome::Infrastructure { .. }
+        ));
+    }
+
+    #[test]
+    fn not_found_spawn_error_maps_to_binary_not_found() {
+        let probe = HerdrDoctorProbe::new(Default::default());
+        assert!(matches!(
+            probe.state_for_error(
+                crate::HerdrError::ServerUnavailable {
+                    message: "not found".to_owned(),
+                    retry_after: None,
+                    io_error_kind: Some(std::io::ErrorKind::NotFound),
+                },
+                Duration::ZERO,
+            ),
+            HerdrDoctorState::BinaryNotFound { searched }
+                if searched == vec![std::path::PathBuf::from("herdr")]
+        ));
+    }
+
+    #[test]
+    fn permission_denied_spawn_error_maps_to_binary_not_executable() {
+        let probe = HerdrDoctorProbe::new(Default::default());
+        assert!(matches!(
+            probe.state_for_error(
+                crate::HerdrError::ServerUnavailable {
+                    message: "permission denied".to_owned(),
+                    retry_after: None,
+                    io_error_kind: Some(std::io::ErrorKind::PermissionDenied),
+                },
+                Duration::ZERO,
+            ),
+            HerdrDoctorState::BinaryNotExecutable { path, cause }
+                if path == std::path::PathBuf::from("herdr")
+                    && cause == "permission denied"
         ));
     }
 }

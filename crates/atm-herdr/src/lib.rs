@@ -102,6 +102,7 @@ pub enum HerdrError {
     ServerUnavailable {
         message: String,
         retry_after: Option<Duration>,
+        io_error_kind: Option<std::io::ErrorKind>,
     },
     InternalError {
         message: String,
@@ -1005,6 +1006,7 @@ mod tests {
             Err(HerdrError::ServerUnavailable {
                 message: "server is draining".to_owned(),
                 retry_after: Some(Duration::from_millis(12_345)),
+                io_error_kind: None,
             })
         );
 
@@ -1191,6 +1193,7 @@ mod tests {
                 HerdrError::ServerUnavailable {
                     message: String::new(),
                     retry_after: None,
+                    io_error_kind: None,
                 },
             ),
             (

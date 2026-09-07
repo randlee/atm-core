@@ -258,6 +258,7 @@ fn error_from_envelope(envelope: &HerdrEnvelope) -> HerdrError {
         "server_unavailable" => HerdrError::ServerUnavailable {
             message,
             retry_after,
+            io_error_kind: None,
         },
         "internal_error" | "agent_prompt_failed" => HerdrError::InternalError { message },
         other => HerdrError::Advisory {
