@@ -1771,9 +1771,9 @@ item 7 below, not optimized.
    poll). AY.12 dispatches only after this line is filled in from AY.11's
    dogfood evidence:
 
-   Decision (Rand, 2026-09-07): stop subscription work — derived from
-   "stop AY.10" above; AY.11 and AY.12 never dispatched, poll stays the
-   authority on both paths.
+   Decision (Rand, 2026-09-07): stop subscription work
+   (derived from "stop AY.10" above; AY.11 and AY.12 never dispatched,
+   poll stays the authority on both paths.)
 
 ### Hardening rounds
 

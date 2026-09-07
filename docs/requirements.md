@@ -1065,6 +1065,10 @@ Definitions:
   runtime request, peer wire, roster write, mailbox row). A prompt or
   script written with aliases and the same prompt written with canonical
   names produce identical wire payloads and identical persisted rows.
+  Cross-host: Rand (2026-09-07): "alias@team.host works". A sender that
+  holds no roster for the remote team forwards the alias; the receiving
+  host's ingress substitutes the canonical name, so persisted rows are
+  canonical on both hosts.
 
 The full permutation matrix and its test mapping live in
 `docs/plans/phase-ay/herdr-naming-test-matrix.md`.

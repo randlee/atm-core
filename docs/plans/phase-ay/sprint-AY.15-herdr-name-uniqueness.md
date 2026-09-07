@@ -48,11 +48,12 @@ dependency_relations:
   team-lead-alias, --from team-lead-alias ..."
 - "basically if all prompts are written for either member name or alias, it
   will work the same"
+- "alias@team.host works" (cross-host, matrix D-13: in scope)
 
 Requirements text: `docs/requirements.md` §3.3.2 `REQ-ROSTER-NAME-001..008`.
 Permutation matrix: `docs/plans/phase-ay/herdr-naming-test-matrix.md`.
-Every row marked **GAP** there is owed by this sprint, except D-13
-(cross-host alias, needs Rand's ruling; leave out).
+Every row marked **GAP** there is owed by this sprint (D-13 included
+since Rand's 2026-09-07 ruling).
 
 ## Defects on integrate/phase-ay f6c9d47b8
 
@@ -136,7 +137,6 @@ Every row marked **GAP** there is owed by this sprint, except D-13
 
 ## Out of scope
 
-- D-13 cross-host alias forwarding (needs Rand's ruling).
 - B-08 alias equal to a team name: accept as today, no new check.
 - `crates/atm-daemon/**` (frozen legacy): empty diff.
 - Any change to what is persisted in message/ack/audit/task rows beyond
@@ -146,8 +146,8 @@ Every row marked **GAP** there is owed by this sprint, except D-13
 
 - AC1 Every matrix row A-01..A-25 has a named passing test; A-06 and A-07
   fail on f6c9d47b8 and pass on the sprint head.
-- AC2 Every GAP row in sections B–G (minus D-13, B-08) has a named passing
-  test, A-26..A-29 and F-07 included, and the matrix file shows no remaining **GAP** except D-13/B-08.
+- AC2 Every GAP row in sections B–G (minus B-08) has a named passing
+  test, A-26..A-29 and F-07 included, and the matrix file shows no remaining **GAP** except B-08.
 - AC3 `rg 'ensure_canonical_member_name_available|ensure_alias_available|validate_database_wide_aliases' crates/` returns nothing; the store transaction is the only enforcement point (A-23 test drives the store directly).
 - AC4 `just validate && cargo test -p atm-core -p atm -p atm-herdr -p atm-http-runtime -p atm-storage-rusqlite -p atm-daemon-bootstrap --all-features` green; fmt and clippy clean before every push.
 - AC5 Empty diff under `crates/atm-daemon/`.
