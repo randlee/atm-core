@@ -140,6 +140,17 @@ a member by alias wherever an agent name is accepted (send recipient,
 `--as`/`ATM_IDENTITY`, `--team`-scoped member arguments, ack/read filters,
 roster commands), and Herdr always uses it when present.
 
+- "one more requirement: atm teams add_member must reject a duplicate name
+  w/out an alias"
+
+`atm teams add-member` rejects a member whose canonical name already exists
+in any other team of the roster store unless `--alias` is given (and that
+alias passes the database-wide uniqueness rule above). The error names the
+conflicting team and the `--alias` remedy. Applies to every backend, as
+written. Consequence for operators: a second team gaining `team-lead` or
+`quality-mgr` must supply an alias at add time; the hmux spawn path that
+creates teams outside ATM must pass one.
+
 Uniqueness is enforced where the alias is written (`add-member --alias`,
 `set-member --alias`): the roster store rejects an alias already held by
 any member of any team, and an alias equal to any canonical member name in
@@ -177,6 +188,11 @@ that leaks the alias past the edge is a blocking finding.
   team A, then attempts the same alias on a member of team B and on a
   member whose canonical name equals it; both are rejected. Concurrent
   writers of the same alias: exactly one succeeds.
+- AC8 `add-member` with a canonical name already present in another team
+  and no `--alias` is rejected with an error naming that team; the same
+  call with a unique `--alias` succeeds; the first member of that name in
+  the database is accepted without an alias. Same check on the daemon
+  member-add path so the CLI cannot be bypassed.
 - AC5 Boundary TOMLs untouched unless the boundary guard requires a
   record update for the new newtype; if so, say which in the PR.
 
