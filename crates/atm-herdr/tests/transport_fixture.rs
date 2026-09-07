@@ -301,14 +301,23 @@ async fn socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read() {
         let server = fake_herdr_socket::FakeHerdrSocket::bind(&oversized).expect("bind");
         let mut response = vec![b'x'; 1024 * 1024 + 1];
         response.push(b'\n');
-        let task = tokio::spawn(server.serve_once_allow_client_abort(response));
-        let result = get_with_deadline(
-            &atm_herdr::testing::production_invoker_with_test_socket(oversized.clone()),
-            None,
-            RequestDeadline::after(Duration::from_secs(1)),
-        )
-        .await;
-        task.await
+        let (write_completed_tx, write_completed_rx) = tokio::sync::oneshot::channel();
+        let server_task = tokio::spawn(server.serve_oversized(response, write_completed_tx));
+        let invoker = atm_herdr::testing::production_invoker_with_test_socket(oversized.clone());
+        let client_task = tokio::spawn(async move {
+            get_with_deadline(
+                &invoker,
+                None,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+        });
+        write_completed_rx
+            .await
+            .expect("server reached the synchronized write boundary");
+        let result = client_task.await.expect("client task");
+        server_task
+            .await
             .expect("server")
             .expect("request despite deliberate client abort");
         assert!(matches!(result, Err(HerdrError::InternalError { .. })));

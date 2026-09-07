@@ -270,17 +270,23 @@ where
     S: AsyncRead + Unpin,
 {
     let mut line = Vec::with_capacity(4096);
+    let mut chunk = [0_u8; 8192];
     loop {
-        let mut byte = [0_u8; 1];
-        let read = deadline_io(deadline, stream.read(&mut byte)).await?;
+        let read_limit = (max_line_bytes + 1 - line.len()).min(chunk.len());
+        let read = deadline_io(deadline, stream.read(&mut chunk[..read_limit])).await?;
         if read == 0 {
             return Err(incomplete_response(line.len()));
         }
-        line.push(byte[0]);
-        if byte[0] == b'\n' {
-            line.pop();
+        let received = &chunk[..read];
+        if let Some(newline) = received.iter().position(|byte| *byte == b'\n') {
+            let observed = line.len() + newline;
+            if observed > max_line_bytes {
+                return Err(oversized_response(observed, max_line_bytes));
+            }
+            line.extend_from_slice(&received[..newline]);
             return Ok(line);
         }
+        line.extend_from_slice(received);
         if line.len() > max_line_bytes {
             return Err(oversized_response(line.len(), max_line_bytes));
         }
