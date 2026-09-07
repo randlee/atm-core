@@ -125,6 +125,12 @@ error unchanged).
   immediately be replaced at the ingress interface."
 - "additional requirements:  alias MUST be unique for atm database (meets
   herdr requirements)"
+- "if an alias is used, the alias would be the herdr agent name."
+
+There is exactly one name field: when a member has an alias, that alias is
+the Herdr agent name the adapter targets (prompt/wait/get, `agent.list`
+snapshot matching, wake loop keys); when it has none, the canonical name is.
+No separate Herdr-name key exists or is accepted.
 
 Uniqueness is enforced where the alias is written (`add-member --alias`,
 `set-member --alias`): the roster store rejects an alias already held by
