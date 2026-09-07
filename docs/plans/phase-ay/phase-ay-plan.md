@@ -62,10 +62,10 @@ owning or supervising Herdr, excluded by ruling 1. Compatibility
 ownership: AY.8's equivalence suite proves the socket client emits the
 same request set and error mapping as the CLI transport for every Herdr
 release at or above `HERDR_MINIMUM_VERSION`; AY.9 keeps the CLI transport
-as a permanent, explicitly selected fallback (Rand, 2026-09-06: the CLI
-implementation has worked from the start; if UDS or named pipes misbehave
-we fall back to CLI calls) so a socket defect or Herdr drift is absorbed by
-configuration, never by a hotfix. AY.8 and AY.9 are therefore the design answer to
+as a permanent alternative selected once at daemon start (Rand,
+2026-09-06: the CLI implementation has worked from the start; pick CLI or
+UDS/named pipe in config, never switch at runtime) so a socket defect or
+Herdr drift is absorbed by a config edit plus restart, never by a hotfix. AY.8 and AY.9 are therefore the design answer to
 the phase's transport and failure-model drivers, not a separate modernization.
 
 Post-mortem entry: filed as AW-READY-W1 (blocking) with a

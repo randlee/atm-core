@@ -29,7 +29,7 @@ dependency_relations:
 
 Select the AY.8 socket transport in the Tokio/Axum production composition,
 make it the default with the CLI transport as the permanent explicit
-fallback, and close its
+alternative, and close its
 configuration, doctor, and automated lifecycle contracts on all three CI
 lanes. AY.9 is the phase's last sprint; live macOS/Windows operator proof
 is release readiness after the phase lands on develop (ruling 5), and the
@@ -79,7 +79,7 @@ completion fails the sprint.
   unreachable; `server_not_running` becomes refused/absent endpoint; the old
   protocol-mismatch case becomes a server-recording/version switch between
   calls with no daemon restart. Keep the distinct below-minimum case and keep
-  CLI variants green while fallback exists. L5 shutdown/drain and resource
+  CLI variants green permanently (both transports are supported). L5 shutdown/drain and resource
   release, L10 restart dedup, L11 flapping suppression, and L12 stalled-
   notification deadline are explicitly included after the transport swap.
 - [ ] D4 — extend doctor without crossing crate boundaries: each endpoint
@@ -244,8 +244,10 @@ serialized JSON, human output, snapshots, or transport logs.
    forbidden-edge grep proves `HerdrEndpoint` does not enter atm-core or
    atm-daemon-bootstrap.
 4. The AY.2 zero-regression oracle passes through the socket default.
-5. The CLI fallback, cutover release, exact removal release, and later deletion
-   of CLI ownership keys are recorded in user docs and `docs/project-plan.md`.
+5. User docs and `docs/project-plan.md` record the CLI transport as a
+   permanent, explicitly selected alternative (`herdr.transport = "cli"`),
+   the cutover release, and that no removal release and no CLI ownership-key
+   cleanup are scheduled.
 6. The temporary AY.8 test-only allowlist is replaced and the one production
    Socket factory inside `atm-herdr` is pinned; `HerdrIo` does not cross its
    crate boundary.
@@ -270,7 +272,7 @@ serialized JSON, human output, snapshots, or transport logs.
 ## Out of scope
 
 - New Herdr capabilities or a change to Herdr's protocol.
-- Removing the CLI fallback in the same release as cutover.
+- Removing or deprecating the CLI transport (no removal release exists).
 - Live macOS/Windows proof (release readiness) and the phase disposition
   (Rand, on AY.9's automated gates and the phase-ending review).
 - Any patch, hardening, or remodeling of the legacy synchronous daemon. D1 is
