@@ -884,6 +884,12 @@ fn parse_alias(
         return Ok(None);
     };
     crate::address::validate_path_segment(alias, "alias")?;
+    if alias == atm_storage::DAEMON_ACTOR_NAME {
+        return Err(AtmError::new(
+            AtmErrorCode::MessageValidationFailed,
+            "atm-daemon is a reserved sender name",
+        ));
+    }
     Ok(Some(Some(alias.to_owned())))
 }
 
@@ -1120,7 +1126,7 @@ mod tests {
                 backend: None,
                 target: None,
                 session: None,
-                alias: Some("team-lead_atm-dev"),
+                alias: Some("Team_Lead"),
                 clear_alias: false,
             },
         )
@@ -1133,10 +1139,93 @@ mod tests {
             .into_iter()
             .find(|member| member.agent_name.as_str() == "worker")
             .expect("worker record");
-        assert_eq!(
-            worker.metadata_json.get("alias"),
-            Some(&json!("team-lead_atm-dev"))
-        );
+        assert_eq!(worker.metadata_json.get("alias"), Some(&json!("Team_Lead")));
+    }
+
+    #[test]
+    fn unique_name_b03_rejects_invalid_canonical_herdr_member_name() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let error = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "Team-Lead",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("worker-home"),
+            BackendOptions {
+                backend: Some("herdr"),
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: false,
+            },
+        )
+        .expect_err("canonical Herdr name must meet Herdr grammar");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    }
+
+    #[test]
+    fn unique_name_b06_rejects_switching_an_invalid_canonical_name_to_herdr() {
+        let error = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("team"),
+            TEST_TEAM,
+            "Team-Lead",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: Some("herdr"),
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: false,
+            },
+        )
+        .expect_err("Herdr backend requires a valid effective name");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    }
+
+    #[test]
+    fn unique_name_b07_rejects_reserved_daemon_alias_at_add_and_update() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let options = BackendOptions {
+            backend: None,
+            target: None,
+            session: None,
+            alias: Some(atm_storage::DAEMON_ACTOR_NAME),
+            clear_alias: false,
+        };
+        let add_error = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            TEST_TEAM,
+            "worker",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("worker-home"),
+            options,
+        )
+        .expect_err("reserved alias must be rejected at add-member");
+        assert_eq!(add_error.code(), AtmErrorCode::MessageValidationFailed);
+
+        let update_error = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("team"),
+            TEST_TEAM,
+            "worker",
+            None,
+            None,
+            None,
+            None,
+            None,
+            options,
+        )
+        .expect_err("reserved alias must be rejected at set-member");
+        assert_eq!(update_error.code(), AtmErrorCode::MessageValidationFailed);
     }
 
     #[test]

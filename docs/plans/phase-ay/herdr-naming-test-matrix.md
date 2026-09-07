@@ -53,11 +53,11 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 |----|-------|----------|--------|
 | B-01 | alias with `/`, space, `@`, `.` | reject (ATM segment rule) | covered `unique_name_b01_rejects_invalid_atm_aliases_at_add_and_update` (atm-core/src/team_admin/member_mutation.rs:1166) |
 | B-02 | Herdr member, alias `Team_Lead` (uppercase) | reject | covered `herdr_alias_uses_herdr_agent_name_validation` (member_mutation.rs:1158) |
-| B-03 | Herdr member, no alias, canonical `Team-Lead` | reject at add (effective name fails Herdr grammar) | **GAP** |
+| B-03 | Herdr member, no alias, canonical `Team-Lead` | reject at add (effective name fails Herdr grammar) | covered `unique_name_b03_rejects_invalid_canonical_herdr_member_name` (member_mutation.rs) |
 | B-04 | Herdr member, alias 33 chars / leading digit / leading `-` | reject | covered `unique_name_b04_rejects_invalid_herdr_aliases_at_add_and_update` (atm-core/src/team_admin/member_mutation.rs:1219) |
-| B-05 | non-Herdr member, alias `Team_Lead` | accept (ATM rule only) | covered `add_member_persists_alias_without_a_herdr_backend` (member_mutation.rs:1122) — uppercase variant **GAP** |
-| B-06 | set-member backend → Herdr on a member whose effective name fails Herdr grammar | reject | covered `validate_effective_herdr_agent_name` (member_mutation.rs:500) — test **GAP** |
-| B-07 | alias equal to reserved `atm-daemon` | reject | **GAP** |
+| B-05 | non-Herdr member, alias `Team_Lead` | accept (ATM rule only) | covered `add_member_persists_alias_without_a_herdr_backend` (member_mutation.rs) |
+| B-06 | set-member backend → Herdr on a member whose effective name fails Herdr grammar | reject | covered `unique_name_b06_rejects_switching_an_invalid_canonical_name_to_herdr` (member_mutation.rs) |
+| B-07 | alias equal to reserved `atm-daemon` | reject | covered `unique_name_b07_rejects_reserved_daemon_alias_at_add_and_update` (member_mutation.rs) |
 | B-08 | alias equal to a team name | accept (teams and agents are separate namespaces) — confirm | **GAP** (decision recorded as accept unless Rand objects) |
 
 ## C. Herdr targeting (REQ-ROSTER-NAME-006)
