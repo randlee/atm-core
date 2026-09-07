@@ -1692,14 +1692,14 @@ Phase AY sprint status:
 
 | Sprint | Track | Execute | Status | Branch | Authoritative sprint doc |
 | --- | --- | --- | --- | --- | --- |
-| `AY.1` | Docs | parallel with AY.2 | `draft` | `feature/ay1-herdr-audit-docs` | `docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md` |
-| `AY.2` | Core stack | parallel with AY.1; stack bottom | `draft` | `feature/ay2-herdr-transport-seam` | `docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md` |
-| `AY.3` | Core stack | after AY.2 development and P-E(a); AY.2 merges first | `draft` | `feature/ay3-herdr-endpoint-doctor-config` | `docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md` |
-| `AY.4` | Core stack | after AY.3 development; parallel with AY.8 once eligible | `draft` | `feature/ay4-herdr-breaker-lifecycle` | `docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md` |
-| `AY.5` | Core stack | after AY.4 development; parallel with AY.8 | `draft` | `feature/ay5-herdr-entry-control-plane` | `docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md` |
-| `AY.6` | Core stack | after AY.5 development; parallel with AY.8 | `draft` | `feature/ay6-herdr-restart-coordination` | `docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md` |
-| `AY.7` | Core/Windows stack | after AY.6 development; Windows CI lane is the gate; parallel with AY.8 | `draft` | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
-| `AY.8` | Socket | after AY.1/AY.2/AY.3 merge and P-E(b); parallel with AY.4–AY.7; standalone | `draft` | `feature/ay8-herdr-socket-transport` | `docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md` |
+| `AY.1` | Docs | parallel with AY.2 | `merged` (#1270, 7e40db597) | `feature/ay1-herdr-audit-docs` | `docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md` |
+| `AY.2` | Core stack | parallel with AY.1; stack bottom | `merged` (#1269, 1195614ba) | `feature/ay2-herdr-transport-seam` | `docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md` |
+| `AY.3` | Core stack | after AY.2 development and P-E(a); AY.2 merges first | `merged` (#1273, 5f769d488) | `feature/ay3-herdr-endpoint-doctor-config` | `docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md` |
+| `AY.4` | Core stack | after AY.3 development; parallel with AY.8 once eligible | `merged` (#1279, fc736e83e) | `feature/ay4-herdr-breaker-lifecycle` | `docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md` |
+| `AY.5` | Core stack | after AY.4 development; parallel with AY.8 | `merged` (#1282, fa1e7d73b) | `feature/ay5-herdr-entry-control-plane` | `docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md` |
+| `AY.6` | Core stack | after AY.5 development; parallel with AY.8 | `merged` (#1284, 8b0a6d346) | `feature/ay6-herdr-restart-coordination` | `docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md` |
+| `AY.7` | Core/Windows stack | after AY.6 development; Windows CI lane is the gate; parallel with AY.8 | `merged` (#1285, 94556328c) | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
+| `AY.8` | Socket | after AY.1/AY.2/AY.3 merge and P-E(b); parallel with AY.4–AY.7; standalone | `merged` (#1280, 4407b006e) | `feature/ay8-herdr-socket-transport` | `docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md` |
 | `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `merged` (#1295, 7ad3ad7e5, disposition Ship) | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
 | `AY.13` | Doctor | standalone; Rand 2026-09-07 doctor team-scope requirement; parallel with AY.14 | `merged` (#1300, dd809c15e) | `feature/ay13-doctor-team-scope` | `docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md` |
 | `AY.14` | Herdr/roster | standalone; Rand 2026-09-07 name-collision ruling (roster alias); parallel with AY.13 | `merged` (#1305, 271b387ed) | `feature/ay14-herdr-agent-name-mapping` | `docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md` |
