@@ -43,11 +43,12 @@ Before starting a sprint:
    - `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
 7. `quality-mgr` must also read:
    - `.claude/skills/quality-management-gh/SKILL.md`
-8. `sc-compose` is available for previewing the JSON and markdown templates.
-   Every ATM assignment is sent with
+8. Every ATM assignment is sent with
    `atm send <agent> --template <template> --vars <json>`; never render a
-   template with `sc-compose` and send the output as message text or via
-   `--stdin`. The template path goes through the daemon-owned admission path
+   template yourself and send the output as message text or via `--stdin`.
+   To view or validate the exact body before sending, use
+   `atm compose --template <template> --vars <json>` (same renderer, same
+   vars). The template path goes through the daemon-owned admission path
    and the dispatch is queryable from outside.
 9. `.claude/agents/ruthless-boundary-qa.md` and
    `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`

@@ -357,8 +357,9 @@ SPRINT=$(echo "$RESULT" | jq -r .vars.sprint)
 TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
 
 # Dispatch via atm send --template (orchestrator supplies remaining vars).
-# Always use this form; never render with sc-compose and paste or --stdin
-# the output. The daemon-owned template admission path records the
+# Always use this form; never render the template yourself and paste or
+# --stdin the output. To preview/validate the exact body first, run
+# `atm compose` with the same --template/--vars/--var arguments. The daemon-owned template admission path records the
 # template and vars structurally, so the dispatch is queryable from outside.
 atm send arch-ctm \
   --template ".claude/skills/graph-orchestration/$TEMPLATE" \
