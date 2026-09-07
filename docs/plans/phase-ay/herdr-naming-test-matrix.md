@@ -22,19 +22,19 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | A-03 | T1:bob | add T2:bob (no alias) | reject, names T1 and `--alias` remedy | covered (same test) |
 | A-04 | T1:bob | add T2:bob (bobby) | accept | covered (same test) |
 | A-05 | T1:bob | add T2:robert (bob) | reject, alias equals a unique_name | covered `unique_name_permutations` (atm-storage-rusqlite/src/roster_store.rs:437) |
-| A-06 | T1:robert (bob) | add T2:bob (no alias) | reject, canonical equals an existing alias | **GAP** — AY14-QA-003 (quality-mgr, 2026-09-07); `ensure_canonical_member_name_available` (member_mutation.rs:480) ignores alias fields |
-| A-07 | T1:robert (bob) | add T1:bob (no alias) | reject, same team, canonical equals alias | **GAP** — same defect, own team is skipped |
+| A-06 | T1:robert (bob) | add T2:bob (no alias) | reject, canonical equals an existing alias | covered `unique_name_permutations` case `unique_name_a06_canonical_collides_other_team_alias` (atm-storage-rusqlite/src/roster_store.rs) |
+| A-07 | T1:robert (bob) | add T1:bob (no alias) | reject, same team, canonical equals alias | covered `unique_name_permutations` case `unique_name_a07_canonical_collides_same_team_alias` (atm-storage-rusqlite/src/roster_store.rs) |
 | A-08 | T1:robert (bob) | add T2:sam (bob) | reject, alias vs alias | covered `unique_name_permutations` (atm-storage-rusqlite/src/roster_store.rs:437) |
-| A-09 | T1:bob (bobby) | add T2:bob (no alias) | accept: unique_names are bobby and bob | **GAP** — currently rejected; over-strict, `ensure_canonical_member_name_available` compares canonical names only |
-| A-10 | T1:bob (bobby) | add T2:sam (bob) | accept: unique_names bobby, bob | **GAP** — currently rejected by `ensure_alias_available` (alias vs canonical of an aliased member) |
+| A-09 | T1:bob (bobby) | add T2:bob (no alias) | accept: unique_names are bobby and bob | covered `unique_name_permutations` case `unique_name_a09_canonical_may_match_aliased_member` (atm-storage-rusqlite/src/roster_store.rs) |
+| A-10 | T1:bob (bobby) | add T2:sam (bob) | accept: unique_names bobby, bob | covered `unique_name_permutations` case `unique_name_a10_alias_may_match_aliased_member_canonical` (atm-storage-rusqlite/src/roster_store.rs) |
 | A-11 | T1:bob (bobby) | add T2:bob (bobby) | reject, alias vs alias | covered (member_mutation.rs:1181) |
 | A-12 | T1:bob, T2:bob (bobby) | set-member T2:bob clear alias | reject, would collide with T1:bob | covered `clearing_alias_is_rejected_when_the_canonical_name_is_cross_team_duplicate` (member_mutation.rs:1260) |
 | A-13 | T1:bob (bobby) | set-member T1:bob clear alias | accept | covered `update_member_can_clear_an_existing_alias` (member_mutation.rs:1295) |
-| A-14 | T1:bob (bobby), T2:sam | set-member T2:sam alias bobby | reject, alias vs alias | **GAP** — set-member alias-change path against an existing alias |
-| A-15 | T1:bob (bobby), T2:sam | set-member T2:sam alias bob | accept (unique_names bobby, bob) | **GAP** |
-| A-16 | T1:bob, T2:sam | set-member T2:sam alias bob | reject, alias vs canonical unique_name | **GAP** — set-member path |
+| A-14 | T1:bob (bobby), T2:sam | set-member T2:sam alias bobby | reject, alias vs alias | covered `unique_name_a14_update_alias_rejects_other_team_alias` (atm-core/src/team_admin/member_mutation.rs) |
+| A-15 | T1:bob (bobby), T2:sam | set-member T2:sam alias bob | accept (unique_names bobby, bob) | covered `unique_name_a15_update_alias_may_match_aliased_member_canonical` (atm-core/src/team_admin/member_mutation.rs) |
+| A-16 | T1:bob, T2:sam | set-member T2:sam alias bob | reject, alias vs canonical unique_name | covered `unique_name_a16_update_alias_rejects_other_team_canonical` (atm-core/src/team_admin/member_mutation.rs) |
 | A-17 | T1:bob (bobby) | add T1:sam (bobby) | reject, same-team alias duplicate | covered `validate_database_wide_aliases` in-roster check (roster_store.rs:204) |
-| A-18 | T1:bob | add T2:bob with `--alias ""` / whitespace | same as A-03: reject | **GAP** — empty alias must equal "no alias" (REQ-ROSTER-NAME-002 definition) |
+| A-18 | T1:bob | add T2:bob with `--alias ""` / whitespace | same as A-03: reject | covered `unique_name_permutations` case `unique_name_a18_whitespace_alias_is_absent` (atm-storage-rusqlite/src/roster_store.rs) |
 | A-19 | T1:bob (bobby) | remove T1:bob, then add T2:sam (bobby) | accept, name freed | **GAP** |
 | A-20 | T1:bob | delete team T1, then add T2:bob | accept, name freed | **GAP** |
 | A-21 | none | concurrent add T1:bob and T2:bob, no alias | exactly one succeeds | **GAP** — `roster_aliases_are_globally_unique_under_the_single_writer_lane` (atm-storage-rusqlite/src/lib.rs:3887) covers alias vs alias only; canonical check runs outside the store transaction |

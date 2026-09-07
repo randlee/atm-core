@@ -1014,6 +1014,14 @@ mod tests {
         member
     }
 
+    fn roster_member_with_alias(team: &str, agent: &str, alias: &str) -> RosterEntry {
+        let mut member = roster_member(team, agent);
+        member
+            .metadata_json
+            .insert("alias".to_owned(), json!(alias));
+        member
+    }
+
     #[test]
     fn add_member_rejects_reserved_daemon_name_without_changing_roster() {
         let store = TestRosterStore::default();
@@ -1407,6 +1415,136 @@ mod tests {
             add_member_with_roster_store(&store, rejected).expect_err("effective-name collision");
         assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
         assert!(error.message().contains(&format!("({TEST_TEAM}, worker)")));
+        assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
+    fn unique_name_a14_update_alias_rejects_other_team_alias() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(
+            &team_a,
+            vec![roster_member_with_alias("team-a", "bob", "bobby")],
+        );
+        store.seed(
+            &team_b,
+            vec![
+                lead_member("team-b", ROLE_TEAM_LEAD),
+                roster_member("team-b", "sam"),
+            ],
+        );
+
+        let request = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team_b.clone(),
+            "team-b",
+            "sam",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("bobby"),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        let error = update_member_with_roster_store(&store, request)
+            .expect_err("other-team effective alias collision");
+
+        assert!(error.message().contains("(team-a, bob)"));
+        assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
+    fn unique_name_a15_update_alias_may_match_aliased_member_canonical() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(
+            &team_a,
+            vec![roster_member_with_alias("team-a", "bob", "bobby")],
+        );
+        store.seed(
+            &team_b,
+            vec![
+                lead_member("team-b", ROLE_TEAM_LEAD),
+                roster_member("team-b", "sam"),
+            ],
+        );
+
+        let request = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team_b.clone(),
+            "team-b",
+            "sam",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("bob"),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        update_member_with_roster_store(&store, request)
+            .expect("aliased canonical name is available");
+
+        let sam = store
+            .members(&team_b)
+            .into_iter()
+            .find(|member| member.agent_name.as_str() == "sam")
+            .expect("updated member");
+        assert_eq!(sam.metadata_json.get("alias"), Some(&json!("bob")));
+    }
+
+    #[test]
+    fn unique_name_a16_update_alias_rejects_other_team_canonical() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(&team_a, vec![roster_member("team-a", "bob")]);
+        store.seed(
+            &team_b,
+            vec![
+                lead_member("team-b", ROLE_TEAM_LEAD),
+                roster_member("team-b", "sam"),
+            ],
+        );
+
+        let request = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team_b.clone(),
+            "team-b",
+            "sam",
+            None,
+            None,
+            None,
+            None,
+            None,
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("bob"),
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+        let error = update_member_with_roster_store(&store, request)
+            .expect_err("other-team canonical effective name collision");
+
+        assert!(error.message().contains("(team-a, bob)"));
         assert!(error.message().contains("--alias"));
     }
 
