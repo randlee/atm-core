@@ -195,11 +195,8 @@ class CliParityTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
-        try:
-            os.environ.clear()
-            os.environ.update(cls.prior_environment)
-        finally:
-            cls.doClassCleanups()
+        os.environ.clear()
+        os.environ.update(cls.prior_environment)
 
     @staticmethod
     def native(tools: object, method: str, arguments: dict[str, object]) -> dict[str, object]:
@@ -232,7 +229,20 @@ class CliParityTests(unittest.TestCase):
             "atm_ack",
             {"message_id": native_send["message_id"], "reply": "parity reply"},
         )
-        self.assertEqual(cli_ack["acknowledged"], native_ack["acknowledged"])
+        self.assertEqual(cli_ack["message_id"], cli_send["message_id"])
+        self.assertEqual(native_ack["message_id"], native_send["message_id"])
+        self.assertEqual(cli_ack["action"], native_ack["action"])
+        self.assertEqual(cli_ack["team"], native_ack["team"])
+        self.assertEqual(cli_ack["agent"], native_ack["agent"])
+        self.assertEqual(cli_ack["reply_text"], native_ack["reply_text"])
+        self.assertEqual(
+            cli_ack["reply_disposition"]["kind"],
+            native_ack["reply_disposition"]["kind"],
+        )
+        self.assertEqual(
+            cli_ack["reply_disposition"]["reply_target"],
+            native_ack["reply_disposition"]["reply_target"],
+        )
 
 
 if __name__ == "__main__":
