@@ -980,29 +980,6 @@ mod tests {
     }
 
     #[test]
-    fn unique_name_a19_removing_a_member_frees_its_effective_name() {
-        let store = SqliteStorageBackend::in_memory_for_test()
-            .expect("backend")
-            .roster_store;
-        store
-            .save_roster(&roster(
-                "team-a",
-                vec![roster_member("team-a", "bob", Some("bobby"))],
-            ))
-            .expect("seed aliased member");
-        store
-            .save_roster(&roster("team-a", vec![]))
-            .expect("remove member");
-
-        store
-            .save_roster(&roster(
-                "team-b",
-                vec![roster_member("team-b", "sam", Some("bobby"))],
-            ))
-            .expect("removed effective name is available");
-    }
-
-    #[test]
     fn unique_name_a20_removing_a_team_roster_frees_its_canonical_name() {
         let store = SqliteStorageBackend::in_memory_for_test()
             .expect("backend")

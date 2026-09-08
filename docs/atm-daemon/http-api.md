@@ -117,8 +117,10 @@ not a separately registered route.
 
 The `/v1/atm/doctor` response includes Herdr endpoint presence entries under
 `herdr.endpoints[].members[]`. Each entry exposes the canonical roster
-`name` and the effective `herdr_agent` name; `herdr_agent` is nullable for
-backward-compatible v1.1 payloads and was added in HTTP API 1.2.0.
+`name` and the effective `herdr_agent` name. The `herdr_agent` field is
+nullable for backward-compatible v1.1 payloads and was added in HTTP API
+1.2.0. Each endpoint also reports its `transport` as `cli` or `socket`; that
+field was added in HTTP API 1.2.0.
 
 ## Publication and compatibility
 

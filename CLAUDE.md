@@ -70,7 +70,7 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 - Agent team execution: Scrum Master → Dev(s) + QA(s), Opus Architect on escalation
 - All work on dedicated worktrees via `sc-git-worktree`
 
-**Current Status**: Phase AX merged to develop (PR #1253, 98661ea18, 2026-09-06 — 7 sprints incl. task-state tracking and every-backend nudge templates; AX.7 live-evidence sprint superseded 2026-09-05, moved to release readiness). Phase AY (native-IPC transport cutover for Herdr) is next, planning stage.
+**Current Status**: Phase AX merged to develop (PR #1253, 98661ea18, 2026-09-06 — 7 sprints incl. task-state tracking and every-backend nudge templates; AX.7 live-evidence sprint superseded 2026-09-05, moved to release readiness). Phase AY (native-IPC transport cutover for Herdr) has all sprints merged into `integrate/phase-ay`; its phase-ending gate is in progress and the merge to `develop` is pending Rand approval.
 
 ---
 
