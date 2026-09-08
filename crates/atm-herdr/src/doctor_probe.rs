@@ -44,7 +44,7 @@ impl HerdrDoctorProbe {
         let started = Instant::now();
         let mut observation = HerdrEndpointObservation {
             session: session.cloned(),
-            provenance: endpoint_provenance(session),
+            provenance: endpoint_provenance(&self.config, session),
             transport: self.config.transport().clone(),
             endpoint: self.io.endpoint_display(session),
             binary: self.binary_resolution(),
@@ -223,8 +223,13 @@ fn presence_for_error(error: HerdrError) -> HerdrPresenceOutcome {
     }
 }
 
-fn endpoint_provenance(session: Option<&HerdrSession>) -> HerdrEndpointProvenance {
-    if session.is_some_and(|session| !session.is_default()) {
+fn endpoint_provenance(
+    config: &HerdrClientConfig,
+    session: Option<&HerdrSession>,
+) -> HerdrEndpointProvenance {
+    if config.socket_path().is_some() {
+        HerdrEndpointProvenance::SocketPath
+    } else if HerdrSession::named(session).is_some() {
         HerdrEndpointProvenance::Session
     } else {
         HerdrEndpointProvenance::HerdrDefault
@@ -233,9 +238,11 @@ fn endpoint_provenance(session: Option<&HerdrSession>) -> HerdrEndpointProvenanc
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use std::time::Duration;
 
     use super::{HerdrDoctorProbe, endpoint_provenance, presence_for_error, state_for_server};
+    use crate::HerdrClientConfig;
     use atm_core::HerdrSession;
     use atm_core::doctor::{
         HerdrDoctorState, HerdrEndpointProvenance, HerdrPresenceOutcome, HerdrVersion,
@@ -250,8 +257,18 @@ mod tests {
     fn default_session_uses_default_endpoint_provenance() {
         let session = HerdrSession::new("default").expect("valid default session");
         assert_eq!(
-            endpoint_provenance(Some(&session)),
+            endpoint_provenance(&HerdrClientConfig::default(), Some(&session)),
             HerdrEndpointProvenance::HerdrDefault
+        );
+    }
+
+    #[test]
+    fn configured_socket_path_uses_socket_path_endpoint_provenance() {
+        let config = HerdrClientConfig::with_socket_path(PathBuf::from("/configured/herdr.sock"));
+        let session = HerdrSession::new("default").expect("valid default session");
+        assert_eq!(
+            endpoint_provenance(&config, Some(&session)),
+            HerdrEndpointProvenance::SocketPath
         );
     }
 

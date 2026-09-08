@@ -1042,6 +1042,10 @@ Definitions:
   list matching, presence probe) targets the effective name, never the
   canonical name directly when an alias exists. Logs and doctor output show
   both (`member = team/agent`, `herdr_agent = <effective>`).
+  - Socket transport and doctor endpoint reporting address roster session
+    `default` through Herdr's default server socket; every other session name
+    uses `sessions/<name>/herdr.sock`, unless explicit `[herdr] socket_path`
+    takes precedence.
 - `REQ-ROSTER-NAME-007` Ingress replacement: an alias is accepted wherever a
   member name is accepted (send recipient, `--as`, `ATM_IDENTITY`, read and
   peek filters, ack, `set-member`/`remove-member` arguments) and is replaced
