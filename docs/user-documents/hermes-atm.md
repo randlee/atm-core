@@ -75,6 +75,10 @@ atm teams update-member "$ATM_TEAM" "$ATM_IDENTITY" \
 
 Then run the package installer with that same gateway Python interpreter:
 
+The installer defaults to the `telegram` platform. For a headless Hermes
+gateway, pass `--platform api_server`; the accepted values are `telegram` and
+`api_server`.
+
 ```bash
 python -m hermes_atm install \
   --profile "$HERMES_PROFILE" \
@@ -84,6 +88,7 @@ python -m hermes_atm install \
   --chat-id "$ATM_CHAT_ID" \
   --atm-home "$ATM_HOME" \
   --workspace-root "$ATM_WORKSPACE_ROOT" \
+  --platform telegram \
   --launch-agent-plist "$HERMES_GATEWAY_PLIST"
 ```
 

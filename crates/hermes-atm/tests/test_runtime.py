@@ -326,6 +326,50 @@ class RuntimeTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_gateway_runner_api_rejects_unavailable_platform(self):
+        async def scenario():
+            import hermes_atm.runtime as module
+
+            original_gateway = sys.modules.get("gateway")
+            original_config = sys.modules.get("gateway.config")
+
+            class FakePlatform(Enum):
+                TELEGRAM = "telegram"
+
+            gateway_module = types.ModuleType("gateway")
+            config_module = types.ModuleType("gateway.config")
+            config_module.Platform = FakePlatform
+            gateway_module.config = config_module
+            sys.modules["gateway"] = gateway_module
+            sys.modules["gateway.config"] = config_module
+            try:
+                with self.assertRaisesRegex(HermesAtmRuntimeError, "not available"):
+                    HermesAtmRuntime.from_gateway_runner(
+                        types.SimpleNamespace(
+                            gateway_loop=asyncio.get_running_loop(),
+                            inject_internal_message=FakeInjector(),
+                        ),
+                        profile=TEST_PROFILE,
+                        platform="missing_platform",
+                        environment={
+                            "ATM_HOME": "/tmp/atm",
+                            "ATM_IDENTITY": TEST_IDENTITY,
+                            "ATM_TEAM": TEST_TEAM,
+                            "ATM_CHAT_ID": TEST_CHAT_ID,
+                        },
+                    )
+            finally:
+                if original_gateway is None:
+                    sys.modules.pop("gateway", None)
+                else:
+                    sys.modules["gateway"] = original_gateway
+                if original_config is None:
+                    sys.modules.pop("gateway.config", None)
+                else:
+                    sys.modules["gateway.config"] = original_config
+
+        asyncio.run(scenario())
+
     def test_gateway_runner_api_uses_running_loop_when_host_omits_loop_attribute(self):
         async def scenario():
             import hermes_atm.runtime as module
