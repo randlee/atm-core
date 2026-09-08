@@ -2672,7 +2672,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn loopback_client_rejects_a_missing_endpoint_record_before_connecting() {
+    async fn loopback_client_reports_a_missing_endpoint_record_as_daemon_unavailable() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("missing-local-http.json");
         let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
@@ -2680,9 +2680,9 @@ mod tests {
         let error = client
             .execute(ApiRequest::new(write_request()))
             .await
-            .expect_err("missing endpoint record must fail before connection");
+            .expect_err("missing endpoint record must report daemon unavailability");
         assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
-        assert!(error.message().contains("read local HTTP endpoint record"));
+        assert!(error.message().contains("could not connect"));
     }
 
     #[cfg(unix)]
