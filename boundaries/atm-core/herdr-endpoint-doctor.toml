@@ -60,7 +60,10 @@ notes = [
 ]
 
 [testing]
-allowed_test_double_paths = []
+allowed_test_double_paths = [
+  "crate::doctor::ClosedHerdrEndpointDoctor",
+  "atm_runtime::doctor_projection::tests::CountingEndpoint",
+]
 forbidden_test_bypasses = ["std::process::Command", "tokio::process::Command"]
 
 [enforcement]
