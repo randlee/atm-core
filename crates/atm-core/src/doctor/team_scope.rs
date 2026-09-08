@@ -1,7 +1,9 @@
-use super::{DoctorFinding, DoctorSeverity, load_member_roster, push_doctor_error};
+use super::{DoctorFinding, DoctorSeverity, push_doctor_error, roster_names};
+use crate::boundary::RosterEntry;
+use crate::delivery_channel::local_message_received_backend;
 use crate::error_codes::AtmErrorCode;
 use crate::service_runtime::LocalServiceRuntime;
-use crate::team_admin::MembersList;
+use crate::team_admin::{MembersList, ordered_roster_member_summaries};
 use crate::types::{AgentName, TeamName};
 use std::path::Path;
 
@@ -89,6 +91,74 @@ pub(super) fn load_scoped_rosters(
     } else {
         (rosters.into_iter().next(), Vec::new())
     }
+}
+
+fn load_member_roster(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    caller_identity: Option<&AgentName>,
+    live_cwd: Option<&Path>,
+    team_context: bool,
+    findings: &mut Vec<DoctorFinding>,
+) -> Option<MembersList> {
+    if let Err(error) = crate::address::validate_path_segment(team.as_str(), "team") {
+        push_doctor_error_for_team(
+            findings,
+            DoctorSeverity::Error,
+            error,
+            team_context.then_some(team),
+        );
+        return None;
+    }
+    let roster = runtime.load_team_roster(team);
+    push_mixed_local_backend_warning(team, &roster, findings);
+    roster_names::push_duplicate_effective_name_warnings(
+        runtime,
+        team,
+        &roster,
+        team_context,
+        findings,
+    );
+    let members = ordered_roster_member_summaries(&roster, caller_identity, live_cwd);
+
+    Some(MembersList {
+        team: team.clone(),
+        members,
+    })
+}
+
+fn push_mixed_local_backend_warning(
+    team: &TeamName,
+    roster: &[RosterEntry],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    let mut tmux = Vec::new();
+    let mut herdr = Vec::new();
+    for member in roster {
+        match local_message_received_backend(member) {
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Tmux { .. }) => {
+                tmux.push(member.agent_name.to_string())
+            }
+            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { .. }) => {
+                herdr.push(member.agent_name.to_string())
+            }
+            None => {}
+        }
+    }
+    if tmux.is_empty() || herdr.is_empty() {
+        return;
+    }
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::RosterMixedLocalBackend,
+        message: format!(
+            "team {team} has mixed local backends; tmux members: [{}]; Herdr members: [{}]",
+            tmux.join(", "), herdr.join(", ")
+        ),
+        remediation: Some(format!(
+            "Use `atm teams update-member {team} <member> --backend herdr` or `atm teams update-member {team} <member> --backend tmux --target %N` to select the intended backend."
+        )),
+    });
 }
 
 pub(super) fn graft_receivers_for_teams(
