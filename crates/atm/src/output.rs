@@ -338,10 +338,10 @@ fn render_doctor_herdr(report: &atm_core::doctor::HerdrDoctorReport) -> String {
             .expect("writing to String cannot fail");
     }
     for endpoint in &report.endpoints {
-        let session = endpoint
-            .session
-            .as_ref()
-            .map_or("default", atm_core::HerdrSession::as_str);
+        let session = endpoint.session.as_ref().map_or(
+            atm_core::HerdrSession::DEFAULT_NAME,
+            atm_core::HerdrSession::as_str,
+        );
         let provenance = match endpoint.provenance {
             atm_core::doctor::HerdrEndpointProvenance::Session => "session",
             atm_core::doctor::HerdrEndpointProvenance::SocketPath => "socket_path",
