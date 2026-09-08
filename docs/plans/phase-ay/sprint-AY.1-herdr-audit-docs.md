@@ -6,7 +6,7 @@ title: Herdr audit, version table, requirements, and ADR text
 branch: feature/ay1-herdr-audit-docs
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay1-herdr-audit-docs
 integration_branch: integrate/phase-ay
-status: draft
+status: complete
 recommended_agent: Cipher-311d
 recommended_model: fast
 execution_track: docs

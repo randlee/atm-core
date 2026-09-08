@@ -6,7 +6,7 @@ title: Transactional Herdr entry control plane
 branch: feature/ay5-herdr-entry-control-plane
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay5-herdr-entry-control-plane
 integration_branch: integrate/phase-ay
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: core

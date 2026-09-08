@@ -9,7 +9,7 @@ integration_branch: integrate/phase-ay
 stack_parent: none
 pr_target: integrate/phase-ay
 target: integrate/phase-ay
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: join

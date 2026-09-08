@@ -9,7 +9,7 @@ integration_branch: integrate/phase-ay
 stack_parent: feature/ay6-herdr-restart-coordination
 pr_target: feature/ay6-herdr-restart-coordination
 target: feature/ay6-herdr-restart-coordination
-status: draft
+status: complete
 recommended_agent: arch-ctm (no Windows machine required; the Windows CI lane is the gate)
 recommended_model: n/a
 execution_track: windows
