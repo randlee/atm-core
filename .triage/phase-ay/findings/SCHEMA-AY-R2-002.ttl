@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SCHEMA-AY-R2-002>
+  a triage:Finding ;
+  triage:findingId "SCHEMA-AY-R2-002" ;
+  triage:title "transport field missing from openapi.yaml doctor presence schema and the openapi surface baseline" ;
+  triage:description "quality-mgr qa-phase-ay-gate-r2 (PR #1308 integrate/phase-ay -> develop, pinned 0da9a26ec; report: message 01M1Z4RKVAMC1J0GRB15K3D219, PR #1308 issuecomment 5576945237). Important. The doctor payload now carries transport (HerdrTransportKind) but docs/atm-http-runtime/openapi.yaml has no transport property and crates/atm/tests/openapi_surface_baseline.json has no transport entry (grep empty at 0da9a26ec). Required correction (quality-mgr): add transport to the openapi.yaml doctor presence schema (enum cli|socket, added in HTTP API 1.2.0) and bless the openapi surface baseline in the same PR so openapi_surface.rs additions-only check stays consistent. Ride the same fix PR as SCHEMA-AY-R2-001." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/atm-http-runtime/openapi.yaml, crates/atm/openapi.yaml, crates/atm/tests/openapi_surface_baseline.json, docs/atm-daemon/http-api.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-08T00:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY3 ;
+  triage:foundAt "2026-09-08T00:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SCHEMA-AY-R2-002/SCHEMA-AY-R2-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SCHEMA-AY-R2-002/SCHEMA-AY-R2-002/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SCHEMA-AY-R2-002/SCHEMA-AY-R2-002/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-http-runtime/openapi.yaml" ;
+  triage:line 192 ;
+  triage:snippet "HerdrMemberPresence:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r2> .
+
+<urn:atm:triage:occurrence/SCHEMA-AY-R2-002/SCHEMA-AY-R2-002/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface_baseline.json" ;
+  triage:line 1 ;
+  triage:snippet "(no transport entry in baseline)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r2> .
+
+<urn:atm:triage:worktree/gate-r2>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-phase-ay-gate-r2" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:orderIndex 0 .
