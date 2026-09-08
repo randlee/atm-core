@@ -178,9 +178,9 @@ impl HttpRuntimeConfig {
 
     /// Enables the plain-TCP peer adapter.
     ///
-    /// The production daemon uses [`DirectPeerTcpConfig::standard`].  It has
-    /// no operator-provided local address or peer identity: the listener owns
-    /// its fixed protocol port and the accepted socket supplies peer
+    /// The production daemon receives a validated port from its immutable
+    /// launch arguments, defaulting to [`DIRECT_PEER_TCP_PORT`]. It has no
+    /// operator-provided local address or peer identity: the accepted socket supplies peer
     /// provenance before the request reaches the canonical router.
     #[must_use]
     pub fn with_direct_peer_tcp(mut self, direct_peer_tcp: DirectPeerTcpConfig) -> Self {
@@ -226,16 +226,16 @@ impl DirectPeerTcpConfig {
 
     /// Uses an explicit non-zero direct-peer port selected at daemon launch.
     ///
-    /// Normal service launches use [`Self::standard`]. An explicit port lets
-    /// an isolated physical benchmark daemon avoid contending with a live
-    /// daemon owned by another OS account on the same host.
+    /// The omitted launch argument defaults to the protocol port. An explicit
+    /// port lets an isolated physical benchmark daemon avoid contending with a
+    /// live daemon owned by another OS account on the same host.
     #[must_use]
     pub fn configured(port: NonZeroU16) -> Self {
         Self::new(port.get())
     }
 
     /// Crate-private port selection keeps isolated runtime tests possible.
-    /// Production composition can construct only [`Self::standard`].
+    /// Production composition can use only validated launch configuration.
     #[must_use]
     pub(crate) fn new(port: u16) -> Self {
         Self {

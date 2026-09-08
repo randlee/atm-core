@@ -7,9 +7,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
-#[cfg(windows)]
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use atm_core::error::AtmError;
 use fs4::fs_std::FileExt;
@@ -85,12 +83,7 @@ impl DaemonOwnerGuard {
     /// this process. The running daemon calls this continuously: retaining an
     /// open file descriptor alone is not sufficient after unlink/replace.
     pub fn verify_ownership(&self) -> Result<(), AtmError> {
-        let record = fs::read_to_string(&self.lock_path).map_err(|source| {
-            AtmError::daemon_serving_state_rejected(format!(
-                "ATM daemon owner lock disappeared at {}: {source}",
-                self.lock_path.display()
-            ))
-        })?;
+        let record = read_owner_record(&self.lock_path)?;
         if record != self.record {
             return Err(AtmError::daemon_serving_state_rejected(format!(
                 "ATM daemon owner lock changed at {}",
@@ -99,6 +92,42 @@ impl DaemonOwnerGuard {
         }
         Ok(())
     }
+}
+
+#[cfg(windows)]
+fn read_owner_record(lock_path: &Path) -> Result<String, AtmError> {
+    read_owner_record_with(lock_path, fs::read_to_string)
+}
+
+#[cfg(windows)]
+fn read_owner_record_with(
+    lock_path: &Path,
+    read_locked_record: impl FnOnce(&Path) -> std::io::Result<String>,
+) -> Result<String, AtmError> {
+    match read_locked_record(lock_path) {
+        Ok(record) => Ok(record),
+        Err(lock_error) => {
+            let shadow_path = owner_record_shadow_path(lock_path);
+            fs::read_to_string(&shadow_path).map_err(|shadow_error| {
+                AtmError::daemon_serving_state_rejected(format!(
+                    "ATM daemon owner lock at {} could not be read ({lock_error}); \
+                     Windows owner shadow {} could not be read: {shadow_error}",
+                    lock_path.display(),
+                    shadow_path.display()
+                ))
+            })
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn read_owner_record(lock_path: &Path) -> Result<String, AtmError> {
+    fs::read_to_string(lock_path).map_err(|source| {
+        AtmError::daemon_serving_state_rejected(format!(
+            "ATM daemon owner lock disappeared at {}: {source}",
+            lock_path.display()
+        ))
+    })
 }
 
 impl Drop for DaemonOwnerGuard {
@@ -123,13 +152,7 @@ impl Drop for DaemonOwnerGuard {
 
 #[cfg(windows)]
 fn sync_owner_record_shadow(lock_path: &Path, record: &str) -> Result<(), AtmError> {
-    let shadow_path = lock_path.with_file_name(format!(
-        "{}.meta",
-        lock_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("owner.lock")
-    ));
+    let shadow_path = owner_record_shadow_path(lock_path);
     let temp_path = shadow_path.with_file_name(format!(
         ".{}.tmp.{}.shadow",
         shadow_path
@@ -155,6 +178,17 @@ fn sync_owner_record_shadow(lock_path: &Path, record: &str) -> Result<(), AtmErr
     })
 }
 
+#[cfg(windows)]
+fn owner_record_shadow_path(lock_path: &Path) -> PathBuf {
+    lock_path.with_file_name(format!(
+        "{}.meta",
+        lock_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("owner.lock")
+    ))
+}
+
 #[cfg(not(windows))]
 fn sync_owner_record_shadow(_lock_path: &PathBuf, _record: &str) -> Result<(), AtmError> {
     Ok(())
@@ -165,6 +199,8 @@ mod tests {
     use std::io::{Read, Seek, SeekFrom};
 
     use super::DaemonOwnerGuard;
+    #[cfg(windows)]
+    use super::read_owner_record_with;
 
     #[test]
     fn owner_record_uses_the_local_http_instance_schema() {
@@ -214,5 +250,23 @@ mod tests {
                 .expect("cleared shadow record exists")
                 .is_empty()
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_owner_verification_uses_the_shadow_after_a_lock_sharing_failure() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let lock = temporary_directory.path().join("owner.lock");
+        let guard = DaemonOwnerGuard::acquire_at(lock.clone()).expect("owner acquires");
+
+        let record = read_owner_record_with(&lock, |_| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "Windows sharing violation",
+            ))
+        })
+        .expect("owner shadow is used when the locked record is unreadable");
+
+        assert_eq!(record, guard.record);
     }
 }

@@ -36,6 +36,7 @@ impl SingletonGuards {
 /// availability condition. The caller must have already recorded the typed
 /// error that led here; abort prevents a compromised server from serving.
 pub(crate) fn abort_for_singleton_violation<T: std::fmt::Display>(violation: T) -> ! {
+    eprintln!("ATM daemon singleton violation; aborting immediately: {violation}");
     tracing::error!(target: "atm_daemon_bootstrap::singleton", %violation, "ATM daemon singleton violation; aborting immediately");
     std::process::abort();
 }
