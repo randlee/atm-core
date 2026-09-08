@@ -1,13 +1,16 @@
 //! Fail-closed singleton checks owned by the Tokio/Axum daemon bootstrap.
 //!
-//! The account-scoped owner lock is authoritative. It is intentionally the
-//! only runtime guard: process tables and network endpoints are host-wide and
-//! would incorrectly couple distinct OS accounts or container hosts.
+//! The account-scoped owner lock is authoritative among daemon-process-local
+//! guards. Process tables and network endpoints are host-wide and would
+//! incorrectly couple distinct OS accounts or container hosts.
 
 use atm_core::error::AtmError;
 
 use crate::DaemonOwnerGuard;
 
+/// These are the daemon-process-local layers of `REQ-P-RUNTIME-003`. The
+/// third layer, the pre-spawn `LaunchGateGuard`, runs in
+/// `crates/atm-daemon-client/src/lib.rs` before this process exists.
 pub(crate) const GUARD_NAMES: [&str; 2] = ["owner lock ownership", "static daemon-launch lint"];
 
 /// Singleton state has no host-global inputs; the owner lock scopes ownership
@@ -46,7 +49,7 @@ mod tests {
     use super::{GUARD_NAMES, abort_for_singleton_violation};
 
     #[test]
-    fn requirements_test_names_the_account_scoped_singleton_guards() {
+    fn requirements_test_names_the_account_scoped_daemon_local_guards() {
         assert_eq!(
             GUARD_NAMES,
             ["owner lock ownership", "static daemon-launch lint"]
