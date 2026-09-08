@@ -18,6 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T22:20:00Z"^^xsd:dateTime ;
+  triage:dispositionNote "Round-5 phase-ending gate disposition (quality-mgr): stays open by design, not closed. ruthless-boundary-qa (round 5, full unscoped workspace sweep, not scope-locked) independently re-confirmed RBQA-AY15-F001's underlying duplication collapsed to a single shared owner (atm_storage::roster_unique_name_collisions, crates/atm-storage/src/contract.rs:591, consumed by all three former call sites), so this lint_gap record is not moot with F001 fixed -- it documents the absence of a mechanical guard against a future third re-derivation, per docs/architecture/boundary/general-guidelines.md priority-5 guidance (one-off duplication does not yet warrant a new lint; only a repeated pattern would). No new occurrence and no repeat of the pattern were found this round. Correctly deferred, not a merge blocker for PR #1308." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T21:55:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AY15-F002/1> ;

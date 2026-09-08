@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-AY-R5-001>
+  a triage:Finding ;
+  triage:findingId "RSH-AY-R5-001" ;
+  triage:title "/v1/health always returns 200, never consults computed RuntimeHealth/Lifecycle readiness state" ;
+  triage:description "rust-service-hardening-agent phase-ay gate round 5 (RSH-001; worktree fix/ay-gate-r4-sprintdoc-status, head 2788d3feca0e83edb5998759d779bc14492244d9). Important. crates/atm-http-runtime/src/health_route.rs:24's health handler builds its response solely from DiagnosticCountersSource::snapshot() and has no branch that can produce a non-200 status; it never reads the Lifecycle (NotReady/Ready/Draining/Stopped) value that runtime_health.rs already computes for atm doctor/status use. An external HTTP health probe therefore cannot detect a draining, not-yet-ready, or already-stopped runtime via /v1/health. This is pre-existing atm-http-runtime infrastructure, not introduced by any phase-ay sprint diff -- surfaced incidentally by this round's phase-end sweep, not a phase-ay regression. Non-blocking for PR #1308 (integrate/phase-ay -> develop); does not gate this phase's merge. Required correction: add the RuntimeHealth/Lifecycle projection as an explicit input to the /v1/health handler and return a non-2xx (e.g. 503) status when Lifecycle is NotReady, Draining, or Stopped, matching the readiness/liveness distinction in .claude/skills/rust-service-hardening/references/production-checklist.md item 11." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "atm-http-runtime health/readiness endpoint" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-08T06:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-08T06:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-AY-R5-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-AY-R5-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/health_route.rs" ;
+  triage:line 24 ;
+  triage:snippet "async fn health(...) -> Json<RetainedObservabilityHealthResponse> builds its response solely from DiagnosticCountersSource; no RuntimeHealth/Lifecycle value is read, handler has no non-200 branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "97cf27f51" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r5-1> .
+
+<urn:atm:triage:worktree/gate-r5-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/ay-gate-r4-sprintdoc-status" ;
+  triage:branch "fix/ay-gate-r4-sprintdoc-status" ;
+  triage:headSha "2788d3feca0e83edb5998759d779bc14492244d9" ;
+  triage:orderIndex 0 .
