@@ -20,7 +20,7 @@
   triage:triagedAt "2026-09-08T00:20:00Z"^^xsd:dateTime ;
   triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
-  triage:closureNote "Confirmed fixed at phase-ay gate round 3 (PR #1318, integrate/phase-ay 75c01a5bd). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. docs/project-plan.md:1663 header now reads [EXECUTED - PHASE-ENDING GATE IN PROGRESS] with a consistent status paragraph; CLAUDE.md Current Status updated in parallel." ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 on PR #1318 (fix/ay-gate-r2-schema-docs, head a572ab66d821c315291edd43f9f93e2102a6c17a). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. docs/project-plan.md:1663 header now reads [EXECUTED - PHASE-ENDING GATE IN PROGRESS] with a consistent status paragraph; CLAUDE.md Current Status updated in parallel. CORRECTION (round 4, 2026-09-07): the original closure cited a fabricated/unreachable sha '75c01a5bd' for integrate/phase-ay; the fix content exists only on the still-unmerged PR #1318 branch head above, not yet on integrate/phase-ay trunk (trunk head cf9b580ff as of this correction does not contain it). Per Rand's stack-routing ruling that PR #1318 represents today's effective integration content, this record stays closed on that basis; the sha citation is corrected here so it no longer implies the fix already landed on the literal integrate/phase-ay branch." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-08T00:05:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-GATE-001/ATM-QA-GATE-001/1> ;
@@ -35,7 +35,7 @@
   triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "0da9a26ec" ;
-  triage:fixedAtHeadSha "75c01a5bd" ;
+  triage:fixedAtHeadSha "a572ab66d821c315291edd43f9f93e2102a6c17a" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r2> .
 
 <urn:atm:triage:worktree/gate-r2>
