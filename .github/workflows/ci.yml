@@ -366,6 +366,42 @@ jobs:
               environment.write(f"ATM_GRAFT_WHEEL={wheels[0].resolve()}\n")
               environment.write(f"ATM_WHEEL_OUTPUT_DIR={Path('bridge-wheels').resolve()}\n")
 
+      - name: Install Hermes parity fixture packages
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          wheels = Path("release-wheels")
+          graft = sorted(wheels.glob("atm_graft*.whl"))
+          hermes = sorted(wheels.glob("hermes_atm*.whl"))
+          if len(graft) != 1 or len(hermes) != 1:
+              raise RuntimeError(
+                  f"expected one atm-graft and one hermes-atm wheel, found {graft=} {hermes=}"
+              )
+          subprocess.run(
+              [
+                  sys.executable,
+                  "-m",
+                  "pip",
+                  "install",
+                  "--disable-pip-version-check",
+                  "--no-deps",
+                  "--requirement",
+                  "tools/bootstrap-requirements.txt",
+              ],
+              check=True,
+          )
+          subprocess.run(
+              [sys.executable, "-m", "pip", "install", "--no-deps", str(graft[0]), str(hermes[0])],
+              check=True,
+          )
+          subprocess.run(
+              [sys.executable, "-c", "import atm_graft, hermes_atm"], check=True
+          )
+
       - name: Run Hermes graft steer boundary tests
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python .just/run_hermes_graft_bridge_tests.py

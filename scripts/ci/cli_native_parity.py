@@ -177,6 +177,7 @@ class CliParityTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.fixture = _CiParityFixture()
         cls.fixture.start()
+        cls.addClassCleanup(cls.fixture.close)
         cls.prior_environment = os.environ.copy()
         os.environ.update(cls.fixture.environment)
         from hermes_atm import native_tools
@@ -195,10 +196,10 @@ class CliParityTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         try:
-            cls.fixture.close()
-        finally:
             os.environ.clear()
             os.environ.update(cls.prior_environment)
+        finally:
+            cls.doClassCleanups()
 
     @staticmethod
     def native(tools: object, method: str, arguments: dict[str, object]) -> dict[str, object]:
