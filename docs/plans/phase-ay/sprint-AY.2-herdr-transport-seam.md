@@ -6,7 +6,7 @@ title: Private transport foundation, CLI pure motion, and portable fake Herdr
 branch: feature/ay2-herdr-transport-seam
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay2-herdr-transport-seam
 integration_branch: integrate/phase-ay
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: core
@@ -62,8 +62,7 @@ Append AY.4 through AY.7 with `gh stack link <stack-number> <branch>` when their
 PRs exist. Parent-development push, not QA completion, triggers a merge-forward
 from the parent branch into every active child before a development or fix
 round. Parent PRs merge first, in stack order. Repository policy permits only
-merge commits and forbids force-pushes, `gh stack rebase`, `gh stack sync`, and
-`gh stack merge`; merge each PR with `gh pr merge --merge`.
+merge commits and Rand (2026-09-07): every operation on a stacked branch goes through `gh stack` subcommands (`gh stack push`, `gh stack view --json`, `gh stack merge` bottom-up); merge commits only, never squash, never force-push outside `gh stack`.
 
 AY.1 remains an independent parallel branch. AY.8 is a multi-parent join and is
 created from `integrate/phase-ay` only after AY.1, AY.2, and AY.3 have merged;
@@ -266,7 +265,8 @@ all of those surfaces.
 
 ## Required validation
 
-- `cargo test -p atm-herdr`
+- `cargo test -p atm-herdr --all-features` (the portable fake-Herdr fixture
+  target is gated behind `test-utils`)
 - `just validate`
 - `python3 .just/check_line_counts.py`
 - `gh pr view feature/ay2-herdr-transport-seam --json

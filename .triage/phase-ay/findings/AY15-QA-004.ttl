@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY15-QA-004>
+  a triage:Finding ;
+  triage:findingId "AY15-QA-004" ;
+  triage:title "AY.15 sprint-doc frontmatter and docs/project-plan.md AY.15 row still read dispatched after the final head; no complete status flip" ;
+  triage:description "quality-mgr qa-pr1310-r7 (PR #1310, AY.15 herdr-name-uniqueness, FINAL head 10bc123f8; report: PR #1310 issuecomment 5575994618). arch-qa ARCH-002/ARCH-003 and req-qa, carried and re-confirmed at 10bc123f8. docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md line 12 frontmatter is status: dispatched and docs/project-plan.md line 1717 AY.15 row status column is dispatched although arch-ctm reported the sprint complete at 10bc123f8. Required correction: flip both to complete on the sprint branch as part of the fix round." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md frontmatter; docs/project-plan.md AY.15 row" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:05:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T21:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-004/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-004/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY15-QA-004/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md" ;
+  triage:line 12 ;
+  triage:snippet "status: dispatched" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-004/10bc123f8> .
+
+<urn:atm:triage:occurrence/AY15-QA-004/2>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1717 ;
+  triage:snippet "| `AY.15` | ... | `dispatched` | ..." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-004/10bc123f8> .
+
+<urn:atm:triage:worktree/AY15-QA-004/10bc123f8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r7" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:orderIndex 0 .

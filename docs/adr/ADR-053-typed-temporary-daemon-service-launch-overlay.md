@@ -160,3 +160,58 @@ Effect:
 - `REQ-P-DAEMON-SWITCH-001` is narrowed to match.  The Windows argv codec
   remains in the codebase only as a tested utility; it carries no service
   contract.
+
+## Addendum 2026-09-07 — explicit Herdr entry control plane
+
+`daemon-switch herdr-entry {install,remove,status [--repair]}` is a separate,
+operator-invoked transaction for per-user Herdr start-at-login definitions. It
+does not alter the selected ATM pair, the temporary-launch overlay journal, or
+the daemon lifecycle. No switch, restart, restore, or daemon startup path
+calls it implicitly.
+
+The command consumes only native `atm doctor --json` endpoint data. It creates
+at most one marker-bearing object per configured non-socket endpoint: a macOS
+LaunchAgent (`RunAtLoad`, no `KeepAlive`), Linux systemd user unit plus enabled
+state, or Windows interactive-user logon scheduled task. The default command
+is `herdr server`; a named session is `herdr --session <name> server`.
+Explicit socket-path endpoints remain externally owned. Windows refuses an
+entry belonging to another account, service, or session 0.
+
+Each entry has its own durable journal in the ADR-053 journal directory,
+separate from temporary-launch recovery state. Install is `plan -> journal ->
+atomic write -> native register -> verify -> complete`; remove verifies the
+marker and digest before `journal -> unregister -> delete -> verify ->
+complete`. Foreign definitions, digest mismatches, and incomplete work fail
+closed. Repair is explicit: it completes a verified registration or rolls back
+only the marker-bearing partial object. The public machine contract is exactly
+one JSON envelope on stdout and exit 0 (success), 3 (safe refusal), or 4
+(operational failure).
+
+## Addendum 2026-09-07 — coordinated Herdr endpoint restart
+
+`daemon-switch restart --restart-herdr [<default-or-session>]` is the only
+restart coordinator. It is never part of `switch`, `restore`, ordinary
+`restart`, daemon startup, or an entry install. It reads one native doctor
+projection to select a configured endpoint, resolves the AY.5 deterministic
+identifier and owned/complete entry, and rejects socket-path or unowned
+endpoints without mutation. A default is inferred only when doctor returns one
+endpoint.
+
+When the installed client is newer than the reported running server and the
+endpoint advertises `capabilities.live_handoff: true`, the coordinator invokes
+the endpoint-scoped `herdr server live-handoff` command. Capability `false` or
+`null`, equal/unknown versions, and every other condition take the destructive
+stop path: stdout remains machine JSON, stderr warns that agent panes exit,
+and `--stop-herdr-panes` is required before scoped `server stop` and the
+already-owned native entry is relaunched. The coordinator neither updates
+Herdr nor supervises it. A failed handoff stops immediately because Herdr owns
+its own rollback.
+
+The operation has one 120-second overall deadline, 30-second child-command
+deadline, and injected-time bounded verification reads; only fresh doctor
+state `ok` yields success. Timeout, selection, acknowledgement, doctor, and
+entry failures retain a stable code and the 0/3/4 JSON exit classes. Ordinary
+ATM restart has a separate read-only preflight: it refuses before any service
+mutation while any configured endpoint is `client_server_mismatch`, listing
+only endpoint names and identifiers. No daemon code, transport selection,
+polling loop, startup dependency, or process ownership is introduced.

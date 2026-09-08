@@ -123,6 +123,45 @@ fn local_ack_admission_transitions_source_and_shapes_reply() {
 }
 
 #[test]
+fn unique_name_d10_ack_alias_is_canonicalized_before_pending_source_lookup() {
+    let message_id = AtmMessageId::new();
+    let mut alias_metadata = Map::new();
+    alias_metadata.insert(
+        "alias".to_owned(),
+        serde_json::Value::String("recipient-alias".to_owned()),
+    );
+    let runtime = runtime_with_pending_source(message_id).with_team_roster(vec![RosterEntry {
+        team_name: TeamName::from_validated(TEST_TEAM),
+        agent_name: AgentName::from_validated(CALLER),
+        member_kind: RosterMemberKind::Permanent,
+        harness: RosterHarness::ClaudeCode,
+        agent_type: crate::schema::AgentType::Worker,
+        model: crate::types::ModelName::default(),
+        recipient_pane_id: None,
+        metadata_json: alias_metadata,
+    }]);
+    let mut request = ack_write_request(message_id);
+    request.caller_identity = AgentName::from_validated("recipient-alias");
+
+    let write = admit_acknowledgement_write(request, &runtime)
+        .expect("alias caller resolves to canonical pending mailbox owner");
+
+    assert_eq!(write.canonical_request.caller_identity.as_str(), CALLER);
+    assert_eq!(write.reply.envelope.from.as_str(), CALLER);
+    let records = runtime.persisted_records.lock().expect("records lock");
+    let reply = records
+        .iter()
+        .find(|record| record.envelope.acknowledges_message_id == Some(message_id))
+        .expect("canonical acknowledgement reply");
+    assert_eq!(reply.envelope.from.as_str(), CALLER);
+    assert!(
+        !serde_json::to_string(reply)
+            .expect("serialize canonical acknowledgement reply")
+            .contains("recipient-alias")
+    );
+}
+
+#[test]
 fn client_supplied_destination_is_rejected_without_peer_provenance() {
     let message_id = AtmMessageId::new();
     let runtime = runtime_with_pending_source(message_id);

@@ -78,6 +78,45 @@ Run ATM health and configuration diagnostics
 | `--json` |  | no | Emit the doctor report as JSON. |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
+**Herdr diagnostics:**
+
+`atm doctor --json` includes a `herdr` object. `configured` is `true` or
+`false` when the roster was read, and `null` only when its configuration input
+was unavailable; `error` then gives the typed doctor finding. `endpoints` are
+ordered with the default endpoint first and named sessions bytewise. Each entry
+reports provenance, transport, an optional privacy-safe endpoint display,
+binary resolution, typed `state`, `remedy`, `capabilities.live_handoff`, and
+the exact routed member outcomes. Endpoint displays never expose raw home,
+config-root, socket, or named-pipe paths. The pre-existing host-wide breaker
+report remains available as `herdr.breaker` (and under its legacy report field).
+
+**Herdr breaker escalation configuration:**
+
+The optional `[herdr].escalation_min_interval_secs` setting in `.atm.toml`
+limits durable breaker-open escalation attempts. It is an integer number of
+seconds, defaults to `1800` (30 minutes), and accepts `1` through `86400`
+inclusive. Invalid values fail daemon bootstrap with `ConfigParseFailed`; the
+setting does not start, supervise, or make ATM readiness depend on Herdr.
+
+**Herdr transport configuration:**
+
+The optional `[herdr].transport` setting in `.atm.toml` selects the client at
+daemon bootstrap:
+
+```toml
+[herdr]
+transport = "socket" # optional default; Unix socket on macOS/Linux, named pipe on Windows
+# transport = "cli"  # permanent explicit alternative
+socket_path = "/absolute/herdr-api-endpoint" # optional endpoint override
+binary_path = "/absolute/path-or-directory" # used only by the CLI alternative
+```
+
+Only `socket` and `cli` are valid. Socket is selected when the key is omitted;
+CLI is never selected automatically after a socket failure. Such a failure is
+reported as a typed Herdr availability event, while `atm doctor` shows the
+active transport and a privacy-safe symbolic endpoint display. The CLI
+alternative remains supported; no removal release is scheduled.
+
 ### `atm escalation`
 
 Manage daemon-wide and per-team escalation recipients
@@ -623,5 +662,3 @@ Show the stored schema/frontmatter for one exact immutable SHA
 | `<sha>` |  | yes |  |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
-
-

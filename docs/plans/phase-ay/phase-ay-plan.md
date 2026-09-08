@@ -3,7 +3,7 @@ phase: AY
 title: "Phase AY: native-IPC transport cutover for Herdr"
 canonical_path: docs/plans/phase-ay/phase-ay-plan.md
 integration_branch: develop (plan) / integrate/phase-ay (dev)
-status: draft, not approved (Rand, 2026-09-05)
+status: approved for execution (Rand, 2026-09-06, verbal to fenix: start phase-ay from the near-merge integrate/phase-ax head with develop fully merged)
 owner: solar (solar@atm-dev, from 2026-09-06T00:30Z; handed over by fenix)
 authored: 2026-09-05
 supersedes:
@@ -926,10 +926,7 @@ gh pr view feature/ay10-herdr-status-stream --json headRefName,baseRefName,state
 
 All commands are noninteractive. The parent-development-pushed event,
 not QA, triggers a merge commit from the parent into each active child
-before a development or fix round. Parent PRs merge first. Repository
-policy narrows the general `/gh-stack` workflow: never run `gh stack
-rebase`, `gh stack sync`, or `gh stack merge`; do not force-push; merge
-each PR in dependency order with `gh pr merge --merge`.
+before a development or fix round. Parent PRs merge first. Rand (2026-09-07): every operation on a stacked branch goes through `gh stack` subcommands (`gh stack push`, `gh stack view --json`, `gh stack merge` bottom-up); merge commits only, never squash, never force-push outside `gh stack`.
 
 AY.1 is standalone. AY.8 is a standalone transport branch (with AY.10
 stacked on it); AY.9 is a standalone two-parent join; AY.11 is a
@@ -990,6 +987,10 @@ Common preconditions:
   git push --set-upstream origin integrate/phase-ay
   ```
 - P-B: this plan is approved by Rand (dated line in this file).
+  Met 2026-09-06: Rand directed fenix to create integrate/phase-ay from
+  integrate/phase-ax (046c9abd9, develop merged at 07edd48c9) and begin
+  graph-orchestration; this supersedes P-A's "never from integrate/phase-ax"
+  wording for this phase. All P-A presence checks pass on that head.
 - P-C (release-readiness prerequisite, not a sprint precondition; no AY
   sprint waits on it, ruling 5): the FastPC4 Windows `atm-dev` team exists with Herdr installed via
   the official installer and its parked reporter agent has delivered one
@@ -1066,17 +1067,18 @@ Common acceptance for every sprint: merge gate 0 blocking / 0 important /
 time (never a dispatch gate), no flaky-test tolerance, frozen files
 untouched without a written ruling, no tokio in atm-core.
 
-## Phase AY exit gate (AY.9 disposition, then AY.11 and item 7)
+## Phase AY exit gate (AY.9 disposition; AY.10–AY.12 retired)
 
-Phase completion (2026-09-06, with AY.10–AY.12 added): the
-integrate/phase-ay to develop PR opens only after (1) the AY.9 cutover
-decision below is recorded, (2) AY.11 has merged and its parity evidence
-from the rand-m4 dogfood run is recorded under rework item 7, and (3)
-item 7's own decision line is filled in. If that decision is "drop poll",
-AY.12 merges into integrate/phase-ay before the develop PR opens; "keep
-both" and "stop subscription work" close the phase without AY.12. There is no interim
-develop merge between AY.9 and AY.11. quality-mgr's phase-ending gate
-refuses the develop PR while either decision line below is missing.
+Phase completion (2026-09-06, amended 2026-09-07): the integrate/phase-ay
+to develop PR opens only after the AY.9 cutover decision below is
+recorded. The earlier preconditions on AY.11 merging and on rework item 7's
+decision line were retired on 2026-09-07 when Rand stopped AY.10 (see item
+7: "Decision (Rand, 2026-09-07): stop AY.10"); AY.10, AY.11 and AY.12 are
+not dispatched and AY.12 never merges. AY.13 (doctor team scope), AY.14
+(Herdr agent-name mapping) and AY.15 (unique_name invariant) run in their
+place and merge to integrate/phase-ay before the develop PR is presented.
+quality-mgr's phase-ending gate refuses the develop PR while the AY.9
+decision line below is missing or any blocking finding is open.
 
 The AY.9 cutover decision is a dated decision, after the AY.9 cutover
 has merged with all three CI lanes green, the socket-default and
@@ -1089,6 +1091,15 @@ readiness on the develop build (Rand, 2026-09-05; closes AYP-R13-002).
 
 - **Ship**: AY.9 merged and its automated gates met; live macOS/Windows
   proof follows under release readiness.
+
+  Evidence (recorded by fenix, 2026-09-07): AY.9 merged to
+  integrate/phase-ay at 7ad3ad7e5 via PR #1295 with all three CI lanes
+  green (17/17 checks); qa-pr1295 r2 and r3 PASS; AY9-QA-001 closed.
+  Live macOS/Windows proof deferred to release readiness per this gate.
+  Rand (2026-09-07), asked to choose Ship / Defer / Cancel: "we need to
+  cutover as part of phase-ay".
+
+Decision (Rand, 2026-09-07): Ship
 - **Defer**: the socket cutover is deferred to a named phase and ADR-058 D3
   is amended to say the CLI transport is the supported design until then.
   Because AY.9 has already made socket the omitted-config default, Defer
@@ -1743,7 +1754,14 @@ item 7 below, not optimized.
    AY.10's scope and would need a HERDR_MINIMUM_VERSION bump. AY.10 is
    dispatched only after this line is filled in:
 
-   Decision (Rand, YYYY-MM-DD): accept N-per-100ms | herdr change first | stop AY.10
+   Decision (Rand, 2026-09-07): stop AY.10
+   Rand: "if we can get status of entire session w/ a single socket call
+   every 5 seconds, I don't see a need to use the 'notification' feature
+   today." The socket path (AY.8/AY.9) does that: one `agent.list` per
+   Herdr server per tick returns every live agent with workspace/pane ids.
+   AY.10, AY.11 and AY.12 are not dispatched; the item-7 line below stays
+   unfilled and the exit gate no longer waits on it (recorded by fenix
+   2026-09-07). The AY.13 doctor-scope sprint runs in their place.
    The earlier planning statement that notification needed one
    subscription per agent was wrong; one connection carries them all.
    Rand: "yes, I think we need to add the subscription socket."; "are you
@@ -1757,7 +1775,9 @@ item 7 below, not optimized.
    poll). AY.12 dispatches only after this line is filled in from AY.11's
    dogfood evidence:
 
-   Decision (Rand, YYYY-MM-DD): drop poll | keep both | stop subscription work
+   Decision (Rand, 2026-09-07): stop subscription work
+   (derived from "stop AY.10" above; AY.11 and AY.12 never dispatched,
+   poll stays the authority on both paths.)
 
 ### Hardening rounds
 

@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AY-R2-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-AY-R2-001" ;
+  triage:title "Second HerdrProcessAdapter impl site outside the RULE-012 allowlist (BenchmarkNoopHerdrProcessAdapter)" ;
+  triage:description "quality-mgr qa-phase-ay-gate-r2 (PR #1308 integrate/phase-ay -> develop, pinned 0da9a26ec; report: message 01M1Z4RKVAMC1J0GRB15K3D219, PR #1308 issuecomment 5576945237). Blocking. boundaries/atm-herdr/herdr-process-adapter.toml RULE-012 allows exactly one test double, atm_herdr::testing::FakeHerdrProcessAdapter (allowed_test_double_paths, line 66). crates/atm-daemon-bootstrap/src/received_hook_selector.rs:155-160 declares a second impl, BenchmarkNoopHerdrProcessAdapter, behind feature benchmark-harness; feature gating does not exempt it from RULE-012. The impl and the boundary file both predate phase-ay on develop (impl since 1.4.12, rule since 91c0d5e0b); the phase-ay allowlist never covered it, so the gate treats it as an unauthorized impl site. Required correction (quality-mgr): either add the benchmark adapter to allowed_test_double_paths in the boundary TOML, or move/gate it so it is not a second impl site (cfg(test)-only, or delegate to FakeHerdrProcessAdapter). Fix on a branch off integrate/phase-ay targeting PR #1308." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "all impl HerdrProcessAdapter for sites outside crates/atm-herdr" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-08T00:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T02:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed on fix/ay-gate-r2-rule012-adapter@490607e69 (PR #1317, base integrate/phase-ay). arch-ctm authorized the benchmark-harness-only adapter by adding 'atm_daemon_bootstrap::received_hook_selector::BenchmarkNoopHerdrProcessAdapter' to boundaries/atm-herdr/herdr-process-adapter.toml's [testing].allowed_test_double_paths (now lists both authorized doubles), plus a [status].notes entry documenting the adapter's no-Herdr/no-real-invoker benchmark-only behavior. quality-mgr independently verified: diff is manifest-only (2 insertions/1 deletion, no source-code change), cargo test --package atm-architecture green (95+98 tests across all boundary suites), cargo fmt --all --check and cargo clippy -p atm-daemon-bootstrap -p atm-herdr --all-targets --all-features -- -D warnings both clean. PR #1317 CI in progress at verification time (Format/Classify SUCCESS, Clippy/Just-lint/Hermes wheels pending); merge to integrate/phase-ay withheld until CI green, per standing practice (CI is a merge-time gate, not a verification gate)." ;
+  triage:foundIn triage:AY1 ;
+  triage:foundAt "2026-09-08T00:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AY-R2-001/ARCH-AY-R2-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AY-R2-001/ARCH-AY-R2-001/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AY-R2-001/ARCH-AY-R2-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 160 ;
+  triage:snippet "impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "490607e692566d7b60758244ff74f88eea8ed0b9" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r2> .
+
+<urn:atm:triage:occurrence/ARCH-AY-R2-001/ARCH-AY-R2-001/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-herdr/herdr-process-adapter.toml" ;
+  triage:line 66 ;
+  triage:snippet "allowed_test_double_paths = ['atm_herdr::testing::FakeHerdrProcessAdapter']" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "490607e692566d7b60758244ff74f88eea8ed0b9" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r2> .
+
+<urn:atm:triage:worktree/gate-r2>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-phase-ay-gate-r2" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "490607e692566d7b60758244ff74f88eea8ed0b9" ;
+  triage:orderIndex 0 .

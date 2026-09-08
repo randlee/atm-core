@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-GATE-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-GATE-001" ;
+  triage:title "project-plan.md Phase AY header still reads PLANNING - DRAFT, NOT APPROVED at the phase-ending gate" ;
+  triage:description "quality-mgr qa-phase-ay-gate-r2 (PR #1308 integrate/phase-ay -> develop, pinned 0da9a26ec; report: message 01M1Z4RKVAMC1J0GRB15K3D219, PR #1308 issuecomment 5576945237). Important. docs/project-plan.md:1663 heading for section 57 (Phase AY) still carries the PLANNING DRAFT NOT APPROVED marker although every AY sprint is complete (c12 = AY15) and PR #1308 is at the phase-ending gate. Required correction (quality-mgr): update the header and phase status line to reflect the executed state (all sprints merged into integrate/phase-ay; develop merge pending Rand approval), consistent with the Current Status line in CLAUDE.md conventions. Rides the same fix PR as the schema docs corrections." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/project-plan.md Phase AY section 57 header and status table" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-08T00:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 on PR #1318 (fix/ay-gate-r2-schema-docs, head a572ab66d821c315291edd43f9f93e2102a6c17a). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. docs/project-plan.md:1663 header now reads [EXECUTED - PHASE-ENDING GATE IN PROGRESS] with a consistent status paragraph; CLAUDE.md Current Status updated in parallel. CORRECTION (round 4, 2026-09-07): the original closure cited a fabricated/unreachable sha '75c01a5bd' for integrate/phase-ay; the fix content exists only on the still-unmerged PR #1318 branch head above, not yet on integrate/phase-ay trunk (trunk head cf9b580ff as of this correction does not contain it). Per Rand's stack-routing ruling that PR #1318 represents today's effective integration content, this record stays closed on that basis; the sha citation is corrected here so it no longer implies the fix already landed on the literal integrate/phase-ay branch." ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-08T00:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-GATE-001/ATM-QA-GATE-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-GATE-001/ATM-QA-GATE-001/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1663 ;
+  triage:snippet "## 57. Phase AY - Native-IPC Transport Cutover For Herdr [PLANNING - DRAFT, NOT APPROVED]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "a572ab66d821c315291edd43f9f93e2102a6c17a" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r2> .
+
+<urn:atm:triage:worktree/gate-r2>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-phase-ay-gate-r2" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:orderIndex 0 .

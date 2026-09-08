@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CIPHER-NAME-009>
+  a triage:Finding ;
+  triage:findingId "CIPHER-NAME-009" ;
+  triage:title "alias conflict errors omit the owning member and --alias remedy and are not uniform across write paths" ;
+  triage:description "Independent review of integrate/phase-ay at 10b044c0c. Matrix G-02 requires an A-06-style conflict error to name the member owning the alias and its team; G-03 requires identical code and text from CLI and daemon paths. ensure_alias_available and alias_conflict_error both emit only alias plus team and omit the owning member and --alias remedy. The canonical preflight uses a different message, while direct store writes use alias_conflict_error and can bypass the preflight entirely. These divergent and incomplete diagnostics fail the operator-facing error contract even apart from the underlying uniqueness defects." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-compliance" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/team_admin/member_mutation.rs; crates/atm-storage-rusqlite/src/roster_store.rs; CLI and daemon member mutation paths" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
+  triage:foundIn triage:AY14 ;
+  triage:foundAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-009/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-009/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-009/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 468 ;
+  triage:snippet "ensure_alias_available emits alias and team only, with no owner member or --alias remedy" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-009-10b> .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-009/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/roster_store.rs" ;
+  triage:line 262 ;
+  triage:snippet "alias_conflict_error is a separate store-path formatter, so CLI and daemon diagnostics are not a single identical contract" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-009-10b> .
+
+<urn:atm:triage:worktree/CIPHER-NAME-009-10b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:orderIndex 0 .

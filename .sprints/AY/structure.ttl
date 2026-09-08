@@ -1,0 +1,27 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAY a triage:Phase .
+
+# Order follows the plan's execution waves (docs/plans/phase-ay/phase-ay-plan.md,
+# "Sprint map, parallel tracks and stacking"). Wave 1: AY.1 (docs, standalone) and
+# AY.2 (stack bottom) in parallel. Linear gh stack: AY.2 -> AY.3 -> AY.4 -> AY.5 -> AY.6 -> AY.7.
+# AY.8 is a standalone join gated on AY.1+AY.2+AY.3 merged and P-E(b); AY.9 is the last
+# sprint, gated on AY.7+AY.8 merged. The cursor does not encode the wave gates; the
+# orchestrator checks must_follow merges (and P-E rulings for AY.3/AY.8) before dispatch.
+# Stack linking: gh stack link needs two args, so the stack is created on AY.3's first push
+# (gh stack link --base integrate/phase-ay 1269 feature/ay3-...; AY.2 is PR #1269) rather than AY.2's first
+# push (GitHub refuses zero-commit PRs), then `gh stack link <stack#> feature/ayN-...` per
+# subsequent sprint push. Never gh stack rebase/sync/merge; merge commits only.
+triage:AY1 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 1 ; triage:branch "feature/ay1-herdr-audit-docs" ; triage:criteria "docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md" .
+triage:AY2 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 2 ; triage:branch "feature/ay2-herdr-transport-seam" ; triage:criteria "docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md" .
+triage:AY3 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 3 ; triage:branch "feature/ay3-herdr-endpoint-doctor-config" ; triage:criteria "docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md" .
+triage:AY4 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 4 ; triage:branch "feature/ay4-herdr-breaker-lifecycle" ; triage:criteria "docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md" .
+triage:AY8 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 5 ; triage:branch "feature/ay8-herdr-socket-transport" ; triage:criteria "docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md" .
+triage:AY5 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 6 ; triage:branch "feature/ay5-herdr-entry-control-plane" ; triage:criteria "docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md" .
+triage:AY6 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 7 ; triage:branch "feature/ay6-herdr-restart-coordination" ; triage:criteria "docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md" .
+triage:AY7 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 8 ; triage:branch "feature/ay7-windows-herdr-process-installer" ; triage:criteria "docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md" .
+triage:AY9 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 9 ; triage:branch "feature/ay9-herdr-socket-cutover" ; triage:criteria "docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md" .
+triage:AY13 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 10 ; triage:branch "feature/ay13-doctor-team-scope" ; triage:criteria "docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md" .
+triage:AY14 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 11 ; triage:branch "feature/ay14-herdr-agent-name-mapping" ; triage:criteria "docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md" .
+triage:AY15 a triage:Sprint ; triage:inPhase triage:PhaseAY ; triage:order 12 ; triage:branch "feature/ay15-herdr-name-uniqueness" ; triage:criteria "docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md" .

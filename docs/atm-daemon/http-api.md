@@ -9,7 +9,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed — Phase AI target |
-| HTTP API SemVer | `1.1.0`; major is `/v1/atm` |
+| HTTP API SemVer | `1.2.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
@@ -115,6 +115,13 @@ not a separately registered route.
 - Mutation preconditions and authorization failures use ordinary HTTP status
   codes but retain the same ATM error code in the body.
 
+The `/v1/atm/doctor` response includes Herdr endpoint presence entries under
+`herdr.endpoints[].members[]`. Each entry exposes the canonical roster
+`name` and the effective `herdr_agent` name. The `herdr_agent` field is
+nullable for backward-compatible v1.1 payloads and was added in HTTP API
+1.2.0. Each endpoint also reports its `transport` as `cli` or `socket`; that
+field was added in HTTP API 1.2.0.
+
 ## Publication and compatibility
 
 `docs/atm-http-runtime/openapi.yaml` is the source artifact. CI validates the
@@ -122,7 +129,7 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. The current `1.1.0` baseline adds the
+The v1 resource paths are durable. The current `1.2.0` baseline adds the
 optional `peer_http_api_version` to cross-host write envelopes; receivers
 reject only a peer major-version mismatch and tolerate minor skew. Same-major
 additive fields, error details,

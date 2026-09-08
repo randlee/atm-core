@@ -11,6 +11,11 @@ use crate::protocol::{ReleaseVersion, RuntimeStatusSnapshot};
 use crate::team_admin::MembersList;
 use crate::types::{AgentName, TeamName};
 
+use super::{
+    HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay, HerdrEndpointObservation,
+    HerdrEndpointProvenance, HerdrMemberPresence, HerdrTransportKind,
+};
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DoctorSeverity {
@@ -219,13 +224,29 @@ pub struct PostSendDoctorReport {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TeamEscalationRecipientsDoctorReport {
     pub team: TeamName,
-    pub recipients: Vec<String>,
-    pub source: String,
+    pub recipients: Vec<AgentName>,
+    pub source: EscalationRecipientSource,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EscalationRecipientSource {
+    DaemonDefault,
+    Team,
+}
+
+impl std::fmt::Display for EscalationRecipientSource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::DaemonDefault => "daemon default",
+            Self::Team => "team",
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct EscalationRecipientsDoctorReport {
-    pub daemon: Vec<String>,
+    pub daemon: Vec<AgentName>,
     pub teams: Vec<TeamEscalationRecipientsDoctorReport>,
 }
 
@@ -293,6 +314,63 @@ pub struct HerdrQueuePumpDoctorReport {
     pub breaker: HerdrBreakerDoctorReport,
 }
 
+/// The capability subset of a Herdr endpoint which is useful to an operator.
+/// Keeping this nested leaves the endpoint state solely responsible for health
+/// and its remedy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HerdrEndpointCapabilitiesDoctorReport {
+    #[serde(default)]
+    pub live_handoff: Option<bool>,
+}
+
+/// One privacy-safe endpoint result rendered by `atm doctor`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HerdrEndpointDoctorReport {
+    pub session: Option<crate::delivery_channel::HerdrSession>,
+    pub provenance: HerdrEndpointProvenance,
+    #[serde(default)]
+    pub transport: HerdrTransportKind,
+    pub endpoint: Option<HerdrEndpointDisplay>,
+    pub binary: Option<HerdrBinaryResolution>,
+    pub state: HerdrDoctorState,
+    pub remedy: String,
+    pub capabilities: HerdrEndpointCapabilitiesDoctorReport,
+    pub members: Vec<HerdrMemberPresence>,
+}
+
+impl From<HerdrEndpointObservation> for HerdrEndpointDoctorReport {
+    fn from(observation: HerdrEndpointObservation) -> Self {
+        let remedy = observation.state.remedy().to_owned();
+        Self {
+            session: observation.session,
+            provenance: observation.provenance,
+            transport: observation.transport,
+            endpoint: observation.endpoint,
+            binary: observation.binary,
+            state: observation.state,
+            remedy,
+            capabilities: HerdrEndpointCapabilitiesDoctorReport {
+                live_handoff: observation.live_handoff,
+            },
+            members: observation.members,
+        }
+    }
+}
+
+/// The complete Herdr surface in a doctor report. `configured` remains null
+/// only when the roster/configuration input was unavailable; a missing Herdr
+/// backend on an available roster is represented by `false`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HerdrDoctorReport {
+    pub configured: Option<bool>,
+    #[serde(default)]
+    pub endpoints: Vec<HerdrEndpointDoctorReport>,
+    #[serde(default)]
+    pub breaker: HerdrBreakerDoctorReport,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<DoctorFinding>,
+}
+
 /// Live metrics snapshot for the single shared reader pool, surfaced
 /// alongside its effective capacity.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -327,6 +405,19 @@ pub struct ReaderPoolDoctorReport {
     pub metrics: Option<ReaderPoolMetricsDoctorReport>,
 }
 
+/// A difference between a local rmux pane alias and durable roster metadata.
+///
+/// This is diagnostic-only. The configuration alias is never used to resolve
+/// an ATM recipient or identity, and it is never persisted outside the roster.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DoctorAliasMismatch {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub config_alias: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roster_alias: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
@@ -339,8 +430,21 @@ pub struct DoctorReport {
     pub daemon_context: Option<DoctorExecutionContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reader_lanes: Option<ReaderPoolDoctorReport>,
+    /// Effective doctor scope: `single` or `all_teams`.
+    #[serde(default)]
+    pub team_scope: String,
+    /// The authoritative scope decision consumed by runtime projections.
+    /// This is not serialized; `team_scope` remains the stable wire field.
+    #[serde(skip, default)]
+    pub resolved_team_scope: super::DoctorTeamScope,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
+    /// One roster block for every team when the effective scope is all teams.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub team_rosters: Vec<MembersList>,
+    /// Local rmux aliases that differ from the durable roster alias.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alias_mismatches: Vec<DoctorAliasMismatch>,
     #[serde(default)]
     pub graft_receivers: GraftReceiversDoctorReport,
     pub observability: AtmObservabilityHealth,
@@ -348,6 +452,8 @@ pub struct DoctorReport {
     pub herdr_breaker: HerdrBreakerDoctorReport,
     #[serde(default)]
     pub herdr_queue_pump: HerdrQueuePumpDoctorReport,
+    #[serde(default)]
+    pub herdr: HerdrDoctorReport,
     #[serde(default)]
     pub post_send: PostSendDoctorReport,
     #[serde(default)]
@@ -373,7 +479,7 @@ impl DoctorReport {
 
 #[cfg(test)]
 mod tests {
-    use super::PeerWireSecurityStatus;
+    use super::{HerdrEndpointCapabilitiesDoctorReport, PeerWireSecurityStatus};
     use crate::peer_wire::PeerWireSecurity;
 
     #[test]
@@ -387,5 +493,14 @@ mod tests {
                 .expect("diagnostic status serializes"),
             "\"plaintext-test\""
         );
+    }
+
+    #[test]
+    fn herdr_capability_serializes_unknown_as_explicit_null() {
+        let value = serde_json::to_value(HerdrEndpointCapabilitiesDoctorReport::default())
+            .expect("capability report serializes");
+
+        assert!(value.get("live_handoff").is_some());
+        assert!(value["live_handoff"].is_null());
     }
 }

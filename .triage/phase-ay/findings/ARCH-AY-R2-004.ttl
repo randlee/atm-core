@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AY-R2-004>
+  a triage:Finding ;
+  triage:findingId "ARCH-AY-R2-004" ;
+  triage:title "O(N^2) doctor --all-teams roster-reload from AY.13 x AY.15 composition" ;
+  triage:description "arch-qa quality-gate-r3 verification (PR #1318 fix/ay-gate-r2-schema-docs, head ef79745ae56aaeb62e6f70a91cf4acad2360ee5c). Important. Two independently-correct, independently-tested phase-ay features compose into quadratic cost: (1) AY.13 introduced per-team doctor iteration in load_scoped_rosters (crates/atm-core/src/doctor/team_scope.rs), calling load_member_roster once per team; (2) AY.15 added collision-detection helper push_duplicate_effective_name_warnings in load_member_roster (crates/atm-core/src/doctor/mod.rs:908-940), which unconditionally reloads ALL teams' full rosters on every single call via runtime.list_roster_teams().into_iter().flat_map(...runtime.load_team_roster...) in crates/atm-core/src/doctor/roster_names.rs. Composition result: for N teams, doctor --all-teams now reloads all N teams' rosters N times (once per team, inside the duplicate-warning check). This O(N^2) behavior was invisible to each sprint's own unit-scoped QA. Required correction: hoist the all-teams roster load in load_scoped_rosters to load once, then pass the already-loaded full roster set into push_duplicate_effective_name_warnings (or equivalent single-pass refactor) so the operation scales as O(N) not O(N^2). This impacts doctor --all-teams performance on large team rosters." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "performance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "doctor command performance composition" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-08T04:45:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T05:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed by arch-ctm on PR #1320 (fix/ay-gate-r3-arch, 170ae2dffe4a86f4cb873de76bea8352c2d55352). Independently re-verified by quality-mgr via direct file reads plus a live fmt/clippy/test run (not taken on arch-ctm's fix notice alone). load_scoped_rosters (doctor/team_scope.rs) now loads all teams' rosters exactly once into a snapshot and passes it by reference through load_member_roster into roster_names::push_duplicate_effective_name_warnings, which now consumes the snapshot instead of reloading via runtime.load_team_roster per call. O(N^2) roster reload eliminated; new all-team duplicate-warning regression test added. 42/42 doctor tests pass." ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-08T04:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AY-R2-004/ARCH-AY-R2-004/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AY-R2-004/ARCH-AY-R2-004/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AY-R2-004/ARCH-AY-R2-004/3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AY-R2-004/ARCH-AY-R2-004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/team_scope.rs" ;
+  triage:line 0 ;
+  triage:snippet "load_scoped_rosters iterates teams and calls load_member_roster once per team (AY.13)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "104e67452" ;
+  triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:fixedAtHeadSha "170ae2dffe4a86f4cb873de76bea8352c2d55352" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r3-4> .
+
+<urn:atm:triage:occurrence/ARCH-AY-R2-004/ARCH-AY-R2-004/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 908 ;
+  triage:snippet "load_member_roster calls runtime.load_team_roster(team) then unconditionally calls roster_names::push_duplicate_effective_name_warnings (AY.15)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "104e67452" ;
+  triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:fixedAtHeadSha "170ae2dffe4a86f4cb873de76bea8352c2d55352" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r3-4> .
+
+<urn:atm:triage:occurrence/ARCH-AY-R2-004/ARCH-AY-R2-004/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/roster_names.rs" ;
+  triage:line 0 ;
+  triage:snippet "push_duplicate_effective_name_warnings reloads ALL teams' full rosters on every invocation via runtime.list_roster_teams().into_iter().flat_map(|other_team| runtime.load_team_roster(&other_team))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "104e67452" ;
+  triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:fixedAtHeadSha "170ae2dffe4a86f4cb873de76bea8352c2d55352" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r3-4> .
+
+<urn:atm:triage:worktree/gate-r3-4>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-phase-ay-gate-r3" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "104e67452" ;
+  triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:orderIndex 0 .

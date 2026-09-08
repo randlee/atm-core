@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CIPHER-NAME-002>
+  a triage:Finding ;
+  triage:findingId "CIPHER-NAME-002" ;
+  triage:title "alias collision checks use raw canonical names instead of effective names and reject valid alias combinations" ;
+  triage:description "Independent review of integrate/phase-ay at 10b044c0c. ensure_alias_available rejects a proposed alias whenever any existing entry.agent_name equals it, even when that existing member has a different alias and therefore a different effective Herdr name. ensure_canonical_member_name_available has the symmetric raw-canonical comparison. Consequently matrix A-09 and A-10 are rejected although unique_name values do not collide, and set-member A-15 is rejected for the same reason; the store validator repeats the same raw-field mistake for explicit aliases. The checks must compare alias-or-canonical effective names and exclude the member being updated from the candidate comparison." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-compliance" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/team_admin/member_mutation.rs; crates/atm-storage-rusqlite/src/roster_store.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
+  triage:foundIn triage:AY14 ;
+  triage:foundAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-002/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 461 ;
+  triage:snippet "ensure_alias_available treats an aliased member's raw agent_name as occupied by the proposed alias (A-10/A-15)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-002-10b> .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-002/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 486 ;
+  triage:snippet "ensure_canonical_member_name_available compares raw canonical names and rejects a valid effective-name combination (A-09)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-002-10b> .
+
+<urn:atm:triage:worktree/CIPHER-NAME-002-10b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:orderIndex 0 .

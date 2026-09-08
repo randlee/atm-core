@@ -10,17 +10,16 @@
 //! router the runtime serves.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
-use atm_core::doctor::{DoctorFinding, DoctorSeverity, HerdrPresenceDoctor};
+use atm_core::doctor::{HerdrEndpointDoctor, HerdrEndpointObservation, HerdrRosterMember};
 use atm_core::error::AtmError;
 use atm_core::observability::ObservabilityPort;
 use atm_core::peer_wire::PeerWireMode;
 use atm_core::team_admin::MembersList;
 use atm_herdr::{
-    BreakerPolicy, HerdrBreakerState, HerdrError, HerdrProcessAdapter, HerdrProcessInvoker,
-    HerdrSpawnBreaker,
+    HerdrBreakerState, HerdrClientConfig, HerdrDoctorProbe, HerdrProcessAdapter,
+    HerdrProcessInvoker, HerdrSpawnBreaker,
 };
 use atm_http_runtime::{
     HerdrQueueWakePump, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, RuntimeHealth,
@@ -31,6 +30,7 @@ use atm_runtime::{DoctorProjectionConfig, HandoffConfig, StorageDoctorProjection
 
 use crate::DaemonLaunchIdentity;
 use crate::bare_cli_runtime::BareCliRuntime;
+use crate::herdr_config::DaemonHerdrConfig;
 use crate::queue_drain;
 
 /// The bootstrap-owned peer transport selection passed as one coherent unit
@@ -51,6 +51,7 @@ pub(crate) struct ReplacementHandlerConfig<F> {
     pub(crate) diagnostic_counters:
         Option<Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>>,
     pub(crate) bare_cli: BareCliRuntime,
+    pub(crate) herdr_config: DaemonHerdrConfig,
     pub(crate) herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 }
 
@@ -106,104 +107,92 @@ impl atm_core::doctor::HerdrBreakerDoctor for HerdrBreakerDoctorAdapter {
     }
 }
 
-pub(crate) struct HerdrPresenceDoctorAdapter {
-    pub(crate) process: Arc<dyn HerdrProcessAdapter>,
+/// The sole production endpoint-doctor adapter. It groups one immutable
+/// roster snapshot by its configured Herdr session before calling the concrete
+/// probe, so no member is queried twice and the configuration decision cannot
+/// drift between grouping and observation.
+pub(crate) struct HerdrEndpointDoctorAdapter {
+    pub(crate) probe: HerdrDoctorProbe,
 }
 
-impl HerdrPresenceDoctor for HerdrPresenceDoctorAdapter {
-    fn probe<'a>(
+impl atm_core::boundary::sealed::Sealed for HerdrEndpointDoctorAdapter {}
+
+/// Partitions the single doctor roster snapshot into deterministic Herdr
+/// endpoint probe inputs. The default server is ordered before named sessions;
+/// members retain their original roster ordinal inside each partition.
+fn herdr_roster_groups(
+    roster: &MembersList,
+) -> Vec<(Option<atm_core::HerdrSession>, Vec<HerdrRosterMember>)> {
+    let mut sessions = roster
+        .members
+        .iter()
+        .filter_map(|member| match member.local_message_received_backend() {
+            Some(atm_core::LocalMessageReceivedBackend::Herdr { session, .. }) => {
+                Some(session.clone())
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    sessions.sort_by(|left, right| {
+        left.as_ref()
+            .map_or("", atm_core::HerdrSession::as_str)
+            .cmp(right.as_ref().map_or("", atm_core::HerdrSession::as_str))
+    });
+    sessions.dedup();
+
+    sessions
+        .into_iter()
+        .map(|session| {
+            let members = roster
+                .members
+                .iter()
+                .enumerate()
+                .filter_map(
+                    |(ordinal, member)| match member.local_message_received_backend() {
+                        Some(atm_core::LocalMessageReceivedBackend::Herdr {
+                            session: member_session,
+                            agent,
+                        }) if *member_session == session => {
+                            atm_core::delivery_channel::resolve_herdr_agent_target(
+                                &member.name,
+                                agent.clone(),
+                                "herdr_endpoint_doctor",
+                            )
+                            .map(|herdr_agent| HerdrRosterMember {
+                                ordinal,
+                                name: member.name.clone(),
+                                herdr_agent,
+                            })
+                        }
+                        _ => None,
+                    },
+                )
+                .collect();
+            (session, members)
+        })
+        .collect()
+}
+
+impl HerdrEndpointDoctor for HerdrEndpointDoctorAdapter {
+    fn observe<'a>(
         &'a self,
         roster: &'a MembersList,
         caller_deadline: RequestDeadline,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
-        Box::pin(probe_herdr_presence(
-            Arc::clone(&self.process),
-            roster,
-            caller_deadline,
-        ))
-    }
-}
-
-async fn probe_herdr_presence(
-    process: Arc<dyn HerdrProcessAdapter>,
-    roster: &MembersList,
-    caller_deadline: RequestDeadline,
-) -> Vec<DoctorFinding> {
-    let mut findings = Vec::new();
-    let mut outage_reason = None;
-    for member in roster.members.iter().filter(|member| {
-        matches!(
-            member.local_message_received_backend(),
-            Some(atm_core::LocalMessageReceivedBackend::Herdr { .. })
-        )
-    }) {
-        match probe_herdr_member(process.as_ref(), member, caller_deadline).await {
-            Ok(()) => {}
-            Err(error) if error.is_infrastructure() => {
-                outage_reason.get_or_insert_with(|| format!("{error:?}"));
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>,
+    > {
+        Box::pin(async move {
+            let groups = herdr_roster_groups(roster);
+            let mut observations = Vec::with_capacity(groups.len());
+            for (session, members) in groups {
+                observations.push(
+                    self.probe
+                        .observe(session.as_ref(), &members, caller_deadline)
+                        .await,
+                );
             }
-            Err(error) => findings.push(herdr_presence_finding(error)),
-        }
-    }
-    if let Some(reason) = outage_reason {
-        findings.push(DoctorFinding {
-            severity: DoctorSeverity::Info,
-            code: atm_core::error_codes::AtmErrorCode::HerdrUnavailable,
-            message: format!("Herdr presence probe skipped: {reason}"),
-            remediation: None,
-        });
-    }
-    findings
-}
-
-async fn probe_herdr_member(
-    process: &dyn HerdrProcessAdapter,
-    member: &atm_core::team_admin::MemberSummary,
-    caller_deadline: RequestDeadline,
-) -> Result<(), HerdrError> {
-    let Some(atm_core::LocalMessageReceivedBackend::Herdr { session }) =
-        member.local_message_received_backend()
-    else {
-        return Ok(());
-    };
-    let deadline = caller_deadline
-        .remaining()
-        .map(|remaining| RequestDeadline::after(remaining.min(Duration::from_secs(2))))
-        .unwrap_or_else(|| RequestDeadline::after(Duration::ZERO));
-    process
-        .get(
-            &member.name,
-            session.as_ref(),
-            deadline,
-            BreakerPolicy::Bypass,
-        )
-        .await
-        .map(|_| ())
-}
-
-pub(crate) fn herdr_presence_finding(error: HerdrError) -> DoctorFinding {
-    let outcome = error.emission_outcome();
-    if matches!(error, HerdrError::AgentNotFound) {
-        let error = AtmError::new(
-            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible,
-            "agent not visible in the member's configured Herdr session",
-        );
-        return DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: error.code(),
-            message: error.detail().to_owned(),
-            remediation: Some(error.remediation().to_owned()),
-        };
-    }
-    let error: AtmError = error.into();
-    DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: error.code(),
-        message: format!(
-            "Herdr presence probe outcome `{outcome}`: {}",
-            error.detail()
-        ),
-        remediation: Some(error.remediation().to_owned()),
+            observations
+        })
     }
 }
 
@@ -227,9 +216,11 @@ pub(crate) fn build_replacement_handler(
         runtime_health,
         diagnostic_counters,
         bare_cli,
+        herdr_config,
         herdr_process,
     } = config;
-    let herdr_process = resolve_herdr_process(&mut assembly, herdr_process);
+    let escalation_min_interval = herdr_config.escalation_min_interval;
+    let herdr_process = resolve_herdr_process(&mut assembly, herdr_process, herdr_config.client);
     let queue_wake_process = Arc::clone(&herdr_process);
     let (selector, recovery_sweep) = compose_queue_workers(
         assembly.service_runtime.clone(),
@@ -249,6 +240,7 @@ pub(crate) fn build_replacement_handler(
         selector.clone(),
         runtime_health.clone(),
         queue_wake_process,
+        escalation_min_interval,
     )?;
     let handler = compose_storage_router(
         assembly,
@@ -317,6 +309,7 @@ fn build_queue_wake_pump(
     selector: Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     runtime_health: RuntimeHealth,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
+    escalation_min_interval: std::time::Duration,
 ) -> Result<Arc<HerdrQueueWakePump>, AtmError> {
     Ok(Arc::new(
         HerdrQueueWakePump::new(
@@ -325,7 +318,8 @@ fn build_queue_wake_pump(
             runtime_health,
             herdr_process,
         )
-        .with_daemon_home(atm_core::home::atm_home()?),
+        .with_daemon_home(atm_core::home::atm_home()?)
+        .with_breaker_escalation_min_interval(escalation_min_interval),
     ))
 }
 
@@ -358,20 +352,112 @@ fn add_peer_connection_pool(
 fn resolve_herdr_process(
     assembly: &mut RuntimeAssembly,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+    herdr_config: HerdrClientConfig,
 ) -> Arc<dyn HerdrProcessAdapter> {
     match herdr_process {
         Some(process) => process,
         None => {
             let herdr_breaker = Arc::new(HerdrSpawnBreaker::new());
-            let process: Arc<dyn HerdrProcessAdapter> =
-                Arc::new(HerdrProcessInvoker::new(Arc::clone(&herdr_breaker)));
+            let process: Arc<dyn HerdrProcessAdapter> = Arc::new(HerdrProcessInvoker::new(
+                Arc::clone(&herdr_breaker),
+                herdr_config.clone(),
+            ));
             assembly.doctor_ports.herdr_breaker = Arc::new(HerdrBreakerDoctorAdapter {
                 breaker: Arc::clone(&herdr_breaker),
             });
-            assembly.doctor_ports.herdr_presence = Arc::new(HerdrPresenceDoctorAdapter {
-                process: Arc::clone(&process),
+            assembly.doctor_ports.herdr_endpoint = Arc::new(HerdrEndpointDoctorAdapter {
+                probe: HerdrDoctorProbe::new(herdr_config.clone()),
             });
             process
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use atm_core::schema::HomeDirPath;
+    use atm_core::team_admin::MemberSummary;
+    use atm_core::types::{AgentName, ModelName, TeamName};
+    use atm_core::{HerdrSession, LocalMessageReceivedBackend, RosterHarness};
+
+    use super::herdr_roster_groups;
+
+    fn herdr_member(name: &str, session: Option<&str>) -> MemberSummary {
+        MemberSummary {
+            name: AgentName::from_validated(name.to_owned()),
+            agent_id: String::new(),
+            agent_type: String::new(),
+            harness: RosterHarness::ClaudeCode,
+            model: ModelName::default(),
+            joined_at: None,
+            tmux_pane_id: None,
+            backend: None,
+            herdr_session: None,
+            alias: None,
+            local_backend: Some(LocalMessageReceivedBackend::Herdr {
+                session: session.map(|value| HerdrSession::new(value).expect("valid test session")),
+                agent: None,
+            }),
+            home_dir: HomeDirPath::default(),
+            live_cwd: None,
+            host: None,
+            extra: serde_json::Map::new(),
+        }
+    }
+
+    #[test]
+    fn herdr_roster_groups_deduplicate_sessions_and_preserve_member_ordinals() {
+        let roster = atm_core::team_admin::MembersList {
+            team: TeamName::from_validated("test-team"),
+            members: vec![
+                herdr_member("default-first", None),
+                herdr_member("beta", Some("beta")),
+                herdr_member("default-second", None),
+                herdr_member("alpha", Some("alpha")),
+                herdr_member("beta-second", Some("beta")),
+            ],
+        };
+
+        let groups = herdr_roster_groups(&roster);
+
+        assert_eq!(groups.len(), 3, "one probe input per unique endpoint");
+        assert_eq!(groups[0].0, None);
+        assert_eq!(
+            groups[0]
+                .1
+                .iter()
+                .map(|member| member.ordinal)
+                .collect::<Vec<_>>(),
+            vec![0, 2]
+        );
+        assert_eq!(
+            groups[1].0.as_ref().map(HerdrSession::as_str),
+            Some("alpha")
+        );
+        assert_eq!(groups[1].1[0].ordinal, 3);
+        assert_eq!(groups[2].0.as_ref().map(HerdrSession::as_str), Some("beta"));
+        assert_eq!(
+            groups[2]
+                .1
+                .iter()
+                .map(|member| member.ordinal)
+                .collect::<Vec<_>>(),
+            vec![1, 4]
+        );
+    }
+
+    #[test]
+    fn herdr_endpoint_doctor_skips_a_nonconforming_canonical_name_without_panicking() {
+        let roster = atm_core::team_admin::MembersList {
+            team: TeamName::from_validated("test-team"),
+            members: vec![herdr_member("TeamLead", None)],
+        };
+
+        let groups = herdr_roster_groups(&roster);
+        assert_eq!(groups.len(), 1, "the endpoint partition is retained");
+        assert!(
+            groups[0].1.is_empty(),
+            "an invalid fallback target must not reach the Herdr doctor probe"
+        );
     }
 }

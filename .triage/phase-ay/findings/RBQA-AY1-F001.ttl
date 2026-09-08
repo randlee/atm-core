@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AY1-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-AY1-F001" ;
+  triage:title "atm-herdr docs contradict each other on HerdrProcessAdapter::notify" ;
+  triage:description "quality-mgr qa-pr1270-r1 (PR #1270, reviewed at d2fdd8b9a; important, non-blocking for AY.1's narrow scope; ruthless-boundary-qa, re-verified): docs/atm-herdr/requirements.md lines ~151-155 (HR-CORE-010) define HerdrProcessAdapter::notify as a trait method, while docs/atm-herdr/architecture.md lines ~185-222 normative section 4 trait sketch and requirements.md's own S6 anchor both state the trait has exactly prompt/wait/get/list. The code on integrate/phase-ay (crates/atm-herdr/src/lib.rs) does carry notify (Phase AX.2). Resolve by reconciling the trait sketch and S6 anchor with HR-CORE-010 and the shipped trait; docs only. Note the AY.2 branch (feature/ay2-herdr-transport-seam) also touches docs/atm-herdr and boundaries/atm-herdr, so check whether it already reconciles this before promoting. Full report: https://github.com/randlee/atm-core/pull/1270#issuecomment-5562672298" ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/atm-herdr/*.md, docs/adr/ADR-058-herdr-local-steer-backend-contract.md, boundaries/atm-herdr/*.toml, crates/atm-herdr/src/lib.rs trait block" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T22:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY1 ;
+  triage:foundAt "2026-09-06T22:37:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AY1-F001/AY1-REQS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AY1-F001/AY1-ARCH-1> ;
+  triage:hasResolution <urn:atm:triage:resolution/RBQA-AY1-F001/1> ;
+  triage:closedAt "2026-09-07T00:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AY1-F001/AY1-REQS-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-herdr/requirements.md" ;
+  triage:line 151 ;
+  triage:snippet "HR-CORE-010: HerdrProcessAdapter::notify as trait method" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay1-herdr-audit-docs" ;
+  triage:headSha "f44f744de" ;
+  triage:occursIn <urn:atm:triage:worktree/AY1/be5800e79> .
+
+<urn:atm:triage:occurrence/RBQA-AY1-F001/AY1-ARCH-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-herdr/architecture.md" ;
+  triage:line 185 ;
+  triage:snippet "Section 4 trait sketch: prompt/wait/get/list only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay1-herdr-audit-docs" ;
+  triage:headSha "f44f744de" ;
+  triage:occursIn <urn:atm:triage:worktree/AY1/be5800e79> .
+
+<urn:atm:triage:worktree/AY0/2633e9e48>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "2633e9e48" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AY1/be5800e79>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay1-herdr-audit-docs" ;
+  triage:branch "feature/ay1-herdr-audit-docs" ;
+  triage:headSha "be5800e79" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AY2/a35154291>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay2-herdr-transport-seam" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "a35154291" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/RBQA-AY1-F001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T00:05:00Z"^^xsd:dateTime ;
+  triage:fixCommit "f44f744de" ;
+  triage:fixBranch "feature/ay1-herdr-audit-docs" ;
+  triage:verifiedInRound "qa-pr1270-r3" ;
+  triage:resolutionNote "docs/atm-herdr/architecture.md section 4 now defines FakeHerdrCall::Notify{title,body} and queue_notify_result, reconciling the trait sketch with HR-CORE-010 and the shipped HerdrProcessAdapter::notify (crates/atm-herdr/src/lib.rs:218-223,888,953,1095-1110). Confirmed independently by ruthless-boundary-qa (original finder, full docs/atm-herdr code-block sweep -- architecture.md is the only file with a code-shaped block), arch-qa (byte-for-byte signature cross-check against shipped trait), and req-qa (workspace sweep of requirements.md/herdr-versions.md/windows-process-audit.md confirming notify already covered everywhere else it belongs), plus quality-mgr's own git diff --stat confirming the fix commit is docs-only." .

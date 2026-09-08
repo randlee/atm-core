@@ -40,6 +40,8 @@ pub mod error_codes;
 pub mod escalation_admin;
 /// Thin graft-facing daemon client traits.
 pub mod graft;
+/// Pure doctor configuration decision derived from one roster snapshot.
+pub mod herdr_configured;
 /// Public ATM home and team-path resolution helpers.
 pub mod home;
 /// Internal identity resolution and hook lookup helpers.
@@ -167,7 +169,7 @@ pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
 pub use config::types::GraftConfig;
 pub use delivery_channel::{
-    DeliveryChannel, GraftLeaseState, HerdrSession, LocalMessageReceivedBackend,
+    DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, LocalMessageReceivedBackend,
     classify_delivery_channel, local_message_received_backend,
 };
 /// Canonical stable import path for the retained thin graft-facing client

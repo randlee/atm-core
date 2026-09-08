@@ -73,6 +73,7 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
+mod herdr_endpoint;
 mod mail;
 mod message_received_hook_emitter;
 mod store;
@@ -82,6 +83,7 @@ mod template_composer;
 // surface for Phase R/AA contracts, so callers should not need to know whether
 // an item lives in `mail` or `store`.
 pub use atm_storage::TemplateOutputFormat;
+pub use herdr_endpoint::HerdrEndpointDoctor;
 pub use mail::*;
 pub use message_received_hook_emitter::{
     AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter, MessageReceivedHookSelector,
@@ -182,11 +184,11 @@ pub struct LocalTmuxNudgeTarget {
     pub rendered_nudge: String,
 }
 
-/// Target metadata for a Herdr prompt. The live agent name is carried by the
-/// dispatch event; the optional per-member session and rendered template are
-/// resolved before the dispatch crosses into the process adapter.
+/// Target metadata for a Herdr prompt, resolved from durable roster data
+/// before the dispatch crosses into the process adapter.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct HerdrNudgeTarget {
+    pub agent: crate::HerdrAgentName,
     pub session: Option<crate::HerdrSession>,
     pub rendered_nudge: String,
 }

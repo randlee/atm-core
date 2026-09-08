@@ -1660,7 +1660,7 @@ Phase AX sprint status:
 | `AX.6` | C | after AX.5 | `complete` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
 | `AX.7` | D | superseded 2026-09-05 (live proof moved to release readiness) | `superseded` | none | `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` |
 
-## 57. Phase AY — Native-IPC Transport Cutover For Herdr [PLANNING — DRAFT, NOT APPROVED]
+## 57. Phase AY — Native-IPC Transport Cutover For Herdr [EXECUTED — PHASE-ENDING GATE IN PROGRESS]
 
 Herdr already runs on Windows: Rand manually verified an atm 1.5.0 self-send,
 and nothing in the current client code blocks it. Phase AY instead moves the
@@ -1687,23 +1687,38 @@ AY.3 merge; it is parallel-safe with AY.4–AY.7. AY.9 is the standalone
 AY.7+AY.8 code join and the phase's last sprint; the live macOS/Windows
 matrix runs under release readiness once the phase is on develop.
 
+AY.9's production contract is closed and explicit: native socket transport is
+the default, while `herdr.transport = "cli"` remains a permanent explicit
+alternative. The transport is selected once at Tokio bootstrap; a socket
+failure is a typed availability/breaker outcome, never a hidden CLI fallback.
+Doctor displays the active transport and a sanitized endpoint. No CLI removal
+release or ownership-key cleanup is planned, and AY.9 contains no live
+evidence; release readiness owns the live gate.
+
 The authoritative umbrella is
 [Phase AY plan](./plans/phase-ay/phase-ay-plan.md), with one
 authoritative sprint file per sprint under `docs/plans/phase-ay/`.
+
+Status: all Phase AY sprints have merged into `integrate/phase-ay`; the
+phase-ending gate is in progress, and the merge to `develop` is pending Rand
+approval.
 
 Phase AY sprint status:
 
 | Sprint | Track | Execute | Status | Branch | Authoritative sprint doc |
 | --- | --- | --- | --- | --- | --- |
-| `AY.1` | Docs | parallel with AY.2 | `draft` | `feature/ay1-herdr-audit-docs` | `docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md` |
-| `AY.2` | Core stack | parallel with AY.1; stack bottom | `draft` | `feature/ay2-herdr-transport-seam` | `docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md` |
-| `AY.3` | Core stack | after AY.2 development and P-E(a); AY.2 merges first | `draft` | `feature/ay3-herdr-endpoint-doctor-config` | `docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md` |
-| `AY.4` | Core stack | after AY.3 development; parallel with AY.8 once eligible | `draft` | `feature/ay4-herdr-breaker-lifecycle` | `docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md` |
-| `AY.5` | Core stack | after AY.4 development; parallel with AY.8 | `draft` | `feature/ay5-herdr-entry-control-plane` | `docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md` |
-| `AY.6` | Core stack | after AY.5 development; parallel with AY.8 | `draft` | `feature/ay6-herdr-restart-coordination` | `docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md` |
-| `AY.7` | Core/Windows stack | after AY.6 development; Windows CI lane is the gate; parallel with AY.8 | `draft` | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
-| `AY.8` | Socket | after AY.1/AY.2/AY.3 merge and P-E(b); parallel with AY.4–AY.7; standalone | `draft` | `feature/ay8-herdr-socket-transport` | `docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md` |
-| `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `draft` | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
+| `AY.1` | Docs | parallel with AY.2 | `merged` (#1270, 7e40db597) | `feature/ay1-herdr-audit-docs` | `docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md` |
+| `AY.2` | Core stack | parallel with AY.1; stack bottom | `merged` (#1269, 1195614ba) | `feature/ay2-herdr-transport-seam` | `docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md` |
+| `AY.3` | Core stack | after AY.2 development and P-E(a); AY.2 merges first | `merged` (#1273, 5f769d488) | `feature/ay3-herdr-endpoint-doctor-config` | `docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md` |
+| `AY.4` | Core stack | after AY.3 development; parallel with AY.8 once eligible | `merged` (#1279, fc736e83e) | `feature/ay4-herdr-breaker-lifecycle` | `docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md` |
+| `AY.5` | Core stack | after AY.4 development; parallel with AY.8 | `merged` (#1282, fa1e7d73b) | `feature/ay5-herdr-entry-control-plane` | `docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md` |
+| `AY.6` | Core stack | after AY.5 development; parallel with AY.8 | `merged` (#1284, 8b0a6d346) | `feature/ay6-herdr-restart-coordination` | `docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md` |
+| `AY.7` | Core/Windows stack | after AY.6 development; Windows CI lane is the gate; parallel with AY.8 | `merged` (#1285, 94556328c) | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
+| `AY.8` | Socket | after AY.1/AY.2/AY.3 merge and P-E(b); parallel with AY.4–AY.7; standalone | `merged` (#1280, 4407b006e) | `feature/ay8-herdr-socket-transport` | `docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md` |
+| `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `merged` (#1295, 7ad3ad7e5, disposition Ship) | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
+| `AY.13` | Doctor | standalone; Rand 2026-09-07 doctor team-scope requirement; parallel with AY.14 | `merged` (#1300, dd809c15e) | `feature/ay13-doctor-team-scope` | `docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md` |
+| `AY.14` | Herdr/roster | standalone; Rand 2026-09-07 name-collision ruling (roster alias); parallel with AY.13 | `merged` (#1305, 271b387ed) | `feature/ay14-herdr-agent-name-mapping` | `docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md` |
+| `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `merged` (#1310, 47f359cf9) | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
 
 ## Daemon-Switch Scope Reduction
 

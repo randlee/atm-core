@@ -15,7 +15,7 @@ use atm_core::boundary::{
     TaskRow, TaskState,
 };
 use atm_core::delivery_channel::{
-    DeliveryChannel, GraftLeaseState, HerdrSession, classify_delivery_channel,
+    DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
     local_message_received_backend,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
@@ -28,6 +28,7 @@ use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
+use crate::herdr_breaker_escalation::HerdrBreakerEscalationGate;
 use crate::herdr_escalation::EscalationState;
 use crate::runtime_health::RuntimeHealth;
 
@@ -73,6 +74,9 @@ pub struct HerdrQueueWakePump {
     clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>,
     last_task_attempt: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
     pub(crate) escalation_state: EscalationState,
+    breaker_escalation_gates: Arc<Mutex<HashMap<Option<HerdrSession>, HerdrBreakerEscalationGate>>>,
+    breaker_escalation_min_interval: Duration,
+    breaker_cycle_opened_at: Arc<Mutex<HashMap<Option<HerdrSession>, IsoTimestamp>>>,
     pub(crate) daemon_home: PathBuf,
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
@@ -101,6 +105,9 @@ impl HerdrQueueWakePump {
             clock: Arc::new(IsoTimestamp::now),
             last_task_attempt: Arc::new(Mutex::new(HashMap::new())),
             escalation_state: EscalationState::default(),
+            breaker_escalation_gates: Arc::new(Mutex::new(HashMap::new())),
+            breaker_escalation_min_interval: Duration::from_secs(1_800),
+            breaker_cycle_opened_at: Arc::new(Mutex::new(HashMap::new())),
             daemon_home: PathBuf::new(),
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
@@ -115,6 +122,14 @@ impl HerdrQueueWakePump {
     #[must_use]
     pub fn with_daemon_home(mut self, daemon_home: PathBuf) -> Self {
         self.daemon_home = daemon_home;
+        self
+    }
+
+    /// Applies the bootstrap-validated breaker escalation cooldown.
+    #[must_use]
+    pub fn with_breaker_escalation_min_interval(mut self, min_interval: Duration) -> Self {
+        self.breaker_escalation_gates = Arc::new(Mutex::new(HashMap::new()));
+        self.breaker_escalation_min_interval = min_interval;
         self
     }
 
@@ -251,6 +266,64 @@ impl HerdrQueueWakePump {
         );
     }
 
+    fn breaker_cycle_opened_at(
+        &self,
+        session: &Option<HerdrSession>,
+        now: IsoTimestamp,
+    ) -> IsoTimestamp {
+        *self
+            .breaker_cycle_opened_at
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(session.clone())
+            .or_insert(now)
+    }
+
+    fn close_breaker_cycle(&self, session: &Option<HerdrSession>) {
+        self.breaker_cycle_opened_at
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(session);
+    }
+
+    async fn maybe_escalate_breaker(
+        &self,
+        session: &Option<HerdrSession>,
+        members: &[HerdrCandidate],
+        now: IsoTimestamp,
+    ) -> bool {
+        if self.daemon_home.as_os_str().is_empty() {
+            return false;
+        }
+        let Some(team) = members.first().map(|member| member.key.team().clone()) else {
+            return false;
+        };
+        let opened_at = self.breaker_cycle_opened_at(session, now);
+        let admitted = self
+            .breaker_escalation_gates
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(session.clone())
+            .or_insert_with(|| {
+                HerdrBreakerEscalationGate::new(self.breaker_escalation_min_interval)
+            })
+            .claim(opened_at, now);
+        if !admitted {
+            return false;
+        }
+        let task_store = self.service_runtime.task_store().ok();
+        crate::herdr_breaker_escalation::escalate_breaker_cycle(
+            &self.service_runtime,
+            self.herdr_process.as_ref(),
+            task_store.as_ref(),
+            &self.daemon_home,
+            &team,
+            opened_at,
+        )
+        .await;
+        true
+    }
+
     async fn list_eligible(
         &self,
         candidates: Vec<HerdrCandidate>,
@@ -276,17 +349,22 @@ impl HerdrQueueWakePump {
                 )
                 .await
             {
-                Ok(outcome) => self.collect_idle_members(
-                    outcome.agents,
-                    members,
-                    stats,
-                    &mut eligible,
-                    &mut task_candidates,
-                ),
+                Ok(outcome) => {
+                    self.close_breaker_cycle(&session);
+                    self.collect_idle_members(
+                        outcome.agents,
+                        members,
+                        stats,
+                        &mut eligible,
+                        &mut task_candidates,
+                    );
+                }
                 Err(error) => {
                     complete = false;
                     if error.is_infrastructure() {
                         stats.breaker_open += 1;
+                        let now = (self.clock)();
+                        let _ = self.maybe_escalate_breaker(&session, &members, now).await;
                     }
                     tracing::warn!(
                         subsystem = "herdr_queue_wake",
@@ -317,12 +395,13 @@ impl HerdrQueueWakePump {
             .filter_map(|snapshot| snapshot.name.as_deref().map(|name| (name, snapshot)))
             .collect();
         for member in members {
-            let Some(snapshot) = snapshots.get(member.key.agent().as_str()) else {
+            let Some(snapshot) = snapshots.get(member.herdr_agent.as_str()) else {
                 if member.pending {
                     stats.not_present += 1;
                     tracing::info!(
                         event = "herdr_queue_poll_outcome",
                         member = %member.key,
+                        herdr_agent = %member.herdr_agent,
                         queue_kind = NudgeKind::Queue.as_str(),
                         outcome = "held_target_not_present",
                         "Herdr queue target was absent from the poll result"
@@ -645,6 +724,7 @@ impl crate::RuntimeMaintenance for HerdrQueueWakePump {
 #[derive(Clone)]
 struct HerdrCandidate {
     key: MemberKey,
+    herdr_agent: HerdrAgentName,
     session: Option<HerdrSession>,
     pending: bool,
 }
@@ -687,15 +767,24 @@ fn herdr_candidates(
             {
                 continue;
             }
-            let session = match backend {
-                atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr { session } => {
-                    session
-                }
+            let (configured_agent, session) = match backend {
+                atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr {
+                    session,
+                    agent,
+                } => (agent, session),
                 atm_core::delivery_channel::LocalMessageReceivedBackend::Tmux { .. } => continue,
+            };
+            let Some(herdr_agent) = atm_core::delivery_channel::resolve_herdr_agent_target(
+                key.agent(),
+                configured_agent,
+                "herdr_queue_wake",
+            ) else {
+                continue;
             };
             candidates.push(HerdrCandidate {
                 pending: pending.contains(&key),
                 key,
+                herdr_agent,
                 session,
             });
         }
@@ -925,7 +1014,7 @@ mod tests {
                 };
                 process
                     .prompt(
-                        &dispatch.event.recipient,
+                        &target.agent,
                         target.session.as_ref(),
                         &target.rendered_nudge,
                         deadline,
@@ -956,6 +1045,14 @@ mod tests {
 
     fn herdr_member(team: &TeamName, agent: &str) -> RosterEntry {
         herdr_member_with_session(team, agent, "aq27-test")
+    }
+
+    fn herdr_member_with_alias(team: &TeamName, agent: &str, alias: &str) -> RosterEntry {
+        let mut member = herdr_member(team, agent);
+        member
+            .metadata_json
+            .insert("alias".to_string(), json!(alias));
+        member
     }
 
     fn queue_message(
@@ -1215,6 +1312,94 @@ mod tests {
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         }])
+    }
+
+    #[tokio::test]
+    async fn shared_herdr_server_prompts_each_team_by_its_roster_alias() {
+        let root = tempfile::tempdir().expect("temporary root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+        let team_a: TeamName = "a-team".parse().expect("team");
+        let team_b: TeamName = "b-team".parse().expect("team");
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team_a.clone(),
+                members: vec![herdr_member_with_alias(
+                    &team_a,
+                    atm_core::roles::ROLE_TEAM_LEAD,
+                    "team-lead_a-team",
+                )],
+                refreshed_at: None,
+            })
+            .expect("team a roster");
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team_b.clone(),
+                members: vec![herdr_member_with_alias(
+                    &team_b,
+                    atm_core::roles::ROLE_TEAM_LEAD,
+                    "team-lead_b-team",
+                )],
+                refreshed_at: None,
+            })
+            .expect("team b roster");
+        queue_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team_a,
+            atm_core::roles::ROLE_TEAM_LEAD,
+        );
+        queue_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team_b,
+            atm_core::roles::ROLE_TEAM_LEAD,
+        );
+
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        fake.queue_list_result(Ok(HerdrListOutcome {
+            agents: vec![
+                AgentSnapshot {
+                    name: Some("team-lead_a-team".to_owned()),
+                    status: HerdrAgentStatus::Idle,
+                    workspace_id: None,
+                },
+                AgentSnapshot {
+                    name: Some("team-lead_b-team".to_owned()),
+                    status: HerdrAgentStatus::Idle,
+                    workspace_id: None,
+                },
+            ],
+        }));
+        let selector = Arc::new(FakeSelector {
+            emitter: FakeEmitter {
+                process: Arc::clone(&fake),
+            },
+        });
+        let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
+        let pump = HerdrQueueWakePump::new(
+            assembly.service_runtime,
+            selector,
+            super::RuntimeHealth::default(),
+            process,
+        );
+
+        pump.tick_once().await;
+
+        let prompted: Vec<String> = fake
+            .calls()
+            .into_iter()
+            .filter_map(|call| match call {
+                atm_herdr::testing::FakeHerdrCall::Prompt { agent, .. } => Some(agent),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(prompted.len(), 2);
+        assert!(prompted.contains(&"team-lead_a-team".to_owned()));
+        assert!(prompted.contains(&"team-lead_b-team".to_owned()));
     }
 
     type TaskOnlyPumpFixture = (
@@ -1724,6 +1909,86 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ay4_breaker_escalation_is_once_per_cycle_and_interval_bounded() {
+        let (root, runtime, fake, pump, _task_store, keys, now) =
+            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+        let team = keys[0].team().clone();
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(&team)
+            .expect("roster");
+        let mut lead = herdr_member(&team, "ay4-lead");
+        lead.agent_type = atm_storage::AgentType::Lead;
+        roster.members.push(lead);
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("roster");
+        let pump = pump
+            .with_daemon_home(root.path().join("home"))
+            .with_breaker_escalation_min_interval(Duration::from_secs(30));
+
+        pump.tick_once().await;
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
+        pump.tick_once().await;
+        assert_eq!(notifications(&fake), 1, "first open cycle escalates once");
+        let notification = fake
+            .calls()
+            .into_iter()
+            .find_map(|call| match call {
+                atm_herdr::testing::FakeHerdrCall::Notify { body, .. } => Some(body),
+                _ => None,
+            })
+            .expect("breaker notification");
+        assert!(notification.contains("state=breaker_open"));
+        assert!(!notification.contains("Herdr breaker opened"));
+
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
+        pump.tick_once().await;
+        assert_eq!(notifications(&fake), 1, "same cycle is deduplicated");
+
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+        pump.tick_once().await;
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str("2030-01-01T00:00:10Z").expect("timestamp");
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
+        pump.tick_once().await;
+        assert_eq!(
+            notifications(&fake),
+            1,
+            "interval suppresses a flapping endpoint"
+        );
+
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+        pump.tick_once().await;
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str("2030-01-01T00:00:30Z").expect("timestamp");
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
+        pump.tick_once().await;
+        assert_eq!(
+            notifications(&fake),
+            2,
+            "later cycle is eligible after interval"
+        );
+    }
+
+    #[tokio::test]
     async fn ax6_02_blocked_poll_failure_preserves_episode_for_retry() {
         let (_root, _runtime, fake, pump, _task_store, keys, now) =
             build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
@@ -1732,7 +1997,11 @@ mod tests {
 
         *now.lock().expect("clock") =
             IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("timestamp");
-        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable));
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
         pump.tick_once().await;
         assert_eq!(notifications(&fake), 0);
 
@@ -2263,7 +2532,11 @@ mod tests {
     async fn ac04_breaker_and_absent_emitter_leave_no_reminder_audit() {
         let (_root, _runtime, fake, pump, store, keys, _now) =
             build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        fake.queue_prompt_result(Err(atm_herdr::HerdrError::ServerUnavailable));
+        fake.queue_prompt_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
         pump.tick_once().await;
         let task_id = "AX5-TASK-00".parse().expect("task id");
         assert_eq!(pump.stats().prompted, 0);
@@ -2749,7 +3022,11 @@ mod tests {
             })
             .expect("roster");
         let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable));
+        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+            message: String::new(),
+            retry_after: None,
+            io_error_kind: None,
+        }));
         let selector = Arc::new(FakeSelector {
             emitter: FakeEmitter {
                 process: Arc::clone(&fake),
@@ -3314,5 +3591,37 @@ mod tests {
             1,
             "herdr_candidates must not call load_roster on the durable store"
         );
+    }
+
+    #[test]
+    fn herdr_queue_wake_skips_a_nonconforming_canonical_name_without_panicking() {
+        let team: TeamName = "aq27-invalid-herdr-name".parse().expect("team");
+        let member = herdr_member(&team, "TeamLead");
+        let durable = std::sync::Arc::new(CountingRosterStore {
+            roster: RosterSnapshot {
+                team_name: team,
+                members: vec![member],
+                refreshed_at: None,
+            },
+            load_roster_calls: std::sync::atomic::AtomicUsize::new(0),
+            list_teams_calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let (roster_store, roster_runtime_mirror) =
+            atm_runtime_test_support::build_write_through_roster_for_test(durable)
+                .expect("write-through roster fixture hydrates");
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            std::sync::Arc::new(UnusedMailStore),
+            roster_store,
+            roster_runtime_mirror,
+            std::sync::Arc::new(NoopNudgeTemplateOverrideStore),
+            std::sync::Arc::new(UnusedNonClaudeOutbound),
+        );
+
+        let pending = std::collections::HashSet::new();
+        let candidates =
+            super::herdr_candidates(runtime.shared_roster_store_arc().as_ref(), &pending)
+                .expect("invalid Herdr fallback is skipped, not surfaced as a failure");
+
+        assert!(candidates.is_empty());
     }
 }

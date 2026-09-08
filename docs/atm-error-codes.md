@@ -387,6 +387,21 @@ Error codes should describe the failure class, not a specific prose message.
       Remount or move the ATM home to a writable filesystem, then retry the ATM command.
       ```
 
+### `atm doctor` team scope
+
+`atm doctor` resolves its roster scope using the following precedence:
+
+| Invocation | Scope |
+| --- | --- |
+| `--team <team>` | The explicitly named team; this overrides `ATM_TEAM`. |
+| `ATM_TEAM=<team>` | Only the ambient caller team when no `--team` is supplied. |
+| `--all-teams` | Every team in the canonical roster store. |
+| Neither a team nor `--all-teams` | Every canonical roster team, plus an informational finding explaining that no team was resolved. |
+
+`--team` and `--all-teams` are mutually exclusive and return an argument
+conflict (exit status 2). JSON reports identify the effective scope in
+`team_scope`; all-team reports contain one roster in `team_rosters` per team.
+
 ### 5.10 Runtime Families
 
 The following families are part of the current runtime line. Store codes are

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY13-QA-006>
+  a triage:Finding ;
+  triage:findingId "AY13-QA-006" ;
+  triage:title "rust-best-practices RBP-F002: escalation-recipient fields in report.rs are raw Vec<String> instead of the AgentName newtype used elsewhere in the same structs" ;
+  triage:description "quality-mgr qa-pr1300-r1 (PR #1300, AY.13 doctor team scope). TeamEscalationRecipientsDoctorReport.recipients and EscalationRecipientsDoctorReport.daemon are typed Vec<String> even though these values are escalation-recipient agent identifiers; the surrounding doctor-report types in the same file (DoctorEnvironmentVisibility, DoctorExecutionContext) consistently use the existing AgentName/TeamName newtypes for the same kind of value. ax6.rs::daemon_recipients/team_recipients pull these strings from TaskStore::list_escalation_recipients/effective_escalation_recipients (both Result<Vec<String>, AtmError> in atm-storage) and pass them through unvalidated; the same raw Vec<String> shape is reused for real escalation dispatch in atm-http-runtime/src/herdr_escalation.rs. Secondary note: TeamEscalationRecipientsDoctorReport.source: String ('daemon default' / 'team' literals) is a two-value discriminant represented as a raw string; consider a small enum." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "type-safety" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/doctor/report.rs, crates/atm-core/src/doctor/ax6.rs, atm-storage::TaskStore, crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY13 ;
+  triage:foundAt "2026-09-07T17:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY13-QA-006/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY13-QA-006/1> ;
+  triage:closedAt "2026-09-07T18:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AY13-QA-006/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 227 ;
+  triage:snippet "recipients: Vec<String>, daemon: Vec<String>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:occursIn <urn:atm:triage:worktree/AY13-QA-006/98ac5c7d2> .
+
+<urn:atm:triage:worktree/AY13-QA-006/98ac5c7d2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay13-doctor-team-scope" ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/AY13-QA-006/1>
+  a triage:Resolution ;
+  triage:resolvedBy "cipher" ;
+  triage:resolvedAt "2026-09-07T17:26:47Z"^^xsd:dateTime ;
+  triage:fixCommit "c0afd678d" ;
+  triage:fixBranch "feature/ay13-doctor-team-scope" ;
+  triage:verifiedInRound "qa-pr1300-r3" ;
+  triage:resolutionNote "quality-mgr independently confirmed via git show c0afd678d: TeamEscalationRecipientsDoctorReport.recipients and EscalationRecipientsDoctorReport.daemon are now Vec<AgentName>; ax6.rs::daemon_recipients/team_report map raw storage strings through AgentName::from_validated at the crate boundary. The secondary note (source: String) was also addressed: added EscalationRecipientSource enum (DaemonDefault/Team) with a Display impl preserving the original 'daemon default'/'team' wire text. Personally-run cargo test -p agent-team-mail-core (597 tests, all green) and clippy clean at branch head cb13ca7e38 / current PR head 8ae936a37. Closing on this evidence." .

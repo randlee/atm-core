@@ -6,7 +6,7 @@ title: Transactional Herdr entry control plane
 branch: feature/ay5-herdr-entry-control-plane
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay5-herdr-entry-control-plane
 integration_branch: integrate/phase-ay
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: core
@@ -68,8 +68,7 @@ gh pr view feature/ay5-herdr-entry-control-plane \
 Append AY.6 and AY.7 with `gh stack link <stack-number> <branch>`. Phase AY
 uses `link` for its external-worktree stack and verifies bases with
 `gh pr view --json`.
-It forbids `gh stack rebase`, `gh stack sync`, and `gh stack merge`; use merge
-commits, no force-push, and parent-first PR completion. AY.4 and AY.5 share
+Rand (2026-09-07): every operation on a stacked branch goes through `gh stack` subcommands (`gh stack push`, `gh stack view --json`, `gh stack merge` bottom-up); merge commits only, never squash, never force-push outside `gh stack`. Parent-first PR completion. AY.4 and AY.5 share
 no files; AY.5 merges after AY.4, and any AY.4 merge into
 `integrate/phase-ay` is merged forward into AY.5 before its next round.
 

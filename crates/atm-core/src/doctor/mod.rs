@@ -1,17 +1,21 @@
 mod ax6;
 pub mod health;
+mod herdr_state;
 pub mod report;
+mod roster_names;
+mod team_scope;
 
 #[cfg(test)]
 use std::collections::BTreeSet;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::pin::Pin;
 
 use crate::api::RequestDeadline;
 use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
 use crate::config;
-use crate::delivery_channel::local_message_received_backend;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 #[cfg(test)]
@@ -20,44 +24,47 @@ use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
-use crate::team_admin::{MembersList, ordered_roster_member_summaries};
+use crate::team_admin::MembersList;
 use crate::types::{AgentName, TeamName};
 use atm_storage::PeerConfigStore;
 use std::sync::Arc;
 
+use team_scope::{
+    graft_receivers_for_teams, load_scoped_rosters, push_doctor_error_for_team, teams_for_scope,
+};
+
+pub use crate::boundary::HerdrEndpointDoctor;
+pub use herdr_state::{
+    HerdrBinaryProvenance, HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay,
+    HerdrEndpointDisplayRoot, HerdrEndpointObservation, HerdrEndpointProvenance,
+    HerdrMemberPresence, HerdrPresenceOutcome, HerdrRosterMember, HerdrTransportKind, HerdrVersion,
+};
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
+    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport, DoctorAliasMismatch,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
-    DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientsDoctorReport,
-    GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport, HerdrBreakerDoctor,
-    HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientSource,
+    EscalationRecipientsDoctorReport, GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport,
+    HerdrBreakerDoctor, HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrDoctorReport,
+    HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDoctorReport, HerdrQueuePumpDoctorReport,
     LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
     PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
     ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RecipientDeliveryPath,
     RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
 };
-
-/// Async application port for the live Herdr visibility checks performed by
-/// the replacement daemon's doctor route. The core report owns finding shape;
-/// the composition root owns the concrete Herdr adapter.
-pub trait HerdrPresenceDoctor: Send + Sync {
-    fn probe<'a>(
-        &'a self,
-        roster: &'a MembersList,
-        caller_deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>>;
-}
+pub use team_scope::DoctorTeamScope;
 
 #[derive(Debug, Default)]
-pub struct ClosedHerdrPresenceDoctor;
+pub struct ClosedHerdrEndpointDoctor;
 
-impl HerdrPresenceDoctor for ClosedHerdrPresenceDoctor {
-    fn probe<'a>(
+impl crate::boundary::sealed::Sealed for ClosedHerdrEndpointDoctor {}
+
+impl HerdrEndpointDoctor for ClosedHerdrEndpointDoctor {
+    fn observe<'a>(
         &'a self,
         _roster: &'a MembersList,
         _caller_deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>> {
         Box::pin(async { Vec::new() })
     }
 }
@@ -76,6 +83,9 @@ pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub team_override: Option<TeamName>,
+    /// Inspect every team in the canonical roster instead of resolving one.
+    #[serde(default)]
+    pub all_teams: bool,
     /// Caller's `ATM_TEAM`, captured in the invoking CLI process.
     #[serde(default)]
     pub caller_team: Option<TeamName>,
@@ -101,7 +111,7 @@ pub struct RuntimeDoctorPorts {
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
     pub herdr_breaker: Arc<dyn HerdrBreakerDoctor>,
-    pub herdr_presence: Arc<dyn HerdrPresenceDoctor>,
+    pub herdr_endpoint: Arc<dyn HerdrEndpointDoctor>,
 }
 
 impl std::fmt::Debug for RuntimeDoctorPorts {
@@ -111,9 +121,71 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
             .field("herdr_breaker", &"dyn HerdrBreakerDoctor")
-            .field("herdr_presence", &"dyn HerdrPresenceDoctor")
+            .field("herdr_endpoint", &"dyn HerdrEndpointDoctor")
             .finish()
     }
+}
+
+/// Flattens endpoint observations into the retained doctor-finding surface.
+/// Member order follows the nonserialized roster ordinal, and infrastructure
+/// trouble remains one global informational finding after member findings.
+#[must_use]
+pub fn presence_findings(observations: &[HerdrEndpointObservation]) -> Vec<DoctorFinding> {
+    presence_findings_with_team(observations, None)
+}
+
+/// Flattens Herdr observations while attributing every finding to its roster
+/// team. This is used by the all-team doctor projection, where otherwise a
+/// presence failure would be ambiguous in the combined report.
+#[must_use]
+pub fn presence_findings_for_team(
+    observations: &[HerdrEndpointObservation],
+    team: &TeamName,
+) -> Vec<DoctorFinding> {
+    presence_findings_with_team(observations, Some(team))
+}
+
+fn presence_findings_with_team(
+    observations: &[HerdrEndpointObservation],
+    team: Option<&TeamName>,
+) -> Vec<DoctorFinding> {
+    let mut members = observations
+        .iter()
+        .flat_map(|observation| observation.members.iter())
+        .collect::<Vec<_>>();
+    members.sort_by_key(|member| member.ordinal);
+    let mut findings = Vec::new();
+    let mut infrastructure = None;
+    for member in members {
+        match &member.outcome {
+            HerdrPresenceOutcome::Visible => {}
+            HerdrPresenceOutcome::Finding { finding } => {
+                findings.push(scope_finding(finding.clone(), team))
+            }
+            HerdrPresenceOutcome::Infrastructure { code, detail } => {
+                infrastructure.get_or_insert((*code, detail.clone()));
+            }
+        }
+    }
+    if let Some((_code, detail)) = infrastructure {
+        findings.push(scope_finding(
+            DoctorFinding {
+                severity: DoctorSeverity::Info,
+                code: AtmErrorCode::HerdrUnavailable,
+                message: format!("Herdr presence probe skipped: {detail}"),
+                remediation: None,
+            },
+            team,
+        ));
+    }
+    findings
+}
+
+fn scope_finding(mut finding: DoctorFinding, team: Option<&TeamName>) -> DoctorFinding {
+    if let Some(team) = team {
+        finding.message = team_scope::team_message(team, finding.message);
+    }
+    finding
 }
 
 /// Run the ATM doctor checks for config, roster, and observability health.
@@ -140,25 +212,28 @@ pub fn run_doctor_with_runtime(
     let (observability_health, finding) = doctor_observability_status(observability);
     let mut findings = Vec::new();
     push_obsolete_identity_warning(config.as_ref(), &mut findings);
-    let member_roster = doctor_context.resolved_team.as_ref().and_then(|team| {
-        load_member_roster(
-            runtime,
-            team,
-            doctor_context.environment.atm_identity.as_ref(),
-            Some(query.current_dir.as_path()),
-            &mut findings,
-        )
-    });
-    let graft_receivers = doctor_context
-        .resolved_team
-        .as_ref()
-        .map(|team| graft_receivers_doctor_report(runtime, team, &mut findings))
-        .unwrap_or_default();
+    let teams = teams_for_scope(runtime, &doctor_context.team_scope, &mut findings);
+    let (member_roster, team_rosters) = load_scoped_rosters(
+        runtime,
+        &teams,
+        &doctor_context.team_scope,
+        doctor_context.environment.atm_identity.as_ref(),
+        Some(query.current_dir.as_path()),
+        &mut findings,
+    );
+    let graft_receivers = graft_receivers_for_teams(
+        runtime,
+        &teams,
+        doctor_context.team_scope.is_all_teams(),
+        &mut findings,
+    );
     findings.push(finding);
     Ok(build_doctor_report(
         findings,
         doctor_context.environment,
+        doctor_context.team_scope,
         member_roster,
+        team_rosters,
         graft_receivers,
         PostSendDoctorReport::default(),
         crate::boundary::ConfigDoctorReport::default(),
@@ -188,23 +263,27 @@ pub fn run_doctor_with_runtime_ports(
     let mut drift_findings = Vec::new();
     let mut reports = inspect_runtime_doctor_sections(runtime_doctors, &mut general_findings);
     push_obsolete_identity_finding(config.as_ref(), &mut reports.config);
-    let member_roster = doctor_context.resolved_team.as_ref().and_then(|team| {
-        load_member_roster(
-            runtime,
-            team,
-            doctor_context.environment.atm_identity.as_ref(),
-            Some(query.current_dir.as_path()),
-            &mut drift_findings,
-        )
-    });
-    let graft_receivers = doctor_context
-        .resolved_team
-        .as_ref()
-        .map(|team| graft_receivers_doctor_report(runtime, team, &mut general_findings))
-        .unwrap_or_default();
+    let teams = teams_for_scope(runtime, &doctor_context.team_scope, &mut general_findings);
+    let (member_roster, team_rosters) = load_scoped_rosters(
+        runtime,
+        &teams,
+        &doctor_context.team_scope,
+        doctor_context.environment.atm_identity.as_ref(),
+        Some(query.current_dir.as_path()),
+        &mut drift_findings,
+    );
+    let graft_receivers = graft_receivers_for_teams(
+        runtime,
+        &teams,
+        doctor_context.team_scope.is_all_teams(),
+        &mut general_findings,
+    );
     let escalation_recipients = ax6::task_and_roster_findings(
         runtime,
-        doctor_context.resolved_team.as_ref(),
+        match &doctor_context.team_scope {
+            DoctorTeamScope::Single(team) => Some(team),
+            DoctorTeamScope::AllTeams { .. } => None,
+        },
         &mut general_findings,
     );
     let findings = collect_doctor_findings(
@@ -218,13 +297,18 @@ pub fn run_doctor_with_runtime_ports(
         config.as_ref(),
         member_roster.as_ref(),
         runtime,
-        doctor_context.resolved_team.as_ref(),
+        match &doctor_context.team_scope {
+            DoctorTeamScope::Single(team) => Some(team),
+            DoctorTeamScope::AllTeams { .. } => None,
+        },
     );
 
     Ok(build_doctor_report(
         findings,
         doctor_context.environment,
+        doctor_context.team_scope,
         member_roster,
+        team_rosters,
         graft_receivers,
         post_send,
         reports.config,
@@ -380,7 +464,7 @@ fn legacy_literal_ip_peer_reports(
 }
 
 struct DoctorRunContext {
-    resolved_team: Option<TeamName>,
+    team_scope: DoctorTeamScope,
     environment: DoctorEnvironmentVisibility,
 }
 
@@ -388,8 +472,19 @@ fn doctor_run_context(
     query: &DoctorQuery,
     config: Option<&crate::config::AtmConfig>,
 ) -> DoctorRunContext {
+    let resolved_team = resolved_doctor_team(query, config);
     DoctorRunContext {
-        resolved_team: resolved_doctor_team(query, config),
+        team_scope: if query.all_teams {
+            DoctorTeamScope::AllTeams {
+                resolved_none: false,
+            }
+        } else if let Some(team) = resolved_team.clone() {
+            DoctorTeamScope::Single(team)
+        } else {
+            DoctorTeamScope::AllTeams {
+                resolved_none: true,
+            }
+        },
         environment: health::environment_visibility(
             query.home_dir.clone(),
             query.team_override.clone(),
@@ -403,7 +498,9 @@ fn doctor_run_context(
 fn build_doctor_report(
     findings: Vec<DoctorFinding>,
     environment: DoctorEnvironmentVisibility,
+    team_scope: DoctorTeamScope,
     member_roster: Option<MembersList>,
+    team_rosters: Vec<MembersList>,
     graft_receivers: GraftReceiversDoctorReport,
     post_send: PostSendDoctorReport,
     config: crate::boundary::ConfigDoctorReport,
@@ -427,12 +524,20 @@ fn build_doctor_report(
         client_context: doctor_client_context(&environment),
         daemon_context: None,
         reader_lanes: None,
+        team_scope: team_scope.report_name().to_owned(),
+        resolved_team_scope: team_scope,
         member_roster,
+        team_rosters,
+        alias_mismatches: Vec::new(),
         graft_receivers,
         observability: observability_health,
         herdr_queue_pump: HerdrQueuePumpDoctorReport {
             breaker: herdr_breaker.clone(),
             ..HerdrQueuePumpDoctorReport::default()
+        },
+        herdr: HerdrDoctorReport {
+            breaker: herdr_breaker.clone(),
+            ..HerdrDoctorReport::default()
         },
         herdr_breaker,
         post_send,
@@ -452,6 +557,7 @@ const ACTIVE_LEASE_WINDOW_SECONDS: i64 = 15;
 fn graft_receivers_doctor_report(
     runtime: &impl RetainedServiceRuntime,
     team: &TeamName,
+    team_context: bool,
     findings: &mut Vec<DoctorFinding>,
 ) -> GraftReceiversDoctorReport {
     const LEASE_LOOKUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
@@ -465,8 +571,14 @@ fn graft_receivers_doctor_report(
                 findings.push(DoctorFinding {
                     severity: DoctorSeverity::Warning,
                     code: atm_storage::AtmErrorCode::DaemonUnavailable,
-                    message: "skipped graft-receiver lease lookups: doctor budget exhausted"
-                        .to_owned(),
+                    message: if team_context {
+                        team_scope::team_message(
+                            team,
+                            "skipped graft-receiver lease lookups: doctor budget exhausted",
+                        )
+                    } else {
+                        "skipped graft-receiver lease lookups: doctor budget exhausted".to_owned()
+                    },
                     remediation: Some("Rerun `atm doctor` to inspect remaining leases.".to_owned()),
                 });
                 return None;
@@ -478,7 +590,12 @@ fn graft_receivers_doctor_report(
             ) {
                 Ok(lease) => lease?,
                 Err(error) => {
-                    push_doctor_error(findings, DoctorSeverity::Error, error);
+                    push_doctor_error_for_team(
+                        findings,
+                        DoctorSeverity::Error,
+                        error,
+                        team_context.then_some(team),
+                    );
                     return None;
                 }
             };
@@ -745,6 +862,7 @@ fn resolved_doctor_team(
     query
         .team_override
         .clone()
+        .or_else(|| query.caller_team.clone())
         .or_else(|| config::resolve_team(None, config))
 }
 
@@ -786,61 +904,6 @@ fn summarize_doctor_findings(findings: &[DoctorFinding]) -> DoctorSummary {
         warning_count,
         error_count,
     }
-}
-
-fn load_member_roster(
-    runtime: &impl RetainedServiceRuntime,
-    team: &TeamName,
-    caller_identity: Option<&AgentName>,
-    live_cwd: Option<&Path>,
-    findings: &mut Vec<DoctorFinding>,
-) -> Option<MembersList> {
-    if let Err(error) = crate::address::validate_path_segment(team.as_str(), "team") {
-        push_doctor_error(findings, DoctorSeverity::Error, error);
-        return None;
-    }
-    let roster = runtime.load_team_roster(team);
-    push_mixed_local_backend_warning(team, &roster, findings);
-    let members = ordered_roster_member_summaries(&roster, caller_identity, live_cwd);
-
-    Some(MembersList {
-        team: team.clone(),
-        members,
-    })
-}
-
-fn push_mixed_local_backend_warning(
-    team: &TeamName,
-    roster: &[crate::boundary::RosterEntry],
-    findings: &mut Vec<DoctorFinding>,
-) {
-    let mut tmux = Vec::new();
-    let mut herdr = Vec::new();
-    for member in roster {
-        match local_message_received_backend(member) {
-            Some(crate::delivery_channel::LocalMessageReceivedBackend::Tmux { .. }) => {
-                tmux.push(member.agent_name.to_string())
-            }
-            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { .. }) => {
-                herdr.push(member.agent_name.to_string())
-            }
-            None => {}
-        }
-    }
-    if tmux.is_empty() || herdr.is_empty() {
-        return;
-    }
-    findings.push(DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: AtmErrorCode::RosterMixedLocalBackend,
-        message: format!(
-            "team {team} has mixed local backends; tmux members: [{}]; Herdr members: [{}]",
-            tmux.join(", "), herdr.join(", ")
-        ),
-        remediation: Some(format!(
-            "Use `atm teams update-member {team} <member> --backend herdr` or `atm teams update-member {team} <member> --backend tmux --target %N` to select the intended backend."
-        )),
-    });
 }
 
 fn push_doctor_error(
@@ -915,6 +978,7 @@ fn member_summary(
         tmux_pane_id: member.tmux_pane_id.clone(),
         backend: None,
         herdr_session: None,
+        alias: None,
         local_backend: None,
         home_dir: member.home_dir.clone(),
         live_cwd: match (caller_identity, live_cwd) {
@@ -930,16 +994,22 @@ fn member_summary(
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
     use std::sync::Arc;
+    use std::{
+        net::SocketAddr,
+        path::{Path, PathBuf},
+    };
 
     use super::{
         legacy_literal_ip_peer_reports, ordered_member_summaries, peer_config_doctor_report,
+        presence_findings, presence_findings_for_team,
     };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
-        DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
+        DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, HerdrDoctorState,
+        HerdrEndpointObservation, HerdrEndpointProvenance, HerdrMemberPresence,
+        HerdrPresenceOutcome, HerdrTransportKind, run_doctor_with_runtime,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -989,6 +1059,153 @@ mod tests {
                 StubHealth::Err(error) => Err(error.clone()),
             }
         }
+    }
+
+    #[test]
+    fn presence_findings_preserve_roster_order_and_emit_one_infrastructure_notice() {
+        let finding = |message: &str| DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::HerdrAgentNotVisible,
+            message: message.to_owned(),
+            remediation: Some("inspect Herdr".to_owned()),
+        };
+        let member = |ordinal: usize, name: &str, outcome| HerdrMemberPresence {
+            ordinal,
+            name: AgentName::from_validated(name.to_owned()),
+            herdr_agent: Some(crate::HerdrAgentName::new(name).expect("valid Herdr test name")),
+            outcome,
+        };
+        let observation = |members| HerdrEndpointObservation {
+            session: None,
+            provenance: HerdrEndpointProvenance::HerdrDefault,
+            transport: HerdrTransportKind::Cli,
+            endpoint: None,
+            binary: None,
+            state: HerdrDoctorState::NotConfigured,
+            live_handoff: None,
+            members,
+        };
+        let observations = vec![
+            observation(vec![
+                member(
+                    2,
+                    "third",
+                    HerdrPresenceOutcome::Finding {
+                        finding: finding("third finding"),
+                    },
+                ),
+                member(
+                    0,
+                    "first",
+                    HerdrPresenceOutcome::Infrastructure {
+                        code: AtmErrorCode::HerdrUnavailable,
+                        detail: "first endpoint unavailable".to_owned(),
+                    },
+                ),
+            ]),
+            observation(vec![
+                member(
+                    1,
+                    "second",
+                    HerdrPresenceOutcome::Finding {
+                        finding: finding("second finding"),
+                    },
+                ),
+                member(
+                    3,
+                    "fourth",
+                    HerdrPresenceOutcome::Infrastructure {
+                        code: AtmErrorCode::HerdrUnavailable,
+                        detail: "later endpoint unavailable".to_owned(),
+                    },
+                ),
+                member(4, "visible", HerdrPresenceOutcome::Visible),
+            ]),
+        ];
+
+        let findings = presence_findings(&observations);
+
+        assert_eq!(
+            findings
+                .iter()
+                .map(|finding| finding.message.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "second finding",
+                "third finding",
+                "Herdr presence probe skipped: first endpoint unavailable",
+            ]
+        );
+        assert_eq!(findings[2].severity, DoctorSeverity::Info);
+        assert_eq!(findings[2].code, AtmErrorCode::HerdrUnavailable);
+        let scoped = presence_findings_for_team(&observations, &"team-a".parse().expect("team"));
+        assert!(
+            scoped
+                .iter()
+                .all(|finding| finding.message.starts_with("team team-a: "))
+        );
+        let member_json =
+            serde_json::to_value(&observations[0].members[0]).expect("member presence serializes");
+        let mut member_keys = member_json
+            .as_object()
+            .expect("member presence is an object")
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        member_keys.sort_unstable();
+        assert_eq!(member_keys, vec!["herdr_agent", "name", "outcome"]);
+    }
+
+    #[test]
+    fn unique_name_c05_presence_serializes_the_effective_herdr_agent() {
+        let presence = HerdrMemberPresence {
+            ordinal: 0,
+            name: AgentName::from_validated("canonical-member"),
+            herdr_agent: Some(crate::HerdrAgentName::new("herdr-alias").expect("valid alias")),
+            outcome: HerdrPresenceOutcome::Visible,
+        };
+
+        let serialized = serde_json::to_value(presence).expect("presence serializes");
+
+        assert_eq!(serialized["name"], "canonical-member");
+        assert_eq!(serialized["herdr_agent"], "herdr-alias");
+    }
+
+    #[test]
+    fn herdr_member_presence_accepts_v1_1_payload_without_herdr_agent() {
+        let presence: HerdrMemberPresence = serde_json::from_value(serde_json::json!({
+            "name": "canonical-member",
+            "outcome": { "kind": "visible" }
+        }))
+        .expect("v1.1 payload remains readable");
+
+        assert_eq!(presence.name.as_str(), "canonical-member");
+        assert_eq!(presence.herdr_agent, None);
+        assert_eq!(presence.outcome, HerdrPresenceOutcome::Visible);
+    }
+
+    #[test]
+    fn herdr_endpoint_observation_accepts_v1_1_payload_without_transport() {
+        let current = HerdrEndpointObservation {
+            session: None,
+            provenance: HerdrEndpointProvenance::HerdrDefault,
+            transport: HerdrTransportKind::Socket,
+            endpoint: None,
+            binary: None,
+            state: HerdrDoctorState::NotConfigured,
+            live_handoff: None,
+            members: Vec::new(),
+        };
+        let mut legacy = serde_json::to_value(current).expect("observation serializes");
+        legacy
+            .as_object_mut()
+            .expect("observation is an object")
+            .remove("transport");
+
+        let observation: HerdrEndpointObservation =
+            serde_json::from_value(legacy).expect("v1.1 payload remains readable");
+
+        assert_eq!(observation.transport, HerdrTransportKind::Cli);
     }
 
     struct UnusedMailStore;
@@ -1056,7 +1273,7 @@ mod tests {
             unreachable!("doctor test never mutates peer configuration")
         }
 
-        fn remove_interface(&self, _bind_addr: std::net::SocketAddr) -> Result<bool, AtmError> {
+        fn remove_interface(&self, _bind_addr: SocketAddr) -> Result<bool, AtmError> {
             unreachable!("doctor test never mutates peer configuration")
         }
 
@@ -1135,7 +1352,12 @@ mod tests {
         fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
             Ok(atm_storage::RosterSnapshot {
                 team_name: team.clone(),
-                members: self.members.clone(),
+                members: self
+                    .members
+                    .iter()
+                    .filter(|member| &member.team_name == team)
+                    .cloned()
+                    .collect(),
                 refreshed_at: None,
             })
         }
@@ -1202,17 +1424,30 @@ mod tests {
         TestRosterStore {
             members: members
                 .iter()
-                .map(|member| atm_storage::RosterMember {
-                    team_name: TEST_TEAM.parse().expect("team"),
-                    agent_name: AgentName::from_validated(*member),
-                    member_kind: atm_storage::RosterMemberKind::Permanent,
-                    harness: atm_storage::RosterHarness::ClaudeCode,
-                    agent_type: atm_storage::contract::AgentType::default(),
-                    model: atm_storage::ModelName::default(),
-                    recipient_pane_id: None,
-                    metadata_json: serde_json::Map::new(),
-                })
+                .map(|member| roster_member(TEST_TEAM, member))
                 .collect(),
+        }
+    }
+
+    fn roster_store_for_teams(members: &[(&str, &str)]) -> TestRosterStore {
+        TestRosterStore {
+            members: members
+                .iter()
+                .map(|(team, member)| roster_member(team, member))
+                .collect(),
+        }
+    }
+
+    fn roster_member(team: &str, member: &str) -> atm_storage::RosterMember {
+        atm_storage::RosterMember {
+            team_name: team.parse().expect("team"),
+            agent_name: AgentName::from_validated(member),
+            member_kind: atm_storage::RosterMemberKind::Permanent,
+            harness: atm_storage::RosterHarness::ClaudeCode,
+            agent_type: atm_storage::contract::AgentType::default(),
+            model: atm_storage::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
         }
     }
 
@@ -1268,7 +1503,7 @@ mod tests {
             .with_graft_receiver_endpoint_store(store);
 
         let mut findings = Vec::new();
-        let report = super::graft_receivers_doctor_report(&runtime, &team, &mut findings);
+        let report = super::graft_receivers_doctor_report(&runtime, &team, false, &mut findings);
 
         assert!(findings.is_empty(), "{findings:#?}");
         assert_eq!(report.receivers.len(), 2);
@@ -1370,6 +1605,7 @@ mod tests {
                 tmux_pane_id: None,
                 backend: None,
                 herdr_session: None,
+                alias: None,
                 local_backend: None,
                 home_dir: PathBuf::from("/workspace").into(),
                 live_cwd: None,
@@ -1409,11 +1645,13 @@ mod tests {
     }
 
     fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {
+        test_runtime_from_store(roster_store(members))
+    }
+
+    fn test_runtime_from_store(store: TestRosterStore) -> LocalServiceRuntime {
         let (roster_store, roster_runtime_mirror) =
-            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(roster_store(
-                members,
-            )))
-            .expect("write-through roster fixture hydrates from the in-memory fake");
+            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(store))
+                .expect("write-through roster fixture hydrates from the in-memory fake");
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
             roster_store,
@@ -1524,6 +1762,137 @@ mod tests {
         assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert_eq!(report.findings[0].severity, DoctorSeverity::Info);
         assert_eq!(report.findings[0].code, AtmErrorCode::ObservabilityHealthOk);
+        assert_eq!(report.team_scope, "single");
+    }
+
+    #[test]
+    fn run_doctor_all_teams_projects_one_roster_per_canonical_team() {
+        let paths = TestPaths::new();
+        let runtime = test_runtime_from_store(roster_store_for_teams(&[
+            ("team-c", "member-c"),
+            ("team-a", "member-a"),
+            ("team-b", "member-b"),
+        ]));
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            all_teams: true,
+            ..DoctorQuery::default()
+        };
+
+        let report = run_doctor_with_runtime(query, &healthy_observability(&paths), &runtime)
+            .expect("all-team doctor report");
+
+        assert_eq!(report.team_scope, "all_teams");
+        assert!(report.member_roster.is_none());
+        assert_eq!(
+            report
+                .team_rosters
+                .iter()
+                .map(|roster| roster.team.as_str())
+                .collect::<Vec<_>>(),
+            ["team-a", "team-b", "team-c"]
+        );
+        assert!(
+            report
+                .team_rosters
+                .iter()
+                .all(|roster| roster.members.len() == 1)
+        );
+    }
+
+    #[test]
+    fn unique_name_f07_reports_legacy_effective_name_conflicts_for_the_scoped_team() {
+        let paths = TestPaths::new();
+        let mut store =
+            roster_store_for_teams(&[(TEST_TEAM, "local-member"), ("other", "remote-member")]);
+        for member in &mut store.members {
+            member.metadata_json.insert(
+                "alias".to_owned(),
+                serde_json::Value::String("shared-herdr-name".to_owned()),
+            );
+        }
+        let runtime = test_runtime_from_store(store);
+
+        let report =
+            run_doctor_with_runtime(query(&paths), &healthy_observability(&paths), &runtime)
+                .expect("doctor report");
+
+        let finding = report
+            .findings
+            .iter()
+            .find(|finding| finding.message.contains("shared-herdr-name"))
+            .expect("duplicate effective-name finding");
+        assert_eq!(finding.code, AtmErrorCode::WarningRosterDrift);
+        assert!(finding.message.contains("remote-member@other"));
+        assert!(
+            finding
+                .remediation
+                .as_deref()
+                .is_some_and(|remediation| remediation.contains("--alias"))
+        );
+    }
+
+    #[test]
+    fn all_teams_duplicate_name_warnings_preserve_team_context() {
+        let paths = TestPaths::new();
+        let mut store =
+            roster_store_for_teams(&[("team-a", "local-member"), ("team-b", "remote-member")]);
+        for member in &mut store.members {
+            member.metadata_json.insert(
+                "alias".to_owned(),
+                serde_json::Value::String("shared-herdr-name".to_owned()),
+            );
+        }
+        let runtime = test_runtime_from_store(store);
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            all_teams: true,
+            ..DoctorQuery::default()
+        };
+
+        let report = run_doctor_with_runtime(query, &healthy_observability(&paths), &runtime)
+            .expect("all-team doctor report");
+        let warnings = report
+            .findings
+            .iter()
+            .filter(|finding| finding.code == AtmErrorCode::WarningRosterDrift)
+            .map(|finding| finding.message.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings.iter().any(|message| {
+            message.starts_with("team team-a:") && message.contains("remote-member@team-b")
+        }));
+        assert!(warnings.iter().any(|message| {
+            message.starts_with("team team-b:") && message.contains("local-member@team-a")
+        }));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn run_doctor_without_team_falls_back_to_all_with_info_finding() {
+        let paths = TestPaths::new();
+        let runtime = test_runtime_from_store(roster_store_for_teams(&[
+            ("team-a", "member-a"),
+            ("team-b", "member-b"),
+        ]));
+        let _env = crate::test_support::EnvGuard::set_many([("ATM_TEAM", None)]);
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            ..DoctorQuery::default()
+        };
+
+        let report = run_doctor_with_runtime(query, &healthy_observability(&paths), &runtime)
+            .expect("fallback all-team doctor report");
+
+        assert_eq!(report.team_scope, "all_teams");
+        assert_eq!(report.team_rosters.len(), 2);
+        assert!(report.findings.iter().any(|finding| {
+            finding.severity == DoctorSeverity::Info && finding.message.contains("no team resolved")
+        }));
     }
 
     #[test]
@@ -1998,6 +2367,7 @@ mod tests {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
             team_override: None,
+            all_teams: false,
             caller_team: Some(TEST_TEAM.parse().expect("team")),
             caller_identity: Some(TEST_SENDER.parse().expect("identity")),
         };
@@ -2025,6 +2395,35 @@ mod tests {
 
     #[test]
     #[serial_test::serial(env)]
+    fn caller_team_precedes_ambient_team_for_doctor_scope() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        let _env = crate::test_support::EnvGuard::set_many([
+            ("ATM_TEAM", Some("config-resolved-team")),
+            ("ATM_IDENTITY", None),
+        ]);
+        let caller_team: TeamName = TEST_TEAM.parse().expect("caller team");
+        let report = run_doctor(
+            &paths,
+            DoctorQuery {
+                home_dir: paths.home_dir.clone(),
+                current_dir: paths.current_dir.clone(),
+                caller_team: Some(caller_team.clone()),
+                ..DoctorQuery::default()
+            },
+            &healthy_observability(&paths),
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.team_scope, "single");
+        assert_eq!(
+            report.member_roster.expect("caller roster").team,
+            caller_team
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
     fn team_override_is_reflected_in_client_context() {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
@@ -2035,6 +2434,7 @@ mod tests {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
             team_override: Some(override_team.parse().expect("team override")),
+            all_teams: false,
             caller_team: Some(TEST_TEAM.parse().expect("team")),
             caller_identity: Some(TEST_SENDER.parse().expect("identity")),
         };

@@ -31,6 +31,7 @@ static DAEMON_ACTOR: LazyLock<AgentName> =
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum EscalationKind {
+    BreakerOpened,
     LeadNotified,
     BlockedEscalated,
 }
@@ -38,6 +39,7 @@ pub(crate) enum EscalationKind {
 impl EscalationKind {
     const fn as_str(self) -> &'static str {
         match self {
+            Self::BreakerOpened => "breaker_opened",
             Self::LeadNotified => "lead_notified",
             Self::BlockedEscalated => "blocked_escalated",
         }

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY13-QA-011>
+  a triage:Finding ;
+  triage:findingId "AY13-QA-011" ;
+  triage:title "rust-qa-agent QA-003: print_doctor_roster's new multi-team-block rendering has no dedicated output test" ;
+  triage:description "quality-mgr qa-pr1300-r1 (PR #1300, AY.13 doctor team scope). print_doctor_roster now iterates report.team_rosters to print one 'Members:' block per team for --all-teams CLI text output, but no test in crates/atm/src/output.rs asserts multi-team block rendering (existing doctor-output tests cover peer/Herdr sections, not this new multi-roster branch). No occurrence of team_rosters in any #[test] fn within crates/atm/src/output.rs." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/src/output.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY13 ;
+  triage:foundAt "2026-09-07T17:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY13-QA-011/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY13-QA-011/1> ;
+  triage:closedAt "2026-09-07T18:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AY13-QA-011/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/output.rs" ;
+  triage:line 622 ;
+  triage:snippet "print_doctor_roster iterates report.team_rosters -- no multi-team-block render test" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:occursIn <urn:atm:triage:worktree/AY13-QA-011/98ac5c7d2> .
+
+<urn:atm:triage:worktree/AY13-QA-011/98ac5c7d2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay13-doctor-team-scope" ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/AY13-QA-011/1>
+  a triage:Resolution ;
+  triage:resolvedBy "cipher" ;
+  triage:resolvedAt "2026-09-07T17:26:47Z"^^xsd:dateTime ;
+  triage:fixCommit "c0afd678d" ;
+  triage:fixBranch "feature/ay13-doctor-team-scope" ;
+  triage:verifiedInRound "qa-pr1300-r3" ;
+  triage:resolutionNote "quality-mgr independently confirmed via git show c0afd678d: print_doctor_roster/print_doctor_roster_block were refactored into pure render_doctor_rosters/render_doctor_roster_block functions returning String instead of println!-ing directly, and a new #[test] doctor_roster_rendering_prints_one_heading_per_team builds a two-team MembersList slice and asserts the rendered string contains exactly two 'Members: ' occurrences, one per team name -- directly covering the previously-untested multi-team-block branch. Personally-run cargo test -p agent-team-mail green at branch head cb13ca7e38 / current PR head 8ae936a37. Closing on this evidence." .

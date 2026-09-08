@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AY15-F002>
+  a triage:Finding ;
+  triage:findingId "RBQA-AY15-F002" ;
+  triage:title "No boundary rule or lint catches a second crate re-deriving the roster unique_name collision scan from the shared contract type; the RBQA-AY15-F001 duplication pattern is unguarded" ;
+  triage:description "quality-mgr qa-pr1310-r7 (PR #1310, AY.15 herdr-name-uniqueness, FINAL head 10bc123f8; report: PR #1310 issuecomment 5575994618), ruthless-boundary-qa RBQA-AY15-F002, detail relayed by quality-mgr in ATM message 01M1YYD169CB6GZB9X6VAF9CGG. Class lint_gap. The duplicate sort-then-scan collision algorithm described in RBQA-AY15-F001 is a repeated leak pattern (two crates independently re-deriving the same set-membership decision from a shared value type) with no mechanical lint or TOML boundary rule that would catch it. boundaries/**/*.toml and .just/lint_boundaries.py govern crate-dependency edges and visibility, not duplicated algorithm bodies across crates operating on a shared contract type (RosterUniqueName in crates/atm-storage/src/contract.rs). Reviewer recommendation: no new generic lint now (narrow one-off duplication); record as a lint_gap so a future repeat of the preflight-now, transaction-verifies-later pattern for a different roster invariant does not silently reintroduce the two-owner problem. If the pattern recurs a third time, add a boundary rule requiring any *_unique_names or *_collision helper in atm-core to import its scan logic from atm-storage rather than reimplementing it. Process/tooling observation tied to RBQA-AY15-F001, not an independent code defect." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-gate" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope ".just/lint_boundaries.py, boundaries/**/*.toml, crates/atm-storage/src/contract.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:20:00Z"^^xsd:dateTime ;
+  triage:dispositionNote "Round-5 phase-ending gate disposition (quality-mgr): stays open by design, not closed. ruthless-boundary-qa (round 5, full unscoped workspace sweep, not scope-locked) independently re-confirmed RBQA-AY15-F001's underlying duplication collapsed to a single shared owner (atm_storage::roster_unique_name_collisions, crates/atm-storage/src/contract.rs:591, consumed by all three former call sites), so this lint_gap record is not moot with F001 fixed -- it documents the absence of a mechanical guard against a future third re-derivation, per docs/architecture/boundary/general-guidelines.md priority-5 guidance (one-off duplication does not yet warrant a new lint; only a repeated pattern would). No new occurrence and no repeat of the pattern were found this round. Correctly deferred, not a merge blocker for PR #1308." ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T21:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AY15-F002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AY15-F002/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 1 ;
+  triage:snippet "no rule for duplicated algorithm bodies keyed off a shared contract struct (RosterUniqueName); file as a whole" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-AY15-F002/10bc123f8> .
+
+<urn:atm:triage:worktree/RBQA-AY15-F002/10bc123f8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r7" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:orderIndex 0 .

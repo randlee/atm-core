@@ -1,0 +1,98 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY2-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY2-QA-001" ;
+  triage:title "just lint boundaries fails: fake_herdr_modes.rs uses std::process::Command (forbidden test bypass)" ;
+  triage:description "crates/atm-herdr/tests/fake_herdr_modes.rs:2 uses std::process::Command directly, which violates BOUNDARY-HerdrProcessAdapter forbidden_test_bypasses rule. Commit 9839b90c5 (arch-ctm AY2-CI-R2 fix) removes the entire file from feature/ay2-herdr-transport-seam. Fix not yet merged to feature/ay3-herdr-endpoint-doctor-config." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T23:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY2 ;
+  triage:foundAt "2026-09-06T23:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-001/AY3-0b0bfa304-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-001/AY2-e12c87da2-1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-001/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-001/2> ;
+  triage:closedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY2-QA-001/AY3-0b0bfa304-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/fake_herdr_modes.rs" ;
+  triage:line 2 ;
+  triage:snippet "use std::process::Command;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:occursIn <urn:atm:triage:worktree/AY3/0b0bfa304> ;
+  triage:note "quality-mgr ttl-reconcile-ay-r1: closed. The original commit hash 9839b90c5 no longer resolves on any surviving ref (feature/ay2-herdr-transport-seam was deleted after PR #1269 merged); verified by content instead. crates/atm-herdr/tests/fake_herdr_modes.rs is confirmed absent from origin/feature/ay3-herdr-endpoint-doctor-config at c8bfb76e3 (git show c8bfb76e3 --stat -- crates/atm-herdr/tests/fake_herdr_modes.rs returns nothing) and absent from integrate/phase-ay's current tree (find . -name fake_herdr_modes.rs returns nothing at HEAD b6f087f92)." .
+
+<urn:atm:triage:occurrence/AY2-QA-001/AY2-e12c87da2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/fake_herdr_modes.rs" ;
+  triage:line 2 ;
+  triage:snippet "use std::process::Command;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "e12c87da2" ;
+  triage:occursIn <urn:atm:triage:worktree/AY2/e12c87da2> .
+
+<urn:atm:triage:worktree/integrate/phase-ay/d084bb2ff>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "d084bb2ff" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AY2/9839b90c5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ay2" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AY2/e12c87da2>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1269-r2" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "e12c87da2" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/AY2-QA-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-06T23:45:00Z"^^xsd:dateTime ;
+  triage:fixCommit "9839b90c5" ;
+  triage:fixBranch "feature/ay2-herdr-transport-seam" ;
+  triage:verifiedInRound "qa-pr1269-r2" ;
+  triage:resolutionNote "On feature/ay2-herdr-transport-seam only: fake_herdr_modes.rs deleted at 9839b90c5 (present at PR #1269's pinned e12c87da2); fake-herdr is now a proper [[bin]] target invoked through the crate's own tokio::process::Command transport. Confirmed by unanimous zero-hit grep sweep across req-qa, ruthless-boundary-qa, arch-qa, and rust-qa-agent in qa-pr1269-r2, plus a clean python3 .just/run_lint.py boundaries pass. The feature/ay3-herdr-endpoint-doctor-config occurrence remains open pending merge-forward -- Finding-level status stays fixed_partial, not fixed, until that branch picks up the fix." .
+
+<urn:atm:triage:resolution/AY2-QA-001/2>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c8bfb76e3 (verified by content absence; original fix commit 9839b90c5 no longer resolves on any surviving ref)" ;
+  triage:fixBranch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:verifiedInRound "ttl-reconcile-ay-r1" ;
+  triage:resolutionNote "The AY3-branch occurrence's originally-cited fix commit 9839b90c5 no longer resolves on any surviving ref (feature/ay2-herdr-transport-seam was deleted after PR #1269 merged). Verified by content instead: (1) git show c8bfb76e3 --stat -- crates/atm-herdr/tests/fake_herdr_modes.rs returns nothing -- the file is absent from origin/feature/ay3-herdr-endpoint-doctor-config at its current pin; (2) the file is likewise absent from integrate/phase-ay's current tree at HEAD b6f087f92; (3) python3 .just/run_lint.py boundaries run directly on integrate/phase-ay HEAD: 'boundaries passed [19.7s]'; QA-AY3-R4 evidence (docs/plans/phase-ay/.audit/qa-evidence-master.json, result 01M1XC8WH4Z9E6H1EZM4H6ZR0D) independently records fmt/clippy/boundary-lint/atm-herdr all-features/atm-architecture all green at c8bfb76e3. Both occurrences now closed -- finding-level status flips fixed_partial -> fixed." .
+
+<urn:atm:triage:worktree/AY3/0b0bfa304>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-ay3" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:orderIndex 2 .

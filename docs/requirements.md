@@ -368,6 +368,54 @@ Satisfied by:
   ADR-047, ADR-052, `REQ-P-BENCHMARK-001`, and
   `REQ-CORE-TRANSPORT-002B1`.
 
+  Herdr entry-management addendum (AY.5): the same operator control plane
+  additionally exposes exactly `herdr-entry install`, `remove`, and `status
+  [--repair]`. This is an explicit, independent transaction; ordinary
+  `switch`, `restart`, `restore`, and daemon startup never invoke it. The
+  command reads Herdr configuration and its ordered endpoint list only from
+  native `atm doctor --json`: `configured: true` is required for install,
+  `false` is a safe refusal, and null, missing, malformed, or nonzero doctor
+  output is `HERDR_DOCTOR_UNREADABLE` (exit 4), never a Python fallback.
+  
+  Herdr restart-coordination addendum (AY.6): `restart --restart-herdr
+  [<default-or-session>]` is a distinct, explicit operator action. It selects
+  exactly one endpoint from native doctor data and the AY.5 owned-entry
+  projection; an omitted selector is valid only for one configured endpoint.
+  Socket-path, foreign/missing, or journal-active entries fail closed. When
+  the doctor reports that the installed client is newer than the running
+  server and `capabilities.live_handoff` is exactly true, it invokes the
+  selected scoped `herdr server live-handoff`; otherwise it emits a pane-loss
+  warning and requires `--stop-herdr-panes` before scoped `server stop` and
+  entry-owned relaunch. It never invokes `herdr update`, starts or restarts
+  ATM, takes ownership of Herdr, or runs implicitly during switch, restore, or
+  ordinary restart. Every command and the whole operation are deadline-bound;
+  a fresh native doctor read must report the selected endpoint `ok` before
+  success. The single JSON envelope uses exit 0/3/4. Exact refusals are
+  `HERDR_NOT_CONFIGURED`, `HERDR_DOCTOR_UNREADABLE`,
+  `HERDR_RESTART_ENDPOINT_REQUIRED`, `HERDR_RESTART_ENDPOINT_UNKNOWN`,
+  `HERDR_RESTART_SOCKET_PATH`, `HERDR_RESTART_PANES_ACK_REQUIRED`,
+  `HERDR_RESTART_NO_LIVE_HANDOFF`, `HERDR_RESTART_TIMEOUT`, and
+  `HERDR_RESTART_VERIFY_TIMEOUT`; an Herdr/entry failure is
+  `HERDR_RESTART_HERDR_FAILED`. Before an ordinary ATM restart mutates its
+  managed service, daemon-switch re-reads doctor and refuses all
+  `client_server_mismatch` endpoints with `HERDR_RESTART_ENDPOINTS_PENDING`.
+  Default and named sessions receive deterministic per-user native entry
+  identifiers; an endpoint configured with explicit socket-path provenance is
+  externally owned and is refused. Every owned object carries
+  `managed-by=atm daemon-switch` and a canonical-render digest.
+
+  Install journals `planned -> written -> registered -> verified` durably
+  before each mutation, atomically writes the owned object, registers it with
+  the native per-user manager, verifies marker/digest/registration, then
+  completes the journal. Remove verifies ownership first and unregisters then
+  deletes only a marker-bearing, digest-matching object. An incomplete journal
+  blocks install/remove; `status --repair` either completes verified
+  registration or unregisters and removes the marker-bearing partial object.
+  Foreign collisions, digest mismatch, Windows account/session mismatch, and
+  ambiguity fail closed without overwrite or deletion. Every result is exactly
+  one stdout JSON object with `ok`, `code`, `message`, `remedy`, and `entries`;
+  success exits 0, safe refusals exit 3, and operational failures exit 4.
+
 - `REQ-P-DAEMON-DISPATCHER-001` Request work accepted by the daemon must remain
   tracked by runtime-owned drain accounting until it finishes or is cancelled.
   Detached untracked request execution is forbidden even when the transport
@@ -819,8 +867,9 @@ Required config fields:
 
 Supported optional config fields:
 - `[atm].team_members`
-- `[atm].aliases`
 - `[[atm.post_send_hooks]]`
+- `[atm].aliases` is retired (below, and `REQ-ROSTER-NAME-007/008`): atm
+  ignores it except for the doctor pane-alias diagnostic
 
 Runtime caller-context rules:
 - repo-local `.atm.toml` `[atm].identity` and the legacy top-level `identity`
@@ -856,8 +905,13 @@ Runtime caller-context rules:
   for runtime identity resolution and `atm doctor` must flag them for removal
 - `.atm.toml` may define `[atm].team_members` as the baseline team roster that
   should always be present in `config.json`
-- `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
-  canonical member identities
+- `.atm.toml` `[atm].aliases` is retired. Rand (2026-09-07): ".atm.toml
+  is ONLY used by hmux and 'atm doctor' to display a warning if alias is
+  not consistent. NOTHING else in atm uses .atm.toml alias." Member
+  aliases live only in the roster (`REQ-ROSTER-NAME-002`); atm-core reads
+  no alias table from `.atm.toml`; the only `.atm.toml` alias use in
+  `atm` is the doctor pane-alias consistency warning
+  (`REQ-ROSTER-NAME-008`).
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
   best-effort recipient-scoped post-send automation
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
@@ -865,7 +919,15 @@ Runtime caller-context rules:
   must be rejected with migration guidance directing operators to
   `[[atm.post_send_hooks]]`
 - config sections outside ATM-owned config, such as `[rmux]` or future
-  `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`
+  `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`,
+  with one diagnostic-only exception: `atm doctor` may read
+  `[[rmux.windows.panes]].alias` from the `.atm.toml` discovered from its
+  caller cwd and compare it with the durable alias of the named pane member
+  for that caller's `ATM_TEAM`
+- that doctor comparison is validation only: it never supplies an alias to
+  member creation, identity or recipient resolution, sends, or writes; it
+  does not widen under `--all-teams`, and a missing or unparsable `.atm.toml`
+  skips the comparison without failing doctor
 
 ### 3.3.1 Config And Schema Recovery
 
@@ -911,6 +973,143 @@ Required diagnostics:
 
 Operator examples and safe repair guidance live in
 [`persisted-data-repair.md`](./persisted-data-repair.md).
+
+### 3.3.2 Member Naming, Alias, And Herdr Agent Name
+
+Rand (2026-09-07), the whole section in one line: "This really is a simple
+UX abstraction. Both names work user facing, everything under the hood
+used member-name except herdr which uses unique-name." Every requirement
+below is that sentence spelled out: the alias is a user-facing token,
+substituted for the member name at the CLI edge; storage, wire, mailbox,
+audit and routing see only the member name; Herdr alone sees
+`unique_name = alias ?? member name`, which must be unique across the
+database.
+
+Product requirement IDs: `REQ-ROSTER-NAME-001` through `REQ-ROSTER-NAME-010`.
+
+Source rulings (Rand, 2026-09-07, verbatim): "the requirement comes from
+herdr agent name MUST be unique which means herdr agent name must be unique
+on atm database."; "herdr agent name = alias. if alias is null/empty, alias
+would be equal to member name"; "this allows us to have the same name on
+different teams (we should guarantee uniqueness of names per team already)
+by simply adding an alias for the conflicting name."; "we call this 'alias'
+because using the alias for cross-team messaging has value independent of
+herdr."; "so basically, there should be a query across all team roster for
+'unique-name' which would return alias ?? name."; "if the list of unique-name collides with a
+proposed alias ?? name, add member must fail"; "the alias should never be
+used in database." (scoped later the same day by Rand: "alias MUST be in
+database AND in immutable roster in RAM"; the earlier sentence applies to
+message, ack, audit and task-state rows only, see REQ-ROSTER-NAME-009);
+"alias would be
+acceptable at all user/agent facing interfaces and would immediately be
+replaced at the ingress interface."
+
+Definitions:
+- canonical member name: the roster `agent_name`; the only name stored in
+  any non-roster row
+- alias: the optional roster attribute `metadata_json["alias"]`; an empty or
+  whitespace-only alias is the same as no alias
+- effective name (the Herdr agent name): the alias when present, otherwise
+  the canonical member name; `effective(member) = alias ?? agent_name`
+
+- `REQ-ROSTER-NAME-001` Canonical member names are unique within a team.
+  `add-member` rejects a canonical name already present in the same team.
+- `REQ-ROSTER-NAME-002` Effective names are unique across the whole ATM
+  database: for any two distinct roster rows in any teams,
+  `effective(a) != effective(b)`. The check covers every combination:
+  canonical vs canonical, canonical vs alias, alias vs canonical, alias vs
+  alias. It applies to members of every backend, not only Herdr members,
+  because the backend may change later.
+- `REQ-ROSTER-NAME-003` The same canonical name may exist in several teams
+  when the effective names differ. The first member of a name in the
+  database needs no alias; a later member of that name in another team must
+  carry an alias, or an alias must already be on the earlier member. The
+  rejection error names the conflicting team and member and states the
+  `--alias` remedy.
+- `REQ-ROSTER-NAME-004` Uniqueness is enforced inside the roster store's
+  write transaction on every write path (`add-member`, `set-member`
+  including alias change and alias clear, restore/import, daemon and HTTP
+  member mutation), not only in the CLI. Two concurrent writers of the same
+  effective name: exactly one succeeds. Removing a member or deleting a team
+  frees its effective name.
+- `REQ-ROSTER-NAME-005` Grammar: canonical names and aliases follow the ATM
+  segment rules (ASCII letters, digits, `-`, `_`; non-empty). A member whose
+  backend is Herdr additionally requires its effective name to satisfy
+  Herdr's live-agent grammar `[a-z][a-z0-9_-]{0,31}`; this is validated when
+  the member is added, when its alias changes, and when its backend becomes
+  Herdr. Comparison is exact (case-sensitive); ATM does not fold case.
+- `REQ-ROSTER-NAME-006` Every Herdr call for a member (prompt, get, wait,
+  list matching, presence probe) targets the effective name, never the
+  canonical name directly when an alias exists. Logs and doctor output show
+  both (`member = team/agent`, `herdr_agent = <effective>`).
+- `REQ-ROSTER-NAME-007` Ingress replacement: an alias is accepted wherever a
+  member name is accepted (send recipient, `--as`, `ATM_IDENTITY`, read and
+  peek filters, ack, `set-member`/`remove-member` arguments) and is replaced
+  by the canonical name at daemon ingress (`REQ-ROSTER-NAME-010`), before validation, self-send
+  checks, mailbox lookup, routing, audit and persistence. Resolution order:
+  a canonical name in the addressed team wins (Rand, 2026-09-07: "`atm send
+  bob` would send bob based on ATM_TEAM just like today"); then the roster
+  alias. `.atm.toml` is not an input (see §3.3). Because aliases are unique
+  database-wide, a bare alias with no `@team` resolves to its member in any
+  team (cross-team addressing by alias alone). An unknown name falls through
+  to the existing canonical parse/lookup error unchanged. An ambient
+  activity observation attested to an alias is dropped on replacement.
+- `REQ-ROSTER-NAME-008` `.atm.toml` pane `alias` keys are spawner input
+  only. Rand (2026-09-07): ".atm.toml alias is ONLY read in doctor as a
+  diagnostic message IF alias in roster != alias in .atm.toml". `atm
+  doctor` emits one diagnostic line per pane whose alias differs from (or
+  is missing in) the roster alias for the caller's team (§3.3); nothing
+  else in `atm` reads a `.atm.toml` alias.
+- `REQ-ROSTER-NAME-009` Upgrade. Rand (2026-09-07): "where we will run
+  into issues are when upgrade occurs. if non-unique names show up in
+  database, hmux launch will certainly fail (hmux calls add member), so that
+  should force team to be re-constructed before team can actually go live in
+  herdr." No migration rewrites, renames, aliases, or deletes existing roster
+  rows, and opening a database that already holds duplicate effective names
+  must not fail. The invariant is enforced on the next roster write: any
+  write (including the add-member call hmux makes at launch) whose resulting
+  roster still contains a duplicate effective name fails with the
+  `REQ-ROSTER-NAME-003` error naming every conflicting `(team, member)` pair
+  and the `--alias` remedy, so the operator reconstructs the team with
+  aliases before it goes live in Herdr. `atm doctor` reports pre-existing
+  duplicates for the caller's team as a finding.
+- Rand (2026-09-07) on why persistence is canonical-only: "by always using
+  the non-alias name when writing to database, we avoid missing things on
+  query. i.e. team-lead-alias becomes team-lead when written to database".
+- `REQ-ROSTER-NAME-010` Alias parity at every CLI argument. Rand
+  (2026-09-07): "From any cli command accepting team-member name, alias must
+  be allowed AND substituted before sending over wire. i.e. atm send
+  team-lead-alias <message> || atm send team-lead-alias@team <message> or
+  any args i.e. --as team-lead-alias, --from team-lead-alias ..."; "basically
+  if all prompts are written for either member name or alias, it will work
+  the same". Every `atm` argument, option, or environment variable that
+  names a team member (positional recipients, `name@team` forms, `--as`,
+  `--from`, `--to`, member arguments of `atm teams`, nudge and doctor
+  targets, chat-id and qualified-identity forms) accepts the alias. The
+  substitution point is daemon ingress, not the CLI. Rand (2026-09-07): "I
+  would probably allow the daemon to do the replacement. cli doesn't need
+  to query for alias before sending. alias would be in immutable roster,
+  so replacement on ingress to the daemon is the logical single point to
+  translate." The CLI passes the token through unchanged; the daemon's
+  request ingress (HTTP runtime, peer receive) replaces every member-name
+  field against the in-memory roster before validation, self-send checks,
+  mailbox lookup, routing, audit and persistence. The substitution point
+  is the existing check, not a new one. Rand (2026-09-07): "the
+  substitution point should be the point where team-member is checked
+  against immutable roster in RAM already."; "It should simply change to
+  instead of returning a bool/enum (member-valid), it would return
+  (member-valid, member-name)". That membership check returns the
+  canonical member name alongside validity, and every caller uses the
+  returned canonical name from there on. A prompt or script
+  written with aliases and the same prompt written with canonical names
+  produce identical daemon-side handling and identical persisted rows.
+  Cross-host: Rand (2026-09-07): "alias@team.host works". The sending
+  daemon forwards the alias unchanged for a remote team; the receiving
+  daemon's ingress substitutes the canonical name, so persisted rows are
+  canonical on both hosts.
+
+The full permutation matrix and its test mapping live in
+`docs/plans/phase-ay/herdr-naming-test-matrix.md`.
 
 ### 3.4 Claude Settings Resolution
 
@@ -1082,9 +1281,15 @@ Alias rules:
 - sender aliases may be accepted on input, but canonical sender identity
   remains the routing and validation identity
 - same-team messages keep current canonical sender projection behavior
-- cross-team messages may project an alias-oriented sender in the persisted
-  `from` field only when ATM also stores the canonical sender identity in
-  SQLite-owned state for routing, validation, and audit
+- the persisted `from` and `to` of every message, acknowledgement, audit and
+  task-state row carry canonical member names only, for same-team and
+  cross-team messages alike. The alias itself is stored: Rand
+  (2026-09-07): "alias MUST be in database AND in immutable roster in
+  RAM". It lives in the roster row and its RAM mirror only; message, ack,
+  audit and task-state rows carry the canonical name (Rand: "the alias
+  should never be used in database" refers to those rows)
+- roster aliases (§3.3.2) are the only alias source; `.atm.toml`
+  `[atm].aliases` is retired (§3.3)
 
 Post-send-hook rules:
 - ATM always has one shipped default post-send path in the installed binary:

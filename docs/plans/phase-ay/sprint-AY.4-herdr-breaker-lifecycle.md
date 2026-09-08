@@ -6,7 +6,7 @@ title: Herdr breaker escalation and failure lifecycle
 branch: feature/ay4-herdr-breaker-lifecycle
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay4-herdr-breaker-lifecycle
 integration_branch: integrate/phase-ay
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: core
@@ -59,9 +59,7 @@ gh pr view feature/ay4-herdr-breaker-lifecycle \
 ```
 
 `gh stack link` is the `/gh-stack` operation for this external-worktree flow and
-creates no local tracking; verify the PR base with `gh pr view --json`. Phase
-AY forbids `gh stack rebase`, `gh stack sync`, and `gh stack merge`. Use merge
-commits and no force-push. AY.3 development pushed, not QA, triggers
+creates no local tracking; verify the PR base with `gh pr view --json`. Rand (2026-09-07): every operation on a stacked branch goes through `gh stack` subcommands (`gh stack push`, `gh stack view --json`, `gh stack merge` bottom-up); merge commits only, never squash, never force-push outside `gh stack`. AY.3 development pushed, not QA, triggers
 merge-forward from AY.3 before every AY.4 development/fix round. Parent PRs
 merge first.
 

@@ -87,7 +87,8 @@ pub fn preflight_write_source_request(
             template_verification: None,
         }),
         SendMessageSource::File { .. } => {
-            let context = prepare_send_context(runtime, request)?;
+            let mut canonical_request = request.clone();
+            let context = prepare_send_context(runtime, &mut canonical_request)?;
             Ok(WriteSourcePreflight {
                 kind: PreflightSourceKind::File,
                 body: resolve_message_body(

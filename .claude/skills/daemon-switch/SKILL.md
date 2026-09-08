@@ -89,8 +89,67 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py quiesce --yes \
   --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 ```
 
+## Explicit Herdr start-at-login entries
+
+Herdr entry management is independent of the selected ATM CLI/daemon pair and
+is always operator-invoked. It never runs during `switch`, `restart`,
+`restore`, or daemon startup. The command reads only `atm doctor --json`; do
+not supply a roster, backend, binary, or socket value by hand.
+
+```sh
+# Install every doctor-reported configured non-socket endpoint, then inspect it.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py herdr-entry install
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py herdr-entry status
+
+# Limit an explicit action to one native-doctor endpoint.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py herdr-entry remove --endpoint <session>
+
+# An interrupted entry transaction blocks mutation until this explicit repair.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py herdr-entry status --repair
+```
+
+The manager owns only definitions marked `managed-by=atm daemon-switch` whose
+canonical digest matches. A foreign collision, digest mismatch, explicit
+socket-path endpoint, or Windows account/session mismatch is a safe refusal;
+it never overwrites or deletes the object. Each invocation emits exactly one
+JSON result on stdout (exit 0 success, 3 refusal, 4 operational failure).
+
 On systems without Homebrew, provide `--default-cli` and `--default-daemon` to
 `restore`. Use `--dry-run` before the first switch on an unfamiliar host.
+
+## Explicit Herdr endpoint restart
+
+Herdr upgrades remain operator-owned. After the operator has installed a newer
+Herdr client, use this explicit, one-endpoint coordinator to resolve a
+client/server mismatch. It never runs `herdr update`, never restarts ATM, and
+never runs as part of pair switching or ordinary ATM restart.
+
+```sh
+# Read the privacy-safe native doctor projection first. The selected endpoint
+# must have an AY.5 owned, complete start-at-login entry.
+atm doctor --json
+
+# When exactly one endpoint is configured, omit ENDPOINT. A session must be
+# selected explicitly when several are configured.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restart \
+  --restart-herdr [ENDPOINT]
+
+# Use this only after accepting that a stop exits the selected session's panes.
+# The coordinator relaunches exactly its already-owned native entry and proves
+# that a fresh doctor read reports `ok`.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restart \
+  --restart-herdr work --stop-herdr-panes
+```
+
+If `capabilities.live_handoff` is exactly true and doctor identifies a newer
+client than running server, the first command uses scoped live handoff and
+preserves panes. Otherwise it refuses with a pane-loss acknowledgement code.
+Socket-path endpoints are externally owned and must be restarted by their
+external owner. The 120-second overall and 30-second per-command limits are
+intentional; failures return one JSON object on stdout and leave ATM untouched.
+Ordinary `restart --yes` refuses while any doctor endpoint remains
+`client_server_mismatch`; restart those endpoints individually before
+restarting ATM.
 
 ## Self-signed development identity
 

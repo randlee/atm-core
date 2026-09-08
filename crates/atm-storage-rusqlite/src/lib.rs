@@ -1036,7 +1036,8 @@ mod tests {
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
     use serde_json::Map;
-    use std::sync::Arc;
+    use std::sync::{Arc, Barrier, mpsc};
+    use std::time::Duration;
 
     type OrdinaryMessageColumns = (
         Option<String>,
@@ -3881,6 +3882,100 @@ mod tests {
         let loaded = store.load_roster(&team).expect("load roster");
         assert_eq!(loaded.members.len(), 1);
         assert_eq!(store.list_teams().expect("list teams"), vec![team]);
+    }
+
+    fn unique_name_roster(team: &str, agent: &str, alias: Option<&str>) -> RosterSnapshot {
+        let team_name: TeamName = team.parse().expect("team");
+        let mut metadata_json = Map::new();
+        if let Some(alias) = alias {
+            metadata_json.insert("alias".to_string(), serde_json::json!(alias));
+        }
+        RosterSnapshot {
+            team_name: team_name.clone(),
+            members: vec![RosterMember {
+                team_name,
+                agent_name: agent.parse().expect("agent"),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: AgentType::Worker,
+                model: ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json,
+            }],
+            refreshed_at: None,
+        }
+    }
+
+    #[test]
+    fn roster_aliases_are_globally_unique_under_the_single_writer_lane() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.roster_store();
+        store
+            .save_roster(&unique_name_roster("team-a", "alpha", Some("shared-alias")))
+            .expect("first alias");
+        let duplicate = store
+            .save_roster(&unique_name_roster("team-b", "beta", Some("shared-alias")))
+            .expect_err("cross-team duplicate alias");
+        assert!(duplicate.message().contains("team-a"));
+        store
+            .save_roster(&unique_name_roster("team-b", "beta", Some("alpha")))
+            .expect("a canonical name is available once its owner has an alias");
+    }
+
+    fn run_concurrent_unique_name_writes(
+        left: RosterSnapshot,
+        right: RosterSnapshot,
+    ) -> [Result<(), AtmError>; 2] {
+        let concurrent_backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let concurrent_store = concurrent_backend.roster_store();
+        let barrier = Arc::new(Barrier::new(2));
+        let (sender, receiver) = mpsc::channel();
+        let left_store = Arc::clone(&concurrent_store);
+        let left_barrier = Arc::clone(&barrier);
+        let left_sender = sender.clone();
+        let left_handle = std::thread::spawn(move || {
+            left_barrier.wait();
+            left_sender
+                .send(left_store.save_roster(&left))
+                .expect("test receiver is alive");
+        });
+        let right_store = Arc::clone(&concurrent_store);
+        let right_sender = sender;
+        let right_handle = std::thread::spawn(move || {
+            barrier.wait();
+            right_sender
+                .send(right_store.save_roster(&right))
+                .expect("test receiver is alive");
+        });
+        let results = [
+            receiver
+                .recv_timeout(Duration::from_secs(1))
+                .expect("left or right writer completed before deadline"),
+            receiver
+                .recv_timeout(Duration::from_secs(1))
+                .expect("both writers completed before deadline"),
+        ];
+        left_handle.join().expect("left writer");
+        right_handle.join().expect("right writer");
+        results
+    }
+
+    #[test]
+    fn unique_name_a21_concurrent_canonical_adds_allow_exactly_one() {
+        let results = run_concurrent_unique_name_writes(
+            unique_name_roster("race-a", "alpha", None),
+            unique_name_roster("race-b", "alpha", None),
+        );
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    }
+
+    #[test]
+    fn unique_name_a22_concurrent_alias_and_canonical_adds_allow_exactly_one() {
+        let results = run_concurrent_unique_name_writes(
+            unique_name_roster("race-a", "robert", Some("alpha")),
+            unique_name_roster("race-b", "alpha", None),
+        );
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     }
 
     #[test]

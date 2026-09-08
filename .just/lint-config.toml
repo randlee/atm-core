@@ -127,7 +127,7 @@ toml_glob = "boundaries/*/*.toml"
 # by one named implementation seam.
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm/Cargo.toml"
-allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-graft", "atm-http-runtime", "atm-observability", "atm-runtime-test-support", "atm-storage", "chrono", "clap", "sc-observability", "sc-observability-types", "serde", "serde_json", "serde_yaml", "serial_test", "tempfile", "time", "tokio", "tracing", "tracing-subscriber", "ulid"]
+allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-graft", "atm-http-runtime", "atm-observability", "atm-runtime-test-support", "atm-storage", "chrono", "clap", "sc-observability", "sc-observability-types", "serde", "serde_json", "serde_yaml", "serial_test", "tempfile", "time", "toml", "tokio", "tracing", "tracing-subscriber", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-core/Cargo.toml"
@@ -146,7 +146,7 @@ allowed_dependencies = ["serde", "serde_json"]
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
 boundary_record_path = "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"
-allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "serial_test", "serde_json", "tempfile", "tokio", "tracing", "ulid"]
+allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "peer-tls", "serial_test", "serde", "serde_json", "tempfile", "tokio", "toml", "tracing", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"
@@ -172,7 +172,7 @@ allowed_dependencies = ["async-trait", "atm-core", "atm-herdr", "atm-runtime", "
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-herdr/Cargo.toml"
 boundary_record_path = "boundaries/atm-herdr/herdr-process-adapter.toml"
-allowed_dependencies = ["atm-core", "serde_json", "tokio"]
+allowed_dependencies = ["atm-core", "semver", "serde_json", "tokio"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-runtime/Cargo.toml"

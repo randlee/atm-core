@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY15-ARCH-002>
+  a triage:Finding ;
+  triage:findingId "AY15-ARCH-002" ;
+  triage:title "storage_and_nudge_router.rs exceeds the 1000 non-test-line decomposition threshold after AY.15 added roster-ingress call sites" ;
+  triage:description "quality-mgr qa-pr1310-r8 (PR #1310, AY.15 herdr-name-uniqueness, head 715ab21ea; report: PR #1310 issuecomment 5576239134). arch-qa ARCH-002. crates/atm-http-runtime/src/storage_and_nudge_router.rs is about 1068 non-test lines, over the 1000-line decomposition threshold; this sprint added the resolve_roster_member_at_ingress call sites at lines 520, 569 and 598, growing an already oversized module. Overage is modest (about 70 lines). Correction: split a cohesive unit (for example the roster-ingress resolution helpers) into its own module so the file returns under the threshold, with no behavior change." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "complexity" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:37:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T22:31:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-ARCH-002/AY15-ARCH-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY15-ARCH-002/AY15-ARCH-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1 ;
+  triage:snippet "//! Replacement-owned canonical write composition." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "715ab21ea" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/ay15-r8> .
+
+<urn:atm:triage:worktree/ay15-r8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r8" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "715ab21ea" ;
+  triage:orderIndex 0 .

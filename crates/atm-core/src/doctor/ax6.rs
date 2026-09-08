@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{
-    DoctorFinding, DoctorSeverity, EscalationRecipientsDoctorReport,
+    DoctorFinding, DoctorSeverity, EscalationRecipientSource, EscalationRecipientsDoctorReport,
     TeamEscalationRecipientsDoctorReport,
 };
 use crate::boundary::{DurableRosterStore, TaskState, TaskStore};
@@ -55,10 +55,13 @@ fn doctor_teams(
 fn daemon_recipients(
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     findings: &mut Vec<DoctorFinding>,
-) -> Vec<String> {
+) -> Vec<crate::types::AgentName> {
     match task_store {
         Some(store) => match store.list_escalation_recipients(&EscalationScope::Daemon) {
-            Ok(recipients) => recipients,
+            Ok(recipients) => recipients
+                .into_iter()
+                .map(crate::types::AgentName::from_validated)
+                .collect(),
             Err(error) => {
                 push_storage_failure(findings, "daemon escalation recipients", error);
                 Vec::new()
@@ -96,11 +99,14 @@ fn team_report(
     Some(TeamEscalationRecipientsDoctorReport {
         team,
         source: if own.is_empty() {
-            "daemon default".to_owned()
+            EscalationRecipientSource::DaemonDefault
         } else {
-            "team".to_owned()
+            EscalationRecipientSource::Team
         },
-        recipients: effective,
+        recipients: effective
+            .into_iter()
+            .map(crate::types::AgentName::from_validated)
+            .collect(),
     })
 }
 

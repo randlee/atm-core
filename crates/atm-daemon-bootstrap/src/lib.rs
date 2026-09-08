@@ -45,6 +45,7 @@ mod atm_temp_sweeper_runtime;
 mod bare_cli_runtime;
 mod daemon_observability;
 mod diagnostic_timeline;
+mod herdr_config;
 mod owner_gate;
 mod peer_launch_config;
 mod queue_drain;
@@ -56,6 +57,7 @@ mod sqlite_observability;
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 use bare_cli_runtime::BareCliRuntime;
+use herdr_config::daemon_herdr_config;
 use replacement_handler::{
     ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
 };
@@ -430,17 +432,12 @@ async fn run_replacement_daemon_with_selector(
     peer_pool_config: PeerPoolConfig,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 ) -> Result<(), AtmError> {
-    install_sqlite_retained_runtime_factory();
-    let scope = current_host_runtime_scope()?;
-    let owner = acquire_singleton_owner(scope.owner_lock.clone());
-    let singleton_guards = SingletonGuards::new();
-    singleton_guards
-        .verify_startup(&owner)
-        .unwrap_or_else(|violation| singleton_guard::abort_for_singleton_violation(violation));
+    let (scope, owner, singleton_guards) = acquire_verified_singleton_scope()?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let bare_cli = BareCliRuntime::default();
     let atm_temp_sweeper =
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
+    let herdr_config = daemon_herdr_config(&ProcessEnvSource)?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
     let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
@@ -460,6 +457,7 @@ async fn run_replacement_daemon_with_selector(
             runtime_health: runtime_health.clone(),
             diagnostic_counters: diagnostic_counters.clone(),
             bare_cli,
+            herdr_config,
             herdr_process,
         },
     )?;
@@ -494,6 +492,24 @@ async fn run_replacement_daemon_with_selector(
         singleton_guards,
     )
     .await
+}
+
+fn acquire_verified_singleton_scope() -> Result<
+    (
+        atm_core::home::HostRuntimeScope,
+        DaemonOwnerGuard,
+        SingletonGuards,
+    ),
+    AtmError,
+> {
+    install_sqlite_retained_runtime_factory();
+    let scope = current_host_runtime_scope()?;
+    let owner = acquire_singleton_owner(scope.owner_lock.clone());
+    let singleton_guards = SingletonGuards::new();
+    singleton_guards
+        .verify_startup(&owner)
+        .unwrap_or_else(|violation| singleton_guard::abort_for_singleton_violation(violation));
+    Ok((scope, owner, singleton_guards))
 }
 
 fn acquire_singleton_owner(owner_lock: PathBuf) -> DaemonOwnerGuard {
@@ -936,6 +952,9 @@ pub fn with_default_peer_address_stores<T>(
 }
 
 #[cfg(test)]
+mod herdr_lifecycle_tests;
+
+#[cfg(test)]
 mod replacement_runtime_tests {
     use std::collections::HashMap;
     use std::ffi::OsString;
@@ -945,12 +964,10 @@ mod replacement_runtime_tests {
     use std::time::Duration;
 
     use atm_core::api::ApiRequest;
-    use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
         BuiltInPostSendDispatch, MemberKey, MessageReceivedHookSelector, RosterEntry,
         TemplateSource,
     };
-    use atm_core::doctor::{DoctorSeverity, HerdrPresenceDoctor};
     use atm_core::observability::NullObservability;
     use atm_core::peer_wire::PeerWireMode;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -966,7 +983,6 @@ mod replacement_runtime_tests {
     use serde_json::Map;
 
     use super::peer_launch_config::parse_peer_pool_config_with_environment;
-    use super::replacement_handler::{HerdrPresenceDoctorAdapter, herdr_presence_finding};
     use super::{
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
         SelectedPeerAdapterSelection, ShutdownSignal, active_received_hook_selector_with_health,
@@ -1212,6 +1228,7 @@ mod replacement_runtime_tests {
                 runtime_health: runtime_health.clone(),
                 diagnostic_counters: None,
                 bare_cli: Default::default(),
+                herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: None,
             },
         )
@@ -1405,6 +1422,7 @@ mod replacement_runtime_tests {
                 runtime_health: runtime_health.clone(),
                 diagnostic_counters: None,
                 bare_cli: Default::default(),
+                herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: Some(fake.clone()),
             },
         )
@@ -1518,103 +1536,6 @@ mod replacement_runtime_tests {
                 .text,
             "bootstrap adapter"
         );
-    }
-
-    #[tokio::test]
-    async fn doctor_presence_probe_uses_bypass_and_degrades_outages() {
-        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        fake.queue_get_result(Err(atm_herdr::HerdrError::AgentNotFound));
-        let roster = atm_core::team_admin::MembersList {
-            team: "team".parse().expect("team"),
-            members: vec![atm_core::team_admin::MemberSummary {
-                name: "receiver".parse().expect("agent"),
-                agent_id: "receiver".to_owned(),
-                agent_type: "worker".to_owned(),
-                harness: atm_core::boundary::RosterHarness::CodexCli,
-                model: ModelName::new("gpt-5").expect("model"),
-                joined_at: None,
-                tmux_pane_id: None,
-                backend: Some("herdr".to_owned()),
-                herdr_session: Some("team-a".to_owned()),
-                local_backend: Some(atm_core::LocalMessageReceivedBackend::Herdr {
-                    session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
-                }),
-                home_dir: std::path::PathBuf::from("/tmp").into(),
-                live_cwd: None,
-                host: None,
-                extra: serde_json::Map::new(),
-            }],
-        };
-        let findings = HerdrPresenceDoctorAdapter {
-            process: fake.clone(),
-        }
-        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
-        .await;
-        assert_eq!(findings.len(), 1);
-        assert_eq!(
-            findings[0].code,
-            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
-        );
-        assert!(matches!(
-            fake.calls().as_slice(),
-            [atm_herdr::testing::FakeHerdrCall::Get {
-                breaker_policy: atm_herdr::BreakerPolicy::Bypass,
-                ..
-            }]
-        ));
-
-        let outage_fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        outage_fake.queue_get_result(Err(atm_herdr::HerdrError::ServerUnavailable));
-        let outage_findings = HerdrPresenceDoctorAdapter {
-            process: outage_fake,
-        }
-        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
-        .await;
-        assert_eq!(outage_findings.len(), 1);
-        assert_eq!(outage_findings[0].severity, DoctorSeverity::Info);
-        assert!(
-            outage_findings[0]
-                .message
-                .starts_with("Herdr presence probe skipped:")
-        );
-    }
-
-    #[test]
-    fn doctor_and_emitter_share_herdr_outcome_classification() {
-        let errors = [
-            atm_herdr::HerdrError::AgentBlocked,
-            atm_herdr::HerdrError::AgentNotFound,
-            atm_herdr::HerdrError::AgentNotReady,
-            atm_herdr::HerdrError::AgentTargetAmbiguous,
-            atm_herdr::HerdrError::AgentNotRunning,
-            atm_herdr::HerdrError::AgentPromptStalled,
-            atm_herdr::HerdrError::ServerNotRunning,
-            atm_herdr::HerdrError::ProtocolMismatch,
-            atm_herdr::HerdrError::Timeout,
-            atm_herdr::HerdrError::InvalidAgentName,
-            atm_herdr::HerdrError::EmptyAgentPrompt,
-            atm_herdr::HerdrError::ServerUnavailable,
-            atm_herdr::HerdrError::InternalError,
-            atm_herdr::HerdrError::TimedOut,
-            atm_herdr::HerdrError::Unavailable {
-                retry_after: Duration::from_secs(1),
-            },
-            atm_herdr::HerdrError::Advisory {
-                code: "future_code".to_owned(),
-            },
-        ];
-        for error in errors {
-            let outcome = error.emission_outcome();
-            let finding = herdr_presence_finding(error.clone());
-            if matches!(error, atm_herdr::HerdrError::AgentNotFound) {
-                assert_eq!(
-                    finding.code,
-                    atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
-                );
-            } else {
-                assert!(finding.message.contains(outcome), "{outcome}");
-            }
-        }
     }
 
     #[cfg(unix)]

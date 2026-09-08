@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SCHEMA-AY-R2-001>
+  a triage:Finding ;
+  triage:findingId "SCHEMA-AY-R2-001" ;
+  triage:title "HerdrTransportKind added to the doctor payload without a serde default (ADR-061 minor bump must be additive)" ;
+  triage:description "quality-mgr qa-phase-ay-gate-r2 (PR #1308 integrate/phase-ay -> develop, pinned 0da9a26ec; report: message 01M1Z4RKVAMC1J0GRB15K3D219, PR #1308 issuecomment 5576945237). Important. crates/atm-core/src/doctor/herdr_state.rs:14-19 introduces enum HerdrTransportKind { Cli, Socket } and line 294 adds field transport: HerdrTransportKind to HerdrEndpointObservation (also report.rs:331). The enum has no Default impl and the field carries no #[serde(default)], so a pre-AY doctor payload without transport fails to deserialize; this breaks the ADR-061 additive-minor-bump rule that herdr_agent already follows (#[serde(default, skip_serializing_if)]). Required correction (quality-mgr): add Default for HerdrTransportKind (Cli, the pre-AY.9 sole transport) and mark the field #[serde(default)], or wrap it Option<HerdrTransportKind> with #[serde(default)]; add a backward-compat test analogous to herdr_member_presence_accepts_v1_1_payload_without_herdr_agent (doctor/mod.rs:1242)." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "schema" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "every ADR-061 governed struct field added in phase-ay: serde default present" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-08T00:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 (PR #1318, integrate/phase-ay 75c01a5bd). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. HerdrTransportKind now derives Default with #[default] Cli; HerdrEndpointObservation.transport and HerdrEndpointDoctorReport.transport both gained #[serde(default)]; new backward-compat test herdr_endpoint_observation_accepts_v1_1_payload_without_transport added and passing." ;
+  triage:foundIn triage:AY3 ;
+  triage:foundAt "2026-09-08T00:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SCHEMA-AY-R2-001/SCHEMA-AY-R2-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SCHEMA-AY-R2-001/SCHEMA-AY-R2-001/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SCHEMA-AY-R2-001/SCHEMA-AY-R2-001/3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SCHEMA-AY-R2-001/SCHEMA-AY-R2-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/herdr_state.rs" ;
+  triage:line 16 ;
+  triage:snippet "pub enum HerdrTransportKind {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r2> .
+
+<urn:atm:triage:occurrence/SCHEMA-AY-R2-001/SCHEMA-AY-R2-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/herdr_state.rs" ;
+  triage:line 294 ;
+  triage:snippet "pub transport: HerdrTransportKind," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r2> .
+
+<urn:atm:triage:occurrence/SCHEMA-AY-R2-001/SCHEMA-AY-R2-001/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 331 ;
+  triage:snippet "pub transport: HerdrTransportKind," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r2> .
+
+<urn:atm:triage:worktree/gate-r2>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-phase-ay-gate-r2" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "0da9a26ec" ;
+  triage:orderIndex 0 .

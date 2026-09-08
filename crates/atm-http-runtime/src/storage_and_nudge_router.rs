@@ -43,6 +43,8 @@ use crate::router_support::{
     write_response,
 };
 
+mod roster_ingress;
+
 /// The replacement implementation of the canonical write operation.
 ///
 /// Storage stays behind `LocalServiceRuntime`'s core interfaces and
@@ -73,6 +75,30 @@ pub struct StorageAndNudgeRouter {
 }
 
 impl StorageAndNudgeRouter {
+    pub(super) async fn list_messages(
+        &self,
+        query: ListQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        self.list_messages_impl(query, deadline).await
+    }
+
+    pub(super) async fn peek_messages(
+        &self,
+        query: PeekQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        self.peek_messages_impl(query, deadline).await
+    }
+
+    pub(super) async fn receive_messages(
+        &self,
+        query: ReadQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        self.receive_messages_impl(query, deadline).await
+    }
+
     #[must_use]
     pub fn new(
         service_runtime: LocalServiceRuntime,
@@ -507,78 +533,6 @@ impl StorageAndNudgeRouter {
             }
             ApiRequest::ReloadRuntimeView => self.reload_runtime_view(ingress),
         }
-    }
-
-    async fn list_messages(
-        &self,
-        query: ListQuery,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        if query.task_ledger.is_some() {
-            if deadline.expired() {
-                return Err(AtmError::daemon_unavailable(
-                    "request deadline expired before task-ledger inspection",
-                ));
-            }
-            let read_deadline = atm_runtime::read_deadline(deadline)?;
-            return atm_core::list::list_task_ledger_with_runtime_async(
-                query,
-                &self.service_runtime,
-                read_deadline,
-            )
-            .await
-            .map(ResponseEnvelope::List)
-            .map(ApiResponse::new);
-        }
-        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "async mailbox runtime was not installed at daemon startup",
-            )
-        })?;
-        let command = atm_core::list::prepare_async_list(&query)?;
-        runtime
-            .list_command(command, deadline)
-            .await
-            .map(ResponseEnvelope::List)
-            .map(ApiResponse::new)
-    }
-
-    async fn peek_messages(
-        &self,
-        query: PeekQuery,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "async mailbox runtime was not installed at daemon startup",
-            )
-        })?;
-        let command = atm_core::read::async_projection::prepare_async_peek(&query)?;
-        runtime
-            .peek_command(command, deadline)
-            .await
-            .map(Box::new)
-            .map(ResponseEnvelope::Peek)
-            .map(ApiResponse::new)
-    }
-
-    async fn receive_messages(
-        &self,
-        query: ReadQuery,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "async mailbox runtime was not installed at daemon startup",
-            )
-        })?;
-        let command = atm_core::read::async_projection::prepare_async_read(&query)?;
-        runtime
-            .read_command(command, deadline)
-            .await
-            .map(Box::new)
-            .map(ResponseEnvelope::Receive)
-            .map(ApiResponse::new)
     }
 
     async fn clear_messages(
@@ -2612,10 +2566,14 @@ mod tests {
 
     #[test]
     fn mailbox_and_doctor_handlers_never_enter_the_blocking_core_bridge() {
-        let source = include_str!("storage_and_nudge_router.rs")
-            .split("\n#[cfg(test)]\nmod tests")
-            .next()
-            .expect("production source");
+        let source = [
+            include_str!("storage_and_nudge_router.rs")
+                .split("\n#[cfg(test)]\nmod tests")
+                .next()
+                .expect("production source"),
+            include_str!("storage_and_nudge_router/roster_ingress.rs"),
+        ]
+        .concat();
         for handler in [
             "list_messages",
             "peek_messages",
