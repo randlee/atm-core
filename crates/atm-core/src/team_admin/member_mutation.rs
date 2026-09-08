@@ -464,7 +464,10 @@ fn preflight_roster_unique_names(
             .iter()
             .map(atm_storage::RosterUniqueName::from_member),
     );
-    let collisions = atm_storage::roster_unique_name_collisions(&names);
+    let collisions = atm_storage::team_scoped_roster_unique_name_collisions(
+        &atm_storage::roster_unique_name_collisions(&names),
+        team,
+    );
     if collisions.is_empty() {
         Ok(())
     } else {
@@ -1453,6 +1456,37 @@ mod tests {
         assert!(error.message().contains("(team-a, robert)"));
         assert!(error.message().contains("(team-b, bob)"));
         assert!(error.message().contains("--alias"));
+    }
+
+    #[test]
+    fn unique_name_g04_preflight_ignores_collisions_between_other_teams() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(&team_a, vec![roster_member("team-a", "alex")]);
+        store.seed(&team_b, vec![roster_member("team-b", "alex")]);
+        let root = tempfile::tempdir().expect("tempdir");
+        let request = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            "team-c",
+            "carol",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("carol-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: false,
+            },
+        )
+        .expect("request");
+
+        add_member_with_roster_store(&store, request)
+            .expect("a pre-existing collision between two other teams must not block team-c");
+
+        assert_eq!(store.members(&"team-c".parse().expect("team")).len(), 1);
     }
 
     #[test]

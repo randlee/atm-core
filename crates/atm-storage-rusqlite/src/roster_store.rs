@@ -5,7 +5,10 @@ use atm_storage::contract::{
     RosterUniqueName,
 };
 use atm_storage::types::{AgentName, ModelName, PaneId, TeamName};
-use atm_storage::{AtmError, roster_unique_name_collision_error, roster_unique_name_collisions};
+use atm_storage::{
+    AtmError, roster_unique_name_collision_error, roster_unique_name_collisions,
+    team_scoped_roster_unique_name_collisions,
+};
 use rusqlite::{Connection, params};
 use serde_json::{Map, Value};
 
@@ -294,7 +297,10 @@ fn enforce_roster_unique_names(
         .collect::<Result<Vec<_>, AtmError>>()?;
     names.extend(roster.members.iter().map(RosterUniqueName::from_member));
 
-    let collisions = roster_unique_name_collisions(&names);
+    let collisions = team_scoped_roster_unique_name_collisions(
+        &roster_unique_name_collisions(&names),
+        &roster.team_name,
+    );
     if collisions.is_empty() {
         Ok(())
     } else {
@@ -913,7 +919,7 @@ mod tests {
     }
 
     #[test]
-    fn unique_name_a27_legacy_collision_blocks_an_unrelated_next_write() {
+    fn unique_name_a27_legacy_collision_blocks_a_write_that_reuses_the_colliding_name() {
         let store = SqliteStorageBackend::in_memory_for_test()
             .expect("backend")
             .roster_store;
@@ -927,13 +933,37 @@ mod tests {
                     roster_member("team-b", "carol", None),
                 ],
             ))
-            .expect_err("legacy conflict blocks unrelated write");
+            .expect_err("proposal reusing the colliding name is rejected");
 
         assert!(error.message().contains("(team-a, alex)"));
         assert_eq!(
             store
                 .load_roster(&"team-b".parse().expect("team"))
                 .expect("roster remains readable")
+                .members
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn unique_name_a30_legacy_collision_does_not_block_an_unrelated_team_write() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        seed_legacy_cross_team_duplicate(&store);
+
+        store
+            .save_roster(&roster(
+                "team-c",
+                vec![roster_member("team-c", "carol", None)],
+            ))
+            .expect("a team that does not participate in the collision may still write");
+
+        assert_eq!(
+            store
+                .load_roster(&"team-c".parse().expect("team"))
+                .expect("roster")
                 .members
                 .len(),
             1

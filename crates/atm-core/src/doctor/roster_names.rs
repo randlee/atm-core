@@ -43,7 +43,7 @@ pub(super) fn push_duplicate_effective_name_warnings(
                     detail
                 },
                 remediation: Some(
-                    "Run `atm teams set-member <member> --alias <unique-herdr-name>` to make the effective roster name unique."
+                    "Run `atm teams update-member --alias <unique-herdr-name> <team> <member>` to make the effective roster name unique."
                         .to_owned(),
                 ),
             });
