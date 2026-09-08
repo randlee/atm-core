@@ -7,6 +7,8 @@ use crate::team_admin::{MembersList, ordered_roster_member_summaries};
 use crate::types::{AgentName, TeamName};
 use std::path::Path;
 
+type LoadedRosters = Vec<(TeamName, Vec<RosterEntry>)>;
+
 /// The effective team scope for one doctor run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DoctorTeamScope {
@@ -73,6 +75,14 @@ pub(super) fn load_scoped_rosters(
     findings: &mut Vec<DoctorFinding>,
 ) -> (Option<MembersList>, Vec<MembersList>) {
     let team_context = scope.is_all_teams();
+    let mut all_rosters = runtime
+        .list_roster_teams()
+        .into_iter()
+        .map(|team| {
+            let roster = runtime.load_team_roster(&team);
+            (team, roster)
+        })
+        .collect::<LoadedRosters>();
     let rosters = teams
         .iter()
         .filter_map(|team| {
@@ -82,6 +92,7 @@ pub(super) fn load_scoped_rosters(
                 caller_identity,
                 live_cwd,
                 team_context,
+                &mut all_rosters,
                 findings,
             )
         })
@@ -99,6 +110,7 @@ fn load_member_roster(
     caller_identity: Option<&AgentName>,
     live_cwd: Option<&Path>,
     team_context: bool,
+    all_rosters: &mut LoadedRosters,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
     if let Err(error) = crate::address::validate_path_segment(team.as_str(), "team") {
@@ -110,12 +122,20 @@ fn load_member_roster(
         );
         return None;
     }
-    let roster = runtime.load_team_roster(team);
+    let roster = all_rosters
+        .iter()
+        .find(|(loaded_team, _)| loaded_team == team)
+        .map(|(_, roster)| roster.clone())
+        .unwrap_or_else(|| {
+            let roster = runtime.load_team_roster(team);
+            all_rosters.push((team.clone(), roster.clone()));
+            roster
+        });
     push_mixed_local_backend_warning(team, &roster, findings);
     roster_names::push_duplicate_effective_name_warnings(
-        runtime,
         team,
         &roster,
+        all_rosters,
         team_context,
         findings,
     );

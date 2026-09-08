@@ -1834,6 +1834,43 @@ mod tests {
     }
 
     #[test]
+    fn all_teams_duplicate_name_warnings_preserve_team_context() {
+        let paths = TestPaths::new();
+        let mut store =
+            roster_store_for_teams(&[("team-a", "local-member"), ("team-b", "remote-member")]);
+        for member in &mut store.members {
+            member.metadata_json.insert(
+                "alias".to_owned(),
+                serde_json::Value::String("shared-herdr-name".to_owned()),
+            );
+        }
+        let runtime = test_runtime_from_store(store);
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            all_teams: true,
+            ..DoctorQuery::default()
+        };
+
+        let report = run_doctor_with_runtime(query, &healthy_observability(&paths), &runtime)
+            .expect("all-team doctor report");
+        let warnings = report
+            .findings
+            .iter()
+            .filter(|finding| finding.code == AtmErrorCode::WarningRosterDrift)
+            .map(|finding| finding.message.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings.iter().any(|message| {
+            message.starts_with("team team-a:") && message.contains("remote-member@team-b")
+        }));
+        assert!(warnings.iter().any(|message| {
+            message.starts_with("team team-b:") && message.contains("local-member@team-a")
+        }));
+    }
+
+    #[test]
     #[serial_test::serial(env)]
     fn run_doctor_without_team_falls_back_to_all_with_info_finding() {
         let paths = TestPaths::new();

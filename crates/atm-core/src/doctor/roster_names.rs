@@ -1,22 +1,18 @@
 use super::{DoctorFinding, DoctorSeverity, team_scope};
+use crate::boundary::RosterEntry;
 use crate::error_codes::AtmErrorCode;
-use crate::service_runtime::LocalServiceRuntime;
 use crate::types::TeamName;
 
 pub(super) fn push_duplicate_effective_name_warnings(
-    runtime: &LocalServiceRuntime,
     team: &TeamName,
-    roster: &[crate::boundary::RosterEntry],
+    roster: &[RosterEntry],
+    all_rosters: &[(TeamName, Vec<RosterEntry>)],
     team_context: bool,
     findings: &mut Vec<DoctorFinding>,
 ) {
-    let all_members = runtime
-        .list_roster_teams()
-        .into_iter()
-        .flat_map(|other_team| runtime.load_team_roster(&other_team))
-        .collect::<Vec<_>>();
-    let all_names = all_members
+    let all_names = all_rosters
         .iter()
+        .flat_map(|(_, roster)| roster.iter())
         .map(atm_storage::RosterUniqueName::from_member)
         .collect::<Vec<_>>();
     let collisions = atm_storage::roster_unique_name_collisions(&all_names);
