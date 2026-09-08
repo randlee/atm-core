@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import sys
 import unittest
 from contextlib import redirect_stderr
@@ -301,11 +302,22 @@ class BootstrapTests(unittest.TestCase):
             self.assertEqual(bootstrap.seed_python_version(manifest), "3.14.7")
 
 class GitHookTests(unittest.TestCase):
-    HOOK = Path(__file__).resolve().parents[2] / ".githooks" / "pre-push"
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+    HOOK = REPO_ROOT / ".githooks" / "pre-push"
+    HOOK_REL = ".githooks/pre-push"
 
     def test_pre_push_hook_is_tracked_and_executable(self) -> None:
         self.assertTrue(self.HOOK.is_file())
-        self.assertTrue(self.HOOK.stat().st_mode & 0o111, "hook must be executable")
+        # Windows checkouts do not carry the POSIX executable bit, so the
+        # tracked git index mode is the portable source of truth.
+        entry = subprocess.run(
+            ["git", "-C", str(self.REPO_ROOT), "ls-files", "-s", "--", self.HOOK_REL],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        self.assertTrue(entry, f"{self.HOOK_REL} must be tracked by git")
+        self.assertEqual(entry.split()[0], "100755", "hook must be executable in the git index")
         text = self.HOOK.read_text(encoding="utf-8")
         self.assertTrue(text.startswith("#!/bin/sh"))
         self.assertIn("cargo fmt --all --check", text)

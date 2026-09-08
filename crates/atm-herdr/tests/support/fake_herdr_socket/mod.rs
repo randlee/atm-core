@@ -181,7 +181,7 @@ impl FakeHerdrSocket {
         Ok(())
     }
 
-    pub async fn stall_before_read(mut self) -> io::Result<()> {
+    pub async fn stall_before_read(self) -> io::Result<()> {
         self.server.connect().await?;
         std::future::pending::<()>().await;
         Ok(())
