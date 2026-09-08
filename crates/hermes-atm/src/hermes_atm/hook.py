@@ -37,7 +37,10 @@ def _configuration(path: Path) -> Mapping[str, str]:
         for name in required
     ):
         raise HermesAtmRuntimeError("invalid Hermes ATM hook configuration")
-    return {name: value[name] for name in required}
+    platform = value.get("platform", "telegram")
+    if not isinstance(platform, str) or not platform.strip():
+        raise HermesAtmRuntimeError("invalid Hermes ATM hook configuration")
+    return {**{name: value[name] for name in required}, "platform": platform}
 
 
 def _gateway_runner(context: Any) -> Any:
@@ -75,6 +78,7 @@ async def handle(event_type: str, context: Any, config_path: Path) -> None:
     runtime = HermesAtmRuntime.from_gateway_runner(
         runner,
         profile=configuration["profile"],
+        platform=configuration["platform"],
         environment=environment,
     )
     _runtime = runtime

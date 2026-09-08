@@ -211,12 +211,15 @@ Satisfied by:
   auto-start it when absent.
 
 - `REQ-P-RUNTIME-002` Daemon singleton is ATM daemon requirement `#1`:
-  exactly one `atm-daemon` process may exist anywhere on the host for the
-  supported runtime model, and no code path may intentionally or accidentally
-  allow a second daemon to reach serving state.
+  exactly one `atm-daemon` process may exist per OS account per host. (Rand,
+  2026-09-08.) A container is its own host for this requirement. (Rand,
+  2026-09-08.) Daemons serving separate OS accounts on one physical machine
+  are not a violation. (Rand, 2026-09-08.) No code path may intentionally or
+  accidentally allow a second daemon for the same OS account to reach serving
+  state.
 
-- `REQ-P-RUNTIME-003` Daemon singleton enforcement must use multiple guard
-  layers:
+- `REQ-P-RUNTIME-003` Daemon singleton enforcement per OS account per host
+  must use multiple guard layers. (Rand, 2026-09-08.)
   - a pre-spawn launch gate that serializes daemon creation attempts
   - a daemon-side startup gate that refuses serving state when ownership is
     already held
@@ -4122,17 +4125,19 @@ writer admission and acknowledgements apply task transitions.
 
 ### 22.2 Singleton Daemon Runtime
 
-- `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per host in the current architecture
-  runtime.
+- `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per OS account per host in the
+  current architecture runtime. (Rand, 2026-09-08.) A container is its own host for this
+  requirement. (Rand, 2026-09-08.)
 
   Required behavior:
-  - it must be impossible for two active ATM daemons to run on one host at the
-    same time
+  - it must be impossible for two active ATM daemons for one OS account to run
+    on one host at the same time (Rand, 2026-09-08.)
   - daemon startup must fail deterministically when a live daemon already owns
-    the host runtime
+    the same OS-account runtime (Rand, 2026-09-08.)
   - stale daemon ownership artifacts may be cleaned up only when they are
     proven stale
-  - stale cleanup must never allow two live daemons
+  - stale cleanup must never allow two live daemons for the same OS account
+    (Rand, 2026-09-08.)
 
 - `REQ-CORE-DAEMON-002` The daemon must be a thin runtime wrapper rather than a
   unique business-logic layer.
@@ -4941,8 +4946,10 @@ writer admission and acknowledgements apply task transitions.
   and boundary invariants.
 
   Required behavior:
-  - impossible to run two active ATM daemons on one host
-  - daemon singleton remains host-wide rather than socket-path-local
+  - impossible to run two active ATM daemons for one OS account on one host (Rand,
+    2026-09-08.)
+  - daemon singleton remains per OS account per host rather than socket-path-local (Rand,
+    2026-09-08.)
   - daemon unavailability after one auto-start attempt fails clearly with no
     hidden direct I/O fallback
   - every subsystem performs external I/O only through its owning trait

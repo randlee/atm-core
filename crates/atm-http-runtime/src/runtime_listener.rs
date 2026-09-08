@@ -12,10 +12,9 @@ pub(crate) async fn bind_configured_direct_peer_listener(
     let bind_address = SocketAddr::from(([0, 0, 0, 0], peer.port()));
     match TcpListener::bind(bind_address).await {
         Ok(listener) => Ok(Some(listener)),
-        Err(error) => {
-            tracing::warn!(%bind_address, error = %error, "replacement direct peer listener is unavailable; continuing with local listeners");
-            Ok(None)
-        }
+        Err(error) => Err(AtmError::daemon_serving_state_rejected(format!(
+            "fixed ATM direct-peer endpoint {bind_address} is already bound: {error}"
+        ))),
     }
 }
 

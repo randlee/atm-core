@@ -3124,8 +3124,9 @@ The daemon runtime must use one documented operational contract.
 Daemon singleton is requirement `#1`.
 
 Architectural rules:
-- only one `atm-daemon` process may exist anywhere on the host for the
-  supported runtime model
+- only one `atm-daemon` process may exist per OS account per host for the
+  supported runtime model (Rand, 2026-09-08.)
+- a container is its own host for this requirement (Rand, 2026-09-08.)
 - singleton enforcement uses at least:
   - a pre-spawn launch gate before fork/exec
   - a daemon-side startup gate before serving state

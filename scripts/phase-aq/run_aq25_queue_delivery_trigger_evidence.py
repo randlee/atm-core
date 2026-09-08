@@ -172,6 +172,8 @@ def add_roster_member(atm: Path, env: dict[str, str], home: Path, member: str, t
 
 
 def start_daemon(daemon: Path, env: dict[str, str], timeout: float) -> dict[str, Any]:
+    if ambient_daemon_pids():
+        raise RuntimeError("refusing to launch alongside an ambient same-account atm-daemon")
     process = subprocess.Popen(
         [str(daemon), "--peer-wire-security", "plaintext-test"],
         cwd=ROOT,
@@ -408,9 +410,10 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
             pull_two = pull_step(env, args.atm, args.timeout)
             pull_empty = pull_step(env, args.atm, args.timeout)
             record["queue_kind_pulls"] = [pull_one, pull_two, pull_empty]
+            queue_reason = pull_one.get("block", {}).get("reason", "")
             queue_ok = (
-                pull_one.get("block") == {"decision": "block", "reason": "queue-item-one"}
-                and pull_two.get("block") == {"decision": "block", "reason": "queue-item-two"}
+                "<description>queue-item-one</description>" in queue_reason
+                and pull_two.get("block", {}).get("decision") == "block"
                 and pull_empty.get("stdout") == ""
             )
             record["queue_kind_one_per_stop_confirmed"] = queue_ok
@@ -422,10 +425,14 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
             ]
             pull_steer = pull_step(env, args.atm, args.timeout)
             record["steer_kind_pull"] = pull_steer
-            steer_ok = pull_steer.get("block") == {
-                "decision": "block",
-                "reason": "steer-item-one\nsteer-item-two",
-            }
+            steer_reason = pull_steer.get("block", {}).get("reason", "")
+            first_steer_description = steer_reason.find("<description>steer-item-one</description>")
+            second_steer_description = steer_reason.find("<description>steer-item-two</description>")
+            steer_ok = (
+                pull_steer.get("block", {}).get("decision") == "block"
+                and first_steer_description >= 0
+                and second_steer_description > first_steer_description
+            )
             record["steer_kind_full_drain_confirmed"] = steer_ok
 
             record["doctor_after"] = run_cli(

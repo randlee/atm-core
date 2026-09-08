@@ -358,7 +358,7 @@ mod take_single_flag_value_tests {
     fn duplicate_rejection_is_the_callers_responsibility() {
         // The helper only decides whether one argument names the flag; each
         // call site composes it with its own "supplied only once" tracking,
-        // the same way `parse_peer_wire_mode` and `parse_direct_peer_port` do.
+        // the same way `parse_peer_wire_mode` does.
         fn parse_with_duplicate_guard(
             arguments: impl IntoIterator<Item = OsString>,
         ) -> Result<OsString, AtmError> {

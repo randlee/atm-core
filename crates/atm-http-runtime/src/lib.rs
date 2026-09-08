@@ -179,9 +179,9 @@ impl HttpRuntimeConfig {
 
     /// Enables the plain-TCP peer adapter.
     ///
-    /// The production daemon uses [`DirectPeerTcpConfig::standard`].  It has
-    /// no operator-provided local address or peer identity: the listener owns
-    /// its fixed protocol port and the accepted socket supplies peer
+    /// The production daemon receives a validated port from its immutable
+    /// launch arguments, defaulting to [`DIRECT_PEER_TCP_PORT`]. It has no
+    /// operator-provided local address or peer identity: the accepted socket supplies peer
     /// provenance before the request reaches the canonical router.
     #[must_use]
     pub fn with_direct_peer_tcp(mut self, direct_peer_tcp: DirectPeerTcpConfig) -> Self {
@@ -227,16 +227,16 @@ impl DirectPeerTcpConfig {
 
     /// Uses an explicit non-zero direct-peer port selected at daemon launch.
     ///
-    /// Normal service launches use [`Self::standard`]. An explicit port lets
-    /// an isolated physical benchmark daemon avoid contending with a live
-    /// daemon owned by another OS account on the same host.
+    /// The omitted launch argument defaults to the protocol port. An explicit
+    /// port lets an isolated physical benchmark daemon avoid contending with a
+    /// live daemon owned by another OS account on the same host.
     #[must_use]
     pub fn configured(port: NonZeroU16) -> Self {
         Self::new(port.get())
     }
 
     /// Crate-private port selection keeps isolated runtime tests possible.
-    /// Production composition can construct only [`Self::standard`].
+    /// Production composition can use only validated launch configuration.
     #[must_use]
     pub(crate) fn new(port: u16) -> Self {
         Self {
@@ -1393,7 +1393,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn direct_peer_port_collision_keeps_the_local_runtime_ready() {
+    async fn direct_peer_port_collision_rejects_runtime_startup() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let occupied_listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
             .await
@@ -1407,26 +1407,24 @@ mod tests {
         let config = config_with_record(0, endpoint_record.clone())
             .with_direct_peer_tcp(DirectPeerTcpConfig::new(occupied_port));
 
-        let running = HttpRuntimeBuilder::new(config, Arc::new(TestRouter))
+        let startup = HttpRuntimeBuilder::new(config, Arc::new(TestRouter))
             .with_runtime_health(health.clone())
             .build()
             .expect("the fixed peer port is valid configuration")
             .start()
-            .await
-            .expect("a peer-port collision must not stop local daemon startup");
+            .await;
+        let error = match startup {
+            Ok(_) => panic!("a peer-port collision rejects singleton runtime startup"),
+            Err(error) => error,
+        };
 
-        assert!(endpoint_record.exists(), "local endpoint remains published");
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_SERVING_STATE_REJECTED");
+        assert!(!endpoint_record.exists(), "no local endpoint is published");
         assert_eq!(
             health.snapshot().readiness,
-            RuntimeReadinessState::Ready,
-            "direct-peer unavailability must not make the local daemon unready"
+            RuntimeReadinessState::Unavailable,
+            "the runtime never reaches ready when its fixed endpoint is occupied"
         );
-
-        running
-            .begin_shutdown()
-            .finish()
-            .await
-            .expect("runtime shuts down cleanly");
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -2675,7 +2673,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn loopback_client_rejects_a_missing_endpoint_record_before_connecting() {
+    async fn loopback_client_reports_a_missing_endpoint_record_as_daemon_unavailable() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("missing-local-http.json");
         let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
@@ -2683,9 +2681,9 @@ mod tests {
         let error = client
             .execute(ApiRequest::new(write_request()))
             .await
-            .expect_err("missing endpoint record must fail before connection");
+            .expect_err("missing endpoint record must report daemon unavailability");
         assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
-        assert!(error.message().contains("read local HTTP endpoint record"));
+        assert!(error.message().contains("could not connect"));
     }
 
     #[cfg(unix)]

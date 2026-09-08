@@ -120,6 +120,12 @@ fn unix_socket_generation(
     socket_path: &Path,
 ) -> Result<TransportGeneration, HttpRuntimeClientFailure> {
     let metadata = std::fs::symlink_metadata(socket_path).map_err(|source| {
+        if source.kind() == std::io::ErrorKind::NotFound {
+            return HttpRuntimeClientFailure::Connect(format!(
+                "Unix HTTP socket {} is absent: {source}",
+                socket_path.display()
+            ));
+        }
         HttpRuntimeClientFailure::EndpointRecord(
             AtmError::daemon_unavailable("failed to inspect the Unix HTTP socket")
                 .with_cause(source),

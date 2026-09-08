@@ -22,6 +22,7 @@ or shared install notes.
 | `chat_id` | Hermes session chat binding | Gateway's configured session |
 | `atm_home` | ATM durable home | `ATM_HOME` for the profile |
 | `workspace_root` | Canonical graft endpoint root | ATM roster `workspace_root` exactly |
+| `platform` | Hermes gateway platform | `telegram` by default; `api_server` for headless gateways |
 | `launch_agent_plist` | Gateway LaunchAgent plist | Its first `ProgramArguments` entry must be the Python running this installer |
 
 The `workspace_root` equality is mandatory. ATM post-send delivery resolves a
@@ -68,6 +69,7 @@ the nudge will fail closed because it cannot find or contact the receiver.
      --chat-id "$ATM_CHAT_ID" \
      --atm-home "$ATM_HOME" \
      --workspace-root "$ATM_WORKSPACE_ROOT" \
+     --platform <telegram|api_server> \
      --launch-agent-plist <gateway-launch-agent.plist>
    ```
 
