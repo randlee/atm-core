@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AY-R2-003>
+  a triage:Finding ;
+  triage:findingId "ARCH-AY-R2-003" ;
+  triage:title "undocumented third HerdrEndpointDoctor test-double impl site missing from boundary TOML allowlist" ;
+  triage:description "arch-qa quality-gate-r3 verification (PR #1318 fix/ay-gate-r2-schema-docs, head ef79745ae56aaeb62e6f70a91cf4acad2360ee5c). Important. RULE-012 boundary enforcement requires all test-double implementation sites outside the primary crate to be explicitly listed in the boundary TOML's allowed_test_double_paths. boundaries/atm-core/herdr-endpoint-doctor.toml [testing].allowed_test_double_paths is currently empty (`= []`). However, crates/atm-runtime/src/doctor_projection.rs:384 contains `impl HerdrEndpointDoctor for CountingEndpoint`, a test-double implementation site inside a #[cfg(test)] mod tests block. Per RULE-012, impl sites outside the boundary's allowlist are findings regardless of #[cfg(test)] gating. The impl and boundary record predate phase-ay; the boundary file was created net-new in this phase without documenting this legitimate test-double site. Required correction: add the actual qualified path of CountingEndpoint (likely `atm_runtime::doctor_projection::testing::CountingEndpoint` or equivalent) to herdr-endpoint-doctor.toml's [testing].allowed_test_double_paths, since this is a legitimate test double that simply was not documented when the boundary record was created." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "RULE-012 boundary allowlist" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-08T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-08T04:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AY-R2-003/ARCH-AY-R2-003/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AY-R2-003/ARCH-AY-R2-003/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AY-R2-003/ARCH-AY-R2-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/doctor_projection.rs" ;
+  triage:line 384 ;
+  triage:snippet "impl HerdrEndpointDoctor for CountingEndpoint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "104e67452" ;
+  triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r3-3> .
+
+<urn:atm:triage:occurrence/ARCH-AY-R2-003/ARCH-AY-R2-003/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/herdr-endpoint-doctor.toml" ;
+  triage:line 0 ;
+  triage:snippet "[testing].allowed_test_double_paths = []" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "104e67452" ;
+  triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r3-3> .
+
+<urn:atm:triage:worktree/gate-r3-3>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-phase-ay-gate-r3" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "104e67452" ;
+  triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:orderIndex 0 .
