@@ -428,15 +428,7 @@ async fn run_replacement_daemon_with_selector(
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
-    let owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone()).unwrap_or_else(|error| {
-        let contender = singleton_guard::competing_daemon_detail()
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| "competing daemon pid/start time unavailable".to_owned());
-        singleton_guard::abort_for_singleton_violation(format!(
-            "ATM daemon singleton violation while acquiring the owner lock: {error}; {contender}"
-        ))
-    });
+    let owner = acquire_singleton_owner(scope.owner_lock.clone());
     let singleton_guards = SingletonGuards::new(scope.socket.clone(), direct_peer_tcp.port());
     singleton_guards
         .verify_startup(&owner)
@@ -480,23 +472,14 @@ async fn run_replacement_daemon_with_selector(
         peer_wire_mode,
         &peer_stream_adapter,
     );
-    let running = match start_replacement_runtime_with_diagnostics(
+    let running = start_replacement_runtime_or_abort(
         config,
         handler.clone(),
         runtime_health,
         diagnostic_timeline,
         diagnostic_counters,
     )
-    .await
-    {
-        Ok(running) => running,
-        Err(error) if error.code().as_str() == "ATM_DAEMON_SERVING_STATE_REJECTED" => {
-            singleton_guard::abort_for_singleton_violation(format!(
-                "ATM daemon singleton violation while binding a fixed endpoint: {error}"
-            ));
-        }
-        Err(error) => return Err(error),
-    };
+    .await?;
     run_until_shutdown(
         running,
         handler,
@@ -507,6 +490,46 @@ async fn run_replacement_daemon_with_selector(
         singleton_guards,
     )
     .await
+}
+
+fn acquire_singleton_owner(owner_lock: PathBuf) -> DaemonOwnerGuard {
+    DaemonOwnerGuard::acquire_at(owner_lock).unwrap_or_else(|error| {
+        let contender = singleton_guard::competing_daemon_detail()
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "competing daemon pid/start time unavailable".to_owned());
+        singleton_guard::abort_for_singleton_violation(format!(
+            "ATM daemon singleton violation while acquiring the owner lock: {error}; {contender}"
+        ))
+    })
+}
+
+async fn start_replacement_runtime_or_abort(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+    diagnostic_timeline: Arc<dyn atm_runtime::DiagnosticTimelineStore>,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    match start_replacement_runtime_with_diagnostics(
+        config,
+        handler,
+        runtime_health,
+        diagnostic_timeline,
+        diagnostic_counters,
+    )
+    .await
+    {
+        Ok(running) => Ok(running),
+        Err(error) if error.code().as_str() == "ATM_DAEMON_SERVING_STATE_REJECTED" => {
+            singleton_guard::abort_for_singleton_violation(format!(
+                "ATM daemon singleton violation while binding a fixed endpoint: {error}"
+            ));
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// Advertises readiness, then waits for either a shutdown signal or an

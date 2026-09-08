@@ -66,6 +66,9 @@ class _CiParityFixture:
         )
         if completed.returncode != 0:
             detail = completed.stderr.strip() or completed.stdout.strip()
+            print(f"CLI parity failure log directory: {self.environment['ATM_LOG_DIR']}")
+            print(f"CLI parity stderr:\n{completed.stderr}")
+            print(f"CLI parity stdout:\n{completed.stdout}")
             raise RuntimeError(f"CLI command failed: {completed.args}: {detail}")
         return json.loads(completed.stdout)
 
