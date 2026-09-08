@@ -15,9 +15,12 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "RULE-012 boundary allowlist" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-08T04:45:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T05:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed by arch-ctm on PR #1320 (fix/ay-gate-r3-arch, 170ae2dffe4a86f4cb873de76bea8352c2d55352). Independently re-verified by quality-mgr via direct file reads plus a live fmt/clippy/test run (not taken on arch-ctm's fix notice alone). herdr-endpoint-doctor.toml's [testing].allowed_test_double_paths now lists both actual impl sites: crate::doctor::ClosedHerdrEndpointDoctor (production, doctor/mod.rs:58) and atm_runtime::doctor_projection::tests::CountingEndpoint (test double, doctor_projection.rs:384). No unauthorized impl site remains." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-08T04:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AY-R2-003/ARCH-AY-R2-003/1> ;
@@ -29,11 +32,12 @@
   triage:file "crates/atm-runtime/src/doctor_projection.rs" ;
   triage:line 384 ;
   triage:snippet "impl HerdrEndpointDoctor for CountingEndpoint" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "104e67452" ;
   triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:fixedAtHeadSha "170ae2dffe4a86f4cb873de76bea8352c2d55352" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r3-3> .
 
 <urn:atm:triage:occurrence/ARCH-AY-R2-003/ARCH-AY-R2-003/2>
@@ -41,11 +45,12 @@
   triage:file "boundaries/atm-core/herdr-endpoint-doctor.toml" ;
   triage:line 0 ;
   triage:snippet "[testing].allowed_test_double_paths = []" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "104e67452" ;
   triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:fixedAtHeadSha "170ae2dffe4a86f4cb873de76bea8352c2d55352" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r3-3> .
 
 <urn:atm:triage:worktree/gate-r3-3>

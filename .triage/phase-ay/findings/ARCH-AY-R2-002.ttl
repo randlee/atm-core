@@ -15,9 +15,12 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "RULE-003 line count" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-08T04:45:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T05:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed by arch-ctm on PR #1320 (fix/ay-gate-r3-arch, 170ae2dffe4a86f4cb873de76bea8352c2d55352). Independently re-verified by quality-mgr via direct file reads plus a live fmt/clippy/test run (not taken on arch-ctm's fix notice alone). doctor/mod.rs's non-test code extracted into doctor/team_scope.rs; outer mod tests block now begins at line 996 (995 non-test lines), under RULE-003's 1000-line cap. fmt/clippy clean under -D warnings." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-08T04:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AY-R2-002/ARCH-AY-R2-002/1> ;
@@ -28,11 +31,12 @@
   triage:file "crates/atm-core/src/doctor/mod.rs" ;
   triage:line 1063 ;
   triage:snippet "mod tests { // 1061 lines of non-test code before this point, exceeds RULE-003 cap of 1000" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "104e67452" ;
   triage:observedAtHeadSha "ef79745ae56aaeb62e6f70a91cf4acad2360ee5c" ;
+  triage:fixedAtHeadSha "170ae2dffe4a86f4cb873de76bea8352c2d55352" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r3-2> .
 
 <urn:atm:triage:worktree/gate-r3-2>
