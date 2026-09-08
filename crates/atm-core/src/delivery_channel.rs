@@ -55,6 +55,26 @@ impl HerdrSession {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Returns whether this names Herdr's reserved default server session.
+    ///
+    /// Herdr reserves the literal `default` for the server rooted at its
+    /// configuration directory. Other session names select servers beneath
+    /// `sessions/<name>/`.
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        self.0 == "default"
+    }
+
+    /// Returns a named-server session, excluding Herdr's reserved default.
+    ///
+    /// The reserved `default` session is addressed through the configuration
+    /// root socket, while every value returned here is addressed through
+    /// `sessions/<name>/`.
+    #[must_use]
+    pub fn named(session: Option<&Self>) -> Option<&Self> {
+        session.filter(|session| !session.is_default())
+    }
 }
 
 impl fmt::Display for HerdrSession {
@@ -317,6 +337,17 @@ mod tests {
         let session = HerdrSession::new("session-1").expect("valid session");
         assert_eq!(session.as_str(), "session-1");
         assert_eq!(session.to_string(), "session-1");
+    }
+
+    #[test]
+    fn herdr_session_identifies_the_reserved_default_name() {
+        let default = HerdrSession::new("default").expect("valid default session");
+        let named = HerdrSession::new("session-1").expect("valid named session");
+
+        assert!(default.is_default());
+        assert!(!named.is_default());
+        assert!(HerdrSession::named(Some(&default)).is_none());
+        assert_eq!(HerdrSession::named(Some(&named)), Some(&named));
     }
 
     #[test]
