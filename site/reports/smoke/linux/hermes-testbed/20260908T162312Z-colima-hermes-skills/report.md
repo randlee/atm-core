@@ -3,9 +3,12 @@
 - verdict: **PASS** (7/7 skill reports, every step PASS, no intervention)
 - run: 2026-09-08 16:23:12Z start, 16:36:21Z verdict (13 minutes including the testbed image layer rebuild)
 - command: `./test.sh` in atm-hermes-testbed (branch `feat/atm-test-skills` at 6c81af1), no arguments
-- files beside this report are the run's outputs, unedited: `result.txt`, `report-1.txt` … `report-7.txt` (the seven
-  skill reports as received in the fixture's oversight inbox), `herdr-doctor.json` (`atm doctor --json` `.herdr` inside
-  the fixture after bringup), `index.html` and `smoke.envelope.json` (written by test.sh for the report index)
+- files beside this report: the run's outputs, unedited (`result.txt`, `report-1.txt` … `report-7.txt`, the seven
+  skill reports as received in the fixture's oversight inbox, and `herdr-doctor.json`, `atm doctor --json` `.herdr`
+  inside the fixture after bringup), plus the smoke-report set rendered from them by
+  `scripts/smoke/colima_skill_report.py` through the sc-compose smoke templates: `colima-hermes-skills.json` (one case
+  per skill step), `hermes-testbed-colima-hermes-skills.xhtml` (the evidence pane), `colima-hermes-skills.html` and
+  `index.html` (frames), `smoke.envelope.json` (report index)
 
 ## Inputs (all from the network, pinned)
 
