@@ -1437,7 +1437,7 @@ provenance.
 
 `COLIMA-SIMPLIFY-R1` is a complete documentation sprint on branch
 `plan/colima-simplify`, targeting `develop`. Its authoritative
-[sprint plan](./plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md) replaces the
+[sprint plan](./plans/hermes-integration-tests/sprint-COLIMA-SIMPLIFY-R1.md) replaces the
 multi-party Colima exercise with one unattended testbed command, one aggregate
 JSON result, and a 30-minute command-to-verdict budget. It is independent of
 the current ATM build/rollout and parallel-safe with the separate canonical
@@ -1448,7 +1448,7 @@ independently mergeable PRs; no testbed or product code changes in this sprint.
 
 `HERMES-SKILL-TESTS-R1` is a documentation-and-skills sprint on branch
 `feat/atm-test-skills`, targeting `develop`. Its authoritative
-[sprint plan](./plans/phase-aq/sprint-HERMES-SKILL-TESTS-R1.md) makes every
+[sprint plan](./plans/hermes-integration-tests/sprint-HERMES-SKILL-TESTS-R1.md) makes every
 Hermes-involved integration test one agent skill under `.claude/skills/atm-*`
 (setup-environment, smoke, hermes-ready, nudge-roundtrip, troubleshoot) with one
 report shape, identical on every developer host and inside the Colima testbed.

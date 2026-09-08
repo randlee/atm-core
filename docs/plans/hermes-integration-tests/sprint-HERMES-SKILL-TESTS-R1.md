@@ -224,7 +224,7 @@ on this list was part of that four hours.
 6. **Verdict.** All reports PASS on both fixtures for the same ATM version = the integration test
    passes for that version. Publication remains Rand's decision.
 7. **Post-mortem report.** After every complete run (each fixture, each version) the oversight
-   agent writes one report, `docs/plans/phase-aq/reports/hermes-skill-tests-<version>-<fixture>.md`:
+   agent writes one report, `docs/plans/hermes-integration-tests/reports/hermes-skill-tests-<version>-<fixture>.md`:
    the seven report summaries (skill, agent, PASS/FAIL, elapsed), every FAIL with its cause line,
    every oversight intervention (what broke, why, what was changed, whether the step then passed),
    product defects found (issue numbers), and recommended changes in three lists: to the skills,
@@ -238,7 +238,7 @@ on this list was part of that four hours.
   `SMOKE-TEST-RUNBOOK.md`; `run.sh`, `testbed/harness/bringup.sh`, `setup-peer.sh`, `run-tester.sh`,
   `testbed/atm.toml` (alpha-prime), Dockerfile (skills, hmux, herdr, Claude Code)
 - this document; `docs/project-plan.md` entry
-- after each run: `docs/plans/phase-aq/reports/hermes-skill-tests-<version>-<fixture>.md` (post-mortem)
+- after each run: `docs/plans/hermes-integration-tests/reports/hermes-skill-tests-<version>-<fixture>.md` (post-mortem)
 - No atm-core source, runtime, requirement or ADR changes in this PR; product findings are issues (#1307, #1309).
 
 ## Acceptance

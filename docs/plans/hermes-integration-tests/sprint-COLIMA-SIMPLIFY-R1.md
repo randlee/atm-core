@@ -313,9 +313,9 @@ summary and links subordinate evidence artifacts.
 ```sh
 git diff --check origin/develop...HEAD
 rg -n '^---$|^id: COLIMA-SIMPLIFY-R1$|^status: complete$|^branch: plan/colima-simplify$|^worktree: |^target: develop$|^one_command: |^target_minutes: 30$' \
-  docs/plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md
+  docs/plans/hermes-integration-tests/sprint-COLIMA-SIMPLIFY-R1.md
 rg -n 'COLIMA-SIMPLIFY-R1' docs/project-plan.md \
-  docs/plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md
-test "$(wc -w < docs/plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md)" -le 2500
+  docs/plans/hermes-integration-tests/sprint-COLIMA-SIMPLIFY-R1.md
+test "$(wc -w < docs/plans/hermes-integration-tests/sprint-COLIMA-SIMPLIFY-R1.md)" -le 2500
 git diff --name-only origin/develop...HEAD | grep -Ev '^(docs/|$)' && exit 1 || true
 ```
