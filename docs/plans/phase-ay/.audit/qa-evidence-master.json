@@ -3,9 +3,9 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-06T22:24:39Z",
-    "end": "2026-09-07T09:02:19Z"
+    "end": "2026-09-07T23:25:20Z"
   },
-  "scope": "phase-ay sprints AY.1-AY.8 orchestrated via graph-orchestration (.sprints/AY) as gh stacks on integrate/phase-ay. Only sprints with a dev Completion event have QA runs: AY.1 (PR #1270; r1 FAIL, r2 FAIL/0 blocking, r3 PASS; merged at 7e40db597), AY.2 (PR #1269; r1-r3 FAIL, r4 PASS at 5e7dd50e1; merged at 1195614ba), AY.3 (PR #1273 stacked on AY.2 then retargeted to integrate/phase-ay; r1 FAIL at 45701a81e, r2 not-closed at ec16200b6, r3 pending at b8afa814f; AY3-QA-002 held for Rand's ruling), AY.4 (PR #1279 stacked on AY.3; r1 FAIL at 296376da0, r2 focused re-verify not-closed at 0e7778a8d, r3 pending at edb2ed877), AY.8 (PR #1280 from integrate/phase-ay; r1 PASS D1-only at f3731606b, r2 FAIL at 696bc1061, r3 FAIL at 26ea2806a with 4/6 closed, r4 pending). AY.5 (arch-ctm, a6) is in dev with no QA run. This master is extended with each authoritative verdict message as quality-mgr reports it; pending rounds are recorded only once their verdict message exists. AY.5 (PR #1282 stacked on AY.4 in stack #1271; r1 PASS at f8876970a, 0 findings; merges after AY.4). AY.6 (PR #1284 stacked on AY.5; r1 PASS at bc32fdf92 with 1 important AY6-QA-001 open, closes before merge). AY.7 (PR #1285, feature/ay7-windows-herdr-process-installer) is in scope from QA-AY7-R1.",
+  "scope": "phase-ay sprints AY.1-AY.8 orchestrated via graph-orchestration (.sprints/AY) as gh stacks on integrate/phase-ay. Only sprints with a dev Completion event have QA runs: AY.1 (PR #1270; r1 FAIL, r2 FAIL/0 blocking, r3 PASS; merged at 7e40db597), AY.2 (PR #1269; r1-r3 FAIL, r4 PASS at 5e7dd50e1; merged at 1195614ba), AY.3 (PR #1273 stacked on AY.2 then retargeted to integrate/phase-ay; r1 FAIL at 45701a81e, r2 not-closed at ec16200b6, r3 pending at b8afa814f; AY3-QA-002 held for Rand's ruling), AY.4 (PR #1279 stacked on AY.3; r1 FAIL at 296376da0, r2 focused re-verify not-closed at 0e7778a8d, r3 pending at edb2ed877), AY.8 (PR #1280 from integrate/phase-ay; r1 PASS D1-only at f3731606b, r2 FAIL at 696bc1061, r3 FAIL at 26ea2806a with 4/6 closed, r4 pending). AY.5 (arch-ctm, a6) is in dev with no QA run. This master is extended with each authoritative verdict message as quality-mgr reports it; pending rounds are recorded only once their verdict message exists. AY.5 (PR #1282 stacked on AY.4 in stack #1271; r1 PASS at f8876970a, 0 findings; merges after AY.4). AY.6 (PR #1284 stacked on AY.5; r1 PASS at bc32fdf92 with 1 important AY6-QA-001 open, closes before merge). AY.7 (PR #1285, feature/ay7-windows-herdr-process-installer) is in scope from QA-AY7-R1. AY.15 (PR #1310, Herdr agent-name/alias uniqueness cutover, dispatched after Rand's naming requirements landed) is in scope from QA-AY15-R7: rounds r1-r6 were superseded by moving heads before any verdict message was produced, so only the three rounds carrying an authoritative quality-mgr verdict are recorded -- r7 FAIL at 10bc123f8, r8 FAIL at 715ab21ea, r9 PASS at 3259d6a72; merged to integrate/phase-ay at 47f359cf9. Phase-ending gate rounds on PR #1308 are phase-level, not sprint QA runs, and are not recorded here.",
   "count_basis": "headline/reviewer",
   "path_notes": "Built directly from ATM messages read this session (fenix mailbox, team atm-dev). Every assignment_message_id is a real ATM message_id located via `atm list quality-mgr --all --json`; every result_message_id via `atm list --from quality-mgr --all --json`. Pinned commits are the HEADs of the detached qa-pr<PR>-r<N> worktrees recorded in worktree-tracking.md. No verdict, run, or message id was fabricated; null means the value is not carried by the source message.",
   "runs": [
@@ -768,6 +768,112 @@
       ],
       "count_basis": "headline/reviewer",
       "evidence": "Deliverable completion 12/12. req-qa PASS, arch-qa PASS (merge_ready), rust-qa-agent PASS (fmt/clippy/tests green), ruthless-boundary-qa confirmed RBQA-AY14-F002 fixed, rust-best-practices-agent confirmed RBP-F002 minor still open. AY14-QA-001 and AY14-QA-002 closed (triage:status=fixed, closedBy=quality-mgr) at d04020e70 on integrate/phase-ay. AC4 empty diff and ADR-061 PR-body note independently verified. CI Test (windows-latest) passed on 109fdad1e (run 34153691392). Full r2 report: PR #1305 comment 5574912902. Merged to integrate/phase-ay at 271b387ed."
+    },
+    {
+      "run_id": "QA-AY15-R7",
+      "aich_sprint": "AY15",
+      "phase_sprint": "AY.15",
+      "pass": 7,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-07T21:42:55Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1YX60M6P1KE9XFJAZ2RZNFD",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "qa-pr1310-r7: AY.15 Herdr agent-name/alias uniqueness cutover, PR #1310, full verdict round; quality-mgr acked and verified live head 10bc123f8 (rebased onto integrate/phase-ay 943b4a64f).",
+      "result_time_utc": "2026-09-07T21:57:38Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1YY0YN31YVT10P6SK1N08M6",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": [
+        "CI red deterministically on macos-latest and ubuntu-latest: atm-runtime::doctor_projection::tests::all_team_projection_aggregates_each_roster_through_the_async_loop panics at doctor_projection.rs:429 (team-a/team-b fixture shares a literal member name, now rejected by D1's database-wide unique_name check)",
+        "herdr_agent field not Option/defaulted -- ADR-061 backward-compat break (doctor/herdr_state.rs:218)",
+        "hardcoded 'atm-dev' literal in member_mutation.rs test fixtures (5 lines)",
+        "sprint-doc frontmatter still 'dispatched'",
+        "docs/project-plan.md AY.15 row still 'dispatched'",
+        "sprint doc D6a cites a non-existent ATM-QA-AY-002.ttl",
+        "sprint doc D6a conflates RBQA-AY-F001 with an unrelated already-closed record",
+        "AY14-QA-003 and AY-QA-001/003/004/005 triage records still open despite confirmed code fixes",
+        "all 9 CIPHER-NAME-00x triage records still open despite confirmed code fixes"
+      ],
+      "important": [
+        "ADR-061 entry missing for the AY.15 interface change",
+        "reviewer coverage gap: rust-qa-agent's round-7 test run never covered atm-runtime",
+        "gh stack needsRebase:true vs integrate/phase-ay 943b4a64f"
+      ],
+      "minor": [
+        "AY15-QA-006 openapi drift (non-blocking, deferred)",
+        "AY15-QA-007 D4a partial permutation table (non-blocking, deferred)"
+      ],
+      "count_basis": "headline/reviewer",
+      "evidence": "Deliverable completion 7/10 present (70%). D1-D4d functional/architectural work independently corroborated 2-3x per item. Blocking CI regression was quality-mgr-discovered, not caught by any of the 5 reviewers. Full round-7 report: PR #1310 comment 5575994618. Headline counts as reported: 9 Blocking / 3 Important / 2 Minor."
+    },
+    {
+      "run_id": "QA-AY15-R8",
+      "aich_sprint": "AY15",
+      "phase_sprint": "AY.15",
+      "pass": 8,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-07T22:14:53Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1YZ0HPWHWFCP3Q5B2WT91EH",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "qa-pr1310-r8: AY.15 Herdr agent-name/alias uniqueness cutover, PR #1310, full-verdict round after AY15-FIX-R1; quality-mgr acked and verified against head 715ab21ea.",
+      "result_time_utc": "2026-09-07T22:31:51Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1YZZKSTHYBAT512J2EGTZYH",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": [],
+      "important": [
+        "req-qa returned FAIL/non-compliant on this head",
+        "arch-qa returned FAIL/non-compliant on this head",
+        "ATM-QA-001: matrix row A-17 cites a deleted function/stale line and names no test",
+        "RBQA-AY15-F001 scope grew to 3 independent duplicate implementations of the collision scan (store, member_mutation preflight, doctor/mod.rs push_duplicate_effective_name_warnings)",
+        "RBQA-AY15-F003: service_runtime.rs default trait method silently ignores its own allow_database_wide_alias param",
+        "AY15-ARCH-002/003: two files ~60-70 lines over the 1000-line threshold, grown by this sprint's additions"
+      ],
+      "minor": [
+        "RBQA-AY15-F004: duplicated alias-matching logic",
+        "RBQA-AY15-F002 lint gap (unchanged, non-blocking)"
+      ],
+      "count_basis": "headline/reviewer",
+      "evidence": "All 9 round-7 Blocking findings confirmed fixed and live-reverified; rust-qa-agent re-ran fmt/clippy/tests green; quality-mgr independently confirmed AC5 empty atm-daemon diff and AC4 fmt clean. No Blocking remains at this head, so status:complete in b5bdb544a stands. Restated non-blocking leftovers: AY15-QA-006, AY15-QA-007, RBQA-AY15-F002. 21 confirmed-fixed records (AY14-QA-003, AY-QA-001/003/004/005, AY15-QA-001/002/003/004/005/008, CIPHER-NAME-001..009) deferred for closure on integrate/phase-ay after merge per standing rule. Full round-8 report: PR #1310 comment 5576239134. Headline counts as reported: 0 Blocking / 6 Important / 2 Minor."
+    },
+    {
+      "run_id": "QA-AY15-R9",
+      "aich_sprint": "AY15",
+      "phase_sprint": "AY.15",
+      "pass": 9,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-07T23:10:12Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M1Z25TQQWCMNZMHA6MHJ81J2",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "qa-pr1310-r9: round 9 fix-verification for PR #1310 after AY15-FIX-R2; quality-mgr acked and verified against head 3259d6a72.",
+      "result_time_utc": "2026-09-07T23:25:20Z",
+      "result_time_pst": null,
+      "result_message_id": "01M1Z31GX3AXEFNDC6NFJ9N6Y5",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": [],
+      "important": [],
+      "minor": [
+        "ATM-QA-101: leftover duplicate test artifact at roster_store.rs:800/983 (rides the next touching PR)",
+        "doc-drift nit on herdr_agent null-vs-omitted wording",
+        "RBQA-AY15-F002 lint gap remains correctly open/non-blocking"
+      ],
+      "count_basis": "headline/reviewer",
+      "evidence": "All 6 round-8 Important findings confirmed fixed at head 3259d6a72, independently re-verified rather than taken on the fix commit's word: RBQA-AY15-F001/F003/F004 collapsed to single owners; AY15-ARCH-002/003 both under the 1000-line threshold via clean module splits; AY15-QA-006/007/009 closed with real named tests and typed OpenAPI schemas. HTTP_API_VERSION confirmed unmoved at 1.2.0 (schema-reviewer PASS). All 5 reviewers PASS or clean findings-only. CI green except macos/windows Test still in progress (not a gate). Full round-9 report: PR #1310 comment 5576663523. Triage .ttl closures deferred to post-merge on integrate/phase-ay. PR #1310 merged to integrate/phase-ay at 47f359cf9. Headline counts as reported: 0 Blocking / 0 Important / 3 Minor."
     }
   ]
 }
