@@ -1,16 +1,28 @@
-"""CI-only CLI/native parity fixture using the ordinary daemon launch gate."""
+"""CI-only CLI/native parity fixture with an explicitly owned daemon."""
 
 from __future__ import annotations
 
 import json
 import os
 from pathlib import Path
+import queue
 import subprocess
+import sys
 import tempfile
+import threading
+import time
 import unittest
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-_CLI_TIMEOUT_SECONDS = 30
+from scripts.smoke.daemon_lifecycle import require_clean_host_daemon_state
+
+
+_CLI_TIMEOUT_SECONDS = 60
+_DAEMON_READY_TIMEOUT_SECONDS = 30
+_DAEMON_STOP_TIMEOUT_SECONDS = 10
 
 
 def _without_observability(value: object) -> object:
@@ -26,7 +38,7 @@ def _without_observability(value: object) -> object:
 
 
 class _CiParityFixture:
-    """A clean-runner fixture; it never launches ``atm-daemon`` directly."""
+    """A clean-runner fixture that owns one replacement daemon child."""
 
     team = "aw5-cli-parity"
     sender = "aw5-parity-sender"
@@ -41,21 +53,32 @@ class _CiParityFixture:
             "ATM_CHAT_ID": "parity",
             "ATM_LOG_DIR": str(self.root / "logs"),
         }
+        self.daemon: subprocess.Popen[str] | None = None
 
     @staticmethod
     def binary() -> Path:
-        repo = Path(__file__).resolve().parents[2]
-        candidate = Path(os.environ.get("ATM_PARITY_ATM", repo / "target" / "debug" / "atm"))
+        candidate = Path(os.environ.get("ATM_PARITY_ATM", ROOT / "target" / "debug" / "atm"))
         if os.name == "nt" and not candidate.is_file():
             candidate = candidate.with_suffix(".exe")
         if not candidate.is_file():
             raise RuntimeError("CI parity fixture requires target/debug/atm")
         return candidate.resolve()
 
+    @staticmethod
+    def daemon_binary() -> Path:
+        candidate = Path(
+            os.environ.get("ATM_PARITY_DAEMON", _CiParityFixture.binary().with_name("atm-daemon"))
+        )
+        if os.name == "nt" and not candidate.is_file():
+            candidate = candidate.with_suffix(".exe")
+        if not candidate.is_file():
+            raise RuntimeError("CI parity fixture requires target/debug/atm-daemon")
+        return candidate.resolve()
+
     def cli(self, *arguments: str, identity: str) -> dict[str, object]:
         completed = subprocess.run(
             [str(self.binary()), *arguments, "--json"],
-            cwd=Path(__file__).resolve().parents[2],
+            cwd=ROOT,
             env={**self.environment, "ATM_IDENTITY": identity},
             capture_output=True,
             text=True,
@@ -72,19 +95,77 @@ class _CiParityFixture:
             raise RuntimeError(f"CLI command failed: {completed.args}: {detail}")
         return json.loads(completed.stdout)
 
+    def start_daemon(self) -> None:
+        require_clean_host_daemon_state(smoke_label="CLI/native parity fixture")
+        self.daemon = subprocess.Popen(
+            [str(self.daemon_binary()), "--peer-wire-security", "plaintext-test"],
+            cwd=ROOT,
+            env={**self.environment, "ATM_DAEMON_READY_STDOUT": "1"},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if not _daemon_ready(self.daemon, _DAEMON_READY_TIMEOUT_SECONDS):
+            self.stop_daemon()
+            raise RuntimeError("CI parity daemon did not publish ATM_DAEMON_READY")
+
+    def stop_daemon(self) -> None:
+        if self.daemon is None or self.daemon.poll() is not None:
+            return
+        self.daemon.terminate()
+        try:
+            self.daemon.wait(timeout=_DAEMON_STOP_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            self.daemon.kill()
+            self.daemon.wait(timeout=_DAEMON_STOP_TIMEOUT_SECONDS)
+
     def start(self) -> None:
         member_home = self.root / "member-home"
         member_home.mkdir()
         for member in (self.sender, self.receiver):
             self.cli("teams", "add-member", self.team, member, "--home-dir", str(member_home), identity=self.sender)
-        # This is deliberately the first daemon request after the preceding
-        # admission-capacity CI step has stopped its owned daemon. The normal
-        # CLI path must connect first, then use DaemonSupervisor's production
-        # gate to start the one Tokio/Axum runtime when no daemon answers.
-        self.cli("list", identity=self.receiver)
+        try:
+            self.start_daemon()
+            self.cli("list", identity=self.receiver)
+        except BaseException:
+            self.stop_daemon()
+            raise
 
     def close(self) -> None:
-        self.temporary.cleanup()
+        try:
+            self.stop_daemon()
+        finally:
+            self.temporary.cleanup()
+
+
+def _daemon_ready(process: subprocess.Popen[str], timeout: float) -> bool:
+    """Wait for the replacement daemon marker without a blocking pipe read."""
+    lines: "queue.Queue[str | None]" = queue.Queue()
+
+    def pump_stdout() -> None:
+        if process.stdout is None:
+            lines.put(None)
+            return
+        try:
+            for line in iter(process.stdout.readline, ""):
+                lines.put(line)
+        finally:
+            lines.put(None)
+
+    threading.Thread(target=pump_stdout, daemon=True).start()
+    deadline = time.monotonic() + timeout
+    while (remaining := deadline - time.monotonic()) > 0:
+        try:
+            line = lines.get(timeout=remaining)
+        except queue.Empty:
+            return False
+        if line is None:
+            return False
+        if line.strip() == "ATM_DAEMON_READY":
+            return True
+    return False
 
 
 @unittest.skipUnless(

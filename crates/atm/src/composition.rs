@@ -25,13 +25,9 @@ use atm_core::search::{SearchRequest, SearchResponse};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
-use atm_daemon_client::{
-    BootstrapCommandEvent, BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent,
-    parse_bootstrap_team, probe_daemon_endpoint, resolve_daemon_bin,
-    resolve_daemon_local_ipc_endpoint, unexpected_response,
-};
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
+use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 #[cfg(test)]
 use atm_runtime_test_support::{
@@ -449,75 +445,16 @@ impl<'a> CliComposition<'a> {
         let endpoint = resolve_daemon_local_ipc_endpoint().inspect_err(|error| {
             log_runtime_root_failure(command, error);
         })?;
-        let supervisor = DaemonSupervisor::new(endpoint.clone(), resolve_daemon_bin("atm")?);
-        let emit_bootstrap_event = |event: BootstrapCommandEvent| {
-            observability.emit(CommandEvent {
-                command: event.command,
-                action: action_name(event.action),
-                outcome: outcome_label(event.outcome),
-                team: event.team,
-                agent: event.agent.clone(),
-                sender: event.agent,
-                message_id: None,
-                requires_ack: false,
-                dry_run: false,
-                task_id: None,
-                error_code: event.error_code,
-                error_message: event.error_message,
-            })
-        };
-        let traceability = BootstrapTraceability::new(
-            command,
-            &emit_bootstrap_event,
-            parse_bootstrap_team()?,
-            parse_bootstrap_agent()?,
-        );
-        // The launch gate starts only the shipped Tokio/Axum daemon after the
-        // selected local HTTP transport proves no daemon is reachable.
-        supervisor.ensure_daemon_available_with_traceability(&traceability, || {
-            probe_daemon_endpoint(&endpoint)
-        })?;
-        let mut composition = Self {
+        // The one managed Tokio/Axum daemon is selected by `/daemon-switch`.
+        // CI fixtures that require a daemon explicitly own its lifecycle.
+        Ok(Self {
             async_transport: atm_http_runtime::preferred_local_client(
                 endpoint.as_ref(),
                 SAME_HOST_REQUEST_DEADLINE,
             )?,
             observability_port: observability,
             bootstrap_trace: None,
-        };
-        composition.bootstrap_trace = Some(bootstrap_trace_to_core(traceability.snapshot()));
-        Ok(composition)
-    }
-}
-
-fn bootstrap_trace_to_core(
-    report: atm_daemon_client::BootstrapTraceReport,
-) -> BootstrapTraceReport {
-    use atm_core::doctor::{
-        BootstrapAutoStartOutcome as CoreAutoStart, BootstrapConnectOutcome as CoreConnect,
-        BootstrapLaunchGateOutcome as CoreLaunch,
-    };
-
-    BootstrapTraceReport {
-        daemon_connect: match report.daemon_connect {
-            atm_daemon_client::BootstrapConnectOutcome::Connected => CoreConnect::Connected,
-            atm_daemon_client::BootstrapConnectOutcome::NotFound => CoreConnect::NotFound,
-            atm_daemon_client::BootstrapConnectOutcome::Timeout => CoreConnect::Timeout,
-            atm_daemon_client::BootstrapConnectOutcome::Failed => CoreConnect::Failed,
-        },
-        daemon_launch_gate: match report.daemon_launch_gate {
-            atm_daemon_client::BootstrapLaunchGateOutcome::Launched => CoreLaunch::Launched,
-            atm_daemon_client::BootstrapLaunchGateOutcome::Failed => CoreLaunch::Failed,
-            atm_daemon_client::BootstrapLaunchGateOutcome::Skipped => CoreLaunch::Skipped,
-        },
-        daemon_auto_start: match report.daemon_auto_start {
-            atm_daemon_client::BootstrapAutoStartOutcome::AutoStarted => CoreAutoStart::AutoStarted,
-            atm_daemon_client::BootstrapAutoStartOutcome::Failed => CoreAutoStart::Failed,
-            atm_daemon_client::BootstrapAutoStartOutcome::Skipped => CoreAutoStart::Skipped,
-        },
-        connect_detail: report.connect_detail,
-        launch_gate_detail: report.launch_gate_detail,
-        auto_start_detail: report.auto_start_detail,
+        })
     }
 }
 
