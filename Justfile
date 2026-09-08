@@ -181,6 +181,18 @@ fuzz *args:
 reports-index *args:
     {{python_cmd}} .just/generate_report_index.py {{args}}
 
+# Print the requirement-ledger skeleton for a QA pass to complete.
+req-ledger-skeleton:
+    {{python_cmd}} .just/req_ledger.py skeleton
+
+# Validate a completed requirement ledger; the argument is its JSON path.
+req-ledger-check ledger:
+    {{python_cmd}} .just/req_ledger.py check {{ledger}}
+
+# Verify that every requirement ID is backtick-delimited before extraction.
+req-ledger-ids-check:
+    {{python_cmd}} .just/req_ledger.py ids-check
+
 # Build the PyO3 extension with Maturin and prove Python can import it.
 test-graft-python:
     {{python_cmd}} scripts/test_atm_graft_python.py

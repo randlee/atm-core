@@ -174,11 +174,11 @@ against the sprint's change set and returns a `requirements_ledger`;
 quality-mgr verifies it mechanically before accepting the report:
 
 ```sh
-python3 .claude/skills/quality-management-gh/scripts/req_ledger.py skeleton > <scratch>/req-ledger-<pr>.json   # req-qa fills verdicts
-python3 .claude/skills/quality-management-gh/scripts/req_ledger.py check <scratch>/req-ledger-<pr>.json      # quality-mgr gate; must print PASS
+just req-ledger-skeleton > <scratch>/req-ledger-<pr>.json   # req-qa fills verdicts
+just req-ledger-check <scratch>/req-ledger-<pr>.json        # quality-mgr gate; must print PASS
+just req-ledger-ids-check                                   # extraction self-check; must print PASS
 ```
 
 A ledger missing an id, listing one twice, carrying a verdict outside
 `untouched | compliant | violated`, or a judged row without evidence fails the
 check and the QA pass. The verdict line carries `req-ledger <n>/<n>`.
-
