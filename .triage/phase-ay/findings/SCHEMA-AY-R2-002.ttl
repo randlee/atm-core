@@ -15,9 +15,12 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "docs/atm-http-runtime/openapi.yaml, crates/atm/openapi.yaml, crates/atm/tests/openapi_surface_baseline.json, docs/atm-daemon/http-api.md" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-08T00:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 (PR #1318, integrate/phase-ay 75c01a5bd). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. Both crates/atm/openapi.yaml and docs/atm-http-runtime/openapi.yaml (confirmed byte-identical) gained the transport field on HerdrEndpointDoctorReport; openapi_surface_baseline.json updated; openapi_surface_is_additions_only test passes 4/4." ;
   triage:foundIn triage:AY3 ;
   triage:foundAt "2026-09-08T00:05:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SCHEMA-AY-R2-002/SCHEMA-AY-R2-002/1> ;
@@ -29,10 +32,11 @@
   triage:file "docs/atm-http-runtime/openapi.yaml" ;
   triage:line 192 ;
   triage:snippet "HerdrMemberPresence:" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r2> .
 
 <urn:atm:triage:occurrence/SCHEMA-AY-R2-002/SCHEMA-AY-R2-002/2>
@@ -40,10 +44,11 @@
   triage:file "crates/atm/tests/openapi_surface_baseline.json" ;
   triage:line 1 ;
   triage:snippet "(no transport entry in baseline)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r2> .
 
 <urn:atm:triage:worktree/gate-r2>

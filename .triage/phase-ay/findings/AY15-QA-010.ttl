@@ -15,9 +15,12 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "docs/atm-daemon/http-api.md, docs/atm-http-runtime/openapi.yaml, crates/atm/openapi.yaml herdr_agent wording" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T23:41:09Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 (PR #1318, integrate/phase-ay 75c01a5bd). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. openapi.yaml/http-api.md herdr_agent description corrected to 'nullable for backward-compatible v1.1 payloads; added in HTTP API 1.2.0', consistent with the actual skip_serializing_if implementation." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T23:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-010/AY15-QA-010/1> ;
@@ -29,10 +32,11 @@
   triage:file "docs/atm-daemon/http-api.md" ;
   triage:line 120 ;
   triage:snippet "name and the effective herdr_agent name; herdr_agent is nullable for" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay15-herdr-name-uniqueness" ;
   triage:headSha "3259d6a72" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/ay15-r9> .
 
 <urn:atm:triage:occurrence/AY15-QA-010/AY15-QA-010/2>
@@ -40,10 +44,11 @@
   triage:file "docs/atm-http-runtime/openapi.yaml" ;
   triage:line 197 ;
   triage:snippet "herdr_agent: { type: string, nullable: true, description: Effective Herdr agent name; null for legacy v1.1 payloads. }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay15-herdr-name-uniqueness" ;
   triage:headSha "3259d6a72" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/ay15-r9> .
 
 <urn:atm:triage:worktree/ay15-r9>

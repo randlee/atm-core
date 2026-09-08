@@ -15,9 +15,12 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "#[allow(clippy:: occurrences added in phase-ay under crates/atm-http-runtime and crates/atm-herdr" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-08T00:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 (PR #1318, integrate/phase-ay 75c01a5bd). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. herdr_breaker_escalation.rs:81 now carries #[expect(clippy::too_many_arguments, reason=...)] plus a documenting #[allow(unfulfilled_lint_expectations, reason=...)]; compiles clean under -D warnings, confirmed live by rust-qa-agent's clippy run." ;
   triage:foundIn triage:AY4 ;
   triage:foundAt "2026-09-08T00:05:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-AY-R2-001/QA-AY-R2-001/1> ;
@@ -28,10 +31,11 @@
   triage:file "crates/atm-http-runtime/src/herdr_breaker_escalation.rs" ;
   triage:line 81 ;
   triage:snippet "#[allow(clippy::too_many_arguments)]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r2> .
 
 <urn:atm:triage:worktree/gate-r2>

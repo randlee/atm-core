@@ -15,9 +15,12 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "docs/project-plan.md Phase AY section 57 header and status table" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-08T00:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 (PR #1318, integrate/phase-ay 75c01a5bd). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. docs/project-plan.md:1663 header now reads [EXECUTED - PHASE-ENDING GATE IN PROGRESS] with a consistent status paragraph; CLAUDE.md Current Status updated in parallel." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-08T00:05:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-GATE-001/ATM-QA-GATE-001/1> ;
@@ -28,10 +31,11 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1663 ;
   triage:snippet "## 57. Phase AY - Native-IPC Transport Cutover For Herdr [PLANNING - DRAFT, NOT APPROVED]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r2> .
 
 <urn:atm:triage:worktree/gate-r2>

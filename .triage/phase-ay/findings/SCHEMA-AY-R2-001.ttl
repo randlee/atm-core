@@ -15,9 +15,12 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "every ADR-061 governed struct field added in phase-ay: serde default present" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-08T00:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 (PR #1318, integrate/phase-ay 75c01a5bd). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. HerdrTransportKind now derives Default with #[default] Cli; HerdrEndpointObservation.transport and HerdrEndpointDoctorReport.transport both gained #[serde(default)]; new backward-compat test herdr_endpoint_observation_accepts_v1_1_payload_without_transport added and passing." ;
   triage:foundIn triage:AY3 ;
   triage:foundAt "2026-09-08T00:05:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SCHEMA-AY-R2-001/SCHEMA-AY-R2-001/1> ;
@@ -30,10 +33,11 @@
   triage:file "crates/atm-core/src/doctor/herdr_state.rs" ;
   triage:line 16 ;
   triage:snippet "pub enum HerdrTransportKind {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r2> .
 
 <urn:atm:triage:occurrence/SCHEMA-AY-R2-001/SCHEMA-AY-R2-001/2>
@@ -41,10 +45,11 @@
   triage:file "crates/atm-core/src/doctor/herdr_state.rs" ;
   triage:line 294 ;
   triage:snippet "pub transport: HerdrTransportKind," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r2> .
 
 <urn:atm:triage:occurrence/SCHEMA-AY-R2-001/SCHEMA-AY-R2-001/3>
@@ -52,10 +57,11 @@
   triage:file "crates/atm-core/src/doctor/report.rs" ;
   triage:line 331 ;
   triage:snippet "pub transport: HerdrTransportKind," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ay" ;
   triage:headSha "0da9a26ec" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/gate-r2> .
 
 <urn:atm:triage:worktree/gate-r2>

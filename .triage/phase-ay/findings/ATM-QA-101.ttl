@@ -15,9 +15,12 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/roster_store.rs test module" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-07T23:41:09Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 (PR #1318, integrate/phase-ay 75c01a5bd). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. Duplicate standalone test unique_name_a19_removing_a_member_frees_its_effective_name removed from roster_store.rs; sole coverage is the table-driven case at line 800; 12/12 tests pass, no regression." ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-07T23:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/ATM-QA-101/1> ;
@@ -29,10 +32,11 @@
   triage:file "crates/atm-storage-rusqlite/src/roster_store.rs" ;
   triage:line 800 ;
   triage:snippet "id: 'unique_name_a19_removing_a_member_frees_its_effective_name'," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay15-herdr-name-uniqueness" ;
   triage:headSha "3259d6a72" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/ay15-r9> .
 
 <urn:atm:triage:occurrence/ATM-QA-101/ATM-QA-101/2>
@@ -40,10 +44,11 @@
   triage:file "crates/atm-storage-rusqlite/src/roster_store.rs" ;
   triage:line 983 ;
   triage:snippet "fn unique_name_a19_removing_a_member_frees_its_effective_name() {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ay15-herdr-name-uniqueness" ;
   triage:headSha "3259d6a72" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
   triage:occursIn <urn:atm:triage:worktree/ay15-r9> .
 
 <urn:atm:triage:worktree/ay15-r9>
