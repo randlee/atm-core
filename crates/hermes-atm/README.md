@@ -68,6 +68,7 @@ the nudge will fail closed because it cannot find or contact the receiver.
      --chat-id "$ATM_CHAT_ID" \
      --atm-home "$ATM_HOME" \
      --workspace-root "$ATM_WORKSPACE_ROOT" \
+     --platform <telegram|api_server> \
      --launch-agent-plist <gateway-launch-agent.plist>
    ```
 
