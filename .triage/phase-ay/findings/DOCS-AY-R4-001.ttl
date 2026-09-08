@@ -1,0 +1,162 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/DOCS-AY-R4-001>
+  a triage:Finding ;
+  triage:findingId "DOCS-AY-R4-001" ;
+  triage:title "Phase-ay sprint-doc frontmatter status stale against docs/project-plan.md" ;
+  triage:description "quality-mgr phase-ay gate round 4 (PR #1320 fix/ay-gate-r3-arch, head 170ae2dffe4a86f4cb873de76bea8352c2d55352) reported sprint-AY.9 and sprint-AY.13 frontmatter status as stale (draft / dispatched) while docs/project-plan.md records both sprints as merged. Workspace-wide sweep of docs/plans/phase-ay/ shows the pattern is broader than the two reported files: eleven sprint docs carry a non-terminal frontmatter status while the phase AY sprint status table in docs/project-plan.md records each as merged. AY.1 through AY.9 read status: draft; AY.13 and AY.14 read status: dispatched. AY.15 already reads status: complete and is correct. AY.10 and AY.12 read status: gated and are correct because both remain undispatched behind a recorded Rand decision; AY.11 reads status: draft and is correct because it is not present in the project-plan sprint status table and was never executed. Required correction: set status: complete on the eleven listed sprint docs so the sprint-doc frontmatter agrees with the project-plan record. This is the same acceptance-gate item the QA template step d enforces (sprint doc frontmatter must set status: complete before QA can PASS). Non-blocking, docs-only, no code impact." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "all sprint docs under docs/plans/phase-ay/ cross-checked against the phase AY sprint status table in docs/project-plan.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-08T06:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-08T05:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOCS-AY-R4-001/11> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md" ;
+  triage:line 9 ;
+  triage:snippet "frontmatter reads status: draft while docs/project-plan.md records AY.1 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md" ;
+  triage:line 9 ;
+  triage:snippet "frontmatter reads status: draft while docs/project-plan.md records AY.2 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md" ;
+  triage:line 9 ;
+  triage:snippet "frontmatter reads status: draft while docs/project-plan.md records AY.3 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/4>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md" ;
+  triage:line 9 ;
+  triage:snippet "frontmatter reads status: draft while docs/project-plan.md records AY.4 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/5>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md" ;
+  triage:line 9 ;
+  triage:snippet "frontmatter reads status: draft while docs/project-plan.md records AY.5 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/6>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md" ;
+  triage:line 9 ;
+  triage:snippet "frontmatter reads status: draft while docs/project-plan.md records AY.6 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/7>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md" ;
+  triage:line 12 ;
+  triage:snippet "frontmatter reads status: draft while docs/project-plan.md records AY.7 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/8>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md" ;
+  triage:line 12 ;
+  triage:snippet "frontmatter reads status: draft while docs/project-plan.md records AY.8 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/9>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md" ;
+  triage:line 12 ;
+  triage:snippet "frontmatter reads status: draft while docs/project-plan.md records AY.9 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/10>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md" ;
+  triage:line 12 ;
+  triage:snippet "frontmatter reads status: dispatched while docs/project-plan.md records AY.13 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:occurrence/DOCS-AY-R4-001/11>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md" ;
+  triage:line 12 ;
+  triage:snippet "frontmatter reads status: dispatched while docs/project-plan.md records AY.14 as merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:occursIn <urn:atm:triage:worktree/gate-r4-1> .
+
+<urn:atm:triage:worktree/gate-r4-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "82c6e428b" ;
+  triage:orderIndex 0 .
