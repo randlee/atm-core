@@ -211,9 +211,9 @@ and leaves no fixture teams, containers, ports, or host trust changes behind.
 - Rewrite the testbed README's obsolete phases, amd64 default, manual
   allowlist, and owner/status narrative around the one-command contract.
 
-### Future testbed implementation sprints
+### Phase AZ testbed implementation sprints
 
-Each row becomes its own mandatory-frontmatter sprint file when dispatched.
+Each row is a Phase AZ sprint (`AZ.1`–`AZ.5`, the phase after AY) and becomes its own mandatory-frontmatter sprint file under `docs/plans/phase-az/` when dispatched.
 Each PR targets the then-current testbed `main`, has no dependency on another
 open PR, and leaves existing entry points usable until replaced. The first PR
 is intentionally a thin wrapper so unattended use arrives before internal
@@ -223,15 +223,15 @@ the `/gh-stack` skill.
 
 | Sprint/PR | Owned paths and independently mergeable scope | Required validation |
 | --- | --- | --- |
-| CS.1 single-command entry point | `run.sh`, new `harness/aggregate-result.*`, and runner tests: accept refs, call today's scripts, enforce child/60-minute timeouts, emit the complete aggregate schema below, and exit 0/1. | Shell tests for args, timeout, skip→fail, child-exit propagation, fresh result directory. |
-| CS.2 immutable assets and cache | `build.sh`, asset resolver/cache helper, and its tests: resolve tag/SHA and matching CI artifacts, verify hashes, use native arm64, and key base/thin-layer caches by content. | Cold and warm dry fixtures; cache-key and provenance mismatch tests. |
-| CS.3 deterministic product oracle | `testbed/test-tier-{a,b,d}.py`, shared result/DB-query helper, and tests: repair B2a–c, D7, and A1 without changing the aggregate schema. | Fixture tests plus A–D matrix on a disposable container. |
-| CS.4 self-contained prompt fixtures | `harness/run-prompts.sh`, prompt manifests/hooks, and tests: repair AT1/AT4/AT8, isolate child secrets, default to a fast/local backend, classify AT3 diagnostic, and fail every required skip. | Offline fake-agent suite and one real-provider prompt run. |
-| CS.5 unattended operation and docs | Scheduled workflow/poster, cleanup/residue tests, `README.md`, concise runbook, and deletion of the ceremonial documents named above. | Cron-like no-TTY run; forced failure proves one JSON, issue payload, and clean teardown. |
+| AZ.1 single-command entry point | `run.sh`, new `harness/aggregate-result.*`, and runner tests: accept refs, call today's scripts, enforce child/60-minute timeouts, emit the complete aggregate schema below, and exit 0/1. | Shell tests for args, timeout, skip→fail, child-exit propagation, fresh result directory. |
+| AZ.2 immutable assets and cache | `build.sh`, asset resolver/cache helper, and its tests: resolve tag/SHA and matching CI artifacts, verify hashes, use native arm64, and key base/thin-layer caches by content. | Cold and warm dry fixtures; cache-key and provenance mismatch tests. |
+| AZ.3 deterministic product oracle | `testbed/test-tier-{a,b,d}.py`, shared result/DB-query helper, and tests: repair B2a–c, D7, and A1 without changing the aggregate schema. | Fixture tests plus A–D matrix on a disposable container. |
+| AZ.4 self-contained prompt fixtures | `harness/run-prompts.sh`, prompt manifests/hooks, and tests: repair AT1/AT4/AT8, isolate child secrets, default to a fast/local backend, classify AT3 diagnostic, and fail every required skip. | Offline fake-agent suite and one real-provider prompt run. |
+| AZ.5 unattended operation and docs | Scheduled workflow/poster, cleanup/residue tests, `README.md`, concise runbook, and deletion of the ceremonial documents named above. | Cron-like no-TTY run; forced failure proves one JSON, issue payload, and clean teardown. |
 
-CS.1 may merge first without waiting for any other row. CS.2–CS.4 touch
+AZ.1 may merge first without waiting for any other row. AZ.2–AZ.4 touch
 separate asset, oracle, and prompt-fixture surfaces and can proceed in
-parallel after CS.1 establishes the aggregate schema. CS.5 follows the stable
+parallel after AZ.1 establishes the aggregate schema. AZ.5 follows the stable
 CLI/schema but can prepare its docs and automation in parallel.
 
 ## Explicit Code Samples
@@ -290,7 +290,7 @@ summary and links subordinate evidence artifacts.
   agent code, the canonical Hermes patch, or release policy.
 - It does not make the cross-host AT3 diagnostic a release gate.
 - It does not claim that the unmeasured image-build duration already meets a
-  target; CS.1 measures it and CS.2 optimizes it.
+  target; AZ.1 measures it and AZ.2 optimizes it.
 - It does not implement the future testbed PRs listed above.
 
 ## Acceptance Criteria
