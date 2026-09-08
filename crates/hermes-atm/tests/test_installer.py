@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import redirect_stdout
+from enum import Enum
 from io import StringIO
 import json
 import os
@@ -73,8 +74,9 @@ class GatewayModules:
         self.original_hermes_config = sys.modules.get("hermes_cli.config")
         self.original_plugins = sys.modules.get("hermes_cli.plugins")
 
-        class Platform:
-            TELEGRAM = object()
+        class Platform(Enum):
+            TELEGRAM = "telegram"
+            API_SERVER = "api_server"
 
         class GatewayRunner:
             gateway_loop = None
@@ -141,7 +143,7 @@ class GatewayModules:
 
 
 class InstallerTests(unittest.TestCase):
-    def test_install_writes_standard_hook_and_is_idempotent(self):
+    def test_install_writes_standard_hook_and_defaults_to_telegram(self):
         with tempfile.TemporaryDirectory() as temporary, GatewayModules():
             profile_home = Path(temporary) / TEST_PROFILE
             result = install_profile(
@@ -165,6 +167,7 @@ class InstallerTests(unittest.TestCase):
                     "team": TEST_TEAM,
                     "chat_id": TEST_CHAT_ID,
                     "workspace_root": "/tmp/workspace",
+                    "platform": "telegram",
                 },
             )
             self.assertIn("gateway:startup", (hook / "HOOK.yaml").read_text())
@@ -194,6 +197,38 @@ class InstallerTests(unittest.TestCase):
                     workspace_root="/tmp/workspace",
                 )["changed"]
             )
+
+    def test_install_writes_explicit_api_server_platform(self):
+        with tempfile.TemporaryDirectory() as temporary, GatewayModules():
+            result = install_profile(
+                profile_home=Path(temporary) / TEST_PROFILE,
+                profile=TEST_PROFILE,
+                identity=TEST_IDENTITY,
+                team=TEST_TEAM,
+                chat_id=TEST_CHAT_ID,
+                atm_home="/tmp/atm",
+                workspace_root="/tmp/workspace",
+                platform="api_server",
+            )
+            self.assertEqual(result["config"]["platform"], "api_server")
+
+    def test_install_rejects_unknown_injection_platform_before_writing_files(self):
+        with tempfile.TemporaryDirectory() as temporary, GatewayModules():
+            profile_home = Path(temporary) / TEST_PROFILE
+            with self.assertRaisesRegex(
+                HermesAtmInstallError, "unsupported Hermes injection platform 'unknown'"
+            ):
+                install_profile(
+                    profile_home=profile_home,
+                    profile=TEST_PROFILE,
+                    identity=TEST_IDENTITY,
+                    team=TEST_TEAM,
+                    chat_id=TEST_CHAT_ID,
+                    atm_home="/tmp/atm",
+                    workspace_root="/tmp/workspace",
+                    platform="unknown",
+                )
+            self.assertFalse(profile_home.exists())
 
     def test_install_preserves_existing_plugin_allowlist_and_enables_native_tools(self):
         with tempfile.TemporaryDirectory() as temporary, GatewayModules():
