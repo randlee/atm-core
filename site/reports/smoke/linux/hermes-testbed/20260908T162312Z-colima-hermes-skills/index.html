@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ATM colima integration: hermes skills</title><style>body{font:16px system-ui,sans-serif;max-width:64rem;margin:2rem auto;padding:0 1rem;line-height:1.5}pre{background:#f7f9fa;padding:1rem;overflow:auto}</style></head><body><h1>ATM colima integration: hermes skills</h1><p>Fixture <code>hermes-testbed</code> (atm-hermes-testbed <code>./test.sh</code>), generated 2026-09-08T16:36:21.878868+00:00. Verdict: <strong>PASS</strong>.</p><h2>result.txt</h2><pre>PASS  skills reported 7/7, PASS 7/7 (7 report messages)
+atm:    1.5.9 (prerelease/v1.5.9 @ 0c2d38368, prerelease-archive run 34249771093, ci run 34249772325)
+hermes: randlee/hermes-agent @ d45230aac
+hermes Hermes Agent v0.21.0 (2026.8.31) · upstream d45230aa | atm-daemon 1.5.9 | herdr 0.8.2
+herdr transport: socket ({&#x27;kind&#x27;: &#x27;unexpected_response&#x27;, &#x27;code&#x27;: &#x27;internal_failure&#x27;, &#x27;detail&#x27;: &#x27;Herdr status query did not return a supported response&#x27;}) (atm doctor --json .herdr.endpoints[].transport; bringup writes [herdr] transport=&quot;socket&quot; to /root/.atm.toml)
+skill: atm-setup-environment agent: tester@testbed  tools: cli result: PASS   (5/5 steps) 
+skill: atm-setup-environment agent: hermes@testbed  tools: native+cli result: PASS   (6/6 steps) 
+skill: atm-smoke agent: hermes@testbed  tools: native+cli result: PASS   (10/10 steps) 
+skill: atm-smoke agent: tester@testbed  tools: cli result: PASS   (8/8 steps) 
+skill: atm-hermes-ready agent: tester@testbed  tools: cli result: PASS   (4/4 steps) 
+skill: atm-nudge-roundtrip agent: hermes@testbed  tools: native result: PASS   (5/5 steps) 
+skill: atm-nudge-roundtrip agent: tester@testbed  tools: cli result: PASS   (2/2 steps) 
+reports and logs: /Users/randlee/Documents/github/atm-hermes-testbed-worktrees/feat/atm-test-skills/.cache/results/20260908T162312Z
+the fixture is still running: docker exec hermes-testbed ... ; ./teardown.sh when done
+</pre><h2>Files (unedited run outputs)</h2><ul><li><a href="herdr-doctor.json">herdr-doctor.json</a></li><li><a href="report-1.txt">report-1.txt</a></li><li><a href="report-2.txt">report-2.txt</a></li><li><a href="report-3.txt">report-3.txt</a></li><li><a href="report-4.txt">report-4.txt</a></li><li><a href="report-5.txt">report-5.txt</a></li><li><a href="report-6.txt">report-6.txt</a></li><li><a href="report-7.txt">report-7.txt</a></li><li><a href="result.txt">result.txt</a></li></ul></body></html>

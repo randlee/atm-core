@@ -1,0 +1,17 @@
+ATM TEST REPORT
+skill: atm-smoke
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.9 daemon 1.5.9
+result: PASS   (8/8 steps)
+steps:
+  0 PASS Self round trip — message_id: 01M20XD79ER1SV2EBDPVW5NZFZ, count: 1→0, mutation_applied: true
+  1 PASS Send — message_id: 01M20XDH9JG5CD02K9ATS43VHN (ack-required to hermes)
+  2 PASS Partner's message arrives — message_id: 01M20XDTCWBZZR9E3FBWM6V0SJ, read: false, seconds: 9
+  3 PASS Peek does not mutate — mutation_applied: false, read: false
+  4 PASS Read by id — count: 1, mutation_applied: true
+  5 PASS Read marked it — read: true
+  6 PASS Stale-connection probe — exit code: 0
+  7 PASS Ack — exit code: 0
+  8 PASS Your message got acked — ack_reply_id: 01M20XEY2JVSYN4TFHJV683GSX, seconds: 46
+elapsed: 56s
