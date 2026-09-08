@@ -1392,7 +1392,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn direct_peer_port_collision_keeps_the_local_runtime_ready() {
+    async fn direct_peer_port_collision_rejects_runtime_startup() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let occupied_listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
             .await
@@ -1406,26 +1406,24 @@ mod tests {
         let config = config_with_record(0, endpoint_record.clone())
             .with_direct_peer_tcp(DirectPeerTcpConfig::new(occupied_port));
 
-        let running = HttpRuntimeBuilder::new(config, Arc::new(TestRouter))
+        let startup = HttpRuntimeBuilder::new(config, Arc::new(TestRouter))
             .with_runtime_health(health.clone())
             .build()
             .expect("the fixed peer port is valid configuration")
             .start()
-            .await
-            .expect("a peer-port collision must not stop local daemon startup");
+            .await;
+        let error = match startup {
+            Ok(_) => panic!("a peer-port collision rejects singleton runtime startup"),
+            Err(error) => error,
+        };
 
-        assert!(endpoint_record.exists(), "local endpoint remains published");
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_SERVING_STATE_REJECTED");
+        assert!(!endpoint_record.exists(), "no local endpoint is published");
         assert_eq!(
             health.snapshot().readiness,
-            RuntimeReadinessState::Ready,
-            "direct-peer unavailability must not make the local daemon unready"
+            RuntimeReadinessState::Unavailable,
+            "the runtime never reaches ready when its fixed endpoint is occupied"
         );
-
-        running
-            .begin_shutdown()
-            .finish()
-            .await
-            .expect("runtime shuts down cleanly");
     }
 
     #[tokio::test(flavor = "current_thread")]

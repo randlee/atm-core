@@ -1035,10 +1035,7 @@ def start_capacity_daemon(
 ) -> tuple[subprocess.Popen[str], DaemonOutputCapture]:
     """Start the shipped daemon with its ordinary explicit peer-wire mode."""
     peer_wire_security = validate_peer_wire_security(peer_wire_security)
-    direct_peer_port = env.get(CAPACITY_DIRECT_PEER_PORT_ENV)
     command = [str(daemon), "--peer-wire-security", peer_wire_security]
-    if direct_peer_port is not None:
-        command.extend(("--direct-peer-port", direct_peer_port))
     process = subprocess.Popen(
         command,
         cwd=home,

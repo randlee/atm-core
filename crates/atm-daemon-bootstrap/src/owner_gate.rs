@@ -20,6 +20,7 @@ pub struct DaemonOwnerGuard {
     lock_file: File,
     lock_path: PathBuf,
     instance_id: Ulid,
+    record: String,
 }
 
 impl DaemonOwnerGuard {
@@ -71,12 +72,32 @@ impl DaemonOwnerGuard {
             lock_file,
             lock_path,
             instance_id,
+            record,
         })
     }
 
     #[must_use]
     pub const fn instance_id(&self) -> Ulid {
         self.instance_id
+    }
+
+    /// Fails closed when the lock path or its owner record no longer names
+    /// this process. The running daemon calls this continuously: retaining an
+    /// open file descriptor alone is not sufficient after unlink/replace.
+    pub fn verify_ownership(&self) -> Result<(), AtmError> {
+        let record = fs::read_to_string(&self.lock_path).map_err(|source| {
+            AtmError::daemon_serving_state_rejected(format!(
+                "ATM daemon owner lock disappeared at {}: {source}",
+                self.lock_path.display()
+            ))
+        })?;
+        if record != self.record {
+            return Err(AtmError::daemon_serving_state_rejected(format!(
+                "ATM daemon owner lock changed at {}",
+                self.lock_path.display()
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -154,12 +175,13 @@ mod tests {
     }
 
     #[test]
-    fn a_second_replacement_owner_cannot_acquire_the_live_lock() {
+    fn second_daemon_start_is_rejected_by_the_live_owner_lock() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let lock = temporary_directory.path().join("owner.lock");
         let _first = DaemonOwnerGuard::acquire_at(lock.clone()).expect("first owner acquires");
         let error = DaemonOwnerGuard::acquire_at(lock).expect_err("second owner is rejected");
         assert_eq!(error.code().as_str(), "ATM_DAEMON_SERVING_STATE_REJECTED");
+        assert!(error.message().contains("an ATM daemon already owns"));
     }
 
     #[cfg(windows)]

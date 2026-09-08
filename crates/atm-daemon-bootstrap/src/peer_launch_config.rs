@@ -1,4 +1,3 @@
-use std::num::NonZeroU16;
 use std::time::Duration;
 
 use atm_core::error::AtmError;
@@ -71,44 +70,6 @@ pub fn parse_peer_wire_mode(
         }
     }
     Ok(mode.unwrap_or_default())
-}
-
-/// Selects the direct-peer listener port from the immutable daemon launch.
-pub fn parse_direct_peer_port(
-    arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<NonZeroU16, AtmError> {
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let mut port = None;
-    while let Some(argument) = arguments.next() {
-        let argument = argument
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch arguments must be valid UTF-8"))?;
-        let Some(value) =
-            take_single_flag_value(&mut arguments, &argument, "--direct-peer-port", || {
-                AtmError::config("--direct-peer-port requires a non-zero TCP port")
-            })?
-        else {
-            continue;
-        };
-        let value = value
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch port must be valid UTF-8"))?;
-        let parsed = value
-            .parse::<u16>()
-            .ok()
-            .and_then(NonZeroU16::new)
-            .ok_or_else(|| AtmError::config("--direct-peer-port requires a non-zero TCP port"))?;
-        if port.replace(parsed).is_some() {
-            return Err(AtmError::config(
-                "--direct-peer-port may be supplied only once",
-            ));
-        }
-    }
-    Ok(port.unwrap_or_else(|| {
-        NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)
-            .expect("the protocol direct-peer port is non-zero")
-    }))
 }
 
 /// Resolves bounded outbound peer-pool settings before daemon composition.
@@ -358,7 +319,7 @@ mod take_single_flag_value_tests {
     fn duplicate_rejection_is_the_callers_responsibility() {
         // The helper only decides whether one argument names the flag; each
         // call site composes it with its own "supplied only once" tracking,
-        // the same way `parse_peer_wire_mode` and `parse_direct_peer_port` do.
+        // the same way `parse_peer_wire_mode` does.
         fn parse_with_duplicate_guard(
             arguments: impl IntoIterator<Item = OsString>,
         ) -> Result<OsString, AtmError> {

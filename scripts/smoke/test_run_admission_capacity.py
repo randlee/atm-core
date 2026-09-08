@@ -2243,10 +2243,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             )
         launched = popen.call_args.args[0]
         self.assertEqual(Path(launched[0]), Path("/release/atm-daemon"))
-        self.assertEqual(
-            launched[1:],
-            ["--peer-wire-security", "plaintext-test", "--direct-peer-port", "43102"],
-        )
+        self.assertEqual(launched[1:], ["--peer-wire-security", "plaintext-test"])
 
     def test_managed_mode_rejects_a_doctor_that_reports_the_wrong_wire_mode(self):
         status = healthy_managed_status()
