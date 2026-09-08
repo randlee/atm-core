@@ -446,9 +446,7 @@ impl<'a> CliComposition<'a> {
             log_runtime_root_failure(command, error);
         })?;
         // The one managed Tokio/Axum daemon is selected by `/daemon-switch`.
-        // Do not probe or start the frozen synchronous daemon here: the first
-        // typed API request carries the same capability-authenticated HTTP
-        // contract and reports its own actionable availability failure.
+        // CI fixtures that require a daemon explicitly own its lifecycle.
         Ok(Self {
             async_transport: atm_http_runtime::preferred_local_client(
                 endpoint.as_ref(),

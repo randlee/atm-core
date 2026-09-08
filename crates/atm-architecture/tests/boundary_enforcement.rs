@@ -235,6 +235,8 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         read_source(&root.join("crates/atm-http-runtime/src/runtime_listener.rs"));
     let runtime_setup = read_source(&root.join("crates/atm-http-runtime/src/runtime_setup.rs"));
     let runtime_sources = format!("{runtime}\n{runtime_listener}\n{runtime_setup}");
+    let launch_config =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/peer_launch_config.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
 
@@ -249,9 +251,21 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         .and_then(|source| source.split("impl LoopbackTcpConnector").next())
         .expect("direct-peer connector implementation");
     assert!(
-        bootstrap.contains("let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;")
-            && bootstrap.contains("DirectPeerTcpConfig::configured(direct_peer_port),"),
-        "AO2 plaintext characterization must retain the configured direct-peer listener: its default remains the standard protocol port, while an isolated benchmark account may select one explicit non-zero port without changing the pipeline"
+        bootstrap
+            .matches("parse_direct_peer_port(std::env::args_os())?")
+            .count()
+            == 2
+            && bootstrap
+                .matches("DirectPeerTcpConfig::configured(direct_peer_port)")
+                .count()
+                == 2
+            && !bootstrap.contains("DirectPeerTcpConfig::standard()"),
+        "the bootstrap alone must select direct-peer ports from immutable daemon launch arguments"
+    );
+    assert!(
+        launch_config.contains("NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)")
+            && launch_config.contains("--direct-peer-port may be supplied only once"),
+        "direct-peer launch configuration must default to the protocol port and reject ambiguous port selection"
     );
     let plaintext_adapter_arm = bootstrap
         .split("fn peer_stream_adapter_for_mode")

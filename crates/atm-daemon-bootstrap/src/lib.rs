@@ -15,7 +15,7 @@ use std::time::Duration;
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 #[cfg(unix)]
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
 use atm_core::home::current_host_runtime_scope;
@@ -50,6 +50,7 @@ mod peer_launch_config;
 mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
+mod singleton_guard;
 mod sqlite_observability;
 
 use atm_temp_config::daemon_atm_config;
@@ -58,6 +59,7 @@ use bare_cli_runtime::BareCliRuntime;
 use replacement_handler::{
     ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
 };
+use singleton_guard::SingletonGuards;
 
 pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
@@ -430,7 +432,11 @@ async fn run_replacement_daemon_with_selector(
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
-    let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
+    let owner = acquire_singleton_owner(scope.owner_lock.clone());
+    let singleton_guards = SingletonGuards::new();
+    singleton_guards
+        .verify_startup(&owner)
+        .unwrap_or_else(|violation| singleton_guard::abort_for_singleton_violation(violation));
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let bare_cli = BareCliRuntime::default();
     let atm_temp_sweeper =
@@ -459,7 +465,7 @@ async fn run_replacement_daemon_with_selector(
     )?;
     let config = replacement_runtime_config(
         &scope,
-        &_owner,
+        &owner,
         direct_peer_tcp,
         &peer_stream_adapter,
         peer_pool_config,
@@ -470,7 +476,7 @@ async fn run_replacement_daemon_with_selector(
         peer_wire_mode,
         &peer_stream_adapter,
     );
-    let running = start_replacement_runtime_with_diagnostics(
+    let running = start_replacement_runtime_or_abort(
         config,
         handler.clone(),
         runtime_health,
@@ -484,8 +490,46 @@ async fn run_replacement_daemon_with_selector(
         workflow_telemetry,
         recovery_sweep,
         atm_temp_sweeper,
+        owner,
+        singleton_guards,
     )
     .await
+}
+
+fn acquire_singleton_owner(owner_lock: PathBuf) -> DaemonOwnerGuard {
+    DaemonOwnerGuard::acquire_at(owner_lock).unwrap_or_else(|error| {
+        singleton_guard::abort_for_singleton_violation(format!(
+            "ATM daemon singleton violation while acquiring the owner lock: {error}"
+        ))
+    })
+}
+
+async fn start_replacement_runtime_or_abort(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+    diagnostic_timeline: Arc<dyn atm_runtime::DiagnosticTimelineStore>,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    match start_replacement_runtime_with_diagnostics(
+        config,
+        handler,
+        runtime_health,
+        diagnostic_timeline,
+        diagnostic_counters,
+    )
+    .await
+    {
+        Ok(running) => Ok(running),
+        Err(error) if error.code() == AtmErrorCode::DaemonServingStateRejected => {
+            singleton_guard::abort_for_singleton_violation(format!(
+                "ATM daemon singleton violation while binding a fixed endpoint: {error}"
+            ));
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// Advertises readiness, then waits for either a shutdown signal or an
@@ -498,6 +542,8 @@ async fn run_until_shutdown(
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
     atm_temp_sweeper: AtmTempSweeperRuntime,
+    owner: DaemonOwnerGuard,
+    singleton_guards: SingletonGuards,
 ) -> Result<(), AtmError> {
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
@@ -518,6 +564,8 @@ async fn run_until_shutdown(
         workflow_telemetry,
         recovery_sweep,
         atm_temp_sweeper,
+        &owner,
+        &singleton_guards,
     )
     .await
 }
@@ -584,31 +632,42 @@ async fn await_runtime_or_shutdown(
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
     atm_temp_sweeper: AtmTempSweeperRuntime,
+    owner: &DaemonOwnerGuard,
+    singleton_guards: &SingletonGuards,
 ) -> Result<(), AtmError> {
-    tokio::select! {
-        signal = wait_for_shutdown_signal() => {
-            let signal = signal?;
-            tracing::info!(target: "atm_daemon_bootstrap::lifecycle", signal = signal.as_str(), "replacement ATM daemon received shutdown signal; starting graceful shutdown");
-            false
+    let mut singleton_recheck = tokio::time::interval(Duration::from_secs(1));
+    singleton_recheck.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        tokio::select! {
+            _ = singleton_recheck.tick() => {
+                singleton_guards
+                    .verify_while_serving(owner)
+                    .unwrap_or_else(|violation| singleton_guard::abort_for_singleton_violation(violation));
+            }
+            signal = wait_for_shutdown_signal() => {
+                let signal = signal?;
+                tracing::info!(target: "atm_daemon_bootstrap::lifecycle", signal = signal.as_str(), "replacement ATM daemon received shutdown signal; starting graceful shutdown");
+                break;
+            }
+            _ = running.wait_for_server_stop() => {
+                tracing::error!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_RUNTIME_UNEXPECTED_STOP", "replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
+                let result = shutdown_replacement_daemon(
+                    running,
+                    handler,
+                    workflow_telemetry,
+                    recovery_sweep,
+                    atm_temp_sweeper,
+                )
+                .await;
+                return match result {
+                    Ok(()) => Err(AtmError::daemon_unavailable(
+                        "replacement HTTP runtime server stopped unexpectedly",
+                    )),
+                    Err(error) => Err(error),
+                };
+            }
         }
-        _ = running.wait_for_server_stop() => {
-            tracing::error!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_RUNTIME_UNEXPECTED_STOP", "replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            let result = shutdown_replacement_daemon(
-                running,
-                handler,
-                workflow_telemetry,
-                recovery_sweep,
-                atm_temp_sweeper,
-            )
-            .await;
-            return match result {
-                Ok(()) => Err(AtmError::daemon_unavailable(
-                    "replacement HTTP runtime server stopped unexpectedly",
-                )),
-                Err(error) => Err(error),
-            };
-        }
-    };
+    }
     shutdown_replacement_daemon(
         running,
         handler,
@@ -912,9 +971,9 @@ mod replacement_runtime_tests {
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
         SelectedPeerAdapterSelection, ShutdownSignal, active_received_hook_selector_with_health,
         assemble_host_runtime_with_template_composer, build_replacement_handler,
-        legacy_literal_ip_policy_from_value, parse_direct_peer_port, parse_peer_wire_mode,
-        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
-        start_replacement_runtime_for_test, write_ready_signal_if_requested,
+        legacy_literal_ip_policy_from_value, parse_peer_wire_mode, peer_stream_adapter_for_mode,
+        replacement_runtime_config_with_direct_peer, start_replacement_runtime_for_test,
+        write_ready_signal_if_requested,
     };
     use peer_tls::LegacyLiteralIpPolicy;
 
@@ -1007,41 +1066,6 @@ mod replacement_runtime_tests {
         ])
         .expect_err("one launch mode must select the whole runtime");
         assert!(error.message().contains("only once"));
-    }
-
-    #[test]
-    fn direct_peer_port_defaults_and_accepts_one_explicit_nonzero_value() {
-        assert_eq!(
-            parse_direct_peer_port([OsString::from("atm-daemon")]).expect("standard port"),
-            NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT).expect("non-zero"),
-        );
-        assert_eq!(
-            parse_direct_peer_port([
-                OsString::from("atm-daemon"),
-                OsString::from("--direct-peer-port=43102"),
-            ])
-            .expect("explicit benchmark port"),
-            NonZeroU16::new(43102).expect("non-zero"),
-        );
-    }
-
-    #[test]
-    fn direct_peer_port_rejects_zero_and_duplicates() {
-        let zero = parse_direct_peer_port([
-            OsString::from("atm-daemon"),
-            OsString::from("--direct-peer-port"),
-            OsString::from("0"),
-        ])
-        .expect_err("zero cannot bind a durable launch port");
-        assert!(zero.message().contains("non-zero"));
-
-        let duplicate = parse_direct_peer_port([
-            OsString::from("atm-daemon"),
-            OsString::from("--direct-peer-port=43102"),
-            OsString::from("--direct-peer-port=43103"),
-        ])
-        .expect_err("one daemon has one direct-peer listener");
-        assert!(duplicate.message().contains("only once"));
     }
 
     #[test]

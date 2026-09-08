@@ -932,7 +932,6 @@ async fn load_active_loopback_endpoint(
                     .with_cause(source),
             )
         })?
-        .map_err(HttpRuntimeClientFailure::EndpointRecord)
 }
 
 /// Re-reads only the daemon generation from the local endpoint record.
@@ -950,33 +949,51 @@ async fn load_active_loopback_daemon_instance_id(
 
 fn load_active_loopback_endpoint_blocking(
     endpoint_record_path: &Path,
-) -> Result<(std::net::SocketAddr, LocalCapability, Ulid), AtmError> {
+) -> Result<(std::net::SocketAddr, LocalCapability, Ulid), HttpRuntimeClientFailure> {
     let contents = std::fs::read(endpoint_record_path).map_err(|source| {
-        AtmError::daemon_unavailable("failed to read local HTTP endpoint record").with_cause(source)
+        if source.kind() == std::io::ErrorKind::NotFound {
+            return HttpRuntimeClientFailure::Connect(format!(
+                "local HTTP endpoint record {} is absent: {source}",
+                endpoint_record_path.display()
+            ));
+        }
+        HttpRuntimeClientFailure::EndpointRecord(
+            AtmError::daemon_unavailable("failed to read local HTTP endpoint record")
+                .with_cause(source),
+        )
     })?;
     let record: LocalHttpEndpointRecord = serde_json::from_slice(&contents).map_err(|source| {
-        AtmError::daemon_unavailable("failed to parse local HTTP endpoint record")
-            .with_cause(source)
+        HttpRuntimeClientFailure::EndpointRecord(
+            AtmError::daemon_unavailable("failed to parse local HTTP endpoint record")
+                .with_cause(source),
+        )
     })?;
-    let capability = record.capability()?;
+    let capability = record
+        .capability()
+        .map_err(HttpRuntimeClientFailure::EndpointRecord)?;
     let owner_instance_id =
-        atm_core::local_http::owner_instance_id_for_local_http_record(endpoint_record_path)?;
+        atm_core::local_http::owner_instance_id_for_local_http_record(endpoint_record_path)
+            .map_err(HttpRuntimeClientFailure::EndpointRecord)?;
     if record.daemon_instance_id != owner_instance_id {
-        return Err(AtmError::daemon_unavailable(
-            "local HTTP endpoint record belongs to a different daemon instance",
+        return Err(HttpRuntimeClientFailure::EndpointRecord(
+            AtmError::daemon_unavailable(
+                "local HTTP endpoint record belongs to a different daemon instance",
+            ),
         ));
     }
     let endpoint = record
         .ipv4_loopback
         .or(record.ipv6_loopback)
         .ok_or_else(|| {
-            AtmError::local_http_endpoint_missing(
+            HttpRuntimeClientFailure::EndpointRecord(AtmError::local_http_endpoint_missing(
                 "local HTTP endpoint record has no loopback endpoint",
-            )
+            ))
         })?;
     if !endpoint.ip().is_loopback() {
-        return Err(AtmError::local_http_endpoint_non_loopback(
-            "local HTTP endpoint record contains a non-loopback address",
+        return Err(HttpRuntimeClientFailure::EndpointRecord(
+            AtmError::local_http_endpoint_non_loopback(
+                "local HTTP endpoint record contains a non-loopback address",
+            ),
         ));
     }
     Ok((endpoint, capability, record.daemon_instance_id))
@@ -1016,8 +1033,8 @@ mod tests {
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
         LoopbackTcpConnector, TransportGeneration, direct_peer_connection_failure,
-        direct_peer_tcp_client, execute_reqwest_request, local_request_timeout_failure,
-        selected_write_transport, shared_direct_peer_client,
+        direct_peer_tcp_client, execute_reqwest_request, load_active_loopback_endpoint_blocking,
+        local_request_timeout_failure, selected_write_transport, shared_direct_peer_client,
     };
 
     struct LocalOnlyClient;
@@ -1354,6 +1371,15 @@ mod tests {
         }
     }
 
+    #[test]
+    fn missing_loopback_endpoint_record_is_a_pre_send_connection_miss() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        assert!(matches!(
+            load_active_loopback_endpoint_blocking(&directory.path().join("endpoint.json")),
+            Err(HttpRuntimeClientFailure::Connect(_))
+        ));
+    }
+
     #[cfg(unix)]
     #[test]
     fn unix_socket_generation_rebuilds_the_transport_after_socket_replacement() {
@@ -1381,6 +1407,18 @@ mod tests {
         assert!(!Arc::ptr_eq(&original_transport, &replacement_transport));
         drop(replacement_listener);
         drop(original_listener);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn missing_unix_socket_is_a_pre_send_connection_miss() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let connector = UnixSocketConnector::new(&directory.path().join("atm.sock"))
+            .expect("Unix connector builds without a serving daemon");
+        assert!(matches!(
+            connector.socket_generation(),
+            Err(HttpRuntimeClientFailure::Connect(_))
+        ));
     }
 
     /// A request against a port nobody listens on must fail during TCP
