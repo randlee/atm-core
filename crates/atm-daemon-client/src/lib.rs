@@ -694,12 +694,13 @@ impl DaemonSupervisor {
                     return Err(error);
                 }
             };
-            if let Some(_guard) = launch_gate {
+            if let Some(launch_gate) = launch_gate {
                 self.emit_trace(traceability, "daemon_launch_gate", "acquired", None);
                 if self.try_connect_with_traceability(&mut try_connect, traceability, "connected") {
                     return Ok(());
                 }
                 return self.spawn_and_wait_for_daemon(
+                    &launch_gate,
                     &mut try_connect,
                     deadline,
                     publish_timeout,
@@ -748,6 +749,7 @@ impl DaemonSupervisor {
 
     fn spawn_and_wait_for_daemon<F>(
         &self,
+        _launch_gate: &LaunchGateGuard,
         try_connect: &mut F,
         deadline: Instant,
         publish_timeout: Duration,
@@ -758,7 +760,7 @@ impl DaemonSupervisor {
         F: FnMut() -> Result<(), AtmError>,
     {
         self.emit_trace(traceability, "daemon_auto_start", "spawn_requested", None);
-        let child = match self.spawn_daemon() {
+        let child = match self.spawn_daemon(_launch_gate) {
             Ok(child) => child,
             Err(error) => {
                 self.emit_trace(traceability, "daemon_auto_start", "error", Some(&error));
@@ -862,7 +864,7 @@ impl DaemonSupervisor {
         }
     }
 
-    fn spawn_daemon(&self) -> Result<Child, AtmError> {
+    fn spawn_daemon(&self, _launch_gate: &LaunchGateGuard) -> Result<Child, AtmError> {
         if !self.daemon_bin.as_ref().is_file() {
             return Err(AtmError::daemon_unavailable(format!(
                 "daemon binary is missing at {}",

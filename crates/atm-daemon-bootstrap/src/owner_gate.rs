@@ -103,11 +103,21 @@ impl DaemonOwnerGuard {
 
 impl Drop for DaemonOwnerGuard {
     fn drop(&mut self) {
-        let _ = self.lock_file.set_len(0);
-        let _ = self.lock_file.seek(SeekFrom::Start(0));
-        let _ = self.lock_file.sync_data();
-        let _ = sync_owner_record_shadow(&self.lock_path, "");
-        let _ = self.lock_file.unlock();
+        if let Err(error) = self.lock_file.set_len(0) {
+            tracing::error!(%error, path = %self.lock_path.display(), "failed to clear daemon owner record during cleanup");
+        }
+        if let Err(error) = self.lock_file.seek(SeekFrom::Start(0)) {
+            tracing::error!(%error, path = %self.lock_path.display(), "failed to rewind daemon owner record during cleanup");
+        }
+        if let Err(error) = self.lock_file.sync_data() {
+            tracing::error!(%error, path = %self.lock_path.display(), "failed to sync daemon owner record cleanup");
+        }
+        if let Err(error) = sync_owner_record_shadow(&self.lock_path, "") {
+            tracing::error!(%error, path = %self.lock_path.display(), "failed to clear daemon owner shadow record during cleanup");
+        }
+        if let Err(error) = self.lock_file.unlock() {
+            tracing::error!(%error, path = %self.lock_path.display(), "failed to unlock daemon owner record during cleanup");
+        }
     }
 }
 
@@ -180,7 +190,10 @@ mod tests {
         let lock = temporary_directory.path().join("owner.lock");
         let _first = DaemonOwnerGuard::acquire_at(lock.clone()).expect("first owner acquires");
         let error = DaemonOwnerGuard::acquire_at(lock).expect_err("second owner is rejected");
-        assert_eq!(error.code().as_str(), "ATM_DAEMON_SERVING_STATE_REJECTED");
+        assert_eq!(
+            error.code(),
+            atm_core::error::AtmErrorCode::DaemonServingStateRejected
+        );
         assert!(error.message().contains("an ATM daemon already owns"));
     }
 

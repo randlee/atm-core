@@ -15,7 +15,7 @@ use std::time::Duration;
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 #[cfg(unix)]
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
 use atm_core::home::current_host_runtime_scope;
@@ -62,7 +62,9 @@ use replacement_handler::{
 use singleton_guard::SingletonGuards;
 
 pub use owner_gate::DaemonOwnerGuard;
-pub use peer_launch_config::{parse_peer_pool_config, parse_peer_wire_mode};
+pub use peer_launch_config::{
+    parse_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
+};
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
 #[cfg(feature = "benchmark-harness")]
@@ -252,6 +254,7 @@ pub async fn run_replacement_daemon_with_observability(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
 ) -> Result<(), AtmError> {
     let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
+    let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
@@ -266,7 +269,7 @@ pub async fn run_replacement_daemon_with_observability(
         },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
-        DirectPeerTcpConfig::standard(),
+        DirectPeerTcpConfig::configured(direct_peer_port),
         peer_pool_config,
         None,
     )
@@ -281,6 +284,7 @@ pub async fn run_replacement_daemon_with_observability(
 #[cfg(feature = "benchmark-harness")]
 pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
     let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
+    let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         Arc::new(NullObservability),
@@ -296,7 +300,7 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
         },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
-        DirectPeerTcpConfig::standard(),
+        DirectPeerTcpConfig::configured(direct_peer_port),
         peer_pool_config,
         Some(Arc::new(
             received_hook_selector::BenchmarkNoopHerdrProcessAdapter,
@@ -429,7 +433,7 @@ async fn run_replacement_daemon_with_selector(
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
     let owner = acquire_singleton_owner(scope.owner_lock.clone());
-    let singleton_guards = SingletonGuards::new(scope.socket.clone(), direct_peer_tcp.port());
+    let singleton_guards = SingletonGuards::new();
     singleton_guards
         .verify_startup(&owner)
         .unwrap_or_else(|violation| singleton_guard::abort_for_singleton_violation(violation));
@@ -494,12 +498,8 @@ async fn run_replacement_daemon_with_selector(
 
 fn acquire_singleton_owner(owner_lock: PathBuf) -> DaemonOwnerGuard {
     DaemonOwnerGuard::acquire_at(owner_lock).unwrap_or_else(|error| {
-        let contender = singleton_guard::competing_daemon_detail()
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| "competing daemon pid/start time unavailable".to_owned());
         singleton_guard::abort_for_singleton_violation(format!(
-            "ATM daemon singleton violation while acquiring the owner lock: {error}; {contender}"
+            "ATM daemon singleton violation while acquiring the owner lock: {error}"
         ))
     })
 }
@@ -523,7 +523,7 @@ async fn start_replacement_runtime_or_abort(
     .await
     {
         Ok(running) => Ok(running),
-        Err(error) if error.code().as_str() == "ATM_DAEMON_SERVING_STATE_REJECTED" => {
+        Err(error) if error.code() == AtmErrorCode::DaemonServingStateRejected => {
             singleton_guard::abort_for_singleton_violation(format!(
                 "ATM daemon singleton violation while binding a fixed endpoint: {error}"
             ));

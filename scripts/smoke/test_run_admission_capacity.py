@@ -2218,6 +2218,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER.DaemonOutputCapture, "start", return_value=output),
             mock.patch.object(RUNNER, "await_daemon_ready", side_effect=RUNNER.SmokeError("not ready")),
             mock.patch.object(RUNNER, "reap_owned_daemon") as reap,
+            mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
         ):
             with self.assertRaisesRegex(RUNNER.SmokeError, "not ready.*config failed"):
                 RUNNER.start_capacity_daemon(
@@ -2235,6 +2236,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER.subprocess, "Popen", return_value=process) as popen,
             mock.patch.object(RUNNER.DaemonOutputCapture, "start", return_value=output),
             mock.patch.object(RUNNER, "await_daemon_ready"),
+            mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
         ):
             RUNNER.start_capacity_daemon(
                 Path("/release/atm-daemon"), Path("/tmp/atm-capacity-proof"),
@@ -2243,7 +2245,10 @@ class AdmissionCapacityTests(unittest.TestCase):
             )
         launched = popen.call_args.args[0]
         self.assertEqual(Path(launched[0]), Path("/release/atm-daemon"))
-        self.assertEqual(launched[1:], ["--peer-wire-security", "plaintext-test"])
+        self.assertEqual(
+            launched[1:],
+            ["--peer-wire-security", "plaintext-test", "--direct-peer-port", "43102"],
+        )
 
     def test_managed_mode_rejects_a_doctor_that_reports_the_wrong_wire_mode(self):
         status = healthy_managed_status()

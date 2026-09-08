@@ -211,12 +211,15 @@ Satisfied by:
   auto-start it when absent.
 
 - `REQ-P-RUNTIME-002` Daemon singleton is ATM daemon requirement `#1`:
-  exactly one `atm-daemon` process may exist anywhere on the host for the
-  supported runtime model, and no code path may intentionally or accidentally
-  allow a second daemon to reach serving state.
+  exactly one `atm-daemon` process may exist per OS account per host. (Rand,
+  2026-09-08.) A container is its own host for this requirement. (Rand,
+  2026-09-08.) Daemons serving separate OS accounts on one physical machine
+  are not a violation. (Rand, 2026-09-08.) No code path may intentionally or
+  accidentally allow a second daemon for the same OS account to reach serving
+  state.
 
-- `REQ-P-RUNTIME-003` Daemon singleton enforcement must use multiple guard
-  layers:
+- `REQ-P-RUNTIME-003` Daemon singleton enforcement per OS account per host
+  must use multiple guard layers. (Rand, 2026-09-08.)
   - a pre-spawn launch gate that serializes daemon creation attempts
   - a daemon-side startup gate that refuses serving state when ownership is
     already held

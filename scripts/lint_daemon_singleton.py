@@ -36,7 +36,15 @@ KNOWN_TEST_ENV_NAMES = frozenset({
 TEST_ENV_RE = re.compile(r"\bATM_(?:TEST_[A-Z0-9_]*|[A-Z0-9_]*_TEST_[A-Z0-9_]*)\b")
 RUNTIME_OVERRIDE_RE = re.compile(r"ATM_TEST_RUNTIME_HOME|test_runtime_home")
 DAEMON_LAUNCH_RE = re.compile(r"(?:Popen|Command::new|\.spawn\(|os\.system|shell=True)")
-ENDPOINT_OVERRIDE_RE = re.compile(r"--direct-peer-port")
+CALLABLE_START_RE = re.compile(
+    r"(?m)^\s*(?:(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn|def)\s+\w+"
+)
+GATE_MARKERS = (
+    "LaunchGateGuard",
+    "require_clean_host",
+    "ambient_daemon_pids",
+    "require_clean_host_daemon_state",
+)
 
 
 @dataclass(frozen=True)
@@ -63,22 +71,40 @@ def sources(root: Path) -> list[Path]:
     )
 
 
-def is_gated_launcher(source: str) -> bool:
-    """Recognize only an executable clean-host or normal-client gate."""
-    return (
-        "DaemonSupervisor" in source
-        or "require_clean_host" in source
-        or "ambient_daemon_pids" in source
-        or "require_clean_host_daemon_state" in source
-    )
+def callable_region(source: str, offset: int) -> str:
+    """Return the function containing a launch expression, never its whole file."""
+    starts = list(CALLABLE_START_RE.finditer(source))
+    before = [match for match in starts if match.start() <= offset]
+    if not before:
+        return ""
+    start = before[-1]
+    following = next((match for match in starts if match.start() > offset), None)
+    end = following.start() if following else len(source)
+    return source[start.start() : end]
+
+
+def is_gated_launcher(source: str, offset: int) -> bool:
+    """Require a singleton gate in the callable that performs this launch."""
+    region = callable_region(source, offset)
+    return any(marker in region for marker in GATE_MARKERS)
 
 
 def is_daemon_launch(source: str) -> bool:
     for match in DAEMON_LAUNCH_RE.finditer(source):
-        window = source[match.start() : match.end() + 240]
-        if "atm-daemon" in window:
+        if is_daemon_launch_at(source, match):
             return True
     return "def start_daemon" in source or "class OwnedDaemon" in source
+
+
+def is_daemon_launch_at(source: str, match: re.Match[str]) -> bool:
+    window = source[match.start() : match.end() + 240]
+    region = callable_region(source, match.start())
+    return (
+        "atm-daemon" in window
+        or "daemon_bin" in region
+        or region.lstrip().startswith(("def start_daemon", "fn start_daemon"))
+        or region.lstrip().startswith("def start_capacity_daemon")
+    )
 
 
 def collect_violations(root: Path) -> list[Violation]:
@@ -90,9 +116,8 @@ def collect_violations(root: Path) -> list[Violation]:
     for path in sources(root):
         source = path.read_text(encoding="utf-8")
         relative = path.relative_to(root).as_posix()
-        if relative not in {"scripts/lint_daemon_singleton.py", ".just/tests/test_lint_daemon_singleton.py"}:
-            for match in ENDPOINT_OVERRIDE_RE.finditer(source):
-                violations.append(Violation(relative, line_number(source, match.start()), "endpoint-override", "flag or environment changes the fixed direct-peer endpoint"))
+        if relative in {"scripts/lint_daemon_singleton.py", ".just/tests/test_lint_daemon_singleton.py"}:
+            continue
         if relative.startswith("crates/"):
             for match in TEST_ENV_RE.finditer(source):
                 name = match.group(0)
@@ -102,11 +127,12 @@ def collect_violations(root: Path) -> list[Violation]:
                 violations.append(Violation(relative, line_number(source, match.start()), "runtime-scope-override", "test-only runtime scope override"))
         if not is_daemon_launch(source):
             continue
-        if is_gated_launcher(source):
-            continue
-        match = DAEMON_LAUNCH_RE.search(source)
-        assert match is not None
-        violations.append(Violation(relative, line_number(source, match.start()), "ungated-daemon-launch", "daemon launcher does not prove the production clean-host gate"))
+        for match in DAEMON_LAUNCH_RE.finditer(source):
+            if is_gated_launcher(source, match.start()):
+                continue
+            if not is_daemon_launch_at(source, match):
+                continue
+            violations.append(Violation(relative, line_number(source, match.start()), "ungated-daemon-launch", "daemon launch call site does not prove the production singleton gate"))
     return sorted(violations, key=lambda item: (item.path, item.line, item.category))
 
 

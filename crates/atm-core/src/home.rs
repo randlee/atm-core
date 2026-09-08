@@ -395,8 +395,8 @@ mod tests {
     use super::{
         atm_home, command_invocation_dir, host_db_dir_from_home, host_log_dir,
         host_log_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
-        host_runtime_lock_path_from_home, inbox_path, inbox_path_from_home, team_dir,
-        team_dir_from_home,
+        host_runtime_lock_path_from_home, host_runtime_scope_from_home, inbox_path,
+        inbox_path_from_home, team_dir, team_dir_from_home,
     };
     #[cfg(unix)]
     use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
@@ -586,6 +586,22 @@ mod tests {
                 .join("daemon")
                 .join("launch.lock")
         );
+    }
+
+    #[test]
+    fn separate_os_account_homes_have_separate_daemon_runtime_scopes() {
+        let first_home = TempDir::new().expect("first account home");
+        let second_home = TempDir::new().expect("second account home");
+
+        let first = host_runtime_scope_from_home(first_home.path().to_path_buf())
+            .expect("first runtime scope");
+        let second = host_runtime_scope_from_home(second_home.path().to_path_buf())
+            .expect("second runtime scope");
+
+        assert_ne!(first.runtime_root, second.runtime_root);
+        assert_ne!(first.owner_lock, second.owner_lock);
+        assert_ne!(first.launch_lock, second.launch_lock);
+        assert_ne!(first.socket, second.socket);
     }
 
     #[cfg(unix)]

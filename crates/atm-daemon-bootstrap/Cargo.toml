@@ -32,7 +32,6 @@ tracing.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 fs4 = "0.13"
 serde_json.workspace = true
-sysinfo.workspace = true
 ulid.workspace = true
 
 [dev-dependencies]

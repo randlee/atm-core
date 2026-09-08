@@ -46,7 +46,7 @@ class DaemonSingletonLintTests(unittest.TestCase):
         self.write(
             root,
             "scripts/fixture.py",
-            'def ambient_daemon_pids(): return []\nsubprocess.Popen(["atm-daemon"])\n',
+            'def start_daemon():\n    ambient_daemon_pids()\n    subprocess.Popen(["atm-daemon"])\n',
         )
         self.assertNotIn("ungated-daemon-launch", self.categories(root))
 
@@ -55,10 +55,19 @@ class DaemonSingletonLintTests(unittest.TestCase):
         self.write(root, "crates/fixture/src/lib.rs", 'let _ = "ATM_TEST_NEW_SINGLETON_OVERRIDE";\n')
         self.assertIn("new-test-env", self.categories(root))
 
-    def test_direct_peer_port_flag_fails(self) -> None:
+    def test_direct_peer_port_is_ordinary_daemon_configuration(self) -> None:
         root = self.fixture()
         self.write(root, "scripts/fixture.py", 'command = ["atm-daemon", "--direct-peer-port", "43102"]\n')
-        self.assertIn("endpoint-override", self.categories(root))
+        self.assertNotIn("endpoint-override", self.categories(root))
+
+    def test_gate_in_another_callable_does_not_exempt_daemon_launch(self) -> None:
+        root = self.fixture()
+        self.write(
+            root,
+            "scripts/fixture.py",
+            'def preflight():\n    ambient_daemon_pids()\n\ndef start_daemon():\n    subprocess.Popen(["atm-daemon"])\n',
+        )
+        self.assertIn("ungated-daemon-launch", self.categories(root))
 
     def test_allowlist_entry_fails(self) -> None:
         root = self.fixture()
