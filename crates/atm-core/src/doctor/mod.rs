@@ -8,13 +8,14 @@ mod team_scope;
 #[cfg(test)]
 use std::collections::BTreeSet;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::pin::Pin;
 
 use crate::api::RequestDeadline;
 use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
 use crate::config;
-use crate::delivery_channel::local_message_received_backend;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 #[cfg(test)]
@@ -23,7 +24,7 @@ use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
-use crate::team_admin::{MembersList, ordered_roster_member_summaries};
+use crate::team_admin::MembersList;
 use crate::types::{AgentName, TeamName};
 use atm_storage::PeerConfigStore;
 use std::sync::Arc;
@@ -903,74 +904,6 @@ fn summarize_doctor_findings(findings: &[DoctorFinding]) -> DoctorSummary {
         warning_count,
         error_count,
     }
-}
-
-fn load_member_roster(
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    caller_identity: Option<&AgentName>,
-    live_cwd: Option<&Path>,
-    team_context: bool,
-    findings: &mut Vec<DoctorFinding>,
-) -> Option<MembersList> {
-    if let Err(error) = crate::address::validate_path_segment(team.as_str(), "team") {
-        push_doctor_error_for_team(
-            findings,
-            DoctorSeverity::Error,
-            error,
-            team_context.then_some(team),
-        );
-        return None;
-    }
-    let roster = runtime.load_team_roster(team);
-    push_mixed_local_backend_warning(team, &roster, findings);
-    roster_names::push_duplicate_effective_name_warnings(
-        runtime,
-        team,
-        &roster,
-        team_context,
-        findings,
-    );
-    let members = ordered_roster_member_summaries(&roster, caller_identity, live_cwd);
-
-    Some(MembersList {
-        team: team.clone(),
-        members,
-    })
-}
-
-fn push_mixed_local_backend_warning(
-    team: &TeamName,
-    roster: &[crate::boundary::RosterEntry],
-    findings: &mut Vec<DoctorFinding>,
-) {
-    let mut tmux = Vec::new();
-    let mut herdr = Vec::new();
-    for member in roster {
-        match local_message_received_backend(member) {
-            Some(crate::delivery_channel::LocalMessageReceivedBackend::Tmux { .. }) => {
-                tmux.push(member.agent_name.to_string())
-            }
-            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { .. }) => {
-                herdr.push(member.agent_name.to_string())
-            }
-            None => {}
-        }
-    }
-    if tmux.is_empty() || herdr.is_empty() {
-        return;
-    }
-    findings.push(DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: AtmErrorCode::RosterMixedLocalBackend,
-        message: format!(
-            "team {team} has mixed local backends; tmux members: [{}]; Herdr members: [{}]",
-            tmux.join(", "), herdr.join(", ")
-        ),
-        remediation: Some(format!(
-            "Use `atm teams update-member {team} <member> --backend herdr` or `atm teams update-member {team} <member> --backend tmux --target %N` to select the intended backend."
-        )),
-    });
 }
 
 fn push_doctor_error(
@@ -1898,6 +1831,43 @@ mod tests {
                 .as_deref()
                 .is_some_and(|remediation| remediation.contains("--alias"))
         );
+    }
+
+    #[test]
+    fn all_teams_duplicate_name_warnings_preserve_team_context() {
+        let paths = TestPaths::new();
+        let mut store =
+            roster_store_for_teams(&[("team-a", "local-member"), ("team-b", "remote-member")]);
+        for member in &mut store.members {
+            member.metadata_json.insert(
+                "alias".to_owned(),
+                serde_json::Value::String("shared-herdr-name".to_owned()),
+            );
+        }
+        let runtime = test_runtime_from_store(store);
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            all_teams: true,
+            ..DoctorQuery::default()
+        };
+
+        let report = run_doctor_with_runtime(query, &healthy_observability(&paths), &runtime)
+            .expect("all-team doctor report");
+        let warnings = report
+            .findings
+            .iter()
+            .filter(|finding| finding.code == AtmErrorCode::WarningRosterDrift)
+            .map(|finding| finding.message.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings.iter().any(|message| {
+            message.starts_with("team team-a:") && message.contains("remote-member@team-b")
+        }));
+        assert!(warnings.iter().any(|message| {
+            message.starts_with("team team-b:") && message.contains("local-member@team-a")
+        }));
     }
 
     #[test]
