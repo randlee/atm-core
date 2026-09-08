@@ -165,7 +165,7 @@ async fn run_command(
 fn command_binary(configured_binary: Option<&Path>) -> PathBuf {
     #[cfg(windows)]
     {
-        return configured_binary.map_or_else(
+        configured_binary.map_or_else(
             || PathBuf::from("herdr.exe"),
             |path| {
                 if path.is_dir() {
@@ -174,7 +174,7 @@ fn command_binary(configured_binary: Option<&Path>) -> PathBuf {
                     path.to_path_buf()
                 }
             },
-        );
+        )
     }
 
     #[cfg(not(windows))]
@@ -195,11 +195,11 @@ fn spawn_unavailable(error: std::io::Error, configured_binary: Option<&Path>) ->
             || "Windows PATH search for herdr.exe".to_owned(),
             |path| format!("configured Herdr binary {}", path.display()),
         );
-        return HerdrError::ServerUnavailable {
+        HerdrError::ServerUnavailable {
             message: format!("{source}: {error}"),
             retry_after: None,
             io_error_kind: Some(error.kind()),
-        };
+        }
     }
 
     #[cfg(not(windows))]
@@ -306,9 +306,9 @@ async fn capture_command_output(
 fn decode_command_output(bytes: Vec<u8>) -> Result<String, HerdrError> {
     #[cfg(windows)]
     {
-        return String::from_utf8(bytes).map_err(|_| HerdrError::ProtocolMismatch {
+        String::from_utf8(bytes).map_err(|_| HerdrError::ProtocolMismatch {
             message: "Herdr process output was not valid UTF-8".to_owned(),
-        });
+        })
     }
 
     #[cfg(not(windows))]

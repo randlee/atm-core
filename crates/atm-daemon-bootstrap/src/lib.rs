@@ -432,13 +432,7 @@ async fn run_replacement_daemon_with_selector(
     peer_pool_config: PeerPoolConfig,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 ) -> Result<(), AtmError> {
-    install_sqlite_retained_runtime_factory();
-    let scope = current_host_runtime_scope()?;
-    let owner = acquire_singleton_owner(scope.owner_lock.clone());
-    let singleton_guards = SingletonGuards::new();
-    singleton_guards
-        .verify_startup(&owner)
-        .unwrap_or_else(|violation| singleton_guard::abort_for_singleton_violation(violation));
+    let (scope, owner, singleton_guards) = acquire_verified_singleton_scope()?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let bare_cli = BareCliRuntime::default();
     let atm_temp_sweeper =
@@ -498,6 +492,24 @@ async fn run_replacement_daemon_with_selector(
         singleton_guards,
     )
     .await
+}
+
+fn acquire_verified_singleton_scope() -> Result<
+    (
+        atm_core::home::HostRuntimeScope,
+        DaemonOwnerGuard,
+        SingletonGuards,
+    ),
+    AtmError,
+> {
+    install_sqlite_retained_runtime_factory();
+    let scope = current_host_runtime_scope()?;
+    let owner = acquire_singleton_owner(scope.owner_lock.clone());
+    let singleton_guards = SingletonGuards::new();
+    singleton_guards
+        .verify_startup(&owner)
+        .unwrap_or_else(|violation| singleton_guard::abort_for_singleton_violation(violation));
+    Ok((scope, owner, singleton_guards))
 }
 
 fn acquire_singleton_owner(owner_lock: PathBuf) -> DaemonOwnerGuard {
