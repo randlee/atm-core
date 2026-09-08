@@ -1251,6 +1251,30 @@ mod tests {
         assert_eq!(presence.outcome, HerdrPresenceOutcome::Visible);
     }
 
+    #[test]
+    fn herdr_endpoint_observation_accepts_v1_1_payload_without_transport() {
+        let current = HerdrEndpointObservation {
+            session: None,
+            provenance: HerdrEndpointProvenance::HerdrDefault,
+            transport: HerdrTransportKind::Socket,
+            endpoint: None,
+            binary: None,
+            state: HerdrDoctorState::NotConfigured,
+            live_handoff: None,
+            members: Vec::new(),
+        };
+        let mut legacy = serde_json::to_value(current).expect("observation serializes");
+        legacy
+            .as_object_mut()
+            .expect("observation is an object")
+            .remove("transport");
+
+        let observation: HerdrEndpointObservation =
+            serde_json::from_value(legacy).expect("v1.1 payload remains readable");
+
+        assert_eq!(observation.transport, HerdrTransportKind::Cli);
+    }
+
     struct UnusedMailStore;
     struct TestRosterStore {
         members: Vec<atm_storage::RosterMember>,

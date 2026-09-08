@@ -11,9 +11,10 @@ use crate::types::AgentName;
 
 use super::DoctorFinding;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum HerdrTransportKind {
+    #[default]
     Cli,
     Socket,
 }
@@ -291,6 +292,7 @@ impl HerdrDoctorState {
 pub struct HerdrEndpointObservation {
     pub session: Option<HerdrSession>,
     pub provenance: HerdrEndpointProvenance,
+    #[serde(default)]
     pub transport: HerdrTransportKind,
     pub endpoint: Option<HerdrEndpointDisplay>,
     pub binary: Option<HerdrBinaryResolution>,

@@ -185,6 +185,7 @@ components:
     HerdrEndpointDoctorReport:
       type: object
       properties:
+        transport: { type: string, enum: [cli, socket], description: Transport used by the Herdr endpoint; added in HTTP API 1.2.0. }
         members:
           type: array
           items: { $ref: '#/components/schemas/HerdrMemberPresence' }
@@ -194,7 +195,7 @@ components:
       description: Herdr presence result. herdr_agent is the effective Herdr identity and was added in HTTP API 1.2.0.
       properties:
         name: { type: string, description: Canonical roster member name. }
-        herdr_agent: { type: string, nullable: true, description: Effective Herdr agent name; null for legacy v1.1 payloads. }
+        herdr_agent: { type: string, nullable: true, description: Effective Herdr agent name; nullable for backward-compatible v1.1 payloads; added in HTTP API 1.2.0. }
         outcome: { type: object, description: Presence probe outcome. }
     SearchRequest:
       type: object

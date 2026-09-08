@@ -361,7 +361,8 @@
     },
     "HerdrEndpointDoctorReport": {
       "properties": [
-        "members"
+        "members",
+        "transport"
       ],
       "required": []
     },

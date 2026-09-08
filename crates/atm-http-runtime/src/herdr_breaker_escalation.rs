@@ -78,7 +78,14 @@ fn elapsed(now: IsoTimestamp, then: IsoTimestamp) -> Duration {
 
 /// Performs a single admitted breaker-cycle escalation. Durable mail and the
 /// desktop notification intentionally use distinct, privacy-safe payloads.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    unfulfilled_lint_expectations,
+    reason = "Clippy's current threshold does not flag this six-argument adapter, but the explicit expectation documents its intentional interface."
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "breaker escalation receives the injected runtime ports and lifecycle context"
+)]
 pub(crate) async fn escalate_breaker_cycle(
     runtime: &LocalServiceRuntime,
     herdr_process: &dyn HerdrProcessAdapter,

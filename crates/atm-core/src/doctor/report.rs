@@ -328,6 +328,7 @@ pub struct HerdrEndpointCapabilitiesDoctorReport {
 pub struct HerdrEndpointDoctorReport {
     pub session: Option<crate::delivery_channel::HerdrSession>,
     pub provenance: HerdrEndpointProvenance,
+    #[serde(default)]
     pub transport: HerdrTransportKind,
     pub endpoint: Option<HerdrEndpointDisplay>,
     pub binary: Option<HerdrBinaryResolution>,
