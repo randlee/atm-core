@@ -15,7 +15,10 @@ pub(super) fn push_duplicate_effective_name_warnings(
         .flat_map(|(_, roster)| roster.iter())
         .map(atm_storage::RosterUniqueName::from_member)
         .collect::<Vec<_>>();
-    let collisions = atm_storage::roster_unique_name_collisions(&all_names);
+    let collisions = atm_storage::team_scoped_roster_unique_name_collisions(
+        &atm_storage::roster_unique_name_collisions(&all_names),
+        team,
+    );
     for member in roster {
         let Some(member_name) = collisions.iter().find(|candidate| {
             candidate.team_name == member.team_name && candidate.agent_name == member.agent_name
@@ -43,7 +46,7 @@ pub(super) fn push_duplicate_effective_name_warnings(
                     detail
                 },
                 remediation: Some(
-                    "Run `atm teams set-member <member> --alias <unique-herdr-name>` to make the effective roster name unique."
+                    "Run `atm teams update-member --alias <unique-herdr-name> <team> <member>` to make the effective roster name unique."
                         .to_owned(),
                 ),
             });

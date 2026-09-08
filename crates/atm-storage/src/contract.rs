@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
@@ -610,6 +610,32 @@ pub fn roster_unique_name_collisions(names: &[RosterUniqueName]) -> Vec<RosterUn
         start = end;
     }
     collisions
+}
+
+/// Narrows a database-wide collision set to the groups `team` participates in.
+///
+/// A roster write is scoped to one team, so it is answerable only for the
+/// collisions its own proposed roster is part of.  Collisions between two
+/// other teams are pre-existing data the write neither creates nor can
+/// repair; rejecting the write for them makes every roster write in the
+/// database fail once any duplicate exists anywhere, with no CLI path back
+/// out.  The whole colliding group is retained so the diagnostic still names
+/// the other team the caller has to avoid.
+#[must_use]
+pub fn team_scoped_roster_unique_name_collisions(
+    collisions: &[RosterUniqueName],
+    team: &TeamName,
+) -> Vec<RosterUniqueName> {
+    let scoped = collisions
+        .iter()
+        .filter(|collision| collision.team_name == *team)
+        .map(|collision| collision.unique_name.as_str())
+        .collect::<BTreeSet<_>>();
+    collisions
+        .iter()
+        .filter(|collision| scoped.contains(collision.unique_name.as_str()))
+        .cloned()
+        .collect()
 }
 
 /// Builds the single operator-facing diagnostic for durable roster identity

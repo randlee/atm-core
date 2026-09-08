@@ -1071,7 +1071,9 @@ Definitions:
   roster still contains a duplicate effective name fails with the
   `REQ-ROSTER-NAME-003` error naming every conflicting `(team, member)` pair
   and the `--alias` remedy, so the operator reconstructs the team with
-  aliases before it goes live in Herdr. `atm doctor` reports pre-existing
+  aliases before it goes live in Herdr. Write-time enforcement is scoped to
+  collision groups the writing team participates in, while `atm doctor`
+  reports the database-wide collision set. `atm doctor` reports pre-existing
   duplicates for the caller's team as a finding.
 - Rand (2026-09-07) on why persistence is canonical-only: "by always using
   the non-alias name when writing to database, we avoid missing things on

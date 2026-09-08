@@ -1,11 +1,14 @@
 use super::SqliteRosterStore;
-use crate::shared_db::{deserialize_json, serialize_json};
+use crate::shared_db::{SharedDb, deserialize_json, serialize_json};
 use atm_storage::contract::{
     AgentType, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
     RosterUniqueName,
 };
 use atm_storage::types::{AgentName, ModelName, PaneId, TeamName};
-use atm_storage::{AtmError, roster_unique_name_collision_error, roster_unique_name_collisions};
+use atm_storage::{
+    AtmError, roster_unique_name_collision_error, roster_unique_name_collisions,
+    team_scoped_roster_unique_name_collisions,
+};
 use rusqlite::{Connection, params};
 use serde_json::{Map, Value};
 
@@ -102,7 +105,7 @@ impl RosterStore for SqliteRosterStore {
 
         let updated_at = chrono::Utc::now().to_rfc3339();
         self.db.with_transaction(|transaction| {
-            enforce_roster_unique_names(transaction, roster)?;
+            enforce_roster_unique_names(&self.db, transaction, roster)?;
             transaction
                 .execute(
                     "DELETE FROM team_roster WHERE team_name = ?1;",
@@ -186,11 +189,14 @@ impl RosterStore for SqliteRosterStore {
 
     fn unique_names(&self) -> Result<Vec<RosterUniqueName>, AtmError> {
         self.db
-            .with_connection(|connection| load_unique_names(connection))
+            .with_connection(|connection| load_unique_names(&self.db, connection))
     }
 }
 
-fn load_unique_names(connection: &Connection) -> Result<Vec<RosterUniqueName>, AtmError> {
+fn load_unique_names(
+    db: &SharedDb,
+    connection: &Connection,
+) -> Result<Vec<RosterUniqueName>, AtmError> {
     let mut statement = connection
         .prepare(
             "SELECT team_name, agent_name,
@@ -199,9 +205,10 @@ fn load_unique_names(connection: &Connection) -> Result<Vec<RosterUniqueName>, A
              ORDER BY team_name ASC, agent_name ASC;",
         )
         .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to prepare database-wide roster unique-name query: {error}"
-            ))
+            db.error(
+                "failed to prepare database-wide roster unique-name query",
+                error,
+            )
         })?;
     let rows = statement
         .query_map([], |row| {
@@ -212,15 +219,17 @@ fn load_unique_names(connection: &Connection) -> Result<Vec<RosterUniqueName>, A
             ))
         })
         .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to execute database-wide roster unique-name query: {error}"
-            ))
+            db.error(
+                "failed to execute database-wide roster unique-name query",
+                error,
+            )
         })?;
     rows.map(|row| {
         let (team_name, agent_name, unique_name) = row.map_err(|error| {
-            AtmError::validation(format!(
-                "failed to decode database-wide roster unique-name row: {error}"
-            ))
+            db.error(
+                "failed to decode database-wide roster unique-name row",
+                error,
+            )
         })?;
         Ok(RosterUniqueName {
             team_name: team_name.parse().map_err(|error| {
@@ -243,6 +252,7 @@ fn load_unique_names(connection: &Connection) -> Result<Vec<RosterUniqueName>, A
 /// immediate SQLite transaction as the replacement.  Preflight is solely an
 /// operator convenience; this remains authoritative for all writers.
 fn enforce_roster_unique_names(
+    db: &SharedDb,
     transaction: &rusqlite::Transaction<'_>,
     roster: &RosterSnapshot,
 ) -> Result<(), AtmError> {
@@ -254,9 +264,10 @@ fn enforce_roster_unique_names(
              WHERE team_name != ?1;",
         )
         .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to prepare transactional roster unique-name validation: {error}"
-            ))
+            db.error(
+                "failed to prepare transactional roster unique-name validation",
+                error,
+            )
         })?;
     let mut names = statement
         .query_map(params![roster.team_name.as_str()], |row| {
@@ -267,15 +278,17 @@ fn enforce_roster_unique_names(
             ))
         })
         .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to query transactional roster unique-name validation: {error}"
-            ))
+            db.error(
+                "failed to query transactional roster unique-name validation",
+                error,
+            )
         })?
         .map(|row| {
             let (team_name, agent_name, unique_name) = row.map_err(|error| {
-                AtmError::validation(format!(
-                    "failed to decode transactional roster unique-name validation: {error}"
-                ))
+                db.error(
+                    "failed to decode transactional roster unique-name validation",
+                    error,
+                )
             })?;
             Ok(RosterUniqueName {
                 team_name: team_name.parse().map_err(|error| {
@@ -294,7 +307,10 @@ fn enforce_roster_unique_names(
         .collect::<Result<Vec<_>, AtmError>>()?;
     names.extend(roster.members.iter().map(RosterUniqueName::from_member));
 
-    let collisions = roster_unique_name_collisions(&names);
+    let collisions = team_scoped_roster_unique_name_collisions(
+        &roster_unique_name_collisions(&names),
+        &roster.team_name,
+    );
     if collisions.is_empty() {
         Ok(())
     } else {
@@ -913,7 +929,7 @@ mod tests {
     }
 
     #[test]
-    fn unique_name_a27_legacy_collision_blocks_an_unrelated_next_write() {
+    fn unique_name_a27_legacy_collision_blocks_a_write_that_reuses_the_colliding_name() {
         let store = SqliteStorageBackend::in_memory_for_test()
             .expect("backend")
             .roster_store;
@@ -927,13 +943,37 @@ mod tests {
                     roster_member("team-b", "carol", None),
                 ],
             ))
-            .expect_err("legacy conflict blocks unrelated write");
+            .expect_err("proposal reusing the colliding name is rejected");
 
         assert!(error.message().contains("(team-a, alex)"));
         assert_eq!(
             store
                 .load_roster(&"team-b".parse().expect("team"))
                 .expect("roster remains readable")
+                .members
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn unique_name_a30_legacy_collision_does_not_block_an_unrelated_team_write() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        seed_legacy_cross_team_duplicate(&store);
+
+        store
+            .save_roster(&roster(
+                "team-c",
+                vec![roster_member("team-c", "carol", None)],
+            ))
+            .expect("a team that does not participate in the collision may still write");
+
+        assert_eq!(
+            store
+                .load_roster(&"team-c".parse().expect("team"))
+                .expect("roster")
                 .members
                 .len(),
             1

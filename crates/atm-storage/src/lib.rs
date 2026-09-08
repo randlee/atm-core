@@ -47,6 +47,7 @@ pub use contract::{
     RosterRuntimeMirror, RosterSnapshot, RosterStore, RosterUniqueName, StorageNotifier,
     TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
     derive_ack_requirement, roster_unique_name_collision_error, roster_unique_name_collisions,
+    team_scoped_roster_unique_name_collisions,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
