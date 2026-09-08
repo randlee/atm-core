@@ -77,10 +77,10 @@ class _CiParityFixture:
         member_home.mkdir()
         for member in (self.sender, self.receiver):
             self.cli("teams", "add-member", self.team, member, "--home-dir", str(member_home), identity=self.sender)
-        # This normal CLI request invokes DaemonSupervisor's production gate:
-        # connect first, then spawn only when no daemon answers. A CI runner
-        # is dedicated to this fixture, and a pre-existing daemon makes the
-        # daemon startup guard abort rather than creating a second runtime.
+        # This is deliberately the first daemon request after the preceding
+        # admission-capacity CI step has stopped its owned daemon. The normal
+        # CLI path must connect first, then use DaemonSupervisor's production
+        # gate to start the one Tokio/Axum runtime when no daemon answers.
         self.cli("list", identity=self.receiver)
 
     def close(self) -> None:

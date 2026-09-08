@@ -96,7 +96,7 @@ impl DaemonOwnerGuard {
 
 #[cfg(windows)]
 fn read_owner_record(lock_path: &Path) -> Result<String, AtmError> {
-    read_owner_record_with(lock_path, fs::read_to_string)
+    read_owner_record_with(lock_path, |path| fs::read_to_string(path))
 }
 
 #[cfg(windows)]

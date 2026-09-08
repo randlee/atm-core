@@ -379,6 +379,40 @@ pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalDaemonConne
     try_connect_with_transport(endpoint, local_daemon_transport()?)
 }
 
+/// Probes the replacement daemon's selected HTTP transport without issuing a request.
+///
+/// The probe is deliberately limited to connection establishment: CLI
+/// bootstrap uses it to decide whether the production launch gate must start
+/// the Tokio/Axum daemon, while all request dispatch remains in
+/// `atm-http-runtime`.
+pub fn probe_daemon_endpoint(endpoint: &DaemonLocalIpcEndpoint) -> Result<(), AtmError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let runtime_directory = endpoint.as_ref().parent().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "local HTTP endpoint record has no runtime directory for Unix socket selection",
+            )
+        })?;
+        let root_owned = std::fs::metadata(runtime_directory)
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to inspect local runtime directory")
+                    .with_cause(source)
+            })?
+            .uid()
+            == 0;
+        if root_owned {
+            return try_connect_local_http_record(endpoint.as_ref()).map(|_| ());
+        }
+        try_connect_unix_socket(endpoint).map(|_| ())
+    }
+    #[cfg(not(unix))]
+    {
+        try_connect_local_http_record(endpoint.as_ref()).map(|_| ())
+    }
+}
+
 #[cfg(unix)]
 fn try_connect_unix_socket(
     endpoint: &DaemonLocalIpcEndpoint,
@@ -1033,7 +1067,8 @@ mod tests {
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
         HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, next_auto_start_poll_interval,
-        resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
+        probe_daemon_endpoint, resolve_daemon_local_ipc_endpoint,
+        resolve_daemon_local_ipc_endpoint_from_home,
     };
     #[cfg(unix)]
     use super::{
@@ -1118,6 +1153,30 @@ mod tests {
             error.cause().is_some_and(|cause| !cause.is_empty()),
             "the underlying UDS connection failure remains structured"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replacement_probe_recovers_after_the_endpoint_is_published() {
+        let tempdir = TempDir::new().expect("temp runtime");
+        let runtime_directory = tempdir.path().join("daemon");
+        std::fs::create_dir_all(&runtime_directory).expect("runtime directory");
+        let endpoint = DaemonLocalIpcEndpoint::new(
+            runtime_directory.join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+        )
+        .expect("endpoint");
+
+        assert!(
+            probe_daemon_endpoint(&endpoint).is_err(),
+            "no daemon is available yet"
+        );
+
+        let _listener = std::os::unix::net::UnixListener::bind(
+            runtime_directory.join(atm_core::home::HOST_RUNTIME_SOCKET_FILE),
+        )
+        .expect("replacement listener publishes");
+
+        probe_daemon_endpoint(&endpoint).expect("published daemon is reachable");
     }
 
     #[test]
