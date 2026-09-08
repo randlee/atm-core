@@ -6,7 +6,7 @@ title: Herdr endpoint doctor and daemon configuration
 branch: feature/ay3-herdr-endpoint-doctor-config
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay3-herdr-endpoint-doctor-config
 integration_branch: integrate/phase-ay
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: core

@@ -9,7 +9,7 @@ integration_branch: integrate/phase-ay
 stack_parent: none
 pr_target: integrate/phase-ay
 target: integrate/phase-ay
-status: draft
+status: complete
 recommended_agent: cipher
 recommended_model: fast
 rework: 2026-09-06 (transport isolation ruling; see phase-ay-plan.md "Rework record")

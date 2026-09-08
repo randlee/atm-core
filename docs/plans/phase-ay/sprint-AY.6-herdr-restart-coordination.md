@@ -6,7 +6,7 @@ title: Coordinated Herdr endpoint restart
 branch: feature/ay6-herdr-restart-coordination
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ay6-herdr-restart-coordination
 integration_branch: integrate/phase-ay
-status: draft
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: core
