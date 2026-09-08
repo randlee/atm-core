@@ -18,6 +18,7 @@ from typing import Callable, Literal, Protocol
 
 
 MARKER = "managed-by=atm daemon-switch"
+HERDR_DEFAULT_SESSION = "default"
 
 
 class HerdrEntryError(Exception):
@@ -62,15 +63,15 @@ class EntryPlatform(Protocol):
 def identifier(platform: str, endpoint: str) -> str:
     """Return the deterministic start-at-login identifier for an endpoint."""
     if platform == "Darwin":
-        return "com.randlee.atm.herdr-server" if endpoint == "default" else f"com.randlee.atm.herdr-server.{endpoint}"
+        return "com.randlee.atm.herdr-server" if endpoint == HERDR_DEFAULT_SESSION else f"com.randlee.atm.herdr-server.{endpoint}"
     if platform == "Windows":
-        return "ATM Herdr Server" if endpoint == "default" else f"ATM Herdr Server ({endpoint})"
-    return "atm-herdr-server.service" if endpoint == "default" else f"atm-herdr-server@{endpoint}.service"
+        return "ATM Herdr Server" if endpoint == HERDR_DEFAULT_SESSION else f"ATM Herdr Server ({endpoint})"
+    return "atm-herdr-server.service" if endpoint == HERDR_DEFAULT_SESSION else f"atm-herdr-server@{endpoint}.service"
 
 
 def canonical_object(platform: str, endpoint: str) -> str:
     """Render the complete owned object without any caller configuration."""
-    command = "herdr server" if endpoint == "default" else f"herdr --session {endpoint} server"
+    command = "herdr server" if endpoint == HERDR_DEFAULT_SESSION else f"herdr --session {endpoint} server"
     if platform == "Darwin":
         return "\n".join(("<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<plist version=\"1.0\"><dict>", f"<key>Label</key><string>{identifier(platform, endpoint)}</string>", f"<key>ProgramArguments</key><array><string>{command}</string></array>", "<key>RunAtLoad</key><true/>", "<key>KeepAlive</key><false/>", f"<key>Comment</key><string>{MARKER}</string>", "</dict></plist>", ""))
     if platform == "Windows":

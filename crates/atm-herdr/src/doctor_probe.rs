@@ -174,15 +174,35 @@ impl HerdrDoctorProbe {
             HerdrError::Timeout | HerdrError::TimedOut => {
                 HerdrDoctorState::ProbeTimedOut { after: elapsed }
             }
-            HerdrError::Advisory { code, .. } => HerdrDoctorState::UnexpectedResponse {
+            HerdrError::Advisory { code, message } => HerdrDoctorState::UnexpectedResponse {
                 code: Some(code),
-                detail: "Herdr status query returned an unrecognized advisory response".to_owned(),
+                detail: detail_or_fallback(
+                    &message,
+                    "Herdr status query returned an unrecognized advisory response",
+                ),
             },
+            ref error @ HerdrError::InternalError { ref message } => {
+                HerdrDoctorState::UnexpectedResponse {
+                    code: Some(error.emission_outcome().to_owned()),
+                    detail: detail_or_fallback(
+                        message,
+                        "Herdr status query did not return a supported response",
+                    ),
+                }
+            }
             error => HerdrDoctorState::UnexpectedResponse {
                 code: Some(error.emission_outcome().to_owned()),
                 detail: "Herdr status query did not return a supported response".to_owned(),
             },
         }
+    }
+}
+
+fn detail_or_fallback(message: &str, fallback: &str) -> String {
+    if message.is_empty() {
+        fallback.to_owned()
+    } else {
+        message.to_owned()
     }
 }
 
@@ -338,6 +358,66 @@ mod tests {
             ),
             HerdrDoctorState::ClientServerMismatch { .. }
         ));
+    }
+
+    #[test]
+    fn internal_error_preserves_herdr_detail_in_doctor_output() {
+        let state = HerdrDoctorProbe::new(Default::default()).state_for_error(
+            crate::HerdrError::InternalError {
+                message: "Herdr returned a useful internal diagnostic".to_owned(),
+            },
+            Duration::ZERO,
+            None,
+        );
+        assert!(matches!(
+            state,
+            HerdrDoctorState::UnexpectedResponse { detail, .. }
+                if detail == "Herdr returned a useful internal diagnostic"
+        ));
+    }
+
+    #[test]
+    fn advisory_preserves_herdr_detail_in_doctor_output() {
+        let state = HerdrDoctorProbe::new(Default::default()).state_for_error(
+            crate::HerdrError::Advisory {
+                code: "future_code".to_owned(),
+                message: "Herdr returned a useful advisory diagnostic".to_owned(),
+            },
+            Duration::ZERO,
+            None,
+        );
+        assert!(matches!(
+            state,
+            HerdrDoctorState::UnexpectedResponse { detail, .. }
+                if detail == "Herdr returned a useful advisory diagnostic"
+        ));
+    }
+
+    #[test]
+    fn empty_unexpected_response_details_keep_their_fallbacks() {
+        let probe = HerdrDoctorProbe::new(Default::default());
+        let cases = [
+            (
+                crate::HerdrError::InternalError {
+                    message: String::new(),
+                },
+                "Herdr status query did not return a supported response",
+            ),
+            (
+                crate::HerdrError::Advisory {
+                    code: "future_code".to_owned(),
+                    message: String::new(),
+                },
+                "Herdr status query returned an unrecognized advisory response",
+            ),
+        ];
+
+        for (error, expected_detail) in cases {
+            assert!(matches!(
+                probe.state_for_error(error, Duration::ZERO, None),
+                HerdrDoctorState::UnexpectedResponse { detail, .. } if detail == expected_detail
+            ));
+        }
     }
 
     #[test]

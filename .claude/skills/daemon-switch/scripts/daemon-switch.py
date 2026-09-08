@@ -81,6 +81,7 @@ from temporary_launch_windows import (  # noqa: E402
 )
 from temporary_launch_linux import LinuxSystemdUserAdapter  # noqa: E402
 from herdr_entry import (  # noqa: E402
+    HERDR_DEFAULT_SESSION,
     HerdrEndpoint,
     HerdrEntryError,
     HerdrEntryManager,
@@ -986,7 +987,7 @@ def herdr_entry_endpoints(cli: Path, *, install: bool) -> list[HerdrEndpoint]:
     for value in values:
         if not isinstance(value, dict):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint was malformed", "Fix native doctor and rerun", 4)
-        name = value.get("session") or value.get("endpoint") or "default"
+        name = value.get("session") or value.get("endpoint") or HERDR_DEFAULT_SESSION
         if not isinstance(name, str) or not name or not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint identifier was invalid", "Fix native doctor and rerun", 4)
         socket_path = value.get("socket_path")
@@ -1075,7 +1076,7 @@ def herdr_restart_endpoints(cli: Path) -> list[HerdrRestartEndpoint]:
     for raw in raw_endpoints:
         if not isinstance(raw, dict):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint was malformed", "Fix native doctor and rerun", 4)
-        name = raw.get("session") or raw.get("endpoint") or "default"
+        name = raw.get("session") or raw.get("endpoint") or HERDR_DEFAULT_SESSION
         state = raw.get("state")
         capabilities = raw.get("capabilities")
         provenance = raw.get("provenance")
@@ -1126,7 +1127,7 @@ def restart_uses_live_handoff(endpoint: HerdrRestartEndpoint) -> bool:
 
 
 def scoped_herdr_command(endpoint: HerdrRestartEndpoint, action: str) -> list[str]:
-    prefix = ["herdr"] if endpoint.name == "default" else ["herdr", "--session", endpoint.name]
+    prefix = ["herdr"] if endpoint.name == HERDR_DEFAULT_SESSION else ["herdr", "--session", endpoint.name]
     return [*prefix, "server", action]
 
 

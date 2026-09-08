@@ -29,6 +29,9 @@ pub(crate) const BACKEND_TYPE_METADATA_KEY: &str = "backendType";
 pub struct HerdrSession(String);
 
 impl HerdrSession {
+    /// Herdr's reserved name for the configuration-root server socket.
+    pub const DEFAULT_NAME: &str = "default";
+
     /// Constructs one Herdr session identifier.
     ///
     /// # Errors
@@ -63,7 +66,7 @@ impl HerdrSession {
     /// `sessions/<name>/`.
     #[must_use]
     pub fn is_default(&self) -> bool {
-        self.0 == "default"
+        self.0 == Self::DEFAULT_NAME
     }
 
     /// Returns a named-server session, excluding Herdr's reserved default.
@@ -341,7 +344,7 @@ mod tests {
 
     #[test]
     fn herdr_session_identifies_the_reserved_default_name() {
-        let default = HerdrSession::new("default").expect("valid default session");
+        let default = HerdrSession::new(HerdrSession::DEFAULT_NAME).expect("valid default session");
         let named = HerdrSession::new("session-1").expect("valid named session");
 
         assert!(default.is_default());
