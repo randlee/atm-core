@@ -1,0 +1,13 @@
+ATM TEST REPORT
+skill: atm-hermes-ready
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.9 daemon 1.5.9
+result: PASS   (4/4 steps)
+steps:
+  0 PASS Start line — 01M20XQP4PQ7N37KCVGTQK7YF8
+  1 PASS Roster — hermes@testbed found
+  2 PASS Receivers registered — hermes graft receiver active (last_seen_age: 0s)
+  3 PASS Ping — message_id: 01M20XR1N1WQ7K80F72J9B2JHB
+  4 PASS Pong — hermes reply: "ready", seconds: 22, message_id: 01M20XRPJ31JNSEX0GFSZD5HC0
+elapsed: 52s
