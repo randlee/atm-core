@@ -43,9 +43,10 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | A-24 | T1:bob | restore/import a roster containing T2:bob | reject | covered `unique_name_a24_store_rejects_imported_cross_team_collision` (atm-storage-rusqlite/src/roster_store.rs) |
 | A-25 | T1:Bob | add T2:bob | accept, exact comparison, no case folding | covered `unique_name_a25_compares_effective_names_case_sensitively` (atm-storage-rusqlite/src/roster_store.rs) |
 | A-26 | pre-upgrade db already holds T1:bob and T2:bob (no aliases) | open db, `atm members`/read paths | no error, no migration, rows unchanged | covered `unique_name_a26_legacy_collision_is_readable_but_next_write_fails` (roster_store.rs) |
-| A-27 | same seed | add T2:carol (the hmux launch add-member) | reject naming (T1,bob)/(T2,bob) and `--alias` remedy; roster unchanged | covered `unique_name_a27_legacy_collision_blocks_an_unrelated_next_write` (roster_store.rs) |
+| A-27 | same seed | add T2:carol (the hmux launch add-member) | reject naming (T1,bob)/(T2,bob) and `--alias` remedy; roster unchanged | covered `unique_name_a27_legacy_collision_blocks_a_write_that_reuses_the_colliding_name` (roster_store.rs) |
 | A-28 | same seed | set T2:bob alias=bobby, then add T2:carol | both accept | covered `unique_name_a28_aliasing_the_legacy_conflict_allows_the_next_write` (roster_store.rs) |
 | A-29 | same seed | remove T2:bob, then add T2:carol | both accept | covered `unique_name_a29_removing_the_legacy_conflict_allows_the_next_write` (roster_store.rs) |
+| A-30 | pre-upgrade db already holds T1:alex and T2:alex | add T3:carol | accept; the writing team does not participate in the legacy collision | covered `unique_name_a30_legacy_collision_does_not_block_an_unrelated_team_write` (roster_store.rs) |
 
 ## B. Grammar (REQ-ROSTER-NAME-005)
 
@@ -140,6 +141,7 @@ silently rewrite historical data through the live roster.
 | G-01 | A-03 error text | names conflicting team and member, states `--alias` remedy | covered (member_mutation.rs:1215) |
 | G-02 | A-06 error text | names the member that owns the alias and its team | covered `unique_name_g02_preflight_collision_names_alias_owner_and_team` (member_mutation.rs) |
 | G-03 | error is identical from CLI and daemon paths | same code and message | covered `unique_name_g03_durable_collision_uses_the_shared_error_contract` (roster_store.rs); preflight and durable enforcement invoke `roster_unique_name_collision_error` |
+| G-04 | pre-upgrade db holds a collision between two other teams | preflight a write for a third team | accept; unrelated collision groups do not block the writing team | covered `unique_name_g04_preflight_ignores_collisions_between_other_teams` (member_mutation.rs) |
 
 ## H. Decision points (fenix critical review, Rand's rulings 2026-09-07)
 

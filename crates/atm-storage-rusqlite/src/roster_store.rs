@@ -1,5 +1,5 @@
 use super::SqliteRosterStore;
-use crate::shared_db::{deserialize_json, serialize_json};
+use crate::shared_db::{SharedDb, deserialize_json, serialize_json};
 use atm_storage::contract::{
     AgentType, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
     RosterUniqueName,
@@ -105,7 +105,7 @@ impl RosterStore for SqliteRosterStore {
 
         let updated_at = chrono::Utc::now().to_rfc3339();
         self.db.with_transaction(|transaction| {
-            enforce_roster_unique_names(transaction, roster)?;
+            enforce_roster_unique_names(&self.db, transaction, roster)?;
             transaction
                 .execute(
                     "DELETE FROM team_roster WHERE team_name = ?1;",
@@ -189,11 +189,14 @@ impl RosterStore for SqliteRosterStore {
 
     fn unique_names(&self) -> Result<Vec<RosterUniqueName>, AtmError> {
         self.db
-            .with_connection(|connection| load_unique_names(connection))
+            .with_connection(|connection| load_unique_names(&self.db, connection))
     }
 }
 
-fn load_unique_names(connection: &Connection) -> Result<Vec<RosterUniqueName>, AtmError> {
+fn load_unique_names(
+    db: &SharedDb,
+    connection: &Connection,
+) -> Result<Vec<RosterUniqueName>, AtmError> {
     let mut statement = connection
         .prepare(
             "SELECT team_name, agent_name,
@@ -202,9 +205,10 @@ fn load_unique_names(connection: &Connection) -> Result<Vec<RosterUniqueName>, A
              ORDER BY team_name ASC, agent_name ASC;",
         )
         .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to prepare database-wide roster unique-name query: {error}"
-            ))
+            db.error(
+                "failed to prepare database-wide roster unique-name query",
+                error,
+            )
         })?;
     let rows = statement
         .query_map([], |row| {
@@ -215,15 +219,17 @@ fn load_unique_names(connection: &Connection) -> Result<Vec<RosterUniqueName>, A
             ))
         })
         .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to execute database-wide roster unique-name query: {error}"
-            ))
+            db.error(
+                "failed to execute database-wide roster unique-name query",
+                error,
+            )
         })?;
     rows.map(|row| {
         let (team_name, agent_name, unique_name) = row.map_err(|error| {
-            AtmError::validation(format!(
-                "failed to decode database-wide roster unique-name row: {error}"
-            ))
+            db.error(
+                "failed to decode database-wide roster unique-name row",
+                error,
+            )
         })?;
         Ok(RosterUniqueName {
             team_name: team_name.parse().map_err(|error| {
@@ -246,6 +252,7 @@ fn load_unique_names(connection: &Connection) -> Result<Vec<RosterUniqueName>, A
 /// immediate SQLite transaction as the replacement.  Preflight is solely an
 /// operator convenience; this remains authoritative for all writers.
 fn enforce_roster_unique_names(
+    db: &SharedDb,
     transaction: &rusqlite::Transaction<'_>,
     roster: &RosterSnapshot,
 ) -> Result<(), AtmError> {
@@ -257,9 +264,10 @@ fn enforce_roster_unique_names(
              WHERE team_name != ?1;",
         )
         .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to prepare transactional roster unique-name validation: {error}"
-            ))
+            db.error(
+                "failed to prepare transactional roster unique-name validation",
+                error,
+            )
         })?;
     let mut names = statement
         .query_map(params![roster.team_name.as_str()], |row| {
@@ -270,15 +278,17 @@ fn enforce_roster_unique_names(
             ))
         })
         .map_err(|error| {
-            AtmError::validation(format!(
-                "failed to query transactional roster unique-name validation: {error}"
-            ))
+            db.error(
+                "failed to query transactional roster unique-name validation",
+                error,
+            )
         })?
         .map(|row| {
             let (team_name, agent_name, unique_name) = row.map_err(|error| {
-                AtmError::validation(format!(
-                    "failed to decode transactional roster unique-name validation: {error}"
-                ))
+                db.error(
+                    "failed to decode transactional roster unique-name validation",
+                    error,
+                )
             })?;
             Ok(RosterUniqueName {
                 team_name: team_name.parse().map_err(|error| {
