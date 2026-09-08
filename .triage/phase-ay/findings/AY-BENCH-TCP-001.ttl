@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY-BENCH-TCP-001>
+  a triage:Finding ;
+  triage:findingId "AY-BENCH-TCP-001" ;
+  triage:title "TCP p50 throughput 2.6% under floor in phase AY m5-atmbench campaign" ;
+  triage:description "Phase AY benchmark campaign 20260908T045049Z-m5-atmbench (host atmbench@rand-m5.local, ATM_CAPACITY_HOST_LABEL=m5-atmbench, per docs/testing-guidelines.md section 4.5.2) returned campaign status FAIL because the tcp target measured p50 16564.461730015042 msg/s against the reviewed same-host baseline floor of 17000.0 msg/s -- 2.56% under. The other three targets passed: sqlite 45867.84/35000, uds 19077.35/18000, tcp-tls 14851.91/13500. The tcp run was complete and durable, not aborted: requested_count 327000 == accepted_count 327000 == response_count 327000, durability_after_restart passed with observed_mailbox_count 327000, incomplete_reason null, first_failure null, all 327 intervals passed. tcp p95 (17354.42) and p99 (17685.60) both clear the floor; only p50 misses, with a deeper trough than uds (tcp min 8291.10 vs uds min 12221.37). This is therefore a genuine p50 throughput shortfall on the TCP transport, not a harness, delivery, or measurement defect. Code under test: integrate/phase-ay at 97cf27f5121695fe9601d7a86fffcd0acc84f092, run from fix/ay-closeout at 2aea45d021572c0bac60afdc787df2e9056c1b3c whose diff from the integration head was TTL and docs only (zero code difference). Binary hashes atm ba1e3cebd09188ee399cf3bb58e049f99b67b68c4dd416e184c543c6a7394c20, atm-daemon 498ab26ec13e33eb6c1db146f3d13501f73dbbe9adf6552b62185258dd1251a8. Published evidence commit 96c968b485efeb63ec76d023cc15ae8e6cad21c7. No baseline floor was changed and no baselines.json edit was made; the floor stands at 17000.0 (revision 1). Separately noted for later repair: the campaign metadata records phase = ao2 on a phase-ay campaign." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "performance" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-08T05:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-08T04:52:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY-BENCH-TCP-001/AYBENCHTCP-1> ;
+  triage:deferredNote "WAIVER (Rand, 2026-09-08, verbatim): -- add a waiver for tcp this round.  we will run again once we are ready to publish --. Scope: this waiver covers the tcp FAIL in campaign 20260908T045049Z-m5-atmbench only. It does not block PR #1308 (integrate/phase-ay -> develop) on the tcp shortfall, and it does not revise the 17000.0 p50 floor or any other baseline. A fresh complete benchmark matrix run is required before publish/release; the tcp result must be re-measured then and this waiver does not carry forward to that run." ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY-BENCH-TCP-001/AYBENCHTCP-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260908T045049Z-m5-atmbench-tcp.json" ;
+  triage:line 84 ;
+  triage:snippet "status: FAIL (tcp target)" ;
+  triage:status "deferred" ;
+  triage:closed false ;
+  triage:branch "evidence/ay-bench-r2-waiver" ;
+  triage:headSha "389ddb0e57cbd5ff5828706006b944a57f86dab3" ;
+  triage:occursIn <urn:atm:triage:worktree/AYWAIVER> .
+
+<urn:atm:triage:worktree/AYWAIVER>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/evidence/ay-bench-r2-waiver" ;
+  triage:branch "evidence/ay-bench-r2-waiver" ;
+  triage:headSha "389ddb0e57cbd5ff5828706006b944a57f86dab3" ;
+  triage:orderIndex 1 .
