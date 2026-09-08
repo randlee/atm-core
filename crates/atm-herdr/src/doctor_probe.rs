@@ -44,11 +44,7 @@ impl HerdrDoctorProbe {
         let started = Instant::now();
         let mut observation = HerdrEndpointObservation {
             session: session.cloned(),
-            provenance: if session.is_some() {
-                HerdrEndpointProvenance::Session
-            } else {
-                HerdrEndpointProvenance::HerdrDefault
-            },
+            provenance: endpoint_provenance(session),
             transport: self.config.transport().clone(),
             endpoint: self.io.endpoint_display(session),
             binary: self.binary_resolution(),
@@ -227,16 +223,36 @@ fn presence_for_error(error: HerdrError) -> HerdrPresenceOutcome {
     }
 }
 
+fn endpoint_provenance(session: Option<&HerdrSession>) -> HerdrEndpointProvenance {
+    if session.is_some_and(|session| !session.is_default()) {
+        HerdrEndpointProvenance::Session
+    } else {
+        HerdrEndpointProvenance::HerdrDefault
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
-    use super::{HerdrDoctorProbe, presence_for_error, state_for_server};
-    use atm_core::doctor::{HerdrDoctorState, HerdrPresenceOutcome, HerdrVersion};
+    use super::{HerdrDoctorProbe, endpoint_provenance, presence_for_error, state_for_server};
+    use atm_core::HerdrSession;
+    use atm_core::doctor::{
+        HerdrDoctorState, HerdrEndpointProvenance, HerdrPresenceOutcome, HerdrVersion,
+    };
 
     #[test]
     fn construction_selects_transport_without_running_a_command() {
         let _probe = HerdrDoctorProbe::new(Default::default());
+    }
+
+    #[test]
+    fn default_session_uses_default_endpoint_provenance() {
+        let session = HerdrSession::new("default").expect("valid default session");
+        assert_eq!(
+            endpoint_provenance(Some(&session)),
+            HerdrEndpointProvenance::HerdrDefault
+        );
     }
 
     #[test]

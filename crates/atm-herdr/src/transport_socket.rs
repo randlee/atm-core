@@ -132,12 +132,14 @@ pub(crate) fn herdr_api_endpoint(
                 .socket_path()
                 .map(std::path::Path::to_path_buf)
                 .or_else(|| {
-                    session.map(|session| {
-                        config_dir(env)
-                            .join("sessions")
-                            .join(session.as_str())
-                            .join("herdr.sock")
-                    })
+                    session
+                        .filter(|session| !session.is_default())
+                        .map(|session| {
+                            config_dir(env)
+                                .join("sessions")
+                                .join(session.as_str())
+                                .join("herdr.sock")
+                        })
                 });
             HerdrEndpoint::UnixSocket(raw.unwrap_or_else(|| config_dir(env).join("herdr.sock")))
         }
@@ -146,13 +148,15 @@ pub(crate) fn herdr_api_endpoint(
                 .socket_path()
                 .map(std::path::Path::to_path_buf)
                 .or_else(|| {
-                    session.map(|session| {
-                        PathBuf::from(format!(
-                            r"{}\sessions\{}\herdr.sock",
-                            config_dir(env).display(),
-                            session.as_str()
-                        ))
-                    })
+                    session
+                        .filter(|session| !session.is_default())
+                        .map(|session| {
+                            PathBuf::from(format!(
+                                r"{}\sessions\{}\herdr.sock",
+                                config_dir(env).display(),
+                                session.as_str()
+                            ))
+                        })
                 });
             let raw = raw.unwrap_or_else(|| {
                 PathBuf::from(format!(r"{}\herdr.sock", config_dir(env).display()))
@@ -473,6 +477,16 @@ mod tests {
     }
 
     #[test]
+    fn endpoint_default_session_uses_default_socket() {
+        let cfg = HerdrClientConfig::default();
+        let session = HerdrSession::new("default").expect("session");
+        assert_eq!(
+            herdr_api_endpoint(&cfg, Some(&session), &env(Platform::Unix)),
+            HerdrEndpoint::UnixSocket(PathBuf::from("/xdg/herdr/herdr.sock"))
+        );
+    }
+
+    #[test]
     fn endpoint_explicit_socket_path_wins_over_session() {
         let cfg = HerdrClientConfig::with_socket_path(PathBuf::from("/explicit/herdr.sock"));
         let session = HerdrSession::new("agent-session").expect("session");
@@ -502,6 +516,18 @@ mod tests {
             HerdrEndpoint::NamedPipe(
                 r"\\.\pipe\C:\Users\alice\AppData\Roaming\herdr\sessions\agent-session\herdr.sock"
                     .to_owned()
+            )
+        );
+    }
+
+    #[test]
+    fn endpoint_windows_default_session_uses_default_socket() {
+        let cfg = HerdrClientConfig::default();
+        let session = HerdrSession::new("default").expect("session");
+        assert_eq!(
+            herdr_api_endpoint(&cfg, Some(&session), &env(Platform::Windows)),
+            HerdrEndpoint::NamedPipe(
+                r"\\.\pipe\C:\Users\alice\AppData\Roaming\herdr\herdr.sock".to_owned()
             )
         );
     }
