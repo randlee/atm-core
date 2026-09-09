@@ -57,6 +57,11 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --release l
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --release 1.5.1 --yes \
   --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 
+# Switch to a published GitHub prerelease. This downloads and checksum-verifies
+# the matched host archive from the prerelease Release before switching it.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --prerelease 1.5.11 --yes \
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
+
 # Dogfood an exact prerelease-tagged worktree build. HEAD must carry
 # `prerelease/vX.Y.Z`, the workspace version must be X.Y.Z, and both release
 # binaries must report X.Y.Z. Use --bump to run prerelease_tag.py and build the

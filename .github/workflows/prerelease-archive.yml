@@ -1,7 +1,8 @@
 name: Prerelease Archive
 
 # Builds manifest-declared release archives (linux/macOS/windows) from a
-# prerelease/vX.Y.Z tag, with CI provenance, without creating a GitHub Release.
+# prerelease/vX.Y.Z tag, with CI provenance, and creates one GitHub prerelease
+# Release only after a final absence check.
 # The tag is created by `just prerelease-tag`, which patch-bumps the workspace
 # on the caller's current branch before pushing the tag.
 #
@@ -35,6 +36,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       atm_core_sha: ${{ steps.resolve.outputs.sha }}
+      tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
       rust_toolchain: ${{ steps.resolve.outputs.rust_toolchain }}
       release_target_matrix: ${{ steps.matrix.outputs.matrix }}
@@ -264,3 +266,30 @@ jobs:
         with:
           name: checksums
           path: checksums
+
+  release:
+    needs: [plan, build, checksums]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download archives and checksums
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+      - name: Create GitHub prerelease Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          find release-assets -type f -name '*.tar.gz' -exec cp {} . \;
+          find release-assets -type f -name '*.zip' -exec cp {} . \;
+          find release-assets -type f -name checksums.txt -exec cp {} . \;
+          tag='${{ needs.plan.outputs.tag }}'
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub Release already exists for ${tag}; refusing to replace it" >&2
+            exit 1
+          fi
+          gh release create "$tag" --prerelease --title "$tag" --generate-notes *.tar.gz *.zip checksums.txt
