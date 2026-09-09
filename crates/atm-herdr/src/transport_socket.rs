@@ -236,11 +236,7 @@ fn encode_request(op: HerdrOp<'_>) -> Result<Vec<u8>, HerdrError> {
             "method": "agent.list",
             "params": {},
         }),
-        HerdrOp::StatusServer => {
-            return Err(HerdrError::InternalError {
-                message: "Herdr socket server status must use the ping probe".to_owned(),
-            });
-        }
+        HerdrOp::StatusServer => unreachable!("socket server status uses the ping probe"),
         HerdrOp::Notify { title, body } => json!({
             "id": "atm:agent:notify",
             "method": "notification.show",
