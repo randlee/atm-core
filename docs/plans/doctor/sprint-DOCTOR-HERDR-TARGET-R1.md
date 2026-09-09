@@ -42,3 +42,14 @@ No tokio in atm-core. No edits to `.just/lint-config.toml`, `.just/allowlists/`,
 - `atm doctor --json` on a host with a label-only pane reports the member with the new code and the pane id in its remediation; after `herdr agent rename <pane> <target>` the same member reports `visible`. The colima fixture (`atm-hermes-testbed`, `bringup.sh` runs `herdr agent rename <pane> tester`) is the place to prove this end-to-end; a unit test with fake IO is the merge gate.
 - PR description names the tests, the breaker decision (D2), and the interface minor bump.
 - QA report posted on the PR before merge.
+
+## D6 — Breaker-opened notice must tell the operator how to recover (added 2026-09-09, Rand)
+
+The daemon mail sent from `atm-daemon@<team>` when the Herdr breaker opens (`crates/atm-http-runtime/src/herdr_breaker_escalation.rs`, body "Herdr breaker opened at … Queued ATM mail remains durable. Remediation: run atm doctor --json.") confused its reader on rand-m4: it arrived wrapped in the generic nudge ("execute the assigned task") and said nothing about what stopped or how to fix it. Rewrite the body so a reader with no context can act:
+
+1. What happened in one sentence: Herdr nudges for team `<team>` are paused after `<n>` consecutive failures; mail is still delivered to inboxes and will be read on the next poll.
+2. The failure that tripped it (the D2 `last_error_code` and the herdr error name, plus the member target if known).
+3. Recovery steps in order: `atm doctor --json` and read `herdr.endpoints[].members`; for `agent_not_found` run `herdr agent rename <pane_id> <target>` (or relaunch the member); for server errors start `herdr server`; the breaker retries on its own after `<retry_after>` and closes on the first success, so no daemon restart is needed.
+4. Where the durable explanation lives (the D5 troubleshooting section).
+
+Keep it plain text, under ~12 lines, no ids or fingerprints. The message is a notice, not a task: send it with the category/tags that make the nudge wrapper say so, if the nudge template supports it (check `team_nudge_template_overrides` / the daemon's nudge template kinds before inventing one). Unit test asserts the body names the cause and the rename command.
