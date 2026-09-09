@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: 1.2.0
+  version: 1.3.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
@@ -157,7 +157,7 @@ components:
         acknowledges_message_id: { type: string }
         peer_http_api_version:
           type: string
-          description: Optional cross-host wire API version. The current baseline is 1.2.0; receivers reject only a major-version mismatch.
+          description: Optional cross-host wire API version. The current baseline is 1.3.0; receivers reject only a major-version mismatch.
     PeekQuery:
       type: object
       description: Canonical inspect query; fields are validated by the daemon.
@@ -182,6 +182,16 @@ components:
         endpoints:
           type: array
           items: { $ref: '#/components/schemas/HerdrEndpointDoctorReport' }
+        breaker:
+          $ref: '#/components/schemas/HerdrBreakerDoctorReport'
+    HerdrBreakerDoctorReport:
+      type: object
+      properties:
+        state: { type: string, enum: [closed, open] }
+        retry_after_ms: { type: integer, format: uint64, nullable: true }
+        consecutive_failures: { type: integer, format: uint32, nullable: true }
+        last_error_code: { type: string, nullable: true, description: Last infrastructure error code; added in HTTP API 1.3.0. }
+        last_error_detail: { type: string, nullable: true, description: Last infrastructure error detail; added in HTTP API 1.3.0. }
     HerdrEndpointDoctorReport:
       type: object
       properties:
@@ -189,6 +199,18 @@ components:
         members:
           type: array
           items: { $ref: '#/components/schemas/HerdrMemberPresence' }
+        findings:
+          type: array
+          description: Endpoint-wide target-resolution and named-session findings; added in HTTP API 1.3.0.
+          items: { $ref: '#/components/schemas/DoctorFinding' }
+    DoctorFinding:
+      type: object
+      description: Privacy-safe operator diagnostic.
+      properties:
+        severity: { type: string }
+        code: { type: string }
+        message: { type: string }
+        remediation: { type: string }
     HerdrMemberPresence:
       type: object
       required: [name, outcome]

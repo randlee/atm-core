@@ -337,6 +337,7 @@ impl HerdrQueueWakePump {
                 _ => None,
             })
             .unwrap_or(Duration::ZERO);
+        let member_target = (members.len() == 1).then(|| members[0].herdr_agent.as_str());
         let task_store = self.service_runtime.task_store().ok();
         crate::herdr_breaker_escalation::escalate_breaker_cycle(
             &self.service_runtime,
@@ -348,6 +349,7 @@ impl HerdrQueueWakePump {
             failure_count,
             error,
             retry_after,
+            member_target,
         )
         .await;
         true
@@ -967,22 +969,33 @@ impl ReleasePendingOnDrop {
         if !self.armed {
             return;
         }
-        let result = if self.claim_release_action() {
-            self.store.requeue_pending(&self.member, &self.claim)
-        } else {
-            self.store.release_pending(&self.member, &self.claim)
-        };
-        if let Err(error) = result {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "queue_claim_release",
-                outcome = "failed",
-                error = %error,
-                member = %self.member,
-                "failed to resolve Herdr queue claim during drop"
-            );
-        }
+        let should_requeue = self.claim_release_action();
         self.armed = false;
+        let store = Arc::clone(&self.store);
+        let member = self.member.clone();
+        let claim = self.claim.clone();
+        let release = move || {
+            let result = if should_requeue {
+                store.requeue_pending(&member, &claim)
+            } else {
+                store.release_pending(&member, &claim)
+            };
+            if let Err(error) = result {
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "queue_claim_release",
+                    outcome = "failed",
+                    error = %error,
+                    member = %member,
+                    "failed to resolve Herdr queue claim during drop"
+                );
+            }
+        };
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            std::mem::drop(handle.spawn_blocking(release));
+        } else {
+            release();
+        }
     }
 
     fn disarm(&mut self) {

@@ -97,8 +97,10 @@ pub(crate) async fn escalate_breaker_cycle(
     failure_count: u32,
     error: &atm_herdr::HerdrError,
     retry_after: Duration,
+    member_target: Option<&str>,
 ) {
-    let mail_body = breaker_opened_mail_body(team, failure_count, error, retry_after);
+    let mail_body =
+        breaker_opened_mail_body(team, failure_count, error, retry_after, member_target);
     let notification = EscalationNotification {
         title: "ATM Herdr breaker open".to_owned(),
         body: "state=breaker_open remediation=atm doctor --json".to_owned(),
@@ -134,10 +136,14 @@ fn breaker_opened_mail_body(
     failure_count: u32,
     error: &atm_herdr::HerdrError,
     retry_after: Duration,
+    member_target: Option<&str>,
 ) -> String {
     let code = AtmError::from(error.clone()).code();
+    let agent_not_found = atm_herdr::HerdrError::AgentNotFound.diagnostic_name();
+    let target_line =
+        member_target.map_or_else(String::new, |target| format!("Member target: {target}.\n"));
     format!(
-        "Herdr nudges for team {team} are paused after {failure_count} consecutive failure(s); ATM mail remains durable and will be read on the next poll.\nCause: {code} ({}) triggered the breaker.\nRecovery:\n1. Run `atm doctor --json` and read `herdr.endpoints[].members`.\n2. For agent_not_found, run `herdr agent rename <pane_id> <target>` or relaunch the member.\n3. For server errors, run `herdr server`.\nThe breaker retries after {} seconds and closes on the first success; no daemon restart is needed.\nDetails: docs/user-documents/troubleshooting.md#herdr-target-not-found",
+        "Herdr nudges for team {team} are paused after {failure_count} consecutive failure(s); ATM mail remains durable and will be read on the next poll.\n{target_line}Cause: {code} ({}) triggered the breaker.\nRecovery:\n1. Run `atm doctor --json` and read `herdr.endpoints[].members`.\n2. For {agent_not_found}, run `herdr agent rename <pane_id> <target>` or relaunch the member.\n3. For server errors, run `herdr server`.\nThe breaker retries after {} seconds and closes on the first success; no daemon restart is needed.\nDetails: docs/user-documents/troubleshooting.md#herdr-target-not-found",
         error.diagnostic_name(),
         retry_after.as_secs()
     )
@@ -177,12 +183,23 @@ mod tests {
             3,
             &atm_herdr::HerdrError::AgentNotFound,
             Duration::from_secs(8),
+            Some("cipher"),
         );
 
         assert!(body.contains("ATM_HERDR_AGENT_NOT_VISIBLE"));
         assert!(body.contains(atm_herdr::HerdrError::AgentNotFound.diagnostic_name()));
         assert!(body.contains("herdr agent rename <pane_id> <target>"));
+        assert!(body.contains("Member target: cipher."));
         assert!(body.contains("retries after 8 seconds"));
         assert!(body.lines().count() <= 12);
+
+        let without_target = breaker_opened_mail_body(
+            &team,
+            3,
+            &atm_herdr::HerdrError::AgentNotFound,
+            Duration::from_secs(8),
+            None,
+        );
+        assert!(!without_target.contains("Member target:"));
     }
 }
