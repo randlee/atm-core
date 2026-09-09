@@ -19,6 +19,7 @@ import sys
 import tarfile
 import tempfile
 import tomllib
+import zipfile
 from typing import Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -26,10 +27,8 @@ from urllib.request import Request, urlopen
 from macos_development_signing import (
     CLI_IDENTIFIER,
     DAEMON_IDENTIFIER,
-    SigningIdentity,
     SigningIdentityError,
     resolve_apple_development_identity,
-    verify_signing_identity,
 )
 
 
@@ -38,6 +37,11 @@ PRERELEASE_TAG_PREFIX = "prerelease/v"
 GITHUB_RELEASES_API = "https://api.github.com/repos/randlee/atm-core/releases"
 PRERELEASE_INSTALL_ROOT = Path("~/.atm-builds").expanduser()
 REPO_ROOT = Path(__file__).resolve().parents[4]
+JUST_SCRIPTS = REPO_ROOT / ".just"
+if str(JUST_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(JUST_SCRIPTS))
+
+from sign_daemon_dev import sign_and_verify_binary, unlock_login_keychain  # noqa: E402
 
 
 class SwitchError(RuntimeError):
@@ -352,15 +356,10 @@ def sign_prerelease_pair(cli: Path, daemon: Path) -> None:
     if platform.system() != "Darwin":
         return
     try:
+        unlock_login_keychain()
         identity = resolve_apple_development_identity()
         for binary, identifier in ((cli, CLI_IDENTIFIER), (daemon, DAEMON_IDENTIFIER)):
-            subprocess.run(
-                ["codesign", "--force", "--sign", identity.fingerprint, "--identifier", identifier,
-                 "--entitlements", str(REPO_ROOT / "scripts" / "macos_debug.entitlements"), str(binary)],
-                check=True, capture_output=True, text=True,
-            )
-            if not verify_signing_identity(str(binary), identifier, identity):
-                raise SwitchError(f"post-sign verification failed for staged prerelease binary: {binary}")
+            sign_and_verify_binary(binary, identifier, identity)
     except (OSError, subprocess.SubprocessError, SigningIdentityError) as error:
         raise SwitchError(f"cannot sign staged prerelease pair: {error}") from error
 

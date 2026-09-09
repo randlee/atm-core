@@ -14,6 +14,7 @@ import socket
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from unittest import mock
 
 
@@ -1331,6 +1332,55 @@ class SwitchModeTests(unittest.TestCase):
         with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "prerelease Release is missing"):
             with mock.patch.object(DAEMON_SWITCH, "github_json", return_value={"draft": False, "prerelease": False}):
                 DAEMON_SWITCH.prerelease_release("1.5.11")
+
+    def test_prerelease_resolution_extracts_a_windows_zip_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            archive_buffer = io.BytesIO()
+            with zipfile.ZipFile(archive_buffer, "w") as archive:
+                archive.writestr("atm-1.5.11/bin/atm.exe", "fixture")
+                archive.writestr("atm-1.5.11/bin/atm-daemon.exe", "fixture")
+            archive_bytes = archive_buffer.getvalue()
+            archive_name = "atm_1.5.11_x86_64-pc-windows-msvc.zip"
+            checksum = DAEMON_SWITCH.hashlib.sha256(archive_bytes).hexdigest()
+            release = {
+                "assets": [
+                    {"name": "checksums.txt", "browser_download_url": "checksums"},
+                    {"name": archive_name, "browser_download_url": "archive"},
+                ]
+            }
+            with (
+                mock.patch.object(DAEMON_SWITCH, "PRERELEASE_INSTALL_ROOT", Path(temporary)),
+                mock.patch.object(DAEMON_SWITCH, "prerelease_release", return_value=("1.5.11", release)),
+                mock.patch.object(DAEMON_SWITCH, "release_archive_triple", return_value=("x86_64-pc-windows-msvc", "zip")),
+                mock.patch.object(DAEMON_SWITCH, "executable_name", side_effect=lambda name: f"{name}.exe"),
+                mock.patch.object(DAEMON_SWITCH, "_download", side_effect=[f"{checksum}  {archive_name}\n".encode(), archive_bytes]),
+                mock.patch.object(DAEMON_SWITCH, "require_pair_version") as versions,
+            ):
+                cli, daemon, version = DAEMON_SWITCH.resolve_prerelease_pair("1.5.11")
+            self.assertEqual(version, "1.5.11")
+            self.assertTrue(cli.is_file())
+            self.assertTrue(daemon.is_file())
+            versions.assert_called_once_with(cli, daemon, "1.5.11")
+
+    def test_prerelease_signing_unlocks_then_uses_the_shared_signer(self) -> None:
+        cli = Path("/staged/atm")
+        daemon = Path("/staged/atm-daemon")
+        identity = mock.sentinel.identity
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "unlock_login_keychain") as unlock,
+            mock.patch.object(DAEMON_SWITCH, "resolve_apple_development_identity", return_value=identity),
+            mock.patch.object(DAEMON_SWITCH, "sign_and_verify_binary") as sign,
+        ):
+            DAEMON_SWITCH.sign_prerelease_pair(cli, daemon)
+        unlock.assert_called_once_with()
+        self.assertEqual(
+            sign.call_args_list,
+            [
+                mock.call(cli, DAEMON_SWITCH.CLI_IDENTIFIER, identity),
+                mock.call(daemon, DAEMON_SWITCH.DAEMON_IDENTIFIER, identity),
+            ],
+        )
 
     def test_release_resolution_uses_platform_owned_pair_and_verifies_both_versions(self) -> None:
         cli = Path("/release/bin/atm")
