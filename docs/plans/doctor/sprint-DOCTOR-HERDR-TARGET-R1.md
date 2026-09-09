@@ -36,7 +36,7 @@ When a named-session observation ends in `ServerNotRunning` / `EndpointUnreachab
 Unit tests in atm-herdr / atm-core for D1 (a), (b), (c); D2 (breaker open → row still shows the cause, or probe bypasses breaker); D3 (two rows on a missing named session → one finding naming both). The D1(a) test must fail before the change.
 
 **D5 — Docs.**
-Extend the doctor/Herdr troubleshooting section that already lists `ATM_WARNING_ROSTER_DRIFT` / `ATM_ROSTER_NO_LEAD` with the new code(s), the label-vs-name explanation in two sentences, and the two remediations. Cross-reference #1360.
+Extend the doctor/Herdr troubleshooting section with the new code(s), the label-vs-name explanation in two sentences, and the two remediations. Cross-reference #1360.
 
 ## Constraints
 

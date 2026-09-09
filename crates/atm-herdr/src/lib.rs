@@ -269,6 +269,13 @@ impl HerdrError {
 /// external deadline and receive typed outcomes without knowing Herdr's wire
 /// format or argv.
 pub trait HerdrProcessAdapter: Send + Sync {
+    /// Returns the current shared-breaker delay when the adapter is holding
+    /// Herdr work. Queue escalation notices use this live value rather than
+    /// reconstructing the breaker's exponential backoff policy.
+    fn breaker_retry_after(&self) -> Option<Duration> {
+        None
+    }
+
     fn prompt<'a>(
         &'a self,
         agent: &'a HerdrAgentName,
@@ -536,6 +543,14 @@ fn validate_prompt_text(text: &str) -> Result<(), HerdrError> {
 }
 
 impl HerdrProcessAdapter for HerdrProcessInvoker {
+    fn breaker_retry_after(&self) -> Option<Duration> {
+        match self.breaker.state() {
+            HerdrBreakerState::Open { retry_after } => Some(retry_after),
+            HerdrBreakerState::HalfOpen => Some(Duration::ZERO),
+            HerdrBreakerState::Closed => None,
+        }
+    }
+
     fn prompt<'a>(
         &'a self,
         agent: &'a HerdrAgentName,
@@ -720,6 +735,7 @@ pub mod testing {
         list_gate: Option<Arc<tokio::sync::Notify>>,
         notify_results: VecDeque<Result<(), HerdrError>>,
         notify_gate: Option<Arc<tokio::sync::Notify>>,
+        breaker_retry_after: Option<Duration>,
     }
 
     #[derive(Debug, Default, Clone)]
@@ -822,6 +838,12 @@ pub mod testing {
             }
         }
 
+        pub fn set_breaker_retry_after(&self, retry_after: Option<Duration>) {
+            if let Ok(mut state) = self.state.lock() {
+                state.breaker_retry_after = retry_after;
+            }
+        }
+
         /// Blocks the next notification until it is released or its request
         /// deadline expires.
         pub fn block_next_notify(&self) -> Arc<tokio::sync::Notify> {
@@ -852,6 +874,13 @@ pub mod testing {
     }
 
     impl HerdrProcessAdapter for FakeHerdrProcessAdapter {
+        fn breaker_retry_after(&self) -> Option<Duration> {
+            self.state
+                .lock()
+                .ok()
+                .and_then(|state| state.breaker_retry_after)
+        }
+
         fn prompt<'a>(
             &'a self,
             agent: &'a HerdrAgentName,

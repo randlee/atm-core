@@ -378,9 +378,7 @@ fn detail_or_fallback(message: &str, fallback: &str) -> String {
 
 fn state_for_server(version: HerdrVersion, protocol: u32) -> HerdrDoctorState {
     let minimum = HerdrVersion::parse(HERDR_MINIMUM_VERSION).expect("minimum version is valid");
-    let below_minimum = semver::Version::parse(version.as_str())
-        .expect("HerdrVersion guarantees semantic version syntax")
-        < semver::Version::parse(minimum.as_str()).expect("minimum version is valid");
+    let below_minimum = version.as_semver() < minimum.as_semver();
     if below_minimum {
         HerdrDoctorState::BelowMinimum { version, minimum }
     } else {

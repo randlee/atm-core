@@ -96,8 +96,9 @@ pub(crate) async fn escalate_breaker_cycle(
     opened_at: IsoTimestamp,
     failure_count: u32,
     error: &atm_herdr::HerdrError,
+    retry_after: Duration,
 ) {
-    let mail_body = breaker_opened_mail_body(team, failure_count, error, Duration::from_secs(1));
+    let mail_body = breaker_opened_mail_body(team, failure_count, error, retry_after);
     let notification = EscalationNotification {
         title: "ATM Herdr breaker open".to_owned(),
         body: "state=breaker_open remediation=atm doctor --json".to_owned(),
@@ -175,12 +176,13 @@ mod tests {
             &team,
             3,
             &atm_herdr::HerdrError::AgentNotFound,
-            Duration::from_secs(2),
+            Duration::from_secs(8),
         );
 
         assert!(body.contains("ATM_HERDR_AGENT_NOT_VISIBLE"));
         assert!(body.contains(atm_herdr::HerdrError::AgentNotFound.diagnostic_name()));
         assert!(body.contains("herdr agent rename <pane_id> <target>"));
+        assert!(body.contains("retries after 8 seconds"));
         assert!(body.lines().count() <= 12);
     }
 }

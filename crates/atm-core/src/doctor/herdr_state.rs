@@ -162,7 +162,10 @@ pub enum HerdrPresenceOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
-pub struct HerdrVersion(String);
+pub struct HerdrVersion {
+    display: String,
+    parsed: semver::Version,
+}
 
 impl HerdrVersion {
     pub fn parse(value: impl Into<String>) -> Result<Self, AtmError> {
@@ -173,12 +176,20 @@ impl HerdrVersion {
                 "Herdr returned an invalid semantic version",
             )
         })?;
-        Ok(Self(version.to_string()))
+        Ok(Self {
+            display: version.to_string(),
+            parsed: version,
+        })
     }
 
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.0
+        &self.display
+    }
+
+    #[must_use]
+    pub const fn as_semver(&self) -> &semver::Version {
+        &self.parsed
     }
 }
 
@@ -192,13 +203,13 @@ impl TryFrom<String> for HerdrVersion {
 
 impl From<HerdrVersion> for String {
     fn from(value: HerdrVersion) -> Self {
-        value.0
+        value.display
     }
 }
 
 impl fmt::Display for HerdrVersion {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+        formatter.write_str(&self.display)
     }
 }
 

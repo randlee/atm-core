@@ -348,19 +348,6 @@ impl Default for HerdrBreakerDoctorReport {
     }
 }
 
-pub trait HerdrBreakerDoctor: Send + Sync {
-    fn report(&self) -> HerdrBreakerDoctorReport;
-}
-
-#[derive(Debug, Default)]
-pub struct ClosedHerdrBreakerDoctor;
-
-impl HerdrBreakerDoctor for ClosedHerdrBreakerDoctor {
-    fn report(&self) -> HerdrBreakerDoctorReport {
-        HerdrBreakerDoctorReport::default()
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct HerdrQueuePumpDoctorReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -391,6 +378,8 @@ pub struct HerdrEndpointDoctorReport {
     pub remedy: String,
     pub capabilities: HerdrEndpointCapabilitiesDoctorReport,
     pub members: Vec<HerdrMemberPresence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub findings: Vec<DoctorFinding>,
 }
 
 impl From<HerdrEndpointObservation> for HerdrEndpointDoctorReport {
@@ -408,6 +397,7 @@ impl From<HerdrEndpointObservation> for HerdrEndpointDoctorReport {
                 live_handoff: observation.live_handoff,
             },
             members: observation.members,
+            findings: observation.findings,
         }
     }
 }

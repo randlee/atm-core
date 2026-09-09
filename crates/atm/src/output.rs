@@ -1119,6 +1119,7 @@ mod tests {
                     live_handoff: Some(true),
                 },
                 members: Vec::new(),
+                findings: Vec::new(),
             }],
             ..HerdrDoctorReport::default()
         };
@@ -1232,6 +1233,7 @@ mod tests {
                     state,
                     capabilities: HerdrEndpointCapabilitiesDoctorReport::default(),
                     members: Vec::new(),
+                    findings: Vec::new(),
                 })
                 .collect(),
             ..HerdrDoctorReport::default()
@@ -1278,6 +1280,7 @@ mod tests {
                         live_handoff: Some(true),
                     },
                     members: Vec::new(),
+                    findings: Vec::new(),
                 },
                 HerdrEndpointDoctorReport {
                     session: Some(HerdrSession::new("alpha").expect("valid session")),
@@ -1292,6 +1295,7 @@ mod tests {
                     remedy: "none".to_owned(),
                     capabilities: HerdrEndpointCapabilitiesDoctorReport::default(),
                     members: Vec::new(),
+                    findings: Vec::new(),
                 },
                 HerdrEndpointDoctorReport {
                     session: Some(HerdrSession::new("beta").expect("valid session")),
@@ -1310,6 +1314,7 @@ mod tests {
                     remedy: "Align per-user ownership or permissions".to_owned(),
                     capabilities: HerdrEndpointCapabilitiesDoctorReport::default(),
                     members: Vec::new(),
+                    findings: Vec::new(),
                 },
             ],
             ..HerdrDoctorReport::default()

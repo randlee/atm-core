@@ -88,6 +88,8 @@ struct HerdrBreakerDoctorAdapter {
     breaker: Arc<HerdrSpawnBreaker>,
 }
 
+impl atm_core::boundary::sealed::Sealed for HerdrBreakerDoctorAdapter {}
+
 impl atm_core::doctor::HerdrBreakerDoctor for HerdrBreakerDoctorAdapter {
     fn report(&self) -> atm_core::doctor::HerdrBreakerDoctorReport {
         let snapshot = self.breaker.snapshot();

@@ -329,6 +329,14 @@ impl HerdrQueueWakePump {
         if !admitted {
             return false;
         }
+        let retry_after = self
+            .herdr_process
+            .breaker_retry_after()
+            .or(match error {
+                atm_herdr::HerdrError::Unavailable { retry_after } => Some(*retry_after),
+                _ => None,
+            })
+            .unwrap_or(Duration::ZERO);
         let task_store = self.service_runtime.task_store().ok();
         crate::herdr_breaker_escalation::escalate_breaker_cycle(
             &self.service_runtime,
@@ -339,6 +347,7 @@ impl HerdrQueueWakePump {
             opened_at,
             failure_count,
             error,
+            retry_after,
         )
         .await;
         true
@@ -539,7 +548,7 @@ impl HerdrQueueWakePump {
         let dispatch = match self.rebuild_dispatch(member, claim.msg).await {
             Ok(Some(dispatch)) => dispatch,
             Ok(None) | Err(_) => {
-                release.release_without_input();
+                release.release_without_input().await;
                 stats.released += 1;
                 tracing::info!(
                     event = "herdr_queue_poll_outcome",
@@ -553,7 +562,7 @@ impl HerdrQueueWakePump {
             }
         };
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
-            release.release_without_input();
+            release.release_without_input().await;
             stats.released += 1;
             tracing::info!(
                 event = "herdr_queue_poll_outcome",
@@ -618,19 +627,19 @@ impl HerdrQueueWakePump {
                 }
                 let outcome = match error.code() {
                     AtmErrorCode::HerdrPromptFailed => {
-                        release.requeue();
+                        release.requeue().await;
                         "dispatch_failed_requeued"
                     }
                     AtmErrorCode::HerdrAgentNotVisible => {
-                        release.release_without_input();
+                        release.release_without_input().await;
                         "held_target_not_present"
                     }
                     AtmErrorCode::PostSendHerdrPromptFailed => {
-                        release.release_without_input();
+                        release.release_without_input().await;
                         "blocked_before_input_released"
                     }
                     _ => {
-                        release.release_without_input();
+                        release.release_without_input().await;
                         "dispatch_failed_released"
                     }
                 };
@@ -886,59 +895,94 @@ impl ReleasePendingOnDrop {
         }
     }
 
-    fn release_without_input(&mut self) {
-        if self.armed {
-            let should_requeue = {
-                let mut streaks = self
-                    .release_streaks
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
-                let streak = streaks.entry(self.member.clone()).or_default();
-                if *streak >= HERDR_MAX_CONSECUTIVE_RELEASES {
-                    streaks.remove(&self.member);
-                    true
-                } else {
-                    *streak = streak.saturating_add(1);
-                    false
-                }
-            };
-            let result = if should_requeue {
-                self.store.requeue_pending(&self.member, &self.claim)
+    async fn release_without_input(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let should_requeue = self.claim_release_action();
+        self.armed = false;
+        let store = Arc::clone(&self.store);
+        let member = self.member.clone();
+        let claim = self.claim.clone();
+        if let Err(error) = run_blocking(move || {
+            if should_requeue {
+                store.requeue_pending(&member, &claim)
             } else {
-                self.store.release_pending(&self.member, &self.claim)
-            };
-            if let Err(error) = result {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "queue_claim_release",
-                    outcome = "failed",
-                    error = %error,
-                    member = %self.member,
-                    "failed to resolve Herdr queue claim"
-                );
+                store.release_pending(&member, &claim)
             }
-            self.armed = false;
+        })
+        .await
+        {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "queue_claim_release",
+                outcome = "failed",
+                error = %error,
+                member = %self.member,
+                "failed to resolve Herdr queue claim"
+            );
         }
     }
 
-    fn requeue(&mut self) {
-        if self.armed {
-            if let Err(error) = self.store.requeue_pending(&self.member, &self.claim) {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "queue_claim_requeue",
-                    outcome = "failed",
-                    error = %error,
-                    member = %self.member,
-                    "failed to requeue Herdr queue claim"
-                );
-            }
-            self.release_streaks
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .remove(&self.member);
-            self.armed = false;
+    async fn requeue(&mut self) {
+        if !self.armed {
+            return;
         }
+        self.release_streaks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&self.member);
+        self.armed = false;
+        let store = Arc::clone(&self.store);
+        let member = self.member.clone();
+        let claim = self.claim.clone();
+        if let Err(error) = run_blocking(move || store.requeue_pending(&member, &claim)).await {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "queue_claim_requeue",
+                outcome = "failed",
+                error = %error,
+                member = %self.member,
+                "failed to requeue Herdr queue claim"
+            );
+        }
+    }
+
+    fn claim_release_action(&self) -> bool {
+        let mut streaks = self
+            .release_streaks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let streak = streaks.entry(self.member.clone()).or_default();
+        if *streak >= HERDR_MAX_CONSECUTIVE_RELEASES {
+            streaks.remove(&self.member);
+            true
+        } else {
+            *streak = streak.saturating_add(1);
+            false
+        }
+    }
+
+    fn release_in_drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let result = if self.claim_release_action() {
+            self.store.requeue_pending(&self.member, &self.claim)
+        } else {
+            self.store.release_pending(&self.member, &self.claim)
+        };
+        if let Err(error) = result {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "queue_claim_release",
+                outcome = "failed",
+                error = %error,
+                member = %self.member,
+                "failed to resolve Herdr queue claim during drop"
+            );
+        }
+        self.armed = false;
     }
 
     fn disarm(&mut self) {
@@ -948,7 +992,7 @@ impl ReleasePendingOnDrop {
 
 impl Drop for ReleasePendingOnDrop {
     fn drop(&mut self) {
-        self.release_without_input();
+        self.release_in_drop();
         self.service_runtime.set_roster_herdr_wake_pending(
             self.member.team(),
             self.member.agent(),
@@ -981,6 +1025,10 @@ mod tests {
     use atm_herdr::{
         AgentSnapshot, HerdrAgentStatus, HerdrListOutcome, HerdrProcessAdapter, HerdrPromptOutcome,
     };
+    use atm_observability::{
+        DiagnosticSink, RetainedEvent, RetainedLogPolicy, SinkOffer, TracingBridgeLayer,
+        build_retained_logger,
+    };
     use atm_runtime_test_support::open_isolated_sqlite_boundary;
     use atm_storage::{RosterSnapshot, TaskRow, TaskState, TaskStore};
     use serde_json::json;
@@ -990,13 +1038,57 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
+
+    use tracing_subscriber::prelude::*;
+
+    #[derive(Default)]
+    struct RecordingDiagnosticSink {
+        codes: Mutex<Vec<String>>,
+    }
+
+    impl DiagnosticSink for RecordingDiagnosticSink {
+        fn offer(&self, event: &RetainedEvent<'_>) -> SinkOffer {
+            if let Some(code) = event.code {
+                self.codes.lock().expect("codes").push(code.to_owned());
+            }
+            SinkOffer::Accepted
+        }
+    }
+
     #[test]
-    fn herdr_list_failure_emits_its_structured_error_code() {
-        let error = atm_herdr::HerdrError::ServerNotRunning;
-        tracing::subscriber::with_default(tracing_subscriber::registry(), || {
-            log_herdr_list_failure(&None, &error);
-        });
-        assert_eq!(AtmError::from(error).code(), AtmErrorCode::HerdrUnavailable);
+    fn herdr_list_failure_reaches_the_tracing_bridge_with_its_error_code() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let logger = Arc::new(
+            build_retained_logger(
+                "atm",
+                &root.path().join("logs"),
+                RetainedLogPolicy {
+                    rotation_max_bytes: 1_024 * 1_024,
+                    rotation_max_files: 2,
+                    retention_max_age: Duration::from_secs(60),
+                    maintenance_cadence: Duration::from_secs(60),
+                    writer_shutdown_timeout: Duration::from_secs(1),
+                    maintenance_max_work_per_pass: Some(2),
+                },
+                None,
+            )
+            .expect("logger"),
+        );
+        let bridge = TracingBridgeLayer::new(logger);
+        let sink = Arc::new(RecordingDiagnosticSink::default());
+        bridge.set_diagnostic_sink(sink.clone());
+
+        tracing::subscriber::with_default(
+            tracing_subscriber::Registry::default().with(bridge),
+            || {
+                log_herdr_list_failure(&None, &atm_herdr::HerdrError::ServerNotRunning);
+            },
+        );
+
+        assert_eq!(
+            sink.codes.lock().expect("codes").as_slice(),
+            ["ATM_HERDR_UNAVAILABLE"]
+        );
     }
 
     struct FakeSelector {
