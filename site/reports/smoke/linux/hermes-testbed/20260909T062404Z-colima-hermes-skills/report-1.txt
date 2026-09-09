@@ -1,0 +1,14 @@
+ATM TEST REPORT
+skill: atm-setup-environment
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.14 daemon 1.5.14
+result: PASS   (6/6 steps)
+steps:
+  0 PASS Start line — 01M22DF72YMKCCGD2HREQKSGJ7
+  1 PASS Daemon answers — status healthy, client 1.5.14, daemon 1.5.14
+  2 PASS Roster complete — all 5 members present (stub-alpha, stub-beta, tester, hermes, oversight)
+  3 PASS Doctor passes — error_count 0
+  4 PASS Self round trip — message 01M22DFP25K793P9527JGXDTZS sent and read
+  5 PASS Cross-host peer — localhost enabled, message 01M22DFZGD96007V5YPWBM01CN sent to oversight@testbed
+elapsed: 0s
