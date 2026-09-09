@@ -1729,32 +1729,39 @@ Phase AY sprint status:
 | `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `merged` (#1310, 47f359cf9) | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
 | `DOCTOR-HERDR-TARGET-R1` | Doctor | standalone target-resolution, breaker, and stale-session diagnostics | `complete` | `fix/doctor-herdr-target-resolution` | `docs/plans/doctor/sprint-DOCTOR-HERDR-TARGET-R1.md` |
 
-## 58. Phase AZ — Bounded Task-Nudge Metadata Contract [PLANNED]
+## 58. Phase AZ — Bounded Nudges And Durable Task Lifecycle [PLANNED]
 
-Phase AZ repairs the long-nudge defect in one surgical sprint. Every Steer,
-Queue, rebuilt Queue, Task, acknowledge-family, and task-reminder path may
-project only the persisted message id, persisted title/summary, and optional
-task id; the immutable message body and rendered J2 output remain available
-only through `atm read --message-id`. Missing titles become empty rather than
-falling back to message or task-description text.
+Phase AZ begins with the AZ.1 metadata-only nudge repair: every Steer, Queue,
+rebuilt Queue, Task, acknowledge-family, and task-reminder path projects only
+persisted message id/title and optional task id. The immutable body remains
+available only through `atm read --message-id`; admission-time
+`build_summary` policy is unchanged.
 
-The phase does not change admission-time title generation: when no explicit
-summary is supplied, the existing bounded `build_summary` result remains the
-persisted title metadata consumed by the nudge path.
-
-The phase does not remove or migrate `tasks.description`, redesign task list
-output, deduplicate resends, or solve completed-task invalidation of older
-independent pending-nudge rows. That lifecycle defect remains a separate
-follow-up. No legacy synchronous daemon code or live daemon/test-daemon
-operation is in scope.
+AZ.2–AZ.4 then replace the message-derived task ledger with a stable logical
+`TaskId`, immutable assignment attempts/events, explicit lifecycle commands,
+atomic terminal handoffs and queue cleanup, and one fair idle attention
+selector over independent ephemeral-message and persistent-task lanes.
+`Blocked -> Assigned` is explicit and never auto-starts. Existing tasks migrate
+at normal priority; one current assignee per task and one active task per agent
+are transactionally enforced.
 
 The authoritative umbrella is
-[Phase AZ plan](./plans/phase-az/phase-az-plan.md); its only sprint is
-[AZ.1](./plans/phase-az/sprint-AZ.1-task-nudge-contract.md).
+[Phase AZ plan](./plans/phase-az/phase-az-plan.md), with one authoritative
+sprint doc per row below and a maintained
+[issue inventory](./plans/phase-az/issues.md).
 
 | Sprint | Status | Branch | Artifacts |
 | --- | --- | --- | --- |
-| `AZ.1` | `planned` | `feature/az1-task-nudge-contract` | notification event/template repair, focused long-body/J2 regressions, normative contract amendments |
+| `AZ.1` | `planned` | `feature/az1-task-nudge-contract` | bounded notification event/template repair, external hook compatibility, long-body/J2 regressions |
+| `AZ.2` | `planned` | `feature/az2-task-domain-storage` | lifecycle types, immutable attempts/events, SQLite migration, atomic invariants and task-aware nudge cleanup |
+| `AZ.3` | `planned` | `feature/az3-task-command-handoff` | canonical task CLI/API, authorization, atomic handoffs/supersession, legacy adapters |
+| `AZ.4` | `planned` | `feature/az4-attention-scheduler` | one-item idle selector, durable fair interleaving, attempt-aware persistent reminders |
+
+The stack is strict `AZ.1 -> AZ.2 -> AZ.3 -> AZ.4`. Parent development must be
+pushed before child work starts, the parent is merged forward before every
+child development/fix round, and parent PRs merge first. No Phase AZ sprint
+touches the frozen synchronous daemon or uses live daemon/test-daemon, release,
+tag, publish, or installation evidence.
 
 ## Daemon-Switch Scope Reduction
 

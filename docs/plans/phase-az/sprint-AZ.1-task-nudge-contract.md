@@ -12,7 +12,7 @@ dependency_relations:
   - prerequisite: develop@0ca0878cf4045546fb7f4b4f14dc6c473995158c
     dependent: AZ.1
     relation: must_follow
-    rationale: The repair edits the Phase AX template/task-reminder surface and the retained Phase AY Tokio/Axum delivery path. Current develop must be merged forward before implementation and before each QA round.
+    rationale: The repair edits the Phase AX template/task-reminder surface and the maintained Tokio/Axum runtime already present on the pinned develop baseline. Current develop must be merged forward before implementation and before each QA round; AZ.1 does not depend on the still-pending Phase AY integration merge.
 ---
 
 # AZ.1 — Bounded task-nudge metadata contract
@@ -81,11 +81,29 @@ ordinary or J2-rendered body. That persisted summary is permitted title
 metadata; the forbidden behavior is reading or falling back to full body text
 again while constructing or projecting a nudge.
 
-Because `PostSendHookEvent` is serialized at retained compatibility seams,
-its serialized key is `title`; there is no `description` or `summary` JSON
-alias. The deprecated `{{description}}` compatibility described below applies
-only to stored nudge-template placeholder names, not to event or hook payload
-fields.
+The internal `PostSendHookEvent` serialized key is `title`; it has no
+body-capable `description` field and accepts `description` only as a
+title-valued deserialization alias at retained internal compatibility seams.
+The external `ATM_POST_SEND` environment contract uses an explicit projection
+DTO during one compatibility window:
+
+```rust
+#[derive(Serialize)]
+pub struct ExternalPostSendHookPayload<'a> {
+    #[serde(flatten)]
+    pub event: &'a PostSendHookEvent,
+    /// Deprecated compatibility key; always byte-identical to event.title.
+    pub description: &'a str,
+}
+```
+
+External JSON therefore emits canonical `title` and deprecated
+`description`, both sourced from the same persisted title metadata. It never
+places body text in either key. Hook documentation directs consumers to
+`title`; removal of the external alias is a separately versioned
+future change. The deprecated `{{description}}` template-placeholder alias
+below is independent but follows the same title-only rule. There is no
+`summary` JSON alias.
 
 For task reminders, `TaskRow.assignment_message_id` identifies the message.
 The builder loads that message once, derives both authenticated source-host
@@ -146,7 +164,7 @@ outside the message-derived payload set.
 
 ## Deliverables
 
-This is the sole authoritative deliverables list for Phase AZ.
+This is the sole authoritative deliverables list for AZ.1.
 
 Every D1–D6 deliverable must land at a production-ready level in AZ.1. A
 field rename, documentation-only update, test-only proof, or partial consumer
@@ -161,12 +179,15 @@ acceptance criterion remains open.
   `docs/atm-graft/architecture.md`, `docs/atm-graft/boundaries.md`,
   `docs/atm-herdr/requirements.md`, `docs/atm-herdr/architecture.md`, and
   `docs/atm-herdr/boundaries.md`. Update the machine-readable contracts in
-  `boundaries/atm-core/message-received-hook-emitter.toml`,
-  `boundaries/atm-graft/message-received-hook.toml`, and
-  `boundaries/atm-herdr/herdr-process-adapter.toml`. Update
+  `boundaries/atm-core/message-received-hook-emitter.toml` for the event/title
+  source, `boundaries/atm-graft/message-received-hook.toml` for the graft
+  projection, and `boundaries/atm-herdr/herdr-process-adapter.toml` for the
+  final prompt boundary. Update
   `docs/user-documents/hooks.md` and its
   `docs/user-documents/examples/hooks/post-send-payload.json` example for the
-  serialized `title` key. Append a dated Phase AZ amendment to
+  canonical `title` plus deprecated external `description` alias, and bump
+  `reviewed_for_release` to the release that ships this contract. Append a
+  dated Phase AZ amendment to
   `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`. ADR-019's
   status does not change, so its index entry does not change. The documents
   must state the allowed message-derived fields, title-only source,
@@ -195,6 +216,7 @@ acceptance criterion remains open.
   `crates/atm-daemon-bootstrap/src/received_hook_selector.rs`,
   `crates/atm-http-runtime/src/storage_and_nudge_router.rs`,
   `crates/atm-http-runtime/src/herdr_queue_wake.rs`,
+  `crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs`,
   `crates/atm-graft/src/nudge_sink.rs`,
   `crates/atm-graft/src/runtime/mod.rs`,
   `crates/atm-graft/examples/smoke_same_host.rs`, and
@@ -220,8 +242,11 @@ acceptance criterion remains open.
   must each use a distinct explicit title and carry unique body-only secret
   sentinels. Assert those sentinels are absent from the event, rendered nudge,
   graft notice/body, and Herdr request while the persisted title, message id,
-  and optional task id remain present. Preserve a focused proof that task
-  completion excludes the completed row from periodic reminder selection.
+  and optional task id remain present. Prove the external `ATM_POST_SEND`
+  payload emits `title` and deprecated `description` with byte-identical
+  title-only values, while the internal event serializes canonical `title`.
+  Preserve a focused proof that task completion excludes the completed row
+  from periodic reminder selection.
 
 ## Affected paths
 
@@ -242,6 +267,7 @@ crates/atm-core/tests/task_reminder_dispatch.rs
 crates/atm/src/commands/internal_nudge.rs
 crates/atm-daemon-bootstrap/src/received_hook_selector.rs
 crates/atm-http-runtime/src/herdr_queue_wake.rs
+crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs
 crates/atm-http-runtime/src/storage_and_nudge_router.rs
 crates/atm-graft/src/nudge_sink.rs
 crates/atm-graft/src/runtime/mod.rs
@@ -300,13 +326,14 @@ None.
 
 ## Acceptance criteria
 
-This is the sole authoritative acceptance list for Phase AZ.
+This is the sole authoritative acceptance list for AZ.1.
 
 1. Every current post-send Steer, queued delivery, rebuilt queued delivery,
    Task assignment, acknowledge-family, and task-reminder construction path
    obtains display text only from persisted `MessageEnvelope.summary`.
-   Retained serialized event/hook payloads expose that value as `title`, with
-   no `description` or `summary` JSON alias.
+   Internal serialized events expose that value as `title`; the external
+   `ATM_POST_SEND` payload also emits a deprecated `description` key that is
+   byte-identical title metadata. No payload exposes a `summary` alias or body.
 2. No production nudge builder or sink falls back to
    `MessageEnvelope.text`, `TaskRow.description`, template source, or rendered
    J2 output. A repository search and focused tests prove the forbidden edges
@@ -323,15 +350,17 @@ This is the sole authoritative acceptance list for Phase AZ.
    Herdr request. `atm read --message-id` remains the only tested body path.
 6. `tasks.description` remains schema-compatible and unchanged, and a TaskRow
    description sentinel is absent from Task assignment/reminder nudges.
-7. Completing a task still removes it from periodic reminder selection. No
-   claim is made that completion cancels older independent pending-nudge
-   message rows.
+7. The production call in
+   `herdr_queue_wake_reminders.rs::HerdrQueueWakePump::emit_task_reminder`
+   uses the title-only dispatch and completing a task still removes it from
+   periodic reminder selection. AZ.1 makes no claim that completion cancels
+   older independent pending-nudge message rows; AZ.2 owns that lifecycle fix.
 8. No legacy synchronous daemon code changes and no live daemon/test-daemon,
    release, tag, publish, or install operation occurs.
 
 ## Required validation
 
-This is the sole authoritative validation list for Phase AZ. All commands run
+This is the sole authoritative validation list for AZ.1. All commands run
 from the AZ.1 worktree with fakes, fixtures, and temporary stores only.
 
 ```bash
@@ -339,6 +368,7 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test -p agent-team-mail-core nudge_template
+cargo test -p agent-team-mail-core post_send_hook
 cargo test -p agent-team-mail-core --test nudge_dispatch
 cargo test -p agent-team-mail-core --test nudge_mode
 cargo test -p agent-team-mail-core --test task_reminder_dispatch
@@ -367,18 +397,18 @@ show the forbidden-sentinel assertions, and report the final head SHA.
   or admission-time summary persistence.
 - No task ordering, list table, or display redesign.
 - No resend deduplication.
-- No task-aware cancellation of prior pending-nudge rows.
+- No task-aware cancellation of prior pending-nudge rows in AZ.1; AZ.2 owns
+  that separate storage/lifecycle transaction.
 - No legacy daemon work and no live daemon evidence.
 
-The separate completed-task defect remains open: pending nudge state is keyed
+The separate completed-task defect remains open until AZ.2: pending nudge state is keyed
 by `(team, agent, message_key)`, and claim selection does not join message
 `task_id` to task state. Completion acknowledges/clears only the task ledger's
 current `assignment_message_id`; earlier task-linked messages or another
 pending/requeued message remain eligible for ordinary queue drain.
 
-Required discovery question for that follow-up: **How should task-aware
-pending-nudge invalidation/supersession cover every message associated with a
-completed task, without coupling it to Phase AZ's notification-body repair?**
+AZ.2 answers that question with attempt-aware invalidation inside the task
+mutation transaction, without expanding this sprint's notification-body repair.
 
 ## Review gates
 

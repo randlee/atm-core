@@ -1,0 +1,351 @@
+---
+phase: AZ
+sprint: AZ.4
+title: Fair idle attention scheduler
+branch: feature/az4-attention-scheduler
+integration_branch: feature/az3-task-command-handoff
+final_integration_branch: develop
+status: planned
+recommended_agent: arch-ctm
+recommended_model: deep-reasoning
+execution_track: stacked
+dependency_relations:
+  - prerequisite: AZ.3
+    dependent: AZ.4
+    relation: must_follow
+    rationale: The scheduler consumes AZ.3's public lifecycle behavior and AZ.2's attempt-aware query/invalidation contracts; merge AZ.3 forward before every AZ.4 round and merge its PR first.
+---
+
+# AZ.4 — Fair idle attention scheduler
+
+## Goal
+
+Replace the drain-first-plus-reminder sequence with one derived idle attention
+selector. Each eligible idle opportunity emits at most one item for an agent,
+preserves separate message and task lifecycle storage, alternates fairly when
+both lanes remain due, and repeats task reminders only while the selected
+assignment attempt remains open and unblocked.
+
+This sprint closes the runtime behavior at production quality. It does not
+change the AZ.1 metadata boundary or the AZ.2/AZ.3 task transition and command
+contracts.
+
+## Derived attention model
+
+```rust
+pub enum AttentionLane {
+    Ephemeral,
+    PersistentTask,
+}
+
+pub enum AttentionItem {
+    EphemeralMessage {
+        member: MemberKey,
+        message_id: AtmMessageId,
+    },
+    PersistentTaskReminder {
+        member: MemberKey,
+        task_id: TaskId,
+        attempt: AssignmentAttempt,
+        assignment_message_id: AtmMessageId,
+    },
+}
+
+pub struct AttentionCandidates {
+    pub ephemeral: Option<EphemeralMessageCandidate>,
+    pub task: Option<PersistentTaskCandidate>,
+}
+
+pub fn select_attention_item(
+    next_lane: AttentionLane,
+    candidates: AttentionCandidates,
+) -> AttentionSelection;
+
+pub struct AttentionSelection {
+    pub item: Option<AttentionItem>,
+    pub next_lane: AttentionLane,
+}
+```
+
+Selection is pure and contains ids/metadata only. It never accepts message body,
+task description, rendered template content, SQLite handles, or an emitter.
+Projection later reloads the AZ.1 persisted title by
+`assignment_message_id`; the recipient retrieves the body with `atm read`.
+
+## Eligibility, ordering, and fairness
+
+For one idle agent:
+
+1. The ephemeral candidate is the first eligible pending queue message in
+   `message_id`/ULID FIFO order. If it became read and acknowledged before the
+   claim, it is suppressed and the selector retries without emitting.
+2. The persistent candidate is the one `Active` task when present; otherwise
+   the first `Assigned` task by `High, Normal, Low`, then
+   `original_assigned_at`, then `TaskId`. `Blocked` and `Closed` are
+   ineligible.
+3. If only one lane has a candidate, select it. If both do, select the lane in
+   the durable per-member alternation cursor. A new cursor starts
+   `Ephemeral`; after a committed selection it points to the other lane.
+4. One `IdleOpportunityId` may commit zero or one selection. It never emits
+   both a message and task reminder. A repeated opportunity id returns the same
+   selection/final state and cannot duplicate an emission.
+5. Task priority applies only within the persistent lane. It never overrides the
+   cross-lane cursor.
+
+The cursor is scheduler metadata in a dedicated
+`attention_lane_cursors(team, agent, next_lane, revision)` table. It contains
+no message/task lifecycle state or body. Message consumption remains owned by
+`PendingNudgeStore`; task state/attempts remain owned by the task ledger. The
+cursor survives restart so repeated restarts cannot indefinitely favor the
+ephemeral lane.
+
+## Runtime flow
+
+```text
+idle/done heartbeat
+  -> query first ephemeral candidate and top persistent candidate independently
+  -> pure select_attention_item(cursor, candidates)
+  -> reserve that one item under one IdleOpportunityId
+  -> atomically claim only the selected lane
+  -> revalidate idle state and candidate eligibility
+  -> project one AZ.1 bounded nudge and emit
+  -> finalize the owning lane and reservation
+```
+
+Reservation and cursor advancement commit together before lane claim. Replaying
+an opportunity returns the same reserved item and can never select the other
+lane. If the candidate loses a race or becomes ineligible, that opportunity
+finalizes as stale without emission; a later idle opportunity starts from the
+other lane. A transient emitter retry remains attached to the same reservation
+and item. This is an at-most-one-*item* contract, not an impossible claim that a
+process crash can make an external prompt sink exactly-once. The global prompt
+budget still bounds a pump tick, but it no longer permits two different items
+for one member/opportunity.
+
+An ephemeral item is consumed after its one accepted nudge. A transient failure
+before accepted emission follows the existing bounded pending-claim retry
+contract; it is not counted as an emitted opportunity. A persistent task
+reminder does not consume the task. After successful emission it appends an
+attempt-aware reminder audit and is eligible again only after the retained
+60-second cadence, while the same attempt remains `Assigned` or `Active`.
+
+Task `Blocked` and `Closed` suppress normal reminders immediately.
+Reassignment makes the old attempt ineligible and the new attempt eligible;
+unblock returns the task to `Assigned` ordering and does not auto-start.
+Runtime process-blocked escalation remains a management signal, not a normal
+task reminder, and must not reintroduce a Task prompt for a lifecycle-blocked
+row.
+
+## Storage-neutral scheduler boundaries
+
+```rust
+pub struct AttentionCursor {
+    pub next_lane: AttentionLane,
+    pub revision: u64,
+}
+
+pub struct AttentionReservation {
+    pub opportunity_id: IdleOpportunityId,
+    pub item: AttentionItem,
+    pub status: AttentionReservationStatus,
+}
+
+pub enum AttentionReservationStatus {
+    Reserved,
+    Delivered,
+    Stale,
+    PermanentlyFailed,
+}
+
+pub trait AttentionScheduleStore: sealed::Sealed + Send + Sync {
+    fn load_cursor(&self, member: &MemberKey) -> Result<AttentionCursor, AtmError>;
+    fn reserve(
+        &self,
+        member: &MemberKey,
+        opportunity_id: &IdleOpportunityId,
+        expected_cursor_revision: u64,
+        item: AttentionItem,
+    ) -> Result<AttentionReservation, AtmError>;
+    fn finalize(
+        &self,
+        member: &MemberKey,
+        opportunity_id: &IdleOpportunityId,
+        status: AttentionReservationStatus,
+    ) -> Result<AttentionReservation, AtmError>;
+}
+
+#[async_trait::async_trait]
+pub trait AsyncAttentionScheduleStore: sealed::Sealed + Send + Sync {
+    async fn load_cursor(
+        &self,
+        member: MemberKey,
+        deadline: ReadDeadline,
+    ) -> Result<AttentionCursor, ReadLaneError>;
+
+    async fn reserve(
+        &self,
+        request: AttentionReservationRequest,
+    ) -> Result<AttentionReservation, AtmError>;
+
+    async fn finalize(
+        &self,
+        request: AttentionFinalizeRequest,
+    ) -> Result<AttentionReservation, AtmError>;
+}
+```
+
+The concrete SQLite adapter owns `attention_lane_cursors` and
+`attention_opportunities` SQL. Opportunity rows store only member,
+opportunity id, selected lane/item ids, and terminal reservation status—never
+message/task lifecycle state or body. The runtime composes
+`AsyncTaskLedgerReader`, `PendingNudgeStore`, and
+`AsyncAttentionScheduleStore`; it does not merge their tables or reopen the
+database. The task reader adds a bounded `top_runnable_task(member, now)` query
+that returns ids, priority, state, attempt, message id, and cadence metadata
+only.
+
+## Deliverables
+
+This is the sole authoritative deliverables list for AZ.4. Every item must land
+at a production-ready level; a pure selector without real pump integration, or
+runtime wiring without durable fairness, is insufficient.
+
+- [ ] D1 — Add the pure `AttentionLane`, `AttentionItem`, candidate,
+  selection, and opportunity-id contracts with exhaustive eligibility/order/
+  alternation tests and no body-capable fields.
+- [ ] D2 — Add the storage-neutral sync/async schedule boundaries, private
+  SQLite cursor/reservation tables, idempotent opportunity reservation/
+  finalization, and bounded top-runnable task query. Update matching boundary
+  TOMLs and crate boundary docs.
+- [ ] D3 — Refactor `HerdrQueueWakePump` so each idle member/opportunity invokes
+  the one selector, claims/revalidates exactly the selected lane, and emits no
+  more than one prompt. Preserve global prompt budget, shutdown, breaker,
+  delivery-channel, and bounded retry behavior.
+- [ ] D4 — Make reminders attempt-aware and scheduler-derived: active before
+  assigned, assigned priority/time ordering, 60-second repeat only while open,
+  no blocked/closed reminder, old-attempt invalidation, and unblock without
+  activation. Keep management escalation distinct from reminder eligibility.
+- [ ] D5 — Amend product/runtime/Herdr/storage requirements, architecture,
+  ADR-062, machine-readable boundaries, and operator docs for
+  `AttentionItem`, separate lanes, durable fairness, one-item opportunities,
+  cadence, and queue-cleanup interaction.
+- [ ] D6 — Add real composed-runtime tests covering FIFO, persistent ordering,
+  alternating dual-lane opportunities, single-lane progress, restart cursor
+  persistence, concurrent opportunity idempotency, read/ack suppression,
+  close/block/reassign races, transient emit failures, shutdown, breaker, and
+  absence of body sentinels in emitted prompts.
+
+## Affected paths
+
+```text
+crates/atm-storage/src/attention.rs
+crates/atm-storage/src/task_store.rs
+crates/atm-storage/src/contract.rs
+crates/atm-storage/src/factory.rs
+crates/atm-storage/src/lib.rs
+crates/atm-storage/src/testing.rs
+crates/atm-storage-rusqlite/src/attention_schedule_store.rs
+crates/atm-storage-rusqlite/src/task_ledger_reader.rs
+crates/atm-storage-rusqlite/src/pending_nudge_store.rs
+crates/atm-storage-rusqlite/src/lib.rs
+crates/atm-http-runtime/src/herdr_queue_wake.rs
+crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs
+crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs
+crates/atm-http-runtime/src/storage_and_nudge_router.rs
+boundaries/atm-storage/attention-schedule-store.toml
+boundaries/atm-storage/async-attention-schedule-store.toml
+boundaries/atm-storage/async-task-ledger-reader.toml
+boundaries/atm-storage/pending-nudge-store.toml
+boundaries/atm-storage-rusqlite/attention-schedule-store-sqlite.toml
+boundaries/atm-storage-rusqlite/async-attention-schedule-store-sqlite.toml
+boundaries/atm-storage-rusqlite/async-task-ledger-reader-sqlite.toml
+boundaries/atm-storage-rusqlite/pending-nudge-store-sqlite.toml
+boundaries/atm-http-runtime/http-runtime.toml
+docs/requirements.md
+docs/architecture.md
+docs/atm-storage/boundaries.md
+docs/atm-http-runtime/architecture.md
+docs/atm-herdr/requirements.md
+docs/atm-herdr/architecture.md
+docs/atm-herdr/boundaries.md
+docs/adr/ADR-062-task-state-machine.md
+docs/user-documents/tasks.md
+docs/plans/phase-az/phase-az-plan.md
+docs/plans/phase-az/issues.md
+docs/project-plan.md
+```
+
+### Paths to delete
+
+None. The existing pump methods may be collapsed or renamed in place, but no
+source-file deletion is required.
+
+### Paths that must not change
+
+- `crates/atm-daemon/**` and every legacy synchronous daemon runtime/dispatch
+  path.
+- AZ.1 title/body contract and admission-time summary generation.
+- AZ.2 lifecycle transitions, persistence identities, and migration semantics.
+- AZ.3 command grammar, authorization, handoff, and legacy compatibility
+  adapters.
+- Message/template bodies, Beads data, and task objective content.
+
+## Acceptance criteria
+
+This is the sole authoritative acceptance list for AZ.4.
+
+1. The selector DTO contains only lane ids/metadata. The message queue, task
+   ledger, and fairness cursor remain independent stores behind
+   storage-neutral boundaries. Reservation rows contain item identities only,
+   never copied message/task content.
+2. For each idle opportunity, composed-runtime tests observe zero or one
+   selected item, never one from each lane. Same-opportunity replay and
+   concurrent attempts return the same reservation; sink retry cannot change
+   its item identity.
+3. With both lanes continuously due, observed sequence is ephemeral, task,
+   ephemeral, task across ticks and process restart. With one lane empty, the
+   other progresses without artificial delay.
+4. Ephemeral selection is FIFO and is consumed after one accepted nudge; a
+   message read and acknowledged before conditional claim is suppressed.
+5. Persistent selection chooses active first, otherwise assigned by
+   priority/original time/task id. Priority never changes cross-lane fairness.
+   Blocked and closed tasks are never normal-reminder candidates.
+6. Reminder audit/cadence is scoped to assignment attempt. Close, block,
+   reassign, reopen, and supersede races cannot emit for an ineligible old
+   attempt; unblock returns to assigned order and never starts.
+7. Transient failure, breaker-open, runtime-blocked, shutdown, and budget tests
+   preserve existing structured outcomes without losing durable message/task
+   eligibility or emitting a second item.
+8. Emitted prompts satisfy AZ.1's bounded title contract; unique message/task
+   body sentinels never appear. No legacy daemon code or direct SQLite access is
+   introduced.
+9. Requirements, architecture, ADR, crate docs, user docs, Rust contracts, and
+   boundary TOMLs describe the same one-item, fair, persistent scheduler.
+
+## Required validation
+
+This is the sole authoritative validation list for AZ.4. Use fakes, in-process
+runtime composition, and temporary databases only.
+
+1. `cargo test -p atm-storage attention`
+2. `cargo test -p atm-storage-rusqlite attention`
+3. `cargo test -p atm-storage-rusqlite pending_nudge`
+4. `cargo test -p atm-http-runtime herdr_queue_wake`
+5. `cargo test -p atm-http-runtime attention`
+6. `cargo test -p atm-http-runtime storage_and_nudge_router`
+7. `cargo test -p atm-storage`
+8. `cargo test -p atm-storage-rusqlite`
+9. `cargo test -p atm-http-runtime`
+10. `cargo fmt --check`
+11. `cargo clippy --workspace --all-targets -- -D warnings`
+12. `python3 .just/run_lint.py boundaries`
+13. `python3 .just/run_lint.py nudge-taxonomy`
+14. `git diff --check`
+
+## Non-closure
+
+- AZ.4 does not alter task state/authorization or add task commands.
+- AZ.4 does not merge message/task lifecycle storage or copy content into
+  scheduler rows.
+- AZ.4 does not modify the legacy synchronous daemon, run a live/test daemon, or
+  perform a tag, release, package publish, or installation.
