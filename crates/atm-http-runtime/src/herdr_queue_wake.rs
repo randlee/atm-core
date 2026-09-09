@@ -81,6 +81,7 @@ pub struct HerdrQueueWakePump {
     pub(crate) daemon_home: PathBuf,
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
+    release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     #[cfg(test)]
     pub(crate) handoff_cleanup_test_gate:
         Arc<Mutex<Option<crate::herdr_queue_wake_test_gates::Gate>>>,
@@ -113,6 +114,7 @@ impl HerdrQueueWakePump {
             daemon_home: PathBuf::new(),
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
+            release_handles: Arc::new(Mutex::new(Vec::new())),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
             #[cfg(test)]
@@ -164,11 +166,37 @@ impl HerdrQueueWakePump {
                     }
                 }
             }
+            self.await_release_handles().await;
         })
+    }
+
+    async fn await_release_handles(&self) {
+        loop {
+            let handles = std::mem::take(
+                &mut *self
+                    .release_handles
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            );
+            if handles.is_empty() {
+                return;
+            }
+            for handle in handles {
+                let _ = handle.await;
+            }
+        }
+    }
+
+    fn prune_finished_release_handles(&self) {
+        self.release_handles
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|handle| !handle.is_finished());
     }
 
     /// Runs one complete roster/list/claim/dispatch pass.
     pub async fn tick_once(&self) {
+        self.prune_finished_release_handles();
         let mut stats = HerdrQueueWakeStats {
             last_tick_at: Some((self.clock)()),
             ..HerdrQueueWakeStats::default()
@@ -546,6 +574,7 @@ impl HerdrQueueWakePump {
             claim.clone(),
             Arc::clone(&self.release_streaks),
             self.service_runtime.clone(),
+            Arc::clone(&self.release_handles),
         );
         let dispatch = match self.rebuild_dispatch(member, claim.msg).await {
             Ok(Some(dispatch)) => dispatch,
@@ -869,6 +898,7 @@ struct ReleasePendingOnDrop {
     member: MemberKey,
     claim: atm_core::boundary::NudgeClaim,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
+    release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     /// Clears the member's ephemeral Herdr wake-pending roster flag when this
     /// claim attempt concludes (success, requeue, or release), regardless of
     /// which exit path was taken. Set alongside claiming a pending nudge in
@@ -886,12 +916,14 @@ impl ReleasePendingOnDrop {
         claim: atm_core::boundary::NudgeClaim,
         release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
         service_runtime: LocalServiceRuntime,
+        release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     ) -> Self {
         Self {
             store,
             member,
             claim,
             release_streaks,
+            release_handles,
             service_runtime,
             armed: true,
         }
@@ -992,7 +1024,13 @@ impl ReleasePendingOnDrop {
             }
         };
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            std::mem::drop(handle.spawn_blocking(release));
+            let release_handle = handle.spawn_blocking(release);
+            let mut release_handles = self
+                .release_handles
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            release_handles.retain(|handle| !handle.is_finished());
+            release_handles.push(release_handle);
         } else {
             release();
         }
@@ -1018,8 +1056,8 @@ impl Drop for ReleasePendingOnDrop {
 mod tests {
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HerdrQueueWakePump, HerdrQueueWakeStats, TASK_REMINDER_INTERVAL_MS, log_herdr_list_failure,
-        runtime_state,
+        HerdrQueueWakePump, HerdrQueueWakeStats, ReleasePendingOnDrop, TASK_REMINDER_INTERVAL_MS,
+        log_herdr_list_failure, runtime_state,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -1045,6 +1083,7 @@ mod tests {
     use atm_runtime_test_support::open_isolated_sqlite_boundary;
     use atm_storage::{RosterSnapshot, TaskRow, TaskState, TaskStore};
     use serde_json::json;
+    use std::collections::HashMap;
     use std::future::Future;
     use std::pin::Pin;
     use std::str::FromStr;
@@ -3421,6 +3460,70 @@ mod tests {
                 .expect("released claim")
                 .attempt,
             0
+        );
+    }
+
+    #[tokio::test]
+    async fn ac11_claim_drop_guard_release_is_joined_before_pump_shutdown() {
+        let (_root, runtime, fake, pump, _health, key) = build_test_pump();
+        let prompt_gate = fake.block_next_prompt();
+        let prompt_started = pump.install_prompt_started_test_gate();
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let task = pump.clone().start(shutdown_rx);
+        tokio::time::timeout(Duration::from_secs(1), prompt_started.notified())
+            .await
+            .expect("the fake prompt is in flight before shutdown");
+
+        shutdown_tx.send(()).expect("shutdown notification");
+        task.await.expect("poll task joins after shutdown");
+
+        assert!(
+            pump.release_handles
+                .lock()
+                .expect("release handles lock")
+                .is_empty(),
+            "shutdown must drain and join every drop release handle"
+        );
+        let claim = runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .claim_next_pending(&key)
+            .expect("claim after shutdown")
+            .expect("cancellation releases the claim before pump shutdown returns");
+        assert_eq!(
+            claim.attempt, 0,
+            "cancellation release preserves retry state"
+        );
+        drop(prompt_gate);
+    }
+
+    #[test]
+    fn release_pending_on_drop_without_runtime_releases_synchronously() {
+        let (_root, runtime, _fake, _pump, _health, key) = build_test_pump();
+        let store = runtime.pending_nudge_store().expect("pending store");
+        let claim = store
+            .claim_next_pending(&key)
+            .expect("claim pending")
+            .expect("queued message claim");
+        let release_handles = Arc::new(Mutex::new(Vec::new()));
+        let release = ReleasePendingOnDrop::new(
+            Arc::clone(&store),
+            key.clone(),
+            claim,
+            Arc::new(Mutex::new(HashMap::new())),
+            runtime,
+            release_handles,
+        );
+
+        drop(release);
+
+        let released_claim = store
+            .claim_next_pending(&key)
+            .expect("claim after synchronous release")
+            .expect("drop release makes the message claimable");
+        assert_eq!(
+            released_claim.attempt, 0,
+            "inline fallback preserves retry state"
         );
     }
 
