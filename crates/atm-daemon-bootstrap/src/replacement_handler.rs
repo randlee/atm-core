@@ -97,11 +97,15 @@ impl atm_core::doctor::HerdrBreakerDoctor for HerdrBreakerDoctorAdapter {
                 state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
                 retry_after_ms: Some(retry_after.as_millis() as u64),
                 consecutive_failures: Some(snapshot.consecutive_failures),
+                last_error_code: snapshot.last_error_code,
+                last_error_detail: snapshot.last_error_detail,
             },
             HerdrBreakerState::HalfOpen => atm_core::doctor::HerdrBreakerDoctorReport {
                 state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
                 retry_after_ms: Some(0),
                 consecutive_failures: Some(snapshot.consecutive_failures),
+                last_error_code: snapshot.last_error_code,
+                last_error_detail: snapshot.last_error_detail,
             },
         }
     }

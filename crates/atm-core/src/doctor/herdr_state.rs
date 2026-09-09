@@ -299,6 +299,10 @@ pub struct HerdrEndpointObservation {
     pub state: HerdrDoctorState,
     pub live_handoff: Option<bool>,
     pub members: Vec<HerdrMemberPresence>,
+    /// Endpoint-wide findings, such as a named Herdr session selected by
+    /// roster rows but unavailable at doctor time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub findings: Vec<super::DoctorFinding>,
 }
 
 mod duration_millis {

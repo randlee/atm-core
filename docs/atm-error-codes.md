@@ -174,6 +174,8 @@ Error codes should describe the failure class, not a specific prose message.
   --task-complete <task_id> --stdin`
 - `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to
   its Herdr agent and answer the prompt`
+- `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` — Herdr exposes an unnamed agent;
+  run `herdr agent rename <pane_id> <target>` rather than only labelling its pane
 
 ### 5.6 Observability
 
@@ -624,6 +626,7 @@ Classification rules:
 | `TEMPLATE_TAG_RESERVED` | `operator_actionable` |
 | `ATM_WARNING_SQLITE_HEALTH_DEGRADED` | `warning_only` |
 | `ATM_WARNING_ROSTER_DRIFT` | `warning_only` |
+| `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` | `warning_only` |
 | `ATM_POST_SEND_PANE_MISSING` | `retryable` |
 | `ATM_POST_SEND_TMUX_SEND_FAILED` | `retryable` |
 | `ATM_POST_SEND_GRAFT_UNAVAILABLE` | `retryable` |

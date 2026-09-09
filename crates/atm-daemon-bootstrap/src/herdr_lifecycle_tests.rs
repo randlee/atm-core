@@ -113,6 +113,7 @@ fn idle(worker: &AgentName) -> HerdrListOutcome {
     HerdrListOutcome {
         agents: vec![AgentSnapshot {
             name: Some(worker.to_string()),
+            pane_id: None,
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         }],

@@ -77,6 +77,7 @@ pub struct HerdrQueueWakePump {
     breaker_escalation_gates: Arc<Mutex<HashMap<Option<HerdrSession>, HerdrBreakerEscalationGate>>>,
     breaker_escalation_min_interval: Duration,
     breaker_cycle_opened_at: Arc<Mutex<HashMap<Option<HerdrSession>, IsoTimestamp>>>,
+    breaker_failure_counts: Arc<Mutex<HashMap<Option<HerdrSession>, u32>>>,
     pub(crate) daemon_home: PathBuf,
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
@@ -108,6 +109,7 @@ impl HerdrQueueWakePump {
             breaker_escalation_gates: Arc::new(Mutex::new(HashMap::new())),
             breaker_escalation_min_interval: Duration::from_secs(1_800),
             breaker_cycle_opened_at: Arc::new(Mutex::new(HashMap::new())),
+            breaker_failure_counts: Arc::new(Mutex::new(HashMap::new())),
             daemon_home: PathBuf::new(),
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
@@ -284,6 +286,20 @@ impl HerdrQueueWakePump {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(session);
+        self.breaker_failure_counts
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(session);
+    }
+
+    fn record_breaker_failure(&self, session: &Option<HerdrSession>) -> u32 {
+        let mut counts = self
+            .breaker_failure_counts
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let count = counts.entry(session.clone()).or_default();
+        *count = count.saturating_add(1);
+        *count
     }
 
     async fn maybe_escalate_breaker(
@@ -291,6 +307,8 @@ impl HerdrQueueWakePump {
         session: &Option<HerdrSession>,
         members: &[HerdrCandidate],
         now: IsoTimestamp,
+        failure_count: u32,
+        error: &atm_herdr::HerdrError,
     ) -> bool {
         if self.daemon_home.as_os_str().is_empty() {
             return false;
@@ -319,6 +337,8 @@ impl HerdrQueueWakePump {
             &self.daemon_home,
             &team,
             opened_at,
+            failure_count,
+            error,
         )
         .await;
         true
@@ -364,16 +384,12 @@ impl HerdrQueueWakePump {
                     if error.is_infrastructure() {
                         stats.breaker_open += 1;
                         let now = (self.clock)();
-                        let _ = self.maybe_escalate_breaker(&session, &members, now).await;
+                        let failure_count = self.record_breaker_failure(&session);
+                        let _ = self
+                            .maybe_escalate_breaker(&session, &members, now, failure_count, &error)
+                            .await;
                     }
-                    tracing::warn!(
-                        subsystem = "herdr_queue_wake",
-                        action = "herdr_list",
-                        outcome = "failed",
-                        session = ?session,
-                        error = ?error,
-                        "Herdr queue wake list failed"
-                    );
+                    log_herdr_list_failure(&session, &error);
                 }
             }
         }
@@ -715,6 +731,20 @@ impl HerdrQueueWakePump {
     }
 }
 
+fn log_herdr_list_failure(session: &Option<HerdrSession>, error: &atm_herdr::HerdrError) {
+    let code = AtmError::from(error.clone()).code();
+    tracing::warn!(
+        subsystem = "herdr_queue_wake",
+        action = "herdr_list",
+        outcome = "failed",
+        session = ?session,
+        code = %code,
+        failure_class = error.diagnostic_name(),
+        error = ?error,
+        "Herdr queue wake list failed: {code}"
+    );
+}
+
 impl crate::RuntimeMaintenance for HerdrQueueWakePump {
     fn start(&self, shutdown: watch::Receiver<()>) -> JoinHandle<()> {
         Arc::new(self.clone()).start(shutdown)
@@ -931,7 +961,8 @@ impl Drop for ReleasePendingOnDrop {
 mod tests {
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HerdrQueueWakePump, HerdrQueueWakeStats, TASK_REMINDER_INTERVAL_MS, runtime_state,
+        HerdrQueueWakePump, HerdrQueueWakeStats, TASK_REMINDER_INTERVAL_MS, log_herdr_list_failure,
+        runtime_state,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -950,6 +981,10 @@ mod tests {
     use atm_herdr::{
         AgentSnapshot, HerdrAgentStatus, HerdrListOutcome, HerdrProcessAdapter, HerdrPromptOutcome,
     };
+    use atm_observability::{
+        DiagnosticSink, RetainedEvent, RetainedLogPolicy, SinkOffer, TracingBridgeLayer,
+        build_retained_logger,
+    };
     use atm_runtime_test_support::open_isolated_sqlite_boundary;
     use atm_storage::{RosterSnapshot, TaskRow, TaskState, TaskStore};
     use serde_json::json;
@@ -959,6 +994,57 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
+    use tracing_subscriber::prelude::*;
+
+    #[derive(Default)]
+    struct RecordingDiagnosticSink {
+        codes: Mutex<Vec<String>>,
+    }
+
+    impl DiagnosticSink for RecordingDiagnosticSink {
+        fn offer(&self, event: &RetainedEvent<'_>) -> SinkOffer {
+            if let Some(code) = event.code {
+                self.codes.lock().expect("codes").push(code.to_owned());
+            }
+            SinkOffer::Accepted
+        }
+    }
+
+    #[test]
+    fn herdr_list_failure_reaches_the_tracing_bridge_with_its_error_code() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let logger = Arc::new(
+            build_retained_logger(
+                "atm",
+                &root.path().join("logs"),
+                RetainedLogPolicy {
+                    rotation_max_bytes: 1_024 * 1_024,
+                    rotation_max_files: 2,
+                    retention_max_age: Duration::from_secs(60),
+                    maintenance_cadence: Duration::from_secs(60),
+                    writer_shutdown_timeout: Duration::from_secs(1),
+                    maintenance_max_work_per_pass: Some(2),
+                },
+                None,
+            )
+            .expect("logger"),
+        );
+        let bridge = TracingBridgeLayer::new(logger);
+        let sink = Arc::new(RecordingDiagnosticSink::default());
+        bridge.set_diagnostic_sink(sink.clone());
+
+        tracing::subscriber::with_default(
+            tracing_subscriber::Registry::default().with(bridge),
+            || {
+                log_herdr_list_failure(&None, &atm_herdr::HerdrError::ServerNotRunning);
+            },
+        );
+
+        assert_eq!(
+            sink.codes.lock().expect("codes").as_slice(),
+            ["ATM_HERDR_UNAVAILABLE"]
+        );
+    }
 
     struct FakeSelector {
         emitter: FakeEmitter,
@@ -1151,6 +1237,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some(key.agent().to_string()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -1167,6 +1254,7 @@ mod tests {
                 .iter()
                 .map(|key| AgentSnapshot {
                     name: Some(key.agent().to_string()),
+                    pane_id: None,
                     status,
                     workspace_id: None,
                 })
@@ -1309,6 +1397,7 @@ mod tests {
     ) {
         build_test_pump_with_agents(vec![AgentSnapshot {
             name: Some("aq27-agent".to_owned()),
+            pane_id: None,
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         }])
@@ -1364,11 +1453,13 @@ mod tests {
             agents: vec![
                 AgentSnapshot {
                     name: Some("team-lead_a-team".to_owned()),
+                    pane_id: None,
                     status: HerdrAgentStatus::Idle,
                     workspace_id: None,
                 },
                 AgentSnapshot {
                     name: Some("team-lead_b-team".to_owned()),
+                    pane_id: None,
                     status: HerdrAgentStatus::Idle,
                     workspace_id: None,
                 },
@@ -1473,6 +1564,7 @@ mod tests {
                 .zip(statuses)
                 .map(|(name, status)| AgentSnapshot {
                     name: Some(name.clone()),
+                    pane_id: None,
                     status,
                     workspace_id: None,
                 })
@@ -1542,11 +1634,13 @@ mod tests {
         let agents = vec![
             AgentSnapshot {
                 name: Some("aq27-agent".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             },
             AgentSnapshot {
                 name: Some("aq27-agent-b".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             },
@@ -2651,6 +2745,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some(key.agent().to_string()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -2663,6 +2758,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some(key.agent().to_string()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -2692,6 +2788,7 @@ mod tests {
         let (root, runtime, fake, _old_pump, health, key) =
             build_test_pump_with_agents(vec![AgentSnapshot {
                 name: Some("aq27-agent".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Blocked,
                 workspace_id: None,
             }]);
@@ -2741,6 +2838,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some(key.agent().to_string()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -2809,6 +2907,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some("aq27-agent".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -2922,6 +3021,7 @@ mod tests {
                 } else {
                     format!("aq27-agent-{index:02}")
                 }),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             })
@@ -3114,6 +3214,7 @@ mod tests {
             fake.queue_list_result(Ok(HerdrListOutcome {
                 agents: vec![AgentSnapshot {
                     name: Some(key.agent().to_string()),
+                    pane_id: None,
                     status: HerdrAgentStatus::Idle,
                     workspace_id: None,
                 }],
@@ -3223,6 +3324,7 @@ mod tests {
     async fn ac10_herdr_statuses_update_runtime_health_states() {
         let agents = vec![AgentSnapshot {
             name: Some("aq27-agent".to_owned()),
+            pane_id: None,
             status: HerdrAgentStatus::Working,
             workspace_id: None,
         }];
@@ -3299,6 +3401,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some("aq27-agent".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -3324,6 +3427,7 @@ mod tests {
                 } else {
                     format!("aq27-agent-{index:02}")
                 }),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             })
@@ -3339,6 +3443,7 @@ mod tests {
                 } else {
                     format!("aq27-agent-{index:02}")
                 }),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             })

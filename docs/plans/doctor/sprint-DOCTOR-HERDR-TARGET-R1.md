@@ -1,3 +1,9 @@
+---
+status: complete
+branch: fix/doctor-herdr-target-resolution
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/fix/doctor-herdr-target-resolution
+---
+
 # Sprint DOCTOR-HERDR-TARGET-R1 — doctor diagnoses unresolvable Herdr nudge targets
 
 Issues: #1360 (launcher labels panes, ATM targets agent names), #1357 (breaker masks the cause).

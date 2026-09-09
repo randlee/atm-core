@@ -57,6 +57,7 @@ impl HerdrAgentStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentSnapshot {
     pub name: Option<String>,
+    pub pane_id: Option<String>,
     pub status: HerdrAgentStatus,
     pub workspace_id: Option<String>,
 }
@@ -201,6 +202,29 @@ impl From<HerdrError> for AtmError {
 }
 
 impl HerdrError {
+    /// Stable error name retained in operator-facing diagnostics.
+    #[must_use]
+    pub const fn diagnostic_name(&self) -> &'static str {
+        match self {
+            Self::AgentBlocked => "agent_blocked",
+            Self::AgentNotFound => "agent_not_found",
+            Self::AgentNotReady => "agent_not_ready",
+            Self::AgentTargetAmbiguous => "agent_target_ambiguous",
+            Self::AgentNotRunning => "agent_not_running",
+            Self::AgentPromptStalled => "agent_prompt_stalled",
+            Self::ServerNotRunning => "server_not_running",
+            Self::ProtocolMismatch { .. } => "protocol_mismatch",
+            Self::Timeout => "timeout",
+            Self::InvalidAgentName => "invalid_agent_name",
+            Self::EmptyAgentPrompt => "empty_agent_prompt",
+            Self::ServerUnavailable { .. } => "server_unavailable",
+            Self::InternalError { .. } => "internal_error",
+            Self::TimedOut => "timed_out",
+            Self::Unavailable { .. } => "breaker_unavailable",
+            Self::Advisory { .. } => "advisory",
+        }
+    }
+
     /// Stable backend-facing outcome classification. Wire error-code strings
     /// remain private to this crate.
     #[must_use]
@@ -292,10 +316,12 @@ pub enum HerdrBreakerState {
     HalfOpen,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HerdrBreakerSnapshot {
     pub state: HerdrBreakerState,
     pub consecutive_failures: u32,
+    pub last_error_code: Option<AtmErrorCode>,
+    pub last_error_detail: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -304,6 +330,8 @@ struct BreakerState {
     opened_at: Option<Instant>,
     half_open_probe: bool,
     retry_after_override: Option<Duration>,
+    last_error_code: Option<AtmErrorCode>,
+    last_error_detail: Option<String>,
 }
 
 /// Supplies the current time to a [`HerdrSpawnBreaker`].
@@ -365,11 +393,15 @@ impl HerdrSpawnBreaker {
                     retry_after: BREAKER_MAX_BACKOFF,
                 },
                 consecutive_failures: u32::MAX,
+                last_error_code: None,
+                last_error_detail: None,
             };
         };
         HerdrBreakerSnapshot {
             state: breaker_state(&state, self.clock.as_ref()),
             consecutive_failures: state.consecutive_failures,
+            last_error_code: state.last_error_code.clone(),
+            last_error_detail: state.last_error_detail.clone(),
         }
     }
 
@@ -399,15 +431,29 @@ impl HerdrSpawnBreaker {
     }
 
     pub fn record_infrastructure_failure(&self) {
-        self.record_infrastructure_failure_with_retry_after(None);
+        self.record_infrastructure_failure_with_retry_after(None, None);
     }
 
-    fn record_infrastructure_failure_with_retry_after(&self, retry_after: Option<Duration>) {
+    fn record_infrastructure_error(&self, error: &HerdrError) {
+        self.record_infrastructure_failure_with_retry_after(
+            error.breaker_retry_after(),
+            Some(error),
+        );
+    }
+
+    fn record_infrastructure_failure_with_retry_after(
+        &self,
+        retry_after: Option<Duration>,
+        error: Option<&HerdrError>,
+    ) {
         if let Ok(mut state) = self.state.lock() {
             state.consecutive_failures = state.consecutive_failures.saturating_add(1);
             state.opened_at = Some(self.clock.now());
             state.half_open_probe = false;
             state.retry_after_override = retry_after;
+            state.last_error_code = error.map(|error| AtmError::from(error.clone()).code());
+            state.last_error_detail =
+                error.map(|error| AtmError::from(error.clone()).detail().to_owned());
         }
     }
 
@@ -476,9 +522,7 @@ impl HerdrProcessInvoker {
             return Err(HerdrError::Unavailable { retry_after });
         }
         let result = self.io.call(op, session, deadline).await;
-        if result.is_err() && breaker_policy == BreakerPolicy::Shared {
-            self.breaker.record_infrastructure_failure();
-        }
+        record_call_result(&self.breaker, &result, breaker_policy);
         result
     }
 }
@@ -600,8 +644,12 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
 
 fn record_result<T>(breaker: &HerdrSpawnBreaker, result: &Result<T, HerdrError>) {
     if let Err(error) = result {
-        if error.is_infrastructure() {
-            breaker.record_infrastructure_failure_with_retry_after(error.breaker_retry_after());
+        if matches!(error, HerdrError::Unavailable { .. }) {
+            // A shared-policy operation was refused before touching Herdr.
+            // It supplies no evidence that the endpoint recovered, so retain
+            // the cooldown rather than closing or re-arming the breaker.
+        } else if error.is_infrastructure() {
+            breaker.record_infrastructure_error(error);
         } else {
             // A typed lifecycle/target response proves that the Herdr
             // process was reachable. In particular, a lifecycle response
@@ -611,6 +659,19 @@ fn record_result<T>(breaker: &HerdrSpawnBreaker, result: &Result<T, HerdrError>)
         }
     } else {
         breaker.record_success();
+    }
+}
+
+fn record_call_result(
+    breaker: &HerdrSpawnBreaker,
+    result: &Result<transport::HerdrEnvelope, HerdrError>,
+    breaker_policy: BreakerPolicy,
+) {
+    if breaker_policy == BreakerPolicy::Shared
+        && let Err(error) = result
+        && error.is_infrastructure()
+    {
+        breaker.record_infrastructure_error(error);
     }
 }
 
@@ -784,6 +845,7 @@ pub mod testing {
     fn default_snapshot(agent: &HerdrAgentName) -> AgentSnapshot {
         AgentSnapshot {
             name: Some(agent.to_string()),
+            pane_id: None,
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         }
@@ -1004,6 +1066,7 @@ mod tests {
             outcome,
             HerdrPromptOutcome::Accepted(AgentSnapshot {
                 name: Some("alice".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Working,
                 workspace_id: None,
             })
@@ -1175,6 +1238,60 @@ mod tests {
         assert_eq!(breaker.state(), HerdrBreakerState::Closed);
     }
 
+    #[test]
+    fn typed_non_infrastructure_err_from_io_call_leaves_the_breaker_closed() {
+        let breaker = HerdrSpawnBreaker::default();
+        let result: Result<transport::HerdrEnvelope, HerdrError> = Err(HerdrError::AgentNotFound);
+
+        record_call_result(&breaker, &result, BreakerPolicy::Shared);
+
+        assert_eq!(breaker.consecutive_failures(), 0);
+        assert_eq!(breaker.state(), HerdrBreakerState::Closed);
+    }
+
+    #[test]
+    fn infrastructure_failure_retains_the_last_error_for_doctor_projection() {
+        let breaker = HerdrSpawnBreaker::default();
+        let result: Result<(), HerdrError> = Err(HerdrError::ServerNotRunning);
+
+        record_result(&breaker, &result);
+
+        let snapshot = breaker.snapshot();
+        assert_eq!(
+            snapshot.last_error_code,
+            Some(AtmErrorCode::HerdrUnavailable)
+        );
+        assert_eq!(
+            snapshot.last_error_detail.as_deref(),
+            Some("Herdr server is unavailable")
+        );
+    }
+
+    #[tokio::test]
+    async fn short_circuited_list_keeps_the_breaker_open_until_a_probe_succeeds() {
+        let clock = Arc::new(TestBreakerClock::new());
+        let breaker = Arc::new(HerdrSpawnBreaker::with_clock(clock.clone()));
+        breaker.record_infrastructure_failure();
+        let invoker = HerdrProcessInvoker {
+            breaker: Arc::clone(&breaker),
+            io: HerdrIo::default(),
+        };
+
+        assert!(matches!(
+            invoker
+                .list(None, RequestDeadline::after(Duration::from_secs(1)))
+                .await,
+            Err(HerdrError::Unavailable { .. })
+        ));
+        assert!(matches!(breaker.state(), HerdrBreakerState::Open { .. }));
+
+        clock.advance(Duration::from_secs(1));
+        assert_eq!(breaker.state(), HerdrBreakerState::HalfOpen);
+        assert!(breaker.permits_spawn(), "the cooldown admits one probe");
+        record_result::<()>(&breaker, &Ok(()));
+        assert_eq!(breaker.state(), HerdrBreakerState::Closed);
+    }
+
     /// HR-SAFE-002 precedence proof (deterministic, no wall-clock): a
     /// caller deadline shorter than `HERDR_PROCESS_CAP` governs the
     /// effective process timeout.
@@ -1287,6 +1404,19 @@ mod tests {
                 }),
                 Err(expected)
             );
+        }
+    }
+
+    #[test]
+    fn target_visibility_errors_keep_distinct_diagnostic_names() {
+        let cases = [
+            ("agent_not_found", HerdrError::AgentNotFound),
+            ("agent_not_ready", HerdrError::AgentNotReady),
+            ("agent_target_ambiguous", HerdrError::AgentTargetAmbiguous),
+            ("agent_not_running", HerdrError::AgentNotRunning),
+        ];
+        for (name, error) in cases {
+            assert_eq!(error.diagnostic_name(), name);
         }
     }
 

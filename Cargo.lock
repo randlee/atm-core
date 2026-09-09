@@ -294,6 +294,7 @@ dependencies = [
  "agent-team-mail-core",
  "async-trait",
  "atm-herdr",
+ "atm-observability",
  "atm-runtime",
  "atm-runtime-test-support",
  "axum",
@@ -310,6 +311,7 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
+ "tracing-subscriber",
  "ulid",
  "windows-sys 0.61.2",
 ]

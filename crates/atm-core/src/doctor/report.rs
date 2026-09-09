@@ -330,6 +330,10 @@ pub struct HerdrBreakerDoctorReport {
     pub retry_after_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consecutive_failures: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error_code: Option<AtmErrorCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error_detail: Option<String>,
 }
 
 impl Default for HerdrBreakerDoctorReport {
@@ -338,6 +342,8 @@ impl Default for HerdrBreakerDoctorReport {
             state: HerdrBreakerDoctorState::Closed,
             retry_after_ms: None,
             consecutive_failures: None,
+            last_error_code: None,
+            last_error_detail: None,
         }
     }
 }

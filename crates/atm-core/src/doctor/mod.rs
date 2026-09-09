@@ -150,12 +150,16 @@ fn presence_findings_with_team(
     observations: &[HerdrEndpointObservation],
     team: Option<&TeamName>,
 ) -> Vec<DoctorFinding> {
+    let mut findings = observations
+        .iter()
+        .flat_map(|observation| observation.findings.iter().cloned())
+        .map(|finding| scope_finding(finding, team))
+        .collect::<Vec<_>>();
     let mut members = observations
         .iter()
         .flat_map(|observation| observation.members.iter())
         .collect::<Vec<_>>();
     members.sort_by_key(|member| member.ordinal);
-    let mut findings = Vec::new();
     let mut infrastructure = None;
     for member in members {
         match &member.outcome {
@@ -1085,6 +1089,7 @@ mod tests {
             state: HerdrDoctorState::NotConfigured,
             live_handoff: None,
             members,
+            findings: Vec::new(),
         };
         let observations = vec![
             observation(vec![
@@ -1196,6 +1201,7 @@ mod tests {
             state: HerdrDoctorState::NotConfigured,
             live_handoff: None,
             members: Vec::new(),
+            findings: Vec::new(),
         };
         let mut legacy = serde_json::to_value(current).expect("observation serializes");
         legacy
