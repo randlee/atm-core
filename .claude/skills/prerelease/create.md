@@ -5,25 +5,17 @@ Release assets. Treat it as an external state change. Proceed beyond the dry
 run only when the operator explicitly requested `--create` in writing and the
 working branch is clean, non-protected, and attached.
 
-Without an explicit version, invoke the consumer's manifest-declared tag
-script. That script owns the repository's patch-version bump and tag policy.
+Always invoke the consumer's manifest-declared tag script. That script owns
+the repository's version-selection and tag policy: it may use the current
+workspace version only when that version has never been published; otherwise
+it must patch-bump before tagging. Reject an explicit version. The script and
+workflow must fail closed rather than overwrite or republish a version.
 
 ```bash
 set -euo pipefail
-python3 .claude/skills/prerelease/scripts/prerelease.py --bump --dry-run
-python3 .claude/skills/prerelease/scripts/prerelease.py --bump --authorized
+python3 .claude/skills/prerelease/scripts/prerelease.py --create --dry-run
+python3 .claude/skills/prerelease/scripts/prerelease.py --create --authorized
 ```
 
-When `--create X.Y.Z` supplies an explicit version, create that prerelease tag
-without invoking the bump script.
-
-```bash
-set -euo pipefail
-version="$VERSION"
-python3 .claude/skills/prerelease/scripts/prerelease.py --publish "$version" --dry-run
-python3 .claude/skills/prerelease/scripts/prerelease.py --publish "$version" --authorized
-```
-
-Set `VERSION` only from the validated `--create X.Y.Z` argument. The helper
-waits for the archive workflow and verifies every manifest-declared asset and
-checksum before reporting success.
+The helper waits for the archive workflow and verifies every
+manifest-declared asset and checksum before reporting success.

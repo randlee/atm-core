@@ -330,22 +330,16 @@ def wait_for_archive(tag: str) -> None:
     raise SystemExit(f"timed out waiting for {ARCHIVE_WORKFLOW} for {tag}")
 
 
-def publish(manifest: dict[str, Any], version: str | None, bump: bool) -> tuple[str, str]:
+def publish(manifest: dict[str, Any]) -> tuple[str, str]:
     config = manifest["prerelease"]
     assert isinstance(config, dict)
     require_publish_preconditions()
-    if bump:
-        result = command([sys.executable, required_string(config, "tag_script")], capture=True)
-        tag = next((line.split()[3] for line in result.stdout.splitlines() if line.startswith("created and pushed ")), "")
-        prefix = required_string(config, "tag_prefix")
-        if not tag.startswith(prefix):
-            raise SystemExit("prerelease tag script did not report a prerelease tag")
-        version = parse_version(tag.removeprefix(prefix))
-    else:
-        assert version is not None
-        tag = f"{required_string(config, 'tag_prefix')}{version}"
-        command(["git", "tag", "-a", tag, "-m", f"Prerelease {version}"])
-        command(["git", "push", "origin", tag])
+    result = command([sys.executable, required_string(config, "tag_script")], capture=True)
+    tag = next((line.split()[3] for line in result.stdout.splitlines() if line.startswith("created and pushed ")), "")
+    prefix = required_string(config, "tag_prefix")
+    if not tag.startswith(prefix):
+        raise SystemExit("prerelease tag script did not report a prerelease tag")
+    version = parse_version(tag.removeprefix(prefix))
     wait_for_archive(tag)
     release = release_for_tag(tag)
     require_release_assets(release, manifest, version)
@@ -366,8 +360,7 @@ def publish(manifest: dict[str, Any], version: str | None, bump: bool) -> tuple[
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--publish", metavar="X.Y.Z")
-    mode.add_argument("--bump", action="store_true", help="run the manifest prerelease tag script")
+    mode.add_argument("--create", action="store_true", help="run the manifest version-selection and tag script")
     mode.add_argument("--install", nargs="?", const="latest", metavar="X.Y.Z")
     parser.add_argument("--manifest", type=Path, default=Path("release/publish-artifacts.toml"))
     parser.add_argument("--dry-run", action="store_true", help="print the plan without network calls")
@@ -375,15 +368,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     manifest = read_manifest(args.manifest)
     config = prerelease_manifest(args.manifest)
-    if args.publish or args.bump:
-        version = parse_version(args.publish) if args.publish else None
-        tag = f"{required_string(config, 'tag_prefix')}{version}" if version else "the tag selected by the manifest script"
+    if args.create:
+        tag = "the unpublished version tag selected by the manifest script"
         if args.dry_run:
             print(f"would tag {tag}, wait for {ARCHIVE_WORKFLOW}, verify Release assets and checksums")
             return 0
         if not args.authorized:
-            raise SystemExit("--publish and --bump require written operator authorization")
-        _tag, url = publish(manifest, version, args.bump)
+            raise SystemExit("--create requires written operator authorization")
+        _tag, url = publish(manifest)
         print(f"Release URL: {url}")
         return 0
     requested = args.install or "latest"

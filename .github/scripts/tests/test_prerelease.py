@@ -65,7 +65,7 @@ class PrereleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_manifest(root)
-            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--publish", "1.5.11", "--dry-run"], cwd=root, text=True, capture_output=True, check=False)
+            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--create", "--dry-run"], cwd=root, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("would tag", result.stdout)
 
@@ -73,7 +73,7 @@ class PrereleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_manifest(root)
-            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--publish", "1.5.11"], cwd=root, text=True, capture_output=True, check=False)
+            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--create"], cwd=root, text=True, capture_output=True, check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("authorization", result.stderr)
 
@@ -92,16 +92,33 @@ class PrereleaseTests(unittest.TestCase):
                 path.write_bytes(f"{digest}  {name}\n".encode() if asset == "checksums.txt" else archive)
                 return path
 
+            tag_result = subprocess.CompletedProcess(
+                [], 0, stdout="created and pushed prerelease/v1.5.11 from fixture\n"
+            )
             with (
                 mock.patch.object(PRERELEASE, "require_publish_preconditions"),
-                mock.patch.object(PRERELEASE, "command", return_value=subprocess.CompletedProcess([], 0)),
+                mock.patch.object(PRERELEASE, "command", return_value=tag_result),
                 mock.patch.object(PRERELEASE, "wait_for_archive") as wait,
                 mock.patch.object(PRERELEASE, "release_for_tag", return_value=release),
                 mock.patch.object(PRERELEASE, "download_asset", side_effect=download),
             ):
-                tag, url = PRERELEASE.publish(values, "1.5.11", False)
+                tag, url = PRERELEASE.publish(values)
         self.assertEqual((tag, url), ("prerelease/v1.5.11", "https://example.test/release"))
         wait.assert_called_once_with("prerelease/v1.5.11")
+
+    def test_create_rejects_an_operator_supplied_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_manifest(root)
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--create", "1.5.11"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unrecognized arguments: 1.5.11", result.stderr)
 
     def test_install_stages_repoints_and_reuses_a_local_pair(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
