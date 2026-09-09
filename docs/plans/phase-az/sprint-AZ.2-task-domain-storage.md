@@ -275,10 +275,18 @@ CREATE UNIQUE INDEX one_active_task_per_agent
 CREATE INDEX task_list_order
   ON tasks_v2(team, current_assignee, state, priority,
               original_assigned_at, task_id);
-CREATE INDEX mail_messages_task_id
-  ON mail_messages(team, agent,
-                   json_extract(envelope_json, '$.taskId'));
+CREATE INDEX IF NOT EXISTS idx_mail_messages_task_id
+  ON mail_messages(team, json_extract(envelope_json, '$.taskId'));
 ```
+
+`idx_mail_messages_task_id` is owned by
+`crates/atm-storage-rusqlite/src/mail_messages_schema.rs` and must be added to
+`mail_messages_index_ddl!()`, the single canonical index batch shared by
+fresh schema creation and legacy table rebuild. Its leading columns exactly
+match the invalidation predicate `(team, taskId)`; inserting `agent` between
+them would prevent SQLite from seeking the task id. The existing
+migrated-versus-fresh schema-object test must prove the new index is
+byte-identical on both paths.
 
 The active-task uniqueness identity is exactly `(team, current_assignee)`:
 one agent may have at most one `Active` task in a team, while the same agent
@@ -367,7 +375,9 @@ insufficient.
   approved coexistence window. Implement deterministic state precedence,
   active-conflict demotion, v1/v2 write bridging, and previous-binary rollback
   tests. Fresh and upgraded databases must converge to byte-equivalent v2 plus
-  compatibility schema; Phase AZ deletes no v1 table or column.
+  compatibility schema. Add `idx_mail_messages_task_id` through
+  `mail_messages_index_ddl!()` and extend its migrated-versus-fresh
+  index-identity test; Phase AZ deletes no v1 table or column.
 - [ ] D5 — Implement all mutation transactions in the existing SQLite writer
   lane, including idempotent results, compare-and-swap revision, active
   uniqueness, prepared message persistence, assignment acknowledgement
@@ -396,6 +406,7 @@ crates/atm-storage-rusqlite/src/task_operations.rs
 crates/atm-storage-rusqlite/src/task_ledger_reader.rs
 crates/atm-storage-rusqlite/src/schema_version.rs
 crates/atm-storage-rusqlite/src/shared_db.rs
+crates/atm-storage-rusqlite/src/mail_messages_schema.rs
 crates/atm-storage-rusqlite/src/writer/mod.rs
 crates/atm-storage-rusqlite/src/writer/ops.rs
 crates/atm-storage-rusqlite/src/writer/task_ops.rs

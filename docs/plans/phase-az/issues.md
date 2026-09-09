@@ -60,3 +60,4 @@ replace repository issue numbers or QA triage authority.
 | `AZ-DES-022` | Both attention lanes share `MAX_NUDGE_ATTEMPTS = 5`; permanent failure terminalizes only the reservation. |
 | `AZ-DES-023` | User-facing docs distinguish lifecycle-blocked tasks from runtime-blocked members. |
 | `AZ-DES-024` | AZ.4 non-closure states the selector is Herdr-only and preserves bare-CLI pull behavior. |
+| `AZ-DES-025` | AZ.2 assigns `idx_mail_messages_task_id(team, json_extract(...))` to the canonical mail-index macro and its fresh/migrated identity test. |
