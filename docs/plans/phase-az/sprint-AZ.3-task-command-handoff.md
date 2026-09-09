@@ -156,24 +156,31 @@ conflicts retain machine-readable error codes and recovery guidance.
 
 ## Authorization
 
+- Every operation that creates an assignment attempt—initial `assign`,
+  `reassign`, `reopen`, and the successor side of `abort(superseded)`—must
+  resolve its recipient to a same-host roster member. A host-qualified
+  other-host recipient rejects before mutation with
+  `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED`; Phase AZ cannot atomically join
+  an ADR-035 remote delivery to the local task transaction.
 - Initial `assign`: an authenticated roster member may assign a distinct
-  resolvable member in the same team, using the existing canonical address and
-  self-send rules.
+  resolvable same-host member in the same team, using the existing canonical
+  address and self-send rules.
 - `start`, `block`, and `unblock`: current assignee only.
 - `reassign`: current assigner, current assignee, or the team's unique lead;
-  the target must be a resolvable team member. Reassign always creates a new
-  attempt and leaves the task `Assigned`. It is legal from `Assigned`,
+  the target must be a resolvable same-host team member. Reassign always creates
+  a new attempt and leaves the task `Assigned`. It is legal from `Assigned`,
   `Blocked`, or `Closed` (where it has reopen semantics), never from
   `Active`.
 - `reopen`: prior assigner, prior assignee, or unique team lead. It creates a
-  new attempt from `Closed` and never enters `Active` directly.
+  new attempt for a same-host assignee from `Closed` and never enters
+  `Active` directly.
 - `complete` and `fail`: current assignee only, and only from `Active`.
 - `abort(cancelled)`: current assignee, current assigner, or unique team lead.
   It is legal from every open state: `Assigned`, `Active`, or `Blocked`.
 - `abort(superseded)`: current assigner or unique team lead; successor id must
-  differ and be unused, and successor assignee must resolve before admission.
-  It is likewise legal from every open state, including `Blocked`; aborting a
-  blocked task never requires a meaningless unblock first.
+  differ and be unused, and successor assignee must resolve as same-host before
+  admission. It is likewise legal from every open state, including `Blocked`;
+  aborting a blocked task never requires a meaningless unblock first.
 - Any operation relying on lead authority resolves exactly one roster member
   whose `agent_type` is `lead`. Zero matches reject with
   `ATM_TASK_LEAD_MISSING`; two or more reject with
@@ -223,9 +230,9 @@ acknowledgement, or clear protection.
   compatibility window, emits a deprecation warning, and translates to
   `TaskAction::Assign`. Existing open ids translate to reassign only when the
   actor is authorized; they are never silent resends that overwrite an attempt.
-  Like canonical assignment, this adapter persists assignment mail/task
-  metadata but creates no immediate post-send nudge and no ordinary
-  message-key pending-queue entry.
+  Like canonical assignment, this adapter requires a same-host assignee,
+  persists assignment mail/task metadata, and creates no immediate post-send
+  nudge or ordinary message-key pending-queue entry.
 - `atm send <recipient> --task-complete <id> <source>` emits a deprecation
   warning and translates to a typed `LegacyComplete` compatibility action.
   It preserves the historical actor set—current assigner or current
@@ -285,9 +292,11 @@ completion is insufficient.
   from `atm clear` until acknowledged.
 - [ ] D4 — Implement template-first assignment/handoff composition and every
   authorization rule. Prove close/handoff and supersession/successor assignment
-  use one durable transaction and exact idempotent response. Canonical handoff
-  resolution admits only same-host non-self roster members; cross-host, missing
-  lead, and ambiguous-lead cases return their typed errors before mutation.
+  use one durable transaction and exact idempotent response. Assignment,
+  reassign, reopen, successor assignment, and canonical handoff resolution
+  admit only same-host roster members (handoff additionally requires non-self);
+  cross-host, missing-lead, and ambiguous-lead cases return their typed errors
+  before mutation.
 - [ ] D5 — Convert all legacy task send/list flags and task-linked
   acknowledgement to delegating compatibility adapters with warnings. Preserve
   assigner-or-assignee `--task-complete` from Assigned/Active via typed legacy
@@ -388,9 +397,11 @@ This is the sole authoritative acceptance list for AZ.3.
    a new attempt, all terminal outcomes, linked supersession, and legacy
    assigner/assignee completion from Assigned or Active.
 3. Unauthorized actors, self-handoffs, unknown members/tasks, illegal states,
-   cross-host handoffs, missing/ambiguous lead authority, stale revisions,
-   malformed operation ids, and conflicting retries fail without any message,
-   task, attempt, event, or queue mutation.
+   cross-host assignment/reassignment/reopen/supersession/handoff recipients,
+   missing/ambiguous lead authority, stale revisions, malformed operation ids,
+   and conflicting retries fail without any message, task, attempt, event, or
+   queue mutation. Every cross-host case uses
+   `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED`.
 4. Every canonical terminal command persists exactly one handoff to another
    same-host member in the same SQLite transaction as closure. Template and
    plain-text variants pass; injected message failure rolls back closure, exact

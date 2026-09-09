@@ -325,8 +325,12 @@ assignment histories under one idempotency key.
 - The partial unique active index is the final authority for concurrent starts.
   Exactly one competing start commits; the loser observes the active-task
   conflict and no partial event.
-- Assign/reassign/reopen commits the new assignment message, immutable attempt,
-  current-task projection, and event together.
+- Assign/reassign/reopen validates that the prepared assignment recipient is a
+  same-host roster member before mutation, then commits the new assignment
+  message, immutable attempt, current-task projection, and event together. A
+  cross-host recipient rejects with
+  `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` before an operation row, message,
+  task, attempt, or event is written.
 - Close commits its handoff message, terminal projection, audit event,
   assignment-message acknowledgement/supersession normalization, and clearing
   of every pending marker whose canonical message has the same `(team,
@@ -340,7 +344,8 @@ assignment histories under one idempotency key.
 - Block and reassign use the same task-id join to clear pending markers in the
   transition transaction. Unblock never recreates a pending marker; AZ.4
   derives future eligibility from task state.
-- Supersede commits old closure, linkage, old-attempt cleanup, successor row,
+- Supersede applies the same same-host validation to the successor assignee,
+  then commits old closure, linkage, old-attempt cleanup, successor row,
   successor assignment message/attempt, and both audit histories together.
 
 ## Read ordering contract
@@ -372,8 +377,10 @@ insufficient.
   `crates/atm-storage/src/task_state.rs` with the types and legal transitions
   above. Add typed rejections for illegal transition, stale revision,
   operation-id conflict, active-task conflict, invalid terminal metadata, and
-  v1/v2 compatibility failure. Register public codes and recovery text in the
-  unified ADR-032 error catalog and machine-readable boundary.
+  v1/v2 compatibility failure. Reuse
+  `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` for every assignment-bearing
+  mutation whose recipient is not same-host. Register public codes and recovery
+  text in the unified ADR-032 error catalog and machine-readable boundary.
 - [ ] D3 — Extend storage-neutral contracts in
   `crates/atm-storage/src/task_store.rs`, `contract.rs`, and `factory.rs`
   with logical-task/attempt/event reads, the binding list/top-runnable ordering,
@@ -391,9 +398,10 @@ insufficient.
   index-identity test; Phase AZ deletes no v1 table or column.
 - [ ] D5 — Implement all mutation transactions in the existing SQLite writer
   lane, including idempotent results, compare-and-swap revision, active
-  uniqueness, prepared message persistence, assignment acknowledgement
-  normalization, supersession linkage, a dedicated idempotent operations table,
-  and task-id-joined pending-nudge cleanup across all task-linked messages.
+  uniqueness, same-host prepared-assignment validation, message persistence,
+  assignment acknowledgement normalization, supersession linkage, a dedicated
+  idempotent operations table, and task-id-joined pending-nudge cleanup across
+  all task-linked messages.
 - [ ] D6 — Update machine-readable task/read/mutation boundary records and add
   pure-state, migration, replay, malformed-legacy, retry, concurrent-start,
   concurrent-reassign, bridge-time multi-assignee/active-conflict reconciliation,
@@ -488,6 +496,8 @@ This is the sole authoritative acceptance list for AZ.2.
 4. Database constraints and race tests prove one current assignee per task and
    at most one active task per `(team, agent)`. Losing concurrent operations
    leave no partial messages, attempts, or events.
+   Assign/reassign/reopen/supersede reject cross-host recipients with
+   `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` before any durable mutation.
 5. Same-operation retries are no-ops returning the original outcome; conflicting
    operation-id reuse and stale revisions fail closed. Supersession writes both
    task histories under one operation record without violating uniqueness.

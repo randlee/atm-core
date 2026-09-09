@@ -71,9 +71,11 @@ the same bounded title metadata, never a body source.
 - Closing a task requires a durable handoff message to another roster member.
   Template plus variables is the documented default; plain text and standard
   message sources remain supported. The handoff message and closure commit
-  together. Canonical handoff recipients are same-host, resolvable, and
-  non-self; cross-host handoff rejects with a typed error because ADR-035 remote
-  delivery cannot participate in the local closure transaction.
+  together. Every assignment-bearing mutation (assign, reassign, reopen, and
+  successor assignment) and canonical handoff resolves a same-host roster
+  member; handoff additionally requires non-self. A cross-host recipient rejects
+  with `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` because ADR-035 remote
+  delivery cannot participate in the local task transaction.
 - `TaskId` remains an opaque validated identifier and may equal a Beads id. ATM
   stores no Beads task body and does not query Beads for task details.
 

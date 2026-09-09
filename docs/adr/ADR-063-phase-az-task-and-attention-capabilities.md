@@ -152,8 +152,8 @@ is replaced with the recorded approval.
 - Canonical v2 rows contain no rendered body or duplicate task description;
   the retained v1 description column is a temporary, approved compatibility
   exception only.
-- Cross-host terminal handoff remains outside Phase AZ because ADR-035 delivery
-  cannot join the local task transaction.
+- Cross-host assignment-bearing mutations and terminal handoff remain outside
+  Phase AZ because ADR-035 delivery cannot join the local task transaction.
 - The frozen synchronous daemon remains untouched; composition is through the
   Tokio/Axum runtime and backend-neutral traits.
 
