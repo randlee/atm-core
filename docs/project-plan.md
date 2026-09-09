@@ -1738,6 +1738,10 @@ task id; the immutable message body and rendered J2 output remain available
 only through `atm read --message-id`. Missing titles become empty rather than
 falling back to message or task-description text.
 
+The phase does not change admission-time title generation: when no explicit
+summary is supplied, the existing bounded `build_summary` result remains the
+persisted title metadata consumed by the nudge path.
+
 The phase does not remove or migrate `tasks.description`, redesign task list
 output, deduplicate resends, or solve completed-task invalidation of older
 independent pending-nudge rows. That lifecycle defect remains a separate

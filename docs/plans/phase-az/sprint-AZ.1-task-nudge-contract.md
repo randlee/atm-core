@@ -17,11 +17,14 @@ dependency_relations:
 
 # AZ.1 — Bounded task-nudge metadata contract
 
+## Goal
+
 Repair the content boundary for every ATM nudge without changing task
 lifecycle semantics. A nudge may project the persisted message id, persisted
-title/summary, and optional task id. It must not contain the immutable message
-body, a rendered J2 body, or `TaskRow.description`. The recipient reads the
-body only through `atm read --message-id`.
+title/summary, and optional task id. Nudge construction must not directly read
+or fall back to the immutable message body, rendered J2 output, or
+`TaskRow.description`. The recipient reads the full body only through
+`atm read --message-id`.
 
 ## Current defect, verified on the planning baseline
 
@@ -71,6 +74,19 @@ Newly admitted ordinary and J2 messages already persist their computed or
 explicit summary before nudge planning; nudge construction consumes that
 persisted field and does not recompute it.
 
+Phase AZ does not change `crates/atm-core/src/send/summary.rs` or title
+generation. If a sender omits an explicit `--summary`, the existing
+`build_summary` policy persists a bounded summary derived from the admitted
+ordinary or J2-rendered body. That persisted summary is permitted title
+metadata; the forbidden behavior is reading or falling back to full body text
+again while constructing or projecting a nudge.
+
+Because `PostSendHookEvent` is serialized at retained compatibility seams,
+its serialized key is `title`; there is no `description` or `summary` JSON
+alias. The deprecated `{{description}}` compatibility described below applies
+only to stored nudge-template placeholder names, not to event or hook payload
+fields.
+
 For task reminders, `TaskRow.assignment_message_id` identifies the message.
 The builder loads that message once, derives both authenticated source-host
 metadata and title from it, and emits an empty title if the assignment message
@@ -110,8 +126,9 @@ no fallback text is synthesized from message content.
 
 ### Forbidden data flow
 
-For every Steer, Queue, rebuilt Queue, Task, acknowledge-family nudge, task
-reminder, graft notice, and Python `PyNudge` projection:
+At nudge-construction and projection time, for every Steer, Queue, rebuilt
+Queue, Task, acknowledge-family nudge, task reminder, graft notice, and Python
+`PyNudge` projection:
 
 ```text
 MessageEnvelope.text / TaskRow.description / rendered J2 body
@@ -122,19 +139,34 @@ MessageEnvelope.text / TaskRow.description / rendered J2 body
 ```
 
 `MessageEnvelope.summary -> PostSendHookEvent.title` is the only permitted
-message-title edge. Fixed XML/control text and sender/recipient routing
-metadata are outside the message-derived payload set.
+message-title edge. Admission-time `body -> build_summary -> persisted
+MessageEnvelope.summary` behavior is unchanged and is upstream of this
+boundary. Fixed XML/control text and sender/recipient routing metadata are
+outside the message-derived payload set.
 
 ## Deliverables
 
 This is the sole authoritative deliverables list for Phase AZ.
 
+Every D1–D6 deliverable must land at a production-ready level in AZ.1. A
+field rename, documentation-only update, test-only proof, or partial consumer
+migration cannot satisfy the sprint while any listed runtime projection or
+acceptance criterion remains open.
+
 - [ ] D1 — Amend the normative notification contract in
   `docs/requirements.md`, `docs/architecture.md`, `docs/atm/requirements.md`,
   `docs/atm/architecture.md`, `docs/atm-core/requirements.md`,
   `docs/atm-core/architecture.md`, `docs/atm-core/boundaries.md`,
-  `docs/atm-graft/requirements.md`, `docs/atm-graft/architecture.md`, and
-  `docs/atm-herdr/requirements.md`. Append a dated Phase AZ amendment to
+  `docs/atm-http-runtime/architecture.md`, `docs/atm-graft/requirements.md`,
+  `docs/atm-graft/architecture.md`, `docs/atm-graft/boundaries.md`,
+  `docs/atm-herdr/requirements.md`, `docs/atm-herdr/architecture.md`, and
+  `docs/atm-herdr/boundaries.md`. Update the machine-readable contracts in
+  `boundaries/atm-core/message-received-hook-emitter.toml`,
+  `boundaries/atm-graft/message-received-hook.toml`, and
+  `boundaries/atm-herdr/herdr-process-adapter.toml`. Update
+  `docs/user-documents/hooks.md` and its
+  `docs/user-documents/examples/hooks/post-send-payload.json` example for the
+  serialized `title` key. Append a dated Phase AZ amendment to
   `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`. ADR-019's
   status does not change, so its index entry does not change. The documents
   must state the allowed message-derived fields, title-only source,
@@ -218,6 +250,9 @@ crates/atm-graft-python/src/lib.rs
 scripts/atm-nudge.py
 scripts/atm-nudge.sh
 scripts/test_atm_nudge.py
+boundaries/atm-core/message-received-hook-emitter.toml
+boundaries/atm-graft/message-received-hook.toml
+boundaries/atm-herdr/herdr-process-adapter.toml
 docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md
 docs/architecture.md
 docs/atm/architecture.md
@@ -226,9 +261,15 @@ docs/atm-core/architecture.md
 docs/atm-core/boundaries.md
 docs/atm-core/requirements.md
 docs/atm-graft/architecture.md
+docs/atm-graft/boundaries.md
 docs/atm-graft/requirements.md
+docs/atm-herdr/architecture.md
+docs/atm-herdr/boundaries.md
 docs/atm-herdr/requirements.md
+docs/atm-http-runtime/architecture.md
 docs/requirements.md
+docs/user-documents/hooks.md
+docs/user-documents/examples/hooks/post-send-payload.json
 docs/user-documents/nudge-templates.md
 docs/user-documents/examples/nudge-templates/delivery.xml
 docs/user-documents/examples/nudge-templates/delivery_ack.xml
@@ -248,10 +289,13 @@ None.
   dispatch path.
 - `crates/atm-storage-rusqlite/src/writer/task_ops.rs`, task schema/migration
   files, and `boundaries/atm-storage/task-store.toml`.
+- `crates/atm-core/src/send/summary.rs`; the existing admission-time summary
+  generation policy is not part of this repair.
 - task list/order/table code.
 - pending-nudge claim, requeue, deduplication, invalidation, and resend logic.
 - `docs/adr/INDEX.md`; ADR-019 remains accepted and its index summary is not a
   Phase AZ deliverable.
+- `docs/atm-http-runtime/openapi.yaml`; no HTTP route or wire DTO changes.
 - historical Phase AD/AQ/AX/AY sprint plans and committed evidence.
 
 ## Acceptance criteria
@@ -261,6 +305,8 @@ This is the sole authoritative acceptance list for Phase AZ.
 1. Every current post-send Steer, queued delivery, rebuilt queued delivery,
    Task assignment, acknowledge-family, and task-reminder construction path
    obtains display text only from persisted `MessageEnvelope.summary`.
+   Retained serialized event/hook payloads expose that value as `title`, with
+   no `description` or `summary` JSON alias.
 2. No production nudge builder or sink falls back to
    `MessageEnvelope.text`, `TaskRow.description`, template source, or rendered
    J2 output. A repository search and focused tests prove the forbidden edges
@@ -296,6 +342,8 @@ cargo test -p agent-team-mail-core nudge_template
 cargo test -p agent-team-mail-core --test nudge_dispatch
 cargo test -p agent-team-mail-core --test nudge_mode
 cargo test -p agent-team-mail-core --test task_reminder_dispatch
+cargo test -p agent-team-mail-core graft
+cargo test -p agent-team-mail internal_nudge
 cargo test -p atm-http-runtime herdr_queue_wake
 cargo test -p atm-http-runtime storage_and_nudge_router
 cargo test -p atm-daemon-bootstrap received_hook_selector
@@ -303,6 +351,7 @@ cargo test -p atm-graft nudge_sink
 just test-graft-python
 python3 scripts/test_atm_nudge.py
 ! rg -n 'envelope\.text|row\.description' crates/atm-core/src/send/hook.rs crates/atm-core/src/nudge_dispatch.rs
+! rg -n 'payload\.get\("(description|summary)"\)' scripts/atm-nudge.py scripts/atm-nudge.sh
 python3 .just/run_lint.py boundaries
 python3 .just/run_lint.py nudge-taxonomy
 git diff --check develop...HEAD
@@ -314,6 +363,8 @@ show the forbidden-sentinel assertions, and report the final head SHA.
 ## Explicit non-goals and follow-up
 
 - No removal or migration of `tasks.description`.
+- No change to `build_summary`, explicit-summary precedence, summary length,
+  or admission-time summary persistence.
 - No task ordering, list table, or display redesign.
 - No resend deduplication.
 - No task-aware cancellation of prior pending-nudge rows.

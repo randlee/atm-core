@@ -50,6 +50,22 @@ read of `MessageEnvelope.text`, `TaskRow.description`, template source, or
 rendered J2 output. The nudge is still emitted with its message id and optional
 task id.
 
+Phase AZ does not change title generation at message admission. When the
+sender omits an explicit summary, the existing `build_summary` policy may
+persist a bounded summary derived from the body; that persisted value is title
+metadata for this contract. The repaired nudge path must not reopen or fall
+back to the immutable body after admission.
+
+## Issue inventory
+
+| Planning id | Disposition | Closure |
+| --- | --- | --- |
+| `AZ-LONG-NUDGE` | In scope | AZ.1 removes direct body/task-description fallbacks and closes every listed projection with focused negative tests. |
+| `AZ-TASK-COMPLETE-PENDING` | Open follow-up | Out of scope: completing a task does not invalidate every older independent pending-nudge row. |
+
+These are Phase AZ planning identifiers, not substitutes for repository issue
+numbers. The second row remains open after this phase by design.
+
 ## Scope
 
 Phase AZ contains exactly one sprint:
