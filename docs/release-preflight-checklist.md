@@ -191,36 +191,24 @@ does not execute them:
 - verify manual handoff prerequisites for Homebrew or `winget` when automation
   depends on external systems
 
-## Prerelease Archives for Integration Testing (tag-triggered GitHub prerelease)
+## Prerelease Archives for Integration Testing
 
-`.github/workflows/prerelease-archive.yml` builds manifest-declared release
-archives (linux/macOS/windows) from a `prerelease/vX.Y.Z` tag, with CI
-provenance, then creates the matching GitHub **prerelease** Release
-with every archive and `checksums.txt`. It does not publish to Homebrew,
-crates.io, PyPI, winget, or Scoop. Use
-`just prerelease-tag` from a clean feature/fix branch to patch-bump the
-workspace version, commit it on the current branch, and push the matching tag.
-The workflow then builds the exact tagged workspace from any branch; it does
-not require the tag to be reachable from `develop`. It is not part of the
-vendored sc-publish kit; see
-[`docs/plans/phase-as/sprint-AS1-1-prerelease-archive.md`](./plans/phase-as/sprint-AS1-1-prerelease-archive.md)
-for why.
+The installed `/prerelease` skill and generic sc-publish
+`.github/workflows/prerelease-archive.yml` operate from the repository's
+`[prerelease]`, release-target, and release-binary manifest declarations. They
+publish GitHub prerelease archives and checksums only; they never publish to
+Homebrew, crates.io, PyPI, Winget, or Scoop.
 
-Create the tag and download results with:
+Use exactly one skill mode:
 
-```bash
-just prerelease-tag --dry-run
-just prerelease-tag
-
-# find the tag-triggered run, then:
-gh run download <run-id> -n x86_64-unknown-linux-gnu   # one archive per requested target
-gh run download <run-id> -n checksums                  # checksums.txt + provenance.json
-
-# After explicit written authorization, run the skill from the pinned
-# sc-publish kit checkout (it is not a source file in atm-core itself):
-python3 <sc-publish-kit>/plugins/sc-publish/.claude/skills/prerelease/scripts/prerelease.py --publish X.Y.Z --authorized
-python3 <sc-publish-kit>/plugins/sc-publish/.claude/skills/prerelease/scripts/prerelease.py --install X.Y.Z
-```
+- `/prerelease --list` lists matching published prereleases without changing
+  local or remote state.
+- `/prerelease --install [X.Y.Z]` installs the selected version, or the latest
+  matching prerelease when the version is omitted. The ATM manifest routes the
+  verified staged pair through the daemon-switch post-install extension.
+- `/prerelease --create [X.Y.Z]` dry-runs first, then creates the tag and waits
+  for all manifest-declared archives only after explicit written authorization.
+  Omitting the version invokes ATM's manifest-declared patch-bump helper.
 
 - `just prerelease-tag` refuses `develop`, `main`, detached HEADs, dirty trees,
   duplicate tags, and non-stable workspace versions.
