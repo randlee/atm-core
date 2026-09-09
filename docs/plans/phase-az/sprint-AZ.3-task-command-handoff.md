@@ -303,7 +303,14 @@ completion is insufficient.
   provenance. Land acknowledgement's mail-only behavior atomically with the
   working explicit-start path. In `PreparedWrite`, suppress assignment's
   immediate post-send dispatch and ordinary pending-queue marker while
-  retaining `requires_ack`; no parallel send path is introduced.
+  retaining `requires_ack`; no parallel send path is introduced. Add
+  `task_mutation_cannot_restore_a_second_message_write_pipeline` to
+  `crates/atm-architecture/tests/boundary_enforcement.rs`, mirroring
+  `acknowledgement_cannot_restore_a_second_write_pipeline`: scan the task
+  command, HTTP router, async mutation-store implementation, and SQLite task
+  writer surfaces and fail if they acquire a second message writer/connection,
+  issue direct message-insert SQL, or bypass the canonical `PreparedWrite`
+  preparation and persistence primitives.
 - [ ] D6 — Amend product, CLI, core, runtime, API, error/recovery, team-protocol,
   and user-facing documentation for the command grammar, output, authorization,
   explicit-start rule, handoff requirement, Beads-id boundary, and deprecation
@@ -341,6 +348,7 @@ crates/atm/tests/openapi_surface.rs
 crates/atm/tests/openapi_surface_baseline.json
 crates/atm-storage/src/error_catalog.rs
 crates/atm-storage/src/error_codes.rs
+crates/atm-architecture/tests/boundary_enforcement.rs
 boundaries/atm-error/error-codes.toml
 docs/requirements.md
 docs/architecture.md
@@ -422,7 +430,10 @@ This is the sole authoritative acceptance list for AZ.3.
    and cannot be cleared before acknowledgement.
 7. Production CLI traffic uses the maintained Tokio/Axum API and injected
    service/storage boundaries. No direct SQLite access or legacy synchronous
-   daemon edit exists.
+   daemon edit exists. The mechanical architecture test
+   `task_mutation_cannot_restore_a_second_message_write_pipeline` scans every
+   task-mutation write surface and fails on a message-write entry point outside
+   the canonical `PreparedWrite` pipeline.
 8. CLI, core, API, crate, boundary, protocol, error, help, and user documents
    describe the same grammar, auth matrix, output, transition, and migration
    contract.
@@ -444,12 +455,13 @@ transport and temporary stores; do not start a daemon.
 7. `cargo test -p agent-team-mail`
 8. `cargo test -p atm-http-runtime`
 9. `cargo test -p atm-http-runtime --test http_v1_3_compat`
-10. `cargo fmt --check`
-11. `cargo clippy --workspace --all-targets -- -D warnings`
-12. `python3 .just/run_lint.py boundaries`
-13. `python3 .just/run_lint.py nudge-taxonomy`
-14. `python3 .just/check_line_counts.py`
-15. `git diff --check`
+10. `cargo test -p atm-architecture --test boundary_enforcement task_mutation_cannot_restore_a_second_message_write_pipeline`
+11. `cargo fmt --check`
+12. `cargo clippy --workspace --all-targets -- -D warnings`
+13. `python3 .just/run_lint.py boundaries`
+14. `python3 .just/run_lint.py nudge-taxonomy`
+15. `python3 .just/check_line_counts.py`
+16. `git diff --check`
 
 ## Non-closure
 
