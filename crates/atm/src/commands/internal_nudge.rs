@@ -89,7 +89,8 @@ impl InternalNudgeInput {
             ("from", qualified_nudge_sender_identity(&self.event)),
             ("team", self.event.recipient_team.to_string()),
             ("message_id", self.event.message_id.to_string()),
-            ("description", self.event.description.clone()),
+            ("title", self.event.title.clone()),
+            ("description", self.event.title.clone()),
             (
                 "task_id",
                 self.event
@@ -329,7 +330,7 @@ mod tests {
             recipient: TEST_ARCH_CTM.parse().expect("recipient"),
             recipient_team: TEST_TEAM.parse().expect("team"),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
-            description: "review failing smoke lane".to_string(),
+            title: "review failing smoke lane".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,

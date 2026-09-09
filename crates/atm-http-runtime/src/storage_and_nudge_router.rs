@@ -1931,7 +1931,7 @@ mod tests {
             recipient: "recipient".parse().expect("recipient"),
             recipient_team: "test-team".parse().expect("recipient team"),
             message_id: AtmMessageId::new(),
-            description: "selection test".to_owned(),
+            title: "selection test".to_owned(),
             requires_ack: false,
             is_ack: false,
             task_id: None,

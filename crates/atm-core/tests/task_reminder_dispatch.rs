@@ -41,7 +41,7 @@ fn member(team: &TeamName, backend: &str) -> RosterEntry {
 }
 
 #[test]
-fn reminder_dispatch_renders_from_a_task_row_without_assignment_mail() {
+fn reminder_dispatch_uses_empty_title_when_assignment_mail_is_missing() {
     let root = tempfile::tempdir().expect("temporary runtime root");
     let assembly =
         atm_runtime_test_support::open_isolated_sqlite_boundary(root.path()).expect("runtime");
@@ -65,6 +65,18 @@ fn reminder_dispatch_renders_from_a_task_row_without_assignment_mail() {
     assert_eq!(dispatch.event.task_id, Some(row.task_id));
     assert!(dispatch.event.requires_ack);
     assert!(!dispatch.event.is_ack);
+    assert_eq!(dispatch.event.title, "");
+    let atm_core::boundary::PostSendBuiltInTarget::LocalSteer(
+        atm_core::boundary::LocalSteerTarget::Herdr(target),
+    ) = dispatch.target
+    else {
+        panic!("expected Herdr target");
+    };
+    assert!(
+        !target
+            .rendered_nudge
+            .contains("remind the recipient from the durable task row")
+    );
 }
 
 #[test]

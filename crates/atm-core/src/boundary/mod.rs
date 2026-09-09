@@ -119,11 +119,25 @@ pub struct PostSendHookEvent {
     pub recipient: AgentName,
     pub recipient_team: TeamName,
     pub message_id: AtmMessageId,
-    pub description: String,
+    /// Persisted `MessageEnvelope.summary`, normalized so blank metadata is empty.
+    /// Older payloads may deserialize through the title-only compatibility alias.
+    #[serde(rename = "title", alias = "description")]
+    pub title: String,
     pub requires_ack: bool,
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
     pub recipient_pane_id: Option<PaneId>,
+}
+
+/// Normalizes persisted summary metadata for a bounded nudge title.
+///
+/// This accepts summary metadata only, so callers cannot accidentally widen
+/// the nudge boundary with a message body or task description.
+pub fn nudge_title(summary: Option<&str>) -> String {
+    summary
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_default()
+        .to_owned()
 }
 
 impl PostSendHookEvent {

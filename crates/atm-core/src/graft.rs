@@ -707,7 +707,7 @@ mod tests {
             recipient: AgentName::from_validated(TEST_QA),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: AtmMessageId::new(),
-            description: "loopback graft transport".to_string(),
+            title: "loopback graft transport".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,
@@ -763,7 +763,7 @@ mod tests {
             .read_request(&mut stream, Duration::from_secs(3))
             .expect("read request");
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
-        assert_eq!(received.event.description, "loopback graft transport");
+        assert_eq!(received.event.title, "loopback graft transport");
         assert_eq!(received.kind, NudgeKind::Steer);
         listener
             .write_response(&mut stream, &GraftPostSendResponse::Delivered)

@@ -243,7 +243,7 @@ pub struct PyNudge {
 
 impl PyNudge {
     pub fn from_post_send(event: &PostSendHookEvent) -> PyResult<Self> {
-        let body = event.description.clone();
+        let body = event.title.clone();
         Ok(Self {
             message_id: event.message_id.to_string(),
             source: PyAgentAddress::from_typed(event.source_address())?,
@@ -1256,7 +1256,7 @@ mod tests {
         HostNudge {
             kind: NudgeKind::Steer,
             body: "<atm><action>read atm</action></atm>".to_string(),
-            notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
+            notice_text: format!("📬 from {}\n{}", event.source_address(), event.title),
             event,
         }
     }
@@ -1286,7 +1286,7 @@ mod tests {
             recipient: AgentName::from_validated(TEST_RECIPIENT),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
-            description: "nudge".to_string(),
+            title: "nudge".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,
@@ -1434,7 +1434,7 @@ mod tests {
             recipient: AgentName::from_validated(TEST_RECIPIENT),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
-            description: "nudge".to_string(),
+            title: "nudge".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,
@@ -1484,7 +1484,7 @@ mod tests {
             recipient: AgentName::from_validated(TEST_RECIPIENT),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
-            description: "nudge".to_string(),
+            title: "nudge".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,

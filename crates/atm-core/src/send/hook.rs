@@ -4,7 +4,7 @@ use super::{ResolvedRecipient, nudge_template};
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, HerdrNudgeTarget, LocalSteerTarget,
     LocalTmuxNudgeTarget, NudgeKind, PostSendBuiltInTarget, PostSendHookEvent, QueuePullTarget,
-    built_in_nudge_template_kind_from_post_send_event,
+    built_in_nudge_template_kind_from_post_send_event, nudge_title,
 };
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -182,12 +182,7 @@ pub(crate) fn post_send_event_from_message(
         recipient: recipient.agent.clone(),
         recipient_team: recipient.team.clone(),
         message_id: message.message_id(),
-        description: message
-            .envelope
-            .summary
-            .clone()
-            .filter(|summary| !summary.trim().is_empty())
-            .unwrap_or_else(|| message.envelope.text.clone()),
+        title: nudge_title(message.envelope.summary.as_deref()),
         requires_ack: message.requires_ack,
         is_ack: message.is_ack,
         task_id: message.envelope.task_id.clone(),
