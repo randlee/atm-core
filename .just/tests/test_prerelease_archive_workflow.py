@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -21,6 +23,28 @@ from lint_common import workspace_manifest_paths
 import prerelease_tag
 from prerelease_tag import patch_bump
 from prerelease_tag import workspace_version
+
+
+def load_script(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def workflow_text(name: str) -> str:
+    return (discover_repo_root() / ".github" / "workflows" / name).read_text(encoding="utf-8")
+
+
+def packaging_script(workflow: str, step_name: str) -> str:
+    """Extract the Python heredoc used to package one release archive."""
+    step = workflow.split(f"      - name: {step_name}\n", 1)[1].split("\n      - name:", 1)[0]
+    script = step.split("          python3 - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
+    lines = script.splitlines()
+    if not all(not line or line.startswith("          ") for line in lines):
+        raise AssertionError("workflow Python block has unexpected indentation")
+    return "\n".join(line[10:] if line else "" for line in lines)
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
@@ -45,6 +69,129 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertTrue(prerelease["selector_dir"]["linux"].startswith(prerelease["install_root"]))
         self.assertNotIn("Programs\\\\ATM", prerelease["selector_dir"]["windows"])
 
+    @unittest.skipUnless(os.name == "posix", "selector composition uses POSIX symlinks")
+    def test_prerelease_install_activates_only_through_daemon_switch(self) -> None:
+        root = discover_repo_root()
+        prerelease = load_script(
+            "atm_prerelease_skill",
+            root / ".claude" / "skills" / "prerelease" / "scripts" / "prerelease.py",
+        )
+        daemon_switch = load_script(
+            "atm_daemon_switch_composition",
+            root / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory)
+            old_bin = fixture / "old" / "bin"
+            stage = fixture / "builds" / "v1.5.11"
+            candidate_bin = stage / "bin"
+            path_bin = fixture / "path"
+            private_bin = fixture / "private-selectors"
+            for folder in (old_bin, candidate_bin, path_bin):
+                folder.mkdir(parents=True)
+            for folder, version in ((old_bin, "1.5.10"), (candidate_bin, "1.5.11")):
+                for name in ("atm", "atm-daemon"):
+                    binary = folder / name
+                    binary.write_text(f"#!/bin/sh\necho '{name} {version}'\n", encoding="utf-8")
+                    binary.chmod(0o755)
+            active_cli = path_bin / "atm"
+            active_daemon = path_bin / "atm-daemon"
+            active_cli.symlink_to(old_bin / "atm")
+            active_daemon.symlink_to(old_bin / "atm-daemon")
+            config = dict(
+                tomllib.loads(
+                    (root / "release" / "publish-artifacts.toml").read_text(encoding="utf-8")
+                )["prerelease"]
+            )
+            config.update({
+                "install_root": str(fixture / "builds"),
+                "selector_dir": {
+                    "darwin": str(private_bin),
+                    "linux": str(private_bin),
+                    "windows": str(private_bin),
+                },
+            })
+            calls: list[str] = []
+
+            def run_manifest_command(command_text: str, *, capture: bool = False):
+                if capture:
+                    calls.append(command_text)
+                    return subprocess.run(
+                        command_text,
+                        shell=True,
+                        check=True,
+                        text=True,
+                        capture_output=True,
+                    )
+                self.assertEqual(
+                    command_text,
+                    "python3 .claude/skills/daemon-switch/scripts/daemon-switch.py "
+                    "switch --prerelease 1.5.11 --yes",
+                )
+                self.assertEqual(active_cli.resolve(), (old_bin / "atm").resolve())
+                self.assertEqual(active_daemon.resolve(), (old_bin / "atm-daemon").resolve())
+                self.assertEqual((private_bin / "atm").resolve(), (candidate_bin / "atm").resolve())
+                self.assertEqual(
+                    (private_bin / "atm-daemon").resolve(),
+                    (candidate_bin / "atm-daemon").resolve(),
+                )
+                with mock.patch.object(
+                    daemon_switch.sys,
+                    "argv",
+                    [
+                        "daemon-switch.py",
+                        "switch",
+                        "--prerelease",
+                        "1.5.11",
+                        "--yes",
+                        "--service",
+                        "fixture",
+                    ],
+                ):
+                    self.assertEqual(daemon_switch.main(), 0)
+                return subprocess.CompletedProcess([], 0, "", "")
+
+            with (
+                mock.patch.object(prerelease, "select_release", return_value=("1.5.11", {})),
+                mock.patch.object(prerelease.platform, "system", return_value="Linux"),
+                mock.patch.object(prerelease, "shell", side_effect=run_manifest_command),
+                mock.patch.dict(os.environ, {"PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"}),
+                mock.patch.object(
+                    daemon_switch,
+                    "resolve_prerelease_pair",
+                    return_value=(candidate_bin / "atm", candidate_bin / "atm-daemon", "1.5.11"),
+                ) as resolve,
+                mock.patch.object(daemon_switch, "sign_prerelease_pair") as sign,
+                mock.patch.object(daemon_switch, "require_no_active_temporary_launch_session"),
+                mock.patch.object(daemon_switch, "save_default_pair"),
+                mock.patch.object(daemon_switch, "run_service") as service,
+                mock.patch.object(daemon_switch, "require_stopped_daemon") as stopped,
+                mock.patch.object(daemon_switch, "require_macos_development_signatures"),
+                mock.patch.object(
+                    daemon_switch, "wait_for_live_pair", return_value=(True, "matched")
+                ) as live_proof,
+                mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+            ):
+                version, installed = prerelease.install({"prerelease": config}, "1.5.11")
+
+            self.assertEqual((version, installed), ("1.5.11", stage))
+            self.assertEqual((private_bin / "atm").resolve(), (candidate_bin / "atm").resolve())
+            self.assertEqual(
+                (private_bin / "atm-daemon").resolve(), (candidate_bin / "atm-daemon").resolve()
+            )
+            self.assertEqual(active_cli.resolve(), (candidate_bin / "atm").resolve())
+            self.assertEqual(active_daemon.resolve(), (candidate_bin / "atm-daemon").resolve())
+            resolve.assert_called_once_with("1.5.11")
+            sign.assert_called_once_with(candidate_bin / "atm", candidate_bin / "atm-daemon")
+            self.assertEqual([call.args[1] for call in service.call_args_list], ["stop", "start"])
+            stopped.assert_called_once()
+            self.assertEqual(stopped.call_args.args[1], (old_bin / "atm").resolve())
+            live_proof.assert_called_once_with(
+                (candidate_bin / "atm").resolve(), (candidate_bin / "atm-daemon").resolve()
+            )
+            self.assertEqual(calls, ["atm --version"])
+            self.assertNotIn("already selected; service left running", stdout.getvalue())
+
     def test_generic_workflow_preserves_manifest_build_and_plain_artifact_contracts(self) -> None:
         root = discover_repo_root()
         workflow = (root / ".github" / "workflows" / "prerelease-archive.yml").read_text(
@@ -62,6 +209,36 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertIn("concurrent run converged", workflow)
         self.assertNotIn('gh release upload "$tag" --clobber', workflow)
         self.assertNotIn("randlee/atm-core", workflow)
+
+    def test_packaging_matches_release_workflow_byte_for_byte(self) -> None:
+        release_script = packaging_script(
+            workflow_text("release.yml"), "Package manifest-declared release archive"
+        )
+        prerelease_script = packaging_script(
+            workflow_text("prerelease-archive.yml"),
+            "Package manifest-declared prerelease archive",
+        )
+        release_version = 'version = "${{ needs.gate-and-tag.outputs.release_version }}"'
+        prerelease_version = 'version = "${{ needs.plan.outputs.version }}"'
+        self.assertIn(release_version, release_script)
+        self.assertIn(prerelease_version, prerelease_script)
+        self.assertEqual(
+            release_script.replace(release_version, 'version = "VERSION"'),
+            prerelease_script.replace(prerelease_version, 'version = "VERSION"'),
+        )
+
+    def test_checksums_are_an_explicit_github_release_asset(self) -> None:
+        workflow = workflow_text("prerelease-archive.yml")
+        release_step = workflow.split(
+            "      - name: Generate checksums and publish GitHub prerelease assets\n", 1
+        )[1]
+        self.assertIn('shasum -a 256 "${archives[@]}" > checksums.txt', release_step)
+        self.assertIn(
+            'gh release create "$tag" --prerelease --title "$tag" --generate-notes '
+            '"${archives[@]}" checksums.txt',
+            release_step,
+        )
+        self.assertNotIn("provenance.json", workflow)
 
     def test_prerelease_tag_recipe_and_helper_have_protected_branch_and_dry_run_guards(self) -> None:
         root = discover_repo_root()
