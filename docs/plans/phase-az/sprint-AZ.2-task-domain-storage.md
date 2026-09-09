@@ -298,9 +298,8 @@ them would prevent SQLite from seeking the task id. The existing
 migrated-versus-fresh schema-object test must prove the new index is
 byte-identical on both paths.
 
-The active-task uniqueness identity is exactly `(team, current_assignee)`:
-one agent may have at most one `Active` task in a team, while the same agent
-may independently have one active task in another team.
+The active-task uniqueness key is exactly `(team, current_assignee)`: the task
+ledger permits at most one `Active` task for that key.
 
 The Rust sum type makes an open state with a terminal outcome
 unrepresentable. SQLite uses separate `state`, `outcome`, `abort_reason`,
