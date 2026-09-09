@@ -1066,19 +1066,25 @@ Definitions:
   else in `atm` reads a `.atm.toml` alias.
 - `REQ-ROSTER-NAME-009` Upgrade. Rand (2026-09-07): "where we will run
   into issues are when upgrade occurs. if non-unique names show up in
-  database, hmux launch will certainly fail (hmux calls add member), so that
-  should force team to be re-constructed before team can actually go live in
-  herdr." No migration rewrites, renames, aliases, or deletes existing roster
+  database, hmux spawn will reject a new member when its add-member call
+  reuses a colliding effective name, so that should force the team to be
+  re-constructed before it can actually go live in herdr." No migration
+  rewrites, renames, aliases, or deletes existing roster
   rows, and opening a database that already holds duplicate effective names
-  must not fail. The invariant is enforced on the next roster write: any
-  write (including the add-member call hmux makes at launch) whose resulting
-  roster still contains a duplicate effective name fails with the
-  `REQ-ROSTER-NAME-003` error naming every conflicting `(team, member)` pair
-  and the `--alias` remedy, so the operator reconstructs the team with
-  aliases before it goes live in Herdr. Write-time enforcement is scoped to
-  collision groups the writing team participates in, while `atm doctor`
-  reports the database-wide collision set. `atm doctor` reports pre-existing
-  duplicates for the caller's team as a finding.
+  must not fail. On the next roster write, enforcement is delta-scoped: only
+  effective names changed or added by that write are checked against the
+  database-wide namespace. Untouched legacy collision rows remain readable and
+  writable, and `atm doctor` reports them as findings. A write that creates a
+  new collision fails with the `REQ-ROSTER-NAME-003` error naming every
+  conflicting `(team, member)` pair and the `--alias` remedy; a write that
+  repairs a colliding member, removes it, or changes only metadata while its
+  effective name is unchanged succeeds. This lets operators repair legacy
+  collisions one member at a time before a team goes live in Herdr. (2026-09-09)
+  Delta-scoped enforcement is the retained ruling for upgrade compatibility:
+  pre-existing collisions are doctor findings, not a blanket write lock.
+  `hmux session` and `hmux launch` reuse existing roster rows and apply aliases
+  through `update-member`; only `hmux spawn` registers a new member through
+  `add-member`.
 - Rand (2026-09-07) on why persistence is canonical-only: "by always using
   the non-alias name when writing to database, we avoid missing things on
   query. i.e. team-lead-alias becomes team-lead when written to database".

@@ -612,6 +612,31 @@ pub fn roster_unique_name_collisions(names: &[RosterUniqueName]) -> Vec<RosterUn
     collisions
 }
 
+/// Returns proposed effective names that differ from the persisted roster.
+///
+/// A write is allowed to preserve legacy collisions among untouched rows. The
+/// returned delta is therefore the only part of a proposed roster whose
+/// collisions can reject the write.
+#[must_use]
+pub fn roster_write_delta(
+    persisted: &[RosterUniqueName],
+    proposed: &[RosterUniqueName],
+) -> Vec<RosterUniqueName> {
+    proposed
+        .iter()
+        .filter(|proposed| {
+            persisted
+                .iter()
+                .find(|persisted| {
+                    persisted.team_name == proposed.team_name
+                        && persisted.agent_name == proposed.agent_name
+                })
+                .is_none_or(|persisted| persisted.unique_name != proposed.unique_name)
+        })
+        .cloned()
+        .collect()
+}
+
 /// Narrows a database-wide collision set to the groups `team` participates in.
 ///
 /// A roster write is scoped to one team, so it is answerable only for the
@@ -1117,9 +1142,9 @@ mod tests {
         GraftReceiverEndpointStore, GraftReceiverRegistration, Message, MessageKey, MessageQuery,
         MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
         PendingNudgeStore, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
-        RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier,
+        RosterMemberKind, RosterSnapshot, RosterStore, RosterUniqueName, StorageNotifier,
         TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, derive_ack_requirement,
-        sealed,
+        roster_write_delta, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -1130,6 +1155,31 @@ mod tests {
     use chrono::Utc;
     use serde_json::Map;
     use std::net::SocketAddr;
+
+    #[test]
+    fn roster_write_delta_only_contains_changed_or_new_effective_names() {
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let member: AgentName = "bob".parse().expect("agent");
+        let unchanged = RosterUniqueName {
+            team_name: team_a.clone(),
+            agent_name: member.clone(),
+            unique_name: "bob".to_owned(),
+        };
+        let changed = RosterUniqueName {
+            unique_name: "bobby".to_owned(),
+            ..unchanged.clone()
+        };
+        let added = RosterUniqueName {
+            team_name: "team-b".parse().expect("team"),
+            agent_name: "sam".parse().expect("agent"),
+            unique_name: "sam".to_owned(),
+        };
+
+        assert_eq!(
+            roster_write_delta(&[unchanged], &[changed.clone(), added.clone()]),
+            vec![changed, added]
+        );
+    }
 
     #[derive(Default)]
     struct DummyStore;
