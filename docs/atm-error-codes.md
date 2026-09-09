@@ -174,6 +174,14 @@ Error codes should describe the failure class, not a specific prose message.
   --task-complete <task_id> --stdin`
 - `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to
   its Herdr agent and answer the prompt`
+- `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` — Herdr exposes an unnamed agent;
+  run `herdr agent rename <pane_id> <target>` rather than only labelling its pane
+- `ATM_HERDR_AGENT_NOT_VISIBLE` — the configured Herdr target does not resolve;
+  inspect `atm doctor --json` and rename the Herdr agent or correct the roster alias
+- `ATM_HERDR_UNAVAILABLE` — the Herdr process breaker is open or the endpoint is
+  unavailable; retry after the reported breaker delay or start the Herdr server
+- `ATM_HERDR_PROMPT_FAILED` — Herdr rejected a nudge prompt; inspect the target
+  state and retry after correcting the reported condition
 
 ### 5.6 Observability
 
@@ -624,6 +632,10 @@ Classification rules:
 | `TEMPLATE_TAG_RESERVED` | `operator_actionable` |
 | `ATM_WARNING_SQLITE_HEALTH_DEGRADED` | `warning_only` |
 | `ATM_WARNING_ROSTER_DRIFT` | `warning_only` |
+| `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` | `warning_only` |
+| `ATM_HERDR_AGENT_NOT_VISIBLE` | `operator_actionable` |
+| `ATM_HERDR_UNAVAILABLE` | `retryable` |
+| `ATM_HERDR_PROMPT_FAILED` | `retryable` |
 | `ATM_POST_SEND_PANE_MISSING` | `retryable` |
 | `ATM_POST_SEND_TMUX_SEND_FAILED` | `retryable` |
 | `ATM_POST_SEND_GRAFT_UNAVAILABLE` | `retryable` |

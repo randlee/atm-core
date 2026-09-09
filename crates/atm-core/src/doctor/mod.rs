@@ -33,7 +33,7 @@ use team_scope::{
     graft_receivers_for_teams, load_scoped_rosters, push_doctor_error_for_team, teams_for_scope,
 };
 
-pub use crate::boundary::HerdrEndpointDoctor;
+pub use crate::boundary::{HerdrBreakerDoctor, HerdrEndpointDoctor};
 pub use herdr_state::{
     HerdrBinaryProvenance, HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay,
     HerdrEndpointDisplayRoot, HerdrEndpointObservation, HerdrEndpointProvenance,
@@ -41,17 +41,16 @@ pub use herdr_state::{
 };
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport, DoctorAliasMismatch,
+    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorAliasMismatch,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
     DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientAddress,
     EscalationRecipientSource, EscalationRecipientsDoctorReport, GraftReceiverLeaseDoctorReport,
-    GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
-    HerdrBreakerDoctorState, HerdrDoctorReport, HerdrEndpointCapabilitiesDoctorReport,
-    HerdrEndpointDoctorReport, HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport,
-    PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
-    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderPoolDoctorReport,
-    ReaderPoolMetricsDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
-    TeamEscalationRecipientsDoctorReport,
+    GraftReceiversDoctorReport, HerdrBreakerDoctorReport, HerdrBreakerDoctorState,
+    HerdrDoctorReport, HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDoctorReport,
+    HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport,
+    PeerConfigDoctorReport, PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex,
+    PostSendHookRuleReport, ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport,
+    RecipientDeliveryPath, RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
 };
 pub use team_scope::DoctorTeamScope;
 
@@ -67,6 +66,17 @@ impl HerdrEndpointDoctor for ClosedHerdrEndpointDoctor {
         _caller_deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>> {
         Box::pin(async { Vec::new() })
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ClosedHerdrBreakerDoctor;
+
+impl crate::boundary::sealed::Sealed for ClosedHerdrBreakerDoctor {}
+
+impl HerdrBreakerDoctor for ClosedHerdrBreakerDoctor {
+    fn report(&self) -> HerdrBreakerDoctorReport {
+        HerdrBreakerDoctorReport::default()
     }
 }
 
@@ -150,12 +160,16 @@ fn presence_findings_with_team(
     observations: &[HerdrEndpointObservation],
     team: Option<&TeamName>,
 ) -> Vec<DoctorFinding> {
+    let mut findings = observations
+        .iter()
+        .flat_map(|observation| observation.findings.iter().cloned())
+        .map(|finding| scope_finding(finding, team))
+        .collect::<Vec<_>>();
     let mut members = observations
         .iter()
         .flat_map(|observation| observation.members.iter())
         .collect::<Vec<_>>();
     members.sort_by_key(|member| member.ordinal);
-    let mut findings = Vec::new();
     let mut infrastructure = None;
     for member in members {
         match &member.outcome {
@@ -1008,7 +1022,8 @@ mod tests {
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
-        DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, HerdrDoctorState,
+        DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus,
+        HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrDoctorState,
         HerdrEndpointObservation, HerdrEndpointProvenance, HerdrMemberPresence,
         HerdrPresenceOutcome, HerdrTransportKind, run_doctor_with_runtime,
     };
@@ -1085,6 +1100,7 @@ mod tests {
             state: HerdrDoctorState::NotConfigured,
             live_handoff: None,
             members,
+            findings: Vec::new(),
         };
         let observations = vec![
             observation(vec![
@@ -1196,6 +1212,7 @@ mod tests {
             state: HerdrDoctorState::NotConfigured,
             live_handoff: None,
             members: Vec::new(),
+            findings: Vec::new(),
         };
         let mut legacy = serde_json::to_value(current).expect("observation serializes");
         legacy
@@ -1207,6 +1224,58 @@ mod tests {
             serde_json::from_value(legacy).expect("v1.1 payload remains readable");
 
         assert_eq!(observation.transport, HerdrTransportKind::Cli);
+    }
+
+    #[test]
+    fn herdr_breaker_report_accepts_v1_2_payload_without_last_error_fields() {
+        let current = HerdrBreakerDoctorReport {
+            state: HerdrBreakerDoctorState::Open,
+            retry_after_ms: Some(1_000),
+            consecutive_failures: Some(2),
+            last_error_code: Some(AtmErrorCode::HerdrUnavailable),
+            last_error_detail: Some("Herdr server is not running".to_owned()),
+        };
+        let mut legacy = serde_json::to_value(current).expect("report serializes");
+        let legacy = legacy.as_object_mut().expect("report is an object");
+        legacy.remove("last_error_code");
+        legacy.remove("last_error_detail");
+
+        let report: HerdrBreakerDoctorReport =
+            serde_json::from_value(serde_json::Value::Object(legacy.clone()))
+                .expect("v1.2 payload remains readable");
+
+        assert_eq!(report.last_error_code, None);
+        assert_eq!(report.last_error_detail, None);
+    }
+
+    #[test]
+    fn herdr_endpoint_observation_accepts_v1_2_payload_without_findings() {
+        let current = HerdrEndpointObservation {
+            session: None,
+            provenance: HerdrEndpointProvenance::HerdrDefault,
+            transport: HerdrTransportKind::Socket,
+            endpoint: None,
+            binary: None,
+            state: HerdrDoctorState::NotConfigured,
+            live_handoff: None,
+            members: Vec::new(),
+            findings: vec![DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmErrorCode::HerdrAgentNotVisible,
+                message: "target missing".to_owned(),
+                remediation: None,
+            }],
+        };
+        let mut legacy = serde_json::to_value(current).expect("observation serializes");
+        legacy
+            .as_object_mut()
+            .expect("observation is an object")
+            .remove("findings");
+
+        let observation: HerdrEndpointObservation =
+            serde_json::from_value(legacy).expect("v1.2 payload remains readable");
+
+        assert!(observation.findings.is_empty());
     }
 
     struct UnusedMailStore;

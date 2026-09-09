@@ -330,6 +330,10 @@ pub struct HerdrBreakerDoctorReport {
     pub retry_after_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consecutive_failures: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error_code: Option<AtmErrorCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error_detail: Option<String>,
 }
 
 impl Default for HerdrBreakerDoctorReport {
@@ -338,20 +342,9 @@ impl Default for HerdrBreakerDoctorReport {
             state: HerdrBreakerDoctorState::Closed,
             retry_after_ms: None,
             consecutive_failures: None,
+            last_error_code: None,
+            last_error_detail: None,
         }
-    }
-}
-
-pub trait HerdrBreakerDoctor: Send + Sync {
-    fn report(&self) -> HerdrBreakerDoctorReport;
-}
-
-#[derive(Debug, Default)]
-pub struct ClosedHerdrBreakerDoctor;
-
-impl HerdrBreakerDoctor for ClosedHerdrBreakerDoctor {
-    fn report(&self) -> HerdrBreakerDoctorReport {
-        HerdrBreakerDoctorReport::default()
     }
 }
 
@@ -385,6 +378,8 @@ pub struct HerdrEndpointDoctorReport {
     pub remedy: String,
     pub capabilities: HerdrEndpointCapabilitiesDoctorReport,
     pub members: Vec<HerdrMemberPresence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub findings: Vec<DoctorFinding>,
 }
 
 impl From<HerdrEndpointObservation> for HerdrEndpointDoctorReport {
@@ -402,6 +397,7 @@ impl From<HerdrEndpointObservation> for HerdrEndpointDoctorReport {
                 live_handoff: observation.live_handoff,
             },
             members: observation.members,
+            findings: observation.findings,
         }
     }
 }

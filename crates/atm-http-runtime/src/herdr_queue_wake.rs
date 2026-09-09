@@ -77,9 +77,11 @@ pub struct HerdrQueueWakePump {
     breaker_escalation_gates: Arc<Mutex<HashMap<Option<HerdrSession>, HerdrBreakerEscalationGate>>>,
     breaker_escalation_min_interval: Duration,
     breaker_cycle_opened_at: Arc<Mutex<HashMap<Option<HerdrSession>, IsoTimestamp>>>,
+    breaker_failure_counts: Arc<Mutex<HashMap<Option<HerdrSession>, u32>>>,
     pub(crate) daemon_home: PathBuf,
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
+    release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     #[cfg(test)]
     pub(crate) handoff_cleanup_test_gate:
         Arc<Mutex<Option<crate::herdr_queue_wake_test_gates::Gate>>>,
@@ -108,9 +110,11 @@ impl HerdrQueueWakePump {
             breaker_escalation_gates: Arc::new(Mutex::new(HashMap::new())),
             breaker_escalation_min_interval: Duration::from_secs(1_800),
             breaker_cycle_opened_at: Arc::new(Mutex::new(HashMap::new())),
+            breaker_failure_counts: Arc::new(Mutex::new(HashMap::new())),
             daemon_home: PathBuf::new(),
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
+            release_handles: Arc::new(Mutex::new(Vec::new())),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
             #[cfg(test)]
@@ -162,11 +166,37 @@ impl HerdrQueueWakePump {
                     }
                 }
             }
+            self.await_release_handles().await;
         })
+    }
+
+    async fn await_release_handles(&self) {
+        loop {
+            let handles = std::mem::take(
+                &mut *self
+                    .release_handles
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            );
+            if handles.is_empty() {
+                return;
+            }
+            for handle in handles {
+                let _ = handle.await;
+            }
+        }
+    }
+
+    fn prune_finished_release_handles(&self) {
+        self.release_handles
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|handle| !handle.is_finished());
     }
 
     /// Runs one complete roster/list/claim/dispatch pass.
     pub async fn tick_once(&self) {
+        self.prune_finished_release_handles();
         let mut stats = HerdrQueueWakeStats {
             last_tick_at: Some((self.clock)()),
             ..HerdrQueueWakeStats::default()
@@ -284,6 +314,20 @@ impl HerdrQueueWakePump {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(session);
+        self.breaker_failure_counts
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(session);
+    }
+
+    fn record_breaker_failure(&self, session: &Option<HerdrSession>) -> u32 {
+        let mut counts = self
+            .breaker_failure_counts
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let count = counts.entry(session.clone()).or_default();
+        *count = count.saturating_add(1);
+        *count
     }
 
     async fn maybe_escalate_breaker(
@@ -291,6 +335,8 @@ impl HerdrQueueWakePump {
         session: &Option<HerdrSession>,
         members: &[HerdrCandidate],
         now: IsoTimestamp,
+        failure_count: u32,
+        error: &atm_herdr::HerdrError,
     ) -> bool {
         if self.daemon_home.as_os_str().is_empty() {
             return false;
@@ -311,6 +357,15 @@ impl HerdrQueueWakePump {
         if !admitted {
             return false;
         }
+        let retry_after = self
+            .herdr_process
+            .breaker_retry_after()
+            .or(match error {
+                atm_herdr::HerdrError::Unavailable { retry_after } => Some(*retry_after),
+                _ => None,
+            })
+            .unwrap_or(Duration::ZERO);
+        let member_target = (members.len() == 1).then(|| members[0].herdr_agent.as_str());
         let task_store = self.service_runtime.task_store().ok();
         crate::herdr_breaker_escalation::escalate_breaker_cycle(
             &self.service_runtime,
@@ -319,6 +374,10 @@ impl HerdrQueueWakePump {
             &self.daemon_home,
             &team,
             opened_at,
+            failure_count,
+            error,
+            retry_after,
+            member_target,
         )
         .await;
         true
@@ -364,16 +423,12 @@ impl HerdrQueueWakePump {
                     if error.is_infrastructure() {
                         stats.breaker_open += 1;
                         let now = (self.clock)();
-                        let _ = self.maybe_escalate_breaker(&session, &members, now).await;
+                        let failure_count = self.record_breaker_failure(&session);
+                        let _ = self
+                            .maybe_escalate_breaker(&session, &members, now, failure_count, &error)
+                            .await;
                     }
-                    tracing::warn!(
-                        subsystem = "herdr_queue_wake",
-                        action = "herdr_list",
-                        outcome = "failed",
-                        session = ?session,
-                        error = ?error,
-                        "Herdr queue wake list failed"
-                    );
+                    log_herdr_list_failure(&session, &error);
                 }
             }
         }
@@ -519,11 +574,12 @@ impl HerdrQueueWakePump {
             claim.clone(),
             Arc::clone(&self.release_streaks),
             self.service_runtime.clone(),
+            Arc::clone(&self.release_handles),
         );
         let dispatch = match self.rebuild_dispatch(member, claim.msg).await {
             Ok(Some(dispatch)) => dispatch,
             Ok(None) | Err(_) => {
-                release.release_without_input();
+                release.release_without_input().await;
                 stats.released += 1;
                 tracing::info!(
                     event = "herdr_queue_poll_outcome",
@@ -537,7 +593,7 @@ impl HerdrQueueWakePump {
             }
         };
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
-            release.release_without_input();
+            release.release_without_input().await;
             stats.released += 1;
             tracing::info!(
                 event = "herdr_queue_poll_outcome",
@@ -602,19 +658,19 @@ impl HerdrQueueWakePump {
                 }
                 let outcome = match error.code() {
                     AtmErrorCode::HerdrPromptFailed => {
-                        release.requeue();
+                        release.requeue().await;
                         "dispatch_failed_requeued"
                     }
                     AtmErrorCode::HerdrAgentNotVisible => {
-                        release.release_without_input();
+                        release.release_without_input().await;
                         "held_target_not_present"
                     }
                     AtmErrorCode::PostSendHerdrPromptFailed => {
-                        release.release_without_input();
+                        release.release_without_input().await;
                         "blocked_before_input_released"
                     }
                     _ => {
-                        release.release_without_input();
+                        release.release_without_input().await;
                         "dispatch_failed_released"
                     }
                 };
@@ -713,6 +769,20 @@ impl HerdrQueueWakePump {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(member);
     }
+}
+
+fn log_herdr_list_failure(session: &Option<HerdrSession>, error: &atm_herdr::HerdrError) {
+    let code = AtmError::from(error.clone()).code();
+    tracing::warn!(
+        subsystem = "herdr_queue_wake",
+        action = "herdr_list",
+        outcome = "failed",
+        session = ?session,
+        code = %code,
+        failure_class = error.diagnostic_name(),
+        error = ?error,
+        "Herdr queue wake list failed: {code}"
+    );
 }
 
 impl crate::RuntimeMaintenance for HerdrQueueWakePump {
@@ -828,6 +898,7 @@ struct ReleasePendingOnDrop {
     member: MemberKey,
     claim: atm_core::boundary::NudgeClaim,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
+    release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     /// Clears the member's ephemeral Herdr wake-pending roster flag when this
     /// claim attempt concludes (success, requeue, or release), regardless of
     /// which exit path was taken. Set alongside claiming a pending nudge in
@@ -845,37 +916,101 @@ impl ReleasePendingOnDrop {
         claim: atm_core::boundary::NudgeClaim,
         release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
         service_runtime: LocalServiceRuntime,
+        release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     ) -> Self {
         Self {
             store,
             member,
             claim,
             release_streaks,
+            release_handles,
             service_runtime,
             armed: true,
         }
     }
 
-    fn release_without_input(&mut self) {
-        if self.armed {
-            let should_requeue = {
-                let mut streaks = self
-                    .release_streaks
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
-                let streak = streaks.entry(self.member.clone()).or_default();
-                if *streak >= HERDR_MAX_CONSECUTIVE_RELEASES {
-                    streaks.remove(&self.member);
-                    true
-                } else {
-                    *streak = streak.saturating_add(1);
-                    false
-                }
-            };
-            let result = if should_requeue {
-                self.store.requeue_pending(&self.member, &self.claim)
+    async fn release_without_input(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let should_requeue = self.claim_release_action();
+        self.armed = false;
+        let store = Arc::clone(&self.store);
+        let member = self.member.clone();
+        let claim = self.claim.clone();
+        if let Err(error) = run_blocking(move || {
+            if should_requeue {
+                store.requeue_pending(&member, &claim)
             } else {
-                self.store.release_pending(&self.member, &self.claim)
+                store.release_pending(&member, &claim)
+            }
+        })
+        .await
+        {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "queue_claim_release",
+                outcome = "failed",
+                error = %error,
+                member = %self.member,
+                "failed to resolve Herdr queue claim"
+            );
+        }
+    }
+
+    async fn requeue(&mut self) {
+        if !self.armed {
+            return;
+        }
+        self.release_streaks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&self.member);
+        self.armed = false;
+        let store = Arc::clone(&self.store);
+        let member = self.member.clone();
+        let claim = self.claim.clone();
+        if let Err(error) = run_blocking(move || store.requeue_pending(&member, &claim)).await {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "queue_claim_requeue",
+                outcome = "failed",
+                error = %error,
+                member = %self.member,
+                "failed to requeue Herdr queue claim"
+            );
+        }
+    }
+
+    fn claim_release_action(&self) -> bool {
+        let mut streaks = self
+            .release_streaks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let streak = streaks.entry(self.member.clone()).or_default();
+        if *streak >= HERDR_MAX_CONSECUTIVE_RELEASES {
+            streaks.remove(&self.member);
+            true
+        } else {
+            *streak = streak.saturating_add(1);
+            false
+        }
+    }
+
+    fn release_in_drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let should_requeue = self.claim_release_action();
+        self.armed = false;
+        let store = Arc::clone(&self.store);
+        let member = self.member.clone();
+        let claim = self.claim.clone();
+        let release = move || {
+            let result = if should_requeue {
+                store.requeue_pending(&member, &claim)
+            } else {
+                store.release_pending(&member, &claim)
             };
             if let Err(error) = result {
                 tracing::warn!(
@@ -883,31 +1018,21 @@ impl ReleasePendingOnDrop {
                     action = "queue_claim_release",
                     outcome = "failed",
                     error = %error,
-                    member = %self.member,
-                    "failed to resolve Herdr queue claim"
+                    member = %member,
+                    "failed to resolve Herdr queue claim during drop"
                 );
             }
-            self.armed = false;
-        }
-    }
-
-    fn requeue(&mut self) {
-        if self.armed {
-            if let Err(error) = self.store.requeue_pending(&self.member, &self.claim) {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "queue_claim_requeue",
-                    outcome = "failed",
-                    error = %error,
-                    member = %self.member,
-                    "failed to requeue Herdr queue claim"
-                );
-            }
-            self.release_streaks
+        };
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let release_handle = handle.spawn_blocking(release);
+            let mut release_handles = self
+                .release_handles
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .remove(&self.member);
-            self.armed = false;
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            release_handles.retain(|handle| !handle.is_finished());
+            release_handles.push(release_handle);
+        } else {
+            release();
         }
     }
 
@@ -918,7 +1043,7 @@ impl ReleasePendingOnDrop {
 
 impl Drop for ReleasePendingOnDrop {
     fn drop(&mut self) {
-        self.release_without_input();
+        self.release_in_drop();
         self.service_runtime.set_roster_herdr_wake_pending(
             self.member.team(),
             self.member.agent(),
@@ -931,7 +1056,8 @@ impl Drop for ReleasePendingOnDrop {
 mod tests {
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HerdrQueueWakePump, HerdrQueueWakeStats, TASK_REMINDER_INTERVAL_MS, runtime_state,
+        HerdrQueueWakePump, HerdrQueueWakeStats, ReleasePendingOnDrop, TASK_REMINDER_INTERVAL_MS,
+        log_herdr_list_failure, runtime_state,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -950,15 +1076,72 @@ mod tests {
     use atm_herdr::{
         AgentSnapshot, HerdrAgentStatus, HerdrListOutcome, HerdrProcessAdapter, HerdrPromptOutcome,
     };
+    use atm_observability::{
+        DiagnosticSink, RetainedEvent, RetainedLogPolicy, SinkOffer, TracingBridgeLayer,
+        build_retained_logger,
+    };
     use atm_runtime_test_support::open_isolated_sqlite_boundary;
     use atm_storage::{RosterSnapshot, TaskRow, TaskState, TaskStore};
     use serde_json::json;
+    use std::collections::HashMap;
     use std::future::Future;
     use std::pin::Pin;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
+
+    use tracing_subscriber::prelude::*;
+
+    #[derive(Default)]
+    struct RecordingDiagnosticSink {
+        codes: Mutex<Vec<String>>,
+    }
+
+    impl DiagnosticSink for RecordingDiagnosticSink {
+        fn offer(&self, event: &RetainedEvent<'_>) -> SinkOffer {
+            if let Some(code) = event.code {
+                self.codes.lock().expect("codes").push(code.to_owned());
+            }
+            SinkOffer::Accepted
+        }
+    }
+
+    #[test]
+    fn herdr_list_failure_reaches_the_tracing_bridge_with_its_error_code() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let logger = Arc::new(
+            build_retained_logger(
+                "atm",
+                &root.path().join("logs"),
+                RetainedLogPolicy {
+                    rotation_max_bytes: 1_024 * 1_024,
+                    rotation_max_files: 2,
+                    retention_max_age: Duration::from_secs(60),
+                    maintenance_cadence: Duration::from_secs(60),
+                    writer_shutdown_timeout: Duration::from_secs(1),
+                    maintenance_max_work_per_pass: Some(2),
+                },
+                None,
+            )
+            .expect("logger"),
+        );
+        let bridge = TracingBridgeLayer::new(logger);
+        let sink = Arc::new(RecordingDiagnosticSink::default());
+        bridge.set_diagnostic_sink(sink.clone());
+
+        tracing::subscriber::with_default(
+            tracing_subscriber::Registry::default().with(bridge),
+            || {
+                log_herdr_list_failure(&None, &atm_herdr::HerdrError::ServerNotRunning);
+            },
+        );
+
+        assert_eq!(
+            sink.codes.lock().expect("codes").as_slice(),
+            ["ATM_HERDR_UNAVAILABLE"]
+        );
+    }
 
     struct FakeSelector {
         emitter: FakeEmitter,
@@ -1151,6 +1334,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some(key.agent().to_string()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -1167,6 +1351,7 @@ mod tests {
                 .iter()
                 .map(|key| AgentSnapshot {
                     name: Some(key.agent().to_string()),
+                    pane_id: None,
                     status,
                     workspace_id: None,
                 })
@@ -1309,6 +1494,7 @@ mod tests {
     ) {
         build_test_pump_with_agents(vec![AgentSnapshot {
             name: Some("aq27-agent".to_owned()),
+            pane_id: None,
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         }])
@@ -1364,11 +1550,13 @@ mod tests {
             agents: vec![
                 AgentSnapshot {
                     name: Some("team-lead_a-team".to_owned()),
+                    pane_id: None,
                     status: HerdrAgentStatus::Idle,
                     workspace_id: None,
                 },
                 AgentSnapshot {
                     name: Some("team-lead_b-team".to_owned()),
+                    pane_id: None,
                     status: HerdrAgentStatus::Idle,
                     workspace_id: None,
                 },
@@ -1473,6 +1661,7 @@ mod tests {
                 .zip(statuses)
                 .map(|(name, status)| AgentSnapshot {
                     name: Some(name.clone()),
+                    pane_id: None,
                     status,
                     workspace_id: None,
                 })
@@ -1542,11 +1731,13 @@ mod tests {
         let agents = vec![
             AgentSnapshot {
                 name: Some("aq27-agent".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             },
             AgentSnapshot {
                 name: Some("aq27-agent-b".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             },
@@ -2651,6 +2842,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some(key.agent().to_string()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -2663,6 +2855,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some(key.agent().to_string()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -2692,6 +2885,7 @@ mod tests {
         let (root, runtime, fake, _old_pump, health, key) =
             build_test_pump_with_agents(vec![AgentSnapshot {
                 name: Some("aq27-agent".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Blocked,
                 workspace_id: None,
             }]);
@@ -2741,6 +2935,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some(key.agent().to_string()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -2809,6 +3004,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some("aq27-agent".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -2922,6 +3118,7 @@ mod tests {
                 } else {
                     format!("aq27-agent-{index:02}")
                 }),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             })
@@ -3114,6 +3311,7 @@ mod tests {
             fake.queue_list_result(Ok(HerdrListOutcome {
                 agents: vec![AgentSnapshot {
                     name: Some(key.agent().to_string()),
+                    pane_id: None,
                     status: HerdrAgentStatus::Idle,
                     workspace_id: None,
                 }],
@@ -3223,6 +3421,7 @@ mod tests {
     async fn ac10_herdr_statuses_update_runtime_health_states() {
         let agents = vec![AgentSnapshot {
             name: Some("aq27-agent".to_owned()),
+            pane_id: None,
             status: HerdrAgentStatus::Working,
             workspace_id: None,
         }];
@@ -3265,6 +3464,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ac11_claim_drop_guard_release_is_joined_before_pump_shutdown() {
+        let (_root, runtime, fake, pump, _health, key) = build_test_pump();
+        let prompt_gate = fake.block_next_prompt();
+        let prompt_started = pump.install_prompt_started_test_gate();
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let task = pump.clone().start(shutdown_rx);
+        tokio::time::timeout(Duration::from_secs(1), prompt_started.notified())
+            .await
+            .expect("the fake prompt is in flight before shutdown");
+
+        shutdown_tx.send(()).expect("shutdown notification");
+        task.await.expect("poll task joins after shutdown");
+
+        assert!(
+            pump.release_handles
+                .lock()
+                .expect("release handles lock")
+                .is_empty(),
+            "shutdown must drain and join every drop release handle"
+        );
+        let claim = runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .claim_next_pending(&key)
+            .expect("claim after shutdown")
+            .expect("cancellation releases the claim before pump shutdown returns");
+        assert_eq!(
+            claim.attempt, 0,
+            "cancellation release preserves retry state"
+        );
+        drop(prompt_gate);
+    }
+
+    #[test]
+    fn release_pending_on_drop_without_runtime_releases_synchronously() {
+        let (_root, runtime, _fake, _pump, _health, key) = build_test_pump();
+        let store = runtime.pending_nudge_store().expect("pending store");
+        let claim = store
+            .claim_next_pending(&key)
+            .expect("claim pending")
+            .expect("queued message claim");
+        let release_handles = Arc::new(Mutex::new(Vec::new()));
+        let release = ReleasePendingOnDrop::new(
+            Arc::clone(&store),
+            key.clone(),
+            claim,
+            Arc::new(Mutex::new(HashMap::new())),
+            runtime,
+            release_handles,
+        );
+
+        drop(release);
+
+        let released_claim = store
+            .claim_next_pending(&key)
+            .expect("claim after synchronous release")
+            .expect("drop release makes the message claimable");
+        assert_eq!(
+            released_claim.attempt, 0,
+            "inline fallback preserves retry state"
+        );
+    }
+
+    #[tokio::test]
     async fn ac11_successful_prompt_cancellation_cannot_rerelease_claim() {
         let (_root, runtime, fake, pump, _health, key) = build_test_pump();
         let (clear_started, _allow_clear) = pump.install_handoff_cleanup_test_gate();
@@ -3299,6 +3562,7 @@ mod tests {
         fake.queue_list_result(Ok(HerdrListOutcome {
             agents: vec![AgentSnapshot {
                 name: Some("aq27-agent".to_owned()),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             }],
@@ -3324,6 +3588,7 @@ mod tests {
                 } else {
                     format!("aq27-agent-{index:02}")
                 }),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             })
@@ -3339,6 +3604,7 @@ mod tests {
                 } else {
                     format!("aq27-agent-{index:02}")
                 }),
+                pane_id: None,
                 status: HerdrAgentStatus::Idle,
                 workspace_id: None,
             })

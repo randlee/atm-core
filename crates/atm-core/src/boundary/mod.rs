@@ -73,6 +73,7 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
+mod herdr_breaker;
 mod herdr_endpoint;
 mod mail;
 mod message_received_hook_emitter;
@@ -83,6 +84,7 @@ mod template_composer;
 // surface for Phase R/AA contracts, so callers should not need to know whether
 // an item lives in `mail` or `store`.
 pub use atm_storage::TemplateOutputFormat;
+pub use herdr_breaker::HerdrBreakerDoctor;
 pub use herdr_endpoint::HerdrEndpointDoctor;
 pub use mail::*;
 pub use message_received_hook_emitter::{

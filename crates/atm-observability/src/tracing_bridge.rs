@@ -426,14 +426,17 @@ impl Visit for RetainedVisitor {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use serde_json::Value;
     use tempfile::TempDir;
     use tracing_subscriber::prelude::*;
 
-    use super::{EMITTING, EventOrigin, RetainedVisitor, TracingBridgeLayer, should_retain};
+    use super::{
+        DiagnosticSink, EMITTING, EventOrigin, RetainedEvent, RetainedVisitor, SinkOffer,
+        TracingBridgeLayer, should_retain,
+    };
     use crate::{RetainedLogPolicy, RetainedLogger, build_retained_logger};
 
     fn bridge() -> (TempDir, Arc<TracingBridgeLayer>) {
@@ -460,6 +463,20 @@ mod tests {
             tracing_subscriber::Registry::default().with((**bridge).clone()),
             f,
         );
+    }
+
+    #[derive(Default)]
+    struct RecordingDiagnosticSink {
+        codes: Mutex<Vec<String>>,
+    }
+
+    impl DiagnosticSink for RecordingDiagnosticSink {
+        fn offer(&self, event: &RetainedEvent<'_>) -> SinkOffer {
+            if let Some(code) = event.code {
+                self.codes.lock().expect("codes").push(code.to_owned());
+            }
+            SinkOffer::Accepted
+        }
     }
 
     /// Reads the retained log file after a synchronous flush. The writer
@@ -499,6 +516,20 @@ mod tests {
                 "missing {expected} in {content}"
             );
         }
+    }
+
+    #[test]
+    fn diagnostic_sink_receives_runtime_error_codes() {
+        let (_tempdir, bridge) = bridge();
+        let sink = Arc::new(RecordingDiagnosticSink::default());
+        bridge.set_diagnostic_sink(sink.clone());
+        with_bridge(&bridge, || {
+            tracing::warn!(target: "atm_http_runtime::herdr_queue_wake", code = "ATM_HERDR_UNAVAILABLE", "Herdr list failed");
+        });
+        assert_eq!(
+            sink.codes.lock().expect("codes").as_slice(),
+            ["ATM_HERDR_UNAVAILABLE"]
+        );
     }
 
     #[test]

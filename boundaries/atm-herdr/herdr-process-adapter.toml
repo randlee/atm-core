@@ -32,7 +32,7 @@ io_forbidden = [
 
 [dependencies]
 allowed_dependents = ["atm-http-runtime", "atm-daemon-bootstrap"]
-allowed_dependencies = ["atm-core", "semver", "tokio", "serde_json"]
+allowed_dependencies = ["atm-core", "tokio", "serde_json"]
 forbidden_edges = [
   "atm-core -> atm-herdr",
   "atm-storage -> atm-herdr",
@@ -60,6 +60,7 @@ notes = [
   "AtmError is now an atm-herdr contract error type with exactly two construction sites in this crate: `From<HerdrError> for AtmError` and `HerdrClientConfig::try_new` (AtmErrorCode::ConfigParseFailed); atm-herdr adds no other AtmError construction and no new error family (AY.3 C1, C2)",
   "atm-herdr owns the exhaustive HerdrError -> HerdrDoctorState mapping and HERDR_MINIMUM_VERSION; no listed HerdrError may fall into HerdrDoctorState::Other, and it is the only crate permitted to build HerdrEndpointDisplay via from_relative (AY.3 C4, C6)",
   "AY.4 breaker-cycle escalation is owned by atm-http-runtime. It may call HerdrProcessAdapter::notify with endpoint state and remediation only, under the fixed five-second deadline; durable ATM mail remains outside atm-herdr and is never forwarded as notification text (HR-SAFE-003).",
+  "semver was removed because HerdrVersion in atm-core now owns semantic-version retention for this crate (FIX-1363-R3 ruling).",
 ]
 
 [testing]

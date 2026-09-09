@@ -97,6 +97,12 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-09 — DOCTOR-HERDR-TARGET-R1:** `HTTP_API_VERSION` moves from
+  `1.2.0` to `1.3.0`. The optional `findings` collection on each Herdr endpoint
+  observation carries target-resolution and named-session diagnostics. Empty
+  collections are omitted, so older payloads remain readable and older
+  consumers may ignore the additive field. This is a minor, backward-compatible
+  bump.
 - **2026-09-07 — AY.15:** `HTTP_API_VERSION` moves from `1.1.0` to `1.2.0`.
   The additive doctor-presence field `herdr_agent` reports the durable
   effective Herdr identity. It is optional when deserializing and omitted
@@ -105,9 +111,10 @@ migration functions directly.
 
 ## Consequences
 
-- `HTTP_API_VERSION` first moved to `1.1.0` as the current wire, and AY.15
-  moves it to `1.2.0` for the additive doctor-presence field; it is bumped on
-  every later governed-interface change.
+- `HTTP_API_VERSION` first moved to `1.1.0` as the current wire, AY.15 moved it
+  to `1.2.0` for the additive doctor-presence field, and
+  DOCTOR-HERDR-TARGET-R1 moves it to `1.3.0` for endpoint findings; it is
+  bumped on every later governed-interface change.
 - Herdr support becomes a matrix, not a single version; per-release
   conformance fixtures are required.
 - SQLite migrations gain a declared version and an explicit rollback test

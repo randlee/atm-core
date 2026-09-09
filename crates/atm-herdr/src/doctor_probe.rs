@@ -10,10 +10,13 @@ use atm_core::doctor::{
     HerdrRosterMember, HerdrVersion,
 };
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::{HerdrSession, RequestDeadline};
 
-use crate::transport::{HerdrIo, HerdrOp, get_from_envelope, server_status_from_envelope};
-use crate::{HERDR_MINIMUM_VERSION, HerdrClientConfig, HerdrError};
+use crate::transport::{
+    HerdrIo, HerdrOp, get_from_envelope, list_from_envelope, server_status_from_envelope,
+};
+use crate::{HERDR_MINIMUM_VERSION, HerdrClientConfig, HerdrError, HerdrListOutcome};
 
 /// Production endpoint probe. Construction selects the configured client
 /// transport but does not execute a Herdr command.
@@ -51,6 +54,7 @@ impl HerdrDoctorProbe {
             state: HerdrDoctorState::NotConfigured,
             live_handoff: None,
             members: Vec::new(),
+            findings: Vec::new(),
         };
 
         let status = self
@@ -61,6 +65,7 @@ impl HerdrDoctorProbe {
         let status = match status {
             Ok(status) => status,
             Err(error) => {
+                observation.findings = stale_session_findings(session, members, &error);
                 observation.state = self.state_for_error(error, started.elapsed(), session);
                 return observation;
             }
@@ -86,9 +91,10 @@ impl HerdrDoctorProbe {
         deadline: RequestDeadline,
     ) -> Vec<HerdrMemberPresence> {
         let mut observations = Vec::with_capacity(members.len());
+        let mut listed_agents = None;
         for member in members {
             let member_deadline = remaining_member_deadline(deadline);
-            let outcome = self
+            let outcome = match self
                 .io
                 .call(
                     HerdrOp::Get {
@@ -100,7 +106,25 @@ impl HerdrDoctorProbe {
                 .await
                 .and_then(get_from_envelope)
                 .map(|_| HerdrPresenceOutcome::Visible)
-                .unwrap_or_else(presence_for_error);
+            {
+                Ok(outcome) => outcome,
+                Err(error @ (HerdrError::AgentNotFound | HerdrError::AgentTargetAmbiguous)) => {
+                    if listed_agents.is_none() {
+                        listed_agents = Some(
+                            self.io
+                                .call(HerdrOp::List, session, member_deadline)
+                                .await
+                                .and_then(list_from_envelope),
+                        );
+                    }
+                    presence_for_target_error(
+                        member,
+                        error,
+                        listed_agents.as_ref().expect("list response was populated"),
+                    )
+                }
+                Err(error) => presence_for_error(error),
+            };
             observations.push(HerdrMemberPresence {
                 ordinal: member.ordinal,
                 name: member.name.clone(),
@@ -179,6 +203,140 @@ impl HerdrDoctorProbe {
     }
 }
 
+fn presence_for_target_error(
+    member: &HerdrRosterMember,
+    error: HerdrError,
+    listed: &Result<HerdrListOutcome, HerdrError>,
+) -> HerdrPresenceOutcome {
+    let Ok(listed) = listed else {
+        return presence_for_error(error);
+    };
+    if matches!(error, HerdrError::AgentTargetAmbiguous) {
+        return presence_for_ambiguous_target(member, listed);
+    }
+    let unnamed = listed
+        .agents
+        .iter()
+        .filter(|agent| agent.name.is_none())
+        .collect::<Vec<_>>();
+    if !unnamed.is_empty() {
+        let rename_commands = unnamed
+            .iter()
+            .filter_map(|agent| agent.pane_id.as_deref())
+            .map(|pane| format!("herdr agent rename {pane} {}", member.herdr_agent))
+            .collect::<Vec<_>>()
+            .join("; ");
+        return HerdrPresenceOutcome::Finding {
+            finding: DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmErrorCode::WarningHerdrUnnamedAgentTarget,
+                message: format!(
+                    "Herdr target `{}` for member `{}` was not found; {} unnamed agent(s) are present",
+                    member.herdr_agent,
+                    member.name,
+                    unnamed.len()
+                ),
+                remediation: Some(rename_commands),
+            },
+        };
+    }
+    if member.herdr_agent.as_str() != member.name.as_str()
+        && let Some(agent) = listed
+            .agents
+            .iter()
+            .find(|agent| agent.name.as_deref() == Some(member.name.as_str()))
+    {
+        let pane = agent.pane_id.as_deref().unwrap_or("<pane_id>");
+        return HerdrPresenceOutcome::Finding {
+            finding: DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmError::from(HerdrError::AgentNotFound).code(),
+                message: format!(
+                    "Herdr member `{}` targets alias `{}`, but Herdr names the agent `{}`",
+                    member.name, member.herdr_agent, member.name
+                ),
+                remediation: Some(format!(
+                    "Either run `herdr agent rename {pane} {}` or `atm teams update-member <team> {} --alias {}`",
+                    member.herdr_agent, member.name, member.name
+                )),
+            },
+        };
+    }
+    presence_for_error(HerdrError::AgentNotFound)
+}
+
+fn presence_for_ambiguous_target(
+    member: &HerdrRosterMember,
+    listed: &HerdrListOutcome,
+) -> HerdrPresenceOutcome {
+    let matches = listed
+        .agents
+        .iter()
+        .filter(|agent| agent.name.as_deref() == Some(member.herdr_agent.as_str()))
+        .collect::<Vec<_>>();
+    if matches.is_empty() {
+        return presence_for_error(HerdrError::AgentTargetAmbiguous);
+    }
+    let agents = matches
+        .iter()
+        .map(|agent| {
+            agent.pane_id.as_deref().map_or_else(
+                || member.herdr_agent.to_string(),
+                |pane| format!("{} ({pane})", member.herdr_agent),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let remediation = matches
+        .iter()
+        .filter_map(|agent| agent.pane_id.as_deref())
+        .map(|pane| format!("herdr agent rename {pane} --clear"))
+        .collect::<Vec<_>>()
+        .join("; ");
+    HerdrPresenceOutcome::Finding {
+        finding: DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmError::from(HerdrError::AgentTargetAmbiguous).code(),
+            message: format!(
+                "Herdr agent_target_ambiguous for target `{}`; matching agents: {agents}",
+                member.herdr_agent
+            ),
+            remediation: (!remediation.is_empty()).then_some(remediation),
+        },
+    }
+}
+
+fn stale_session_findings(
+    session: Option<&HerdrSession>,
+    members: &[HerdrRosterMember],
+    error: &HerdrError,
+) -> Vec<DoctorFinding> {
+    if !matches!(
+        error,
+        HerdrError::ServerNotRunning | HerdrError::ServerUnavailable { .. }
+    ) || HerdrSession::named(session).is_none()
+        || members.is_empty()
+    {
+        return Vec::new();
+    }
+    let members = members
+        .iter()
+        .map(|member| member.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    vec![DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::HerdrUnavailable,
+        message: format!(
+            "Herdr session `{}` is unavailable for roster member(s): {members}",
+            session.expect("named session was checked")
+        ),
+        remediation: Some(
+            "Run `atm teams update-member <team> <member> --backend herdr` for the default server, or select the correct `--session`".to_owned(),
+        ),
+    }]
+}
+
 fn unexpected_response(error: HerdrError) -> HerdrDoctorState {
     let emission_outcome = error.emission_outcome().to_owned();
     match error {
@@ -220,9 +378,7 @@ fn detail_or_fallback(message: &str, fallback: &str) -> String {
 
 fn state_for_server(version: HerdrVersion, protocol: u32) -> HerdrDoctorState {
     let minimum = HerdrVersion::parse(HERDR_MINIMUM_VERSION).expect("minimum version is valid");
-    let below_minimum = semver::Version::parse(version.as_str())
-        .expect("HerdrVersion guarantees semantic version syntax")
-        < semver::Version::parse(minimum.as_str()).expect("minimum version is valid");
+    let below_minimum = version.as_semver() < minimum.as_semver();
     if below_minimum {
         HerdrDoctorState::BelowMinimum { version, minimum }
     } else {
@@ -237,6 +393,7 @@ fn remaining_member_deadline(deadline: RequestDeadline) -> RequestDeadline {
 
 fn presence_for_error(error: HerdrError) -> HerdrPresenceOutcome {
     let infrastructure = error.is_infrastructure();
+    let outcome = error.diagnostic_name();
     let error: AtmError = error.into();
     if infrastructure {
         HerdrPresenceOutcome::Infrastructure {
@@ -248,7 +405,7 @@ fn presence_for_error(error: HerdrError) -> HerdrPresenceOutcome {
             finding: DoctorFinding {
                 severity: DoctorSeverity::Warning,
                 code: error.code(),
-                message: error.detail().to_owned(),
+                message: format!("Herdr {outcome}: {}", error.detail()),
                 remediation: Some(error.remediation().to_owned()),
             },
         }
@@ -273,12 +430,18 @@ mod tests {
     use std::path::PathBuf;
     use std::time::Duration;
 
-    use super::{HerdrDoctorProbe, endpoint_provenance, presence_for_error, state_for_server};
-    use crate::HerdrClientConfig;
-    use atm_core::HerdrSession;
+    use super::{
+        HerdrDoctorProbe, endpoint_provenance, presence_for_error, presence_for_target_error,
+        stale_session_findings, state_for_server,
+    };
+    use crate::{AgentSnapshot, HerdrAgentStatus, HerdrClientConfig, HerdrError, HerdrListOutcome};
+    use atm_core::doctor::HerdrRosterMember;
     use atm_core::doctor::{
         HerdrDoctorState, HerdrEndpointProvenance, HerdrPresenceOutcome, HerdrVersion,
     };
+    use atm_core::error_codes::AtmErrorCode;
+    use atm_core::types::AgentName;
+    use atm_core::{HerdrAgentName, HerdrSession};
 
     #[test]
     fn construction_selects_transport_without_running_a_command() {
@@ -454,6 +617,131 @@ mod tests {
         assert!(matches!(
             presence_for_error(crate::HerdrError::ServerNotRunning),
             HerdrPresenceOutcome::Infrastructure { .. }
+        ));
+    }
+
+    fn roster_member(name: &str, target: &str) -> HerdrRosterMember {
+        HerdrRosterMember {
+            ordinal: 0,
+            name: AgentName::from_validated(name),
+            herdr_agent: HerdrAgentName::new(target).expect("valid Herdr target"),
+        }
+    }
+
+    fn snapshot(name: Option<&str>, pane_id: Option<&str>) -> AgentSnapshot {
+        AgentSnapshot {
+            name: name.map(str::to_owned),
+            pane_id: pane_id.map(str::to_owned),
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        }
+    }
+
+    #[test]
+    fn missing_target_with_unnamed_agent_names_the_pane_rename_remediation() {
+        let member = roster_member("alice", "delivery-alice");
+        let outcome = presence_for_target_error(
+            &member,
+            HerdrError::AgentNotFound,
+            &Ok(HerdrListOutcome {
+                agents: vec![snapshot(None, Some("pane-7"))],
+            }),
+        );
+
+        assert!(matches!(
+            outcome,
+            HerdrPresenceOutcome::Finding { finding }
+                if finding.code == AtmErrorCode::WarningHerdrUnnamedAgentTarget
+                    && finding.message.contains("delivery-alice")
+                    && finding.remediation.as_deref()
+                        == Some("herdr agent rename pane-7 delivery-alice")
+        ));
+    }
+
+    #[test]
+    fn missing_target_with_canonical_name_reports_alias_mismatch() {
+        let member = roster_member("alice", "delivery-alice");
+        let outcome = presence_for_target_error(
+            &member,
+            HerdrError::AgentNotFound,
+            &Ok(HerdrListOutcome {
+                agents: vec![snapshot(Some("alice"), Some("pane-7"))],
+            }),
+        );
+
+        assert!(matches!(
+            outcome,
+            HerdrPresenceOutcome::Finding { finding }
+                if finding.code == AtmErrorCode::HerdrAgentNotVisible
+                    && finding.message.contains("alias `delivery-alice`")
+                    && finding.remediation.as_deref().is_some_and(|value|
+                        value.contains("herdr agent rename pane-7 delivery-alice")
+                            && value.contains("update-member <team> alice --alias alice"))
+        ));
+    }
+
+    #[test]
+    fn missing_target_without_list_evidence_keeps_the_typed_not_found_finding() {
+        let member = roster_member("alice", "delivery-alice");
+        let outcome = presence_for_target_error(
+            &member,
+            HerdrError::AgentNotFound,
+            &Ok(HerdrListOutcome {
+                agents: vec![snapshot(Some("bob"), Some("pane-8"))],
+            }),
+        );
+
+        assert!(matches!(
+            outcome,
+            HerdrPresenceOutcome::Finding { finding }
+                if finding.code == AtmErrorCode::HerdrAgentNotVisible
+                    && finding.message.contains("agent_not_found")
+        ));
+    }
+
+    #[test]
+    fn ambiguous_target_names_each_stale_pane_for_clear_remediation() {
+        let member = roster_member("alice", "delivery-alice");
+        let outcome = presence_for_target_error(
+            &member,
+            HerdrError::AgentTargetAmbiguous,
+            &Ok(HerdrListOutcome {
+                agents: vec![
+                    snapshot(Some("delivery-alice"), Some("pane-7")),
+                    snapshot(Some("delivery-alice"), Some("pane-8")),
+                ],
+            }),
+        );
+
+        assert!(matches!(
+            outcome,
+            HerdrPresenceOutcome::Finding { finding }
+                if finding.message.contains("agent_target_ambiguous")
+                    && finding.message.contains("pane-7")
+                    && finding.message.contains("pane-8")
+                    && finding.remediation.as_deref().is_some_and(|value|
+                        value.contains("herdr agent rename pane-7 --clear")
+                            && value.contains("herdr agent rename pane-8 --clear"))
+        ));
+    }
+
+    #[test]
+    fn stale_named_session_lists_affected_roster_members() {
+        let session = HerdrSession::new("stale").expect("valid session");
+        let findings = stale_session_findings(
+            Some(&session),
+            &[roster_member("alice", "alice"), roster_member("bob", "bob")],
+            &HerdrError::ServerNotRunning,
+        );
+
+        assert!(matches!(
+            findings.as_slice(),
+            [finding]
+                if finding.code == AtmErrorCode::HerdrUnavailable
+                    && finding.message.contains("stale")
+                    && finding.message.contains("alice, bob")
+                    && finding.remediation.as_deref().is_some_and(|value|
+                        value.contains("atm teams update-member"))
         ));
     }
 

@@ -167,6 +167,7 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
     ) -> Pin<Box<dyn Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>> {
         let snapshot = AgentSnapshot {
             name: Some(agent.to_string()),
+            pane_id: None,
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         };
@@ -184,6 +185,7 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
     {
         let snapshot = AgentSnapshot {
             name: Some(agent.to_string()),
+            pane_id: None,
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         };
@@ -200,6 +202,7 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
     {
         let snapshot = AgentSnapshot {
             name: Some(agent.to_string()),
+            pane_id: None,
             status: HerdrAgentStatus::Idle,
             workspace_id: None,
         };
@@ -442,7 +445,8 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                 }
                 Err(error) => {
                     let outcome = error.emission_outcome();
-                    tracing::warn!(subsystem = "herdr_queue_wake", action = "herdr_prompt", backend = "herdr", member = %dispatch.event.recipient, error = ?error, outcome, "Herdr wake-up was not accepted");
+                    let code = atm_core::error::AtmError::from(error.clone()).code();
+                    tracing::warn!(subsystem = "herdr_queue_wake", action = "herdr_prompt", backend = "herdr", member = %dispatch.event.recipient, code = %code, failure_class = outcome, error = ?error, outcome, "Herdr wake-up was not accepted");
                     return Err(error.into());
                 }
             }

@@ -272,6 +272,15 @@
       "properties": [],
       "required": []
     },
+    "DoctorFinding": {
+      "properties": [
+        "code",
+        "message",
+        "remediation",
+        "severity"
+      ],
+      "required": []
+    },
     "DoctorResponse": {
       "properties": [
         "herdr"
@@ -353,14 +362,26 @@
       "properties": [],
       "required": []
     },
+    "HerdrBreakerDoctorReport": {
+      "properties": [
+        "consecutive_failures",
+        "last_error_code",
+        "last_error_detail",
+        "retry_after_ms",
+        "state"
+      ],
+      "required": []
+    },
     "HerdrDoctorReport": {
       "properties": [
+        "breaker",
         "endpoints"
       ],
       "required": []
     },
     "HerdrEndpointDoctorReport": {
       "properties": [
+        "findings",
         "members",
         "transport"
       ],

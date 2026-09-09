@@ -1727,6 +1727,7 @@ Phase AY sprint status:
 | `AY.13` | Doctor | standalone; Rand 2026-09-07 doctor team-scope requirement; parallel with AY.14 | `merged` (#1300, dd809c15e) | `feature/ay13-doctor-team-scope` | `docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md` |
 | `AY.14` | Herdr/roster | standalone; Rand 2026-09-07 name-collision ruling (roster alias); parallel with AY.13 | `merged` (#1305, 271b387ed) | `feature/ay14-herdr-agent-name-mapping` | `docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md` |
 | `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `merged` (#1310, 47f359cf9) | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
+| `DOCTOR-HERDR-TARGET-R1` | Doctor | standalone target-resolution, breaker, and stale-session diagnostics | `complete` | `fix/doctor-herdr-target-resolution` | `docs/plans/doctor/sprint-DOCTOR-HERDR-TARGET-R1.md` |
 
 ## Daemon-Switch Scope Reduction
 

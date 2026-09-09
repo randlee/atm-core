@@ -261,6 +261,7 @@ pub(crate) fn prompt_from_envelope(
         .transpose()?
         .unwrap_or(AgentSnapshot {
             name: None,
+            pane_id: None,
             status: HerdrAgentStatus::Unknown,
             workspace_id: None,
         });
@@ -353,6 +354,10 @@ fn snapshot_from_value(value: &Value) -> Result<AgentSnapshot, HerdrError> {
         .ok_or_else(|| protocol_mismatch("agent response did not contain a status"))?;
     Ok(AgentSnapshot {
         name: value.get("name").and_then(Value::as_str).map(str::to_owned),
+        pane_id: value
+            .get("pane_id")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
         status: parse_status(status),
         workspace_id: value
             .get("workspace_id")

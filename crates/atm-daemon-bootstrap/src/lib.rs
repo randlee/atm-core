@@ -1389,11 +1389,13 @@ mod replacement_runtime_tests {
             agents: vec![
                 atm_herdr::AgentSnapshot {
                     name: Some("recipient".to_owned()),
+                    pane_id: None,
                     status: atm_herdr::HerdrAgentStatus::Idle,
                     workspace_id: None,
                 },
                 atm_herdr::AgentSnapshot {
                     name: Some("no-task".to_owned()),
+                    pane_id: None,
                     status: atm_herdr::HerdrAgentStatus::Idle,
                     workspace_id: None,
                 },

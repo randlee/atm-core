@@ -3793,6 +3793,48 @@ fn ay3_herdr_endpoint_doctor_contract_has_only_closed_and_bootstrap_implementati
     );
 }
 
+#[test]
+fn doctor_herdr_breaker_contract_has_only_closed_and_bootstrap_implementations() {
+    let root = workspace_root();
+    let boundary = read_source(&root.join("crates/atm-core/src/boundary/herdr_breaker.rs"));
+    assert!(
+        boundary.contains("pub trait HerdrBreakerDoctor")
+            && boundary.contains("sealed::Sealed + Send + Sync"),
+        "doctor breaker diagnostics must retain the ADR-001 seal"
+    );
+
+    let mut implementations = BTreeSet::new();
+    for path in [
+        root.join("crates/atm-core/src/doctor/mod.rs"),
+        root.join("crates/atm-daemon-bootstrap/src/replacement_handler.rs"),
+    ] {
+        let source = read_source(&path);
+        let syntax = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let mut visitor = HerdrBreakerDoctorImplementationVisitor::default();
+        visitor.visit_file(&syntax);
+        implementations.extend(visitor.implementations.into_iter().map(|implementation| {
+            format!(
+                "{}::{implementation}",
+                path.strip_prefix(&root)
+                    .expect("doctor breaker implementation is inside the workspace")
+                    .display()
+                    .to_string()
+                    .replace('\\', "/")
+            )
+        }));
+    }
+    assert_eq!(
+        implementations,
+        BTreeSet::from([
+            "crates/atm-core/src/doctor/mod.rs::ClosedHerdrBreakerDoctor".to_owned(),
+            "crates/atm-daemon-bootstrap/src/replacement_handler.rs::HerdrBreakerDoctorAdapter"
+                .to_owned(),
+        ]),
+        "doctor breaker diagnostics permit exactly the closed core double and sole bootstrap adapter"
+    );
+}
+
 #[derive(Default)]
 struct HerdrEndpointDoctorImplementationVisitor {
     implementations: Vec<String>,
@@ -3806,6 +3848,35 @@ impl<'ast> Visit<'ast> for HerdrEndpointDoctorImplementationVisitor {
                 path.segments
                     .last()
                     .is_some_and(|segment| segment.ident == "HerdrEndpointDoctor")
+            })
+        {
+            self.implementations
+                .push(item.self_ty.to_token_stream().to_string());
+        }
+        syn::visit::visit_item_impl(self, item);
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || item.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, item);
+        self.in_test_module = previous;
+    }
+}
+
+#[derive(Default)]
+struct HerdrBreakerDoctorImplementationVisitor {
+    implementations: Vec<String>,
+    in_test_module: bool,
+}
+
+impl<'ast> Visit<'ast> for HerdrBreakerDoctorImplementationVisitor {
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        if !self.in_test_module
+            && item.trait_.as_ref().is_some_and(|(_, path, _)| {
+                path.segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "HerdrBreakerDoctor")
             })
         {
             self.implementations

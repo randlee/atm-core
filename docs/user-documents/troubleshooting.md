@@ -119,6 +119,19 @@ Supported recovery:
 For the configuration model, see [Hooks](./hooks.md) and
 [Nudge Templates](./nudge-templates.md).
 
+### Herdr Target Not Found
+
+`ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` means Herdr has one or more unnamed
+agents: a pane label set with `herdr pane rename` is not an agent name and is
+never a valid ATM nudge target. Use `herdr agent rename <pane_id> <target>` to
+register the target shown by `atm doctor`; when the roster alias disagrees
+with an existing Herdr agent name, either rename that agent or run `atm teams
+update-member <team> <member> --alias <herdr name>`. See #1360.
+
+Herdr agent names are in-memory state: they are lost when the Herdr server
+restarts, so a label-only launcher will cause this warning again until it
+reapplies `herdr agent rename` for each managed pane.
+
 Additional runnable examples live in
 [examples/troubleshooting/](./examples/troubleshooting/).
 

@@ -9,9 +9,15 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed — Phase AI target |
-| HTTP API SemVer | `1.2.0`; major is `/v1/atm` |
+| HTTP API SemVer | `1.3.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
+
+Version 1.3.0 adds optional Herdr doctor diagnostics. `herdr.breaker` reports
+`last_error_code` and `last_error_detail` when an open breaker retains the
+failure that caused it. Each `herdr.endpoints[]` entry may also contain
+`findings`, the endpoint-wide target-resolution or named-session diagnostics;
+older payloads that omit these fields remain valid.
 
 ## Transport and handler rule
 
@@ -129,8 +135,9 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. The current `1.2.0` baseline adds the
-optional `peer_http_api_version` to cross-host write envelopes; receivers
+The v1 resource paths are durable. The current `1.3.0` baseline adds optional
+Herdr doctor diagnostics; the `1.2.0` baseline added the optional
+`peer_http_api_version` to cross-host write envelopes; receivers
 reject only a peer major-version mismatch and tolerate minor skew. Same-major
 additive fields, error details,
 and endpoints require a minor version: servers default omitted additive request

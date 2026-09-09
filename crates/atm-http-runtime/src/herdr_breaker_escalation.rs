@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::boundary::TaskStore;
+use atm_core::error::AtmError;
 use atm_core::types::IsoTimestamp;
 use atm_core::types::TeamName;
 use atm_herdr::HerdrProcessAdapter;
@@ -93,10 +94,13 @@ pub(crate) async fn escalate_breaker_cycle(
     daemon_home: &Path,
     team: &TeamName,
     opened_at: IsoTimestamp,
+    failure_count: u32,
+    error: &atm_herdr::HerdrError,
+    retry_after: Duration,
+    member_target: Option<&str>,
 ) {
-    let mail_body = format!(
-        "Herdr breaker opened at {opened_at}. Queued ATM mail remains durable. Remediation: run atm doctor --json."
-    );
+    let mail_body =
+        breaker_opened_mail_body(team, failure_count, error, retry_after, member_target);
     let notification = EscalationNotification {
         title: "ATM Herdr breaker open".to_owned(),
         body: "state=breaker_open remediation=atm doctor --json".to_owned(),
@@ -112,9 +116,12 @@ pub(crate) async fn escalate_breaker_cycle(
         EscalationKind::BreakerOpened,
     )
     .await;
+    let code = AtmError::from(error.clone()).code();
     tracing::info!(
         event = "herdr_breaker_escalation",
         outcome = "completed",
+        code = %code,
+        failure_class = error.diagnostic_name(),
         breaker_cycle = %opened_at,
         lead_write = outcome.lead_write.is_some(),
         recipients_written = outcome.recipients_written,
@@ -124,6 +131,24 @@ pub(crate) async fn escalate_breaker_cycle(
     );
 }
 
+fn breaker_opened_mail_body(
+    team: &TeamName,
+    failure_count: u32,
+    error: &atm_herdr::HerdrError,
+    retry_after: Duration,
+    member_target: Option<&str>,
+) -> String {
+    let code = AtmError::from(error.clone()).code();
+    let agent_not_found = atm_herdr::HerdrError::AgentNotFound.diagnostic_name();
+    let target_line =
+        member_target.map_or_else(String::new, |target| format!("Member target: {target}.\n"));
+    format!(
+        "Herdr nudges for team {team} are paused after {failure_count} consecutive failure(s); ATM mail remains durable and will be read on the next poll.\n{target_line}Cause: {code} ({}) triggered the breaker.\nRecovery:\n1. Run `atm doctor --json` and read `herdr.endpoints[].members`.\n2. For {agent_not_found}, run `herdr agent rename <pane_id> <target>` or relaunch the member.\n3. For server errors, run `herdr server`.\nThe breaker retries after {} seconds and closes on the first success; no daemon restart is needed.\nDetails: docs/user-documents/troubleshooting.md#herdr-target-not-found",
+        error.diagnostic_name(),
+        retry_after.as_secs()
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -131,7 +156,8 @@ mod tests {
 
     use atm_core::types::IsoTimestamp;
 
-    use super::HerdrBreakerEscalationGate;
+    use super::{HerdrBreakerEscalationGate, breaker_opened_mail_body};
+    use atm_core::types::TeamName;
 
     fn timestamp(value: &str) -> IsoTimestamp {
         IsoTimestamp::from_str(value).expect("valid test timestamp")
@@ -147,5 +173,33 @@ mod tests {
         assert!(!gate.claim(first, timestamp("2030-01-01T00:00:30Z")));
         assert!(!gate.claim(second, second));
         assert!(gate.claim(second, timestamp("2030-01-01T00:00:30Z")));
+    }
+
+    #[test]
+    fn breaker_notice_names_the_cause_and_target_recovery() {
+        let team = TeamName::from_validated("example");
+        let body = breaker_opened_mail_body(
+            &team,
+            3,
+            &atm_herdr::HerdrError::AgentNotFound,
+            Duration::from_secs(8),
+            Some("cipher"),
+        );
+
+        assert!(body.contains("ATM_HERDR_AGENT_NOT_VISIBLE"));
+        assert!(body.contains(atm_herdr::HerdrError::AgentNotFound.diagnostic_name()));
+        assert!(body.contains("herdr agent rename <pane_id> <target>"));
+        assert!(body.contains("Member target: cipher."));
+        assert!(body.contains("retries after 8 seconds"));
+        assert!(body.lines().count() <= 12);
+
+        let without_target = breaker_opened_mail_body(
+            &team,
+            3,
+            &atm_herdr::HerdrError::AgentNotFound,
+            Duration::from_secs(8),
+            None,
+        );
+        assert!(!without_target.contains("Member target:"));
     }
 }

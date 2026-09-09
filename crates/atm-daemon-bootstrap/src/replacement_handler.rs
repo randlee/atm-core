@@ -88,21 +88,22 @@ struct HerdrBreakerDoctorAdapter {
     breaker: Arc<HerdrSpawnBreaker>,
 }
 
+impl atm_core::boundary::sealed::Sealed for HerdrBreakerDoctorAdapter {}
+
 impl atm_core::doctor::HerdrBreakerDoctor for HerdrBreakerDoctorAdapter {
     fn report(&self) -> atm_core::doctor::HerdrBreakerDoctorReport {
         let snapshot = self.breaker.snapshot();
-        match snapshot.state {
-            HerdrBreakerState::Closed => Default::default(),
-            HerdrBreakerState::Open { retry_after } => atm_core::doctor::HerdrBreakerDoctorReport {
-                state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
-                retry_after_ms: Some(retry_after.as_millis() as u64),
-                consecutive_failures: Some(snapshot.consecutive_failures),
-            },
-            HerdrBreakerState::HalfOpen => atm_core::doctor::HerdrBreakerDoctorReport {
-                state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
-                retry_after_ms: Some(0),
-                consecutive_failures: Some(snapshot.consecutive_failures),
-            },
+        let retry_after = match snapshot.state {
+            HerdrBreakerState::Closed => return Default::default(),
+            HerdrBreakerState::Open { retry_after } => retry_after,
+            HerdrBreakerState::HalfOpen => std::time::Duration::ZERO,
+        };
+        atm_core::doctor::HerdrBreakerDoctorReport {
+            state: atm_core::doctor::report::HerdrBreakerDoctorState::Open,
+            retry_after_ms: Some(retry_after.as_millis() as u64),
+            consecutive_failures: Some(snapshot.consecutive_failures),
+            last_error_code: snapshot.last_error_code,
+            last_error_detail: snapshot.last_error_detail,
         }
     }
 }
