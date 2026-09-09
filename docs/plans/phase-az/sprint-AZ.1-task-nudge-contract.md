@@ -45,8 +45,8 @@ schema, replay rule, and task-list behavior unchanged.
 
 ### Event signature
 
-The implementation may choose an equivalent field layout, but it must make
-this value-source boundary explicit and testable:
+The public boundary uses this field shape; implementations must not retain a
+second body-capable display field or an equivalent broad string input:
 
 ```rust
 pub struct PostSendHookEvent {
@@ -101,12 +101,12 @@ The Task template retains its task marker and uses the same value source:
 ```
 
 For compatibility with already persisted team overrides,
-`{{description}}` remains a deprecated placeholder alias for `{{title}}` in
-this sprint. The renderer maps both names to `PostSendHookEvent.title`; the
-alias cannot access a message body. User documentation names `{{title}}` as
-canonical and marks the alias as title-only compatibility behavior. A blank
-title renders as an empty value; no fallback text is synthesized from message
-content.
+`{{description}}` remains a deprecated *placeholder-name* alias for
+`{{title}}` in this sprint. It is not a description field: the renderer maps
+both names to `PostSendHookEvent.title`, so the alias cannot access a message
+body. User documentation names `{{title}}` as canonical and marks the alias as
+title-only compatibility behavior. A blank title renders as an empty value;
+no fallback text is synthesized from message content.
 
 ### Forbidden data flow
 
@@ -135,9 +135,9 @@ This is the sole authoritative deliverables list for Phase AZ.
   `docs/atm-core/architecture.md`, `docs/atm-core/boundaries.md`,
   `docs/atm-graft/requirements.md`, `docs/atm-graft/architecture.md`, and
   `docs/atm-herdr/requirements.md`. Append a dated Phase AZ amendment to
-  `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md` and update
-  `docs/adr/INDEX.md` only if its summary needs to mention the amendment. The
-  documents must state the allowed message-derived fields, title-only source,
+  `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`. ADR-019's
+  status does not change, so its index entry does not change. The documents
+  must state the allowed message-derived fields, title-only source,
   missing-title rule, and `atm read --message-id` body boundary.
 - [ ] D2 — Replace the body-capable `PostSendHookEvent.description` semantic
   with `title` in `crates/atm-core/src/boundary/mod.rs`. Add one summary-only
@@ -175,11 +175,15 @@ This is the sole authoritative deliverables list for Phase AZ.
   text.
 - [ ] D6 — Add the focused regression suite in the files above plus
   `crates/atm-core/src/send/tests.rs` and
-  `crates/atm-core/src/send/post_write_tests.rs`. Tests must cover direct
-  post-send Steer, deferred Queue, queue rebuild, Task assignment, periodic
-  Task reminder, graft projection, and missing-title behavior. At least one
-  ordinary long body and one successfully admitted J2-rendered long body must
-  each use a distinct explicit title and carry unique body-only secret
+  `crates/atm-core/src/send/post_write_tests.rs`. Core send/nudge tests own
+  direct post-send Steer, deferred Queue, queue rebuild, Task assignment,
+  periodic Task reminder, missing-title, and completed-task selection proofs.
+  Graft and Herdr tests own their final projections. The real
+  `atm-http-runtime` template route in
+  `crates/atm-http-runtime/src/storage_and_nudge_router.rs` owns the admitted
+  J2 case; a source-construction-only CLI test does not satisfy it. At least
+  one ordinary long body and one successfully admitted J2-rendered long body
+  must each use a distinct explicit title and carry unique body-only secret
   sentinels. Assert those sentinels are absent from the event, rendered nudge,
   graft notice/body, and Herdr request while the persisted title, message id,
   and optional task id remain present. Preserve a focused proof that task
@@ -211,7 +215,6 @@ scripts/atm-nudge.py
 scripts/atm-nudge.sh
 scripts/test_atm_nudge.py
 docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md
-docs/adr/INDEX.md
 docs/architecture.md
 docs/atm/architecture.md
 docs/atm/requirements.md
@@ -243,6 +246,8 @@ None.
   files, and `boundaries/atm-storage/task-store.toml`.
 - task list/order/table code.
 - pending-nudge claim, requeue, deduplication, invalidation, and resend logic.
+- `docs/adr/INDEX.md`; ADR-019 remains accepted and its index summary is not a
+  Phase AZ deliverable.
 - historical Phase AD/AQ/AX/AY sprint plans and committed evidence.
 
 ## Acceptance criteria
@@ -284,12 +289,15 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test -p atm-core nudge_template
+cargo test -p atm-core nudge_dispatch
 cargo test -p atm-core --test nudge_mode
 cargo test -p atm-http-runtime herdr_queue_wake
 cargo test -p atm-http-runtime storage_and_nudge_router
 cargo test -p atm-daemon-bootstrap received_hook_selector
 cargo test -p atm-graft nudge_sink
 just test-graft-python
+python3 scripts/test_atm_nudge.py
+! rg -n 'envelope\.text|row\.description' crates/atm-core/src/send/hook.rs crates/atm-core/src/nudge_dispatch.rs
 python3 .just/run_lint.py boundaries
 python3 .just/run_lint.py nudge-taxonomy
 git diff --check develop...HEAD

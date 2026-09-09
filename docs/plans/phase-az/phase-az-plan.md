@@ -60,7 +60,10 @@ Phase AZ contains exactly one sprint:
 
 AZ.1 owns the one authoritative deliverables list, affected-path list,
 acceptance criteria, and validation matrix. There is no second Phase AZ
-sprint and no live evidence gate.
+sprint and no live evidence gate. The consumer count does not justify a split:
+every touched projection compiles against the same `PostSendHookEvent` field
+rename and closes the same forbidden body-flow invariant. Shipping any subset
+would leave either a broken public boundary or an unclosed delivery class.
 
 ## Dependency relation
 
