@@ -247,11 +247,21 @@ retaining the v1 `tasks`/`task_events` compatibility projection and its
    reconstructed body text.
 8. Install a compatibility bridge: new writers update v2 and the retained v1
    projection in one transaction; triggers on supported v1 writes translate
-   legacy assign/ack/complete mutations into v2 attempts/events. A retained
-   1.5.14 binary fixture must assign, acknowledge, and complete against the
-   migrated database, after which the new binary reopens it and observes the
-   same state. No v1 table/column is dropped in Phase AZ; retirement requires a
-   separate ADR-061 major approval after the co-existence window.
+   legacy assign/ack/complete mutations into v2 attempts/events. Those triggers
+   reuse steps 2–4's deterministic reconciliation rather than rejecting a
+   write the legacy binary can make: multiple v1 assignee rows become immutable
+   attempts, current state/assignee use the same `Active > Assigned > Complete`
+   precedence and deterministic winning-attempt rule, and any resulting
+   one-active-per-agent collision keeps the earliest `original_assigned_at`,
+   then lexical `TaskId`, active. Every surplus active task is demoted to
+   `Assigned` with `MigratedActiveConflictDemotion`, exactly as in the
+   one-time migration. The bridge must not introduce last-write-wins or a
+   second rejection policy. A retained 1.5.14 binary fixture must create
+   multiple assignee rows and an active collision, then assign, acknowledge,
+   and complete against the migrated database; the new binary reopens it and
+   observes the same reconciled state and audit events. No v1 table/column is
+   dropped in Phase AZ; retirement requires a separate ADR-061 major approval
+   after the co-existence window.
 9. Validate foreign keys/check constraints, row/attempt/event counts, terminal
    outcome consistency, active uniqueness, and v1/v2 projection agreement
    before committing. Any failure rolls back the entire migration and leaves
@@ -372,9 +382,10 @@ insufficient.
 - [ ] D4 — Implement the transactional v2 migration and indexes in
   `atm-storage-rusqlite`, introduce/persist `STORAGE_SCHEMA_VERSION = 2.0.0`,
   and retain the v1 tables/description compatibility projection for the
-  approved coexistence window. Implement deterministic state precedence,
-  active-conflict demotion, v1/v2 write bridging, and previous-binary rollback
-  tests. Fresh and upgraded databases must converge to byte-equivalent v2 plus
+  approved coexistence window. Implement deterministic state precedence and
+  active-conflict demotion once and reuse them for both initial migration and
+  every supported v1 bridge write; add previous-binary multi-assignee and
+  active-conflict rollback tests. Fresh and upgraded databases must converge to byte-equivalent v2 plus
   compatibility schema. Add `idx_mail_messages_task_id` through
   `mail_messages_index_ddl!()` and extend its migrated-versus-fresh
   index-identity test; Phase AZ deletes no v1 table or column.
@@ -385,8 +396,9 @@ insufficient.
   and task-id-joined pending-nudge cleanup across all task-linked messages.
 - [ ] D6 — Update machine-readable task/read/mutation boundary records and add
   pure-state, migration, replay, malformed-legacy, retry, concurrent-start,
-  concurrent-reassign, atomic-rollback, no-body, and queue-cleanup tests using
-  temporary SQLite databases and real writer/read adapters. Extend the frozen
+  concurrent-reassign, bridge-time multi-assignee/active-conflict reconciliation,
+  atomic-rollback, no-body, and queue-cleanup tests using temporary SQLite
+  databases and real writer/read adapters. Extend the frozen
   nudge-identifier inventory only for identifiers actually introduced by this
   sprint, beside ADR-063; never bulk-regenerate it.
 
@@ -469,8 +481,10 @@ This is the sole authoritative acceptance list for AZ.2.
 3. Existing rows migrate to `Normal`; state collapse uses
    `Active > Assigned > Complete`, records every non-winning row, and
    deterministically demotes pre-existing active conflicts to `Assigned`.
-   Replay reproduces current projection, attempts, counters, and terminal
-   linkage without copying `description` into v2.
+   The v1 bridge applies those same rules and
+   `MigratedActiveConflictDemotion` events to post-migration multi-assignee and
+   active-conflict writes. Replay reproduces current projection, attempts,
+   counters, and terminal linkage without copying `description` into v2.
 4. Database constraints and race tests prove one current assignee per task and
    at most one active task per `(team, agent)`. Losing concurrent operations
    leave no partial messages, attempts, or events.

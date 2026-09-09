@@ -102,9 +102,14 @@ The major classification does not permit lockstep upgrade. For the coexistence
 duration approved by Rand, the canonical v2 tables live beside the retained v1
 `tasks` and `task_events` tables and `description` column. New writers update
 v2 and the v1 compatibility projection transactionally. Supported writes from
-the previous binary are mirrored into v2 by compatibility triggers. A retained
-ATM 1.5.14 fixture must open the migrated database, assign, acknowledge, and
-complete; the new binary must then reopen and observe those changes.
+the previous binary are mirrored into v2 by compatibility triggers. The bridge
+uses the same state precedence, winning-attempt selection, and deterministic
+active-conflict demotion as the one-time migration when a legacy write creates
+multiple assignee rows or violates v2's one-active-per-agent invariant; it
+records `MigratedActiveConflictDemotion` rather than rejecting a write the
+legacy binary supports. A retained ATM 1.5.14 fixture must open the migrated
+database, exercise those conflicts, assign, acknowledge, and complete; the new
+binary must then reopen and observe the reconciled changes and audit events.
 
 Migration uses `Active > Assigned > Complete` when legacy rows for one logical
 task disagree, records every non-winning row, and demotes deterministic surplus
