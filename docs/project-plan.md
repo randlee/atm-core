@@ -1748,8 +1748,10 @@ at normal priority; one current assignee per task and one active task per
 The governed-interface sequence is HTTP API 1.3.0 → 1.4.0 in AZ.3 and SQLite
 schema 2.0.0 (major task migration) → 2.1.0 (additive attention tables) in
 AZ.2/AZ.4. ADR-063 records the capability-trait recount and v1/v2 coexistence
-bridge. Phase AZ remains proposed and implementation-blocked until Rand's
-ADR-061 major-storage approval and coexistence duration are recorded.
+bridge. Rand approved that major change on 2026-09-09: ATM `1.6.0` introduces
+v2, every `1.6.x` release retains the bridge, and ATM `1.7.0` is the planned
+removal target and earliest permitted removal release under a separate ADR-061
+major review. ADR-061 D6 and ADR-063 D6 record the decision.
 
 The authoritative umbrella is
 [Phase AZ plan](./plans/phase-az/phase-az-plan.md), with one authoritative

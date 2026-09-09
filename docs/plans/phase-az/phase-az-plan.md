@@ -4,7 +4,7 @@ title: "Phase AZ: bounded nudges and durable task lifecycle"
 canonical_path: docs/plans/phase-az/phase-az-plan.md
 planning_branch: plan/phase-az-task-nudge-contract
 integration_branch: develop
-status: proposed
+status: approved
 owner: solar
 authored: 2026-09-09
 baseline: develop@0ca0878cf4045546fb7f4b4f14dc6c473995158c
@@ -13,6 +13,7 @@ authority:
   - arch-ctm@atm-dev task PHASE-AZ-2-TASK-LIFECYCLE-PLANNING
   - arch-ctm@atm-dev messages 01M23GR2K5M5SEBX8ZWDJAM8Q2 and 01M23GVQMV5E3BW7F5K65JEK87
   - team-lead@atm-dev message 01M23E8CGE4ENY59CY2VT079YX
+  - Rand's 2026-09-09 major-change and coexistence approval, recorded in ADR-061 D6 and ADR-063 D6
 ---
 
 # Phase AZ: bounded nudges and durable task lifecycle
@@ -23,7 +24,7 @@ ATM first needs to restore the notification boundary: nudges are bounded wake-up
 metadata, while the immutable message body is retrieved only with `atm read
 --message-id`. That remains the complete and unchanged scope of AZ.1.
 
-The proposed, approval-gated follow-up design then replaces the message-derived
+The approved follow-up design then replaces the message-derived
 three-state task ledger with a durable logical-task lifecycle. A stable `TaskId` survives
 assignment attempts, explicit commands own state changes, terminal outcomes and
 supersession are recorded, and the runtime derives at most one fair idle work
@@ -108,7 +109,7 @@ ADR-054's bare-CLI pull behavior.
 | `AZ-TASK-LIFECYCLE` | In scope | AZ.2 replaces the task domain/schema and provides transactional mutation primitives. |
 | `AZ-TASK-COMMANDS` | In scope | AZ.3 adds the canonical command/service surface, authorization, durable handoffs, and legacy adapters. |
 | `AZ-TASK-COMPLETE-PENDING` | In scope | AZ.2 atomically joins canonical messages by `(team, task_id)` and invalidates every task-linked pending marker—not only assignment-attempt ids—when a task blocks, closes, reassigns, reopens, or is superseded. |
-| `AZ-GOVERNED-INTERFACES` | Approval-gated | AZ.2/AZ.3/AZ.4 implement the ADR-061 version, migration, record, and older-consumer matrix; AZ.2's major storage change additionally requires Rand's separately recorded sign-off. |
+| `AZ-GOVERNED-INTERFACES` | In scope | AZ.2/AZ.3/AZ.4 implement the ADR-061 version, migration, record, and older-consumer matrix; ADR-061 D6 and ADR-063 D6 record Rand's approval of the major storage change and its version-bounded coexistence window. |
 | `AZ-IDLE-INTERLEAVING` | In scope | AZ.4 replaces drain-first reminder scheduling with the one-item fair selector. |
 
 These are planning identifiers, not substitutes for repository issue numbers.
@@ -169,7 +170,7 @@ that owns the interface change.
 | Sprint | HTTP/peer API | Herdr IPC | SQLite schema |
 | --- | --- | --- | --- |
 | AZ.1 | No HTTP route/DTO change; patch classification. The separate internal-nudge/graft compatibility seam follows ADR-054's reader-first dual-key plan. | Prompt content becomes bounded title metadata but the Herdr request shape and `HERDR_MINIMUM_VERSION` are unchanged; patch classification. | No schema/version change. |
-| AZ.2 | No HTTP/version change. | No Herdr/version change. | **Major:** introduce persisted `STORAGE_SCHEMA_VERSION = 2.0.0` and canonical v2 task/attempt/event/operation tables with changed constraints/meaning. Retain the full v1 table/column projection and transactional bidirectional compatibility bridge for the approved coexistence window. |
+| AZ.2 | No HTTP/version change. | No Herdr/version change. | **Major:** ATM `1.6.0` introduces persisted `STORAGE_SCHEMA_VERSION = 2.0.0` and canonical v2 task/attempt/event/operation tables with changed constraints/meaning. Retain the full v1 table/column projection and transactional bidirectional compatibility bridge throughout `1.6.x`; ATM `1.7.0` is the planned removal target and earliest permitted removal release, subject to a separate ADR-061 major approval. |
 | AZ.3 | **Minor:** additive task routes, request variants, and optional response fields; bump `HTTP_API_VERSION` 1.3.0 → 1.4.0, update both OpenAPI documents and surface baseline, append ADR-061 D5 record, and run retained 1.3.0 consumer tests. | No Herdr/version change. | No schema/version change beyond consuming AZ.2. |
 | AZ.4 | No HTTP/version change. | Scheduler implementation changes behind the existing Herdr request shape; `HERDR_MINIMUM_VERSION` remains unchanged. | **Minor:** additive attention cursor/reservation tables; bump `STORAGE_SCHEMA_VERSION` 2.0.0 → 2.1.0 through a registered idempotent migration, update schema/ADR-061 records, and run fresh/upgraded plus older-consumer tests. |
 
@@ -179,17 +180,22 @@ terminal sum-state meaning and one-active constraints, and must support atomic
 multi-task supersession. It is therefore intentionally classified major even
 though the coexistence bridge prevents lockstep upgrade.
 
-**Open approval gate:** ADR-061 requires Rand's explicit recorded approval and
-the approved v1/v2 coexistence duration before this plan may become approved.
-The citation is not yet present; implementation and plan approval are blocked
-until team-lead records that message/issue/ADR reference in this section and in
-ADR-063. The plan must not substitute its own authorship for that sign-off.
+**Approval record:** On 2026-09-09, Rand approved the schema-v2 major
+classification and directed ATM `1.6.0` to introduce v2 while retaining the v1
+bridge throughout `1.6.x`. ATM `1.7.0` is the planned bridge-removal target and
+the earliest permitted removal release, under a separate ADR-061 major-change
+approval. ADR-061 D6 and accepted ADR-063 D6 are the durable citations for that
+decision.
 
-The assumed rollback story is concrete: after v2 migration, a retained ATM
+The approved rollback story is concrete: after v2 migration, a retained ATM
 1.5.14 binary opens the same database, reads and mutates its v1 task projection,
 and compatibility triggers mirror supported assign/ack/complete writes into v2.
-The new binary can then reopen and observe those writes. Phase AZ drops no v1
-object; ending the bridge is a separately approved ADR-061 major change.
+The new binary can then reopen and observe the reconciled writes. During
+`1.6.x`, the legacy guarantee is no crash and no compatibility rejection for
+those supported operations, not preservation of conflicting v1 semantics.
+Canonical v2 behavior applies immediately. Phase AZ drops no v1 object; the
+planned ATM `1.7.0` bridge removal is a separately approved ADR-061 major
+change and cannot occur earlier.
 
 ## Architecture boundary
 

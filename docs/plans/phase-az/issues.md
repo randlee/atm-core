@@ -10,7 +10,7 @@ replace repository issue numbers or QA triage authority.
 | `AZ-TASK-COMPLETE-PENDING` | planned | AZ.2 | Block/close/reassign/reopen/supersede atomically join canonical messages by `(team, task_id)` and invalidate assignment, progress, requeued, and legacy task-linked pending markers. Missing historical messages are audit facts and cannot retain a marker. |
 | `AZ-TASK-COMMANDS` | planned | AZ.3 | Canonical task CLI/API, authorization, explicit start, durable handoffs, supersession, and legacy adapters pass end-to-end. |
 | `AZ-IDLE-INTERLEAVING` | planned | AZ.4 | One derived selector emits at most one item per idle opportunity and alternates the separate ephemeral/persistent lanes across restart. |
-| `AZ-GOVERNED-INTERFACES` | approval-gated | AZ.2/AZ.3/AZ.4 | HTTP API 1.4.0 and storage schema 2.0.0/2.1.0 carry ADR-061 records and older-consumer tests; Rand's major-storage approval and coexistence duration must be cited before plan approval. |
+| `AZ-GOVERNED-INTERFACES` | planned | AZ.2/AZ.3/AZ.4 | HTTP API 1.4.0 and storage schema 2.0.0/2.1.0 carry ADR-061 records and older-consumer tests; ADR-061 D6 and ADR-063 D6 record the approved `1.6.x` coexistence window and ATM `1.7.0` as the planned and earliest permitted bridge-removal release. |
 
 ## Binding clarifications
 
@@ -39,12 +39,12 @@ replace repository issue numbers or QA triage authority.
 | `AZ-DES-001` | AZ.1 uses dual-key internal/graft wire DTOs, a deserialization alias, reader-first 1.5.14/1.5.15 skew tests, and an ADR-054 amendment. |
 | `AZ-DES-002` | AZ.3 D5 and its path list own `crates/atm-core/src/send/mod.rs` assignment dispatch/queue suppression. |
 | `AZ-DES-003` | Canonical terminal handoff is same-host only; cross-host rejects before mutation. |
-| `AZ-DES-004` | The phase governed-interface matrix specifies HTTP 1.4.0 and storage 2.0.0/2.1.0 records, migrations, compatibility tests, and the open Rand approval gate. |
+| `AZ-DES-004` | The phase governed-interface matrix specifies HTTP 1.4.0 and storage 2.0.0/2.1.0 records, migrations, compatibility tests, and Rand's approved `1.6.x` bridge window. |
 | `AZ-DES-005` | Typed legacy completion preserves assigner/assignee and Assigned/Active behavior without widening canonical completion. |
 | `AZ-DES-006` | AZ.2 retains ack activation; AZ.3 lands the mail-only ack switch atomically with explicit start. |
 | `AZ-DES-007` | All sprint validations run the line-count gate and AZ.2/AZ.3/AZ.4 authorize split modules. |
 | `AZ-DES-008` | AZ.2 owns list/top-runnable ordering and the covering index. |
-| `AZ-DES-009` / `AZ-DES-009-R` | Proposed ADR-063 recounts the twelve live semantic capabilities, groups required async companions per ADR-036, and assigns task mutation, attention scheduling, and schema-major rationale. |
+| `AZ-DES-009` / `AZ-DES-009-R` | Accepted ADR-063 recounts the twelve live semantic capabilities, groups required async companions per ADR-036, and assigns task mutation, attention scheduling, and schema-major rationale. |
 | `AZ-DES-010` | Migration uses open/active precedence, records discarded rows, and deterministically demotes surplus active rows. |
 | `AZ-DES-011` | A dedicated operations table owns idempotency; both supersession histories may reference one operation. |
 | `AZ-DES-012` | Invalidation joins every canonical message envelope by `(team, taskId)`, not only attempt message ids. |

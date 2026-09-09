@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-063 |
-| Status | Proposed — blocked on ADR-061 major-change approval |
+| Status | Accepted — ADR-061 major change approved 2026-09-09 |
 | Scope | Phase AZ task lifecycle mutation, attention scheduling, and SQLite v2 coexistence |
 | Relates to | ADR-009, ADR-018, ADR-035, ADR-036, ADR-054, ADR-061, ADR-062, Phase AZ |
 
@@ -98,11 +98,12 @@ supersession cannot be expressed as optional columns on the old
 `(team, task_id, assignee)` projection without keeping two contradictory
 authorities.
 
-The major classification does not permit lockstep upgrade. For the coexistence
-duration approved by Rand, the canonical v2 tables live beside the retained v1
-`tasks` and `task_events` tables and `description` column. New writers update
-v2 and the v1 compatibility projection transactionally. Supported writes from
-the previous binary are mirrored into v2 by compatibility triggers. The bridge
+The major classification does not permit lockstep upgrade. ATM `1.6.0`
+introduces the canonical v2 tables beside the retained v1 `tasks` and
+`task_events` tables and `description` column. Every `1.6.x` release retains
+the bidirectional bridge. New writers update v2 and the v1 compatibility
+projection transactionally. Supported writes from the previous binary are
+mirrored into v2 by compatibility triggers. The bridge
 uses the same state precedence, winning-attempt selection, and deterministic
 active-conflict demotion as the one-time migration when a legacy write creates
 multiple assignee rows or violates v2's one-active-per-agent invariant; it
@@ -117,10 +118,16 @@ active tasks to Assigned when old data violates `(team, agent)` active
 uniqueness. It never silently closes live work, reopens a fully completed task,
 or makes an existing host permanently unupgradable.
 
-Phase AZ drops no v1 object. Removing the bridge later is a separate ADR-061
-major change with its own approval. Migration failure rolls back before the
-version changes; successful migration remains rollback-consumable through the
-coexistence bridge.
+Phase AZ drops no v1 object. ATM `1.7.0` is the planned bridge-removal target
+and the earliest release permitted to remove it; removal remains a separate
+ADR-061 major change with its own approval. Migration failure rolls back before
+the version changes;
+successful migration remains consumable by the retained ATM `1.5.14` binary
+through every `1.6.x` release. That rollback guarantee is operational: the old
+binary must open and read the database and its supported
+assign/acknowledge/complete writes must not crash or be rejected. Exact legacy
+state semantics are not guaranteed when the bridge reconciles a write to v2's
+authoritative constraints.
 
 ### D5. SQLite schema 2.1 additive attention migration
 
@@ -135,14 +142,20 @@ older-consumer suite must remain green.
 
 ### D6. Governed-interface approval record
 
-ADR-061 requires Rand's explicit sign-off before this ADR or the Phase AZ plan
-can become Accepted/Approved. The approval record must name the 2.0.0 major
-classification and the v1/v2 coexistence duration.
+**Approval:** On 2026-09-09, Rand explicitly approved the
+`STORAGE_SCHEMA_VERSION = 2.0.0` major classification and directed that ATM
+`1.6.0` ship canonical v2 storage with the v1 bridge retained throughout the
+entire `1.6.x` line. ATM `1.7.0` is the planned bridge-removal target and the
+earliest permitted removal release; removal remains a separate ADR-061
+major-change review. This accepted ADR and ADR-061 D6 are the durable approval
+record.
 
-**Approval:** pending; no message id, issue comment, or accepted ADR citation
-has yet been supplied. Planning may describe the assumed design, but
-implementation must not begin and plan status must not advance until this field
-is replaced with the recorded approval.
+The approved coexistence promise is intentionally about safe operation, not
+unchanged legacy semantics. ATM `1.5.14` must not crash or receive a
+compatibility rejection when it opens, reads, or performs its supported
+assign/acknowledge/complete writes against a migrated database. Canonical v2
+remains authoritative immediately, so the bridge may normalize a legacy write
+and record reconciliation events such as `MigratedActiveConflictDemotion`.
 
 ## Consequences
 
@@ -150,7 +163,8 @@ is replaced with the recorded approval.
   instead of leaking SQLite transactions into core, CLI, or runtime code.
 - Capability growth is explicit and capped at twelve semantic capabilities;
   required async companions do not increment that count.
-- The previous release remains a supported rollback consumer after migration.
+- ATM `1.5.14` remains an operational rollback consumer throughout `1.6.x`;
+  authoritative v2 reconciliation may change the state it subsequently sees.
 - Canonical v2 rows contain no rendered body or duplicate task description;
   the retained v1 description column is a temporary, approved compatibility
   exception only.
@@ -185,5 +199,5 @@ is replaced with the recorded approval.
   envelope-`taskId`-joined nudge invalidation, and no-body tests.
 - Fair scheduler tests across restart with one reservation per idle opportunity
   and no merged message/task lifecycle state.
-- ADR-061 version records and Rand's explicit approval citation before status
-  changes from Proposed.
+- ADR-061 version records and phase-end verification against the approval in
+  D6, including the full-`1.6.x` bridge-retention boundary.

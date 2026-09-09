@@ -197,11 +197,14 @@ one transaction. No caller receives a connection or writer permit.
 ## SQLite v2 schema, compatibility window, and migration
 
 `STORAGE_SCHEMA_VERSION` is introduced as `2.0.0` and persisted in the
-database. This is an ADR-061 **major** change and cannot receive plan approval
-until Rand's separately recorded sign-off is cited in the Phase AZ plan and
-ADR-063. The implementation assumes that approval and provides this explicit
-co-existence window: the previous supported 1.5.14 binary must continue to open,
-read, and mutate a migrated database for the duration Rand approves.
+database by ATM `1.6.0`. This is an approved ADR-061 **major** change, recorded
+in ADR-061 D6 and ADR-063 D6. Every `1.6.x` release retains the v1/v2 bridge.
+ATM `1.7.0` is the planned removal target and earliest permitted removal
+release, under a separate ADR-061 major approval. During `1.6.x`, the previous
+supported 1.5.14 binary must continue to
+open and read a migrated database and make its supported
+assign/acknowledge/complete writes without a crash or compatibility rejection.
+The bridge may reconcile those writes to authoritative v2 semantics.
 
 The migration builds the canonical v2 task ledger transactionally while
 retaining the v1 `tasks`/`task_events` compatibility projection and its
@@ -261,7 +264,7 @@ retaining the v1 `tasks`/`task_events` compatibility projection and its
    and complete against the migrated database; the new binary reopens it and
    observes the same reconciled state and audit events. No v1 table/column is
    dropped in Phase AZ; retirement requires a separate ADR-061 major approval
-   after the co-existence window.
+   no earlier than ATM `1.7.0`, after the `1.6.x` co-existence window.
 9. Validate foreign keys/check constraints, row/attempt/event counts, terminal
    outcome consistency, active uniqueness, and v1/v2 projection agreement
    before committing. Any failure rolls back the entire migration and leaves
@@ -365,15 +368,15 @@ insufficient.
 
 - [ ] D1 — Amend `docs/requirements.md`, `docs/architecture.md`,
   create the canonical `docs/task-lifecycle-schema.md`, amend
-  `docs/atm-storage/boundaries.md`, and amend ADR-061/ADR-062 plus accept the
-  proposed `ADR-063-phase-az-task-and-attention-capabilities.md` and index it in
+  `docs/atm-storage/boundaries.md`, amend ADR-061/ADR-062, maintain the accepted
+  `ADR-063-phase-az-task-and-attention-capabilities.md`, and index it in
   `docs/adr/INDEX.md`. Record the corrected lifecycle, stable identity,
   capability-trait recount, schema-v2 major classification, coexistence,
   immutable attempts/events, ordering, priority, idempotency, migration, and
   transaction ownership. Remove the Phase-AM-deleted `OutboundMessageQuery`
   from ADR-036's capability inventory and update its matching boundary TOMLs.
-  Plan approval remains blocked until Rand's explicit
-  ADR-061 major-change sign-off is cited in ADR-063 and the phase plan.
+  Preserve Rand's explicit ADR-061 major-change approval and version-bounded
+  coexistence record in ADR-061 D6, ADR-063 D6, and the phase plan.
 - [ ] D2 — Replace the pure task model in
   `crates/atm-storage/src/task_state.rs` with the types and legal transitions
   above. Add typed rejections for illegal transition, stale revision,
@@ -517,7 +520,8 @@ This is the sole authoritative acceptance list for AZ.2.
 10. Every changed storage contract has matching Rust docs, boundary TOML, crate
    boundary prose, public error code, and concrete-adapter tests. ADR-036 and
    matching boundary TOMLs no longer list the deleted `OutboundMessageQuery`.
-   ADR-063 is indexed and cites Rand's approval before the plan may be approved.
+   ADR-063 is accepted and indexed, and its D6 approval record matches ADR-061
+   D6 and the phase plan.
 
 ## Required validation
 
@@ -547,5 +551,7 @@ with temporary stores only.
   prompt emission.
 - AZ.2 does not run a live/test daemon or perform any tag, release, package
   publish, or installation operation.
-- AZ.2 does not remove the v1 compatibility schema after migration; that is a
-  future ADR-061 major-change decision after the approved coexistence window.
+- AZ.2 does not remove the v1 compatibility schema after migration. Every ATM
+  `1.6.x` release retains it. ATM `1.7.0` is the planned removal target and
+  earliest permitted removal release, and removal remains a separate ADR-061
+  major-change decision.
