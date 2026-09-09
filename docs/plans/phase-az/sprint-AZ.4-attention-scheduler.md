@@ -267,7 +267,9 @@ runtime wiring without durable fairness, is insufficient.
   `AttentionItem`, separate lanes, durable fairness, one-item opportunities,
   cadence, retry terminalization, task-scoped escalation counting, queue-cleanup
   interaction, lifecycle-blocked versus runtime-blocked vocabulary, and the
-  replacement of stale "after draining mail"/"Task body" requirements.
+  replacement of stale "after draining mail"/"Task body" requirements. Recheck
+  ADR-036's capability inventory and matching boundary TOMLs, removing any
+  remaining `OutboundMessageQuery` entry deleted by Phase AM.
 - [ ] D6 — Add real composed-runtime tests covering FIFO, persistent ordering,
   alternating dual-lane opportunities, single-lane progress, restart cursor
   persistence, concurrent opportunity idempotency, read/ack suppression,
@@ -376,7 +378,9 @@ This is the sole authoritative acceptance list for AZ.4.
    body sentinels never appear. No legacy daemon code or direct SQLite access is
    introduced.
 9. Requirements, architecture, ADR, crate docs, user docs, Rust contracts, and
-   boundary TOMLs describe the same one-item, fair, persistent scheduler.
+   boundary TOMLs describe the same one-item, fair, persistent scheduler;
+   ADR-036 and matching boundary TOMLs contain no stale
+   `OutboundMessageQuery` entry.
 10. `STORAGE_SCHEMA_VERSION` is 2.1.0; fresh and 2.0-upgraded schemas are
     byte-equivalent, the prior consumer ignores the additive tables, and the
     ADR-061 version record agrees.

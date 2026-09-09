@@ -370,7 +370,9 @@ insufficient.
   `docs/adr/INDEX.md`. Record the corrected lifecycle, stable identity,
   capability-trait recount, schema-v2 major classification, coexistence,
   immutable attempts/events, ordering, priority, idempotency, migration, and
-  transaction ownership. Plan approval remains blocked until Rand's explicit
+  transaction ownership. Remove the Phase-AM-deleted `OutboundMessageQuery`
+  from ADR-036's capability inventory and update its matching boundary TOMLs.
+  Plan approval remains blocked until Rand's explicit
   ADR-061 major-change sign-off is cited in ADR-063 and the phase plan.
 - [ ] D2 — Replace the pure task model in
   `crates/atm-storage/src/task_state.rs` with the types and legal transitions
@@ -513,8 +515,9 @@ This is the sole authoritative acceptance list for AZ.2.
 9. Storage list/top-runnable tests prove the binding order and covering-index
    query plan without materializing unbounded task or event history.
 10. Every changed storage contract has matching Rust docs, boundary TOML, crate
-   boundary prose, public error code, and concrete-adapter tests. ADR-063 is
-   indexed and cites Rand's approval before the plan may be approved.
+   boundary prose, public error code, and concrete-adapter tests. ADR-036 and
+   matching boundary TOMLs no longer list the deleted `OutboundMessageQuery`.
+   ADR-063 is indexed and cites Rand's approval before the plan may be approved.
 
 ## Required validation
 
