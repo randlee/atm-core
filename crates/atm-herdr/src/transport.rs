@@ -165,7 +165,10 @@ impl HerdrIo {
     ) -> Result<HerdrEnvelope, HerdrError> {
         match self {
             Self::Cli(cli) => cli.call(op, session, deadline).await,
-            Self::Socket(socket) => socket.call(op, session, deadline).await,
+            Self::Socket(socket) => match op {
+                HerdrOp::StatusServer => socket.server_info(session, deadline).await,
+                op => socket.call(op, session, deadline).await,
+            },
         }
     }
 }
@@ -312,18 +315,26 @@ pub(crate) fn server_status_from_envelope(
         .ok_or_else(|| protocol_mismatch("response did not contain a protocol number"))?;
     let live_handoff = result
         .get("capabilities")
-        .and_then(Value::as_array)
-        .map(|capabilities| {
-            capabilities
-                .iter()
-                .any(|capability| capability.as_str() == Some("live_handoff"))
-        })
+        .map(live_handoff_from_capabilities)
         .unwrap_or(false);
     Ok(HerdrServerStatus {
         version,
         protocol,
         live_handoff,
     })
+}
+
+fn live_handoff_from_capabilities(capabilities: &Value) -> bool {
+    match capabilities {
+        Value::Array(capabilities) => capabilities
+            .iter()
+            .any(|capability| capability.as_str() == Some("live_handoff")),
+        Value::Object(capabilities) => capabilities
+            .get("live_handoff")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        _ => false,
+    }
 }
 
 pub(crate) fn unit_from_envelope(envelope: HerdrEnvelope) -> Result<(), HerdrError> {

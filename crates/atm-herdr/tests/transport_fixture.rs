@@ -4,9 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use atm_core::doctor::{HerdrDoctorState, HerdrTransportKind};
 use atm_core::{HerdrAgentName, HerdrSession, RequestDeadline};
 use atm_herdr::testing::production_invoker_with_test_binary_and_environment;
-use atm_herdr::{HerdrError, HerdrProcessAdapter};
+use atm_herdr::{HerdrClientConfig, HerdrDoctorProbe, HerdrError, HerdrProcessAdapter};
 
 #[path = "support/fake_herdr_socket/mod.rs"]
 mod fake_herdr_socket;
@@ -271,6 +272,63 @@ async fn socket_fixture_matrix_covers_late_start_and_one_request_connections() {
     assert!(matches!(second, Err(HerdrError::ServerUnavailable { .. })));
     #[cfg(unix)]
     let _ = std::fs::remove_file(path);
+}
+
+#[cfg(any(unix, windows))]
+#[tokio::test]
+async fn socket_doctor_ping_response_reports_ok() {
+    let path = socket_path("doctor-ping");
+    let server = fake_herdr_socket::FakeHerdrSocket::bind(&path).expect("fake socket bind");
+    let response = br#"{"result":{"type":"pong","version":"0.8.2","protocol":20,"capabilities":{"live_handoff":true}}}
+"#.to_vec();
+    let server_task = tokio::spawn(server.serve_once(response));
+    let config = HerdrClientConfig::try_new(HerdrTransportKind::Socket, None, Some(path.clone()))
+        .expect("socket config");
+    let observation = HerdrDoctorProbe::new(config)
+        .observe(None, &[], RequestDeadline::after(Duration::from_secs(1)))
+        .await;
+    let request = server_task
+        .await
+        .expect("fake socket task")
+        .expect("ping request");
+    let request: serde_json::Value = serde_json::from_slice(&request).expect("request JSON");
+
+    assert_eq!(request["id"], "atm:agent:ping");
+    assert_eq!(request["method"], "ping");
+    assert!(matches!(
+        observation.state,
+        HerdrDoctorState::Ok {
+            ref version,
+            protocol: 20,
+        } if version.as_str() == "0.8.2"
+    ));
+    assert_eq!(observation.live_handoff, Some(true));
+}
+
+#[cfg(any(unix, windows))]
+#[tokio::test]
+async fn socket_doctor_rejected_ping_reports_unexpected_response() {
+    let path = socket_path("doctor-reject");
+    let server = fake_herdr_socket::FakeHerdrSocket::bind(&path).expect("fake socket bind");
+    let response = br#"{"error":{"code":"internal_error","message":"ping rejected"}}
+"#
+    .to_vec();
+    let server_task = tokio::spawn(server.serve_once(response));
+    let config = HerdrClientConfig::try_new(HerdrTransportKind::Socket, None, Some(path))
+        .expect("socket config");
+    let observation = HerdrDoctorProbe::new(config)
+        .observe(None, &[], RequestDeadline::after(Duration::from_secs(1)))
+        .await;
+    server_task
+        .await
+        .expect("fake socket task")
+        .expect("ping request");
+
+    assert!(matches!(
+        observation.state,
+        HerdrDoctorState::UnexpectedResponse { detail, .. }
+            if detail == "ping rejected"
+    ));
 }
 
 #[cfg(any(unix, windows))]
