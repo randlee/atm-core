@@ -1,0 +1,13 @@
+ATM TEST REPORT
+skill: atm-nudge-roundtrip
+fixture: hermes-testbed
+agent: hermes@testbed  tools: native
+atm: client 1.5.11 daemon 1.5.11
+result: PASS   (5/5 steps)
+steps:
+  0 PASS Start line — 01M21REF0Z4BHWDD612FWG9QJN
+  1 PASS Nudge received — id 01M21REFQ6NV7HCW5FCMF7D7SE
+  2 PASS Read by id — count 1, mutation_applied true
+  3 PASS Ack natively — reply 01M21REVAHR6AG83ZB48FZJR0Z
+  4 PASS List after idle — exit 0
+elapsed: 26s
