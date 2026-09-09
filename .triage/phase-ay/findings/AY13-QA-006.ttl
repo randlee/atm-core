@@ -24,7 +24,9 @@
   triage:hasResolution <urn:atm:triage:resolution/AY13-QA-006/1> ;
   triage:closedAt "2026-09-07T18:05:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
-  triage:triageRecordVersion "2" .
+  triage:supersededBy "GH-1355" ;
+  triage:supersessionNote "2026-09-09 fenix (single-writer): the resolution recorded here (Vec<AgentName> for escalation recipients, c0afd678d) was itself the root cause of #1355: recipients are addresses such as ops@atm-dev, which AgentName rejects, so the daemon /doctor body became undeserialisable by the CLI. PR #1358 reverts the recipient fields to an address type. A future pass must not re-apply this record's demanded fix; the valid form is a validated address newtype, never AgentName." ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AY13-QA-006/1>
   a triage:Occurrence ;

@@ -1,9 +1,12 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
+use super::team_scope::team_message;
 use super::{
-    DoctorFinding, DoctorSeverity, EscalationRecipientSource, EscalationRecipientsDoctorReport,
-    TeamEscalationRecipientsDoctorReport,
+    DoctorFinding, DoctorSeverity, EscalationRecipientAddress, EscalationRecipientSource,
+    EscalationRecipientsDoctorReport, TeamEscalationRecipientsDoctorReport,
 };
+use crate::address::AgentAddress;
 use crate::boundary::{DurableRosterStore, TaskState, TaskStore};
 use crate::error_codes::AtmErrorCode;
 use crate::service_runtime::LocalServiceRuntime;
@@ -55,13 +58,10 @@ fn doctor_teams(
 fn daemon_recipients(
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     findings: &mut Vec<DoctorFinding>,
-) -> Vec<crate::types::AgentName> {
+) -> Vec<EscalationRecipientAddress> {
     match task_store {
         Some(store) => match store.list_escalation_recipients(&EscalationScope::Daemon) {
-            Ok(recipients) => recipients
-                .into_iter()
-                .map(crate::types::AgentName::from_validated)
-                .collect(),
+            Ok(recipients) => validated_recipients(recipients, findings),
             Err(error) => {
                 push_storage_failure(findings, "daemon escalation recipients", error);
                 Vec::new()
@@ -69,6 +69,22 @@ fn daemon_recipients(
         },
         None => Vec::new(),
     }
+}
+
+fn validated_recipients(
+    recipients: Vec<String>,
+    findings: &mut Vec<DoctorFinding>,
+) -> Vec<EscalationRecipientAddress> {
+    recipients
+        .into_iter()
+        .filter_map(|recipient| match AgentAddress::from_str(&recipient) {
+            Ok(address) => Some(address.into()),
+            Err(error) => {
+                push_storage_failure(findings, "escalation recipient address", error);
+                None
+            }
+        })
+        .collect()
 }
 
 fn team_report(
@@ -103,10 +119,7 @@ fn team_report(
         } else {
             EscalationRecipientSource::Team
         },
-        recipients: effective
-            .into_iter()
-            .map(crate::types::AgentName::from_validated)
-            .collect(),
+        recipients: validated_recipients(effective, findings),
     })
 }
 
@@ -164,7 +177,7 @@ pub(super) fn team_findings(
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::RosterNoLead,
-            message: format!("team {team} has no lead member"),
+            message: team_message(team, "has no lead member"),
             remediation: Some(
                 "assign one lead: atm teams update-member <team> <member> --agent-type lead"
                     .to_owned(),
@@ -174,7 +187,7 @@ pub(super) fn team_findings(
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::RosterMultipleLeads,
-            message: format!("team {team} has {lead_count} lead members"),
+            message: team_message(team, format!("has {lead_count} lead members")),
             remediation: Some(
                 "keep one lead: atm teams update-member <team> <member> --agent-type <other type>"
                     .to_owned(),
@@ -212,7 +225,10 @@ fn reserved_name_findings(
             findings.push(DoctorFinding {
                 severity: DoctorSeverity::Warning,
                 code: AtmErrorCode::RosterReservedName,
-                message: format!("team {team} contains reserved member name {DAEMON_ACTOR_NAME}"),
+                message: team_message(
+                    team,
+                    format!("contains reserved member name {DAEMON_ACTOR_NAME}"),
+                ),
                 remediation: Some(
                     "rename the member: atm-daemon is reserved for daemon-originated messages"
                         .to_owned(),
@@ -244,7 +260,7 @@ pub(super) fn member_info_findings(
     findings.push(DoctorFinding {
         severity: DoctorSeverity::Info,
         code: AtmErrorCode::ObservabilityHealthOk,
-        message: format!("team {team} task counts: {counts}"),
+        message: team_message(team, format!("task counts: {counts}")),
         remediation: None,
     });
 }
