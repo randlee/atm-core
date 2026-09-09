@@ -3,7 +3,10 @@ name: GitHub Pages
 on:
   push:
     branches:
-      - integrate/phase-ai-31-33
+      - develop
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -27,11 +30,8 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install just
-        uses: taiki-e/install-action@just
-
       - name: Verify generated report index
-        run: just reports-index --check
+        run: python3 .just/generate_report_index.py --check
 
       - name: Upload the site artifact
         uses: actions/upload-pages-artifact@v3
