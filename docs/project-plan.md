@@ -1729,6 +1729,48 @@ Phase AY sprint status:
 | `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `merged` (#1310, 47f359cf9) | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
 | `DOCTOR-HERDR-TARGET-R1` | Doctor | standalone target-resolution, breaker, and stale-session diagnostics | `complete` | `fix/doctor-herdr-target-resolution` | `docs/plans/doctor/sprint-DOCTOR-HERDR-TARGET-R1.md` |
 
+## 58. Phase AZ — Bounded Nudges And Durable Task Lifecycle [APPROVED]
+
+Phase AZ begins with the AZ.1 metadata-only nudge repair: every Steer, Queue,
+rebuilt Queue, Task, acknowledge-family, and task-reminder path projects only
+persisted message id/title and optional task id. The immutable body remains
+available only through `atm read --message-id`; admission-time
+`build_summary` policy is unchanged.
+
+AZ.2–AZ.4 then replace the message-derived task ledger with a stable logical
+`TaskId`, immutable assignment attempts/events, explicit lifecycle commands,
+atomic terminal handoffs and queue cleanup, and one fair idle attention
+selector over independent ephemeral-message and persistent-task lanes.
+`Blocked -> Assigned` is explicit and never auto-starts. Existing tasks migrate
+at normal priority; one current assignee per task and one active task per
+`(team, agent)` are transactionally enforced.
+
+The governed-interface sequence is HTTP API 1.3.0 → 1.4.0 in AZ.3 and SQLite
+schema 2.0.0 (major task migration) → 2.1.0 (additive attention tables) in
+AZ.2/AZ.4. ADR-063 records the capability-trait recount and v1/v2 coexistence
+bridge. Rand approved that major change on 2026-09-09: ATM `1.6.0` introduces
+v2, every `1.6.x` release retains the bridge, and ATM `1.7.0` is the planned
+removal target and earliest permitted removal release under a separate ADR-061
+major review. ADR-061 D6 and ADR-063 D6 record the decision.
+
+The authoritative umbrella is
+[Phase AZ plan](./plans/phase-az/phase-az-plan.md), with one authoritative
+sprint doc per row below and a maintained
+[issue inventory](./plans/phase-az/issues.md).
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AZ.1` | `planned` | `feature/az1-task-nudge-contract` | bounded notification event/template repair, external hook compatibility, long-body/J2 regressions |
+| `AZ.2` | `planned` | `feature/az2-task-domain-storage` | lifecycle types, immutable attempts/events, SQLite migration, atomic invariants and task-aware nudge cleanup |
+| `AZ.3` | `planned` | `feature/az3-task-command-handoff` | canonical task CLI/API, authorization, atomic handoffs/supersession, legacy adapters |
+| `AZ.4` | `planned` | `feature/az4-attention-scheduler` | one-item idle selector, durable fair interleaving, attempt-aware persistent reminders |
+
+The stack is strict `AZ.1 -> AZ.2 -> AZ.3 -> AZ.4`. Parent development must be
+pushed before child work starts, the parent is merged forward before every
+child development/fix round, and parent PRs merge first. No Phase AZ sprint
+touches the frozen synchronous daemon or uses live daemon/test-daemon, release,
+tag, publish, or installation evidence.
+
 ## Daemon-Switch Scope Reduction
 
 Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:
