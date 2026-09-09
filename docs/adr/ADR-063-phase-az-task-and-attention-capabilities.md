@@ -17,8 +17,8 @@ durable, fair selector over separate message and task lanes.
 
 Those changes require three new sealed storage capability traits representing
 two new semantic capabilities, plus a major SQLite task-schema migration.
-ADR-018 requires a follow-up ADR before capability growth. ADR-036 and ADR-054
-still list `OutboundMessageQuery`, but Phase AM deleted that trait in
+ADR-018 requires a follow-up ADR before capability growth. ADR-036 still lists
+`OutboundMessageQuery`, but Phase AM deleted that trait in
 `e49c059c`; later phases added the async message, mailbox-reader, task-reader,
 and graft-endpoint capability surfaces now present on `origin/develop`.
 This ADR therefore recounts the live baseline rather than carrying the stale
