@@ -182,6 +182,8 @@ class PrereleaseTests(unittest.TestCase):
         self.assertIn("toolchain: ${{ needs.plan.outputs.rust_toolchain }}", workflow)
         self.assertIn("uses: ./.github/actions/install-linux-native-deps", workflow)
         self.assertIn("ref: ${{ needs.plan.outputs.source_sha }}", workflow)
+        self.assertIn('matrix="$(python3 .github/scripts/release_artifacts.py release-target-matrix --manifest "$RELEASE_ARTIFACT_MANIFEST")"', workflow)
+        self.assertNotIn('--manifest \\"$RELEASE_ARTIFACT_MANIFEST\\"', workflow)
         self.assertIn('for bundled_path in binary.get("bundled_paths", []):', workflow)
         self.assertIn("path: ${{ env.ARCHIVE }}", workflow)
         self.assertIn("permissions:\n  contents: read", workflow)

@@ -51,7 +51,11 @@ jobs:
           echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "rust_toolchain=$rust_toolchain" >> "$GITHUB_OUTPUT"
       - id: matrix
-        run: echo "value=$(python3 .github/scripts/release_artifacts.py release-target-matrix --manifest \"$RELEASE_ARTIFACT_MANIFEST\")" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          set -euo pipefail
+          matrix="$(python3 .github/scripts/release_artifacts.py release-target-matrix --manifest "$RELEASE_ARTIFACT_MANIFEST")"
+          echo "value=$matrix" >> "$GITHUB_OUTPUT"
   build:
     needs: plan
     strategy:
