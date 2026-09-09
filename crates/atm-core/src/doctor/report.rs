@@ -1,8 +1,10 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::address::AgentAddress;
 use crate::boundary::{ConfigDoctorReport, MailStoreDoctorReport, RosterStoreDoctorReport};
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
@@ -224,8 +226,55 @@ pub struct PostSendDoctorReport {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TeamEscalationRecipientsDoctorReport {
     pub team: TeamName,
-    pub recipients: Vec<String>,
+    pub recipients: Vec<EscalationRecipientAddress>,
     pub source: EscalationRecipientSource,
+}
+
+/// Validated escalation address with the doctor's established string wire shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct EscalationRecipientAddress(
+    #[serde(with = "escalation_recipient_address_serde")] AgentAddress,
+);
+
+impl From<AgentAddress> for EscalationRecipientAddress {
+    fn from(address: AgentAddress) -> Self {
+        Self(address)
+    }
+}
+
+impl FromStr for EscalationRecipientAddress {
+    type Err = crate::error::AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        AgentAddress::from_str(value).map(Self)
+    }
+}
+
+impl std::fmt::Display for EscalationRecipientAddress {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+mod escalation_recipient_address_serde {
+    use super::AgentAddress;
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::str::FromStr;
+
+    pub fn serialize<S: Serializer>(
+        address: &AgentAddress,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&address.to_string())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<AgentAddress, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        AgentAddress::from_str(&value).map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -246,7 +295,7 @@ impl std::fmt::Display for EscalationRecipientSource {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct EscalationRecipientsDoctorReport {
-    pub daemon: Vec<String>,
+    pub daemon: Vec<EscalationRecipientAddress>,
     pub teams: Vec<TeamEscalationRecipientsDoctorReport>,
 }
 
@@ -480,11 +529,12 @@ impl DoctorReport {
 #[cfg(test)]
 mod tests {
     use super::{
-        EscalationRecipientSource, EscalationRecipientsDoctorReport,
+        EscalationRecipientAddress, EscalationRecipientSource, EscalationRecipientsDoctorReport,
         HerdrEndpointCapabilitiesDoctorReport, PeerWireSecurityStatus,
         TeamEscalationRecipientsDoctorReport,
     };
     use crate::peer_wire::PeerWireSecurity;
+    use crate::test_support::TEST_TEAM;
     use crate::types::TeamName;
 
     #[test]
@@ -512,15 +562,22 @@ mod tests {
     #[test]
     fn escalation_recipient_report_round_trips_address_strings() {
         let report = EscalationRecipientsDoctorReport {
-            daemon: vec!["ops@atm-dev".to_owned()],
+            daemon: vec![format!("ops@{TEST_TEAM}").parse().expect("address")],
             teams: vec![TeamEscalationRecipientsDoctorReport {
                 team: TeamName::from_validated("team-a"),
-                recipients: vec!["team-ops@team-a".to_owned()],
+                recipients: vec![
+                    "team-ops@team-a"
+                        .parse::<EscalationRecipientAddress>()
+                        .expect("address"),
+                ],
                 source: EscalationRecipientSource::Team,
             }],
         };
 
         let wire = serde_json::to_vec(&report).expect("doctor report serializes");
+        let wire_value: serde_json::Value = serde_json::from_slice(&wire).expect("wire JSON");
+        assert_eq!(wire_value["daemon"][0], format!("ops@{TEST_TEAM}"));
+        assert_eq!(wire_value["teams"][0]["recipients"][0], "team-ops@team-a");
         let decoded: EscalationRecipientsDoctorReport =
             serde_json::from_slice(&wire).expect("doctor report deserializes");
 

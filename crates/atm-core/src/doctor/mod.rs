@@ -43,14 +43,15 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport, DoctorAliasMismatch,
     DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
-    DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientSource,
-    EscalationRecipientsDoctorReport, GraftReceiverLeaseDoctorReport, GraftReceiversDoctorReport,
-    HerdrBreakerDoctor, HerdrBreakerDoctorReport, HerdrBreakerDoctorState, HerdrDoctorReport,
-    HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDoctorReport, HerdrQueuePumpDoctorReport,
-    LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport, PeerConfigDoctorReport,
-    PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
-    ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RecipientDeliveryPath,
-    RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientAddress,
+    EscalationRecipientSource, EscalationRecipientsDoctorReport, GraftReceiverLeaseDoctorReport,
+    GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
+    HerdrBreakerDoctorState, HerdrDoctorReport, HerdrEndpointCapabilitiesDoctorReport,
+    HerdrEndpointDoctorReport, HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport,
+    PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
+    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderPoolDoctorReport,
+    ReaderPoolMetricsDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+    TeamEscalationRecipientsDoctorReport,
 };
 pub use team_scope::DoctorTeamScope;
 
