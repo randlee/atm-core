@@ -217,8 +217,10 @@ Use exactly one skill mode:
   `1.4.6`), verifies workspace lockstep, commits on the current branch, and
   pushes both the commit and `prerelease/v1.4.6`.
 - The workflow triggers only on `prerelease/vX.Y.Z`, verifies that the tag
-  version matches the workspace and release-contract lockstep, and refuses to
-  run when a GitHub Release already uses that tag.
+  version matches the workspace and release-contract lockstep, then attempts
+  to create the GitHub prerelease. If another run already created that tag, it
+  succeeds only after proving the existing prerelease has the exact expected
+  asset set and byte-identical `checksums.txt`; any disagreement fails closed.
 - Verify a downloaded archive against `checksums.txt` with
   `shasum -a 256 -c checksums.txt` (macOS/Linux) — same line format
   `release.yml`'s own checksums use.
