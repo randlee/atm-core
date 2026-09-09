@@ -40,6 +40,10 @@ def manifest(root: Path) -> dict[str, object]:
 
 def write_manifest(root: Path) -> None:
     (root / "release").mkdir()
+    (root / ".just").mkdir()
+    (root / ".just" / "prerelease_tag.py").write_text(
+        'print("would create tag: prerelease/v1.5.11")\n', encoding="utf-8"
+    )
     (root / "release" / "publish-artifacts.toml").write_text(
         "[prerelease]\n"
         'tag_prefix = "prerelease/v"\n'
@@ -67,7 +71,8 @@ class PrereleaseTests(unittest.TestCase):
             write_manifest(root)
             result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--create", "--dry-run"], cwd=root, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("would tag", result.stdout)
+        self.assertIn("would create tag: prerelease/v1.5.11", result.stdout)
+        self.assertIn("would wait for prerelease-archive.yml", result.stdout)
 
     def test_publish_refuses_without_written_authorization(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

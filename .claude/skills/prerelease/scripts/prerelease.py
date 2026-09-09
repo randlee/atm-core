@@ -369,9 +369,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     manifest = read_manifest(args.manifest)
     config = prerelease_manifest(args.manifest)
     if args.create:
-        tag = "the unpublished version tag selected by the manifest script"
         if args.dry_run:
-            print(f"would tag {tag}, wait for {ARCHIVE_WORKFLOW}, verify Release assets and checksums")
+            plan = command(
+                [sys.executable, required_string(config, "tag_script"), "--dry-run"],
+                capture=True,
+            )
+            print(plan.stdout, end="" if plan.stdout.endswith("\n") else "\n")
+            print(f"would wait for {ARCHIVE_WORKFLOW}, then verify Release assets and checksums")
             return 0
         if not args.authorized:
             raise SystemExit("--create requires written operator authorization")
