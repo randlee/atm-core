@@ -537,7 +537,7 @@ class MacosDevelopmentSigningTests(unittest.TestCase):
     def test_signature_check_uses_shared_stable_identifier_verifier(self) -> None:
         daemon = Path("/candidate/atm-daemon")
         with (
-            mock.patch.object(DAEMON_SWITCH, "verify_signing_identity", return_value=True) as verify,
+            mock.patch.object(RELEASE_RESOLUTION, "verify_signing_identity", return_value=True) as verify,
         ):
             identity = DAEMON_SWITCH.SigningIdentity("A" * 40, "Apple Development: test", "4869P2ZYC6")
             self.assertTrue(

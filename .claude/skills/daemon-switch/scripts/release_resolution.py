@@ -27,8 +27,10 @@ from urllib.request import Request, urlopen
 from macos_development_signing import (
     CLI_IDENTIFIER,
     DAEMON_IDENTIFIER,
+    SigningIdentity,
     SigningIdentityError,
     resolve_apple_development_identity,
+    verify_signing_identity,
 )
 
 
