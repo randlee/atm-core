@@ -330,7 +330,12 @@ pub fn add_member_with_roster_store(
     )?;
     let created_inbox = filesystem::ensure_inbox_exists(&inbox_path)?;
     existing_roster.push(build_member_add_roster_record(&request));
-    preflight_roster_unique_names(roster_store, &request.team, &existing_roster)?;
+    preflight_roster_unique_names(
+        roster_store,
+        &request.team,
+        &request.member,
+        &existing_roster,
+    )?;
     replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
 
     Ok(AddMemberOutcome {
@@ -365,7 +370,7 @@ pub fn update_member_with_roster_store(
 
     validate_effective_herdr_agent_name(member, &request)?;
     apply_member_metadata_update(member, &request);
-    preflight_roster_unique_names(roster_store, &request.team, &existing_roster)?;
+    preflight_roster_unique_names(roster_store, &request.team, &member_name, &existing_roster)?;
     roster_store.replace_roster(&request.team, &existing_roster)?;
 
     Ok(UpdateMemberOutcome {
@@ -446,28 +451,30 @@ fn ensure_member_absent(
 }
 
 /// Produces the same collision diagnostic as durable enforcement without
-/// claiming authority over the write. The caller's proposed roster replaces
-/// its persisted snapshot while every other team's database-owned projection
-/// stays in the comparison.
+/// claiming authority over the write. Only the member being written is
+/// compared against the database-wide roster: pre-existing collisions among
+/// untouched members are doctor findings, not a roster-write gate.
 fn preflight_roster_unique_names(
     roster_store: &dyn RosterStore,
     team: &TeamName,
+    member: &AgentName,
     proposed_roster: &[RosterEntry],
 ) -> Result<(), AtmError> {
+    let proposed_member = proposed_roster
+        .iter()
+        .find(|entry| entry.agent_name == *member)
+        .ok_or_else(|| AtmError::member_not_found(member.as_str(), team.as_str()))?;
     let mut names = roster_store
         .unique_names()?
         .into_iter()
-        .filter(|name| name.team_name != *team)
+        .filter(|name| name.team_name != *team || name.agent_name != *member)
         .collect::<Vec<_>>();
-    names.extend(
-        proposed_roster
-            .iter()
-            .map(atm_storage::RosterUniqueName::from_member),
-    );
-    let collisions = atm_storage::team_scoped_roster_unique_name_collisions(
-        &atm_storage::roster_unique_name_collisions(&names),
-        team,
-    );
+    let proposed_name = atm_storage::RosterUniqueName::from_member(proposed_member);
+    names.push(proposed_name.clone());
+    let collisions = atm_storage::roster_unique_name_collisions(&names)
+        .into_iter()
+        .filter(|collision| collision.unique_name == proposed_name.unique_name)
+        .collect::<Vec<_>>();
     if collisions.is_empty() {
         Ok(())
     } else {
@@ -907,7 +914,7 @@ fn nonstandard_tmux_warning(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::sync::Mutex;
 
     use super::*;
@@ -1011,6 +1018,14 @@ mod tests {
             .metadata_json
             .insert("alias".to_owned(), json!(alias));
         member
+    }
+
+    fn collision_name_count(store: &TestRosterStore) -> usize {
+        atm_storage::roster_unique_name_collisions(&store.unique_names().expect("unique names"))
+            .iter()
+            .map(|collision| collision.unique_name.as_str())
+            .collect::<BTreeSet<_>>()
+            .len()
     }
 
     #[test]
@@ -1487,6 +1502,108 @@ mod tests {
             .expect("a pre-existing collision between two other teams must not block team-c");
 
         assert_eq!(store.members(&"team-c".parse().expect("team")).len(), 1);
+    }
+
+    #[test]
+    fn unique_name_g05_alias_repairs_write_only_its_delta_among_multiple_collisions() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(
+            &team_a,
+            vec![
+                lead_member("team-a", ROLE_TEAM_LEAD),
+                roster_member("team-a", "quality"),
+            ],
+        );
+        store.seed(
+            &team_b,
+            vec![
+                lead_member("team-b", ROLE_TEAM_LEAD),
+                roster_member("team-b", "quality"),
+            ],
+        );
+        assert_eq!(collision_name_count(&store), 2);
+
+        for (member, alias, remaining_collisions) in [
+            (ROLE_TEAM_LEAD, "team-b-lead", 1),
+            ("quality", "team-b-quality", 0),
+        ] {
+            let request = UpdateMemberRequest::new_with_backend(
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                team_b.clone(),
+                "team-b",
+                member,
+                None,
+                None,
+                None,
+                None,
+                None,
+                BackendOptions {
+                    backend: None,
+                    target: None,
+                    session: None,
+                    alias: Some(alias),
+                    clear_alias: false,
+                },
+            )
+            .expect("alias repair request");
+
+            update_member_with_roster_store(&store, request)
+                .expect("an alias repair must not be blocked by an untouched collision");
+            assert_eq!(collision_name_count(&store), remaining_collisions);
+        }
+    }
+
+    #[test]
+    fn unique_name_g06_multiple_legacy_collisions_do_not_block_add_or_remove() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(
+            &team_a,
+            vec![
+                lead_member("team-a", ROLE_TEAM_LEAD),
+                roster_member("team-a", "quality"),
+            ],
+        );
+        store.seed(
+            &team_b,
+            vec![
+                lead_member("team-b", ROLE_TEAM_LEAD),
+                roster_member("team-b", "quality"),
+            ],
+        );
+        let root = tempfile::tempdir().expect("tempdir");
+        let add = AddMemberRequest::new_with_backend(
+            root.path().to_path_buf(),
+            "team-b",
+            "helper",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            root.path().join("helper-home"),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: Some("team-b-helper"),
+                clear_alias: false,
+            },
+        )
+        .expect("add request");
+        add_member_with_roster_store(&store, add)
+            .expect("an aliased add must not be blocked by untouched collisions");
+
+        let remove = RemoveMemberRequest::new(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team_b,
+            "team-b",
+            "quality",
+        )
+        .expect("remove request");
+        remove_member_with_roster_store(&store, remove)
+            .expect("a removal must not be blocked by untouched collisions");
+        assert_eq!(collision_name_count(&store), 1);
     }
 
     #[test]

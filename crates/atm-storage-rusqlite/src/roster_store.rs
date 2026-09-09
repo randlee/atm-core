@@ -5,12 +5,10 @@ use atm_storage::contract::{
     RosterUniqueName,
 };
 use atm_storage::types::{AgentName, ModelName, PaneId, TeamName};
-use atm_storage::{
-    AtmError, roster_unique_name_collision_error, roster_unique_name_collisions,
-    team_scoped_roster_unique_name_collisions,
-};
+use atm_storage::{AtmError, roster_unique_name_collision_error, roster_unique_name_collisions};
 use rusqlite::{Connection, params};
 use serde_json::{Map, Value};
+use std::collections::BTreeSet;
 
 const MAX_CANONICAL_ROSTER_MEMBERS: usize = 4096;
 struct StoredRosterMemberRow {
@@ -248,9 +246,10 @@ fn load_unique_names(
     .collect()
 }
 
-/// Enforces the database-wide effective roster-name invariant in the same
-/// immediate SQLite transaction as the replacement.  Preflight is solely an
-/// operator convenience; this remains authoritative for all writers.
+/// Enforces write-delta effective roster-name uniqueness in the same immediate
+/// SQLite transaction as the replacement. Preflight is solely an operator
+/// convenience; this remains authoritative for all writers. Existing
+/// collisions outside the effective-name delta remain doctor findings.
 fn enforce_roster_unique_names(
     db: &SharedDb,
     transaction: &rusqlite::Transaction<'_>,
@@ -260,8 +259,7 @@ fn enforce_roster_unique_names(
         .prepare(
             "SELECT team_name, agent_name,
                     COALESCE(NULLIF(TRIM(json_extract(metadata_json, '$.alias')), ''), agent_name)
-             FROM team_roster
-             WHERE team_name != ?1;",
+             FROM team_roster;",
         )
         .map_err(|error| {
             db.error(
@@ -270,7 +268,7 @@ fn enforce_roster_unique_names(
             )
         })?;
     let mut names = statement
-        .query_map(params![roster.team_name.as_str()], |row| {
+        .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -305,12 +303,54 @@ fn enforce_roster_unique_names(
             })
         })
         .collect::<Result<Vec<_>, AtmError>>()?;
-    names.extend(roster.members.iter().map(RosterUniqueName::from_member));
+    let proposed_names = roster
+        .members
+        .iter()
+        .map(RosterUniqueName::from_member)
+        .collect::<Vec<_>>();
+    let mut proposed_member_ids = BTreeSet::new();
+    if proposed_names
+        .iter()
+        .any(|proposed| !proposed_member_ids.insert((&proposed.team_name, &proposed.agent_name)))
+    {
+        let collisions = roster_unique_name_collisions(&proposed_names);
+        if !collisions.is_empty() {
+            return Err(roster_unique_name_collision_error(&collisions));
+        }
+        return Err(AtmError::validation(format!(
+            "roster-store replace rejected team {} because the proposed roster contains the same member more than once",
+            roster.team_name
+        )));
+    }
+    let written_names = proposed_names
+        .iter()
+        .filter(|proposed| {
+            names
+                .iter()
+                .find(|persisted| {
+                    persisted.team_name == proposed.team_name
+                        && persisted.agent_name == proposed.agent_name
+                })
+                .is_none_or(|persisted| persisted.unique_name != proposed.unique_name)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    if written_names.is_empty() {
+        return Ok(());
+    }
 
-    let collisions = team_scoped_roster_unique_name_collisions(
-        &roster_unique_name_collisions(&names),
-        &roster.team_name,
-    );
+    names.retain(|persisted| persisted.team_name != roster.team_name);
+    names.extend(proposed_names);
+    let all_collisions = roster_unique_name_collisions(&names);
+    let written_collision_names = all_collisions
+        .iter()
+        .filter(|collision| written_names.contains(collision))
+        .map(|collision| collision.unique_name.clone())
+        .collect::<BTreeSet<_>>();
+    let collisions = all_collisions
+        .into_iter()
+        .filter(|collision| written_collision_names.contains(&collision.unique_name))
+        .collect::<Vec<_>>();
     if collisions.is_empty() {
         Ok(())
     } else {
@@ -459,6 +499,34 @@ mod tests {
                 Ok(())
             })
             .expect("seed legacy collision");
+    }
+
+    fn seed_legacy_cross_team_duplicates(store: &SqliteRosterStore) {
+        store
+            .save_roster(&roster(
+                "team-a",
+                vec![
+                    roster_member("team-a", "lead", None),
+                    roster_member("team-a", "quality", None),
+                ],
+            ))
+            .expect("first roster");
+        store
+            .db
+            .with_connection(|connection| {
+                connection
+                    .execute_batch(
+                        "INSERT INTO team_roster(team_name, agent_name, member_kind, harness, agent_type, model, metadata_json, updated_at)
+                         VALUES
+                            ('team-b', 'lead', 'permanent', 'codex-cli', 'worker', '', '{}', 'now'),
+                            ('team-b', 'quality', 'permanent', 'codex-cli', 'worker', '', '{}', 'now');",
+                    )
+                    .map_err(|error| {
+                        AtmError::validation(format!("seed legacy collisions: {error}"))
+                    })?;
+                Ok(())
+            })
+            .expect("seed legacy collisions");
     }
 
     #[test]
@@ -869,7 +937,7 @@ mod tests {
     }
 
     #[test]
-    fn unique_name_a26_legacy_collision_is_readable_but_next_write_fails() {
+    fn unique_name_a26_legacy_collision_is_readable_and_unchanged_write_succeeds() {
         let store = SqliteStorageBackend::in_memory_for_test()
             .expect("backend")
             .roster_store;
@@ -883,14 +951,42 @@ mod tests {
                 .len(),
             1
         );
-        let error = store
+        store
             .save_roster(&roster(
                 "team-b",
                 vec![roster_member("team-b", "alex", None)],
             ))
-            .expect_err("next write must enforce legacy collision");
-        assert!(error.message().contains("(team-a, alex)"));
-        assert!(error.message().contains("(team-b, alex)"));
+            .expect("an unchanged legacy collision must not block the write");
+    }
+
+    #[test]
+    fn unique_name_a26b_delta_writes_repair_multiple_legacy_collisions_one_at_a_time() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        seed_legacy_cross_team_duplicates(&store);
+
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![
+                    roster_member("team-b", "lead", Some("team-b-lead")),
+                    roster_member("team-b", "quality", None),
+                ],
+            ))
+            .expect("the first alias repair must not revalidate quality");
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![
+                    roster_member("team-b", "lead", Some("team-b-lead")),
+                    roster_member("team-b", "quality", Some("team-b-quality")),
+                ],
+            ))
+            .expect("the second alias repair must clear the final collision");
+        assert!(
+            roster_unique_name_collisions(&store.unique_names().expect("unique names")).is_empty()
+        );
     }
 
     #[test]
@@ -929,7 +1025,7 @@ mod tests {
     }
 
     #[test]
-    fn unique_name_a27_legacy_collision_blocks_a_write_that_reuses_the_colliding_name() {
+    fn unique_name_a27_legacy_collision_blocks_a_write_that_creates_a_colliding_name() {
         let store = SqliteStorageBackend::in_memory_for_test()
             .expect("backend")
             .roster_store;
@@ -940,10 +1036,10 @@ mod tests {
                 "team-b",
                 vec![
                     roster_member("team-b", "alex", None),
-                    roster_member("team-b", "carol", None),
+                    roster_member("team-b", "carol", Some("alex")),
                 ],
             ))
-            .expect_err("proposal reusing the colliding name is rejected");
+            .expect_err("a new effective name reusing the collision is rejected");
 
         assert!(error.message().contains("(team-a, alex)"));
         assert_eq!(
