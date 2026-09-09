@@ -1322,6 +1322,16 @@ class SwitchModeTests(unittest.TestCase):
             self.assertEqual(DAEMON_SWITCH.latest_published_release_version(), "1.5.1")
         request.assert_called_once_with("")
 
+    def test_prerelease_resolution_accepts_only_prerelease_tags(self) -> None:
+        releases = [{"draft": False, "prerelease": True, "tag_name": "prerelease/v1.5.11"}]
+        with mock.patch.object(DAEMON_SWITCH, "github_json", return_value=releases):
+            self.assertEqual(DAEMON_SWITCH.prerelease_release("latest")[0], "1.5.11")
+
+    def test_prerelease_resolution_rejects_stable_tags(self) -> None:
+        with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "prerelease Release is missing"):
+            with mock.patch.object(DAEMON_SWITCH, "github_json", return_value={"draft": False, "prerelease": False}):
+                DAEMON_SWITCH.prerelease_release("1.5.11")
+
     def test_release_resolution_uses_platform_owned_pair_and_verifies_both_versions(self) -> None:
         cli = Path("/release/bin/atm")
         daemon = Path("/release/bin/atm-daemon")
@@ -1423,9 +1433,10 @@ class SwitchModeTests(unittest.TestCase):
             with self.assertRaisesRegex(switcher.SwitchError, "--allow-release-version"):
                 switcher.validate_raw_pair_mode(cli, daemon, allow_release_version=False)
 
-    def test_switch_parser_exposes_only_the_three_supported_modes(self) -> None:
+    def test_switch_parser_exposes_the_prerelease_mode(self) -> None:
         parsed = self.switcher.parser().parse_args(["switch", "--release", "latest", "--yes"])
         self.assertEqual(parsed.release, "latest")
+        self.assertIsNone(parsed.prerelease)
         self.assertIsNone(parsed.worktree)
         self.assertFalse(parsed.bump)
 

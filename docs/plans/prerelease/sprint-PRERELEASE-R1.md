@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/prerelease-skill
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/prerelease-skill
+---
+
 # Sprint PRERELEASE-R1 — `/prerelease --publish` and `/prerelease --install`, GitHub-only, sc-publish native
 
 Spec: atm-core issue #1350 (read it first, including the comments). Rand's rulings: prerelease binaries are published to **GitHub only** (a `prerelease/vX.Y.Z` GitHub *prerelease* Release carrying every manifest-declared archive and `checksums.txt`); Homebrew, crates.io, PyPI/TestPyPI, winget and Scoop are never touched by this path. The capability lives in the **sc-publish kit** so every kit repo gets it from its manifest alone; atm-core is the first adopter.

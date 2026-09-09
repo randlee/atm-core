@@ -3,6 +3,9 @@ name: publishing
 description: Coordinate a manifest-driven software release through a named ATM publisher teammate. Use when preparing release preflight, publishing a release, retrying a failed publish channel, or diagnosing release workflow readiness in the current repository.
 ---
 
+Prerelease GitHub archive publication and installation are a separate `/prerelease`
+capability, not a production release: it never uses the channels coordinated here.
+
 # Publishing
 
 **Goal: one skill invocation, one human approval.** A defect-free release

@@ -7,6 +7,8 @@ Callers receive a verified pair and perform the lifecycle transition separately.
 from __future__ import annotations
 
 import json
+import hashlib
+import io
 import os
 from pathlib import Path
 import platform
@@ -34,6 +36,8 @@ from macos_development_signing import (
 STABLE_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 PRERELEASE_TAG_PREFIX = "prerelease/v"
 GITHUB_RELEASES_API = "https://api.github.com/repos/randlee/atm-core/releases"
+PRERELEASE_INSTALL_ROOT = Path("~/.atm-builds").expanduser()
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class SwitchError(RuntimeError):
@@ -254,6 +258,111 @@ def latest_published_release_version() -> str:
 def release_is_published(version_value: str) -> bool:
     payload = github_json(f"/tags/v{version_value}")
     return isinstance(payload, dict) and not payload.get("draft") and not payload.get("prerelease")
+
+
+def prerelease_release(version_value: str) -> tuple[str, dict[str, object]]:
+    """Resolve exactly one published prerelease/vX.Y.Z GitHub Release."""
+    if version_value == "latest":
+        payload = github_json("")
+        if not isinstance(payload, list):
+            raise SwitchError("cannot resolve latest prerelease: GitHub returned an invalid release list")
+        for release in payload:
+            tag = release.get("tag_name") if isinstance(release, dict) else None
+            if (
+                isinstance(tag, str)
+                and release.get("prerelease") is True
+                and not release.get("draft")
+                and STABLE_VERSION.fullmatch(tag.removeprefix(PRERELEASE_TAG_PREFIX))
+            ):
+                return tag.removeprefix(PRERELEASE_TAG_PREFIX), release
+        raise SwitchError("cannot resolve latest prerelease: no prerelease/vX.Y.Z GitHub Release exists")
+    if STABLE_VERSION.fullmatch(version_value) is None:
+        raise SwitchError("--prerelease must be a stable X.Y.Z version or 'latest'")
+    payload = github_json(f"/tags/{PRERELEASE_TAG_PREFIX.replace('/', '%2F')}{version_value}")
+    if not isinstance(payload, dict) or payload.get("draft") or payload.get("prerelease") is not True:
+        raise SwitchError(f"cannot resolve prerelease/v{version_value}: GitHub prerelease Release is missing")
+    return version_value, payload
+
+
+def _release_asset(release: dict[str, object], name: str) -> str:
+    assets = release.get("assets")
+    if not isinstance(assets, list):
+        raise SwitchError("GitHub prerelease Release has no assets")
+    for asset in assets:
+        if isinstance(asset, dict) and asset.get("name") == name and isinstance(asset.get("browser_download_url"), str):
+            return asset["browser_download_url"]
+    raise SwitchError(f"GitHub prerelease Release is missing required asset: {name}")
+
+
+def _download(url: str) -> bytes:
+    try:
+        with urlopen(Request(url, headers={"User-Agent": "atm-daemon-switch"}), timeout=30) as response:  # noqa: S310 - fixed GitHub Release asset origin.
+            return response.read()
+    except (OSError, URLError, TimeoutError) as error:
+        raise SwitchError("cannot download GitHub prerelease asset; connect to the network and retry") from error
+
+
+def resolve_prerelease_pair(requested: str) -> tuple[Path, Path, str]:
+    """Download, checksum-verify, and stage one GitHub prerelease pair."""
+    expected, release = prerelease_release(requested)
+    triple, extension = release_archive_triple()
+    archive_name = f"atm_{expected}_{triple}.{extension}"
+    destination = PRERELEASE_INSTALL_ROOT / f"v{expected}"
+    cli = destination / "bin" / executable_name("atm")
+    daemon = destination / "bin" / executable_name("atm-daemon")
+    if cli.is_file() and daemon.is_file():
+        require_pair_version(cli, daemon, expected)
+        return cli, daemon, expected
+    checksums = _download(_release_asset(release, "checksums.txt")).decode("utf-8")
+    expected_digest = next((line.split()[0] for line in checksums.splitlines() if line.endswith(f"  {archive_name}")), None)
+    if expected_digest is None or re.fullmatch(r"[0-9a-f]{64}", expected_digest) is None:
+        raise SwitchError(f"checksums.txt has no valid SHA-256 for {archive_name}")
+    archive = _download(_release_asset(release, archive_name))
+    if hashlib.sha256(archive).hexdigest() != expected_digest:
+        raise SwitchError(f"GitHub prerelease archive checksum mismatch: {archive_name}")
+    destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    staging = destination.with_name(f".{destination.name}.download")
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(mode=0o700)
+    try:
+        if extension == "tar.gz":
+            with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as bundle:
+                members = bundle.getmembers()
+                if any(not (staging / member.name).resolve().is_relative_to(staging.resolve()) for member in members):
+                    raise SwitchError("GitHub prerelease archive contains an unsafe path")
+                bundle.extractall(staging, members=members, filter="data")
+        else:
+            with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+                if any(not (staging / name).resolve().is_relative_to(staging.resolve()) for name in bundle.namelist()):
+                    raise SwitchError("GitHub prerelease archive contains an unsafe path")
+                bundle.extractall(staging)
+        roots = [path for path in staging.iterdir() if path.is_dir()]
+        if len(roots) != 1:
+            raise SwitchError("GitHub prerelease archive has an unexpected layout")
+        shutil.rmtree(destination, ignore_errors=True)
+        os.replace(roots[0], destination)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    require_pair_version(cli, daemon, expected)
+    return cli, daemon, expected
+
+
+def sign_prerelease_pair(cli: Path, daemon: Path) -> None:
+    """Apply the configured macOS development signature to staged archives."""
+    if platform.system() != "Darwin":
+        return
+    try:
+        identity = resolve_apple_development_identity()
+        for binary, identifier in ((cli, CLI_IDENTIFIER), (daemon, DAEMON_IDENTIFIER)):
+            subprocess.run(
+                ["codesign", "--force", "--sign", identity.fingerprint, "--identifier", identifier,
+                 "--entitlements", str(REPO_ROOT / "scripts" / "macos_debug.entitlements"), str(binary)],
+                check=True, capture_output=True, text=True,
+            )
+            if not verify_signing_identity(str(binary), identifier, identity):
+                raise SwitchError(f"post-sign verification failed for staged prerelease binary: {binary}")
+    except (OSError, subprocess.SubprocessError, SigningIdentityError) as error:
+        raise SwitchError(f"cannot sign staged prerelease pair: {error}") from error
 
 
 def release_archive_triple() -> tuple[str, str]:

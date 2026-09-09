@@ -1549,6 +1549,14 @@ which builds CI-provenanced archives without publishing or modifying the
 vendored `sc-publish` kit. It does not inherit the retired phase's files,
 acceptance criteria, or release receipts.
 
+## 52b. PRERELEASE-R1 — GitHub-only prerelease publish/install
+
+`PRERELEASE-R1` delivers the vendorable `sc-publish` prerelease skill and the
+first `atm-core` adopter: GitHub prerelease Release assets, checksum-verified
+staging, and managed-pair installation without touching production channels or
+the Homebrew formula. The sprint record is
+[`PRERELEASE-R1`](./plans/prerelease/sprint-PRERELEASE-R1.md).
+
 ## 53. Phase AU — Boundary Debt Retirement ✅ COMPLETE
 
 Phase AU retires the 22 pre-existing sc-boundary findings exposed when

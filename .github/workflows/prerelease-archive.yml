@@ -35,6 +35,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       atm_core_sha: ${{ steps.resolve.outputs.sha }}
+      tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
       rust_toolchain: ${{ steps.resolve.outputs.rust_toolchain }}
       release_target_matrix: ${{ steps.matrix.outputs.matrix }}
@@ -264,3 +265,27 @@ jobs:
         with:
           name: checksums
           path: checksums
+
+  release:
+    needs: [plan, build, checksums]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download archives and checksums
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+      - name: Create or update GitHub prerelease Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          find release-assets -type f -name '*.tar.gz' -exec cp {} . \;
+          find release-assets -type f -name '*.zip' -exec cp {} . \;
+          find release-assets -type f -name checksums.txt -exec cp {} . \;
+          tag='${{ needs.plan.outputs.tag }}'
+          gh release create "$tag" --prerelease --title "$tag" --generate-notes *.tar.gz *.zip checksums.txt \
+            || gh release upload "$tag" --clobber *.tar.gz *.zip checksums.txt

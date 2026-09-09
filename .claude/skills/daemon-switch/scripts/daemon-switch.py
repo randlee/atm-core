@@ -55,6 +55,8 @@ from release_resolution import (  # noqa: E402
     require_macos_restore_provenance,
     require_pair_version,
     resolve_release_pair,
+    resolve_prerelease_pair,
+    sign_prerelease_pair,
     run,
     load_state,
     save_default_pair,
@@ -1231,6 +1233,7 @@ def parser() -> argparse.ArgumentParser:
     switch.add_argument("--cli", help="raw-path ATM binary (fixture escape hatch)")
     switch.add_argument("--daemon", help="matching raw-path ATM daemon (fixture escape hatch)")
     switch.add_argument("--release", metavar="VERSION|latest", help="switch to a published release without paths")
+    switch.add_argument("--prerelease", metavar="VERSION|latest", help="download and switch to a GitHub prerelease without changing Homebrew")
     switch.add_argument("--worktree", help="switch to a prerelease-tagged git worktree build")
     switch.add_argument("--bump", action="store_true", help="tag and build --worktree before switching")
     switch.add_argument(
@@ -1284,15 +1287,21 @@ def main() -> int:
         if args.command == "status":
             status(args)
         elif args.command == "switch":
-            modes = sum((args.release is not None, args.worktree is not None, args.cli is not None or args.daemon is not None))
+            modes = sum((args.release is not None, args.prerelease is not None, args.worktree is not None, args.cli is not None or args.daemon is not None))
             if modes != 1:
-                raise SwitchError("switch requires exactly one mode: --release, --worktree, or paired --cli/--daemon")
+                raise SwitchError("switch requires exactly one mode: --release, --prerelease, --worktree, or paired --cli/--daemon")
             if args.release is not None:
                 if args.bump:
                     raise SwitchError("--bump is valid only with --worktree")
                 cli, daemon, _expected = resolve_release_pair(args.release)
                 require_macos_restore_provenance(cli, daemon)
                 switch_pair(args, cli, daemon, require_development_signature=False)
+            elif args.prerelease is not None:
+                if args.bump:
+                    raise SwitchError("--bump is valid only with --worktree")
+                cli, daemon, _expected = resolve_prerelease_pair(args.prerelease)
+                sign_prerelease_pair(cli, daemon)
+                switch_pair(args, cli, daemon)
             elif args.worktree is not None:
                 cli, daemon, _expected = prepare_worktree_pair(Path(args.worktree), args.bump)
                 switch_pair(args, cli, daemon)
