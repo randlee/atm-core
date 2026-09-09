@@ -1066,9 +1066,10 @@ Definitions:
   else in `atm` reads a `.atm.toml` alias.
 - `REQ-ROSTER-NAME-009` Upgrade. Rand (2026-09-07): "where we will run
   into issues are when upgrade occurs. if non-unique names show up in
-  database, hmux launch will certainly fail (hmux calls add member), so that
-  should force team to be re-constructed before team can actually go live in
-  herdr." No migration rewrites, renames, aliases, or deletes existing roster
+  database, hmux spawn will reject a new member when its add-member call
+  reuses a colliding effective name, so that should force the team to be
+  re-constructed before it can actually go live in herdr." No migration
+  rewrites, renames, aliases, or deletes existing roster
   rows, and opening a database that already holds duplicate effective names
   must not fail. On the next roster write, enforcement is delta-scoped: only
   effective names changed or added by that write are checked against the
@@ -1081,6 +1082,9 @@ Definitions:
   collisions one member at a time before a team goes live in Herdr. (2026-09-09)
   Delta-scoped enforcement is the retained ruling for upgrade compatibility:
   pre-existing collisions are doctor findings, not a blanket write lock.
+  `hmux session` and `hmux launch` reuse existing roster rows and apply aliases
+  through `update-member`; only `hmux spawn` registers a new member through
+  `add-member`.
 - Rand (2026-09-07) on why persistence is canonical-only: "by always using
   the non-alias name when writing to database, we avoid missing things on
   query. i.e. team-lead-alias becomes team-lead when written to database".
