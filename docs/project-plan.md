@@ -1729,7 +1729,7 @@ Phase AY sprint status:
 | `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `merged` (#1310, 47f359cf9) | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
 | `DOCTOR-HERDR-TARGET-R1` | Doctor | standalone target-resolution, breaker, and stale-session diagnostics | `complete` | `fix/doctor-herdr-target-resolution` | `docs/plans/doctor/sprint-DOCTOR-HERDR-TARGET-R1.md` |
 
-## 58. Phase AZ — Bounded Nudges And Durable Task Lifecycle [PROPOSED — APPROVAL GATED]
+## 58. Phase AZ — Bounded Nudges And Durable Task Lifecycle [APPROVED]
 
 Phase AZ begins with the AZ.1 metadata-only nudge repair: every Steer, Queue,
 rebuilt Queue, Task, acknowledge-family, and task-reminder path projects only
