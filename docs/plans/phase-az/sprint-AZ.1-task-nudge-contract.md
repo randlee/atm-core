@@ -174,8 +174,10 @@ This is the sole authoritative deliverables list for Phase AZ.
   legacy Python projections may use only title metadata, never immutable body
   text.
 - [ ] D6 — Add the focused regression suite in the files above plus
-  `crates/atm-core/src/send/tests.rs` and
-  `crates/atm-core/src/send/post_write_tests.rs`. Core send/nudge tests own
+  `crates/atm-core/src/send/tests.rs`,
+  `crates/atm-core/src/send/post_write_tests.rs`,
+  `crates/atm-core/tests/nudge_dispatch.rs`, and
+  `crates/atm-core/tests/task_reminder_dispatch.rs`. Core send/nudge tests own
   direct post-send Steer, deferred Queue, queue rebuild, Task assignment,
   periodic Task reminder, missing-title, and completed-task selection proofs.
   Graft and Herdr tests own their final projections. The real
@@ -202,7 +204,9 @@ crates/atm-core/src/send/hook.rs
 crates/atm-core/src/send/nudge_template.rs
 crates/atm-core/src/send/post_write_tests.rs
 crates/atm-core/src/send/tests.rs
+crates/atm-core/tests/nudge_dispatch.rs
 crates/atm-core/tests/nudge_mode.rs
+crates/atm-core/tests/task_reminder_dispatch.rs
 crates/atm/src/commands/internal_nudge.rs
 crates/atm-daemon-bootstrap/src/received_hook_selector.rs
 crates/atm-http-runtime/src/herdr_queue_wake.rs
@@ -288,9 +292,10 @@ from the AZ.1 worktree with fakes, fixtures, and temporary stores only.
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo test -p atm-core nudge_template
-cargo test -p atm-core nudge_dispatch
-cargo test -p atm-core --test nudge_mode
+cargo test -p agent-team-mail-core nudge_template
+cargo test -p agent-team-mail-core --test nudge_dispatch
+cargo test -p agent-team-mail-core --test nudge_mode
+cargo test -p agent-team-mail-core --test task_reminder_dispatch
 cargo test -p atm-http-runtime herdr_queue_wake
 cargo test -p atm-http-runtime storage_and_nudge_router
 cargo test -p atm-daemon-bootstrap received_hook_selector
