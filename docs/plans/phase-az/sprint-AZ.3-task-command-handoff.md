@@ -80,6 +80,16 @@ most 200 metadata rows at the storage query, not after materialization.
 `--limit` selects a smaller or larger bounded page up to 10,000; explicit
 `--all` is the ADR-009 opt-out and may not be combined with `--limit`.
 
+The human `task list` table includes an `age` column derived from
+`original_assigned_at`, meaning elapsed time since the task's original
+assignment. It uses the same non-negative integer buckets as `atm members`:
+seconds below 60, whole minutes below 3,600 seconds, and whole hours thereafter
+(`Ns`, `Nm`, or `Nh`). Each JSON list row exposes the raw
+`original_assigned_at` and `updated_at` timestamps plus
+`assigned_age_seconds`, the non-negative elapsed seconds derived from
+`original_assigned_at`; consumers therefore receive both assignment age and
+the timestamp needed to derive time since the last state transition.
+
 ## API and service contract
 
 ```rust
@@ -287,9 +297,12 @@ completion is insufficient.
   command-specific validation, help text, and installed user documentation.
   `task list` defaults open, `--closed` selects terminal history, and event
   history follows stable task identity across attempts. Closed/event reads
-  default to 200 rows and require explicit `--all` to remove the bound. Every
-  task-linked message retains `requires_ack`, read visibility, and protection
-  from `atm clear` until acknowledged.
+  default to 200 rows and require explicit `--all` to remove the bound. The
+  human list includes assignment `age` derived from `original_assigned_at`
+  with the existing `atm members` s/m/h buckets; JSON exposes
+  `original_assigned_at`, `updated_at`, and derived `assigned_age_seconds`.
+  Every task-linked message retains `requires_ack`, read visibility, and
+  protection from `atm clear` until acknowledged.
 - [ ] D4 — Implement template-first assignment/handoff composition and every
   authorization rule. Prove close/handoff and supersession/successor assignment
   use one durable transaction and exact idempotent response. Assignment,
@@ -419,7 +432,11 @@ This is the sole authoritative acceptance list for AZ.3.
 5. Open list ordering and closed history are correct, bounded at the query, and
    body-free; `--all` is the explicit opt-out. Events show all attempts under
    one stable `TaskId` through bounded pages. Beads-shaped ids work without any
-   Beads dependency or copied task detail.
+   Beads dependency or copied task detail. Fixed-clock output tests prove the
+   human `age` column derives from `original_assigned_at`, clamps future values
+   to zero, and uses the same 59s/60s/3,599s/3,600s bucket boundaries as
+   `atm members`. JSON tests require raw `original_assigned_at` and `updated_at`
+   plus the same assignment age as non-negative `assigned_age_seconds`.
 6. Legacy send/list flags emit actionable deprecation warnings, delegate to
    the same task service, and preserve the historical completion actor/state
    set through typed compatibility provenance. Task mail acknowledgement no
