@@ -218,11 +218,15 @@ that returns ids, priority, state, attempt, message id, and cadence metadata
 only.
 
 AZ.4 is an ADR-061 minor/additive SQLite change. It moves
-`STORAGE_SCHEMA_VERSION` from `2.0.0` to `2.1.0` and registers an idempotent
-`ensure_attention_schedule_schema` entry in `DB_MIGRATIONS`. The migration
-creates `attention_lane_cursors` and `attention_opportunities` with defaults
-and indexes only; the retained 2.0/1.5.14 consumer ignores them and continues
-to read/write its supported surface. Fresh-2.1 and upgraded-2.0 databases must
+`STORAGE_SCHEMA_VERSION` from `2.0.0` to `2.1.0`. The concrete adapter
+implements `crate::attention_schedule_store::ensure_schema(connection, target)`
+and registers that idempotent call in
+`crates/atm-storage-rusqlite/src/shared_db.rs::ensure_schema` alongside the
+existing per-table ensure calls. It is not a function entry in
+`DB_MIGRATIONS`, which remains the canonical SQL batch. The ensure creates
+`attention_lane_cursors` and `attention_opportunities` with defaults and
+indexes only; the retained 2.0/1.5.14 consumer ignores them and continues to
+read/write its supported surface. Fresh-2.1 and upgraded-2.0 databases must
 converge to byte-equivalent schema, and the older-consumer fixture is rerun.
 ADR-061's version record, the storage schema document, and migration baseline
 are updated in the same change.
@@ -239,9 +243,11 @@ runtime wiring without durable fairness, is insufficient.
 - [ ] D2 — Add the storage-neutral sync/async schedule boundaries, private
   SQLite cursor/reservation tables, idempotent opportunity reservation/
   finalization, and bounded top-runnable task query. Bump
-  `STORAGE_SCHEMA_VERSION` to 2.1.0 through the registered idempotent migration,
-  update matching boundary/schema/ADR-061 records, prove fresh/upgraded schema
-  convergence, and rerun the older-consumer compatibility fixture.
+  `STORAGE_SCHEMA_VERSION` to 2.1.0 through the idempotent
+  `attention_schedule_store::ensure_schema` call registered in
+  `shared_db::ensure_schema`; update matching boundary/schema/ADR-061 records,
+  prove fresh/upgraded schema convergence, and rerun the older-consumer
+  compatibility fixture.
 - [ ] D3 — Refactor `HerdrQueueWakePump` so each idle member/opportunity invokes
   the one selector, claims/revalidates exactly the selected lane, and emits no
   more than one prompt. Preserve global prompt budget, shutdown, breaker,

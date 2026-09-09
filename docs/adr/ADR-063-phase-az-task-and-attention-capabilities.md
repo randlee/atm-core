@@ -125,11 +125,13 @@ coexistence bridge.
 ### D5. SQLite schema 2.1 additive attention migration
 
 AZ.4 moves `STORAGE_SCHEMA_VERSION` to `2.1.0`. A registered idempotent
-`DB_MIGRATIONS` step adds `attention_lane_cursors` and
-`attention_opportunities` with defaults and indexes. Older consumers ignore
-the additive tables. Fresh 2.1 and upgraded 2.0 databases must have
-byte-equivalent schema, and the retained older-consumer suite must remain
-green.
+`crate::attention_schedule_store::ensure_schema(connection, target)` call in
+`shared_db::ensure_schema` adds `attention_lane_cursors` and
+`attention_opportunities` with defaults and indexes. It follows the existing
+per-table ensure pattern rather than treating `DB_MIGRATIONS` as a function
+registry. Older consumers ignore the additive tables. Fresh 2.1 and upgraded
+2.0 databases must have byte-equivalent schema, and the retained
+older-consumer suite must remain green.
 
 ### D6. Governed-interface approval record
 
