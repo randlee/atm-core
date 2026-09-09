@@ -1,31 +1,15 @@
 name: Prerelease Archive
 
-# Builds manifest-declared release archives (linux/macOS/windows) from a
-# prerelease/vX.Y.Z tag, with CI provenance, and creates one GitHub prerelease
-# Release only after a final absence check.
-# The tag is created by `just prerelease-tag`, which patch-bumps the workspace
-# on the caller's current branch before pushing the tag.
-#
-# This workflow is atm-core-owned, not part of the vendored sc-publish kit
-# (see README.sc-publish.md — kit files under .github/workflows are pinned
-# and never hand-edited locally; a workflow like this one, added by the
-# consumer, is exactly the escape hatch the kit expects). It intentionally
-# re-uses only unmodified sc-publish CLI subcommands
-# (build-plan, release-target-matrix, cargo-build-bin-args, release-package-config) and
-# duplicates — rather than edits — the packaging step already vendored in
-# release.yml ("Package manifest-declared release archive"), so the two
-# stay behaviour-identical without any drift to the pinned kit files.
 on:
   push:
-    tags:
-      - "prerelease/v*.*.*"
+    tags: ["prerelease/v*.*.*"]
 
 permissions:
   contents: read
 
 concurrency:
   group: prerelease-archive-${{ github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
@@ -35,90 +19,56 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      atm_core_sha: ${{ steps.resolve.outputs.sha }}
-      tag: ${{ steps.resolve.outputs.tag }}
-      version: ${{ steps.resolve.outputs.version }}
-      rust_toolchain: ${{ steps.resolve.outputs.rust_toolchain }}
-      release_target_matrix: ${{ steps.matrix.outputs.matrix }}
+      version: ${{ steps.version.outputs.value }}
+      source_sha: ${{ steps.version.outputs.source_sha }}
+      rust_toolchain: ${{ steps.version.outputs.rust_toolchain }}
+      matrix: ${{ steps.matrix.outputs.value }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - name: Validate prerelease tag and workspace version
-        id: resolve
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.x" }
+      - id: version
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          if [[ ! "${tag}" =~ ^prerelease/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-            echo "invalid prerelease tag '${tag}'; expected prerelease/vX.Y.Z" >&2
-            exit 1
-          fi
-          version="${BASH_REMATCH[1]}"
-          plan="$(python3 .github/scripts/release_artifacts.py build-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
-          workspace_toml="$(jq -r '.workspace_toml' <<<"${plan}")"
-          rust_toolchain="$(jq -r '.rust_toolchain' <<<"${plan}")"
-          python3 .github/scripts/release_artifacts.py verify-version \
-            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
-            --workspace-toml "${workspace_toml}" \
-            --version "${version}"
-          python3 .github/scripts/release_artifacts.py verify-version-lockstep \
-            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
-            --workspace-toml "${workspace_toml}"
-          probe="$(gh api --include "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" 2>&1 || true)"
-          if grep -qE '^HTTP/[0-9.]+ 200' <<<"${probe}"; then
-            echo "GitHub Release already exists for ${tag}; refusing to rebuild it" >&2
-            exit 1
-          fi
-          if ! grep -qE '^HTTP/[0-9.]+ 404' <<<"${probe}"; then
-            echo "could not prove that GitHub Release ${tag} is absent" >&2
-            echo "${probe}" >&2
-            exit 1
-          fi
-          sha="$(git rev-parse HEAD)"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "rust_toolchain=${rust_toolchain}" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve release target matrix
-        id: matrix
-        shell: bash
-        run: |
-          set -euo pipefail
-          full="$(python3 .github/scripts/release_artifacts.py release-target-matrix --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
-          matrix="${full}"
-          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
-
+          prefix="$(python3 - <<'PY'
+          import tomllib
+          print(tomllib.load(open('release/publish-artifacts.toml','rb'))['prerelease']['tag_prefix'])
+          PY
+          )"
+          [[ "$tag" == "$prefix"* ]] || { echo "unexpected prerelease tag: $tag" >&2; exit 1; }
+          version="${tag#"$prefix"}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid prerelease version" >&2; exit 1; }
+          plan="$(python3 .github/scripts/release_artifacts.py build-plan --manifest "$RELEASE_ARTIFACT_MANIFEST")"
+          workspace="$(jq -r .workspace_toml <<<"$plan")"
+          rust_toolchain="$(jq -r .rust_toolchain <<<"$plan")"
+          python3 .github/scripts/release_artifacts.py validate-manifest --manifest "$RELEASE_ARTIFACT_MANIFEST" --workspace-toml "$workspace"
+          python3 .github/scripts/release_artifacts.py verify-version --manifest "$RELEASE_ARTIFACT_MANIFEST" --workspace-toml "$workspace" --version "$version"
+          python3 .github/scripts/release_artifacts.py verify-version-lockstep --manifest "$RELEASE_ARTIFACT_MANIFEST" --workspace-toml "$workspace"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "rust_toolchain=$rust_toolchain" >> "$GITHUB_OUTPUT"
+      - id: matrix
+        run: echo "value=$(python3 .github/scripts/release_artifacts.py release-target-matrix --manifest \"$RELEASE_ARTIFACT_MANIFEST\")" >> "$GITHUB_OUTPUT"
   build:
     needs: plan
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.release_target_matrix) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.plan.outputs.atm_core_sha }}
-
+          ref: ${{ needs.plan.outputs.source_sha }}
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.plan.outputs.rust_toolchain }}
           targets: ${{ matrix.target }}
-
-      - name: Ensure cross-compilation target
-        run: rustup target add ${{ matrix.target }}
+      - run: rustup target add ${{ matrix.target }}
 
       - name: Install Linux native build deps
         uses: ./.github/actions/install-linux-native-deps
@@ -136,16 +86,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bin_args="$(python3 .github/scripts/release_artifacts.py cargo-build-bin-args --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
-          cargo build --release --target ${{ matrix.target }} ${bin_args}
+          bins="$(python3 .github/scripts/release_artifacts.py cargo-build-bin-args --manifest "$RELEASE_ARTIFACT_MANIFEST")"
+          cargo build --release --target "${{ matrix.target }}" $bins
 
-      # Deliberately duplicated (not shared via a new release_artifacts.py
-      # subcommand): this is release.yml's own "Package manifest-declared
-      # release archive" step, byte-for-byte, so archive layout stays
-      # provably identical without editing the vendored kit file. See
-      # .just/tests/test_prerelease_archive_workflow.py, which
-      # asserts this block and release.yml's block are the same script.
-      - name: Package manifest-declared pre-release archive
+      - name: Package manifest-declared prerelease archive
         shell: bash
         run: |
           set -euo pipefail
@@ -154,7 +98,6 @@ jobs:
           import os
           from pathlib import Path
           import shutil
-          import sys
           import subprocess
           import tarfile
           import zipfile
@@ -164,7 +107,7 @@ jobs:
           config = json.loads(
               subprocess.check_output(
                   [
-                      sys.executable,
+                      "python3",
                       ".github/scripts/release_artifacts.py",
                       "release-package-config",
                       "--manifest",
@@ -209,87 +152,38 @@ jobs:
         with:
           name: ${{ matrix.target }}
           path: ${{ env.ARCHIVE }}
-
-  checksums:
-    needs: [plan, build]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Download all target artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Generate checksums and provenance record
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import hashlib
-          import json
-          from pathlib import Path
-
-          artifacts_dir = Path("artifacts")
-          entries = []
-          checksum_lines = []
-          for target_dir in sorted(p for p in artifacts_dir.iterdir() if p.is_dir()):
-              archives = sorted(target_dir.glob("*"))
-              if len(archives) != 1:
-                  raise SystemExit(
-                      f"expected exactly one archive for {target_dir.name}, found {len(archives)}"
-                  )
-              archive = archives[0]
-              digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-              # Same "<sha256>  <filename>" line format sha256sum/release.yml's
-              # checksums.txt emits and `shasum -a 256 -c` verifies.
-              checksum_lines.append(f"{digest}  {archive.name}")
-              entries.append({"target": target_dir.name, "archive": archive.name, "sha256": digest})
-
-          out_dir = Path("checksums")
-          out_dir.mkdir(exist_ok=True)
-          (out_dir / "checksums.txt").write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
-
-          provenance = {
-              "version": "${{ needs.plan.outputs.version }}",
-              "atm_core_sha": "${{ needs.plan.outputs.atm_core_sha }}",
-              "ref": "${{ github.ref }}",
-              "run_id": "${{ github.run_id }}",
-              "targets": entries,
-          }
-          (out_dir / "provenance.json").write_text(
-              json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-          )
-          PY
-
-      - name: Upload checksums artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: checksums
-          path: checksums
-
   release:
-    needs: [plan, build, checksums]
+    needs: [plan, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
     steps:
-      - name: Download archives and checksums
-        uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-      - name: Create GitHub prerelease Release
+      - uses: actions/download-artifact@v4
+        with: { path: assets }
+      - name: Generate checksums and publish GitHub prerelease assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          find release-assets -type f -name '*.tar.gz' -exec cp {} . \;
-          find release-assets -type f -name '*.zip' -exec cp {} . \;
-          find release-assets -type f -name checksums.txt -exec cp {} . \;
-          tag='${{ needs.plan.outputs.tag }}'
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "GitHub Release already exists for ${tag}; refusing to replace it" >&2
-            exit 1
+          find assets -type f -exec cp {} . \;
+          mapfile -t archives < <(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print | sed 's#^./##' | sort)
+          ((${#archives[@]} > 0)) || { echo "no prerelease archives were downloaded" >&2; exit 1; }
+          shasum -a 256 "${archives[@]}" > checksums.txt
+          tag="${GITHUB_REF_NAME}"
+          if gh release create "$tag" --prerelease --title "$tag" --generate-notes "${archives[@]}" checksums.txt; then
+            exit 0
           fi
-          gh release create "$tag" --prerelease --title "$tag" --generate-notes *.tar.gz *.zip checksums.txt
+
+          echo "release creation did not win; verifying an identical existing prerelease"
+          metadata="$(gh release view "$tag" --json isDraft,isPrerelease,assets)"
+          [[ "$(jq -r .isPrerelease <<<"$metadata")" == "true" ]] || { echo "$tag is not a prerelease" >&2; exit 1; }
+          [[ "$(jq -r .isDraft <<<"$metadata")" == "false" ]] || { echo "$tag is still a draft" >&2; exit 1; }
+          expected_assets="$(printf '%s\n' "${archives[@]}" checksums.txt | sort)"
+          actual_assets="$(jq -r '.assets[].name' <<<"$metadata" | sort)"
+          [[ "$actual_assets" == "$expected_assets" ]] || { echo "$tag has a different asset set" >&2; exit 1; }
+          mkdir existing-release
+          gh release download "$tag" --pattern checksums.txt --dir existing-release
+          cmp checksums.txt existing-release/checksums.txt || { echo "$tag has different archive checksums" >&2; exit 1; }
+          echo "existing prerelease $tag is identical; concurrent run converged"
