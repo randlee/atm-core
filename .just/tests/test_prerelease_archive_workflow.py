@@ -232,6 +232,8 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         release_step = workflow.split(
             "      - name: Generate checksums and publish GitHub prerelease assets\n", 1
         )[1]
+        release_job = workflow.split("  release:\n", 1)[1]
+        self.assertIn("- uses: actions/checkout@v4", release_job)
         self.assertIn('shasum -a 256 "${archives[@]}" > checksums.txt', release_step)
         self.assertIn(
             'gh release create "$tag" --prerelease --title "$tag" --generate-notes '
