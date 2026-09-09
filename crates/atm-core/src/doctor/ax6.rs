@@ -55,13 +55,10 @@ fn doctor_teams(
 fn daemon_recipients(
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     findings: &mut Vec<DoctorFinding>,
-) -> Vec<crate::types::AgentName> {
+) -> Vec<String> {
     match task_store {
         Some(store) => match store.list_escalation_recipients(&EscalationScope::Daemon) {
-            Ok(recipients) => recipients
-                .into_iter()
-                .map(crate::types::AgentName::from_validated)
-                .collect(),
+            Ok(recipients) => recipients,
             Err(error) => {
                 push_storage_failure(findings, "daemon escalation recipients", error);
                 Vec::new()
@@ -103,10 +100,7 @@ fn team_report(
         } else {
             EscalationRecipientSource::Team
         },
-        recipients: effective
-            .into_iter()
-            .map(crate::types::AgentName::from_validated)
-            .collect(),
+        recipients: effective,
     })
 }
 

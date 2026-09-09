@@ -224,7 +224,7 @@ pub struct PostSendDoctorReport {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TeamEscalationRecipientsDoctorReport {
     pub team: TeamName,
-    pub recipients: Vec<AgentName>,
+    pub recipients: Vec<String>,
     pub source: EscalationRecipientSource,
 }
 
@@ -246,7 +246,7 @@ impl std::fmt::Display for EscalationRecipientSource {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct EscalationRecipientsDoctorReport {
-    pub daemon: Vec<AgentName>,
+    pub daemon: Vec<String>,
     pub teams: Vec<TeamEscalationRecipientsDoctorReport>,
 }
 
@@ -479,8 +479,13 @@ impl DoctorReport {
 
 #[cfg(test)]
 mod tests {
-    use super::{HerdrEndpointCapabilitiesDoctorReport, PeerWireSecurityStatus};
+    use super::{
+        EscalationRecipientSource, EscalationRecipientsDoctorReport,
+        HerdrEndpointCapabilitiesDoctorReport, PeerWireSecurityStatus,
+        TeamEscalationRecipientsDoctorReport,
+    };
     use crate::peer_wire::PeerWireSecurity;
+    use crate::types::TeamName;
 
     #[test]
     fn peer_wire_security_status_is_typed_and_preserves_public_json_values() {
@@ -502,5 +507,23 @@ mod tests {
 
         assert!(value.get("live_handoff").is_some());
         assert!(value["live_handoff"].is_null());
+    }
+
+    #[test]
+    fn escalation_recipient_report_round_trips_address_strings() {
+        let report = EscalationRecipientsDoctorReport {
+            daemon: vec!["ops@atm-dev".to_owned()],
+            teams: vec![TeamEscalationRecipientsDoctorReport {
+                team: TeamName::from_validated("team-a"),
+                recipients: vec!["team-ops@team-a".to_owned()],
+                source: EscalationRecipientSource::Team,
+            }],
+        };
+
+        let wire = serde_json::to_vec(&report).expect("doctor report serializes");
+        let decoded: EscalationRecipientsDoctorReport =
+            serde_json::from_slice(&wire).expect("doctor report deserializes");
+
+        assert_eq!(decoded, report);
     }
 }
