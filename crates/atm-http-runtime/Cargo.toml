@@ -37,7 +37,6 @@ ulid.workspace = true
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Memory"] }
 
 [dev-dependencies]
-atm-observability.workspace = true
 atm-core = { workspace = true, features = ["test-utils"] }
 atm-herdr = { workspace = true, features = ["test-utils"] }
 atm-runtime-test-support.workspace = true

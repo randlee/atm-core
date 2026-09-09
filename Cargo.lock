@@ -294,7 +294,6 @@ dependencies = [
  "agent-team-mail-core",
  "async-trait",
  "atm-herdr",
- "atm-observability",
  "atm-runtime",
  "atm-runtime-test-support",
  "axum",

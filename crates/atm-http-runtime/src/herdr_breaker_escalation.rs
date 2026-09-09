@@ -179,7 +179,7 @@ mod tests {
         );
 
         assert!(body.contains("ATM_HERDR_AGENT_NOT_VISIBLE"));
-        assert!(body.contains("agent_not_found"));
+        assert!(body.contains(atm_herdr::HerdrError::AgentNotFound.diagnostic_name()));
         assert!(body.contains("herdr agent rename <pane_id> <target>"));
         assert!(body.lines().count() <= 12);
     }

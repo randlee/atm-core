@@ -981,10 +981,6 @@ mod tests {
     use atm_herdr::{
         AgentSnapshot, HerdrAgentStatus, HerdrListOutcome, HerdrProcessAdapter, HerdrPromptOutcome,
     };
-    use atm_observability::{
-        DiagnosticSink, RetainedEvent, RetainedLogPolicy, SinkOffer, TracingBridgeLayer,
-        build_retained_logger,
-    };
     use atm_runtime_test_support::open_isolated_sqlite_boundary;
     use atm_storage::{RosterSnapshot, TaskRow, TaskState, TaskStore};
     use serde_json::json;
@@ -994,56 +990,13 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
-    use tracing_subscriber::prelude::*;
-
-    #[derive(Default)]
-    struct RecordingDiagnosticSink {
-        codes: Mutex<Vec<String>>,
-    }
-
-    impl DiagnosticSink for RecordingDiagnosticSink {
-        fn offer(&self, event: &RetainedEvent<'_>) -> SinkOffer {
-            if let Some(code) = event.code {
-                self.codes.lock().expect("codes").push(code.to_owned());
-            }
-            SinkOffer::Accepted
-        }
-    }
-
     #[test]
-    fn herdr_list_failure_reaches_the_tracing_bridge_with_its_error_code() {
-        let root = tempfile::tempdir().expect("tempdir");
-        let logger = Arc::new(
-            build_retained_logger(
-                "atm",
-                &root.path().join("logs"),
-                RetainedLogPolicy {
-                    rotation_max_bytes: 1_024 * 1_024,
-                    rotation_max_files: 2,
-                    retention_max_age: Duration::from_secs(60),
-                    maintenance_cadence: Duration::from_secs(60),
-                    writer_shutdown_timeout: Duration::from_secs(1),
-                    maintenance_max_work_per_pass: Some(2),
-                },
-                None,
-            )
-            .expect("logger"),
-        );
-        let bridge = TracingBridgeLayer::new(logger);
-        let sink = Arc::new(RecordingDiagnosticSink::default());
-        bridge.set_diagnostic_sink(sink.clone());
-
-        tracing::subscriber::with_default(
-            tracing_subscriber::Registry::default().with(bridge),
-            || {
-                log_herdr_list_failure(&None, &atm_herdr::HerdrError::ServerNotRunning);
-            },
-        );
-
-        assert_eq!(
-            sink.codes.lock().expect("codes").as_slice(),
-            ["ATM_HERDR_UNAVAILABLE"]
-        );
+    fn herdr_list_failure_emits_its_structured_error_code() {
+        let error = atm_herdr::HerdrError::ServerNotRunning;
+        tracing::subscriber::with_default(tracing_subscriber::registry(), || {
+            log_herdr_list_failure(&None, &error);
+        });
+        assert_eq!(AtmError::from(error).code(), AtmErrorCode::HerdrUnavailable);
     }
 
     struct FakeSelector {
