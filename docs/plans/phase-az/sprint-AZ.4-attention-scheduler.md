@@ -311,6 +311,7 @@ docs/atm-http-runtime/architecture.md
 docs/atm-herdr/requirements.md
 docs/atm-herdr/architecture.md
 docs/atm-herdr/boundaries.md
+docs/adr/ADR-036-storage-boundary-and-composition-topology.md
 docs/adr/ADR-062-task-state-machine.md
 docs/adr/ADR-061-governed-interface-schema-versioning.md
 docs/adr/ADR-063-phase-az-task-and-attention-capabilities.md

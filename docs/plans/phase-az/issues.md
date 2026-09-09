@@ -44,7 +44,7 @@ replace repository issue numbers or QA triage authority.
 | `AZ-DES-006` | AZ.2 retains ack activation; AZ.3 lands the mail-only ack switch atomically with explicit start. |
 | `AZ-DES-007` | All sprint validations run the line-count gate and AZ.2/AZ.3/AZ.4 authorize split modules. |
 | `AZ-DES-008` | AZ.2 owns list/top-runnable ordering and the covering index. |
-| `AZ-DES-009` | Proposed ADR-063 recounts ten capabilities and owns task mutation, attention scheduling, and schema-major rationale. |
+| `AZ-DES-009` / `AZ-DES-009-R` | Proposed ADR-063 recounts the twelve live semantic capabilities, groups required async companions per ADR-036, and assigns task mutation, attention scheduling, and schema-major rationale. |
 | `AZ-DES-010` | Migration uses open/active precedence, records discarded rows, and deterministically demotes surplus active rows. |
 | `AZ-DES-011` | A dedicated operations table owns idempotency; both supersession histories may reference one operation. |
 | `AZ-DES-012` | Invalidation joins every canonical message envelope by `(team, taskId)`, not only attempt message ids. |

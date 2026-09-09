@@ -15,11 +15,15 @@ blocked and terminal outcomes, atomic supersession, or idempotent multi-row
 mutation. Phase AZ also replaces Herdr's drain-first reminder sequence with a
 durable, fair selector over separate message and task lanes.
 
-Those changes require three new sealed storage capability traits and a major
-SQLite task-schema migration. ADR-018 requires a follow-up ADR after four
-optional capabilities; ADR-054 recounts six, then records `TaskStore` as the
-seventh. ADR-061 separately requires explicit approval and coexistence for a
-major storage interface change.
+Those changes require three new sealed storage capability traits representing
+two new semantic capabilities, plus a major SQLite task-schema migration.
+ADR-018 requires a follow-up ADR before capability growth. ADR-036 and ADR-054
+still list `OutboundMessageQuery`, but Phase AM deleted that trait in
+`e49c059c`; later phases added the async message, mailbox-reader, task-reader,
+and graft-endpoint capability surfaces now present on `origin/develop`.
+This ADR therefore recounts the live baseline rather than carrying the stale
+ordinal forward. ADR-061 separately requires explicit approval and coexistence
+for a major storage interface change.
 
 ## Decision
 
@@ -30,7 +34,7 @@ attempts, append-only events, and task operation/result types. Open state and a
 terminal outcome are unrepresentable together in Rust. SQLite may project the
 sum type into checked columns for indexed reads.
 
-`AsyncTaskMutationStore` is the eighth optional capability. It owns one
+`AsyncTaskMutationStore` is the eleventh semantic storage capability. It owns one
 bounded asynchronous mutation admission that atomically applies assignment,
 start, block/unblock, reassign/reopen, terminal handoff, and supersession. It is
 separate from `TaskStore` because it is a compare-and-swap transactional command
@@ -44,15 +48,15 @@ multiple events across old and successor tasks may reference one operation.
 
 ### D2. Attention schedule capabilities
 
-`AttentionScheduleStore` is the ninth optional capability. It owns only durable
+`AttentionScheduleStore` is the twelfth semantic storage capability. It owns only durable
 per-member lane cursors and one-item idle-opportunity reservations. It does not
 own message lifecycle, task lifecycle, bodies, templates, emitters, or runtime
 presence.
 
-`AsyncAttentionScheduleStore` is the tenth optional capability. Although it is
-the Tokio-safe companion of the same semantic store, this ADR counts it
-independently rather than understating the inventory. It exists because the
-replacement runtime requires bounded reader/writer execution, deadlines, and
+`AsyncAttentionScheduleStore` is the required Tokio-safe companion of the
+same semantic store, not a thirteenth capability. This follows ADR-036's rule
+for `AsyncMessageSearchStore`: an async companion carries the same semantic
+contract while providing bounded reader/writer execution, deadlines, and
 cancellation without exposing a synchronous SQLite operation on a Tokio task.
 
 The pure selector receives at most one candidate from `PendingNudgeStore` and
@@ -63,21 +67,27 @@ choose a task reminder when the assignee is idle.
 
 ### D3. Capability inventory after Phase AZ
 
-The optional storage capability inventory is explicitly recounted as:
+The semantic storage capability inventory after Phase AZ is explicitly
+recounted as:
 
-1. `PeerConfigStore`
-2. `OutboundMessageQuery`
-3. `NudgeTemplateOverrideStore`
-4. `TemplateCatalogStore`
-5. `MessageSearchStore`
-6. `PendingNudgeStore`
-7. `TaskStore`
-8. `AsyncTaskMutationStore`
-9. `AttentionScheduleStore`
-10. `AsyncAttentionScheduleStore`
+1. `MessageStore` with its `AsyncMessageStore` companion
+2. `AsyncMailboxReader`
+3. `AsyncTaskLedgerReader`
+4. `GraftReceiverEndpointStore` with its
+   `AsyncGraftReceiverEndpointStore` companion
+5. `PeerConfigStore`
+6. `NudgeTemplateOverrideStore`
+7. `TemplateCatalogStore`
+8. `MessageSearchStore` with its `AsyncMessageSearchStore` companion
+9. `PendingNudgeStore`
+10. `TaskStore`
+11. `AsyncTaskMutationStore`
+12. `AttentionScheduleStore` with its
+    `AsyncAttentionScheduleStore` companion
 
-ADR-036's inventory and the matching boundary TOMLs must be updated in AZ.2
-and AZ.4. No eleventh optional capability is authorized by this ADR.
+`OutboundMessageQuery` is not in this inventory because Phase AM deleted it.
+ADR-036's stale inventory and the matching boundary TOMLs must be updated in
+AZ.2 and AZ.4. No thirteenth semantic capability is authorized by this ADR.
 
 ### D4. SQLite schema 2.0 major migration
 
@@ -131,7 +141,8 @@ is replaced with the recorded approval.
 
 - Task mutation and attention scheduling gain narrow storage-neutral owners
   instead of leaking SQLite transactions into core, CLI, or runtime code.
-- Capability-trait growth is explicit and capped at ten.
+- Capability growth is explicit and capped at twelve semantic capabilities;
+  required async companions do not increment that count.
 - The previous release remains a supported rollback consumer after migration.
 - Canonical v2 rows contain no rendered body or duplicate task description;
   the retained v1 description column is a temporary, approved compatibility
@@ -158,7 +169,8 @@ is replaced with the recorded approval.
 
 ## Required evidence
 
-- Boundary tests for all three new sealed traits and a crate-graph proof that
+- Boundary tests for all three new sealed traits (two semantic capabilities)
+  and a crate-graph proof that
   no concrete SQLite type crosses the storage boundary.
 - Fresh, failed, conflicting-legacy, 1.5.14-to-2.0, and 2.0-to-2.1 migration
   fixtures, including previous-binary write/read rollback evidence.
