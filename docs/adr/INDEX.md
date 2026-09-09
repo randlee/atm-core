@@ -69,6 +69,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-060 — Peer Dial Order And Address Cache](./ADR-060-peer-dial-and-address-cache.md)
 - [ADR-061 — Governed Interface Schema Versioning And Breaking-Change Approval](./ADR-061-governed-interface-schema-versioning.md)
 - [ADR-062 — Task State Machine](./ADR-062-task-state-machine.md)
+- [ADR-063 — Phase AZ Task And Attention Storage Capabilities](./ADR-063-phase-az-task-and-attention-capabilities.md) *(Proposed; ADR-061 approval pending)*
 
 ## Extracted Crate-Local ADRs
 

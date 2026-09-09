@@ -23,8 +23,8 @@ ATM first needs to restore the notification boundary: nudges are bounded wake-up
 metadata, while the immutable message body is retrieved only with `atm read
 --message-id`. That remains the complete and unchanged scope of AZ.1.
 
-The accepted follow-up design then replaces the message-derived three-state task
-ledger with a durable logical-task lifecycle. A stable `TaskId` survives
+The proposed, approval-gated follow-up design then replaces the message-derived
+three-state task ledger with a durable logical-task lifecycle. A stable `TaskId` survives
 assignment attempts, explicit commands own state changes, terminal outcomes and
 supersession are recorded, and the runtime derives at most one fair idle work
 item from the independent ephemeral-message and persistent-task lanes.
@@ -55,7 +55,7 @@ the same bounded title metadata, never a body source.
   activates the task. `Closed -> Assigned` is available only through authorized
   reopen/reassign and creates a new assignment attempt.
 - Each task has exactly one current assignee. A database constraint permits at
-  most one `Active` task per agent. All transitions, assignment-attempt creation,
+  most one `Active` task per `(team, agent)`. All transitions, assignment-attempt creation,
   terminal handoff persistence, supersession, and task-related pending-nudge
   invalidation are atomic and idempotent.
 - Existing rows migrate with `Normal` priority. Runnable order is `Active` first,
@@ -64,11 +64,16 @@ the same bounded title metadata, never a body source.
 - `atm task` is the canonical public command family. Legacy `atm send --task-id`,
   `atm send --task-complete`, `atm list --tasks`, and `atm list --task-events`
   remain temporary deprecated adapters to the same service, never alternate
-  mutation/query paths. Acknowledging task-linked mail no longer starts a task.
+  mutation/query paths. AZ.2 retains acknowledgement activation until AZ.3
+  atomically lands `atm task start`; only then does acknowledgement become
+  mail-only. The legacy completion adapter retains assigner-or-assignee closure
+  from Assigned or Active during its compatibility window.
 - Closing a task requires a durable handoff message to another roster member.
   Template plus variables is the documented default; plain text and standard
   message sources remain supported. The handoff message and closure commit
-  together.
+  together. Canonical handoff recipients are same-host, resolvable, and
+  non-self; cross-host handoff rejects with a typed error because ADR-035 remote
+  delivery cannot participate in the local closure transaction.
 - `TaskId` remains an opaque validated identifier and may equal a Beads id. ATM
   stores no Beads task body and does not query Beads for task details.
 
@@ -90,6 +95,9 @@ on the next, and continues alternating. Exactly one item is emitted per idle
 opportunity. Task priority orders only the persistent lane; it never jumps a
 task ahead of the ephemeral lane.
 
+This selector is specifically the Herdr idle-attention pump. It does not alter
+ADR-054's bare-CLI pull behavior.
+
 ## Issue inventory
 
 | Planning id | Disposition | Closure |
@@ -97,7 +105,8 @@ task ahead of the ephemeral lane.
 | `AZ-LONG-NUDGE` | In scope | AZ.1 removes direct body/task-description fallbacks and closes every listed projection with focused negative tests. |
 | `AZ-TASK-LIFECYCLE` | In scope | AZ.2 replaces the task domain/schema and provides transactional mutation primitives. |
 | `AZ-TASK-COMMANDS` | In scope | AZ.3 adds the canonical command/service surface, authorization, durable handoffs, and legacy adapters. |
-| `AZ-TASK-COMPLETE-PENDING` | In scope | AZ.2 atomically invalidates pending nudges associated with every assignment attempt when a task blocks, closes, reassigns, reopens, or is superseded. |
+| `AZ-TASK-COMPLETE-PENDING` | In scope | AZ.2 atomically joins canonical messages by `(team, task_id)` and invalidates every task-linked pending marker—not only assignment-attempt ids—when a task blocks, closes, reassigns, reopens, or is superseded. |
+| `AZ-GOVERNED-INTERFACES` | Approval-gated | AZ.2/AZ.3/AZ.4 implement the ADR-061 version, migration, record, and older-consumer matrix; AZ.2's major storage change additionally requires Rand's separately recorded sign-off. |
 | `AZ-IDLE-INTERLEAVING` | In scope | AZ.4 replaces drain-first reminder scheduling with the one-item fair selector. |
 
 These are planning identifiers, not substitutes for repository issue numbers.
@@ -148,6 +157,38 @@ runtime composition, or scheduler-visible state.
   issue inventory only for its own status/evidence. Historical Phase AX plans
   remain historical and are not rewritten.
 
+## ADR-061 governed-interface plan
+
+All three managed interfaces are classified here so phase-end schema review can
+diff implementation against the approved plan. Every version change, baseline,
+older-consumer fixture, and ADR-061 version-record entry lands in the sprint
+that owns the interface change.
+
+| Sprint | HTTP/peer API | Herdr IPC | SQLite schema |
+| --- | --- | --- | --- |
+| AZ.1 | No HTTP route/DTO change; patch classification. The separate internal-nudge/graft compatibility seam follows ADR-054's reader-first dual-key plan. | Prompt content becomes bounded title metadata but the Herdr request shape and `HERDR_MINIMUM_VERSION` are unchanged; patch classification. | No schema/version change. |
+| AZ.2 | No HTTP/version change. | No Herdr/version change. | **Major:** introduce persisted `STORAGE_SCHEMA_VERSION = 2.0.0` and canonical v2 task/attempt/event/operation tables with changed constraints/meaning. Retain the full v1 table/column projection and transactional bidirectional compatibility bridge for the approved coexistence window. |
+| AZ.3 | **Minor:** additive task routes, request variants, and optional response fields; bump `HTTP_API_VERSION` 1.3.0 → 1.4.0, update both OpenAPI documents and surface baseline, append ADR-061 D5 record, and run retained 1.3.0 consumer tests. | No Herdr/version change. | No schema/version change beyond consuming AZ.2. |
+| AZ.4 | No HTTP/version change. | Scheduler implementation changes behind the existing Herdr request shape; `HERDR_MINIMUM_VERSION` remains unchanged. | **Minor:** additive attention cursor/reservation tables; bump `STORAGE_SCHEMA_VERSION` 2.0.0 → 2.1.0 through a registered idempotent migration, update schema/ADR-061 records, and run fresh/upgraded plus older-consumer tests. |
+
+AZ.2's storage change cannot be expressed as merely optional columns: stable
+logical identity collapses the old `(team, task_id, assignee)` rows, introduces
+terminal sum-state meaning and one-active constraints, and must support atomic
+multi-task supersession. It is therefore intentionally classified major even
+though the coexistence bridge prevents lockstep upgrade.
+
+**Open approval gate:** ADR-061 requires Rand's explicit recorded approval and
+the approved v1/v2 coexistence duration before this plan may become approved.
+The citation is not yet present; implementation and plan approval are blocked
+until team-lead records that message/issue/ADR reference in this section and in
+ADR-063. The plan must not substitute its own authorship for that sign-off.
+
+The assumed rollback story is concrete: after v2 migration, a retained ATM
+1.5.14 binary opens the same database, reads and mutates its v1 task projection,
+and compatibility triggers mirror supported assign/ack/complete writes into v2.
+The new binary can then reopen and observe those writes. Phase AZ drops no v1
+object; ending the bridge is a separately approved ADR-061 major change.
+
 ## Architecture boundary
 
 Task state policy and DTOs remain storage-neutral. SQLite owns schema,
@@ -173,5 +214,11 @@ Phase AZ is complete only when all four sprint acceptance lists pass and:
 4. Each idle opportunity selects zero or one item, alternates fairly when both
    lanes remain due, and never reminds blocked or closed tasks.
 5. No task or attempt row stores a rendered message body or duplicate
-   description, and task-related pending queue markers cannot survive
-   ineligible lifecycle transitions.
+   description in canonical v2 storage, and task-related pending queue markers
+   cannot survive ineligible lifecycle transitions. The invalidation join
+   covers every canonical message with the same `(team, task_id)`, not only
+   assignment-attempt message ids.
+6. HTTP API 1.4.0 and storage schema 2.0.0/2.1.0 changes carry their ADR-061
+   records, documentation, migration baselines, and older-consumer tests.
+7. ADR-063 is accepted and indexed, and the ADR-061 major storage approval plus
+   coexistence duration is cited before plan approval or implementation begins.

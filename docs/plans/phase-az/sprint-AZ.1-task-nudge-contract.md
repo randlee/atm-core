@@ -81,9 +81,22 @@ ordinary or J2-rendered body. That persisted summary is permitted title
 metadata; the forbidden behavior is reading or falling back to full body text
 again while constructing or projecting a nudge.
 
-The internal `PostSendHookEvent` serialized key is `title`; it has no
-body-capable `description` field and accepts `description` only as a
-title-valued deserialization alias at retained internal compatibility seams.
+The internal `PostSendHookEvent` canonical Rust field and serialized key are
+`title`; the reader declares
+`#[serde(rename = "title", alias = "description")]`. During the compatibility
+window, explicit `InternalNudgeWireEvent` and `GraftPostSendWireEvent`
+projections emit both `title` and deprecated `description`, byte-identical and
+title-only, so a separately installed older receiver never has to understand
+the new key. There is no body-capable description semantic.
+
+The both-sides rollout is reader-first and versioned. The `atm-graft` PyPI
+package used by hermes-atm and the `atm-graft-python` receiver shipped with ATM
+`1.5.15` accept canonical `title` and legacy `description`; tests retain an ATM
+`1.5.14` receiver fixture and prove it can deserialize the dual-key producer
+shape. Only after `1.5.14` leaves the supported receiver window may a separately
+planned governed-interface change stop emitting the internal compatibility
+key. This sprint updates producer, Rust receiver, Python receiver, examples,
+and skew fixtures together; it does not assume daemon and receiver lockstep.
 The external `ATM_POST_SEND` environment contract uses an explicit projection
 DTO during one compatibility window:
 
@@ -191,7 +204,13 @@ acceptance criterion remains open.
   `docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md`. ADR-019's
   status does not change, so its index entry does not change. The documents
   must state the allowed message-derived fields, title-only source,
-  missing-title rule, and `atm read --message-id` body boundary.
+  missing-title rule, and `atm read --message-id` body boundary. Rewrite the
+  stale requirement that says reminders resend the "Task body": AZ.1 makes the
+  payload metadata-only while explicitly leaving drain-first scheduling for
+  AZ.4.
+  Append the internal/graft both-sides compatibility plan to
+  `docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md`, including the
+  1.5.14 reader fixture and 1.5.15 title-aware receiver floor.
 - [ ] D2 — Replace the body-capable `PostSendHookEvent.description` semantic
   with `title` in `crates/atm-core/src/boundary/mod.rs`. Add one summary-only
   normalization helper and use it from
@@ -226,7 +245,10 @@ acceptance criterion remains open.
   `description` value nor a `summary` fallback can become body input. Graft
   `body` remains the canonical rendered ATM nudge; graft `notice_text` and
   legacy Python projections may use only title metadata, never immutable body
-  text.
+  text. Explicit internal/graft wire projection DTOs emit canonical `title`
+  plus deprecated title-only `description`; all new readers accept either
+  spelling. The 1.5.15 `atm-graft`/hermes-atm reader ships before the
+  deprecated key can be removed.
 - [ ] D6 — Add the focused regression suite in the files above plus
   `crates/atm-core/src/send/tests.rs`,
   `crates/atm-core/src/send/post_write_tests.rs`,
@@ -244,7 +266,10 @@ acceptance criterion remains open.
   graft notice/body, and Herdr request while the persisted title, message id,
   and optional task id remain present. Prove the external `ATM_POST_SEND`
   payload emits `title` and deprecated `description` with byte-identical
-  title-only values, while the internal event serializes canonical `title`.
+  title-only values. Prove internal/graft payloads emit the same dual-key
+  compatibility shape, a retained 1.5.14 reader fixture accepts it, and the
+  1.5.15 reader accepts both old description-only and new shapes while
+  exposing canonical `title` internally.
   Preserve a focused proof that task completion excludes the completed row
   from periodic reminder selection.
 
@@ -280,6 +305,7 @@ boundaries/atm-core/message-received-hook-emitter.toml
 boundaries/atm-graft/message-received-hook.toml
 boundaries/atm-herdr/herdr-process-adapter.toml
 docs/adr/ADR-019-direct-post-send-and-claude-json-retirement.md
+docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md
 docs/architecture.md
 docs/atm/architecture.md
 docs/atm/requirements.md
@@ -334,6 +360,9 @@ This is the sole authoritative acceptance list for AZ.1.
    Internal serialized events expose that value as `title`; the external
    `ATM_POST_SEND` payload also emits a deprecated `description` key that is
    byte-identical title metadata. No payload exposes a `summary` alias or body.
+   Internal-nudge and graft wire projections also emit the deprecated
+   byte-identical key during the 1.5.14 compatibility window; new readers
+   accept both keys and normalize to `title`.
 2. No production nudge builder or sink falls back to
    `MessageEnvelope.text`, `TaskRow.description`, template source, or rendered
    J2 output. A repository search and focused tests prove the forbidden edges
@@ -384,6 +413,7 @@ python3 scripts/test_atm_nudge.py
 ! rg -n 'payload\.get\("(description|summary)"\)' scripts/atm-nudge.py scripts/atm-nudge.sh
 python3 .just/run_lint.py boundaries
 python3 .just/run_lint.py nudge-taxonomy
+python3 .just/check_line_counts.py
 git diff --check develop...HEAD
 ```
 

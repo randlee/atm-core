@@ -1729,7 +1729,7 @@ Phase AY sprint status:
 | `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `merged` (#1310, 47f359cf9) | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
 | `DOCTOR-HERDR-TARGET-R1` | Doctor | standalone target-resolution, breaker, and stale-session diagnostics | `complete` | `fix/doctor-herdr-target-resolution` | `docs/plans/doctor/sprint-DOCTOR-HERDR-TARGET-R1.md` |
 
-## 58. Phase AZ — Bounded Nudges And Durable Task Lifecycle [PLANNED]
+## 58. Phase AZ — Bounded Nudges And Durable Task Lifecycle [PROPOSED — APPROVAL GATED]
 
 Phase AZ begins with the AZ.1 metadata-only nudge repair: every Steer, Queue,
 rebuilt Queue, Task, acknowledge-family, and task-reminder path projects only
@@ -1744,6 +1744,12 @@ selector over independent ephemeral-message and persistent-task lanes.
 `Blocked -> Assigned` is explicit and never auto-starts. Existing tasks migrate
 at normal priority; one current assignee per task and one active task per
 `(team, agent)` are transactionally enforced.
+
+The governed-interface sequence is HTTP API 1.3.0 → 1.4.0 in AZ.3 and SQLite
+schema 2.0.0 (major task migration) → 2.1.0 (additive attention tables) in
+AZ.2/AZ.4. ADR-063 records the capability-trait recount and v1/v2 coexistence
+bridge. Phase AZ remains proposed and implementation-blocked until Rand's
+ADR-061 major-storage approval and coexistence duration are recorded.
 
 The authoritative umbrella is
 [Phase AZ plan](./plans/phase-az/phase-az-plan.md), with one authoritative

@@ -32,8 +32,10 @@ not claim the fair idle-reminder scheduler, which belongs only to AZ.4.
 ## Public command contract
 
 ```text
-atm task list [<agent> | --as <agent>] [--team <team>] [--closed] [--json]
-atm task events <task-id> [--team <team>] [--as <agent>] [--json]
+atm task list [<agent> | --as <agent>] [--team <team>] [--closed]
+  [--limit <1..10000> | --all] [--json]
+atm task events <task-id> [--team <team>] [--as <agent>]
+  [--limit <1..10000> | --all] [--json]
 
 atm task assign <to> <task-id> [--priority high|normal|low] <message-source>
 atm task start <task-id>
@@ -73,7 +75,10 @@ contract: active first, assigned by priority and original assignment time, then
 blocked; closed history sorts newest terminal event first. `task events`
 returns the complete stable-`TaskId` event/attempt history. Optional
 agent scope is a presentation filter over the assignee recorded on attempts;
-it is never part of task identity.
+it is never part of task identity. Both `--closed` and `events` default to at
+most 200 metadata rows at the storage query, not after materialization.
+`--limit` selects a smaller or larger bounded page up to 10,000; explicit
+`--all` is the ADR-009 opt-out and may not be combined with `--limit`.
 
 ## API and service contract
 
@@ -105,11 +110,17 @@ pub enum TaskAction {
     Reassign(AssignmentInput),
     Reopen(AssignmentInput),
     Complete(HandoffInput),
+    LegacyComplete(LegacyCompletionNoticeInput),
     Fail(HandoffInput),
     Abort { reason: AbortInput, handoff: HandoffInput },
 }
 
 pub struct HandoffInput {
+    pub recipient: MemberKey,
+    pub message: ComposedMessageInput,
+}
+
+pub struct LegacyCompletionNoticeInput {
     pub recipient: MemberKey,
     pub message: ComposedMessageInput,
 }
@@ -163,18 +174,28 @@ conflicts retain machine-readable error codes and recovery guidance.
   differ and be unused, and successor assignee must resolve before admission.
   It is likewise legal from every open state, including `Blocked`; aborting a
   blocked task never requires a meaningless unblock first.
-- The terminal handoff recipient must be a resolvable roster member other than
-  the actor. All authorization is evaluated before entering the writer
-  transaction and rechecked against the current revision inside it.
+- Any operation relying on lead authority resolves exactly one roster member
+  whose `agent_type` is `lead`. Zero matches reject with
+  `ATM_TASK_LEAD_MISSING`; two or more reject with
+  `ATM_TASK_LEAD_AMBIGUOUS`. Neither condition guesses an actor or suppresses
+  an otherwise unauthorized mutation.
+- The canonical terminal handoff recipient must be a resolvable **same-host**
+  roster member other than the actor. A host-qualified other-host recipient
+  rejects before mutation with `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` and
+  guidance to choose a same-host member; Phase AZ does not pull ADR-035 remote
+  post-commit semantics into task closure. All authorization is evaluated
+  before entering the writer transaction and rechecked against the current
+  revision inside it.
 
 ## Closure and handoff semantics
 
-Every terminal command—`complete`, `fail`, or either `abort` form—requires a
-durable handoff message. The message is addressed to another agent, contains the
-closed `TaskId` and terminal outcome as typed envelope metadata, and is
-persisted atomically with the task event and projection. A failure to compose,
-authorize, resolve, or persist the handoff leaves the task open and emits no
-partial message. A retry with the same operation id returns the original
+Every canonical terminal command—`complete`, `fail`, or either `abort`
+form—requires a durable same-host handoff message. The message is addressed to
+another local roster member, contains the closed `TaskId` and terminal outcome
+as typed envelope metadata, and is persisted in the same SQLite transaction as
+the task event and projection. A cross-host target, or a failure to compose,
+authorize, resolve, or persist the local handoff, leaves the task open and emits
+no partial message. A retry with the same operation id returns the original
 response and message id.
 
 Supersession is one operation: it closes the old task as
@@ -189,6 +210,13 @@ in task projections; only AZ.4's derived attention selector may emit a task
 nudge, and only when that attempt is the top runnable task and its assignee is
 idle.
 
+Every canonical assignment and every legacy task-linked message sets
+`requires_ack = true`. Until acknowledged, it remains visible through
+`atm read` and `atm clear` must refuse to remove it, exactly as the existing
+task-linked mail obligation requires. Suppressing immediate/ordinary-queue
+nudges changes notification scheduling only; it does not weaken durable read,
+acknowledgement, or clear protection.
+
 ## Legacy migration
 
 - `atm send <assignee> --task-id <id> <source>` remains accepted for one
@@ -199,18 +227,38 @@ idle.
   metadata but creates no immediate post-send nudge and no ordinary
   message-key pending-queue entry.
 - `atm send <recipient> --task-complete <id> <source>` emits a deprecation
-  warning and translates to `TaskAction::Complete`, treating the target/message
-  as the required handoff. It therefore retains atomic closure plus message
-  persistence.
+  warning and translates to a typed `LegacyComplete` compatibility action.
+  It preserves the historical actor set—current assigner or current
+  assignee—and is legal from `Assigned` or `Active`. Its named recipient is the
+  historical completion-notice recipient and may equal the assignee/actor;
+  this narrow adapter exemption is not canonical handoff authorization. The
+  notice and closure still persist atomically, and every other actor/state
+  rejects. This intentionally widens the shared service policy only for typed
+  legacy provenance; canonical `atm task complete` remains assignee-only,
+  Active-only, same-host, and non-self.
 - `atm list --tasks` and `atm list --task-events` remain deprecated query
   adapters to `atm task list/events` and return the same rows/order. Their
   existing `--member` option maps to canonical agent scoping; `--member` is a
   compatibility spelling, not the sole public form.
 - `atm ack` acknowledges task-linked mail but never starts or otherwise
-  transitions the task. Help and recovery text directs the assignee to
-  `atm task start <id>`.
+  transitions the task. This semantic switch lands in the same AZ.3 commit as
+  the usable `atm task start <id>` CLI/API path; before that commit, the AZ.2
+  compatibility adapter still activates on acknowledgement. Help and recovery
+  text direct the assignee to explicit start.
 - Legacy adapters contain no storage calls or transition logic. Removal is a
   separately versioned future decision, not an AZ.3 deletion.
+
+## Governed HTTP/peer interface change
+
+AZ.3's additive task routes, request variants, and optional response fields are
+an ADR-061 minor change. In the same implementation change,
+`HTTP_API_VERSION` moves from `1.3.0` to `1.4.0`; both maintained OpenAPI files,
+the CLI surface baseline, HTTP/peer ICD, and ADR-061 D5 version record are
+updated. A retained 1.3.0 client/daemon fixture proves the older consumer still
+uses every pre-AZ route and ignores additive task response fields. New task
+requests sent to a 1.3.0 daemon fail with the existing typed unsupported-route/
+version response before mutation. Herdr IPC and SQLite versions do not change
+in this sprint.
 
 ## Deliverables
 
@@ -225,33 +273,51 @@ completion is insufficient.
 - [ ] D2 — Add canonical HTTP request/response routing and replacement-runtime
   composition for task queries and mutations. Update the API schema/ICD and
   client mapping; preserve structured errors, deadlines, and retry operation
-  ids.
+  ids. Bump `HTTP_API_VERSION` to 1.4.0, update both OpenAPI documents and the
+  surface baseline, append the ADR-061 D5 record, and prove a 1.3.0 consumer's
+  pre-AZ surface remains compatible.
 - [ ] D3 — Implement the complete clap surface, human tables, JSON responses,
   command-specific validation, help text, and installed user documentation.
   `task list` defaults open, `--closed` selects terminal history, and event
-  history follows stable task identity across attempts.
+  history follows stable task identity across attempts. Closed/event reads
+  default to 200 rows and require explicit `--all` to remove the bound. Every
+  task-linked message retains `requires_ack`, read visibility, and protection
+  from `atm clear` until acknowledged.
 - [ ] D4 — Implement template-first assignment/handoff composition and every
   authorization rule. Prove close/handoff and supersession/successor assignment
-  use one durable transaction and exact idempotent response.
+  use one durable transaction and exact idempotent response. Canonical handoff
+  resolution admits only same-host non-self roster members; cross-host, missing
+  lead, and ambiguous-lead cases return their typed errors before mutation.
 - [ ] D5 — Convert all legacy task send/list flags and task-linked
-  acknowledgement to delegating compatibility adapters with warnings and no
-  state mutation on acknowledgement.
+  acknowledgement to delegating compatibility adapters with warnings. Preserve
+  assigner-or-assignee `--task-complete` from Assigned/Active via typed legacy
+  provenance. Land acknowledgement's mail-only behavior atomically with the
+  working explicit-start path. In `PreparedWrite`, suppress assignment's
+  immediate post-send dispatch and ordinary pending-queue marker while
+  retaining `requires_ack`; no parallel send path is introduced.
 - [ ] D6 — Amend product, CLI, core, runtime, API, error/recovery, team-protocol,
   and user-facing documentation for the command grammar, output, authorization,
   explicit-start rule, handoff requirement, Beads-id boundary, and deprecation
   window. Add end-to-end tests through the real CLI-to-Tokio/Axum-to-SQLite
-  route using in-process transport and temporary storage.
+  route using in-process transport and temporary storage. Update the
+  `ATM_TASK_STALLED` recovery hint to canonical `atm task` syntax and test the
+  legacy completion, same-host handoff, task-linked read/clear, and bounded
+  history contracts.
 
 ## Affected paths
 
 ```text
 crates/atm-core/src/api.rs
+crates/atm-core/src/protocol.rs
+crates/atm-core/src/task_api.rs
 crates/atm-core/src/task_command.rs
 crates/atm-core/src/lib.rs
+crates/atm-core/src/send/mod.rs
 crates/atm-http-runtime/src/client.rs
 crates/atm-http-runtime/src/client_tail.rs
 crates/atm-http-runtime/src/lib.rs
 crates/atm-http-runtime/src/storage_and_nudge_router.rs
+crates/atm-http-runtime/tests/http_v1_3_compat.rs
 crates/atm/src/main.rs
 crates/atm/src/commands/mod.rs
 crates/atm/src/commands/task.rs
@@ -265,6 +331,8 @@ crates/atm/tests/task_ledger_cli.rs
 crates/atm/tests/openapi_surface.rs
 crates/atm/tests/openapi_surface_baseline.json
 crates/atm-storage/src/error_catalog.rs
+crates/atm-storage/src/error_codes.rs
+boundaries/atm-error/error-codes.toml
 docs/requirements.md
 docs/architecture.md
 docs/atm/requirements.md
@@ -275,6 +343,8 @@ docs/atm-core/architecture.md
 docs/atm-core/boundaries.md
 docs/atm-http-runtime/architecture.md
 docs/atm-http-runtime/openapi.yaml
+docs/atm-daemon/http-api.md
+docs/adr/ADR-061-governed-interface-schema-versioning.md
 docs/team-protocol.md
 docs/atm-error-codes.md
 docs/user-documents/tasks.md
@@ -315,28 +385,39 @@ This is the sole authoritative acceptance list for AZ.3.
    forms, mutually exclusive message sources, and stable JSON fields.
 2. End-to-end tests prove every legal transition and authorization role,
    including pre-start block, explicit unblock to assigned, reopen/reassign to
-   a new attempt, all terminal outcomes, and linked supersession.
+   a new attempt, all terminal outcomes, linked supersession, and legacy
+   assigner/assignee completion from Assigned or Active.
 3. Unauthorized actors, self-handoffs, unknown members/tasks, illegal states,
-   stale revisions, malformed operation ids, and conflicting retries fail
-   without any message, task, attempt, event, or queue mutation.
-4. Every terminal command persists exactly one handoff to another member in the
-   same transaction as closure. Template and plain-text variants pass; injected
-   message failure rolls back closure, and exact retry returns the same message
-   and response.
-5. Open list ordering and closed history are correct and body-free; events show
-   all attempts under one stable `TaskId`. Beads-shaped ids work without any
+   cross-host handoffs, missing/ambiguous lead authority, stale revisions,
+   malformed operation ids, and conflicting retries fail without any message,
+   task, attempt, event, or queue mutation.
+4. Every canonical terminal command persists exactly one handoff to another
+   same-host member in the same SQLite transaction as closure. Template and
+   plain-text variants pass; injected message failure rolls back closure, exact
+   retry returns the same message/response, and cross-host targets receive the
+   typed unsupported error. The legacy completion-notice exemption is tested
+   separately and cannot authorize canonical self-handoff.
+5. Open list ordering and closed history are correct, bounded at the query, and
+   body-free; `--all` is the explicit opt-out. Events show all attempts under
+   one stable `TaskId` through bounded pages. Beads-shaped ids work without any
    Beads dependency or copied task detail.
-6. Legacy send/list flags emit actionable deprecation warnings and produce
-   byte-equivalent service results. Task mail acknowledgement no longer starts
-   a task; only `atm task start` can enter `Active`. Canonical and legacy
+6. Legacy send/list flags emit actionable deprecation warnings, delegate to
+   the same task service, and preserve the historical completion actor/state
+   set through typed compatibility provenance. Task mail acknowledgement no
+   longer starts a task; only `atm task start` can enter `Active`. Canonical and legacy
    assignment create neither an immediate nudge nor an ordinary message-key
-   pending-queue entry.
+   pending-queue entry. The ack switch and start command land atomically.
+   Every task-linked message still requires acknowledgement, remains readable,
+   and cannot be cleared before acknowledgement.
 7. Production CLI traffic uses the maintained Tokio/Axum API and injected
    service/storage boundaries. No direct SQLite access or legacy synchronous
    daemon edit exists.
 8. CLI, core, API, crate, boundary, protocol, error, help, and user documents
    describe the same grammar, auth matrix, output, transition, and migration
    contract.
+9. The HTTP API reports 1.4.0; both OpenAPI files, surface baseline, and ADR-061
+   D5 record agree, and a retained 1.3.0 consumer passes its old-route
+   compatibility suite.
 
 ## Required validation
 
@@ -351,11 +432,13 @@ transport and temporary stores; do not start a daemon.
 6. `cargo test -p agent-team-mail-core`
 7. `cargo test -p agent-team-mail`
 8. `cargo test -p atm-http-runtime`
-9. `cargo fmt --check`
-10. `cargo clippy --workspace --all-targets -- -D warnings`
-11. `python3 .just/run_lint.py boundaries`
-12. `python3 .just/run_lint.py nudge-taxonomy`
-13. `git diff --check`
+9. `cargo test -p atm-http-runtime --test http_v1_3_compat`
+10. `cargo fmt --check`
+11. `cargo clippy --workspace --all-targets -- -D warnings`
+12. `python3 .just/run_lint.py boundaries`
+13. `python3 .just/run_lint.py nudge-taxonomy`
+14. `python3 .just/check_line_counts.py`
+15. `git diff --check`
 
 ## Non-closure
 

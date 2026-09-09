@@ -128,18 +128,26 @@ budget still bounds a pump tick, but it no longer permits two different items
 for one member/opportunity.
 
 An ephemeral item is consumed after its one accepted nudge. A transient failure
-before accepted emission follows the existing bounded pending-claim retry
-contract; it is not counted as an emitted opportunity. A persistent task
-reminder does not consume the task. After successful emission it appends an
-attempt-aware reminder audit and is eligible again only after the retained
-60-second cadence, while the same attempt remains `Assigned` or `Active`.
+before accepted emission follows the shared
+`MAX_NUDGE_ATTEMPTS = 5` contract; the same counter and ceiling apply to both
+lanes and no per-channel retry budget is introduced. After the fifth failed
+delivery for one reservation, it becomes `PermanentlyFailed`; that terminalizes
+the reservation, not the underlying message/task. A persistent task reminder
+does not consume the task. After successful emission it appends an
+attempt-aware eligibility audit and advances a **task-scoped** reminder ordinal.
+The ordinal never resets on reassign, reopen, or unblock, so ordinal 10, 20, 30,
+and so on retain ADR-062's lead-escalation boundary. The current attempt is
+eligible again only after the retained 60-second cadence while it remains
+`Assigned` or `Active`.
 
-Task `Blocked` and `Closed` suppress normal reminders immediately.
+Task-lifecycle `Blocked` and `Closed` suppress normal reminders immediately.
 Reassignment makes the old attempt ineligible and the new attempt eligible;
 unblock returns the task to `Assigned` ordering and does not auto-start.
-Runtime process-blocked escalation remains a management signal, not a normal
-task reminder, and must not reintroduce a Task prompt for a lifecycle-blocked
-row.
+Runtime-member `blocked` remains a distinct process-health/escalation signal,
+not a task state or normal task reminder, and must not reintroduce a Task prompt
+for a lifecycle-blocked row. User-facing docs and prompt text use
+"lifecycle-blocked task" and "runtime-blocked member" rather than the bare
+ambiguous word where both concepts can appear.
 
 ## Storage-neutral scheduler boundaries
 
@@ -209,6 +217,16 @@ database. The task reader adds a bounded `top_runnable_task(member, now)` query
 that returns ids, priority, state, attempt, message id, and cadence metadata
 only.
 
+AZ.4 is an ADR-061 minor/additive SQLite change. It moves
+`STORAGE_SCHEMA_VERSION` from `2.0.0` to `2.1.0` and registers an idempotent
+`ensure_attention_schedule_schema` entry in `DB_MIGRATIONS`. The migration
+creates `attention_lane_cursors` and `attention_opportunities` with defaults
+and indexes only; the retained 2.0/1.5.14 consumer ignores them and continues
+to read/write its supported surface. Fresh-2.1 and upgraded-2.0 databases must
+converge to byte-equivalent schema, and the older-consumer fixture is rerun.
+ADR-061's version record, the storage schema document, and migration baseline
+are updated in the same change.
+
 ## Deliverables
 
 This is the sole authoritative deliverables list for AZ.4. Every item must land
@@ -220,25 +238,37 @@ runtime wiring without durable fairness, is insufficient.
   alternation tests and no body-capable fields.
 - [ ] D2 — Add the storage-neutral sync/async schedule boundaries, private
   SQLite cursor/reservation tables, idempotent opportunity reservation/
-  finalization, and bounded top-runnable task query. Update matching boundary
-  TOMLs and crate boundary docs.
+  finalization, and bounded top-runnable task query. Bump
+  `STORAGE_SCHEMA_VERSION` to 2.1.0 through the registered idempotent migration,
+  update matching boundary/schema/ADR-061 records, prove fresh/upgraded schema
+  convergence, and rerun the older-consumer compatibility fixture.
 - [ ] D3 — Refactor `HerdrQueueWakePump` so each idle member/opportunity invokes
   the one selector, claims/revalidates exactly the selected lane, and emits no
   more than one prompt. Preserve global prompt budget, shutdown, breaker,
-  delivery-channel, and bounded retry behavior.
+  delivery-channel, and shared `MAX_NUDGE_ATTEMPTS` retry behavior. Split the
+  selector/reservation orchestration into
+  `crates/atm-http-runtime/src/herdr_attention_scheduler.rs` before the existing
+  pump exceeds RULE-003; no lint-cap increase is authorized.
 - [ ] D4 — Make reminders attempt-aware and scheduler-derived: active before
   assigned, assigned priority/time ordering, 60-second repeat only while open,
   no blocked/closed reminder, old-attempt invalidation, and unblock without
-  activation. Keep management escalation distinct from reminder eligibility.
+  activation. Keep the escalation ordinal task-scoped across attempts, emit
+  lead audit at every tenth successful reminder, and keep management
+  escalation distinct from reminder eligibility.
 - [ ] D5 — Amend product/runtime/Herdr/storage requirements, architecture,
-  ADR-062, machine-readable boundaries, and operator docs for
+  `docs/task-lifecycle-schema.md`, ADR-061/ADR-062/ADR-063,
+  machine-readable boundaries, and operator docs for
   `AttentionItem`, separate lanes, durable fairness, one-item opportunities,
-  cadence, and queue-cleanup interaction.
+  cadence, retry terminalization, task-scoped escalation counting, queue-cleanup
+  interaction, lifecycle-blocked versus runtime-blocked vocabulary, and the
+  replacement of stale "after draining mail"/"Task body" requirements.
 - [ ] D6 — Add real composed-runtime tests covering FIFO, persistent ordering,
   alternating dual-lane opportunities, single-lane progress, restart cursor
   persistence, concurrent opportunity idempotency, read/ack suppression,
   close/block/reassign races, transient emit failures, shutdown, breaker, and
-  absence of body sentinels in emitted prompts.
+  absence of body sentinels in emitted prompts. Extend the ADR-054 frozen
+  nudge-identifier inventory only for identifiers actually introduced; never
+  bulk-regenerate the allowlist.
 
 ## Affected paths
 
@@ -250,10 +280,14 @@ crates/atm-storage/src/factory.rs
 crates/atm-storage/src/lib.rs
 crates/atm-storage/src/testing.rs
 crates/atm-storage-rusqlite/src/attention_schedule_store.rs
+crates/atm-storage-rusqlite/src/schema_version.rs
+crates/atm-storage-rusqlite/src/shared_db.rs
 crates/atm-storage-rusqlite/src/task_ledger_reader.rs
 crates/atm-storage-rusqlite/src/pending_nudge_store.rs
 crates/atm-storage-rusqlite/src/lib.rs
+crates/atm-storage-rusqlite/tests/schema_version_compat.rs
 crates/atm-http-runtime/src/herdr_queue_wake.rs
+crates/atm-http-runtime/src/herdr_attention_scheduler.rs
 crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs
 crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs
 crates/atm-http-runtime/src/storage_and_nudge_router.rs
@@ -266,14 +300,20 @@ boundaries/atm-storage-rusqlite/async-attention-schedule-store-sqlite.toml
 boundaries/atm-storage-rusqlite/async-task-ledger-reader-sqlite.toml
 boundaries/atm-storage-rusqlite/pending-nudge-store-sqlite.toml
 boundaries/atm-http-runtime/http-runtime.toml
+scripts/check-nudge-taxonomy.py
 docs/requirements.md
 docs/architecture.md
+docs/task-lifecycle-schema.md
 docs/atm-storage/boundaries.md
+docs/atm-rusqlite/requirements.md
+docs/atm-rusqlite/architecture.md
 docs/atm-http-runtime/architecture.md
 docs/atm-herdr/requirements.md
 docs/atm-herdr/architecture.md
 docs/atm-herdr/boundaries.md
 docs/adr/ADR-062-task-state-machine.md
+docs/adr/ADR-061-governed-interface-schema-versioning.md
+docs/adr/ADR-063-phase-az-task-and-attention-capabilities.md
 docs/user-documents/tasks.md
 docs/plans/phase-az/phase-az-plan.md
 docs/plans/phase-az/issues.md
@@ -317,15 +357,22 @@ This is the sole authoritative acceptance list for AZ.4.
    Blocked and closed tasks are never normal-reminder candidates.
 6. Reminder audit/cadence is scoped to assignment attempt. Close, block,
    reassign, reopen, and supersede races cannot emit for an ineligible old
-   attempt; unblock returns to assigned order and never starts.
+   attempt; unblock returns to assigned order and never starts. The escalation
+   ordinal is task-scoped, survives every attempt change, and still notifies at
+   reminders 10, 20, 30, and so on.
 7. Transient failure, breaker-open, runtime-blocked, shutdown, and budget tests
    preserve existing structured outcomes without losing durable message/task
-   eligibility or emitting a second item.
+   eligibility or emitting a second item. Both lanes use the one
+   `MAX_NUDGE_ATTEMPTS = 5`; `PermanentlyFailed` occurs on the fifth failed
+   reservation delivery and never closes its message/task.
 8. Emitted prompts satisfy AZ.1's bounded title contract; unique message/task
    body sentinels never appear. No legacy daemon code or direct SQLite access is
    introduced.
 9. Requirements, architecture, ADR, crate docs, user docs, Rust contracts, and
    boundary TOMLs describe the same one-item, fair, persistent scheduler.
+10. `STORAGE_SCHEMA_VERSION` is 2.1.0; fresh and 2.0-upgraded schemas are
+    byte-equivalent, the prior consumer ignores the additive tables, and the
+    ADR-061 version record agrees.
 
 ## Required validation
 
@@ -341,11 +388,13 @@ runtime composition, and temporary databases only.
 7. `cargo test -p atm-storage`
 8. `cargo test -p atm-storage-rusqlite`
 9. `cargo test -p atm-http-runtime`
-10. `cargo fmt --check`
-11. `cargo clippy --workspace --all-targets -- -D warnings`
-12. `python3 .just/run_lint.py boundaries`
-13. `python3 .just/run_lint.py nudge-taxonomy`
-14. `git diff --check`
+10. `cargo test -p atm-storage-rusqlite --test schema_version_compat`
+11. `cargo fmt --check`
+12. `cargo clippy --workspace --all-targets -- -D warnings`
+13. `python3 .just/run_lint.py boundaries`
+14. `python3 .just/run_lint.py nudge-taxonomy`
+15. `python3 .just/check_line_counts.py`
+16. `git diff --check`
 
 ## Non-closure
 
@@ -354,3 +403,6 @@ runtime composition, and temporary databases only.
   scheduler rows.
 - AZ.4 does not modify the legacy synchronous daemon, run a live/test daemon, or
   perform a tag, release, package publish, or installation.
+- AZ.4 changes only the Herdr idle attention pump. The bare-CLI pull contract
+  remains ADR-054's existing behavior: each pull drains all steer items and at
+  most one oldest queue item; this sprint makes no universal scheduler claim.

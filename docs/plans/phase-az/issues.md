@@ -7,9 +7,10 @@ replace repository issue numbers or QA triage authority.
 | --- | --- | --- | --- |
 | `AZ-LONG-NUDGE` | planned | AZ.1 | All Steer, Queue/rebuild, Task/reminder, graft, and Herdr projections use persisted title metadata; ordinary/J2 body sentinels are absent. |
 | `AZ-TASK-LIFECYCLE` | planned | AZ.2 | Corrected state table, stable logical id, immutable attempts/events, priority, migration, database invariants, idempotency, and concurrency tests pass. |
-| `AZ-TASK-COMPLETE-PENDING` | planned | AZ.2 | Block/close/reassign/reopen/supersede atomically invalidate pending nudges for every ineligible assignment attempt, including legacy rows. |
+| `AZ-TASK-COMPLETE-PENDING` | planned | AZ.2 | Block/close/reassign/reopen/supersede atomically join canonical messages by `(team, task_id)` and invalidate assignment, progress, requeued, and legacy task-linked pending markers. Missing historical messages are audit facts and cannot retain a marker. |
 | `AZ-TASK-COMMANDS` | planned | AZ.3 | Canonical task CLI/API, authorization, explicit start, durable handoffs, supersession, and legacy adapters pass end-to-end. |
 | `AZ-IDLE-INTERLEAVING` | planned | AZ.4 | One derived selector emits at most one item per idle opportunity and alternates the separate ephemeral/persistent lanes across restart. |
+| `AZ-GOVERNED-INTERFACES` | approval-gated | AZ.2/AZ.3/AZ.4 | HTTP API 1.4.0 and storage schema 2.0.0/2.1.0 carry ADR-061 records and older-consumer tests; Rand's major-storage approval and coexistence duration must be cited before plan approval. |
 
 ## Binding clarifications
 
@@ -30,3 +31,32 @@ replace repository issue numbers or QA triage authority.
   `TaskId`.
 - No live daemon/test-daemon, tag, release, publish, or installation action is a
   Phase AZ validation step.
+
+## Fenix design-review correction record
+
+| Finding | Plan correction |
+| --- | --- |
+| `AZ-DES-001` | AZ.1 uses dual-key internal/graft wire DTOs, a deserialization alias, reader-first 1.5.14/1.5.15 skew tests, and an ADR-054 amendment. |
+| `AZ-DES-002` | AZ.3 D5 and its path list own `crates/atm-core/src/send/mod.rs` assignment dispatch/queue suppression. |
+| `AZ-DES-003` | Canonical terminal handoff is same-host only; cross-host rejects before mutation. |
+| `AZ-DES-004` | The phase governed-interface matrix specifies HTTP 1.4.0 and storage 2.0.0/2.1.0 records, migrations, compatibility tests, and the open Rand approval gate. |
+| `AZ-DES-005` | Typed legacy completion preserves assigner/assignee and Assigned/Active behavior without widening canonical completion. |
+| `AZ-DES-006` | AZ.2 retains ack activation; AZ.3 lands the mail-only ack switch atomically with explicit start. |
+| `AZ-DES-007` | All sprint validations run the line-count gate and AZ.2/AZ.3/AZ.4 authorize split modules. |
+| `AZ-DES-008` | AZ.2 owns list/top-runnable ordering and the covering index. |
+| `AZ-DES-009` | Proposed ADR-063 recounts ten capabilities and owns task mutation, attention scheduling, and schema-major rationale. |
+| `AZ-DES-010` | Migration uses open/active precedence, records discarded rows, and deterministically demotes surplus active rows. |
+| `AZ-DES-011` | A dedicated operations table owns idempotency; both supersession histories may reference one operation. |
+| `AZ-DES-012` | Invalidation joins every canonical message envelope by `(team, taskId)`, not only attempt message ids. |
+| `AZ-DES-013` | Reminder eligibility is attempt-aware while escalation ordinal remains task-scoped across attempts. |
+| `AZ-DES-014` | Missing and ambiguous lead authority have distinct typed rejections. |
+| `AZ-DES-015` | AZ.2 owns public error registry, catalog, boundary, and recovery documentation paths. |
+| `AZ-DES-016` | AZ.2/AZ.4 authorize only deliberate frozen nudge-inventory additions beside ADR-063. |
+| `AZ-DES-017` | Closed/event reads default to 200 rows; bounded `--limit` and explicit `--all` are mutually exclusive. |
+| `AZ-DES-018` | Canonical and legacy task-linked mail retain requires-ack, read visibility, and clear protection. |
+| `AZ-DES-019` | AZ.3 D6 updates and tests the `ATM_TASK_STALLED` recovery hint. |
+| `AZ-DES-020` | AZ.1 removes Task-body wording; AZ.4 removes drain-first wording. |
+| `AZ-DES-021` | AZ.4 D5 and paths include the canonical task lifecycle schema. |
+| `AZ-DES-022` | Both attention lanes share `MAX_NUDGE_ATTEMPTS = 5`; permanent failure terminalizes only the reservation. |
+| `AZ-DES-023` | User-facing docs distinguish lifecycle-blocked tasks from runtime-blocked members. |
+| `AZ-DES-024` | AZ.4 non-closure states the selector is Herdr-only and preserves bare-CLI pull behavior. |
