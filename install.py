@@ -201,6 +201,18 @@ def load_install_values(path: Path) -> dict[str, object]:
                 "bundled_paths.homebrew_destination_components",
             )
 
+    if "prerelease" in values:
+        prerelease = _require_mapping(values["prerelease"], "prerelease")
+        for field in ("tag_prefix", "tag_script", "install_root", "post_install", "verify"):
+            _require_string(prerelease.get(field), f"prerelease.{field}")
+        _require_string_array(prerelease.get("binaries"), "prerelease.binaries")
+        _require_string_array(
+            prerelease.get("protected_branches"), "prerelease.protected_branches"
+        )
+        selectors = _require_string_mapping(prerelease.get("selector_dir"), "prerelease.selector_dir")
+        if set(selectors) != {"darwin", "linux", "windows"}:
+            raise argparse.ArgumentTypeError("prerelease.selector_dir must declare darwin, linux, and windows")
+
     _require_entries(
         values.get("python_packages"),
         "python_packages",
@@ -386,6 +398,15 @@ def template_values(values: dict[str, object]) -> dict[str, object]:
     template_project.setdefault("renderer_archive_path", "")
     template_project.setdefault("workspace_toml", "")
     template_project.setdefault("rust_toolchain", "")
+    prerelease = values.get("prerelease")
+    template_prerelease = (
+        _toml_scalars(
+            _require_mapping(prerelease, "prerelease"),
+            ("binaries", "protected_branches", "selector_dir"),
+        )
+        if prerelease
+        else {"tag_prefix": "", "tag_script": "", "install_root": "", "binaries": "[]", "protected_branches": "[]", "selector_dir": "{}", "post_install": "", "verify": ""}
+    )
 
     return {
         "schema_version": _toml_literal(values["schema_version"]),
@@ -405,10 +426,12 @@ def template_values(values: dict[str, object]) -> dict[str, object]:
         ],
         "python_distributions": distributions,
         "channels": converted_channels,
+        "prerelease": template_prerelease,
         "has_readme_dependency_crate": "readme_dependency_crate" in project,
         "has_renderer_archive_path": "renderer_archive_path" in project,
         "has_workspace_toml": "workspace_toml" in project,
         "has_rust_toolchain": "rust_toolchain" in project,
+        "has_prerelease": "prerelease" in values,
         **{f"has_channel_{name}": name in channels for name in CHANNEL_NAMES},
     }
 

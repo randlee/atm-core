@@ -314,6 +314,44 @@ def cmd_validate_manifest(args: argparse.Namespace) -> int:
     _require_project(manifest)
     _release_targets_by_name(manifest)
     binaries = _release_binaries(manifest)
+    prerelease = manifest.get("prerelease")
+    if prerelease is not None:
+        if not isinstance(prerelease, dict):
+            raise SystemExit("[prerelease] must be a table")
+        _require_keys(
+            prerelease,
+            (
+                "tag_prefix",
+                "tag_script",
+                "install_root",
+                "binaries",
+                "protected_branches",
+                "selector_dir",
+                "post_install",
+                "verify",
+            ),
+            "[prerelease]",
+        )
+        if not all(
+            isinstance(prerelease[key], str) and prerelease[key]
+            for key in ("tag_prefix", "tag_script", "install_root", "post_install", "verify")
+        ):
+            raise SystemExit("[prerelease] string fields must be non-empty")
+        for field in ("binaries", "protected_branches"):
+            value = prerelease[field]
+            if not isinstance(value, list) or not value or not all(
+                isinstance(name, str) and name for name in value
+            ):
+                raise SystemExit(f"[prerelease].{field} must be a non-empty string list")
+        selectors = prerelease["selector_dir"]
+        if (
+            not isinstance(selectors, dict)
+            or set(selectors) != {"darwin", "linux", "windows"}
+            or not all(isinstance(value, str) and value for value in selectors.values())
+        ):
+            raise SystemExit(
+                "[prerelease].selector_dir must declare non-empty darwin, linux, and windows paths"
+            )
     channel_names = _channel_names(manifest)
     for channel_name in channel_names:
         _channel_dispatch_config(manifest, channel_name)

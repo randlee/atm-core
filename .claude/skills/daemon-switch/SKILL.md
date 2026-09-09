@@ -1,14 +1,15 @@
 ---
 name: daemon-switch
-description: Safely switch the system-wide ATM CLI and daemon as one matched pair: either a published release or an exactly prerelease-tagged worktree build.
+description: Safely switch the system-wide ATM CLI and daemon as one matched pair from a stable release, GitHub prerelease, or exactly prerelease-tagged worktree build.
 ---
 
 # Daemon Switch
 
 Use `scripts/daemon-switch.py`; never point a system LaunchAgent/service at a
-worktree binary directly. The tool has two ordinary situations: return to a
-published release, or dogfood one tagged worktree build. Raw binary paths are
-only the fixture/Colima escape hatch.
+worktree binary directly. The tool has three ordinary situations: return to a
+stable published release, select a checksum-verified GitHub prerelease, or
+dogfood one tagged worktree build. Raw binary paths are only the fixture/Colima
+escape hatch.
 
 ## Rules
 

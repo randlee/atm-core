@@ -215,3 +215,22 @@ ATM restart has a separate read-only preflight: it refuses before any service
 mutation while any configured endpoint is `client_server_mismatch`, listing
 only endpoint names and identifiers. No daemon code, transport selection,
 polling loop, startup dependency, or process ownership is introduced.
+
+## Amendment 2026-09-09 — GitHub prerelease pair selection
+
+Rand authorized issue #1350 on 2026-09-09, adding a third ordinary pair
+selection mode: `daemon-switch switch --prerelease <X.Y.Z|latest>`. The mode
+resolves only a published, non-draft GitHub prerelease whose tag uses the
+manifest-declared prerelease prefix. It downloads the manifest-declared host
+archive and `checksums.txt`, verifies the archive digest, stages the matched
+CLI/daemon pair under the manifest-declared install root, and applies the same
+platform signing requirements as a tagged worktree build before the ordinary
+selector, restart, and doctor proof transaction.
+
+The mode does not publish a package, accept caller-supplied binary paths, or
+alter a Homebrew formula. Stable `--release` resolution continues to reject
+prereleases, and `--worktree` continues to require an exact prerelease tag on
+the selected worktree HEAD. The GitHub-only publish/install boundary from
+issue #1350 excludes Homebrew taps, crates.io, PyPI/TestPyPI, Winget, and
+Scoop. Repository-specific prefix and install-root values have one owner: the
+release artifact manifest.
