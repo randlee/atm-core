@@ -195,7 +195,7 @@ does not execute them:
 
 `.github/workflows/prerelease-archive.yml` builds manifest-declared release
 archives (linux/macOS/windows) from a `prerelease/vX.Y.Z` tag, with CI
-provenance, then creates or updates the matching GitHub **prerelease** Release
+provenance, then creates the matching GitHub **prerelease** Release
 with every archive and `checksums.txt`. It does not publish to Homebrew,
 crates.io, PyPI, winget, or Scoop. Use
 `just prerelease-tag` from a clean feature/fix branch to patch-bump the
@@ -216,9 +216,10 @@ just prerelease-tag
 gh run download <run-id> -n x86_64-unknown-linux-gnu   # one archive per requested target
 gh run download <run-id> -n checksums                  # checksums.txt + provenance.json
 
-# After explicit written authorization, the vendored skill can publish or install:
-python3 .claude/skills/prerelease/scripts/prerelease.py --publish X.Y.Z --authorized
-python3 .claude/skills/prerelease/scripts/prerelease.py --install X.Y.Z
+# After explicit written authorization, run the skill from the pinned
+# sc-publish kit checkout (it is not a source file in atm-core itself):
+python3 <sc-publish-kit>/plugins/sc-publish/.claude/skills/prerelease/scripts/prerelease.py --publish X.Y.Z --authorized
+python3 <sc-publish-kit>/plugins/sc-publish/.claude/skills/prerelease/scripts/prerelease.py --install X.Y.Z
 ```
 
 - `just prerelease-tag` refuses `develop`, `main`, detached HEADs, dirty trees,

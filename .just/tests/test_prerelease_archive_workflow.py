@@ -329,12 +329,15 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertNotIn("-pre.", text)
         self.assertIn('version="${BASH_REMATCH[1]}"', text)
 
-    def test_workflow_never_tags_or_publishes_and_uses_read_permission(self) -> None:
+    def test_workflow_creates_only_a_new_prerelease_release_with_write_permission(self) -> None:
         text = workflow_text("prerelease-archive.yml")
-        self.assertIn("permissions:\n  contents: read", text)
+        self.assertIn("    permissions:\n      contents: write", text)
         self.assertNotIn("git tag", text)
         self.assertNotIn("git push", text)
-        self.assertNotIn("action-gh-release", text)
+        self.assertIn('gh release create "$tag" --prerelease', text)
+        self.assertIn('gh release view "$tag" >/dev/null 2>&1', text)
+        self.assertNotIn("gh release upload \"$tag\" --clobber", text)
+        self.assertIn("checksums.txt", text)
         self.assertNotIn("secrets.", text)
 
     def test_checksums_and_provenance_are_retained(self) -> None:

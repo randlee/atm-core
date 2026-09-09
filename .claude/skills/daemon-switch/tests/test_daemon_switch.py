@@ -1362,6 +1362,25 @@ class SwitchModeTests(unittest.TestCase):
             self.assertTrue(daemon.is_file())
             versions.assert_called_once_with(cli, daemon, "1.5.11")
 
+    def test_prerelease_resolution_rejects_a_bad_checksum_without_staging(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            archive_name = "atm_1.5.11_x86_64-pc-windows-msvc.zip"
+            release = {
+                "assets": [
+                    {"name": "checksums.txt", "browser_download_url": "checksums"},
+                    {"name": archive_name, "browser_download_url": "archive"},
+                ]
+            }
+            with (
+                mock.patch.object(DAEMON_SWITCH, "PRERELEASE_INSTALL_ROOT", Path(temporary)),
+                mock.patch.object(DAEMON_SWITCH, "prerelease_release", return_value=("1.5.11", release)),
+                mock.patch.object(DAEMON_SWITCH, "release_archive_triple", return_value=("x86_64-pc-windows-msvc", "zip")),
+                mock.patch.object(DAEMON_SWITCH, "_download", side_effect=[f"{'0' * 64}  {archive_name}\n".encode(), b"wrong archive"]),
+            ):
+                with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "checksum mismatch"):
+                    DAEMON_SWITCH.resolve_prerelease_pair("1.5.11")
+            self.assertFalse((Path(temporary) / "v1.5.11").exists())
+
     def test_prerelease_signing_unlocks_then_uses_the_shared_signer(self) -> None:
         cli = Path("/staged/atm")
         daemon = Path("/staged/atm-daemon")

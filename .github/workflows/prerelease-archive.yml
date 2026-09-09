@@ -1,7 +1,8 @@
 name: Prerelease Archive
 
 # Builds manifest-declared release archives (linux/macOS/windows) from a
-# prerelease/vX.Y.Z tag, with CI provenance, without creating a GitHub Release.
+# prerelease/vX.Y.Z tag, with CI provenance, and creates one GitHub prerelease
+# Release only after a final absence check.
 # The tag is created by `just prerelease-tag`, which patch-bumps the workspace
 # on the caller's current branch before pushing the tag.
 #
@@ -277,7 +278,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
-      - name: Create or update GitHub prerelease Release
+      - name: Create GitHub prerelease Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -287,5 +288,8 @@ jobs:
           find release-assets -type f -name '*.zip' -exec cp {} . \;
           find release-assets -type f -name checksums.txt -exec cp {} . \;
           tag='${{ needs.plan.outputs.tag }}'
-          gh release create "$tag" --prerelease --title "$tag" --generate-notes *.tar.gz *.zip checksums.txt \
-            || gh release upload "$tag" --clobber *.tar.gz *.zip checksums.txt
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub Release already exists for ${tag}; refusing to replace it" >&2
+            exit 1
+          fi
+          gh release create "$tag" --prerelease --title "$tag" --generate-notes *.tar.gz *.zip checksums.txt
