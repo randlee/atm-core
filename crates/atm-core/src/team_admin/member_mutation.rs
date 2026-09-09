@@ -330,12 +330,10 @@ pub fn add_member_with_roster_store(
     )?;
     let created_inbox = filesystem::ensure_inbox_exists(&inbox_path)?;
     existing_roster.push(build_member_add_roster_record(&request));
-    preflight_roster_unique_names(
-        roster_store,
-        &request.team,
-        &request.member,
-        &existing_roster,
-    )?;
+    let proposed_member = existing_roster
+        .last()
+        .expect("member add record was pushed into the proposed roster");
+    preflight_roster_unique_names(roster_store, proposed_member, &existing_roster)?;
     replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
 
     Ok(AddMemberOutcome {
@@ -363,14 +361,15 @@ pub fn update_member_with_roster_store(
     validate_update_member_caller(roster_store, &request)?;
     let member_name = request.member.0.clone();
     ensure_member_name_available(&member_name)?;
-    let member = existing_roster
-        .iter_mut()
-        .find(|existing_member| existing_member.agent_name == member_name)
+    let member_index = existing_roster
+        .iter()
+        .position(|existing_member| existing_member.agent_name == member_name)
         .ok_or_else(|| AtmError::member_not_found(member_name.as_str(), request.team.as_str()))?;
 
-    validate_effective_herdr_agent_name(member, &request)?;
-    apply_member_metadata_update(member, &request);
-    preflight_roster_unique_names(roster_store, &request.team, &member_name, &existing_roster)?;
+    validate_effective_herdr_agent_name(&existing_roster[member_index], &request)?;
+    apply_member_metadata_update(&mut existing_roster[member_index], &request);
+    let proposed_member = existing_roster[member_index].clone();
+    preflight_roster_unique_names(roster_store, &proposed_member, &existing_roster)?;
     roster_store.replace_roster(&request.team, &existing_roster)?;
 
     Ok(UpdateMemberOutcome {
@@ -456,24 +455,34 @@ fn ensure_member_absent(
 /// untouched members are doctor findings, not a roster-write gate.
 fn preflight_roster_unique_names(
     roster_store: &dyn RosterStore,
-    team: &TeamName,
-    member: &AgentName,
+    proposed_member: &RosterEntry,
     proposed_roster: &[RosterEntry],
 ) -> Result<(), AtmError> {
-    let proposed_member = proposed_roster
+    let persisted_names = roster_store.unique_names()?;
+    let proposed_names = proposed_roster
         .iter()
-        .find(|entry| entry.agent_name == *member)
-        .ok_or_else(|| AtmError::member_not_found(member.as_str(), team.as_str()))?;
-    let mut names = roster_store
-        .unique_names()?
-        .into_iter()
-        .filter(|name| name.team_name != *team || name.agent_name != *member)
+        .map(atm_storage::RosterUniqueName::from_member)
         .collect::<Vec<_>>();
-    let proposed_name = atm_storage::RosterUniqueName::from_member(proposed_member);
-    names.push(proposed_name.clone());
+    let written_names = atm_storage::roster_write_delta(&persisted_names, &proposed_names);
+    if written_names.is_empty() {
+        return Ok(());
+    }
+    let mut names = persisted_names
+        .into_iter()
+        .filter(|name| name.team_name != proposed_member.team_name)
+        .collect::<Vec<_>>();
+    names.extend(proposed_names);
+    let written_collision_names = atm_storage::roster_unique_name_collisions(&names)
+        .into_iter()
+        .filter(|collision| written_names.contains(collision))
+        .collect::<Vec<_>>();
     let collisions = atm_storage::roster_unique_name_collisions(&names)
         .into_iter()
-        .filter(|collision| collision.unique_name == proposed_name.unique_name)
+        .filter(|collision| {
+            written_collision_names
+                .iter()
+                .any(|written| written.unique_name == collision.unique_name)
+        })
         .collect::<Vec<_>>();
     if collisions.is_empty() {
         Ok(())
@@ -1603,6 +1612,51 @@ mod tests {
         .expect("remove request");
         remove_member_with_roster_store(&store, remove)
             .expect("a removal must not be blocked by untouched collisions");
+        assert_eq!(collision_name_count(&store), 1);
+    }
+
+    #[test]
+    fn unique_name_a31_metadata_only_update_preserves_legacy_collision() {
+        let store = TestRosterStore::default();
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let team_b: TeamName = "team-b".parse().expect("team");
+        store.seed(&team_a, vec![roster_member("team-a", "bob")]);
+        store.seed(
+            &team_b,
+            vec![
+                lead_member("team-b", ROLE_TEAM_LEAD),
+                roster_member("team-b", "bob"),
+            ],
+        );
+
+        let request = UpdateMemberRequest::new_with_backend(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            team_b.clone(),
+            "team-b",
+            "bob",
+            None,
+            None,
+            None,
+            None,
+            Some("gpt-5.1".to_owned()),
+            BackendOptions {
+                backend: None,
+                target: None,
+                session: None,
+                alias: None,
+                clear_alias: false,
+            },
+        )
+        .expect("metadata-only update request");
+
+        update_member_with_roster_store(&store, request)
+            .expect("unchanged effective name must not revalidate a legacy collision");
+        let updated = store
+            .members(&team_b)
+            .into_iter()
+            .find(|member| member.agent_name.as_str() == "bob")
+            .expect("updated member");
+        assert_eq!(updated.model.as_str(), "gpt-5.1");
         assert_eq!(collision_name_count(&store), 1);
     }
 

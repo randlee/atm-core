@@ -2,10 +2,10 @@
 
 Requirements: `docs/requirements.md` §3.3.2 (`REQ-ROSTER-NAME-001..010`).
 Invariant under test: `unique_name(member) = alias ?? agent_name` is unique
-across every team roster in the ATM database (Rand, 2026-09-07: "herdr agent
-name = alias. if alias is null/empty, alias would be equal to member name";
-"there should be a query across all team roster for 'unique-name' which
-would return alias ?? name").
+for every changed or added roster member; untouched legacy collisions remain
+doctor findings (Rand, 2026-09-07: "herdr agent name = alias. if alias is
+null/empty, alias would be equal to member name"; "there should be a query
+across all team roster for 'unique-name' which would return alias ?? name").
 
 Status column: `covered` names the existing test; `GAP` is owed by AY.15.
 Paths are relative to `crates/`. Line numbers as of integrate/phase-ay
@@ -42,11 +42,13 @@ Notation: `T1:bob` = member `bob` in team T1; `(x)` = alias x.
 | A-23 | T1:bob | daemon/HTTP member-add T2:bob, no alias | reject in the store, CLI not bypassable | covered `unique_name_a23_store_rejects_non_cli_canonical_name_collisions` (atm-storage-rusqlite/src/roster_store.rs) |
 | A-24 | T1:bob | restore/import a roster containing T2:bob | reject | covered `unique_name_a24_store_rejects_imported_cross_team_collision` (atm-storage-rusqlite/src/roster_store.rs) |
 | A-25 | T1:Bob | add T2:bob | accept, exact comparison, no case folding | covered `unique_name_a25_compares_effective_names_case_sensitively` (atm-storage-rusqlite/src/roster_store.rs) |
-| A-26 | pre-upgrade db already holds T1:bob and T2:bob (no aliases) | open db, `atm members`/read paths | no error, no migration, rows unchanged | covered `unique_name_a26_legacy_collision_is_readable_but_next_write_fails` (roster_store.rs) |
+| A-26 | pre-upgrade db already holds T1:bob and T2:bob (no aliases) | open db, `atm members`/read paths; unchanged write | no error, no migration, rows unchanged; unchanged effective names accepted | covered `unique_name_a26_legacy_collision_is_readable_but_unchanged_write_succeeds` (roster_store.rs) |
 | A-27 | same seed | add T2:carol (the hmux launch add-member) | reject naming (T1,bob)/(T2,bob) and `--alias` remedy; roster unchanged | covered `unique_name_a27_legacy_collision_blocks_a_write_that_reuses_the_colliding_name` (roster_store.rs) |
 | A-28 | same seed | set T2:bob alias=bobby, then add T2:carol | both accept | covered `unique_name_a28_aliasing_the_legacy_conflict_allows_the_next_write` (roster_store.rs) |
 | A-29 | same seed | remove T2:bob, then add T2:carol | both accept | covered `unique_name_a29_removing_the_legacy_conflict_allows_the_next_write` (roster_store.rs) |
 | A-30 | pre-upgrade db already holds T1:alex and T2:alex | add T3:carol | accept; the writing team does not participate in the legacy collision | covered `unique_name_a30_legacy_collision_does_not_block_an_unrelated_team_write` (roster_store.rs) |
+| A-26B | two independent legacy collision groups | repair one member in each writing-team roster, one write at a time | each repair succeeds without revalidating the other untouched collision | covered `unique_name_a26b_delta_writes_repair_multiple_legacy_collisions_one_at_a_time` (roster_store.rs) |
+| A-31 | pre-upgrade db already holds T1:bob and T2:bob | metadata-only update to T2:bob | accept; unchanged effective name remains a legacy doctor finding | covered `unique_name_a31_metadata_only_update_preserves_legacy_collision` (atm-core/src/team_admin/member_mutation.rs) |
 
 ## B. Grammar (REQ-ROSTER-NAME-005)
 
@@ -142,6 +144,8 @@ silently rewrite historical data through the live roster.
 | G-02 | A-06 error text | names the member that owns the alias and its team | covered `unique_name_g02_preflight_collision_names_alias_owner_and_team` (member_mutation.rs) |
 | G-03 | error is identical from CLI and daemon paths | same code and message | covered `unique_name_g03_durable_collision_uses_the_shared_error_contract` (roster_store.rs); preflight and durable enforcement invoke `roster_unique_name_collision_error` |
 | G-04 | pre-upgrade db holds a collision between two other teams | preflight a write for a third team | accept; unrelated collision groups do not block the writing team | covered `unique_name_g04_preflight_ignores_collisions_between_other_teams` (member_mutation.rs) |
+| G-05 | multiple legacy collision groups | repair one alias in the writing team's roster | accept; only that write delta is checked and repaired | covered `unique_name_g05_alias_repairs_write_only_its_delta_among_multiple_collisions` (member_mutation.rs) |
+| G-06 | multiple legacy collision groups | add an aliased member or remove a member | accept; untouched legacy collisions do not block either operation | covered `unique_name_g06_multiple_legacy_collisions_do_not_block_add_or_remove` (member_mutation.rs) |
 
 ## H. Decision points (fenix critical review, Rand's rulings 2026-09-07)
 

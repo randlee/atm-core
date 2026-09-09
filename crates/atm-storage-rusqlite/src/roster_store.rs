@@ -4,6 +4,7 @@ use atm_storage::contract::{
     AgentType, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
     RosterUniqueName,
 };
+use atm_storage::roster_write_delta;
 use atm_storage::types::{AgentName, ModelName, PaneId, TeamName};
 use atm_storage::{AtmError, roster_unique_name_collision_error, roster_unique_name_collisions};
 use rusqlite::{Connection, params};
@@ -255,54 +256,7 @@ fn enforce_roster_unique_names(
     transaction: &rusqlite::Transaction<'_>,
     roster: &RosterSnapshot,
 ) -> Result<(), AtmError> {
-    let mut statement = transaction
-        .prepare(
-            "SELECT team_name, agent_name,
-                    COALESCE(NULLIF(TRIM(json_extract(metadata_json, '$.alias')), ''), agent_name)
-             FROM team_roster;",
-        )
-        .map_err(|error| {
-            db.error(
-                "failed to prepare transactional roster unique-name validation",
-                error,
-            )
-        })?;
-    let mut names = statement
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-            ))
-        })
-        .map_err(|error| {
-            db.error(
-                "failed to query transactional roster unique-name validation",
-                error,
-            )
-        })?
-        .map(|row| {
-            let (team_name, agent_name, unique_name) = row.map_err(|error| {
-                db.error(
-                    "failed to decode transactional roster unique-name validation",
-                    error,
-                )
-            })?;
-            Ok(RosterUniqueName {
-                team_name: team_name.parse().map_err(|error| {
-                    AtmError::validation(format!(
-                        "failed to parse transactional roster team `{team_name}`: {error}"
-                    ))
-                })?,
-                agent_name: agent_name.parse().map_err(|error| {
-                    AtmError::validation(format!(
-                        "failed to parse transactional roster member `{agent_name}`: {error}"
-                    ))
-                })?,
-                unique_name,
-            })
-        })
-        .collect::<Result<Vec<_>, AtmError>>()?;
+    let mut names = load_unique_names(db, transaction)?;
     let proposed_names = roster
         .members
         .iter()
@@ -318,23 +272,11 @@ fn enforce_roster_unique_names(
             return Err(roster_unique_name_collision_error(&collisions));
         }
         return Err(AtmError::validation(format!(
-            "roster-store replace rejected team {} because the proposed roster contains the same member more than once",
+            "roster-store replace rejected team {} because the proposed roster contains the same member more than once; remove the duplicate (team, agent_name) entry from the roster payload before replace_roster",
             roster.team_name
         )));
     }
-    let written_names = proposed_names
-        .iter()
-        .filter(|proposed| {
-            names
-                .iter()
-                .find(|persisted| {
-                    persisted.team_name == proposed.team_name
-                        && persisted.agent_name == proposed.agent_name
-                })
-                .is_none_or(|persisted| persisted.unique_name != proposed.unique_name)
-        })
-        .cloned()
-        .collect::<Vec<_>>();
+    let written_names = roster_write_delta(&names, &proposed_names);
     if written_names.is_empty() {
         return Ok(());
     }
@@ -987,6 +929,44 @@ mod tests {
         assert!(
             roster_unique_name_collisions(&store.unique_names().expect("unique names")).is_empty()
         );
+    }
+
+    #[test]
+    fn unique_name_i01_delta_helper_matches_durable_write_gate() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        seed_legacy_cross_team_duplicate(&store);
+        let persisted = store.unique_names().expect("persisted names");
+        let unchanged = persisted
+            .iter()
+            .filter(|name| name.team_name.as_str() == "team-b")
+            .cloned()
+            .collect::<Vec<_>>();
+        assert!(roster_write_delta(&persisted, &unchanged).is_empty());
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![roster_member("team-b", "alex", None)],
+            ))
+            .expect("unchanged effective names are accepted by the durable gate");
+
+        let persisted = store.unique_names().expect("persisted names");
+        let changed = vec![RosterUniqueName {
+            team_name: "team-b".parse().expect("team"),
+            agent_name: "carol".parse().expect("agent"),
+            unique_name: "alex".to_owned(),
+        }];
+        assert_eq!(roster_write_delta(&persisted, &changed), changed);
+        store
+            .save_roster(&roster(
+                "team-b",
+                vec![
+                    roster_member("team-b", "alex", None),
+                    roster_member("team-b", "carol", Some("alex")),
+                ],
+            ))
+            .expect_err("the same changed effective name must be rejected durably");
     }
 
     #[test]
