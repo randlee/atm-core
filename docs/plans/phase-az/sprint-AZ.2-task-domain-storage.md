@@ -24,9 +24,9 @@ Replace the message-derived `Assigned/Active/Complete` row with one stable
 logical task, immutable assignment attempts, append-only lifecycle events, and
 transactional mutation primitives. Migrate existing SQLite ledgers without
 losing task identity or audit history, enforce one current assignee and at most
-one active task per agent in the database, and make stale task nudge cleanup
-part of the same transaction as every transition that makes an assignment
-attempt ineligible.
+one active task per `(team, agent)` in the database, and make stale task nudge
+cleanup part of the same transaction as every transition that makes an
+assignment attempt ineligible.
 
 This sprint is a production-ready storage/domain foundation. It intentionally
 does not expose the new public CLI until AZ.3, and it does not change the idle
@@ -62,7 +62,7 @@ pub enum TaskPriority {
 }
 
 pub struct AssignmentAttempt(u32);
-pub struct TaskOperationId(AtmMessageId);
+pub struct TaskOperationId(Ulid);
 
 pub struct TaskRow {
     pub team: TeamName,
@@ -113,7 +113,10 @@ message body.
 
 `TaskId` stays an opaque validated identifier. A Beads id is valid input, but
 the storage layer does not import Beads types, query Beads, or copy Beads task
-details.
+details. `TaskOperationId` is its own opaque UUID/ULID-domain newtype and
+idempotency-key namespace. It is never an alias for, constructed from, or
+interpreted as an `AtmMessageId`; a mutation may create message ids, but its
+operation identity remains independent of every resulting message.
 
 ### Legal transitions
 
@@ -128,6 +131,7 @@ details.
 | Active | succeed/fail/abort | Closed(outcome) | persist handoff; invalidate all attempt nudges |
 | Blocked | unblock | Assigned | append resolution; preserve priority/original time; never activate |
 | Blocked | reassign | Assigned | append a new attempt; preserve original time |
+| Blocked | abort | Closed(Aborted) | persist handoff; invalidate all attempt nudges |
 | Closed | reopen/reassign | Assigned | clear terminal projection, append a new attempt, preserve history/priority/original time |
 | any open | supersede | old Closed(Aborted(Superseded)); new Assigned | link a distinct successor `TaskId` and persist its first attempt atomically |
 
@@ -227,6 +231,10 @@ CREATE UNIQUE INDEX one_result_per_operation
 CREATE UNIQUE INDEX one_active_task_per_agent
   ON tasks(team, current_assignee) WHERE state = 'active';
 ```
+
+The active-task uniqueness identity is exactly `(team, current_assignee)`:
+one agent may have at most one `Active` task in a team, while the same agent
+may independently have one active task in another team.
 
 The Rust sum type makes an open state with a terminal outcome
 unrepresentable. SQLite uses separate `state`, `outcome`, `abort_reason`,
@@ -354,8 +362,8 @@ This is the sole authoritative acceptance list for AZ.2.
    `Closed(Succeeded)`; deterministic replay reproduces current projection,
    attempts, counters, and terminal linkage without retaining `description`.
 4. Database constraints and race tests prove one current assignee per task and
-   at most one active task per agent. Losing concurrent operations leave no
-   partial messages, attempts, or events.
+   at most one active task per `(team, agent)`. Losing concurrent operations
+   leave no partial messages, attempts, or events.
 5. Same-operation retries are no-ops returning the original outcome; conflicting
    operation-id reuse and stale revisions fail closed.
 6. Close/supersede/handoff, assignment changes, acknowledgement normalization,

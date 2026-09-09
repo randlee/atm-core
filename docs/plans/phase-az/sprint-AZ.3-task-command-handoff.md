@@ -32,10 +32,10 @@ not claim the fair idle-reminder scheduler, which belongs only to AZ.4.
 ## Public command contract
 
 ```text
-atm task list [--team <team>] [--member <agent>] [--closed] [--json]
-atm task events <task-id> [--team <team>] [--member <agent>] [--json]
+atm task list [<agent> | --as <agent>] [--team <team>] [--closed] [--json]
+atm task events <task-id> [--team <team>] [--as <agent>] [--json]
 
-atm task assign <task-id> <assignee> [--priority high|normal|low] <message-source>
+atm task assign <to> <task-id> [--priority high|normal|low] <message-source>
 atm task start <task-id>
 atm task block <task-id> --reason <text>
 atm task unblock <task-id> --resolution <text>
@@ -65,12 +65,14 @@ namespaced: template-first
 `--assignment-text` and `--handoff-text`. It does not accept ambiguous
 positional text or two competing stdin readers.
 
-`task list` returns open rows by default. `--closed` returns closed history
+`task list` returns open rows by default. `atm task list <agent>` and
+`atm task list --as <agent>` are equivalent supported forms for a specific
+agent; parser tests keep both forms aligned. `--closed` returns closed history
 instead of mixing it into the actionable default. Rows sort per the AZ.2
 contract: active first, assigned by priority and original assignment time, then
 blocked; closed history sorts newest terminal event first. `task events`
 returns the complete stable-`TaskId` event/attempt history. Optional
-`--member` is a presentation filter over the assignee recorded on attempts;
+agent scope is a presentation filter over the assignee recorded on attempts;
 it is never part of task identity.
 
 ## API and service contract
@@ -156,9 +158,11 @@ conflicts retain machine-readable error codes and recovery guidance.
   new attempt from `Closed` and never enters `Active` directly.
 - `complete` and `fail`: current assignee only, and only from `Active`.
 - `abort(cancelled)`: current assignee, current assigner, or unique team lead.
-  It is legal from `Assigned` or `Active`, not from `Blocked`.
+  It is legal from every open state: `Assigned`, `Active`, or `Blocked`.
 - `abort(superseded)`: current assigner or unique team lead; successor id must
   differ and be unused, and successor assignee must resolve before admission.
+  It is likewise legal from every open state, including `Blocked`; aborting a
+  blocked task never requires a meaningless unblock first.
 - The terminal handoff recipient must be a resolvable roster member other than
   the actor. All authorization is evaluated before entering the writer
   transaction and rechecked against the current revision inside it.
@@ -178,19 +182,30 @@ Supersession is one operation: it closes the old task as
 assignment attempt/message, and persists the terminal handoff. It does not edit
 the old objective in place.
 
+Canonical `atm task assign` persists assignment mail and task/attempt metadata,
+but it creates neither an immediate post-send nudge nor an ordinary
+message-key pending-queue entry. The assignment remains durable and body-free
+in task projections; only AZ.4's derived attention selector may emit a task
+nudge, and only when that attempt is the top runnable task and its assignee is
+idle.
+
 ## Legacy migration
 
 - `atm send <assignee> --task-id <id> <source>` remains accepted for one
   compatibility window, emits a deprecation warning, and translates to
   `TaskAction::Assign`. Existing open ids translate to reassign only when the
   actor is authorized; they are never silent resends that overwrite an attempt.
+  Like canonical assignment, this adapter persists assignment mail/task
+  metadata but creates no immediate post-send nudge and no ordinary
+  message-key pending-queue entry.
 - `atm send <recipient> --task-complete <id> <source>` emits a deprecation
   warning and translates to `TaskAction::Complete`, treating the target/message
   as the required handoff. It therefore retains atomic closure plus message
   persistence.
 - `atm list --tasks` and `atm list --task-events` remain deprecated query
   adapters to `atm task list/events` and return the same rows/order. Their
-  existing `--member` option maps to the canonical presentation filter.
+  existing `--member` option maps to canonical agent scoping; `--member` is a
+  compatibility spelling, not the sole public form.
 - `atm ack` acknowledges task-linked mail but never starts or otherwise
   transitions the task. Help and recovery text directs the assignee to
   `atm task start <id>`.
@@ -296,7 +311,8 @@ This is the sole authoritative acceptance list for AZ.3.
 
 1. Help and parser tests enumerate `list`, `events`, `assign`, `start`,
    `block`, `unblock`, `reassign`, `reopen`, `complete`, `fail`, and
-   `abort`, with mutually exclusive message sources and stable JSON fields.
+   `abort`, with `assign <to> <task-id>` ordering, both specific-agent list
+   forms, mutually exclusive message sources, and stable JSON fields.
 2. End-to-end tests prove every legal transition and authorization role,
    including pre-start block, explicit unblock to assigned, reopen/reassign to
    a new attempt, all terminal outcomes, and linked supersession.
@@ -312,7 +328,9 @@ This is the sole authoritative acceptance list for AZ.3.
    Beads dependency or copied task detail.
 6. Legacy send/list flags emit actionable deprecation warnings and produce
    byte-equivalent service results. Task mail acknowledgement no longer starts
-   a task; only `atm task start` can enter `Active`.
+   a task; only `atm task start` can enter `Active`. Canonical and legacy
+   assignment create neither an immediate nudge nor an ordinary message-key
+   pending-queue entry.
 7. Production CLI traffic uses the maintained Tokio/Axum API and injected
    service/storage boundaries. No direct SQLite access or legacy synchronous
    daemon edit exists.

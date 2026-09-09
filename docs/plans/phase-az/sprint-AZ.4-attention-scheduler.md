@@ -99,6 +99,11 @@ no message/task lifecycle state or body. Message consumption remains owned by
 cursor survives restart so repeated restarts cannot indefinitely favor the
 ephemeral lane.
 
+Assignment admission never puts task mail on the ordinary message-key pending
+queue and never emits an immediate post-send task nudge. This selector is the
+only path that may choose a task reminder, after confirming that the assignment
+attempt is the assignee's top runnable task and that the assignee is idle.
+
 ## Runtime flow
 
 ```text

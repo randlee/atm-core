@@ -1742,8 +1742,8 @@ AZ.2–AZ.4 then replace the message-derived task ledger with a stable logical
 atomic terminal handoffs and queue cleanup, and one fair idle attention
 selector over independent ephemeral-message and persistent-task lanes.
 `Blocked -> Assigned` is explicit and never auto-starts. Existing tasks migrate
-at normal priority; one current assignee per task and one active task per agent
-are transactionally enforced.
+at normal priority; one current assignee per task and one active task per
+`(team, agent)` are transactionally enforced.
 
 The authoritative umbrella is
 [Phase AZ plan](./plans/phase-az/phase-az-plan.md), with one authoritative
