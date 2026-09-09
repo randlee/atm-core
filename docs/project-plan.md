@@ -1729,6 +1729,29 @@ Phase AY sprint status:
 | `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `merged` (#1310, 47f359cf9) | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
 | `DOCTOR-HERDR-TARGET-R1` | Doctor | standalone target-resolution, breaker, and stale-session diagnostics | `complete` | `fix/doctor-herdr-target-resolution` | `docs/plans/doctor/sprint-DOCTOR-HERDR-TARGET-R1.md` |
 
+## 58. Phase AZ — Bounded Task-Nudge Metadata Contract [PLANNED]
+
+Phase AZ repairs the long-nudge defect in one surgical sprint. Every Steer,
+Queue, rebuilt Queue, Task, acknowledge-family, and task-reminder path may
+project only the persisted message id, persisted title/summary, and optional
+task id; the immutable message body and rendered J2 output remain available
+only through `atm read --message-id`. Missing titles become empty rather than
+falling back to message or task-description text.
+
+The phase does not remove or migrate `tasks.description`, redesign task list
+output, deduplicate resends, or solve completed-task invalidation of older
+independent pending-nudge rows. That lifecycle defect remains a separate
+follow-up. No legacy synchronous daemon code or live daemon/test-daemon
+operation is in scope.
+
+The authoritative umbrella is
+[Phase AZ plan](./plans/phase-az/phase-az-plan.md); its only sprint is
+[AZ.1](./plans/phase-az/sprint-AZ.1-task-nudge-contract.md).
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AZ.1` | `planned` | `feature/az1-task-nudge-contract` | notification event/template repair, focused long-body/J2 regressions, normative contract amendments |
+
 ## Daemon-Switch Scope Reduction
 
 Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:
