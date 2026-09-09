@@ -21,7 +21,6 @@ from typing import Any, Sequence
 
 STABLE_VERSION_PARTS = 3
 ARCHIVE_WORKFLOW = "prerelease-archive.yml"
-PROTECTED_BRANCHES = {"develop", "main", "master"}
 
 
 def command(args: Sequence[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -62,6 +61,17 @@ def required_string(config: dict[str, Any], name: str) -> str:
     value = config.get(name)
     if not isinstance(value, str) or not value:
         raise SystemExit(f"[prerelease].{name} must be a non-empty string")
+    return value
+
+
+def required_string_list(config: dict[str, Any], name: str) -> list[str]:
+    value = config.get(name)
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(item, str) and item for item in value)
+    ):
+        raise SystemExit(f"[prerelease].{name} must be a non-empty string array")
     return value
 
 
@@ -309,20 +319,28 @@ def install(manifest: dict[str, Any], requested: str) -> tuple[str, Path]:
     return version, stage
 
 
-def require_publish_preconditions() -> None:
+def require_publish_preconditions(config: dict[str, Any]) -> None:
     branch = command(["git", "branch", "--show-current"], capture=True).stdout.strip()
-    if not branch or branch in PROTECTED_BRANCHES:
+    if not branch or branch in required_string_list(config, "protected_branches"):
         raise SystemExit("prerelease publishing refuses a protected or detached branch")
     command(["git", "diff", "--quiet"])
     command(["gh", "auth", "status"])
 
 
-def wait_for_archive(tag: str) -> None:
+def wait_for_archive(tag: str, source_sha: str) -> None:
     for _attempt in range(60):
-        runs = gh_json(["run", "list", "--workflow", ARCHIVE_WORKFLOW, "--branch", tag, "--limit", "1", "--json", "status,conclusion"])
-        if isinstance(runs, list) and runs:
-            run = runs[0]
-            if isinstance(run, dict) and run.get("status") == "completed":
+        runs = gh_json(["run", "list", "--workflow", ARCHIVE_WORKFLOW, "--branch", tag, "--limit", "20", "--json", "status,conclusion,headSha"])
+        if isinstance(runs, list):
+            run = next(
+                (
+                    candidate
+                    for candidate in runs
+                    if isinstance(candidate, dict)
+                    and candidate.get("headSha") == source_sha
+                ),
+                None,
+            )
+            if run is not None and run.get("status") == "completed":
                 if run.get("conclusion") == "success":
                     return
                 raise SystemExit(f"{ARCHIVE_WORKFLOW} failed for {tag}")
@@ -333,14 +351,17 @@ def wait_for_archive(tag: str) -> None:
 def publish(manifest: dict[str, Any]) -> tuple[str, str]:
     config = manifest["prerelease"]
     assert isinstance(config, dict)
-    require_publish_preconditions()
+    require_publish_preconditions(config)
     result = command([sys.executable, required_string(config, "tag_script")], capture=True)
     tag = next((line.split()[3] for line in result.stdout.splitlines() if line.startswith("created and pushed ")), "")
     prefix = required_string(config, "tag_prefix")
     if not tag.startswith(prefix):
         raise SystemExit("prerelease tag script did not report a prerelease tag")
     version = parse_version(tag.removeprefix(prefix))
-    wait_for_archive(tag)
+    source_sha = command(["git", "rev-list", "-n", "1", tag], capture=True).stdout.strip()
+    if not source_sha:
+        raise SystemExit(f"cannot resolve the commit for {tag}")
+    wait_for_archive(tag, source_sha)
     release = release_for_tag(tag)
     require_release_assets(release, manifest, version)
     with tempfile.TemporaryDirectory(prefix="prerelease-verify-") as directory:
@@ -360,15 +381,27 @@ def publish(manifest: dict[str, Any]) -> tuple[str, str]:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--create", action="store_true", help="run the manifest version-selection and tag script")
-    mode.add_argument("--install", nargs="?", const="latest", metavar="X.Y.Z")
+    mode.add_argument(
+        "--publish",
+        "--create",
+        dest="publish",
+        action="store_true",
+        help="publish a new manifest-selected prerelease (--create is a compatibility alias)",
+    )
+    mode.add_argument(
+        "--install",
+        nargs="?",
+        const="latest",
+        metavar="X.Y.Z",
+        help="install X.Y.Z, or the latest matching GitHub prerelease when omitted",
+    )
     parser.add_argument("--manifest", type=Path, default=Path("release/publish-artifacts.toml"))
     parser.add_argument("--dry-run", action="store_true", help="print the plan without network calls")
     parser.add_argument("--authorized", action="store_true", help="confirm written operator authorization to publish")
     args = parser.parse_args(argv)
     manifest = read_manifest(args.manifest)
     config = prerelease_manifest(args.manifest)
-    if args.create:
+    if args.publish:
         if args.dry_run:
             plan = command(
                 [sys.executable, required_string(config, "tag_script"), "--dry-run"],
@@ -378,7 +411,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"would wait for {ARCHIVE_WORKFLOW}, then verify Release assets and checksums")
             return 0
         if not args.authorized:
-            raise SystemExit("--create requires written operator authorization")
+            raise SystemExit("--publish requires written operator authorization")
         _tag, url = publish(manifest)
         print(f"Release URL: {url}")
         return 0

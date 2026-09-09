@@ -1,6 +1,6 @@
 ---
 name: prerelease
-description: List, install, or create manifest-declared GitHub prerelease archives. Use for /prerelease --list, --install, or --create operations.
+description: List, install, or publish manifest-declared GitHub prerelease archives. Use for /prerelease --list, --install, or --publish operations.
 ---
 
 # Prerelease
@@ -13,7 +13,7 @@ Winget, Scoop, or another package channel from this skill.
 
 ```bash
 which python3 && python3 --version
-python3 -c 'import sys; raise SystemExit("Python 3.11+ is required") if sys.version_info < (3, 11) else None'
+python3 -c 'import sys; sys.exit("Python 3.11+ is required") if sys.version_info < (3, 11) else None'
 which git && git --version
 which gh && gh --version
 gh auth status
@@ -31,7 +31,8 @@ Read and follow exactly one mode file; do not load the other mode procedures.
 - `--list`: read [list.md](list.md).
 - `--install [X.Y.Z]`: read [install.md](install.md). Omit the version to
   select the latest matching prerelease.
-- `--create`: read [create.md](create.md). This mode always invokes the
+- `--publish` (`--create` is a compatibility alias): read
+  [publish.md](publish.md). This mode always invokes the
   manifest-declared version-selection and tag command. Reject a version
   argument; prerelease creation may never reuse a published version.
 

@@ -206,6 +206,9 @@ def load_install_values(path: Path) -> dict[str, object]:
         for field in ("tag_prefix", "tag_script", "install_root", "post_install", "verify"):
             _require_string(prerelease.get(field), f"prerelease.{field}")
         _require_string_array(prerelease.get("binaries"), "prerelease.binaries")
+        _require_string_array(
+            prerelease.get("protected_branches"), "prerelease.protected_branches"
+        )
         selectors = _require_string_mapping(prerelease.get("selector_dir"), "prerelease.selector_dir")
         if set(selectors) != {"darwin", "linux", "windows"}:
             raise argparse.ArgumentTypeError("prerelease.selector_dir must declare darwin, linux, and windows")
@@ -397,9 +400,12 @@ def template_values(values: dict[str, object]) -> dict[str, object]:
     template_project.setdefault("rust_toolchain", "")
     prerelease = values.get("prerelease")
     template_prerelease = (
-        _toml_scalars(_require_mapping(prerelease, "prerelease"), ("binaries", "selector_dir"))
+        _toml_scalars(
+            _require_mapping(prerelease, "prerelease"),
+            ("binaries", "protected_branches", "selector_dir"),
+        )
         if prerelease
-        else {"tag_prefix": "", "tag_script": "", "install_root": "", "binaries": "[]", "selector_dir": "{}", "post_install": "", "verify": ""}
+        else {"tag_prefix": "", "tag_script": "", "install_root": "", "binaries": "[]", "protected_branches": "[]", "selector_dir": "{}", "post_install": "", "verify": ""}
     )
 
     return {

@@ -1,6 +1,6 @@
 ---
 name: prerelease
-description: List, install, or create manifest-declared GitHub prerelease archives. Use for /prerelease --list, --install, or --create operations.
+description: List, install, or publish manifest-declared GitHub prerelease archives. Use for /prerelease --list, --install, or --publish operations.
 ---
 
 # Prerelease

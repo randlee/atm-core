@@ -16,6 +16,7 @@ tag_prefix = "prerelease/v"
 tag_script = ".just/prerelease_tag.py"
 install_root = "~/.atm-builds"
 binaries = ["atm", "atm-daemon"]
+protected_branches = ["develop", "main", "master"]
 selector_dir = { darwin = "~/.atm-builds/selectors/darwin", linux = "~/.atm-builds/selectors/linux", windows = "%LOCALAPPDATA%\\ATM\\prerelease-selectors" }
 post_install = "python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --prerelease {version} --yes"
 verify = "atm --version"

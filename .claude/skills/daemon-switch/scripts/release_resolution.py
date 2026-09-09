@@ -35,9 +35,7 @@ from macos_development_signing import (
 
 
 STABLE_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
-PRERELEASE_TAG_PREFIX = "prerelease/v"
 GITHUB_RELEASES_API = "https://api.github.com/repos/randlee/atm-core/releases"
-PRERELEASE_INSTALL_ROOT = Path("~/.atm-builds").expanduser()
 REPO_ROOT = Path(__file__).resolve().parents[4]
 JUST_SCRIPTS = REPO_ROOT / ".just"
 if str(JUST_SCRIPTS) not in sys.path:
@@ -48,6 +46,25 @@ from sign_daemon_dev import sign_and_verify_binary, unlock_login_keychain  # noq
 
 class SwitchError(RuntimeError):
     """A precondition that protects the singleton daemon was not met."""
+
+
+def prerelease_settings(repo_root: Path | None = None) -> tuple[str, Path]:
+    """Read the prerelease tag prefix and install root from their manifest owner."""
+    manifest_path = (repo_root or REPO_ROOT) / "release" / "publish-artifacts.toml"
+    try:
+        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise SwitchError(f"cannot read prerelease manifest {manifest_path}: {error}") from error
+    config = manifest.get("prerelease")
+    if not isinstance(config, dict):
+        raise SwitchError(f"{manifest_path} has no [prerelease] table")
+    tag_prefix = config.get("tag_prefix")
+    install_root = config.get("install_root")
+    if not isinstance(tag_prefix, str) or not tag_prefix:
+        raise SwitchError("[prerelease].tag_prefix must be a non-empty string")
+    if not isinstance(install_root, str) or not install_root:
+        raise SwitchError("[prerelease].install_root must be a non-empty string")
+    return tag_prefix, Path(os.path.expandvars(install_root)).expanduser()
 
 
 def executable_name(name: str) -> str:
@@ -267,7 +284,8 @@ def release_is_published(version_value: str) -> bool:
 
 
 def prerelease_release(version_value: str) -> tuple[str, dict[str, object]]:
-    """Resolve exactly one published prerelease/vX.Y.Z GitHub Release."""
+    """Resolve exactly one published, manifest-prefixed GitHub prerelease."""
+    tag_prefix, _install_root = prerelease_settings()
     if version_value == "latest":
         payload = github_json("")
         if not isinstance(payload, list):
@@ -278,15 +296,19 @@ def prerelease_release(version_value: str) -> tuple[str, dict[str, object]]:
                 isinstance(tag, str)
                 and release.get("prerelease") is True
                 and not release.get("draft")
-                and STABLE_VERSION.fullmatch(tag.removeprefix(PRERELEASE_TAG_PREFIX))
+                and STABLE_VERSION.fullmatch(tag.removeprefix(tag_prefix))
             ):
-                return tag.removeprefix(PRERELEASE_TAG_PREFIX), release
-        raise SwitchError("cannot resolve latest prerelease: no prerelease/vX.Y.Z GitHub Release exists")
+                return tag.removeprefix(tag_prefix), release
+        raise SwitchError(
+            f"cannot resolve latest prerelease: no {tag_prefix}X.Y.Z GitHub Release exists"
+        )
     if STABLE_VERSION.fullmatch(version_value) is None:
         raise SwitchError("--prerelease must be a stable X.Y.Z version or 'latest'")
-    payload = github_json(f"/tags/{PRERELEASE_TAG_PREFIX.replace('/', '%2F')}{version_value}")
+    payload = github_json(f"/tags/{tag_prefix.replace('/', '%2F')}{version_value}")
     if not isinstance(payload, dict) or payload.get("draft") or payload.get("prerelease") is not True:
-        raise SwitchError(f"cannot resolve prerelease/v{version_value}: GitHub prerelease Release is missing")
+        raise SwitchError(
+            f"cannot resolve {tag_prefix}{version_value}: GitHub prerelease Release is missing"
+        )
     return version_value, payload
 
 
@@ -311,9 +333,10 @@ def _download(url: str) -> bytes:
 def resolve_prerelease_pair(requested: str) -> tuple[Path, Path, str]:
     """Download, checksum-verify, and stage one GitHub prerelease pair."""
     expected, release = prerelease_release(requested)
+    _tag_prefix, install_root = prerelease_settings()
     triple, extension = release_archive_triple()
     archive_name = f"atm_{expected}_{triple}.{extension}"
-    destination = PRERELEASE_INSTALL_ROOT / f"v{expected}"
+    destination = install_root / f"v{expected}"
     cli = destination / "bin" / executable_name("atm")
     daemon = destination / "bin" / executable_name("atm-daemon")
     if cli.is_file() and daemon.is_file():
@@ -500,10 +523,11 @@ def exact_prerelease_tag(worktree: Path) -> str:
     result = run(["git", "-C", str(worktree), "tag", "--points-at", "HEAD"], timeout=10)
     if result.returncode != 0:
         raise SwitchError(f"cannot inspect worktree HEAD tags: {(result.stderr or result.stdout).strip()}")
-    expected = f"{PRERELEASE_TAG_PREFIX}{workspace_version(worktree)}"
+    tag_prefix, _install_root = prerelease_settings(worktree)
+    expected = f"{tag_prefix}{workspace_version(worktree)}"
     if expected not in result.stdout.splitlines():
         raise SwitchError(f"worktree HEAD requires exact tag {expected}; run `python3 .just/prerelease_tag.py` on that branch, then rebuild")
-    return expected[len(PRERELEASE_TAG_PREFIX):]
+    return expected[len(tag_prefix):]
 
 
 def prepare_worktree_pair(worktree: Path, bump: bool) -> tuple[Path, Path, str]:

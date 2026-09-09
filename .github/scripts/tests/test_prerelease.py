@@ -31,6 +31,7 @@ def manifest(root: Path) -> dict[str, object]:
             "tag_script": ".just/prerelease_tag.py",
             "install_root": str(root / "builds"),
             "binaries": ["fixture"],
+            "protected_branches": ["trunk", "release"],
             "selector_dir": {"darwin": str(root / "darwin"), "linux": str(root / "selector"), "windows": str(root / "windows")},
             "post_install": "true",
             "verify": "echo 1.5.11",
@@ -50,6 +51,7 @@ def write_manifest(root: Path) -> None:
         'tag_script = ".just/prerelease_tag.py"\n'
         'install_root = "~/.fixture-builds"\n'
         'binaries = ["fixture"]\n'
+        'protected_branches = ["trunk", "release"]\n'
         'selector_dir = { darwin = "/tmp", linux = "/tmp", windows = "C:\\\\tmp" }\n'
         'post_install = "true"\n'
         'verify = "echo 1.5.11"\n',
@@ -69,7 +71,7 @@ class PrereleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_manifest(root)
-            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--create", "--dry-run"], cwd=root, text=True, capture_output=True, check=False)
+            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--publish", "--dry-run"], cwd=root, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("would create tag: prerelease/v1.5.11", result.stdout)
         self.assertIn("would wait for prerelease-archive.yml", result.stdout)
@@ -78,9 +80,30 @@ class PrereleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_manifest(root)
-            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--create"], cwd=root, text=True, capture_output=True, check=False)
+            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--publish"], cwd=root, text=True, capture_output=True, check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("authorization", result.stderr)
+
+    def test_create_remains_an_alias_for_publish(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_manifest(root)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--manifest",
+                    "release/publish-artifacts.toml",
+                    "--create",
+                    "--dry-run",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("would create tag: prerelease/v1.5.11", result.stdout)
 
     def test_publish_tags_waits_and_verifies_release_assets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -102,21 +125,28 @@ class PrereleaseTests(unittest.TestCase):
             )
             with (
                 mock.patch.object(PRERELEASE, "require_publish_preconditions"),
-                mock.patch.object(PRERELEASE, "command", return_value=tag_result),
+                mock.patch.object(
+                    PRERELEASE,
+                    "command",
+                    side_effect=[
+                        tag_result,
+                        subprocess.CompletedProcess([], 0, stdout="fixture-sha\n"),
+                    ],
+                ),
                 mock.patch.object(PRERELEASE, "wait_for_archive") as wait,
                 mock.patch.object(PRERELEASE, "release_for_tag", return_value=release),
                 mock.patch.object(PRERELEASE, "download_asset", side_effect=download),
             ):
                 tag, url = PRERELEASE.publish(values)
         self.assertEqual((tag, url), ("prerelease/v1.5.11", "https://example.test/release"))
-        wait.assert_called_once_with("prerelease/v1.5.11")
+        wait.assert_called_once_with("prerelease/v1.5.11", "fixture-sha")
 
-    def test_create_rejects_an_operator_supplied_version(self) -> None:
+    def test_publish_rejects_an_operator_supplied_version(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_manifest(root)
             result = subprocess.run(
-                [sys.executable, str(SCRIPT), "--create", "1.5.11"],
+                [sys.executable, str(SCRIPT), "--publish", "1.5.11"],
                 cwd=root,
                 text=True,
                 capture_output=True,
@@ -188,8 +218,72 @@ class PrereleaseTests(unittest.TestCase):
         self.assertIn("path: ${{ env.ARCHIVE }}", workflow)
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("    permissions:\n      contents: write", workflow)
+        self.assertIn(
+            "    steps:\n      - uses: actions/checkout@v4\n"
+            "      - uses: actions/download-artifact@v4",
+            workflow,
+        )
         self.assertIn("timeout-minutes: 45", workflow)
         self.assertNotRegex(workflow, r":\s*\{[^\n]*\$\{\{")
+
+    def test_prerelease_packager_matches_release_packager(self) -> None:
+        workflows = SCRIPT.parents[4] / ".github" / "workflows"
+
+        def package_script(path: Path, step_name: str) -> str:
+            workflow = path.read_text(encoding="utf-8")
+            step = workflow.split(f"      - name: {step_name}\n", 1)[1]
+            return step.split("          python3 - <<'PY'\n", 1)[1].split(
+                "\n          PY", 1
+            )[0]
+
+        prerelease = package_script(
+            workflows / "prerelease-archive.yml",
+            "Package manifest-declared prerelease archive",
+        ).replace(
+            'version = "${{ needs.plan.outputs.version }}"',
+            'version = "${VERSION}"',
+        )
+        release = package_script(
+            workflows / "release.yml",
+            "Package manifest-declared release archive",
+        ).replace(
+            'version = "${{ needs.gate-and-tag.outputs.release_version }}"',
+            'version = "${VERSION}"',
+        )
+        # A downstream consumer's release workflow may already carry this
+        # correction. It invokes the helper with the interpreter running the
+        # packaging heredoc; the kit's production release template has not
+        # adopted that correction.
+        release = release.replace(
+            "          import shutil\n          import subprocess",
+            "          import shutil\n          import sys\n          import subprocess",
+        ).replace(
+            '                      "python3",\n'
+            '                      ".github/scripts/release_artifacts.py",',
+            '                      sys.executable,\n'
+            '                      ".github/scripts/release_artifacts.py",',
+        )
+        self.assertEqual(prerelease, release)
+
+    def test_wait_for_archive_ignores_a_stale_run_for_the_reused_tag(self) -> None:
+        stale = {"headSha": "old-sha", "status": "completed", "conclusion": "failure"}
+        current = {"headSha": "new-sha", "status": "completed", "conclusion": "success"}
+        with (
+            mock.patch.object(PRERELEASE, "gh_json", side_effect=[[stale], [stale, current]]),
+            mock.patch.object(PRERELEASE.time, "sleep"),
+        ):
+            PRERELEASE.wait_for_archive("prerelease/v1.5.11", "new-sha")
+
+    def test_help_documents_install_and_publish(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--help"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--publish", result.stdout)
+        self.assertIn("install X.Y.Z", result.stdout)
 
 
 if __name__ == "__main__":

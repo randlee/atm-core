@@ -1328,6 +1328,20 @@ class SwitchModeTests(unittest.TestCase):
         with mock.patch.object(DAEMON_SWITCH, "github_json", return_value=releases):
             self.assertEqual(DAEMON_SWITCH.prerelease_release("latest")[0], "1.5.11")
 
+    def test_prerelease_settings_are_read_from_the_release_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "release").mkdir()
+            (root / "release" / "publish-artifacts.toml").write_text(
+                "[prerelease]\n"
+                'tag_prefix = "candidate/v"\n'
+                'install_root = "~/candidate-builds"\n',
+                encoding="utf-8",
+            )
+            tag_prefix, install_root = DAEMON_SWITCH.prerelease_settings(root)
+        self.assertEqual(tag_prefix, "candidate/v")
+        self.assertEqual(install_root, Path("~/candidate-builds").expanduser())
+
     def test_prerelease_resolution_rejects_stable_tags(self) -> None:
         with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "prerelease Release is missing"):
             with mock.patch.object(DAEMON_SWITCH, "github_json", return_value={"draft": False, "prerelease": False}):
@@ -1349,7 +1363,11 @@ class SwitchModeTests(unittest.TestCase):
                 ]
             }
             with (
-                mock.patch.object(DAEMON_SWITCH, "PRERELEASE_INSTALL_ROOT", Path(temporary)),
+                mock.patch.object(
+                    DAEMON_SWITCH,
+                    "prerelease_settings",
+                    return_value=("prerelease/v", Path(temporary)),
+                ),
                 mock.patch.object(DAEMON_SWITCH, "prerelease_release", return_value=("1.5.11", release)),
                 mock.patch.object(DAEMON_SWITCH, "release_archive_triple", return_value=("x86_64-pc-windows-msvc", "zip")),
                 mock.patch.object(DAEMON_SWITCH, "executable_name", side_effect=lambda name: f"{name}.exe"),
@@ -1372,7 +1390,11 @@ class SwitchModeTests(unittest.TestCase):
                 ]
             }
             with (
-                mock.patch.object(DAEMON_SWITCH, "PRERELEASE_INSTALL_ROOT", Path(temporary)),
+                mock.patch.object(
+                    DAEMON_SWITCH,
+                    "prerelease_settings",
+                    return_value=("prerelease/v", Path(temporary)),
+                ),
                 mock.patch.object(DAEMON_SWITCH, "prerelease_release", return_value=("1.5.11", release)),
                 mock.patch.object(DAEMON_SWITCH, "release_archive_triple", return_value=("x86_64-pc-windows-msvc", "zip")),
                 mock.patch.object(DAEMON_SWITCH, "_download", side_effect=[f"{'0' * 64}  {archive_name}\n".encode(), b"wrong archive"]),
@@ -1459,6 +1481,12 @@ class SwitchModeTests(unittest.TestCase):
             worktree = Path(temporary)
             (worktree / "Cargo.toml").write_text(
                 '[workspace.package]\nversion = "1.5.1"\n', encoding="utf-8"
+            )
+            (worktree / "release").mkdir()
+            (worktree / "release" / "publish-artifacts.toml").write_text(
+                '[prerelease]\ntag_prefix = "prerelease/v"\n'
+                'install_root = "~/.atm-builds"\n',
+                encoding="utf-8",
             )
             with mock.patch.object(
                 DAEMON_SWITCH,

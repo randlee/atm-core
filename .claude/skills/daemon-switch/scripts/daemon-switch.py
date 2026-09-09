@@ -30,7 +30,6 @@ if str(DAEMON_SWITCH_SCRIPTS_DIRECTORY) not in sys.path:
 
 from release_resolution import (  # noqa: E402
     GITHUB_RELEASES_API,
-    PRERELEASE_TAG_PREFIX,
     STABLE_VERSION,
     SwitchError,
     binary_release_version,

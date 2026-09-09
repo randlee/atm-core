@@ -18,6 +18,7 @@ required_variables:
   - prerelease.tag_script
   - prerelease.install_root
   - prerelease.binaries
+  - prerelease.protected_branches
   - prerelease.selector_dir
   - prerelease.post_install
   - prerelease.verify
@@ -86,6 +87,7 @@ tag_prefix = {{ prerelease.tag_prefix }}
 tag_script = {{ prerelease.tag_script }}
 install_root = {{ prerelease.install_root }}
 binaries = {{ prerelease.binaries }}
+protected_branches = {{ prerelease.protected_branches }}
 selector_dir = {{ prerelease.selector_dir }}
 post_install = {{ prerelease.post_install }}
 verify = {{ prerelease.verify }}
