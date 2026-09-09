@@ -400,7 +400,7 @@ impl HerdrSpawnBreaker {
         HerdrBreakerSnapshot {
             state: breaker_state(&state, self.clock.as_ref()),
             consecutive_failures: state.consecutive_failures,
-            last_error_code: state.last_error_code.clone(),
+            last_error_code: state.last_error_code,
             last_error_detail: state.last_error_detail.clone(),
         }
     }
