@@ -28,7 +28,7 @@ io_forbidden = ["direct_sqlite_io", "daemon_request_dispatch", "raw_http_framing
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm", "atm-daemon-client", "atm-graft"]
 allowed_dependencies = ["async-trait", "atm-core", "atm-herdr", "atm-runtime", "axum", "base64", "fs4", "http-body-util", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "tokio", "tower", "tracing", "ulid", "windows-sys"]
-allowed_dev_dependencies = ["atm-core", "atm-herdr", "atm-runtime-test-support", "serde_yaml", "tempfile"]
+allowed_dev_dependencies = ["atm-core", "atm-herdr", "atm-observability", "atm-runtime-test-support", "serde_yaml", "tempfile", "tracing-subscriber"]
 forbidden_edges = ["atm-http-runtime -> atm-storage-rusqlite", "atm-http-runtime -> atm-graft", "atm-http-runtime -> atm", "atm-http-runtime -> atm-daemon-bootstrap"]
 
 [references]
