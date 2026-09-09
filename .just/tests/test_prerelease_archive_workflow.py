@@ -205,11 +205,6 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertIn('shasum -a 256 "${archives[@]}" > checksums.txt', workflow)
         self.assertIn('"${archives[@]}" checksums.txt', workflow)
         self.assertIn('gh release create "$tag" --prerelease', workflow)
-        self.assertIn(
-            "    steps:\n      - uses: actions/checkout@v4\n"
-            "      - uses: actions/download-artifact@v4",
-            workflow,
-        )
         self.assertIn('cmp checksums.txt existing-release/checksums.txt', workflow)
         self.assertIn("concurrent run converged", workflow)
         self.assertNotIn('gh release upload "$tag" --clobber', workflow)
@@ -237,6 +232,8 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         release_step = workflow.split(
             "      - name: Generate checksums and publish GitHub prerelease assets\n", 1
         )[1]
+        release_job = workflow.split("  release:\n", 1)[1]
+        self.assertIn("- uses: actions/checkout@v4", release_job)
         self.assertIn('shasum -a 256 "${archives[@]}" > checksums.txt', release_step)
         self.assertIn(
             'gh release create "$tag" --prerelease --title "$tag" --generate-notes '
