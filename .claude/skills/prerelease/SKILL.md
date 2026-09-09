@@ -31,8 +31,9 @@ Read and follow exactly one mode file; do not load the other mode procedures.
 - `--list`: read [list.md](list.md).
 - `--install [X.Y.Z]`: read [install.md](install.md). Omit the version to
   select the latest matching prerelease.
-- `--create [X.Y.Z]`: read [create.md](create.md). Omit the version to invoke
-  the manifest-declared patch-version bump and tag command.
+- `--create`: read [create.md](create.md). This mode always invokes the
+  manifest-declared version-selection and tag command. Reject a version
+  argument; prerelease creation may never reuse a published version.
 
 Require exactly one mode. Run from the consumer repository root, fail closed
 when `[prerelease]` is absent, and take all repository-specific values from the

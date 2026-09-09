@@ -206,9 +206,10 @@ Use exactly one skill mode:
 - `/prerelease --install [X.Y.Z]` installs the selected version, or the latest
   matching prerelease when the version is omitted. The ATM manifest routes the
   verified staged pair through the daemon-switch post-install extension.
-- `/prerelease --create [X.Y.Z]` dry-runs first, then creates the tag and waits
-  for all manifest-declared archives only after explicit written authorization.
-  Omitting the version invokes ATM's manifest-declared patch-bump helper.
+- `/prerelease --create` accepts no version argument. It dry-runs first, then
+  invokes ATM's manifest-declared version-selection/tag helper and waits for
+  every declared GitHub archive only after explicit written authorization.
+  The helper must never select an already-published version.
 
 - `just prerelease-tag` refuses `develop`, `main`, detached HEADs, dirty trees,
   duplicate tags, and non-stable workspace versions.
