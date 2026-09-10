@@ -28,7 +28,7 @@ pub use service::CoreTaskCommandService;
 pub enum TaskCommandRequest {
     List(TaskListQuery),
     Events(TaskEventQuery),
-    Mutate(TaskMutationCommand),
+    Mutate(Box<TaskMutationCommand>),
 }
 
 /// A bounded task-list query. Closed work is never mixed into the actionable

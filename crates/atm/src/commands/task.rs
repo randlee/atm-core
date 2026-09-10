@@ -490,13 +490,13 @@ async fn mutate(
 ) -> Result<()> {
     let response = execute(
         observability,
-        TaskCommandRequest::Mutate(TaskMutationCommand {
+        TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
             operation_id: TaskOperationId::new(),
             actor,
             task_id,
             expected_revision: None,
             action,
-        }),
+        })),
     )
     .await?;
     print_response(response, true)

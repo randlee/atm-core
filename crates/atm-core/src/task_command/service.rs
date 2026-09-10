@@ -353,7 +353,7 @@ impl TaskCommandService for CoreTaskCommandService {
                 self.events(query).await.map(TaskCommandResponse::Events)
             }
             TaskCommandRequest::Mutate(command) => self
-                .mutate(command)
+                .mutate(*command)
                 .await
                 .map(TaskCommandResponse::Mutation),
         }
