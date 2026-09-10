@@ -252,7 +252,7 @@ pub(crate) fn reserve_writer(
             "attention item member mismatch",
         ));
     }
-    let (message_id, task_id, attempt, assignment_message_id) = item_columns(&request.item);
+    let columns = item_columns(&request.item);
     connection.execute(
         "INSERT INTO attention_opportunities(
             team, agent, opportunity_id, roster_state_revision, lane, message_id, task_id,
@@ -264,10 +264,10 @@ pub(crate) fn reserve_writer(
             request.opportunity.id.to_string(),
             request.opportunity.roster_state_revision.get(),
             request.item.lane().as_str(),
-            message_id,
-            task_id,
-            attempt,
-            assignment_message_id,
+            columns.message_id,
+            columns.task_id,
+            columns.attempt,
+            columns.assignment_message_id,
         ],
     )?;
     let next_lane = request.item.lane().other();
@@ -417,24 +417,33 @@ fn request_item_member(item: &AttentionItem) -> &MemberKey {
         | AttentionItem::PersistentTaskReminder { member, .. } => member,
     }
 }
-fn item_columns(
-    item: &AttentionItem,
-) -> (Option<String>, Option<String>, Option<u32>, Option<String>) {
+
+struct ItemColumns {
+    message_id: Option<String>,
+    task_id: Option<String>,
+    attempt: Option<u32>,
+    assignment_message_id: Option<String>,
+}
+
+fn item_columns(item: &AttentionItem) -> ItemColumns {
     match item {
-        AttentionItem::EphemeralMessage { message_id, .. } => {
-            (Some(message_id.to_string()), None, None, None)
-        }
+        AttentionItem::EphemeralMessage { message_id, .. } => ItemColumns {
+            message_id: Some(message_id.to_string()),
+            task_id: None,
+            attempt: None,
+            assignment_message_id: None,
+        },
         AttentionItem::PersistentTaskReminder {
             task_id,
             attempt,
             assignment_message_id,
             ..
-        } => (
-            None,
-            Some(task_id.to_string()),
-            Some(attempt.get()),
-            Some(assignment_message_id.to_string()),
-        ),
+        } => ItemColumns {
+            message_id: None,
+            task_id: Some(task_id.to_string()),
+            attempt: Some(attempt.get()),
+            assignment_message_id: Some(assignment_message_id.to_string()),
+        },
     }
 }
 fn parse_lane(value: &str) -> Result<AttentionLane, ()> {
