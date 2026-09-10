@@ -502,7 +502,57 @@ async fn mutate(
     print_response(response, true)
 }
 
-async fn execute(
+/// Run the deprecated `atm send --task-id` path through the one maintained
+/// task service. The send adapter owns only compatibility parsing and warning
+/// text; authorization and task mutation remain service-owned.
+pub(crate) async fn run_legacy_assign(
+    observability: &CliObservability,
+    actor: MemberKey,
+    task_id: TaskId,
+    assignee: MemberKey,
+    message: ComposedMessageInput,
+) -> Result<()> {
+    eprintln!(
+        "warning: `atm send --task-id` is deprecated; use `atm task assign <to> <task-id> <message-source>`"
+    );
+    mutate(
+        observability,
+        actor,
+        task_id,
+        TaskAction::LegacyAssign(AssignmentInput {
+            assignee,
+            priority: TaskPriority::Normal,
+            message,
+        }),
+    )
+    .await
+}
+
+/// Run the deprecated `atm send --task-complete` path through the canonical
+/// task service while retaining its deliberately narrow provenance.
+pub(crate) async fn run_legacy_complete(
+    observability: &CliObservability,
+    actor: MemberKey,
+    task_id: TaskId,
+    recipient: MemberKey,
+    message: ComposedMessageInput,
+) -> Result<()> {
+    eprintln!(
+        "warning: `atm send --task-complete` is deprecated; use `atm task complete <task-id> --handoff <agent> <message-source>`"
+    );
+    mutate(
+        observability,
+        actor,
+        task_id,
+        TaskAction::LegacyComplete(atm_core::task_command::LegacyCompletionNoticeInput {
+            recipient,
+            message,
+        }),
+    )
+    .await
+}
+
+pub(crate) async fn execute(
     observability: &CliObservability,
     request: TaskCommandRequest,
 ) -> Result<TaskCommandResponse> {
@@ -518,7 +568,7 @@ async fn execute(
     .map_err(Into::into)
 }
 
-fn page(limit: Option<usize>, all: bool) -> Result<TaskPage> {
+pub(crate) fn page(limit: Option<usize>, all: bool) -> Result<TaskPage> {
     if all {
         Ok(TaskPage::All)
     } else {
@@ -530,7 +580,7 @@ fn page(limit: Option<usize>, all: bool) -> Result<TaskPage> {
     }
 }
 
-fn print_response(response: TaskCommandResponse, json: bool) -> Result<()> {
+pub(crate) fn print_response(response: TaskCommandResponse, json: bool) -> Result<()> {
     print_response_at(response, json, Utc::now())
 }
 

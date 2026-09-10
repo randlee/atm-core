@@ -99,6 +99,12 @@ pub struct TaskMutationCommand {
 #[serde(rename_all = "snake_case")]
 pub enum TaskAction {
     Assign(AssignmentInput),
+    /// Compatibility-only assignment provenance for deprecated `atm send`.
+    ///
+    /// An absent task creates its initial attempt; an assigned, blocked, or
+    /// closed task follows the authorized reassignment path. Active work is
+    /// never silently interrupted.
+    LegacyAssign(AssignmentInput),
     Start,
     Block {
         reason: NonEmptyText,

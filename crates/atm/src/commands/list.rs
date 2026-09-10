@@ -1,5 +1,6 @@
 use anyhow::Result;
 use atm_core::list::{ListQuery, TaskLedgerQuery};
+use atm_core::task_command::{TaskCommandRequest, TaskEventQuery, TaskListQuery, TaskListScope};
 use clap::Args;
 
 use crate::commands::caller_context::{
@@ -74,6 +75,9 @@ pub struct ListCommand {
 
 impl ListCommand {
     pub async fn run(self, observability: &CliObservability) -> Result<()> {
+        if self.tasks || self.task_events.is_some() {
+            return self.run_legacy_task_query(observability).await;
+        }
         let (home_dir, current_dir) = resolve_command_runtime_context("list")?;
         let json = self.json;
         let query = self.build_query(home_dir.clone(), current_dir.clone())?;
@@ -89,6 +93,42 @@ impl ListCommand {
             Some(task_ledger) => print_task_ledger(&outcome, &task_ledger, json),
             None => output::print_list_result(&outcome, json),
         }
+    }
+
+    async fn run_legacy_task_query(self, observability: &CliObservability) -> Result<()> {
+        let context = resolve_cli_caller_context(CallerContextOverrides {
+            identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+            chat_id_override: None,
+            team_override: self.team.as_deref().map(CallerTeamOverride),
+        })?;
+        let request = match self.task_events {
+            Some(task_id) => {
+                eprintln!(
+                    "warning: `atm list --task-events` is deprecated; use `atm task events <task-id>`"
+                );
+                TaskCommandRequest::Events(TaskEventQuery {
+                    team: context.caller_team,
+                    task_id,
+                    assignee: self.member,
+                    page: crate::commands::task::page(None, false)?,
+                })
+            }
+            None => {
+                eprintln!(
+                    "warning: `atm list --tasks` is deprecated; use `atm task list [<agent> | --as <agent>]`"
+                );
+                TaskCommandRequest::List(TaskListQuery {
+                    team: context.caller_team,
+                    assignee: self.member,
+                    scope: TaskListScope::Open,
+                    page: crate::commands::task::page(None, false)?,
+                })
+            }
+        };
+        crate::commands::task::print_response(
+            crate::commands::task::execute(observability, request).await?,
+            self.json,
+        )
     }
 
     fn build_query(

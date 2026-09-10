@@ -99,6 +99,9 @@ impl CoreTaskCommandService {
         require_member(&self.runtime, &command.actor)?;
         match &command.action {
             TaskAction::Assign(input) => self.assign(command, existing, input),
+            TaskAction::LegacyAssign(input) => {
+                self.legacy_assign(command, existing, latest_attempt, input)
+            }
             TaskAction::Start => self.start(command, existing),
             TaskAction::Block { reason } => self.block(command, existing, reason.as_str()),
             TaskAction::Unblock { resolution } => {
@@ -132,6 +135,19 @@ impl CoreTaskCommandService {
         }
         require_distinct_member(&command.actor, &input.assignee, "initial assignment")?;
         Ok(TaskOperation::Assign(self.assignment(command, input)?))
+    }
+
+    fn legacy_assign(
+        &self,
+        command: &TaskMutationCommand,
+        existing: Option<&atm_storage::LogicalTaskRow>,
+        latest_attempt: Option<&TaskAssignmentAttempt>,
+        input: &AssignmentInput,
+    ) -> Result<TaskOperation, AtmError> {
+        if existing.is_none() {
+            return self.assign(command, existing, input);
+        }
+        self.reassign(command, existing, latest_attempt, input)
     }
 
     fn start(

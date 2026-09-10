@@ -55,7 +55,10 @@ pub(crate) use persistence::persist_message;
 pub(crate) use received_hook::{PreparedReceivedHook, prepare_received_hook};
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 use request::prepare_threaded_message;
-pub(crate) use request::resolve_message_body;
+#[doc(hidden)]
+pub use request::resolve_message_body;
+#[doc(hidden)]
+pub use template::render_template_source_for_task;
 use template::{requires_plain_template_fallback, verify_template_send};
 pub(crate) use write_context::{SendExecutionContext, prepare_send_context};
 use write_context::{build_send_delivery_plan, build_send_outcome};
