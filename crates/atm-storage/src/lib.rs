@@ -78,9 +78,9 @@ pub use task_mutation::{
 pub use task_state::{
     AssignmentAttempt, DAEMON_ACTOR_NAME, LogicalTaskRow, TaskAbortReason, TaskActor,
     TaskAssignmentAttempt, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
-    TaskLifecycleAction, TaskLifecycleEventKind, TaskLifecycleEventRow, TaskLifecycleState,
-    TaskLifecycleTransition, TaskOperationId, TaskOutcome, TaskPriority, TaskRejected, TaskRow,
-    TaskState, Transition, admit, lifecycle_transition, transition,
+    TaskLedgerScope, TaskLifecycleAction, TaskLifecycleEventKind, TaskLifecycleEventRow,
+    TaskLifecycleState, TaskLifecycleTransition, TaskOperationId, TaskOutcome, TaskPriority,
+    TaskRejected, TaskRow, TaskState, Transition, admit, lifecycle_transition, transition,
 };
 pub use task_store::{
     DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,

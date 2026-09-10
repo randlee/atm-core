@@ -703,6 +703,22 @@ impl LocalServiceRuntime {
         self.roster_runtime.ephemeral_state(team, agent)
     }
 
+    /// Loads one canonical roster member from the runtime-owned RAM mirror.
+    /// Task command authorization uses this rather than issuing a durable
+    /// roster read while handling an HTTP request.
+    pub fn roster_member(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Option<crate::boundary::RosterEntry> {
+        self.roster_runtime.load_roster_member(team, agent)
+    }
+
+    /// Returns a team's canonical members from the runtime-owned RAM mirror.
+    pub fn team_roster(&self, team: &TeamName) -> Vec<crate::boundary::RosterEntry> {
+        self.roster_runtime.load_team_roster(team)
+    }
+
     /// Sets one member's Herdr wake-pending ephemeral flag in RAM only.
     /// Returns `false` without effect when the member is not present in the
     /// current roster snapshot.

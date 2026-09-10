@@ -7,8 +7,9 @@ mod tests {
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, IsoTimestamp, MemberKey, TaskId, TeamName};
     use atm_storage::{
-        MessageWriteOrigin, PreparedAssignment, PreparedMessage, ReadDeadline, TaskLifecycleState,
-        TaskMutationRequest, TaskOperation, TaskOperationId, TaskOutcome, TaskPriority,
+        MessageWriteOrigin, PreparedAssignment, PreparedMessage, ReadDeadline, TaskLedgerScope,
+        TaskLifecycleState, TaskMutationRequest, TaskOperation, TaskOperationId, TaskOutcome,
+        TaskPriority,
     };
     use serde_json::Map;
     use std::time::Duration;
@@ -605,7 +606,13 @@ mod tests {
         }
         let deadline = || ReadDeadline::new(Duration::from_secs(1)).expect("deadline");
         let list = reader
-            .list_logical_tasks(team(), Some(worker.agent().clone()), None, deadline())
+            .list_logical_tasks(
+                team(),
+                Some(worker.agent().clone()),
+                TaskLedgerScope::All,
+                None,
+                deadline(),
+            )
             .await
             .expect("logical list");
         assert_eq!(
@@ -721,7 +728,7 @@ mod tests {
             ))
         );
         let rows = reader
-            .list_logical_tasks(team(), None, None, deadline())
+            .list_logical_tasks(team(), None, TaskLedgerScope::All, None, deadline())
             .await
             .expect("logical rows");
         assert!(rows.iter().any(|row| {

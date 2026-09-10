@@ -940,6 +940,7 @@ pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
         &self,
         _team: TeamName,
         _member: Option<AgentName>,
+        _scope: crate::TaskLedgerScope,
         _limit: Option<usize>,
         _deadline: ReadDeadline,
     ) -> Result<Vec<crate::LogicalTaskRow>, ReadLaneError> {
@@ -954,6 +955,18 @@ pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
         &self,
         _team: TeamName,
         _member: AgentName,
+        _deadline: ReadDeadline,
+    ) -> Result<Option<crate::LogicalTaskRow>, ReadLaneError> {
+        Err(ReadLaneError::Unavailable {
+            message: "logical task projections are unavailable in this storage adapter".to_owned(),
+        })
+    }
+
+    /// Loads one current logical-task projection by its stable identity.
+    async fn load_logical_task(
+        &self,
+        _team: TeamName,
+        _task_id: TaskId,
         _deadline: ReadDeadline,
     ) -> Result<Option<crate::LogicalTaskRow>, ReadLaneError> {
         Err(ReadLaneError::Unavailable {
