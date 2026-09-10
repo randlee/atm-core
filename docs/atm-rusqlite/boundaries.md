@@ -20,6 +20,7 @@ Canonical machine-readable boundary sources:
 - [`boundaries/atm-storage-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/mail-store-sqlite.toml)
 - [`boundaries/atm-storage-rusqlite/task-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/task-store-sqlite.toml)
 - [`boundaries/atm-storage-rusqlite/roster-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/roster-store-sqlite.toml)
+- [`boundaries/atm-storage-rusqlite/async-task-scheduler-audit-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/async-task-scheduler-audit-store-sqlite.toml)
 - [`boundaries/atm-storage-rusqlite/shared-db.toml`](../../boundaries/atm-storage-rusqlite/shared-db.toml)
 
 Important crate-private assembly/state-root structs that must stay visible in

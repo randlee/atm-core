@@ -155,7 +155,7 @@ pub struct TaskMutationRequest {
     pub operation_id: TaskOperationId,
     pub actor: MemberKey,
     pub task_id: TaskId,
-    pub expected_revision: Option<u64>,
+    pub expected_revision: Option<TaskRevision>,
     pub operation: TaskOperation,
 }
 
