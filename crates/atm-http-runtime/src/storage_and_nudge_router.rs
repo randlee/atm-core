@@ -673,59 +673,7 @@ impl StorageAndNudgeRouter {
         let sink = self.member_state_transition_sink.clone();
         let idle_opportunity_sink = self.idle_opportunity_sink.clone();
         self.control_path_sync_bridge
-            .run(deadline, move || {
-                let next_state = match request.activity {
-                    atm_core::protocol::HeartbeatActivity::ActiveToolUse => {
-                        atm_core::protocol::RuntimeMemberState::Active
-                    }
-                    atm_core::protocol::HeartbeatActivity::Idle => {
-                        atm_core::protocol::RuntimeMemberState::Idle
-                    }
-                    atm_core::protocol::HeartbeatActivity::SessionEnded => {
-                        atm_core::protocol::RuntimeMemberState::Offline
-                    }
-                };
-                let update = atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-                    request.member.clone(),
-                    next_state,
-                    atm_core::protocol::RuntimeObservationSource::Heartbeat,
-                    request.observed_at,
-                    Some(atm_core::protocol::RosterRuntimeIdentity {
-                        pid: request.pid,
-                        session_id: request.session_id.clone(),
-                    }),
-                );
-                let outcome = runtime
-                    .apply_roster_runtime_observations(&request.team, &[update])
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| {
-                        AtmError::agent_not_found(request.member.as_str(), request.team.as_str())
-                    })?;
-                let transition = (outcome.state_changed
-                    && outcome.current.state == atm_core::protocol::RuntimeMemberState::Idle)
-                    .then_some(outcome.previous_state);
-                let response = atm_core::protocol::TeamMemberHeartbeatResponse {
-                    team: request.team.clone(),
-                    member: request.member.clone(),
-                    pid: request.pid,
-                    pid_changed: outcome.pid_changed,
-                    state: outcome.current.state,
-                    last_active_at: outcome.current.last_active_at,
-                    session_id: outcome.current.session_id,
-                };
-                let opportunity = (outcome.current.state
-                    == atm_core::protocol::RuntimeMemberState::Idle)
-                    .then(|| atm_core::boundary::IdleOpportunity {
-                        id: Default::default(),
-                        member: atm_core::boundary::MemberKey::new(
-                            response.team.clone(),
-                            response.member.clone(),
-                        ),
-                        roster_state_revision: outcome.current.revision,
-                    });
-                Ok((response, transition, opportunity))
-            })
+            .run(deadline, move || heartbeat_update(&runtime, request))
             .await
             .map(|(response, transition, opportunity)| {
                 let member = atm_core::boundary::MemberKey::new(
@@ -889,6 +837,67 @@ impl StorageAndNudgeRouter {
         self.service_runtime.reload_roster_from_durable_store()?;
         Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
     }
+}
+
+fn heartbeat_update(
+    runtime: &LocalServiceRuntime,
+    request: atm_core::protocol::TeamMemberHeartbeatRequest,
+) -> Result<
+    (
+        atm_core::protocol::TeamMemberHeartbeatResponse,
+        Option<atm_core::protocol::RuntimeMemberState>,
+        Option<atm_core::boundary::IdleOpportunity>,
+    ),
+    AtmError,
+> {
+    let next_state = match request.activity {
+        atm_core::protocol::HeartbeatActivity::ActiveToolUse => {
+            atm_core::protocol::RuntimeMemberState::Active
+        }
+        atm_core::protocol::HeartbeatActivity::Idle => atm_core::protocol::RuntimeMemberState::Idle,
+        atm_core::protocol::HeartbeatActivity::SessionEnded => {
+            atm_core::protocol::RuntimeMemberState::Offline
+        }
+    };
+    let update = atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+        request.member.clone(),
+        next_state,
+        atm_core::protocol::RuntimeObservationSource::Heartbeat,
+        request.observed_at,
+        Some(atm_core::protocol::RosterRuntimeIdentity {
+            pid: request.pid,
+            session_id: request.session_id.clone(),
+        }),
+    );
+    let outcome = runtime
+        .apply_roster_runtime_observations(&request.team, &[update])
+        .into_iter()
+        .next()
+        .ok_or_else(|| AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))?;
+    let transition = (outcome.state_changed
+        && outcome.current.state == atm_core::protocol::RuntimeMemberState::Idle)
+        .then_some(outcome.previous_state);
+    let response = atm_core::protocol::TeamMemberHeartbeatResponse {
+        team: request.team.clone(),
+        member: request.member.clone(),
+        pid: request.pid,
+        pid_changed: outcome.pid_changed,
+        state: outcome.current.state,
+        last_active_at: outcome.current.last_active_at,
+        session_id: outcome.current.session_id,
+    };
+    let opportunity =
+        (outcome.current.state == atm_core::protocol::RuntimeMemberState::Idle).then(|| {
+            atm_core::boundary::IdleOpportunity {
+                id: Default::default(),
+                member: atm_core::boundary::MemberKey::new(
+                    response.team.clone(),
+                    response.member.clone(),
+                ),
+                roster_state_revision: outcome.current.revision,
+            }
+        });
+    Ok((response, transition, opportunity))
 }
 
 impl crate::RuntimeMaintenance for StorageAndNudgeRouter {
@@ -1607,6 +1616,17 @@ mod tests {
         )
     }
 
+    fn fixture_assembly(with_recipient: bool) -> (TempDir, PathBuf, atm_runtime::RuntimeAssembly) {
+        let temporary_root = tempfile::tempdir().expect("temporary runtime root");
+        let database_path = temporary_root.path().join("mail.sqlite");
+        let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
+        let team: TeamName = "test-team".parse().expect("team");
+        if with_recipient {
+            seed_fixture_roster(&assembly.shared_roster_store_arc(), &team);
+        }
+        (temporary_root, database_path, assembly)
+    }
+
     fn fixture_with_selector_and_template_and_pending<F>(
         with_recipient: bool,
         hook_failure: Option<AtmError>,
@@ -1618,13 +1638,7 @@ mod tests {
     where
         F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
     {
-        let temporary_root = tempfile::tempdir().expect("temporary runtime root");
-        let database_path = temporary_root.path().join("mail.sqlite");
-        let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
-        let team: TeamName = "test-team".parse().expect("team");
-        if with_recipient {
-            seed_fixture_roster(&assembly.shared_roster_store_arc(), &team);
-        }
+        let (temporary_root, database_path, assembly) = fixture_assembly(with_recipient);
         let message_store = assembly.message_store_arc();
         let pending_nudge_store = assembly
             .service_runtime
@@ -1642,32 +1656,25 @@ mod tests {
             Arc::new(atm_runtime_test_support::InMemoryTaskLedgerReader::default());
         let pending_nudge_store_for_runtime =
             pending_store_with_failures(&pending_nudge_store, pending_marker_failures);
-        let received_hook = Arc::new(RecordingReceivedHook {
-            message_store: Arc::clone(&message_store),
-            emitted_ids: Mutex::new(Vec::new()),
-            dispatches: Mutex::new(Vec::new()),
-            saw_durable_record: AtomicBool::new(false),
-            failure: hook_failure,
+        let received_hook = build_recording_received_hook(
+            Arc::clone(&message_store),
+            hook_failure,
             cancelled_on_drop,
-        });
+        );
         let home_dir = temporary_root.path().join("home");
         let current_dir = temporary_root.path().join("workspace");
         fs::create_dir_all(&home_dir).expect("create fixture home");
         fs::create_dir_all(&current_dir).expect("create fixture workspace");
         let health = RuntimeHealth::with_owner(99);
-        let service_runtime = match template_composer {
-            Some(composer) => assembly.service_runtime.with_template_composer(composer),
-            None => assembly.service_runtime,
-        };
-        let service_runtime =
-            attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
-        let service_runtime =
-            service_runtime.with_pending_nudge_store(pending_nudge_store_for_runtime);
-        let async_reader_for_runtime: Arc<dyn AsyncTaskLedgerReader + Send + Sync> =
-            async_task_ledger_reader.clone();
-        let service_runtime = service_runtime
-            .with_task_store(Arc::clone(&task_store))
-            .with_async_task_ledger_reader(async_reader_for_runtime);
+        let service_runtime = compose_fixture_service_runtime(
+            assembly.service_runtime,
+            template_composer,
+            &database_path,
+            with_recipient,
+            pending_nudge_store_for_runtime,
+            Arc::clone(&task_store),
+            async_task_ledger_reader.clone(),
+        );
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1744,6 +1751,43 @@ mod tests {
                 refreshed_at: None,
             })
             .expect("seed recipient roster");
+    }
+
+    fn build_recording_received_hook(
+        message_store: Arc<dyn MessageStore + Send + Sync>,
+        failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+    ) -> Arc<RecordingReceivedHook> {
+        Arc::new(RecordingReceivedHook {
+            message_store,
+            emitted_ids: Mutex::new(Vec::new()),
+            dispatches: Mutex::new(Vec::new()),
+            saw_durable_record: AtomicBool::new(false),
+            failure,
+            cancelled_on_drop,
+        })
+    }
+
+    fn compose_fixture_service_runtime(
+        assembly_service_runtime: LocalServiceRuntime,
+        template_composer: Option<Arc<dyn atm_core::TemplateComposer>>,
+        database_path: &Path,
+        with_recipient: bool,
+        pending_nudge_store_for_runtime: Arc<dyn PendingNudgeStore + Send + Sync>,
+        task_store: Arc<dyn TaskStore + Send + Sync>,
+        async_reader_for_runtime: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    ) -> LocalServiceRuntime {
+        let service_runtime = match template_composer {
+            Some(composer) => assembly_service_runtime.with_template_composer(composer),
+            None => assembly_service_runtime,
+        };
+        let service_runtime =
+            attach_graft_receiver_store(service_runtime, database_path, with_recipient);
+        let service_runtime =
+            service_runtime.with_pending_nudge_store(pending_nudge_store_for_runtime);
+        service_runtime
+            .with_task_store(task_store)
+            .with_async_task_ledger_reader(async_reader_for_runtime)
     }
 
     fn attach_graft_receiver_store(
@@ -2441,7 +2485,7 @@ mod tests {
         }
         tokio::time::timeout(Duration::from_secs(1), async {
             while selector.emitter.emissions.load(Ordering::SeqCst) != 1 {
-                tokio::time::sleep(Duration::from_millis(5)).await;
+                tokio::task::yield_now().await;
             }
         })
         .await
@@ -2465,7 +2509,7 @@ mod tests {
             .expect("Idle-to-Idle authenticated heartbeat");
         tokio::time::timeout(Duration::from_secs(1), async {
             while selector.emitter.emissions.load(Ordering::SeqCst) != 2 {
-                tokio::time::sleep(Duration::from_millis(5)).await;
+                tokio::task::yield_now().await;
             }
         })
         .await
