@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-014>
+  a triage:Finding ;
+  triage:findingId "FNX-014" ;
+  triage:title "Heartbeat drain guard has a narrow check-then-push window; DetachedReceivedHooks doc no longer matches the new entry point" ;
+  triage:description "fenix's re-verification pass on PR #1395 (head 3b8a43fd3) reports on_idle_opportunity (herdr_queue_wake_idle.rs:9) checks runtime_health.is_draining() then calls observe_task, which pushes the JoinHandle into the registry (router_support.rs:320). drain (router_support.rs:358) does std::mem::take(&mut *self.lock()) once, from the pump's shutdown path. A dispatch that passes the draining check but pushes after drain has taken the vector is therefore never joined -- a narrow shutdown-only window reproducing the original finding's failure mode. Also, the DetachedReceivedHooks doc (router_support.rs:310) still promises 'every warning it produces is logged with the originating request id and counted on RuntimeHealth', which is no longer true of the new entry point: observe_task takes neither a RuntimeHealth nor a RequestId, produces no WarningEntry, and run_idle_opportunity logs failures with member and no request id; idle_opportunity_dispatches_total counts attempts, not outcomes. Recommendation: take the draining decision inside the registry lock (or have observe_task return whether the push was accepted and abort the task if not), and amend the doc comment to describe both entry points. Deferred: narrow shutdown-only race, self-healing per the pre-existing reservation retry mechanism; does not block merge per fenix's PASS verdict." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "concurrency-correctness" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_idle.rs, crates/atm-http-runtime/src/router_support.rs" ;
+  triage:status "deferred" ;
+  triage:closedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-014/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FNX-014/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_idle.rs" ;
+  triage:line 9 ;
+  triage:snippet "check-then-push race between is_draining() and observe_task vs drain's take(); doc comment stale. Deferred per fenix's non-blocking PASS verdict on PR #1395" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
+
+<urn:atm:triage:worktree/AZ4/3b8a43fd3-r>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:orderIndex 4 .
