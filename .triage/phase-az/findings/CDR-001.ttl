@@ -15,28 +15,30 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/task_command/service.rs, crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T18:50:33Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.3 ;
   triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CDR-001/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/CDR-001/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/task_command/service.rs" ;
   triage:line 79 ;
   triage:snippet "expected_revision forwarded unchanged; no re-authorization against current assignee/attempt" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "dc8f0164b" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/dc8f0164b> .
 
-<urn:atm:triage:worktree/AZ4/066a465d0>
+<urn:atm:triage:worktree/AZ4/dc8f0164b>
   a triage:WorktreeSnapshot ;
-  triage:path "integrate/phase-az" ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "dc8f0164b" ;
   triage:orderIndex 4 .
