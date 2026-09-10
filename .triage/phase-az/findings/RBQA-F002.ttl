@@ -15,22 +15,24 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/boundary/mod.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T17:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T00:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.1 ;
   triage:foundAt "2026-09-10T00:47:28Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AZ1-OCC1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AZ2-OCC1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F002/AZ1-OCC1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/boundary/mod.rs" ;
   triage:line 182 ;
   triage:snippet "pub struct PostSendHookEventWire<'a> { ... } pub struct ExternalPostSendHookPayload<'a> { ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az1-task-nudge-contract" ;
   triage:headSha "729675822137df3517690f17406c682c8d4e357d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ1/729675822137df3517690f17406c682c8d4e357d> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-core/src/boundary/mod.rs" ;
   triage:line 182 ;
   triage:snippet "pub struct PostSendHookEventWire<'a> { ... } pub struct ExternalPostSendHookPayload<'a> { ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az2-task-domain-storage" ;
   triage:headSha "618484d78e3037055124db20bb5eb5b50f441564" ;
   triage:occursIn <urn:atm:triage:worktree/AZ2/618484d78e3037055124db20bb5eb5b50f441564> .
