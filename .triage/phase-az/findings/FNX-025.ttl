@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-025>
+  a triage:Finding ;
+  triage:findingId "FNX-025" ;
+  triage:title "No operator control over the nudge-path state machines -- no independent, durable, observable disable switch exists for any of them" ;
+  triage:description "Originates from Rand directly (relayed by fenix, not from her review): \"I want several simple state machines. and I need to be able to stop the additional interconnected state machines that are getting executed.\" fenix verified the basis independently before filing: grepped the workspace for any disable/enable/pause/quiet-hours config, env var, or flag reaching herdr_queue_wake, herdr_escalation, or the attention store -- there is none. tick_once (herdr_queue_wake.rs:246) runs the whole chain unconditionally every tick: pending-member list, roster candidates, lane selection, reservation, dispatch, escalation, audit writes. The only granularity an operator has today is stopping the daemon entirely. Required outcome: an independent switch per machine on the nudge path (presence observation, lane selection/reservation, ephemeral nudges, persistent-task cadence, lead escalation, audit writes), where OFF means the machine does not execute at all (not execute-and-discard), the switch state is durable across restart, and it is observable -- atm doctor should print which machines are live. Two of the candidate machines are currently in-RAM-only hashmaps with no persistence path at all: release_streaks (herdr_queue_wake.rs:92) and EscalationState (herdr_escalation.rs:51) -- these cannot be switched off durably or observably in the present design, which is part of this finding, not a separate one. fenix has sent solar the full analysis plus a proposed target decomposition (seven machines consolidated down to four, with task lifecycle and message-pending state demoted to read-only eligibility inputs rather than machines in their own right) and this finding must not be dispatched to any dev agent until solar rules on that decomposition -- this needs an architecture call, and probably an ADR, before anyone writes code. Routing is to solar, not arch-ctm or cipher. fenix's recommendation to Rand (his to overrule): the operator switches themselves gate the Phase AZ merge; the seven-to-four machine consolidation does not need to land before merge. CDR-009 is explicitly unaffected by this finding and this finding must not leak into arch-ctm's CDR-009/az-cdr-followup-1 dispatch." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "operability" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs, crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs, crates/atm-storage-rusqlite/src/attention_schedule_store.rs, crates/atm-core/src/commands/doctor (or equivalent atm doctor surface)" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T22:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T22:23:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-025/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+# dispatchReady false: routed to solar for an architecture ruling on fenix's
+# proposed seven-to-four machine decomposition (and likely an ADR) before
+# any dev dispatch -- explicitly not arch-ctm or cipher, and explicitly not
+# to be folded into SOLAR-CDR-009/az-cdr-followup-1's active dispatch.
+# Filed blocking per fenix's relay of Rand's direct instruction; per her
+# recommendation to Rand (pending his confirmation or override), the
+# operator switches themselves are what gate the Phase AZ merge -- the
+# seven-to-four consolidation is a separate, non-merge-gating refinement.
+
+<urn:atm:triage:occurrence/FNX-025/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 246 ;
+  triage:snippet "tick_once runs the entire nudge-path chain unconditionally every tick with no per-machine disable switch; release_streaks (:92, in-RAM hashmap) and herdr_queue_wake_escalation.rs's EscalationState (:51, in-RAM hashmap) additionally have no persistence path, so they cannot be switched off durably or observably at all." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-cdr-followup-1" ;
+  triage:headSha "8e66775b2" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/8e66775b2> .
