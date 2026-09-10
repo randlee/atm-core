@@ -640,7 +640,6 @@ impl StorageAndNudgeRouter {
         let sink = self.member_state_transition_sink.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
-                validate_heartbeat_member(&runtime, &request.team, &request.member)?;
                 let next_state = match request.activity {
                     atm_core::protocol::HeartbeatActivity::ActiveToolUse => {
                         atm_core::protocol::RuntimeMemberState::Active
