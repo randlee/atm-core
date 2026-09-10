@@ -5,7 +5,7 @@ title: Durable task domain and storage migration
 branch: feature/az2-task-domain-storage
 integration_branch: feature/az1-task-nudge-contract
 final_integration_branch: develop
-status: planned
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: stacked

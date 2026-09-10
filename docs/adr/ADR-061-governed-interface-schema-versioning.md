@@ -123,6 +123,10 @@ migration functions directly.
   rejection. The bridge may reconcile those writes to authoritative v2
   constraints, including deterministic active-conflict demotion; exact v1
   state semantics are not part of the rollback guarantee.
+- **2026-09-10 — AZ.2 implementation:** the v2 task, attempt, event, and
+  operation projections, retained v1 bridge, and fresh-versus-upgraded
+  compatibility fixture implement this approved boundary without removing a
+  v1 table or column.
 
 ## Consequences
 

@@ -83,7 +83,7 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
         "bounded_host_nudge_injector_timeout_does_not_wedge_future_delivery",
         "BoundedHostNudgeInjector", "built_in_nudge_template_kind_from_post_send_event",
         "BuiltInNudgeSinkTarget", "BuiltInNudgeTemplateKind", "claim_next_pending",
-        "clear_nudge_template_command",
+        "clear_nudge_template_command", "clear_task_nudge_markers",
         "clear_nudge_template_executes_through_shared_override_boundary",
         "clear_nudge_template_override_deletes_row_and_reports_state",
         "clear_nudge_template_override_with_store", "clear_pending_on_handoff",

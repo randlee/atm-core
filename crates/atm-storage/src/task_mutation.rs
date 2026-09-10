@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::contract::{Message, sealed};
 use crate::error::AtmError;
 use crate::task_state::{TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority};
+use crate::task_store::MessageWriteOrigin;
 use crate::types::{MemberKey, TaskId};
 
 /// A validated, admitted message committed by the same task transaction.
@@ -23,6 +24,10 @@ pub struct PreparedAssignment {
     pub assignee: MemberKey,
     pub assigner: MemberKey,
     pub priority: TaskPriority,
+    /// The prepared admission's origin. Only a locally admitted recipient can
+    /// join this one-transaction task mutation; peer delivery has no durable
+    /// cross-host handoff transaction and must be rejected before persistence.
+    pub delivery_origin: MessageWriteOrigin,
     pub message: PreparedMessage,
     pub template_sha: Option<crate::types::TemplateSha>,
 }
@@ -53,7 +58,7 @@ pub enum TaskOperation {
     Supersede {
         handoff: PreparedMessage,
         successor_task_id: TaskId,
-        successor: PreparedAssignment,
+        successor: Box<PreparedAssignment>,
     },
 }
 

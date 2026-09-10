@@ -1,6 +1,7 @@
 use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
-use super::task_ops::{apply_task_acknowledgement, apply_task_message, execute_task_mutation};
+use super::task_legacy_ops::{apply_task_acknowledgement, apply_task_message};
+use super::task_ops::execute_task_mutation;
 use crate::search_schema::{
     InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
     sync_template_projection,

@@ -197,6 +197,9 @@ and record reconciliation events such as `MigratedActiveConflictDemotion`.
   fixtures, including previous-binary write/read rollback evidence.
 - Atomic rollback, concurrency, idempotency, supersession,
   envelope-`taskId`-joined nudge invalidation, and no-body tests.
+- The ADR-054 frozen nudge inventory admits only the AZ.2
+  `clear_task_nudge_markers` identifier, which names transactional cleanup of
+  stale task-linked pending markers rather than a new nudge kind or scheduler.
 - Fair scheduler tests across restart with one reservation per idle opportunity
   and no merged message/task lifecycle state.
 - ADR-061 version records and phase-end verification against the approval in

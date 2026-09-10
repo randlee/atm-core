@@ -435,6 +435,7 @@ fn parse_event_kind(value: &str) -> rusqlite::Result<TaskLifecycleEventKind> {
             Ok(TaskLifecycleEventKind::MigratedActiveConflictDemotion)
         }
         "legacy_close_succeeded" => Ok(TaskLifecycleEventKind::LegacyCloseSucceeded),
+        "legacy_v1_updated" => Ok(TaskLifecycleEventKind::LegacyV1Updated),
         _ => invalid_value("lifecycle event kind"),
     }
 }
@@ -445,8 +446,10 @@ fn parse_event_outcome(
 ) -> rusqlite::Result<TaskOutcome> {
     parse_outcome(
         Some(value),
-        if value == "aborted" {
+        if value == "aborted" && related_task_id.is_some() {
             Some("superseded")
+        } else if value == "aborted" {
+            Some("cancelled")
         } else {
             None
         },

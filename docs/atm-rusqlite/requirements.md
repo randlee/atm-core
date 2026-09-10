@@ -183,3 +183,14 @@ Required rules:
   `crates/atm-storage-rusqlite/src/shared_db.rs::DB_MIGRATIONS`; because this
   crate centralizes bootstrap SQL in that constant today, no separate SQL file
   is the accepted migration shape unless the migration architecture changes
+
+## Phase AZ.2 logical-task storage
+
+`tasks_v2`, immutable assignment attempts, lifecycle events, and operation
+replay rows are the canonical task ledger. The schema migration is transactional
+and retains v1 `tasks`/`task_events` throughout ATM 1.6.x. It reconciles legacy
+multi-assignee rows by `Active > Assigned > Complete`, records every source
+row, and demotes surplus active rows deterministically before creating the
+active uniqueness index. The existing writer lane owns every v2 mutation; it
+atomically persists prepared canonical messages, task records, and task-id
+joined pending-marker cleanup without storing copied body text.
