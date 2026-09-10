@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: 1.3.0
+  version: 1.4.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
@@ -157,7 +157,7 @@ components:
         acknowledges_message_id: { type: string }
         peer_http_api_version:
           type: string
-          description: Optional cross-host wire API version. The current baseline is 1.3.0; receivers reject only a major-version mismatch.
+          description: Optional cross-host wire API version. The current baseline is 1.4.0; receivers reject only a major-version mismatch.
     PeekQuery:
       type: object
       description: Canonical inspect query; fields are validated by the daemon.
@@ -176,6 +176,66 @@ components:
       properties:
         herdr:
           $ref: '#/components/schemas/HerdrDoctorReport'
+        runtime_status:
+          $ref: '#/components/schemas/RuntimeStatusSnapshot'
+          description: Optional projection of the daemon's canonical ephemeral master-roster state; added in HTTP API 1.4.0.
+    RuntimeStatusSnapshot:
+      type: object
+      required: [liveness, readiness]
+      properties:
+        liveness: { type: string, enum: [running, unavailable] }
+        readiness: { type: string, enum: [ready, degraded, unavailable] }
+        detail: { type: string, nullable: true }
+        singleton_owner_pid: { type: integer, format: uint32, nullable: true }
+        degraded_ingest: { type: boolean, default: false }
+        member_counts: { $ref: '#/components/schemas/RuntimeStatusCounts' }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/RuntimeMemberObservation' }
+        graft_queue_handoff_failures_total: { type: integer, format: uint64, default: 0 }
+        graft_queue_marker_clear_failures_total: { type: integer, format: uint64, default: 0 }
+        bare_cli_queue_full_drops_total: { type: integer, format: uint64, default: 0 }
+        queue_marker_set_failures_total: { type: integer, format: uint64, default: 0 }
+        herdr_queue_last_tick_at: { type: string, format: date-time, nullable: true }
+        queue_messages_drained_total: { type: integer, format: uint64, default: 0 }
+        queue_drain_failures_total: { type: integer, format: uint64, default: 0 }
+        blocking_core_bridge_stalls_total: { type: integer, format: uint64, default: 0 }
+        write_source_preflight_stalls_total: { type: integer, format: uint64, default: 0 }
+    RuntimeStatusCounts:
+      type: object
+      required: [active_members, idle_members, offline_members, unknown_members]
+      properties:
+        active_members: { type: integer, format: uint64 }
+        idle_members: { type: integer, format: uint64 }
+        offline_members: { type: integer, format: uint64 }
+        unknown_members: { type: integer, format: uint64 }
+    RuntimeMemberObservation:
+      type: object
+      required: [team, member, state]
+      properties:
+        team: { type: string }
+        member: { type: string }
+        state: { type: string, enum: [unknown, identity_conflict, offline, idle, active, blocked] }
+        revision: { type: integer, format: uint64, default: 0, description: Monotonic accepted-observation revision; added in HTTP API 1.4.0. }
+        availability: { $ref: '#/components/schemas/RuntimeObservationAvailability', description: Freshness of the most recent accepted observation attempt; added in HTTP API 1.4.0. }
+        last_observation_attempt_by: { $ref: '#/components/schemas/RuntimeObservationSource', nullable: true, description: Source of the latest accepted attempt; added in HTTP API 1.4.0. }
+        last_observation_attempt_at: { type: string, format: date-time, nullable: true, description: Time of the latest accepted attempt; added in HTTP API 1.4.0. }
+        last_observed_by: { $ref: '#/components/schemas/RuntimeObservationSource', nullable: true, description: Source of the latest successful observation; added in HTTP API 1.4.0. }
+        last_observed_at: { type: string, format: date-time, nullable: true, description: Time of the latest successful observation; added in HTTP API 1.4.0. }
+        session_id: { type: string, nullable: true }
+        pid: { type: integer, format: uint32, nullable: true }
+        last_active_at: { type: string, format: date-time, nullable: true }
+        state_changed_by: { $ref: '#/components/schemas/RuntimeObservationSource', nullable: true }
+        state_changed_at: { type: string, format: date-time, nullable: true }
+        session_changed_by: { $ref: '#/components/schemas/RuntimeObservationSource', nullable: true }
+        session_changed_at: { type: string, format: date-time, nullable: true }
+    RuntimeObservationAvailability:
+      type: string
+      enum: [unobserved, fresh, unavailable]
+      default: unobserved
+    RuntimeObservationSource:
+      type: string
+      enum: [heartbeat, herdr_poll]
     HerdrDoctorReport:
       type: object
       properties:

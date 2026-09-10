@@ -4104,10 +4104,9 @@ writer admission and acknowledgements apply task transitions.
   - an authenticated local heartbeat POST (including an external hook's
     startup/active, idle, or stop event) and each successful Herdr `agent list`
     poll update the same in-memory member record
-  - successful local `send`, `read`, or `ack` and graft activity update that
-    same record through their environment-attested activity observation
-  - graft may update observation only through its environment-derived caller
-    context; no other ingress or daemon side effect may synthesize an update
+  - no other ingress or daemon side effect may synthesize a canonical state
+    update; the pre-cutover `ActivityObservation` request field remains
+    tolerated as transient compatibility metadata but cannot update this record
   - accepted runtime ingress order, not client-clock ordering, determines the
     current state; every accepted state observation advances the per-member
     `RosterStateRevision` and `last_observed_at`, including same-state evidence,
@@ -4123,8 +4122,8 @@ writer admission and acknowledgements apply task transitions.
     observation metadata: it is true only when a prior defined pid is replaced
     by a different defined pid; initial pid observation is audited but is not a
     replacement
-  - local heartbeat, CLI, and graft updates may not clear a defined session;
-    a successful Herdr poll maps working → `Active`, idle/done → `Idle`, blocked
+  - heartbeat updates may not clear a defined session; a successful Herdr poll
+    maps working → `Active`, idle/done → `Idle`, blocked
     → `Blocked`, and an unknown or absent member in the poll's covered roster
     scope → `Unknown`
   - a failed or incomplete Herdr poll is not a state observation: it preserves
@@ -4140,9 +4139,8 @@ writer admission and acknowledgements apply task transitions.
   - `Unknown` means no trustworthy state observation; `Offline` means an
     explicit heartbeat session-end observation. They are distinct values and
     must not be substituted for one another
-  - trusted environment-attested CLI/graft `send`, `read`, and `ack` transition
-    state to `Active`; heartbeat activity transitions to `Active`, `Idle`, or
-    `Offline` only from its explicit activity value
+  - heartbeat activity transitions to `Active`, `Idle`, or `Offline` only from
+    its explicit activity value
   - each cache member carries `state_changed_at`; it changes only on a real
     lifecycle-state transition and is shown only for defined non-default state;
     human roster output renders its relative age while structured output keeps
@@ -4155,14 +4153,10 @@ writer admission and acknowledgements apply task transitions.
     `IdentityConflict`, degrade readiness, alter cache eviction, or alter
     routing, notification, or delivery behavior. A future doctor phase may
     diagnose them.
-  - local observation requires matching, parseable `ATM_IDENTITY` and
-    `ATM_TEAM`; args-only or mismatched invocation leaves normal command
-    behavior unchanged and suppresses observation
   - local read/write request DTOs carry one optional `ActivityObservation`
-    (team, member, optional session/pid), constructed only by that
-    environment-attestation step; the daemon accepts it only on existing
-    authenticated local UDS/loopback ingress, and remote HTTPS ingress clears
-    it before shared dispatch
+    (team, member, optional session/pid) for pre-cutover compatibility; it is
+    never canonical state ingress, and remote HTTPS ingress clears it before
+    shared dispatch
   - session, pid, and observation metadata must not drive routing,
     notification, retry, admission, or delivery logic
   - the sole state-policy exception is Phase AZ attention eligibility: each

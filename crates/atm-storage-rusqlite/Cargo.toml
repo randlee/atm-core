@@ -34,3 +34,4 @@ rusqlite = { version = "0.33.0", features = ["bundled-windows", "modern_sqlite",
 serde.workspace = true
 serde_json.workspace = true
 tempfile = "3"
+tracing-subscriber.workspace = true

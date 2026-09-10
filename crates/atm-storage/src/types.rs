@@ -1,6 +1,7 @@
 use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::{error::Error, result::Result};
 
 use base64::Engine as _;
 use chrono::{DateTime, Utc};
@@ -9,6 +10,115 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::error::AtmError;
 use crate::template_workflow::TemplateVariableName;
 use crate::validation::{validate_agent_at_team, validate_path_segment};
+
+/// Maximum UTF-8 byte length for a session identifier retained in runtime state.
+pub const SESSION_ID_MAX_BYTES: usize = 256;
+
+/// Opaque, bounded identifier for one observed runtime session.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SessionId(String);
+
+/// Validation error returned for an invalid runtime session identifier.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SessionIdError {
+    Blank,
+    TooLong {
+        max_bytes: usize,
+        actual_bytes: usize,
+    },
+}
+
+impl fmt::Display for SessionIdError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Blank => formatter.write_str("session id must not be blank"),
+            Self::TooLong {
+                max_bytes,
+                actual_bytes,
+            } => write!(
+                formatter,
+                "session id is {actual_bytes} bytes; maximum is {max_bytes} bytes"
+            ),
+        }
+    }
+}
+
+impl Error for SessionIdError {}
+
+impl SessionIdError {
+    pub const fn code(&self) -> crate::error_codes::AtmErrorCode {
+        crate::error_codes::AtmErrorCode::MessageValidationFailed
+    }
+}
+
+impl SessionId {
+    pub fn new(value: impl AsRef<str>) -> Result<Self, SessionIdError> {
+        let value = value.as_ref();
+        if value.trim().is_empty() {
+            return Err(SessionIdError::Blank);
+        }
+        let actual_bytes = value.len();
+        if actual_bytes > SESSION_ID_MAX_BYTES {
+            return Err(SessionIdError::TooLong {
+                max_bytes: SESSION_ID_MAX_BYTES,
+                actual_bytes,
+            });
+        }
+        Ok(Self(value.to_owned()))
+    }
+
+    pub fn parse_optional(value: impl AsRef<str>) -> Result<Option<Self>, SessionIdError> {
+        let value = value.as_ref();
+        (!value.trim().is_empty())
+            .then(|| Self::new(value))
+            .transpose()
+    }
+}
+
+impl AsRef<str> for SessionId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for SessionId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl Serialize for SessionId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for SessionId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+#[doc(hidden)]
+pub fn deserialize_optional_session_id<'de, D>(
+    deserializer: D,
+) -> Result<Option<SessionId>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)?
+        .map(SessionId::parse_optional)
+        .transpose()
+        .map_err(serde::de::Error::custom)
+        .map(Option::flatten)
+}
 
 pub const LOCAL_CAPABILITY_BYTES: usize = 32;
 
@@ -1000,13 +1110,11 @@ impl fmt::Display for PaneId {
     }
 }
 
-/// The canonical durable-mailbox member key for nudge and queue surfaces.
+/// The canonical team-scoped member key for roster, nudge, and queue surfaces.
 ///
 /// One team-scoped agent identity. This is the key every pending-nudge,
-/// drain, sweep, and pump surface uses; features must not define their own
-/// per-surface member key. Distinct from the private
-/// `atm_http_runtime::runtime_health::MemberKey`, whose migration onto this
-/// type is a non-blocking follow-up.
+/// drain, sweep, pump, and runtime projection uses; features must not define
+/// a private per-surface member key.
 ///
 /// # Examples
 ///

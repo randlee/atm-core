@@ -591,7 +591,12 @@ impl StorageAndNudgeRouter {
             .await?;
         let mut runtime_status = report.member_roster.as_ref().map_or_else(
             || runtime_health.snapshot(),
-            |roster| runtime_health.snapshot_with_roster(roster),
+            |roster| {
+                let observations = self
+                    .service_runtime
+                    .roster_runtime_observations(&roster.team);
+                runtime_health.snapshot_with_member_observations(&roster.team, &observations)
+            },
         );
         runtime_status.bare_cli_queue_full_drops_total =
             bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
@@ -632,20 +637,57 @@ impl StorageAndNudgeRouter {
             ));
         }
         let runtime = self.service_runtime.clone();
-        let health = self.runtime_health.clone();
         let sink = self.member_state_transition_sink.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
-                validate_heartbeat_member(&runtime, &request.team, &request.member)?;
-                Ok(request)
+                let next_state = match request.activity {
+                    atm_core::protocol::HeartbeatActivity::ActiveToolUse => {
+                        atm_core::protocol::RuntimeMemberState::Active
+                    }
+                    atm_core::protocol::HeartbeatActivity::Idle => {
+                        atm_core::protocol::RuntimeMemberState::Idle
+                    }
+                    atm_core::protocol::HeartbeatActivity::SessionEnded => {
+                        atm_core::protocol::RuntimeMemberState::Offline
+                    }
+                };
+                let update = atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                    request.member.clone(),
+                    next_state,
+                    atm_core::protocol::RuntimeObservationSource::Heartbeat,
+                    request.observed_at,
+                    Some(atm_core::protocol::RosterRuntimeIdentity {
+                        pid: request.pid,
+                        session_id: request.session_id.clone(),
+                    }),
+                );
+                let outcome = runtime
+                    .apply_roster_runtime_observations(&request.team, &[update])
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| {
+                        AtmError::agent_not_found(request.member.as_str(), request.team.as_str())
+                    })?;
+                let transition = (outcome.state_changed
+                    && outcome.current.state == atm_core::protocol::RuntimeMemberState::Idle)
+                    .then_some(outcome.previous_state);
+                let response = atm_core::protocol::TeamMemberHeartbeatResponse {
+                    team: request.team.clone(),
+                    member: request.member.clone(),
+                    pid: request.pid,
+                    pid_changed: outcome.pid_changed,
+                    state: outcome.current.state,
+                    last_active_at: outcome.current.last_active_at,
+                    session_id: outcome.current.session_id,
+                };
+                Ok((response, transition))
             })
             .await
-            .map(|request| {
+            .map(|(response, transition)| {
                 let member = atm_core::boundary::MemberKey::new(
-                    request.team.clone(),
-                    request.member.clone(),
+                    response.team.clone(),
+                    response.member.clone(),
                 );
-                let (response, transition) = health.record_heartbeat(&request);
                 if let (Some(from), Some(sink)) = (transition, sink.as_ref()) {
                     sink.on_transition(&member, from, atm_core::protocol::RuntimeMemberState::Idle);
                 }
@@ -2104,15 +2146,10 @@ mod tests {
         );
     }
 
-    /// AC1: a deterministic (non-wall-clock) `observed_at` proves the
-    /// existing Heartbeat route drives `RuntimeHealth`'s member-state
-    /// projection end to end. AQ3's own observation sink does not exist yet
-    /// (this sprint is upstream of AQ3), so this test covers the AC1 claim
-    /// as it is actually implementable today: the router's real dispatch
-    /// path into `RuntimeHealth::record_heartbeat` and its snapshot.
+    /// A deterministic `observed_at` proves the real Heartbeat route mutates
+    /// the canonical ephemeral master-roster record, not `RuntimeHealth`.
     #[tokio::test]
-    async fn heartbeat_route_drives_runtime_health_member_state_transitions_with_a_deterministic_clock()
-     {
+    async fn heartbeat_route_drives_canonical_roster_state_with_a_deterministic_clock() {
         let fixture = fixture(true, None, None);
         let observed_at: atm_core::types::IsoTimestamp = "2026-01-01T00:00:00Z"
             .parse()
@@ -2135,12 +2172,15 @@ mod tests {
             .await
             .expect("authorized heartbeat");
 
-        let snapshot = fixture.router.runtime_health.snapshot();
-        let member = snapshot
-            .members
-            .iter()
-            .find(|observation| observation.member.as_str() == "recipient")
-            .expect("heartbeat route projected the member into RuntimeHealth");
+        let member = fixture
+            .router
+            .service_runtime
+            .roster_ephemeral_state(
+                &"test-team".parse().expect("team"),
+                &"recipient".parse().expect("agent"),
+            )
+            .expect("heartbeat member remains in the master roster")
+            .runtime;
         assert_eq!(
             member.state,
             atm_core::protocol::RuntimeMemberState::Active,
@@ -2171,12 +2211,13 @@ mod tests {
             .expect("second authorized heartbeat");
         let idle_state = fixture
             .router
-            .runtime_health
-            .snapshot()
-            .members
-            .into_iter()
-            .find(|observation| observation.member.as_str() == "recipient")
-            .expect("member remains projected")
+            .service_runtime
+            .roster_ephemeral_state(
+                &"test-team".parse().expect("team"),
+                &"recipient".parse().expect("agent"),
+            )
+            .expect("member remains in canonical roster")
+            .runtime
             .state;
         assert_eq!(
             idle_state,

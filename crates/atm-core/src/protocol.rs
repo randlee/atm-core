@@ -28,6 +28,9 @@ use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_opt
 
 pub use atm_storage::{
     GraftReceiverLease, GraftReceiverRegistration, LocalCapability, OwnerGeneration,
+    RosterRuntimeIdentity, RosterRuntimeMutationOutcome, RosterRuntimeObservation,
+    RosterRuntimeObservationUpdate, RosterStateRevision, RuntimeMemberState,
+    RuntimeObservationAvailability, RuntimeObservationSource,
 };
 
 /// Body representation for the local graft receiver lookup route.
@@ -93,7 +96,7 @@ pub enum ResponseEnvelope {
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.3.0";
+pub const HTTP_API_VERSION: &str = "1.4.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
@@ -333,22 +336,14 @@ pub struct NotificationEvent {
     pub agent: Option<AgentName>,
 }
 
-/// Runtime heartbeat activity transported into the daemon status cache.
+/// Runtime heartbeat activity transported into the canonical ephemeral
+/// master-roster record.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum HeartbeatActivity {
     ActiveToolUse,
     Idle,
     SessionEnded,
-}
-
-/// Provenance of an observation accepted by the daemon runtime cache.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeObservationSource {
-    Heartbeat,
-    LocalCommand,
-    HerdrPoll,
 }
 
 /// One daemon heartbeat request for one team member identity.
@@ -367,7 +362,7 @@ pub struct TeamMemberHeartbeatRequest {
     pub session_id: Option<SessionId>,
 }
 
-/// One daemon heartbeat response after runtime-state application.
+/// One daemon heartbeat response after canonical roster-state application.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TeamMemberHeartbeatResponse {
     pub team: TeamName,
@@ -427,24 +422,24 @@ pub struct GraftReceiverRefreshRequest {
     pub owner_generation: OwnerGeneration,
 }
 
-/// Runtime-owned live-state projection for one known team member.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeMemberState {
-    Unknown,
-    IdentityConflict,
-    Offline,
-    Idle,
-    Active,
-    Blocked,
-}
-
-/// Current non-authoritative runtime observation for one roster member.
+/// Wire projection of one member's canonical ephemeral master-roster state.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RuntimeMemberObservation {
     pub team: TeamName,
     pub member: AgentName,
     pub state: RuntimeMemberState,
+    #[serde(default)]
+    pub revision: RosterStateRevision,
+    #[serde(default)]
+    pub availability: RuntimeObservationAvailability,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observation_attempt_by: Option<RuntimeObservationSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observation_attempt_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observed_by: Option<RuntimeObservationSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observed_at: Option<IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<SessionId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -543,9 +538,10 @@ mod tests {
 
     use super::{
         DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
-        RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState, RuntimeReadinessState,
-        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
-        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
+        RosterStateRevision, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
+        RuntimeObservationAvailability, RuntimeReadinessState, RuntimeStatusCounts,
+        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -713,6 +709,26 @@ mod tests {
     }
 
     #[test]
+    fn runtime_member_observation_accepts_payload_without_revision_or_availability() {
+        let legacy_payload = serde_json::json!({
+            "team": "test-team",
+            "member": "test-agent",
+            "state": "active"
+        });
+
+        let decoded: RuntimeMemberObservation =
+            serde_json::from_value(legacy_payload).expect("decode legacy member observation");
+        assert_eq!(decoded.state, RuntimeMemberState::Active);
+        assert_eq!(decoded.revision.get(), 0);
+        assert_eq!(
+            decoded.availability,
+            RuntimeObservationAvailability::Unobserved
+        );
+        assert_eq!(decoded.last_observed_by, None);
+        assert_eq!(decoded.last_observation_attempt_at, None);
+    }
+
+    #[test]
     fn older_runtime_snapshot_reader_ignores_additive_members_field() {
         #[derive(Debug, Deserialize, PartialEq, Eq)]
         struct LegacyRuntimeStatusSnapshot {
@@ -735,6 +751,12 @@ mod tests {
                 team: TeamName::from_validated("test-team"),
                 member: AgentName::from_validated("test-agent"),
                 state: RuntimeMemberState::Active,
+                revision: RosterStateRevision::default(),
+                availability: RuntimeObservationAvailability::Fresh,
+                last_observation_attempt_by: None,
+                last_observation_attempt_at: None,
+                last_observed_by: None,
+                last_observed_at: None,
                 session_id: Some(SessionId::new("session-1").expect("session")),
                 pid: Some(42),
                 last_active_at: None,

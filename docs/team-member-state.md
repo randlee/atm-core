@@ -38,7 +38,6 @@ pub enum RuntimeMemberState {
 
 pub enum RuntimeObservationSource {
     Heartbeat,
-    LocalCommand,
     HerdrPoll,
 }
 
@@ -78,27 +77,13 @@ Only these accepted events can update current observation:
 | --- | --- | --- | --- |
 | `POST /v1/atm/heartbeat` | `ActiveToolUse -> Active`, `Idle -> Idle`, `SessionEnded -> Offline` | required pid; optional session ID | `Heartbeat` |
 | Successful Herdr `agent list` poll | `working -> Active`, `idle/done -> Idle`, `blocked -> Blocked`, covered unknown/absent member -> Unknown | no pid/session mutation | `HerdrPoll` |
-| Successful environment-attested local `send`, `read`, or `ack` | `Active` | optional pid/session ID | `LocalCommand` |
-| Graft read/send/ack with the same environment-derived caller context | `Active` | optional pid/session ID | `LocalCommand` |
 
-Local request metadata uses one transient `ActivityObservation`:
-
-```rust
-pub struct ActivityObservation {
-    pub team: TeamName,
-    pub member: AgentName,
-    pub session_id: Option<SessionId>,
-    pub pid: Option<u32>,
-}
-```
-
-It exists only when parseable `ATM_IDENTITY` and `ATM_TEAM` attest the resolved
-caller. Arguments alone create no observation. An argument/environment mismatch
-keeps the command's existing behavior, suppresses observation, and may emit an
-info diagnostic. HTTPS peer ingress clears this transient field before shared
-dispatch. The daemon accepts it only over existing authenticated local
-UDS/loopback ingress; it never reads its own environment to infer provenance.
-It never enters a mail row, message payload, or SQLite table.
+The pre-cutover `ActivityObservation` field remains tolerated as transient
+wire-compatible request metadata and remote HTTPS ingress still strips it. It
+does not update the canonical master-roster state and is not a
+`RuntimeObservationSource`. This keeps older local clients non-fatal without
+creating a third state authority while the legacy synchronous daemon awaits
+Phase AM deletion.
 
 Roster reload, daemon recovery, peer delivery, nudge emission, notification,
 routing, retry, admission, and mailbox import are not state ingress. A failed
@@ -130,10 +115,10 @@ synthesize durable membership.
   covered member did not provide a known lifecycle value. `Offline` means an
   explicit `SessionEnded` heartbeat. They are distinct; timeout, poll failure,
   a dead PID, roster data, or inbox state never produces `Offline`.
-- A trusted local command moves the member to `Active`. A later heartbeat may
-  move it to `Idle` or `Offline`. `state_changed_at` and its source update only
-  on a real state edge; repeated evidence of the same state does not reset the
-  edge time. `last_active_at` may advance on every trusted `Active` event.
+- A heartbeat may move the member to `Active`, `Idle`, or `Offline` according
+  to its explicit activity value. `state_changed_at` and its source update
+  only on a real state edge; repeated evidence of the same state does not reset
+  the edge time. `last_active_at` may advance on every accepted `Active` event.
 - Normal ingress cannot clear a known session. A successful Herdr poll may set
   state to `Unknown` for a covered absent/unknown member without clearing that
   member's pid/session metadata.
@@ -166,12 +151,10 @@ of session ID followed by `…` when longer.
 
 ## Required Tests
 
-- heartbeat, successful Herdr poll, and environment-attested local/graft
-  activity converge on the same master-roster record;
+- heartbeat and successful Herdr poll observations converge on the same
+  master-roster record;
 - no second global member-state map exists in `RuntimeHealth` or a CLI path;
-- args-only and mismatched command identity produce no observation without
-  changing existing command behavior;
-- UDS, TCP, and heartbeat converge on one cache entry;
+- legacy local activity metadata cannot create a canonical observation;
 - absent/blank optional telemetry preserves known values;
 - changed pid/session is logged and retained without conflict/rejection;
 - a successful poll writes all covered members, including `Unknown` for
