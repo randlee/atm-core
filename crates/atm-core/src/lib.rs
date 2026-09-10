@@ -178,7 +178,7 @@ pub use delivery_channel::{
 pub use graft::AtmGraftClient;
 pub use picker_projection::{
     PICKER_MEMBERS_SCHEMA_VERSION, PickerMember, PickerMemberStatus, PickerMembersProjection,
-    build_picker_members_projection,
+    build_picker_members_projection, build_picker_members_projection_from_runtime_status,
 };
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};

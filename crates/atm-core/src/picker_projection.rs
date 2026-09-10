@@ -14,7 +14,7 @@ use serde::Serialize;
 use crate::boundary::MemberKey;
 use crate::protocol::{
     RosterStateRevision, RuntimeMemberObservation, RuntimeMemberState,
-    RuntimeObservationAvailability, RuntimeObservationSource,
+    RuntimeObservationAvailability, RuntimeObservationSource, RuntimeStatusSnapshot,
 };
 use crate::send_to::PICKER_OUTPUT_SCHEMA_VERSION;
 use crate::team_admin::MemberSummary;
@@ -142,6 +142,61 @@ pub fn build_picker_members_projection(
     }
 }
 
+/// Builds a picker projection from the daemon's wire snapshot.
+///
+/// The wire snapshot is an optional enrichment of the durable roster. A
+/// missing snapshot, or a roster member omitted from a present snapshot,
+/// projects as exact `Unknown` + `Unavailable`; neither case is evidence
+/// that the member is offline. Observations for other teams are ignored.
+#[must_use]
+pub fn build_picker_members_projection_from_runtime_status(
+    team: &TeamName,
+    roster_members: &[MemberSummary],
+    runtime_status: Option<&RuntimeStatusSnapshot>,
+) -> PickerMembersProjection {
+    let mut runtime_states = runtime_status
+        .into_iter()
+        .flat_map(|snapshot| snapshot.members.iter())
+        .filter(|observation| observation.team == *team)
+        .map(|observation| {
+            (
+                MemberKey::new(observation.team.clone(), observation.member.clone()),
+                observation.clone(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    for member in roster_members {
+        let key = MemberKey::new(team.clone(), member.name.clone());
+        runtime_states
+            .entry(key)
+            .or_insert_with(|| unavailable_runtime_observation(team.clone(), member.name.clone()));
+    }
+
+    build_picker_members_projection(team, roster_members, &runtime_states)
+}
+
+fn unavailable_runtime_observation(team: TeamName, member: AgentName) -> RuntimeMemberObservation {
+    RuntimeMemberObservation {
+        team,
+        member,
+        state: RuntimeMemberState::Unknown,
+        revision: RosterStateRevision::default(),
+        availability: RuntimeObservationAvailability::Unavailable,
+        last_observation_attempt_by: None,
+        last_observation_attempt_at: None,
+        last_observed_by: None,
+        last_observed_at: None,
+        session_id: None,
+        pid: None,
+        last_active_at: None,
+        state_changed_by: None,
+        state_changed_at: None,
+        session_changed_by: None,
+        session_changed_at: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,6 +245,27 @@ mod tests {
             state_changed_at: None,
             session_changed_by: None,
             session_changed_at: None,
+        }
+    }
+
+    fn runtime_snapshot(members: Vec<RuntimeMemberObservation>) -> RuntimeStatusSnapshot {
+        RuntimeStatusSnapshot {
+            liveness: crate::protocol::RuntimeLivenessState::Running,
+            readiness: crate::protocol::RuntimeReadinessState::Ready,
+            detail: None,
+            singleton_owner_pid: None,
+            degraded_ingest: false,
+            member_counts: Default::default(),
+            members,
+            graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
+            bare_cli_queue_full_drops_total: 0,
+            queue_marker_set_failures_total: 0,
+            herdr_queue_last_tick_at: None,
+            queue_messages_drained_total: 0,
+            queue_drain_failures_total: 0,
+            blocking_core_bridge_stalls_total: 0,
+            write_source_preflight_stalls_total: 0,
         }
     }
 
@@ -280,6 +356,50 @@ mod tests {
         assert_eq!(
             projection.members[0].runtime_state,
             RuntimeMemberState::Active
+        );
+        assert_eq!(
+            projection.members[0].runtime_availability,
+            RuntimeObservationAvailability::Unavailable
+        );
+    }
+
+    #[test]
+    fn runtime_status_projection_is_team_scoped_and_preserves_degradation() {
+        let mut matching = observation(RuntimeMemberState::Active);
+        matching.availability = RuntimeObservationAvailability::Unavailable;
+        let mut other_team = matching.clone();
+        other_team.team = "other-team".parse().expect("team");
+        let snapshot = runtime_snapshot(vec![matching, other_team]);
+
+        let projection = build_picker_members_projection_from_runtime_status(
+            &team(),
+            &[member("sender-a", None, None)],
+            Some(&snapshot),
+        );
+
+        assert_eq!(projection.members[0].status, PickerMemberStatus::Dead);
+        assert_eq!(
+            projection.members[0].runtime_state,
+            RuntimeMemberState::Active
+        );
+        assert_eq!(
+            projection.members[0].runtime_availability,
+            RuntimeObservationAvailability::Unavailable
+        );
+    }
+
+    #[test]
+    fn missing_runtime_status_projects_unknown_unavailable() {
+        let projection = build_picker_members_projection_from_runtime_status(
+            &team(),
+            &[member("sender-a", None, None)],
+            None,
+        );
+
+        assert_eq!(projection.members[0].status, PickerMemberStatus::Dead);
+        assert_eq!(
+            projection.members[0].runtime_state,
+            RuntimeMemberState::Unknown
         );
         assert_eq!(
             projection.members[0].runtime_availability,

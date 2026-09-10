@@ -248,64 +248,7 @@ impl RosterRuntimeState {
                 continue;
             }
             let runtime = &mut ephemeral.entry(update.agent().clone()).or_default().runtime;
-            let previous_state = runtime.state;
-            let previous_pid = runtime.pid;
-            let previous_session = runtime.session_id.clone();
-            let state_changed = update.state().is_some_and(|next| next != runtime.state);
-
-            runtime.availability = update.availability();
-            runtime.last_observation_attempt_by = Some(update.source());
-            runtime.last_observation_attempt_at = Some(update.observed_at());
-            if let Some(next_state) = update.state() {
-                runtime.revision = runtime.revision.next();
-                runtime.last_observed_by = Some(update.source());
-                runtime.last_observed_at = Some(update.observed_at());
-                runtime.state = next_state;
-                if state_changed {
-                    runtime.state_changed_by = Some(update.source());
-                    runtime.state_changed_at = Some(update.observed_at());
-                }
-                if next_state == RuntimeMemberState::Active {
-                    runtime.last_active_at = Some(update.observed_at());
-                }
-            }
-            if let Some(identity) = update.identity() {
-                runtime.pid = Some(identity.pid);
-                if let Some(session_id) = &identity.session_id
-                    && runtime.session_id.as_ref() != Some(session_id)
-                {
-                    runtime.session_id = Some(session_id.clone());
-                    runtime.session_changed_by = Some(update.source());
-                    runtime.session_changed_at = Some(update.observed_at());
-                }
-            }
-
-            let pid_mutated = runtime.pid != previous_pid;
-            let session_mutated = runtime.session_id != previous_session;
-            if pid_mutated || session_mutated {
-                tracing::info!(
-                    event = "roster_runtime_identity_changed",
-                    team = %team,
-                    member = %update.agent(),
-                    source = ?update.source(),
-                    observed_at = %update.observed_at(),
-                    previous_pid = ?previous_pid,
-                    new_pid = ?runtime.pid,
-                    previous_session_id = ?previous_session,
-                    new_session_id = ?runtime.session_id,
-                    pid_mutated,
-                    session_mutated,
-                    "canonical roster runtime identity metadata changed"
-                );
-            }
-
-            outcomes.push(RosterRuntimeMutationOutcome {
-                agent: update.agent().clone(),
-                previous_state,
-                current: runtime.clone(),
-                state_changed,
-                pid_changed: previous_pid.is_some_and(|pid| runtime.pid != Some(pid)),
-            });
+            outcomes.push(apply_runtime_observation(team, update, runtime));
         }
 
         record.ephemeral = Arc::new(ephemeral);
@@ -333,6 +276,71 @@ impl RosterRuntimeState {
                 (member.agent_name.clone(), observation)
             })
             .collect()
+    }
+}
+
+fn apply_runtime_observation(
+    team: &TeamName,
+    update: &RosterRuntimeObservationUpdate,
+    runtime: &mut RosterRuntimeObservation,
+) -> RosterRuntimeMutationOutcome {
+    let previous_state = runtime.state;
+    let previous_pid = runtime.pid;
+    let previous_session = runtime.session_id.clone();
+    let state_changed = update.state().is_some_and(|next| next != runtime.state);
+
+    runtime.availability = update.availability();
+    runtime.last_observation_attempt_by = Some(update.source());
+    runtime.last_observation_attempt_at = Some(update.observed_at());
+    if let Some(next_state) = update.state() {
+        runtime.revision = runtime.revision.next();
+        runtime.last_observed_by = Some(update.source());
+        runtime.last_observed_at = Some(update.observed_at());
+        runtime.state = next_state;
+        if state_changed {
+            runtime.state_changed_by = Some(update.source());
+            runtime.state_changed_at = Some(update.observed_at());
+        }
+        if next_state == RuntimeMemberState::Active {
+            runtime.last_active_at = Some(update.observed_at());
+        }
+    }
+    if let Some(identity) = update.identity() {
+        runtime.pid = Some(identity.pid);
+        if let Some(session_id) = &identity.session_id
+            && runtime.session_id.as_ref() != Some(session_id)
+        {
+            runtime.session_id = Some(session_id.clone());
+            runtime.session_changed_by = Some(update.source());
+            runtime.session_changed_at = Some(update.observed_at());
+        }
+    }
+
+    let pid_mutated = runtime.pid != previous_pid;
+    let session_mutated = runtime.session_id != previous_session;
+    if pid_mutated || session_mutated {
+        tracing::info!(
+            event = "roster_runtime_identity_changed",
+            team = %team,
+            member = %update.agent(),
+            source = ?update.source(),
+            observed_at = %update.observed_at(),
+            previous_pid = ?previous_pid,
+            new_pid = ?runtime.pid,
+            previous_session_id = ?previous_session,
+            new_session_id = ?runtime.session_id,
+            pid_mutated,
+            session_mutated,
+            "canonical roster runtime identity metadata changed"
+        );
+    }
+
+    RosterRuntimeMutationOutcome {
+        agent: update.agent().clone(),
+        previous_state,
+        current: runtime.clone(),
+        state_changed,
+        pid_changed: previous_pid.is_some_and(|pid| runtime.pid != Some(pid)),
     }
 }
 

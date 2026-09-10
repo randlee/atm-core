@@ -288,26 +288,8 @@ impl TeamsCommand {
                 },
             )
         })?;
-        let runtime_states = match self.runtime_member_states(&team, observability).await {
-            Ok(mut states) => {
-                let unavailable = unavailable_runtime_observations(&team, &outcome.members);
-                let mut missing = 0_usize;
-                for (key, observation) in unavailable {
-                    if let std::collections::btree_map::Entry::Vacant(entry) = states.entry(key) {
-                        entry.insert(observation);
-                        missing += 1;
-                    }
-                }
-                if missing > 0 {
-                    tracing::warn!(
-                        event = "picker_runtime_status_incomplete",
-                        team = %team,
-                        missing,
-                        "runtime response omitted roster members; marking them unavailable"
-                    );
-                }
-                states
-            }
+        let runtime_status = match self.runtime_status(&team, observability).await {
+            Ok(status) => Some(status),
             Err(error) => {
                 tracing::warn!(
                     event = "picker_runtime_status_unavailable",
@@ -315,26 +297,24 @@ impl TeamsCommand {
                     error = %error,
                     "runtime status unavailable; emitting roster with explicit unavailable state"
                 );
-                unavailable_runtime_observations(&team, &outcome.members)
+                None
             }
         };
-        let projection =
-            atm_core::build_picker_members_projection(&team, &outcome.members, &runtime_states);
+        let projection = atm_core::build_picker_members_projection_from_runtime_status(
+            &team,
+            &outcome.members,
+            runtime_status.as_ref(),
+        );
         output::print_picker_members_projection(&projection, json)
     }
 
-    /// Live runtime state per member, keyed by full team/member identity. Failure is propagated:
-    /// an unavailable runtime must not be misreported as an all-dead team.
-    async fn runtime_member_states(
+    /// Loads the daemon's runtime status snapshot. Failure is propagated: an
+    /// unavailable runtime must not be misreported as an all-dead team.
+    async fn runtime_status(
         &self,
         team: &atm_core::types::TeamName,
         observability: &CliObservability,
-    ) -> Result<
-        std::collections::BTreeMap<
-            atm_core::boundary::MemberKey,
-            atm_core::protocol::RuntimeMemberObservation,
-        >,
-    > {
+    ) -> Result<atm_core::protocol::RuntimeStatusSnapshot> {
         let (home_dir, current_dir) = resolve_command_runtime_context("teams")?;
         let query = atm_core::doctor::DoctorQuery {
             home_dir,
@@ -355,71 +335,10 @@ impl TeamsCommand {
             AtmHomePath::new(&query.home_dir),
         )?;
         let report = composition.doctor(query).await?;
-        runtime_observation_map(team, report.runtime_status)
+        report
+            .runtime_status
+            .ok_or_else(|| anyhow::anyhow!("daemon doctor response omitted runtime status"))
     }
-}
-
-fn runtime_observation_map(
-    team: &atm_core::types::TeamName,
-    snapshot: Option<atm_core::protocol::RuntimeStatusSnapshot>,
-) -> Result<
-    std::collections::BTreeMap<
-        atm_core::boundary::MemberKey,
-        atm_core::protocol::RuntimeMemberObservation,
-    >,
-> {
-    let snapshot =
-        snapshot.ok_or_else(|| anyhow::anyhow!("daemon doctor response omitted runtime status"))?;
-    Ok(snapshot
-        .members
-        .into_iter()
-        .filter(|observation| observation.team == *team)
-        .map(|observation| {
-            (
-                atm_core::boundary::MemberKey::new(
-                    observation.team.clone(),
-                    observation.member.clone(),
-                ),
-                observation,
-            )
-        })
-        .collect())
-}
-
-fn unavailable_runtime_observations(
-    team: &atm_core::types::TeamName,
-    members: &[atm_core::team_admin::MemberSummary],
-) -> std::collections::BTreeMap<
-    atm_core::boundary::MemberKey,
-    atm_core::protocol::RuntimeMemberObservation,
-> {
-    members
-        .iter()
-        .map(|member| {
-            let observation = atm_core::protocol::RuntimeMemberObservation {
-                team: team.clone(),
-                member: member.name.clone(),
-                state: atm_core::protocol::RuntimeMemberState::Unknown,
-                revision: Default::default(),
-                availability: atm_core::protocol::RuntimeObservationAvailability::Unavailable,
-                last_observation_attempt_by: None,
-                last_observation_attempt_at: None,
-                last_observed_by: None,
-                last_observed_at: None,
-                session_id: None,
-                pid: None,
-                last_active_at: None,
-                state_changed_by: None,
-                state_changed_at: None,
-                session_changed_by: None,
-                session_changed_at: None,
-            };
-            (
-                atm_core::boundary::MemberKey::new(team.clone(), member.name.clone()),
-                observation,
-            )
-        })
-        .collect()
 }
 
 async fn reload_runtime_view() -> Result<()> {
@@ -690,12 +609,12 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
+    use super::TeamsCommand;
     use super::{
         AddMemberCommand, BackupCommand, ClearNudgeTemplateCommand, DisableNudgeTemplateCommand,
         RemoveMemberCommand, RestoreCommand, SetNudgeTemplateCommand, TeamsSubcommand,
         UpdateMemberCommand,
     };
-    use super::{TeamsCommand, runtime_observation_map};
     use crate::commands::caller_context::CallerContext;
     use crate::observability::CliObservability;
 
@@ -704,82 +623,6 @@ mod tests {
             .enable_all()
             .build()
             .expect("test runtime")
-    }
-
-    fn runtime_snapshot(
-        members: Vec<atm_core::protocol::RuntimeMemberObservation>,
-    ) -> atm_core::protocol::RuntimeStatusSnapshot {
-        atm_core::protocol::RuntimeStatusSnapshot {
-            liveness: atm_core::protocol::RuntimeLivenessState::Running,
-            readiness: atm_core::protocol::RuntimeReadinessState::Ready,
-            detail: None,
-            singleton_owner_pid: None,
-            degraded_ingest: false,
-            member_counts: Default::default(),
-            members,
-            graft_queue_handoff_failures_total: 0,
-            graft_queue_marker_clear_failures_total: 0,
-            bare_cli_queue_full_drops_total: 0,
-            queue_marker_set_failures_total: 0,
-            herdr_queue_last_tick_at: None,
-            queue_messages_drained_total: 0,
-            queue_drain_failures_total: 0,
-            blocking_core_bridge_stalls_total: 0,
-            write_source_preflight_stalls_total: 0,
-        }
-    }
-
-    fn runtime_member(team: &str) -> atm_core::protocol::RuntimeMemberObservation {
-        atm_core::protocol::RuntimeMemberObservation {
-            team: team.parse().expect("team"),
-            member: "same-name".parse().expect("agent"),
-            state: atm_core::protocol::RuntimeMemberState::Active,
-            revision: Default::default(),
-            availability: atm_core::protocol::RuntimeObservationAvailability::Unavailable,
-            last_observation_attempt_by: Some(
-                atm_core::protocol::RuntimeObservationSource::HerdrPoll,
-            ),
-            last_observation_attempt_at: None,
-            last_observed_by: Some(atm_core::protocol::RuntimeObservationSource::Heartbeat),
-            last_observed_at: None,
-            session_id: None,
-            pid: None,
-            last_active_at: None,
-            state_changed_by: None,
-            state_changed_at: None,
-            session_changed_by: None,
-            session_changed_at: None,
-        }
-    }
-
-    #[test]
-    fn runtime_observation_map_rejects_missing_status_instead_of_fabricating_dead() {
-        let team = "team-a".parse().expect("team");
-        assert!(runtime_observation_map(&team, None).is_err());
-    }
-
-    #[test]
-    fn runtime_observation_map_is_team_scoped_and_preserves_degradation() {
-        let team = "team-a".parse().expect("team");
-        let states = runtime_observation_map(
-            &team,
-            Some(runtime_snapshot(vec![
-                runtime_member("team-a"),
-                runtime_member("team-b"),
-            ])),
-        )
-        .expect("runtime status");
-        assert_eq!(states.len(), 1);
-        let observation = states.values().next().expect("team-a member");
-        assert_eq!(observation.team, team);
-        assert_eq!(
-            observation.availability,
-            atm_core::protocol::RuntimeObservationAvailability::Unavailable
-        );
-        assert_eq!(
-            observation.state,
-            atm_core::protocol::RuntimeMemberState::Active
-        );
     }
 
     struct Fixture {
@@ -1408,8 +1251,9 @@ mod tests {
 
     /// ADR-055 decision (e)/PRD §4.2: `atm teams --json --members` runs end
     /// to end against a real (isolated, sqlite-backed) roster without a live
-    /// daemon -- the runtime-state lookup degrades to an empty map (every
-    /// member projects `dead`) rather than failing the whole command.
+    /// daemon -- runtime enrichment degrades to explicit
+    /// `Unknown` + `Unavailable` (and compatibility `dead`) rather than
+    /// failing the whole command or asserting an offline lifecycle state.
     #[test]
     #[serial_test::serial(env)]
     fn teams_members_projection_runs_without_daemon() {
