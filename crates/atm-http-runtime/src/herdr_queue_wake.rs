@@ -3045,15 +3045,13 @@ mod tests {
             .service_runtime
             .async_task_ledger_reader()
             .expect("task reader");
-        let (roster_store, roster_runtime_mirror) =
-            atm_runtime_test_support::build_write_through_roster_for_test(
-                assembly.shared_roster_store_arc(),
-            )
-            .expect("write-through roster fixture hydrates from the isolated sqlite assembly");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(
+            assembly.shared_roster_store_arc(),
+        )
+        .expect("write-through roster fixture hydrates from the isolated sqlite assembly");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             assembly.message_store_arc(),
-            roster_store,
-            roster_runtime_mirror,
+            roster,
             assembly.nudge_template_override_store.clone(),
             Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
         )
@@ -3887,13 +3885,11 @@ mod tests {
             load_roster_calls: std::sync::atomic::AtomicUsize::new(0),
             list_teams_calls: std::sync::atomic::AtomicUsize::new(0),
         });
-        let (roster_store, roster_runtime_mirror) =
-            atm_runtime_test_support::build_write_through_roster_for_test(durable.clone())
-                .expect("write-through roster fixture hydrates from the counting fake");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(durable.clone())
+            .expect("write-through roster fixture hydrates from the counting fake");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             std::sync::Arc::new(UnusedMailStore),
-            roster_store,
-            roster_runtime_mirror,
+            roster,
             std::sync::Arc::new(NoopNudgeTemplateOverrideStore),
             std::sync::Arc::new(UnusedNonClaudeOutbound),
         );
@@ -3951,13 +3947,11 @@ mod tests {
             load_roster_calls: std::sync::atomic::AtomicUsize::new(0),
             list_teams_calls: std::sync::atomic::AtomicUsize::new(0),
         });
-        let (roster_store, roster_runtime_mirror) =
-            atm_runtime_test_support::build_write_through_roster_for_test(durable)
-                .expect("write-through roster fixture hydrates");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(durable)
+            .expect("write-through roster fixture hydrates");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             std::sync::Arc::new(UnusedMailStore),
-            roster_store,
-            roster_runtime_mirror,
+            roster,
             std::sync::Arc::new(NoopNudgeTemplateOverrideStore),
             std::sync::Arc::new(UnusedNonClaudeOutbound),
         );

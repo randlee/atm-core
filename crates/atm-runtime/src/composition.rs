@@ -69,10 +69,7 @@ pub struct RuntimeAssembly {
     /// Runtime-inert AV.1a port. AV.1b is the only sprint authorized to wire
     /// an HTTP handler through it.
     pub async_mailbox_runtime: StorageAsyncMailboxRuntime,
-    pub(crate) storage_backends: StorageBackends<
-        Arc<dyn SharedMessageStore + Send + Sync>,
-        Arc<dyn SharedRosterStore + Send + Sync>,
-    >,
+    pub(crate) storage_backends: StorageBackends<Arc<dyn SharedMessageStore + Send + Sync>>,
     pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     /// Read-only retained diagnostic timeline supplied by the selected storage backend.
@@ -188,11 +185,10 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         .storage_factory
         .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
     let reader_lanes = reader_pool_doctor_report(&storage);
+    let roster = storage.roster();
     let storage_backends = StorageBackends {
         messages: storage.message_store(),
-        rosters: storage.roster_store(),
     };
-    let roster_runtime_mirror = storage.roster_runtime_mirror();
     let async_message_store = storage.async_message_store();
     let async_mailbox_reader = storage.async_mailbox_reader();
     let async_task_ledger_reader = storage.async_task_ledger_reader();
@@ -206,8 +202,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let diagnostic_timeline = storage.diagnostic_timeline();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
-        storage_backends.rosters.clone(),
-        roster_runtime_mirror,
+        roster,
         Arc::clone(&nudge_template_override_store),
         inputs.non_claude_outbound,
     )
@@ -323,20 +318,18 @@ impl RuntimeAssembly {
 
     /// Returns the write-through, RAM-backed roster boundary view.
     ///
-    /// This must go through [`LocalServiceRuntime::shared_roster_store_arc`]
-    /// rather than the raw durable `storage_backends.rosters` handle: the
-    /// runtime's handle is what serves every read from the RAM roster
-    /// mirror and write-throughs every mutation into it in the same
-    /// operation. Reaching past it to the durable store directly would
-    /// silently reintroduce a SQLite roster read on this seam.
+    /// This must go through [`LocalServiceRuntime::shared_roster_store_arc`]:
+    /// the runtime's handle serves every read from the RAM roster mirror and
+    /// writes every mutation through it in the same operation. The raw
+    /// durable roster handle is deliberately absent from this assembly.
     pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {
         boundary_roster_store_view(self.service_runtime.shared_roster_store_arc())
     }
 
     /// Returns the write-through, RAM-backed roster store seam.
     ///
-    /// See [`Self::roster_store_arc`] for why this must be sourced from the
-    /// runtime rather than `storage_backends.rosters` directly.
+    /// See [`Self::roster_store_arc`] for why this is sourced from the
+    /// runtime's paired write-through roster.
     pub fn shared_roster_store_arc(&self) -> Arc<dyn SharedRosterStore + Send + Sync> {
         self.service_runtime.shared_roster_store_arc()
     }

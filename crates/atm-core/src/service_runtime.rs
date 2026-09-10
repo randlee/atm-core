@@ -15,7 +15,7 @@ use atm_storage::{
     MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
     RosterMemberEphemeralState, RosterRuntimeMirror, RosterRuntimeMutationOutcome,
     RosterRuntimeObservation, RosterRuntimeObservationUpdate, RosterStore as SharedRosterStore,
-    TaskStore, TemplateCatalogStore,
+    TaskStore, TemplateCatalogStore, WriteThroughRosterStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -350,17 +350,13 @@ pub struct LocalServiceRuntime {
 
 impl LocalServiceRuntime {
     ///
-    /// `roster_store` and `roster_runtime` must be the paired handles
-    /// returned by the storage composition root's write-through roster
-    /// factory (e.g. `atm_storage_rusqlite::roster_runtime::build_write_through_roster`):
-    /// `roster_store` is the write-through `RosterStore` decorator and
-    /// `roster_runtime` is its RAM mirror. Hydration already happened,
-    /// fail-closed, before either handle was constructed; this constructor
-    /// performs no further durable roster I/O.
+    /// `roster` is the indivisible paired handle returned by the storage
+    /// composition root's write-through roster factory. Hydration already
+    /// happened, fail-closed, before this constructor receives it; callers
+    /// cannot pair an unrelated durable store and RAM mirror.
     pub fn new_with_delivery_boundaries(
         message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
-        roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
-        roster_runtime: Arc<dyn RosterRuntimeMirror + Send + Sync>,
+        roster: WriteThroughRosterStore,
         nudge_template_override_store: std::sync::Arc<
             dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync,
         >,
@@ -372,7 +368,7 @@ impl LocalServiceRuntime {
             async_mailbox_reader: None,
             async_task_ledger_reader: None,
             async_message_search_store: None,
-            roster_store,
+            roster_store: roster.store(),
             nudge_template_override_store,
             non_claude_outbound,
             pending_nudge_store: None,
@@ -380,7 +376,7 @@ impl LocalServiceRuntime {
             graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
-            roster_runtime,
+            roster_runtime: roster.mirror(),
             graft_receiver_lease_cache: Arc::new(GraftReceiverLeaseCache::default()),
             workspace_config_access: WorkspaceConfigAccess::Client,
         }
@@ -1233,15 +1229,13 @@ mod tests {
 
     #[test]
     fn task_store_reports_the_not_installed_error() {
-        let (roster_store, roster_runtime) =
-            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
-                UnusedRuntimeStore,
-            ))
-            .expect("empty write-through roster fixture");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+            UnusedRuntimeStore,
+        ))
+        .expect("empty write-through roster fixture");
         let runtime = super::LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedRuntimeStore),
-            roster_store,
-            roster_runtime,
+            roster,
             Arc::new(UnusedRuntimeStore),
             Arc::new(super::LocalFileNonClaudeOutbound::new()),
         );
