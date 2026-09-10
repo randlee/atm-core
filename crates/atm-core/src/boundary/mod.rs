@@ -417,3 +417,35 @@ pub enum PostSendEmissionOutcome {
 }
 // `PostSendHookEmitter` deliberately has no compatibility alias. Any use is
 // a compiler failure and must migrate to `MessageReceivedHookEmitter`.
+
+#[cfg(test)]
+mod tests {
+    use super::{ExternalPostSendHookPayload, PostSendHookEvent, PostSendHookEventWire};
+    use crate::schema::AtmMessageId;
+    use crate::types::{AgentName, TeamName};
+
+    #[test]
+    fn post_send_wire_wrappers_remain_byte_identical() {
+        let event = PostSendHookEvent {
+            sender: AgentName::from_validated("sender"),
+            sender_chat_id: None,
+            sender_team: TeamName::from_validated("team"),
+            sender_host: None,
+            recipient: AgentName::from_validated("recipient"),
+            recipient_team: TeamName::from_validated("team"),
+            message_id: "01KX1TEST00000000000000000"
+                .parse::<AtmMessageId>()
+                .expect("message id"),
+            title: "title only".to_owned(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
+            recipient_pane_id: None,
+        };
+
+        assert_eq!(
+            serde_json::to_value(PostSendHookEventWire::new(&event)).expect("internal wire"),
+            serde_json::to_value(ExternalPostSendHookPayload::new(&event)).expect("external wire"),
+        );
+    }
+}

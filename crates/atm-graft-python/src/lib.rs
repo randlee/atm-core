@@ -11,7 +11,6 @@ use ::atm_graft::{
     HostNudgeInjector, MailboxWorkCounts, SessionSnapshot,
 };
 use atm_core::address::AgentAddress;
-use atm_core::boundary::{NudgeKind, PostSendHookEvent};
 use atm_core::caller_context::activity_observation_for_resolved_caller;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
@@ -242,17 +241,6 @@ pub struct PyNudge {
 }
 
 impl PyNudge {
-    pub fn from_post_send(event: &PostSendHookEvent) -> PyResult<Self> {
-        let body = event.title.clone();
-        Ok(Self {
-            message_id: event.message_id.to_string(),
-            source: PyAgentAddress::from_typed(event.source_address())?,
-            notice_text: body.clone(),
-            body,
-            kind: NudgeKind::Steer.as_str().to_owned(),
-        })
-    }
-
     pub fn from_host_nudge(nudge: &HostNudge) -> PyResult<Self> {
         Ok(Self {
             message_id: nudge.event.message_id.to_string(),
@@ -1293,9 +1281,10 @@ mod tests {
             recipient_pane_id: None,
         };
 
-        let nudge = PyNudge::from_post_send(&event).expect("python nudge");
+        let nudge = PyNudge::from_host_nudge(&host_nudge(event)).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
         assert_eq!(nudge.kind, "steer");
+        assert_eq!(nudge.body, "<atm><action>read atm</action></atm>");
     }
 
     #[test]

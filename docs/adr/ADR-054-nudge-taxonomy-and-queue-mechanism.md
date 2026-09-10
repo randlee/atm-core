@@ -453,3 +453,8 @@ message id, summary-backed title, and optional task id. Compatibility writers
 emit canonical `title` plus deprecated same-value `description`; readers accept
 either or both. This does not add a message-body delivery path: immutable
 message content and task descriptions remain available only through `atm read`.
+
+The compatibility proof retains a 1.5.14 reader fixture for the dual-key
+producer shape. The title-aware receiver floor is 1.5.15: `atm-graft` and the
+ATM Python receiver at or above that version accept canonical `title` while
+continuing to accept the deprecated `description` alias during this window.
