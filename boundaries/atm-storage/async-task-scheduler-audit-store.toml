@@ -19,7 +19,7 @@ io_owns = ["bounded_task_mutation_submission", "idempotent_task_audit_result"]
 io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn", "template_rendering"]
 
 [dependencies]
-# lint_boundaries.py unions these manifests by owner_package; task-store.toml covers atm-http-runtime's re-exported consumption.
+# atm-http-runtime reaches these types only through atm-core's re-export; it has no direct Cargo edge to atm-storage, and task-store.toml forbids that edge.
 allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-storage-rusqlite", "atm-storage -> atm-core"]

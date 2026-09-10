@@ -739,7 +739,7 @@ impl LocalServiceRuntime {
         self.async_mailbox_reader()?
             .list_messages(scope, query, deadline)
             .await
-            .map_err(map_read_lane_error)
+            .map_err(AtmError::from)
     }
 
     /// Performs the acknowledgement source transition and reply insertion on
@@ -1145,10 +1145,6 @@ mod workspace_config_tests {
     }
 }
 
-fn map_read_lane_error(error: atm_storage::ReadLaneError) -> AtmError {
-    AtmError::from(error)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1159,6 +1155,7 @@ mod tests {
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::InboxMessage;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use atm_storage::AtmError;
     use chrono::Utc;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1197,7 +1194,7 @@ mod tests {
                 AtmErrorCode::MailboxReadFailed,
             ),
         ] {
-            assert_eq!(super::map_read_lane_error(error).code(), expected);
+            assert_eq!(AtmError::from(error).code(), expected);
         }
     }
 

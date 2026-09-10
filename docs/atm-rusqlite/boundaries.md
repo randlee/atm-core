@@ -54,6 +54,26 @@ The private analyst adapter is the only direct SQLite dependency of the local
 and query budgets. Daemon, HTTP runtime, CLI, and graft crates remain forbidden
 dependents; they use the typed runtime search port instead.
 
+## SqliteAsyncTaskMutationStoreAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml](../../boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml)
+
+The private adapter implements `AsyncTaskMutationStore` over the SQLite writer
+transaction. It accepts only the storage-owned typed lifecycle request and
+returns its durable mutation outcome; callers do not receive the concrete
+adapter, SQLite connections, or writer internals.
+
+## SqliteAsyncTaskSchedulerAuditStoreAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage-rusqlite/async-task-scheduler-audit-store-sqlite.toml](../../boundaries/atm-storage-rusqlite/async-task-scheduler-audit-store-sqlite.toml)
+
+The private adapter exposes the narrowed `AsyncTaskSchedulerAuditStore` view
+of the same SQLite task-writer implementation. It permits only reminder and
+lead-notification audit requests, so the scheduler cannot perform task
+lifecycle mutations or access SQLite directly.
+
 ## SharedDbStateRoot
 
 Canonical machine-readable boundary source:

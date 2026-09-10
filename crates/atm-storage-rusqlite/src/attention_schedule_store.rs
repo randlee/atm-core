@@ -96,7 +96,16 @@ pub(crate) fn ensure_schema(
                 Err(error)
             }
         })
-        .map_err(|error| sqlite_error(target, "failed to add attention creation timestamp", error))
+        .map_err(|error| {
+            sqlite_error(target, "failed to add attention creation timestamp", error)
+        })?;
+    // The 2.1 upgrade drops all pre-existing terminal opportunity rows on the first prune; reserved rows are exempt.
+    connection
+        .execute_batch(
+            "CREATE INDEX IF NOT EXISTS attention_opportunities_status_created_at
+             ON attention_opportunities(status, created_at);",
+        )
+        .map_err(|error| sqlite_error(target, "failed to index attention retention columns", error))
 }
 
 impl SqliteAttentionScheduleStore {
@@ -830,6 +839,82 @@ mod tests {
                 Ok(())
             })
             .expect("inspect pruned rows");
+    }
+
+    #[test]
+    fn pruning_caps_terminal_rows_at_the_configured_limit() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let transaction = connection.transaction().map_err(|error| {
+                    atm_storage::AtmError::daemon_unavailable(error.to_string())
+                })?;
+                {
+                    let mut insert = transaction
+                        .prepare(
+                            "INSERT INTO attention_opportunities(
+                                team, agent, opportunity_id, roster_state_revision, lane,
+                                message_id, status, failed_attempts, created_at
+                             ) VALUES (?1, ?2, ?3, 1, 'ephemeral', ?4, 'delivered', 0, ?5)",
+                        )
+                        .map_err(|error| {
+                            atm_storage::AtmError::daemon_unavailable(error.to_string())
+                        })?;
+                    for index in 0..=ATTENTION_MAX_TERMINAL_ROWS {
+                        let opportunity_id = format!("seed-{index}");
+                        let message_id = format!("message-{index}");
+                        insert
+                            .execute(params![
+                                member().team().as_str(),
+                                member().agent().as_str(),
+                                opportunity_id,
+                                message_id,
+                                now_unix_ms(),
+                            ])
+                            .map_err(|error| {
+                                atm_storage::AtmError::daemon_unavailable(error.to_string())
+                            })?;
+                    }
+                }
+                transaction
+                    .commit()
+                    .map_err(|error| atm_storage::AtmError::daemon_unavailable(error.to_string()))
+            })
+            .expect("seed terminal rows");
+
+        let store = backend.attention_schedule_store();
+        store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(1),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: AttentionItem::EphemeralMessage {
+                    member: member(),
+                    message_id: AtmMessageId::new(),
+                },
+            })
+            .expect("reserve triggers terminal-row cap pruning");
+
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let terminal_count: i64 = connection
+                    .query_row(
+                        "SELECT COUNT(*) FROM attention_opportunities WHERE status <> 'reserved'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| {
+                        atm_storage::AtmError::daemon_unavailable(error.to_string())
+                    })?;
+                assert_eq!(terminal_count, ATTENTION_MAX_TERMINAL_ROWS);
+                Ok(())
+            })
+            .expect("inspect capped terminal rows");
     }
 
     #[tokio::test]

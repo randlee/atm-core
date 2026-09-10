@@ -307,10 +307,12 @@ impl ControlPathSyncBridge {
 /// A peer write is acknowledged as soon as the message is durably persisted,
 /// so its receiver hook (a tmux nudge, a graft handoff) cannot run on the
 /// response path without risking the caller's absolute request budget. The
-/// hook is therefore detached from the response but never unobserved: every
-/// warning it produces is logged with the originating request id and counted
-/// on `RuntimeHealth`, and daemon shutdown drains whatever is still in
-/// flight instead of abandoning it mid-emission.
+/// hook is therefore detached from the response but never unobserved: the
+/// peer-write entry point logs each returned `WarningEntry` with its request
+/// id and records it on `RuntimeHealth`, while the idle-opportunity entry point
+/// logs failures with member context and counts dispatch attempts. Daemon
+/// shutdown drains whatever is still in flight instead of abandoning it
+/// mid-emission.
 #[derive(Clone, Default)]
 pub(crate) struct DetachedReceivedHooks {
     tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
