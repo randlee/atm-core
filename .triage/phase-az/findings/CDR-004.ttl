@@ -15,28 +15,30 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage/src/task_mutation.rs, crates/atm-core/src/service_runtime.rs, crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs, boundaries/atm-storage/async-task-mutation-store.toml" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T18:56:35Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CDR-004/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/CDR-004/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/task_mutation.rs" ;
   triage:line 40 ;
   triage:snippet "scheduler receives full AsyncTaskMutationStore capability instead of a narrow audit-only capability" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "980b40d6f" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/980b40d6f> .
 
-<urn:atm:triage:worktree/AZ4/066a465d0>
+<urn:atm:triage:worktree/AZ4/980b40d6f>
   a triage:WorktreeSnapshot ;
-  triage:path "integrate/phase-az" ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "980b40d6f" ;
   triage:orderIndex 4 .
