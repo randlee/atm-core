@@ -15,24 +15,26 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "boundaries/atm-storage-rusqlite/task-store-sqlite.toml, boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T05:58:11Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.3 ;
   triage:foundAt "2026-09-10T05:58:02Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-10T06:36:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-002-FOLLOWUP/AZ3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-002-FOLLOWUP/AZ3-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AZS2-RBQA-002-FOLLOWUP/AZ3-1>
   a triage:Occurrence ;
   triage:file "boundaries/atm-storage-rusqlite/task-store-sqlite.toml" ;
   triage:line 39 ;
   triage:snippet "[contracts].notes: 'no named lint rule in this boundary file is mechanically dispatched today' -- stale, self-contradicts new io_forbidden_source_modules enforcement" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/az3-task-command-handoff" ;
-  triage:headSha "61a839f6a03f3fe55433e0b89410650b1799e207" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "0dc6f2f24" ;
   triage:occursIn <urn:atm:triage:worktree/AZ3/61a839f6> .
 
 <urn:atm:triage:occurrence/AZS2-RBQA-002-FOLLOWUP/AZ3-2>
@@ -40,10 +42,10 @@
   triage:file "boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml" ;
   triage:line 36 ;
   triage:snippet "[contracts].notes: 'no named lint rule in this boundary file is mechanically dispatched today' -- stale, self-contradicts new io_forbidden_source_modules enforcement" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/az3-task-command-handoff" ;
-  triage:headSha "61a839f6a03f3fe55433e0b89410650b1799e207" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "0dc6f2f24" ;
   triage:occursIn <urn:atm:triage:worktree/AZ3/61a839f6> .
 
 <urn:atm:triage:worktree/AZ3/61a839f6>
