@@ -235,7 +235,7 @@ components:
       default: unobserved
     RuntimeObservationSource:
       type: string
-      enum: [heartbeat, local_command, herdr_poll]
+      enum: [heartbeat, herdr_poll]
     HerdrDoctorReport:
       type: object
       properties:

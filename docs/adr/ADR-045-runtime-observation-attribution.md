@@ -9,8 +9,9 @@
 ## Original Phase AJ decision
 
 The following records the implemented Phase AJ baseline. The issue #1378 and
-Phase AZ amendment below supersedes its owner and its blanket ban on state-based
-attention; all other attribution and trust-boundary clauses remain active.
+Phase AZ amendment below supersedes its owner, accepted state-ingress set, and
+blanket ban on state-based attention; all other attribution and trust-boundary
+clauses remain active.
 
 Session, pid, heartbeat activity, and derived agent state are in-memory,
 best-effort telemetry. They are forbidden inputs to routing, nudge,
@@ -76,10 +77,12 @@ corrected owner:
    `RuntimeMemberState` per durable `(team, member)`. `RuntimeHealth` is a
    projection-only reader under ADR-014; it must not retain or merge a second
    member-state map.
-2. Authenticated local heartbeat POSTs, environment-attested local/graft
-   activity, and successful Herdr list polls converge on that same record.
-   Source and timestamps describe the latest accepted observation; they do not
-   create source-specific states. Accepted ingress order remains authoritative.
+2. Authenticated local heartbeat POSTs and successful Herdr list polls converge
+   on that same record. Source and timestamps describe the latest accepted
+   observation; they do not create source-specific states. Accepted ingress
+   order remains authoritative. The pre-cutover `ActivityObservation` request
+   field remains tolerated for wire compatibility but is not canonical state
+   ingress and cannot produce a runtime observation source.
 3. Each accepted state observation advances a typed `RosterStateRevision` and
    `last_observed_at`, even for same-state evidence. `state_changed_at` still
    changes only on a state edge. A failed/incomplete poll makes no state or

@@ -971,7 +971,6 @@ pub enum RuntimeMemberState {
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeObservationSource {
     Heartbeat,
-    LocalCommand,
     HerdrPoll,
 }
 

@@ -1100,13 +1100,13 @@ complete. Phase AJ is not closed: a final holistic QA gate finding (a
 transport-trust-boundary gap in heartbeat ingress) must be remediated and
 reverified before its final status changes.
 
-AJ established in-memory roster observation: successful environment-attested
-CLI/graft activity and heartbeat converge on one current entry. Issue #1378
-later corrects the replacement-runtime owner so successful Herdr polls converge
-on that same ephemeral master-roster member record and `RuntimeHealth` becomes a
-projection only. Session, pid, source, and timestamp metadata remain
-non-policy inputs; Phase AZ explicitly permits only canonical `Idle` state
-revisions to publish attention opportunities.
+AJ established the original in-memory observation design. Issue #1378 corrects
+the replacement-runtime owner: authenticated heartbeat POSTs and successful
+Herdr polls converge on one ephemeral master-roster member record, while
+`RuntimeHealth` becomes a projection only. Pre-cutover local activity metadata
+remains tolerated but is not canonical state ingress. Session, pid, source, and
+timestamp metadata remain non-policy inputs; Phase AZ explicitly permits only
+canonical `Idle` state revisions to publish attention opportunities.
 
 | Sprint | Status | Branch | Purpose |
 | --- | --- | --- | --- |

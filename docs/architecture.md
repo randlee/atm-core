@@ -3105,9 +3105,10 @@ Architectural rules:
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
 - Runtime member state and its pid/session/timestamp metadata live only in the
-  RAM master roster. Authenticated heartbeat POST, successful Herdr poll, and
-  successful environment-attested local CLI/graft activity converge there.
-  `RuntimeHealth` projects it and must not merge or retain a second member map.
+  RAM master roster. Authenticated heartbeat POST and successful Herdr poll
+  ingress converge there. `RuntimeHealth` projects it and must not merge or
+  retain a second member map. Pre-cutover local activity metadata is tolerated
+  for wire compatibility but does not mutate canonical state.
 - Session, pid, source, and timestamps never select routing, retry, admission,
   delivery, or notification behavior. Under ADR-045's Phase AZ amendment, an
   accepted `Idle` state revision may publish one attention opportunity; the
