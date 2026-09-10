@@ -47,6 +47,10 @@ forbidden_test_bypasses = ["rusqlite::Connection"]
 lint_rules = ["LINT-BOUNDARY-TASK-STORE-SQLITE"]
 review_gates = ["manual_architecture_review"]
 
+[enforcement.io_forbidden_source_modules]
+message_delivery = ["atm_storage_rusqlite::writer::task_ops", "atm_storage_rusqlite::writer::task_legacy_ops"]
+process_spawn = ["atm_storage_rusqlite::writer::task_ops", "atm_storage_rusqlite::writer::task_legacy_ops"]
+
 [status]
 state = "concrete_landed"
 notes = ["AX.3"]

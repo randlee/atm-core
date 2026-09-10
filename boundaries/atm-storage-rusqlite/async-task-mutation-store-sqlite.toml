@@ -44,6 +44,11 @@ forbidden_test_bypasses = ["rusqlite::Connection"]
 lint_rules = ["LINT-BOUNDARY-ASYNC-TASK-MUTATION-REFERENCES"]
 review_gates = ["manual_architecture_review"]
 
+[enforcement.io_forbidden_source_modules]
+socket_io = ["atm_storage_rusqlite::writer::task_ops", "atm_storage_rusqlite::writer::task_legacy_ops"]
+process_spawn = ["atm_storage_rusqlite::writer::task_ops", "atm_storage_rusqlite::writer::task_legacy_ops"]
+template_rendering = ["atm_storage_rusqlite::writer::task_ops", "atm_storage_rusqlite::writer::task_legacy_ops"]
+
 [status]
 state = "concrete_landed"
 notes = [
