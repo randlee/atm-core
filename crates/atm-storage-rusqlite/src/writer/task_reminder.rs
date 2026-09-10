@@ -25,15 +25,13 @@ pub(super) fn record_reminder(
     if !matches!(state.as_str(), "assigned" | "active") || current_attempt != attempt.get() {
         return Err(task_rejected("task reminder attempt is no longer runnable"));
     }
-    let next_revision = revision.saturating_add(1);
     connection
         .execute(
-            "UPDATE tasks_v2 SET reminder_ordinal = reminder_ordinal + 1, revision = ?3, updated_at = ?4
-             WHERE team = ?1 AND task_id = ?2 AND state IN ('assigned', 'active') AND current_attempt = ?5",
+            "UPDATE tasks_v2 SET reminder_ordinal = reminder_ordinal + 1, updated_at = ?3
+             WHERE team = ?1 AND task_id = ?2 AND state IN ('assigned', 'active') AND current_attempt = ?4",
             params![
                 request.actor.team().as_str(),
                 request.task_id.as_str(),
-                next_revision,
                 at.to_string(),
                 attempt.get(),
             ],
@@ -46,7 +44,7 @@ pub(super) fn record_reminder(
     };
     Ok(TransitionResult {
         state,
-        revision: next_revision,
+        revision,
         event: "reminded",
         detail: None,
         related_task_id: None,
@@ -74,15 +72,13 @@ pub(super) fn record_lead_notified(
             "task lead audit attempt is no longer runnable",
         ));
     }
-    let next_revision = revision.saturating_add(1);
     connection
         .execute(
-            "UPDATE tasks_v2 SET revision = ?3, updated_at = ?4
-             WHERE team = ?1 AND task_id = ?2 AND state IN ('assigned', 'active') AND current_attempt = ?5",
+            "UPDATE tasks_v2 SET updated_at = ?3
+             WHERE team = ?1 AND task_id = ?2 AND state IN ('assigned', 'active') AND current_attempt = ?4",
             params![
                 request.actor.team().as_str(),
                 request.task_id.as_str(),
-                next_revision,
                 at.to_string(),
                 attempt.get(),
             ],
@@ -95,7 +91,7 @@ pub(super) fn record_lead_notified(
     };
     Ok(TransitionResult {
         state,
-        revision: next_revision,
+        revision,
         event: "lead_notified",
         detail: Some(format!("lead={lead} message_id={message_id}")),
         related_task_id: None,

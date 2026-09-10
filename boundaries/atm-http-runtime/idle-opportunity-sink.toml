@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-IdleOpportunitySink"
+owner_package = "atm-http-runtime"
+owner_crate_path = "atm_http_runtime"
+name = "IdleOpportunitySink"
+
+[public]
+trait = "IdleOpportunitySink"
+notes = "Sealed post-commit idle opportunity notification carrying only the canonical member and roster revision."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_daemon_bootstrap::run_replacement_daemon_with_selector"]
+
+[ownership]
+io_owns = ["idle_opportunity_notification"]
+io_forbidden = ["database_io", "process_spawn", "daemon_request_dispatch"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap"]
+allowed_dependencies = ["atm-core", "tokio"]
+forbidden_edges = ["atm-http-runtime -> atm-daemon-bootstrap", "atm-http-runtime -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["atm_core::boundary::IdleOpportunity"]
+response_types = ["none"]
+error_types = ["none; notification is best effort"]
+
+[testing]
+allowed_test_double_paths = ["crate::herdr_queue_wake::HerdrQueueWakePump", "crate::storage_and_nudge_router::RecordingIdleOpportunitySink"]
+forbidden_test_bypasses = ["inline_storage_claim"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES"]
+review_gates = ["sealed_trait", "post_roster_commit", "bounded_dispatch"]
+
+[status]
+state = "concrete_landed"
+notes = ["Idle opportunities are published only after the canonical roster revision commits."]

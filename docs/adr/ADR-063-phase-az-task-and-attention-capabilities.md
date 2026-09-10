@@ -46,6 +46,12 @@ namespace, never an alias for `AtmMessageId`. A dedicated task-operations table
 owns one request fingerprint and typed result per `(team, operation_id)`;
 multiple events across old and successor tasks may reference one operation.
 
+The scheduler's `AsyncTaskSchedulerAuditStore` is a narrowed capability view of
+this already-authorized semantic store, backed by the same concrete adapter. It
+is not a thirteenth semantic capability: the view admits only reminder and lead
+notification audit operations and cannot perform lifecycle transitions. This
+mirrors ADR-036's existing async-companion exemption rule.
+
 ### D2. Attention schedule capabilities
 
 `AttentionScheduleStore` is the twelfth semantic storage capability. It owns only durable
@@ -99,7 +105,8 @@ recounted as:
 
 `OutboundMessageQuery` is not in this inventory because Phase AM deleted it.
 ADR-036's stale inventory and the matching boundary TOMLs must be updated in
-AZ.2 and AZ.4. No thirteenth semantic capability is authorized by this ADR.
+AZ.2 and AZ.4. No additional semantic capability is authorized by this ADR;
+the scheduler audit view is covered by the mutation-store authorization above.
 
 ### D4. SQLite schema 2.0 major migration
 

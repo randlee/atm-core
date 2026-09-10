@@ -2,6 +2,8 @@
 
 #[path = "herdr_queue_wake_claim.rs"]
 mod claim;
+#[path = "herdr_queue_wake_idle.rs"]
+mod idle;
 #[path = "herdr_queue_wake_reminders.rs"]
 mod reminders;
 #[path = "herdr_queue_wake_support.rs"]
@@ -38,7 +40,8 @@ use tokio::task::JoinHandle;
 use crate::herdr_breaker_escalation::HerdrBreakerEscalationGate;
 use crate::herdr_escalation::EscalationState;
 use crate::herdr_queue_wake_escalation::TaskReminderEmission;
-use crate::runtime_health::{IdleOpportunitySink, RuntimeHealth};
+use crate::router_support::DetachedReceivedHooks;
+use crate::runtime_health::RuntimeHealth;
 use claim::ReleasePendingOnDrop;
 use support::{log_herdr_list_failure, member_order, runtime_state};
 
@@ -95,6 +98,7 @@ pub struct HerdrQueueWakePump {
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
     release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    detached_hooks: DetachedReceivedHooks,
     #[cfg(test)]
     pub(crate) handoff_cleanup_test_gate:
         Arc<Mutex<Option<crate::herdr_queue_wake_test_gates::Gate>>>,
@@ -126,6 +130,7 @@ impl HerdrQueueWakePump {
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
             release_handles: Arc::new(Mutex::new(Vec::new())),
+            detached_hooks: DetachedReceivedHooks::default(),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
             #[cfg(test)]
@@ -178,6 +183,7 @@ impl HerdrQueueWakePump {
                 }
             }
             self.await_release_handles().await;
+            self.detached_hooks.drain(HERDR_REQUEST_DEADLINE).await;
         })
     }
 
@@ -1002,17 +1008,6 @@ impl HerdrQueueWakePump {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(member);
-    }
-}
-
-impl IdleOpportunitySink for HerdrQueueWakePump {
-    fn on_idle_opportunity(&self, opportunity: atm_core::boundary::IdleOpportunity) {
-        let pump = self.clone();
-        tokio::spawn(async move {
-            let mut stats = HerdrQueueWakeStats::default();
-            pump.run_idle_opportunity(opportunity, (pump.clock)(), &mut stats)
-                .await;
-        });
     }
 }
 

@@ -739,7 +739,7 @@ impl LocalServiceRuntime {
         self.async_mailbox_reader()?
             .list_messages(scope, query, deadline)
             .await
-            .map_err(|error| AtmError::daemon_unavailable(error.to_string()))
+            .map_err(map_read_lane_error)
     }
 
     /// Performs the acknowledgement source transition and reply insertion on
@@ -1145,6 +1145,10 @@ mod workspace_config_tests {
     }
 }
 
+fn map_read_lane_error(error: atm_storage::ReadLaneError) -> AtmError {
+    AtmError::from(error)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1172,6 +1176,30 @@ mod tests {
     /// makes detection reliable without any timing assumption.
     const RACE_ATTEMPTS: usize = 64;
     use tempfile::tempdir;
+
+    #[test]
+    fn list_messages_preserves_read_lane_error_codes() {
+        for (error, expected) in [
+            (
+                atm_storage::ReadLaneError::Saturated { reason: "full" },
+                AtmErrorCode::DaemonConnectionSaturated,
+            ),
+            (
+                atm_storage::ReadLaneError::DeadlineExpired { stage: "read" },
+                AtmErrorCode::MailboxLockTimeout,
+            ),
+            (
+                atm_storage::ReadLaneError::Storage {
+                    code: AtmErrorCode::MailboxReadFailed,
+                    message: "storage".to_owned(),
+                    cause: None,
+                },
+                AtmErrorCode::MailboxReadFailed,
+            ),
+        ] {
+            assert_eq!(super::map_read_lane_error(error).code(), expected);
+        }
+    }
 
     struct UnusedRuntimeStore;
 

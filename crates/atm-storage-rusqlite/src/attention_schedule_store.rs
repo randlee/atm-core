@@ -1,6 +1,7 @@
 //! SQLite ownership of the identifier-only idle-attention cursor and reservation metadata.
 
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use atm_storage::{
     AssignmentAttempt, AsyncAttentionScheduleStore, AtmError, AtmErrorCode, AttentionCursor,
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS attention_opportunities (
     assignment_message_id TEXT NULL,
     status TEXT NOT NULL CHECK(status IN ('reserved', 'delivered', 'stale', 'permanently_failed')),
     failed_attempts INTEGER NOT NULL DEFAULT 0 CHECK(failed_attempts >= 0),
+    created_at INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (team, agent, opportunity_id),
     CHECK((lane = 'ephemeral' AND message_id IS NOT NULL AND task_id IS NULL
            AND assignment_attempt IS NULL AND assignment_message_id IS NULL)
@@ -60,6 +62,9 @@ CREATE TABLE IF NOT EXISTS attention_opportunities (
 CREATE INDEX IF NOT EXISTS attention_opportunities_member_revision
     ON attention_opportunities(team, agent, roster_state_revision);
 "#;
+
+const ATTENTION_MAX_AGE_DAYS: i64 = 30;
+const ATTENTION_MAX_TERMINAL_ROWS: i64 = 10_000;
 
 pub(crate) fn ensure_schema(
     connection: &mut SqliteConnection,
@@ -79,7 +84,19 @@ pub(crate) fn ensure_schema(
         .or_else(|error| {
             if error.to_string().contains("duplicate column name") { Ok(()) } else { Err(error) }
         })
-        .map_err(|error| sqlite_error(target, "failed to add attention retry counter", error))
+        .map_err(|error| sqlite_error(target, "failed to add attention retry counter", error))?;
+    connection
+        .execute_batch(
+            "ALTER TABLE attention_opportunities ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0;",
+        )
+        .or_else(|error| {
+            if error.to_string().contains("duplicate column name") {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        })
+        .map_err(|error| sqlite_error(target, "failed to add attention creation timestamp", error))
 }
 
 impl SqliteAttentionScheduleStore {
@@ -226,6 +243,7 @@ pub(crate) fn reserve_writer(
     connection: &Connection,
     request: AttentionReservationRequest,
 ) -> rusqlite::Result<AttentionReservation> {
+    prune_terminal_rows(connection)?;
     if let Some(existing) = load_reservation(
         connection,
         &request.opportunity.member,
@@ -272,8 +290,8 @@ pub(crate) fn reserve_writer(
     connection.execute(
         "INSERT INTO attention_opportunities(
             team, agent, opportunity_id, roster_state_revision, lane, message_id, task_id,
-            assignment_attempt, assignment_message_id, status, failed_attempts
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'reserved', 0)",
+            assignment_attempt, assignment_message_id, status, failed_attempts, created_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'reserved', 0, ?10)",
         params![
             request.opportunity.member.team().as_str(),
             request.opportunity.member.agent().as_str(),
@@ -284,6 +302,7 @@ pub(crate) fn reserve_writer(
             columns.task_id,
             columns.attempt,
             columns.assignment_message_id,
+            now_unix_ms(),
         ],
     )?;
     let next_lane = request.item.lane().other();
@@ -298,6 +317,36 @@ pub(crate) fn reserve_writer(
         status: AttentionReservationStatus::Reserved,
         failed_attempts: 0,
     })
+}
+
+fn now_unix_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(i64::MAX)
+}
+
+fn prune_terminal_rows(connection: &Connection) -> rusqlite::Result<()> {
+    let cutoff =
+        now_unix_ms().saturating_sub(ATTENTION_MAX_AGE_DAYS.saturating_mul(24 * 60 * 60 * 1_000));
+    connection.execute(
+        "DELETE FROM attention_opportunities
+         WHERE status <> 'reserved' AND created_at < ?1",
+        params![cutoff],
+    )?;
+    connection.execute(
+        "DELETE FROM attention_opportunities
+         WHERE rowid IN (
+             SELECT rowid FROM attention_opportunities
+             WHERE status <> 'reserved'
+             ORDER BY created_at DESC, rowid DESC
+             LIMIT -1 OFFSET ?1
+         )",
+        params![ATTENTION_MAX_TERMINAL_ROWS],
+    )?;
+    Ok(())
 }
 
 fn load_unfinished_reservation_for_item(
@@ -678,6 +727,109 @@ mod tests {
             retry.opportunity.id,
             "the later opportunity stays idempotent while a terminal prior reservation does not suppress it"
         );
+    }
+
+    #[test]
+    fn pruning_removes_old_terminal_rows_but_retains_reserved_rows() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        let first = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(1),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: AttentionItem::EphemeralMessage {
+                    member: member(),
+                    message_id: AtmMessageId::new(),
+                },
+            })
+            .expect("first reserve");
+        store
+            .finalize(AttentionFinalizeRequest {
+                member: member(),
+                opportunity_id: first.opportunity.id,
+                outcome: AttentionFinalizeOutcome::Delivered,
+            })
+            .expect("terminalize first");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE attention_opportunities SET created_at = 0 WHERE opportunity_id = ?1",
+                        params![first.opportunity.id.to_string()],
+                    )
+                    .expect("age terminal row");
+                Ok(())
+            })
+            .expect("age terminal row");
+
+        let reserved = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(2),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                item: AttentionItem::EphemeralMessage {
+                    member: member(),
+                    message_id: AtmMessageId::new(),
+                },
+            })
+            .expect("reserved row");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE attention_opportunities SET created_at = 0 WHERE opportunity_id = ?1",
+                        params![reserved.opportunity.id.to_string()],
+                    )
+                    .expect("age reserved row");
+                Ok(())
+            })
+            .expect("age reserved row");
+
+        let later = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(3),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(2),
+                item: AttentionItem::EphemeralMessage {
+                    member: member(),
+                    message_id: AtmMessageId::new(),
+                },
+            })
+            .expect("later reserve triggers pruning");
+        assert!(store.load_cursor(&member()).expect("cursor").revision.get() >= 3);
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let terminal_count: u64 = connection.query_row(
+                    "SELECT COUNT(*) FROM attention_opportunities WHERE opportunity_id = ?1",
+                    params![first.opportunity.id.to_string()],
+                    |row| row.get(0),
+                )
+                .map_err(|error| atm_storage::AtmError::daemon_unavailable(error.to_string()))?;
+                let reserved_count: u64 = connection.query_row(
+                    "SELECT COUNT(*) FROM attention_opportunities WHERE opportunity_id = ?1 AND status = 'reserved'",
+                    params![reserved.opportunity.id.to_string()],
+                    |row| row.get(0),
+                )
+                .map_err(|error| atm_storage::AtmError::daemon_unavailable(error.to_string()))?;
+                assert_eq!(terminal_count, 0);
+                assert_eq!(reserved_count, 1);
+                let _ = later;
+                Ok(())
+            })
+            .expect("inspect pruned rows");
     }
 
     #[tokio::test]

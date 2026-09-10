@@ -1172,6 +1172,8 @@ mod tests {
         opportunities: Mutex<Vec<IdleOpportunity>>,
     }
 
+    impl atm_core::boundary::sealed::Sealed for RecordingIdleOpportunitySink {}
+
     impl IdleOpportunitySink for RecordingIdleOpportunitySink {
         fn on_idle_opportunity(&self, opportunity: IdleOpportunity) {
             self.opportunities

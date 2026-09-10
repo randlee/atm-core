@@ -317,6 +317,16 @@ pub(crate) struct DetachedReceivedHooks {
 }
 
 impl DetachedReceivedHooks {
+    pub(crate) fn observe_task<F>(&self, task: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        let task = tokio::spawn(task);
+        let mut tasks = self.lock();
+        tasks.retain(|task| !task.is_finished());
+        tasks.push(task);
+    }
+
     pub(crate) fn observe<F>(&self, runtime_health: RuntimeHealth, request_id: RequestId, hook: F)
     where
         F: Future<Output = Vec<WarningEntry>> + Send + 'static,
@@ -397,4 +407,34 @@ pub(super) fn validate_graft_receiver_member(
         return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DetachedReceivedHooks;
+    use std::sync::Arc;
+    use tokio::sync::Notify;
+
+    #[tokio::test]
+    async fn detached_task_drain_joins_in_flight_dispatch() {
+        let hooks = DetachedReceivedHooks::default();
+        let started = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let started_task = Arc::clone(&started);
+        let release_task = Arc::clone(&release);
+        hooks.observe_task(async move {
+            started_task.notify_one();
+            release_task.notified().await;
+        });
+        started.notified().await;
+
+        let drain = tokio::spawn({
+            let hooks = hooks.clone();
+            async move { hooks.drain(std::time::Duration::from_secs(1)).await }
+        });
+        tokio::task::yield_now().await;
+        assert!(!drain.is_finished(), "drain must wait for the dispatch");
+        release.notify_one();
+        drain.await.expect("drain task joins");
+    }
 }
