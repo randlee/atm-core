@@ -8,6 +8,8 @@ mod idle;
 mod reminders;
 #[path = "herdr_queue_wake_support.rs"]
 mod support;
+#[path = "herdr_queue_wake_task.rs"]
+mod task;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -18,8 +20,8 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AssignmentAttempt, AttentionItem, AttentionReservation, AttentionReservationStatus,
-    DurableRosterStore, LogicalTaskRow, MemberKey, MessageReceivedHookSelector, NudgeKind,
-    PendingNudgeStore, ReadDeadline, ReadLaneError, TaskAssignmentAttempt,
+    DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
+    ReadLaneError,
 };
 use atm_core::delivery_channel::{
     DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
@@ -819,9 +821,15 @@ impl HerdrQueueWakePump {
         now: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
     ) -> Result<AttentionReservationStatus, AtmError> {
-        let Some((row, assignment)) = self
-            .load_current_task_reminder(member, task_id, attempt, assignment_message_id, now)
-            .await?
+        let Some((row, assignment)) = task::load_current_task_reminder(
+            self,
+            member,
+            task_id,
+            attempt,
+            assignment_message_id,
+            now,
+        )
+        .await?
         else {
             return Ok(AttentionReservationStatus::Stale);
         };
@@ -857,43 +865,6 @@ impl HerdrQueueWakePump {
             stats,
         )
         .await
-    }
-
-    async fn load_current_task_reminder(
-        &self,
-        member: &MemberKey,
-        task_id: &TaskId,
-        attempt: AssignmentAttempt,
-        assignment_message_id: atm_core::schema::AtmMessageId,
-        now: IsoTimestamp,
-    ) -> Result<Option<(LogicalTaskRow, TaskAssignmentAttempt)>, AtmError> {
-        let reader = self.service_runtime.async_task_ledger_reader()?;
-        let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
-        let Some(row) = reader
-            .top_runnable_task(member.team().clone(), member.agent().clone(), deadline)
-            .await
-            .map_err(task_ledger_read_error)?
-            .filter(|row| {
-                row.task_id == *task_id
-                    && row.current_attempt == attempt
-                    && row.assignment_message_id == assignment_message_id
-                    && super::herdr_attention_scheduler::task_reminder_due(row, now)
-            })
-        else {
-            return Ok(None);
-        };
-        let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
-        let assignment = reader
-            .list_task_assignment_attempts(member.team().clone(), task_id.clone(), deadline)
-            .await
-            .map_err(task_ledger_read_error)?
-            .into_iter()
-            .find(|assignment| {
-                assignment.attempt == attempt
-                    && assignment.assignee == *member.agent()
-                    && assignment.assignment_message_id == assignment_message_id
-            });
-        Ok(assignment.map(|assignment| (row, assignment)))
     }
 
     pub(crate) async fn rebuild_dispatch(
