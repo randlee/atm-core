@@ -11,7 +11,7 @@ use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::task_state::{TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority};
 use crate::task_store::MessageWriteOrigin;
-use crate::types::{MemberKey, TaskId};
+use crate::types::{AgentName, MemberKey, TaskId};
 
 /// A validated, admitted message committed by the same task transaction.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -86,6 +86,11 @@ pub struct TaskMutationOutcome {
     pub message_id: Option<AtmMessageId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub successor_task_id: Option<TaskId>,
+    /// The immutable current projection snapshot committed by the operation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_assignee: Option<AgentName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_attempt: Option<crate::task_state::AssignmentAttempt>,
     pub replayed: bool,
 }
 

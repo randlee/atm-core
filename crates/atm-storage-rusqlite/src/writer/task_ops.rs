@@ -309,12 +309,16 @@ fn finalize_mutation(
     message_id: Option<atm_storage::AtmMessageId>,
     now: &str,
 ) -> Result<TaskMutationOutcome, AtmError> {
+    let (current_assignee, current_attempt) =
+        current_projection_snapshot(request, connection, target)?;
     let result = TaskMutationOutcome {
         task_id: request.task_id.clone(),
         state: transition.state.clone(),
         revision: transition.revision,
         message_id,
         successor_task_id: transition.related_task_id.clone(),
+        current_assignee: Some(current_assignee),
+        current_attempt: Some(current_attempt),
         replayed: false,
     };
     let result_json = serde_json::to_string(&result).map_err(|error| {
@@ -342,6 +346,35 @@ fn finalize_mutation(
         sync_v1_compat_projection(connection, target, request.actor.team(), successor_task_id)?;
     }
     Ok(result)
+}
+
+fn current_projection_snapshot(
+    request: &TaskMutationRequest,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(atm_storage::AgentName, atm_storage::AssignmentAttempt), AtmError> {
+    let (assignee, attempt): (String, u32) = connection
+        .query_row(
+            "SELECT current_assignee, current_attempt FROM tasks_v2 WHERE team = ?1 AND task_id = ?2",
+            params![request.actor.team().as_str(), request.task_id.as_str()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|error| sqlite_error(target, "failed to load committed task projection", error))?;
+    let assignee = assignee.parse().map_err(|error| {
+        AtmError::new(
+            AtmErrorCode::SerializationFailed,
+            "committed task projection has an invalid assignee",
+        )
+        .with_cause(error)
+    })?;
+    let attempt = atm_storage::AssignmentAttempt::new(attempt).map_err(|error| {
+        AtmError::new(
+            AtmErrorCode::SerializationFailed,
+            "committed task projection has an invalid assignment attempt",
+        )
+        .with_cause(error.into_atm_error())
+    })?;
+    Ok((assignee, attempt))
 }
 
 fn assign_v2(

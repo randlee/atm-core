@@ -140,6 +140,8 @@ mod tests {
         assert!(replay.replayed);
         assert!(first.message_id.is_some());
         assert_eq!(replay.message_id, first.message_id);
+        assert_eq!(replay.current_assignee, first.current_assignee);
+        assert_eq!(replay.current_attempt, first.current_attempt);
         backend
             .shared_db_for_test()
             .with_connection(|connection| {
