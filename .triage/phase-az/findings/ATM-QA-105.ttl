@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-105>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-105" ;
+  triage:title "trailing blank line in generated CLI-reference doc" ;
+  triage:description "quality-mgr's phase-ending review (req-qa) reports a trailing blank line left in the generated CLI-reference documentation for the phase-az task commands. Note: originally suggested by quality-mgr as 'QA-002', renumbered to ATM-QA-105 since ATM-QA-002 (AZ.1 nudge-templates.md staleness) and ATM-QA-104 (AZS3 boundary_enforcement.rs writer-surface scan gap) are both already existing, unrelated, closed findings under those ids. Cosmetic; trivial fix." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/cli-reference.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-105/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-105/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "docs/cli-reference.md" ;
+  triage:line 1 ;
+  triage:snippet "trailing blank line in generated CLI-reference doc section for task commands" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+
+<urn:atm:triage:worktree/AZ4/066a465d0>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-az" ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:orderIndex 4 .

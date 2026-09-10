@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F004>
+  a triage:Finding ;
+  triage:findingId "RBQA-F004" ;
+  triage:title "AsyncTaskLedgerReader::list_tasks/list_task_events dead behind ListCommand::run's short-circuit" ;
+  triage:description "quality-mgr's phase-ending review (ruthless-boundary-qa) reports that crates/atm/src/commands/list.rs's ListCommand::run short-circuits to CoreTaskCommandService before ever reaching AsyncTaskLedgerReader::list_tasks/list_task_events, leaving both methods dead in production (only reachable from tests). Note: this finding was originally suggested by quality-mgr as 'RBQA-F001', but that id is already a closed AZ.1 finding on a different topic (dead RuntimeObservationSource::LocalCommand-adjacent code) -- 'RBQA-F003' was also already taken (a closed PR #1381 dead-code finding, misfiled/re-correlated 2026-09-10) -- so this finding is filed as RBQA-F004 to avoid collision with either existing record. Fix: either wire ListCommand::run to use AsyncTaskLedgerReader for these two read paths, or remove the now-dead trait methods if CoreTaskCommandService fully supersedes them." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/src/commands/list.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F004/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/list.rs" ;
+  triage:line 1 ;
+  triage:snippet "ListCommand::run short-circuits to CoreTaskCommandService before AsyncTaskLedgerReader::list_tasks/list_task_events" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+
+<urn:atm:triage:worktree/AZ4/066a465d0>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-az" ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:orderIndex 4 .

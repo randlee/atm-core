@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-106>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-106" ;
+  triage:title "phase-ending review's own finding coverage is a partial re-derivation, not exhaustive re-triage" ;
+  triage:description "quality-mgr's phase-ending review self-reports that its reviewer team independently re-derived roughly 13 of the 44 previously-triaged findings during this pass (as corroboration, not full re-litigation of all 44). This is a coverage caveat on the review's own methodology, recorded for the phase-end record -- not a code defect. No fix required; informational note only, closed on filing." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process-note" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "N/A -- process note" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-106/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-106/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-az/phase-az-plan.md" ;
+  triage:line 1 ;
+  triage:snippet "phase-ending review coverage note: ~13/44 findings independently re-derived as corroboration" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+
+<urn:atm:triage:worktree/AZ4/066a465d0>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-az" ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:orderIndex 4 .
