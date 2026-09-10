@@ -15,28 +15,30 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/runtime_health.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-006/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/FNX-006/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/runtime_health.rs" ;
   triage:line 59 ;
   triage:snippet "pub trait IdleOpportunitySink: Send + Sync {} -- unsealed, unlike sibling MemberStateTransitionSink; no boundary manifest filed" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "d0cb3f509" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
+  triage:headSha "51648beef" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/51648beef> .
 
-<urn:atm:triage:worktree/AZ4/d0cb3f509>
+<urn:atm:triage:worktree/AZ4/51648beef>
   a triage:WorktreeSnapshot ;
   triage:path "fix/az-critical-design-review-findings" ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "d0cb3f509" ;
+  triage:headSha "51648beef" ;
   triage:orderIndex 4 .

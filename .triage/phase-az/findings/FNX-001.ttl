@@ -15,28 +15,30 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "docs/adr/ADR-063.md, docs/adr/ADR-036.md" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-001/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/FNX-001/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/task_mutation.rs" ;
   triage:line 189 ;
   triage:snippet "AsyncTaskSchedulerAuditStore introduced as an uncataloged thirteenth semantic capability; ADR-063 D3 and ADR-036's AZ.4 amendment not amended to authorize or reconcile it" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "d0cb3f509" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
+  triage:headSha "51648beef" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/51648beef> .
 
-<urn:atm:triage:worktree/AZ4/d0cb3f509>
+<urn:atm:triage:worktree/AZ4/51648beef>
   a triage:WorktreeSnapshot ;
   triage:path "fix/az-critical-design-review-findings" ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "d0cb3f509" ;
+  triage:headSha "51648beef" ;
   triage:orderIndex 4 .

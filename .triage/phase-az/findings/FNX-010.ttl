@@ -15,28 +15,30 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage/src/testing.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-010/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/FNX-010/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/testing.rs" ;
   triage:line 1 ;
   triage:snippet "GateAfterTaskRead::load_logical_task blocks a Tokio worker via std::sync::mpsc::Receiver::recv() inside an async fn" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "d0cb3f509" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
+  triage:headSha "7248e41d8" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7248e41d8> .
 
-<urn:atm:triage:worktree/AZ4/d0cb3f509>
+<urn:atm:triage:worktree/AZ4/7248e41d8>
   a triage:WorktreeSnapshot ;
   triage:path "fix/az-critical-design-review-findings" ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "d0cb3f509" ;
+  triage:headSha "7248e41d8" ;
   triage:orderIndex 4 .
