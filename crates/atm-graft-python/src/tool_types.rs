@@ -401,7 +401,7 @@ pub(crate) fn canonical_timestamp(value: &atm_core::types::IsoTimestamp) -> Stri
     let value = value.to_string();
     value
         .strip_suffix("+00:00")
-        .map_or(value.clone(), |prefix| format!("{prefix}Z"))
+        .map_or_else(|| value.clone(), |prefix| format!("{prefix}Z"))
 }
 
 fn read_selection(value: ReadSelection) -> &'static str {
