@@ -15,15 +15,29 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_idle.rs, crates/atm-http-runtime/src/router_support.rs" ;
-  triage:status "deferred" ;
-  triage:closedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
-  triage:closedBy "team-lead" ;
-  triage:dispatchReady false ;
-  triage:triagedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T21:26:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-014/AZ4-001> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-014/AZ4-002> ;
+  triage:triageRecordVersion "3" .
+
+# v3: fenix (leading coordination on this round, per Rand) rules this moves
+# deferred -> open, folded into SOLAR-CDR-009's closure as a required
+# sub-item, dispatched to arch-ctm on fix/az-cdr-followup-1. Rationale: this
+# finding's code (router_support.rs:322-330's unconstrained tokio::spawn in
+# observe_task) is exactly what solar's required closure restructures
+# anyway (a per-member claim/lease will change this spawn and its registry
+# interaction), so the marginal cost of fixing it in the same pass is near
+# zero and leaving it deferred means touching the same lines twice.
+# Acceptance criterion added: the draining decision and the handle
+# registration must happen under the same lock, so a dispatch that passes
+# the draining check cannot be pushed after drain has taken the vector.
+# Supersedes the v2 deferral below (that reasoning was correct at the time;
+# the concurrency-design decision it was waiting on is now being made
+# anyway via SOLAR-CDR-009).
 
 # v2, team-lead judgment call (documented override of quality-mgr's stated
 # 0-blocking/0-important/0-minor merge gate for this one finding only):
@@ -58,3 +72,14 @@
   triage:branch "fix/az-critical-design-review-findings" ;
   triage:headSha "3b8a43fd3" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:occurrence/FNX-014/AZ4-002>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/router_support.rs" ;
+  triage:line 322 ;
+  triage:snippet "folded into SOLAR-CDR-009's closure as a required sub-item; dispatched to arch-ctm on fix/az-cdr-followup-1 per fenix's ruling (same tokio::spawn/registry code the lease/claim fix restructures)." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-cdr-followup-1" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/e20f2d0f5> .

@@ -15,13 +15,20 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-013/AZ4-001> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
+
+# v3: closed fixed -- verified by quality-mgr's QA-3 pass on PR #1395 @ e20f2d0f5
+# (PASS 0/0/0 across arch-qa/req-qa/rust-qa-agent/ruthless-boundary-qa, full
+# suite re-confirmed clean) plus team-lead direct source verification.
+# index added: CREATE INDEX IF NOT EXISTS attention_opportunities_status_created_at ON attention_opportunities(status, created_at) at attention_schedule_store.rs -- write-path call site unchanged per fenix's own scoped recommendation.
 
 # v2: reopened for dispatch, scoped to the minimal mitigation fenix's own
 # recommendation allows ("...add a (status, created_at) index if it stays on
@@ -34,10 +41,10 @@
   triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
   triage:line 246 ;
   triage:snippet "prune_terminal_rows runs on the writer hot path, unindexed; bounded/self-limiting cost. Deferred per fenix's non-blocking PASS verdict on PR #1395" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "3b8a43fd3" ;
+  triage:headSha "e20f2d0f5" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
 
 <urn:atm:triage:worktree/AZ4/3b8a43fd3-r>

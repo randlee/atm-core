@@ -15,23 +15,30 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/service_runtime.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T20:55:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-019/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# v2: closed fixed -- verified by quality-mgr's QA-3 pass on PR #1395 @ e20f2d0f5
+# (PASS 0/0/0 across arch-qa/req-qa/rust-qa-agent/ruthless-boundary-qa, full
+# suite re-confirmed clean) plus team-lead direct source verification.
+# map_read_lane_error wrapper removed at service_runtime.rs; call site now uses AtmError::from directly, migrated test still covers all 3 ReadLaneError cases.
 
 <urn:atm:triage:occurrence/FNX-019/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/service_runtime.rs" ;
   triage:line 1148 ;
   triage:snippet "map_read_lane_error is a superfluous AtmError::from wrapper; quality-mgr QA-2 finding #5 on PR #1395" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "3b8a43fd3" ;
+  triage:headSha "e20f2d0f5" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
 
 <urn:atm:triage:worktree/AZ4/3b8a43fd3-r>

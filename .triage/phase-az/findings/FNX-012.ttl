@@ -15,13 +15,20 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "boundaries/atm-storage/async-task-scheduler-audit-store.toml" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-012/AZ4-001> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
+
+# v3: closed fixed -- verified by quality-mgr's QA-3 pass on PR #1395 @ e20f2d0f5
+# (PASS 0/0/0 across arch-qa/req-qa/rust-qa-agent/ruthless-boundary-qa, full
+# suite re-confirmed clean) plus team-lead direct source verification.
+# comment corrected at boundaries/atm-storage/async-task-scheduler-audit-store.toml -- now states the real reason (atm-http-runtime reaches these types only through atm-core's re-export, no direct Cargo edge, task-store.toml forbids it).
 
 # v2: reopened for dispatch as part of a consolidated minor cleanup pass
 # (quality-mgr's QA-2 FAIL under her own 0/0/0 gate; team-lead elects to
@@ -32,10 +39,10 @@
   triage:file "boundaries/atm-storage/async-task-scheduler-audit-store.toml" ;
   triage:line 22 ;
   triage:snippet "replacement comment says task-store.toml covers atm-http-runtime; it actually forbids that edge. Deferred per fenix's non-blocking PASS verdict on PR #1395" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "3b8a43fd3" ;
+  triage:headSha "e20f2d0f5" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
 
 <urn:atm:triage:worktree/AZ4/3b8a43fd3-r>
