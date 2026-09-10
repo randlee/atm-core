@@ -17,7 +17,7 @@ use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AssignmentAttempt, AttentionItem, AttentionReservation, AttentionReservationStatus,
     DurableRosterStore, LogicalTaskRow, MemberKey, MessageReceivedHookSelector, NudgeKind,
-    PendingNudgeStore, ReadDeadline, TaskAssignmentAttempt,
+    PendingNudgeStore, ReadDeadline, ReadLaneError, TaskAssignmentAttempt,
 };
 use atm_core::delivery_channel::{
     DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
@@ -52,6 +52,10 @@ pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 #[cfg(test)]
 pub(crate) use super::herdr_attention_scheduler::TASK_REMINDER_INTERVAL_MS;
 pub(crate) const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
+
+fn task_ledger_read_error(error: ReadLaneError) -> AtmError {
+    AtmError::from(error)
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct HerdrQueueWakeStats {
@@ -862,7 +866,7 @@ impl HerdrQueueWakePump {
         let Some(row) = reader
             .top_runnable_task(member.team().clone(), member.agent().clone(), deadline)
             .await
-            .map_err(|error| AtmError::daemon_unavailable(error.to_string()))?
+            .map_err(task_ledger_read_error)?
             .filter(|row| {
                 row.task_id == *task_id
                     && row.current_attempt == attempt
@@ -876,7 +880,7 @@ impl HerdrQueueWakePump {
         let assignment = reader
             .list_task_assignment_attempts(member.team().clone(), task_id.clone(), deadline)
             .await
-            .map_err(|error| AtmError::daemon_unavailable(error.to_string()))?
+            .map_err(task_ledger_read_error)?
             .into_iter()
             .find(|assignment| {
                 assignment.attempt == attempt
@@ -1104,8 +1108,8 @@ mod tests {
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MemberKey,
-        MessageReceivedHookSelector, PostSendEmissionPath, ReadDeadline, RosterEntry,
-        RosterHarness, RosterMemberKind,
+        MessageReceivedHookSelector, PostSendEmissionPath, ReadDeadline, ReadLaneError,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::NullObservability;
@@ -1186,6 +1190,34 @@ mod tests {
             sink.codes.lock().expect("codes").as_slice(),
             ["ATM_HERDR_UNAVAILABLE"]
         );
+    }
+
+    #[test]
+    fn reminder_reader_errors_preserve_the_reader_lane_code() {
+        for (error, expected) in [
+            (
+                ReadLaneError::Saturated {
+                    reason: "test saturation",
+                },
+                AtmErrorCode::DaemonConnectionSaturated,
+            ),
+            (
+                ReadLaneError::DeadlineExpired {
+                    stage: "test deadline",
+                },
+                AtmErrorCode::MailboxLockTimeout,
+            ),
+            (
+                ReadLaneError::Storage {
+                    code: AtmErrorCode::MailboxReadFailed,
+                    message: "test storage failure".to_owned(),
+                    cause: Some("test cause".to_owned()),
+                },
+                AtmErrorCode::MailboxReadFailed,
+            ),
+        ] {
+            assert_eq!(super::task_ledger_read_error(error).code(), expected);
+        }
     }
 
     struct FakeSelector {

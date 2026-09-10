@@ -17,10 +17,11 @@ pub use atm_storage::{
     AttentionReservationStatus, AttentionScheduleStore, BuiltInNudgeTemplateKind,
     DAEMON_ACTOR_NAME, EphemeralMessageCandidate, EscalationScope, IdleOpportunity, LogicalTaskRow,
     MAX_ESCALATION_RECIPIENTS, NudgeTemplateOverrideStore, PersistentTaskCandidate, ReadDeadline,
-    ReminderOutcome, TASK_STALLED_REMINDER_THRESHOLD, TaskAssignmentAttempt, TaskEventKind,
-    TaskEventRow, TaskLeadNotificationAuditRequest, TaskLifecycleState, TaskMutationRequest,
-    TaskOperation, TaskOperationId, TaskPriority, TaskReminderAuditRequest, TaskRow, TaskStore,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, select_attention_item,
+    ReadLaneError, ReminderOutcome, TASK_STALLED_REMINDER_THRESHOLD, TaskAssignmentAttempt,
+    TaskEventKind, TaskEventRow, TaskLeadNotificationAuditRequest, TaskLifecycleState,
+    TaskMutationRequest, TaskOperation, TaskOperationId, TaskPriority, TaskReminderAuditRequest,
+    TaskRow, TaskStore, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+    select_attention_item,
 };
 
 /// Durable at-most-once delivery state for deferred (`atm queue`) nudges.
