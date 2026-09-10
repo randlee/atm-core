@@ -50,14 +50,14 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 
 ---
 
-## ⚠️ Architecture Direction — Tokio + Axum (Phase AL/AM)
+## ⚠️ Architecture Direction — Tokio + Axum (complete, Phase AM)
 
-**The daemon's target architecture is Tokio + Axum (`atm-http-runtime`) for ALL of CLI + graft + cross-host transport.** Tokio was previously a sidelined feature — that is no longer true.
+**The daemon's only architecture is Tokio + Axum (`atm-http-runtime`) for ALL of CLI + graft + cross-host transport.** This is not a target — the migration is complete.
 
-- The synchronous daemon is **legacy code, intentionally left untouched, and scheduled for wholesale deletion in Phase AM**.
-- **Never** patch, harden, or "remodel" the legacy synchronous daemon path — not for QA findings, not for critical-review findings. The correct fix is always finishing the `atm-http-runtime` cutover (AL.5–AL.7 adapter activation).
-- Rewriting legacy daemon code invalidates the Phase AM deletion plan (`docs/plans/phase-am/*.md` targets specific legacy files/patterns). Before dispatching any fix that touches legacy daemon runtime/dispatch code, check it against AM's deletion targets.
-- Findings against legacy daemon runtime behavior (e.g. private Tokio runtime bridged via `spawn_blocking`) are **known, deferred technical debt** — not missed QA.
+- The legacy synchronous daemon was **deleted in Phase AM** (PR #853; see `docs/plans/phase-am/am6-closure-proof.md` for the ledger-row deletion evidence). There is no remaining legacy sync-daemon path.
+- Do not treat a finding, plan reference, or reviewer proposal that assumes a "legacy daemon" path still exists as valid — it is describing removed code. Correct the assumption rather than routing it as remediation work.
+- `atm-daemon` is now only the shipped binary entrypoint plus its retained observability adapter; `atm-daemon-bootstrap` owns lifecycle/composition; `atm-http-runtime` owns the maintained Axum server. `atm-daemon-client` is retained only for narrow non-write compatibility calls.
+- A small number of conditional-retain items from the AM ledger remain by design (e.g. `atm-peer-tls-interop`/storage TLS types as reference-only physical-adapter material, and the supported tmux received-hook emitter) — these are documented exceptions, not open deletion work.
 
 ---
 

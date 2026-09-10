@@ -15,33 +15,34 @@ approval_policy = "on-failure"
 
 [startup.team-lead]
 all = ["Read /graph-orchestration SKILL.md and /triaging-findings SKILL.md",
-       "HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — immediately reject any finding/fix/task that remodels or patches it; route daemon work to the AL.5-AL.7 atm-http-runtime cutover (see CLAUDE.md Architecture Direction)",
+       "HARD RULE: every ATM assignment carrying a rendered template body (task/QA/fix dispatch) MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself (sc-compose/atm compose) and send the output as message text, via --stdin, or via --file. `atm send --file` only records a path reference (content_format=path-ref) — it does not deliver rendered content. If a template lacks a variable slot for one-off content (e.g. an override note), fold that content into an existing variable such as description rather than hand-rendering and sending the output directly.",
        "Use native atm send or atm ack for messages to arch-ctm or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
 [startup.arch-ctm]
-all = ["HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — immediately reject any finding/fix/task that remodels or patches it; route daemon work to the AL.5-AL.7 atm-http-runtime cutover (see AGENTS.md hard rule)",
+all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
 [startup.quality-mgr]
 all = ["read .claude/agents/quality-mgr.md for directive",
-       "HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — classify legacy-daemon runtime findings as non-findings (never Blocking/Important) and reject any reviewer proposal to remodel/patch the old daemon; valid remediation is the AL.5-AL.7 atm-http-runtime cutover",
+       "HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead or arch-ctm",
        "Use native atm read to read messages from team-members" ]
 
 [startup.cipher]
-all = ["HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — immediately reject any finding/fix/task that remodels or patches it; route daemon work to the AL.5-AL.7 atm-http-runtime cutover (see AGENTS.md hard rule)",
+all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead, arch-ctm, or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
 [startup.fenix]
-all = ["HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — immediately reject any finding/fix/task that remodels or patches it; route daemon work to the AL.5-AL.7 atm-http-runtime cutover (see AGENTS.md hard rule)",
+all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead, arch-ctm, or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
 [startup.publisher]
-all = ["Use native atm send or atm ack for messages to team-lead or quality-mgr",
+all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
+       "Use native atm send or atm ack for messages to team-lead or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
 # ── rmux: tmux session launcher ──────────────────────────────────────
