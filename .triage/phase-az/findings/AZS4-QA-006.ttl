@@ -42,8 +42,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
   triage:line 8 ;
   triage:snippet "#[cfg(test)] use std::cell::Cell;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -53,8 +53,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
   triage:line 35 ;
   triage:snippet "#[cfg(test)] LeadNotified," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -64,8 +64,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
   triage:line 44 ;
   triage:snippet "#[cfg(test)] Self::LeadNotified => \"lead_notified\"," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -75,8 +75,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
   triage:line 53 ;
   triage:snippet "#[cfg(test)] std::thread_local! {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -86,8 +86,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
   triage:line 58 ;
   triage:snippet "#[cfg(test)] pub(crate) fn fail_next_escalation_mail_" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -97,8 +97,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
   triage:line 391 ;
   triage:snippet "#[cfg(test)] if FAIL_NEXT_ESCALATION_MAIL_WRITE.with(" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -108,8 +108,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
   triage:line 8 ;
   triage:snippet "#[cfg(test)] use atm_core::boundary::{ReminderOutcome" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -119,8 +119,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
   triage:line 16 ;
   triage:snippet "#[cfg(test)] use crate::herdr_queue_wake::run_blockin" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -130,8 +130,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
   triage:line 24 ;
   triage:snippet "#[cfg(test)] pub(crate) async fn maybe_escalate_task(" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -141,8 +141,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
   triage:line 73 ;
   triage:snippet "#[cfg(test)] async fn reminder_events(" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -152,8 +152,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
   triage:line 91 ;
   triage:snippet "#[cfg(test)] fn task_escalation_body(row: &TaskRow, n" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -163,8 +163,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
   triage:line 119 ;
   triage:snippet "#[cfg(test)] fn task_escalation_notification(row: &Ta" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
@@ -174,8 +174,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
   triage:line 135 ;
   triage:snippet "#[cfg(test)] async fn record_lead_audit(" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .

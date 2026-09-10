@@ -30,8 +30,8 @@
   triage:file "crates/atm-storage-rusqlite/tests/schema_version_compat.rs" ;
   triage:line 1 ;
   triage:snippet "Missing schema migration test coverage for attention_lane_cursors, attention_opportunities" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfd> .

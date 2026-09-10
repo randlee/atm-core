@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS4-QA-012>
+  a triage:Finding ;
+  triage:findingId "AZS4-QA-012" ;
+  triage:title "No dedicated boundary tests for the two new sealed traits (AttentionScheduleStore/AsyncAttentionScheduleStore) per ADR-063 Required Evidence" ;
+  triage:description "quality-mgr's formal QA-2 verdict (ruthless-boundary-qa, RBQA-AZ4-F001) reports that no dedicated boundary test exists for the two new sealed traits AttentionScheduleStore (crates/atm-storage/src/attention.rs:235) and AsyncAttentionScheduleStore (crates/atm-storage/src/attention.rs:247), unlike every other capability in the repo (e.g. crates/atm-architecture/tests/pending_nudge_store_boundary.rs establishes the existing precedent pattern for a dedicated per-capability boundary test file). ADR-063 (docs/adr/ADR-063-phase-az-task-and-attention-capabilities.md) Required Evidence section, line 205, explicitly demands: 'Boundary tests for all three new sealed traits (two semantic capabilities) and a crate-graph proof that no concrete SQLite type crosses the storage boundary.' This evidence requirement has not been satisfied for the attention-scheduler capability added in AZ.4." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/attention.rs, crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T16:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-012/AZ4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-012/AZ4-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS4-QA-012/AZ4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/attention.rs" ;
+  triage:line 235 ;
+  triage:snippet "pub trait AttentionScheduleStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042> .
+
+<urn:atm:triage:occurrence/AZS4-QA-012/AZ4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/attention.rs" ;
+  triage:line 247 ;
+  triage:snippet "pub trait AsyncAttentionScheduleStore: sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042> .
+
+<urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ4" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
+  triage:orderIndex 4 .

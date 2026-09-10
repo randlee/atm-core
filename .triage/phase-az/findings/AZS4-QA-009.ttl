@@ -30,8 +30,8 @@
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
   triage:line 28 ;
   triage:snippet "type DecomposedWorkflowColumns<'a> = (Option<&'a str>, Option<&'a str>, Option<&'a str>, Option<&'a str>, Option<&'a str>, Option<&'a str>, Option<String>, Option<String>);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
