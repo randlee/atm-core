@@ -3260,7 +3260,7 @@ reconstructs lifecycle authorization. Terminal handoff mail is represented as
 prepared data and committed by the same task mutation transaction as the
 closed event/projection. Task-linked acknowledgement remains a mail mutation;
 only explicit `TaskAction::Start` activates an assignment. The public HTTP
-task route is additive in API 1.4.0, while the retained legacy flags delegate
+task route is additive in API 1.5.0, while the retained legacy flags delegate
 through this boundary during their compatibility window.
 
 ### 21.13 Phase AZ.4 fair idle attention scheduler
