@@ -103,14 +103,24 @@ async fn next_ephemeral(
     pending_store: std::sync::Arc<dyn PendingNudgeStore + Send + Sync>,
     member: MemberKey,
 ) -> Result<Option<EphemeralMessageCandidate>, AtmError> {
-    run_blocking(move || {
-        pending_store.peek_next_pending(&member).map(|claim| {
-            claim.map(|claim| EphemeralMessageCandidate {
-                message_id: claim.msg,
+    let deadline = ReadDeadline::new(SCHEDULER_REQUEST_DEADLINE)?;
+    tokio::time::timeout(
+        deadline.remaining(),
+        run_blocking(move || {
+            pending_store.peek_next_pending(&member).map(|claim| {
+                claim.map(|claim| EphemeralMessageCandidate {
+                    message_id: claim.msg,
+                })
             })
-        })
-    })
+        }),
+    )
     .await
+    .map_err(|_| {
+        AtmError::new(
+            AtmErrorCode::WaitTimeout,
+            "pending-nudge inspection exceeded the scheduler request deadline",
+        )
+    })?
 }
 
 async fn next_persistent_task(

@@ -6,13 +6,28 @@ use atm_storage::{
     AssignmentAttempt, AsyncAttentionScheduleStore, AtmError, AttentionCursor,
     AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionItem, AttentionLane,
     AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
-    AttentionScheduleStore, IdleOpportunity, IdleOpportunityId, MemberKey, ReadDeadline,
-    ReadLaneError, RosterStateRevision,
+    AttentionScheduleStore, IdleOpportunity, IdleOpportunityId, MAX_NUDGE_ATTEMPTS, MemberKey,
+    ReadDeadline, ReadLaneError, RosterStateRevision,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::SqliteAttentionScheduleStore;
 use crate::shared_db::{SharedDb, SharedDbTarget, SqliteConnection, sqlite_error};
+
+#[derive(Debug)]
+struct AttentionScheduleInvariant(&'static str);
+
+impl std::fmt::Display for AttentionScheduleInvariant {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+impl std::error::Error for AttentionScheduleInvariant {}
+
+fn attention_schedule_invariant(reason: &'static str) -> rusqlite::Error {
+    rusqlite::Error::ToSqlConversionFailure(Box::new(AttentionScheduleInvariant(reason)))
+}
 
 const ATTENTION_SCHEMA_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS attention_lane_cursors (
@@ -184,7 +199,8 @@ fn load_cursor(connection: &Connection, member: &MemberKey) -> rusqlite::Result<
             revision: 0,
         },
         Some((lane, revision)) => AttentionCursor {
-            next_lane: parse_lane(&lane).map_err(|_| rusqlite::Error::InvalidQuery)?,
+            next_lane: parse_lane(&lane)
+                .map_err(|_| attention_schedule_invariant("invalid attention cursor lane"))?,
             revision,
         },
     })
@@ -227,12 +243,16 @@ pub(crate) fn reserve_writer(
     }
     let cursor = load_cursor(connection, &request.opportunity.member)?;
     if cursor.revision != request.expected_cursor_revision {
-        return Err(rusqlite::Error::InvalidQuery);
+        return Err(attention_schedule_invariant(
+            "attention cursor revision mismatch",
+        ));
     }
     if request_item_member(&request.item) != &request.opportunity.member {
-        return Err(rusqlite::Error::InvalidQuery);
+        return Err(attention_schedule_invariant(
+            "attention item member mismatch",
+        ));
     }
-    let (message_id, task_id, attempt, assignment_message_id) = item_columns(&request.item);
+    let columns = item_columns(&request.item);
     connection.execute(
         "INSERT INTO attention_opportunities(
             team, agent, opportunity_id, roster_state_revision, lane, message_id, task_id,
@@ -244,10 +264,10 @@ pub(crate) fn reserve_writer(
             request.opportunity.id.to_string(),
             request.opportunity.roster_state_revision.get(),
             request.item.lane().as_str(),
-            message_id,
-            task_id,
-            attempt,
-            assignment_message_id,
+            columns.message_id,
+            columns.task_id,
+            columns.attempt,
+            columns.assignment_message_id,
         ],
     )?;
     let next_lane = request.item.lane().other();
@@ -269,26 +289,30 @@ fn load_unfinished_reservation_for_item(
     member: &MemberKey,
     item: &AttentionItem,
 ) -> rusqlite::Result<Option<AttentionReservation>> {
-    let (lane, message_id, task_id, attempt, assignment_message_id) = match item {
-        AttentionItem::EphemeralMessage { message_id, .. } => (
-            AttentionLane::Ephemeral,
-            Some(message_id.to_string()),
-            None,
-            None,
-            None,
-        ),
+    let filter = match item {
+        AttentionItem::EphemeralMessage { message_id, .. } => UnfinishedReservationFilter {
+            lane: AttentionLane::Ephemeral,
+            columns: ItemColumns {
+                message_id: Some(message_id.to_string()),
+                task_id: None,
+                attempt: None,
+                assignment_message_id: None,
+            },
+        },
         AttentionItem::PersistentTaskReminder {
             task_id,
             attempt,
             assignment_message_id,
             ..
-        } => (
-            AttentionLane::PersistentTask,
-            None,
-            Some(task_id.to_string()),
-            Some(attempt.get()),
-            Some(assignment_message_id.to_string()),
-        ),
+        } => UnfinishedReservationFilter {
+            lane: AttentionLane::PersistentTask,
+            columns: ItemColumns {
+                message_id: None,
+                task_id: Some(task_id.to_string()),
+                attempt: Some(attempt.get()),
+                assignment_message_id: Some(assignment_message_id.to_string()),
+            },
+        },
     };
     connection
         .query_row(
@@ -303,18 +327,20 @@ fn load_unfinished_reservation_for_item(
             params![
                 member.team().as_str(),
                 member.agent().as_str(),
-                lane.as_str(),
-                message_id,
-                task_id,
-                attempt,
-                assignment_message_id,
+                filter.lane.as_str(),
+                filter.columns.message_id,
+                filter.columns.task_id,
+                filter.columns.attempt,
+                filter.columns.assignment_message_id,
             ],
             |row| {
                 let id: String = row.get(0)?;
                 decode_reservation_with_offset(
                     row,
                     member.clone(),
-                    IdleOpportunityId::parse(&id).map_err(|_| rusqlite::Error::InvalidQuery)?,
+                    IdleOpportunityId::parse(&id).map_err(|_| {
+                        attention_schedule_invariant("invalid stored attention opportunity id")
+                    })?,
                     1,
                 )
             },
@@ -329,7 +355,9 @@ pub(crate) fn finalize_writer(
     let existing = load_reservation(connection, &request.member, request.opportunity_id)?
         .ok_or(rusqlite::Error::QueryReturnedNoRows)?;
     if existing.status != AttentionReservationStatus::Reserved {
-        return Err(rusqlite::Error::InvalidQuery);
+        return Err(attention_schedule_invariant(
+            "attention reservation is already finalized",
+        ));
     }
     let (status, failed_attempts) = match request.outcome {
         AttentionFinalizeOutcome::Delivered => (
@@ -342,7 +370,7 @@ pub(crate) fn finalize_writer(
         AttentionFinalizeOutcome::RetryableFailure => {
             let failed_attempts = existing.failed_attempts.saturating_add(1);
             (
-                if failed_attempts >= 5 {
+                if failed_attempts >= MAX_NUDGE_ATTEMPTS {
                     AttentionReservationStatus::PermanentlyFailed
                 } else {
                     AttentionReservationStatus::Reserved
@@ -393,24 +421,38 @@ fn request_item_member(item: &AttentionItem) -> &MemberKey {
         | AttentionItem::PersistentTaskReminder { member, .. } => member,
     }
 }
-fn item_columns(
-    item: &AttentionItem,
-) -> (Option<String>, Option<String>, Option<u32>, Option<String>) {
+
+struct ItemColumns {
+    message_id: Option<String>,
+    task_id: Option<String>,
+    attempt: Option<u32>,
+    assignment_message_id: Option<String>,
+}
+
+struct UnfinishedReservationFilter {
+    lane: AttentionLane,
+    columns: ItemColumns,
+}
+
+fn item_columns(item: &AttentionItem) -> ItemColumns {
     match item {
-        AttentionItem::EphemeralMessage { message_id, .. } => {
-            (Some(message_id.to_string()), None, None, None)
-        }
+        AttentionItem::EphemeralMessage { message_id, .. } => ItemColumns {
+            message_id: Some(message_id.to_string()),
+            task_id: None,
+            attempt: None,
+            assignment_message_id: None,
+        },
         AttentionItem::PersistentTaskReminder {
             task_id,
             attempt,
             assignment_message_id,
             ..
-        } => (
-            None,
-            Some(task_id.to_string()),
-            Some(attempt.get()),
-            Some(assignment_message_id.to_string()),
-        ),
+        } => ItemColumns {
+            message_id: None,
+            task_id: Some(task_id.to_string()),
+            attempt: Some(attempt.get()),
+            assignment_message_id: Some(assignment_message_id.to_string()),
+        },
     }
 }
 fn parse_lane(value: &str) -> Result<AttentionLane, ()> {
@@ -453,29 +495,36 @@ fn decode_reservation_with_offset(
             message_id: row
                 .get::<_, String>(offset + 2)?
                 .parse()
-                .map_err(|_| rusqlite::Error::InvalidQuery)?,
+                .map_err(|_| attention_schedule_invariant("invalid stored ephemeral message id"))?,
         },
         "persistent_task" => AttentionItem::PersistentTaskReminder {
             member: member.clone(),
             task_id: row
                 .get::<_, String>(offset + 3)?
                 .parse()
-                .map_err(|_| rusqlite::Error::InvalidQuery)?,
+                .map_err(|_| attention_schedule_invariant("invalid stored persistent task id"))?,
             attempt: AssignmentAttempt::new(row.get(offset + 4)?)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?,
-            assignment_message_id: row
-                .get::<_, String>(offset + 5)?
-                .parse()
-                .map_err(|_| rusqlite::Error::InvalidQuery)?,
+                .map_err(|_| attention_schedule_invariant("invalid stored assignment attempt"))?,
+            assignment_message_id: row.get::<_, String>(offset + 5)?.parse().map_err(|_| {
+                attention_schedule_invariant("invalid stored assignment message id")
+            })?,
         },
-        _ => return Err(rusqlite::Error::InvalidQuery),
+        _ => {
+            return Err(attention_schedule_invariant(
+                "unknown stored attention lane",
+            ));
+        }
     };
     let status = match status.as_str() {
         "reserved" => AttentionReservationStatus::Reserved,
         "delivered" => AttentionReservationStatus::Delivered,
         "stale" => AttentionReservationStatus::Stale,
         "permanently_failed" => AttentionReservationStatus::PermanentlyFailed,
-        _ => return Err(rusqlite::Error::InvalidQuery),
+        _ => {
+            return Err(attention_schedule_invariant(
+                "unknown stored attention reservation status",
+            ));
+        }
     };
     Ok(AttentionReservation {
         opportunity: IdleOpportunity {
