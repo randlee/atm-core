@@ -193,6 +193,7 @@ fn task_schema_objects(connection: &Connection) -> Vec<(String, String, String)>
              WHERE name IN (
                  'tasks_v2', 'task_assignment_attempts', 'task_events_v2',
                  'task_operations', 'task_v2_projection_context',
+                 'task_legacy_state_precedence',
                  'one_active_task_per_agent', 'task_list_order',
                  'task_v1_insert_bridge', 'task_v1_update_bridge',
                  'idx_mail_messages_task_id'

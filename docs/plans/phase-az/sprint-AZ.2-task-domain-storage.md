@@ -400,8 +400,10 @@ insufficient.
 - [ ] D4 — Implement the transactional v2 migration and indexes in
   `atm-storage-rusqlite`, introduce/persist `STORAGE_SCHEMA_VERSION = 2.0.0`,
   and retain the v1 tables/description compatibility projection for the
-  approved coexistence window. Implement deterministic state precedence and
-  active-conflict demotion once and reuse them for both initial migration and
+  approved coexistence window. Implement deterministic state precedence in the
+  canonical `task_legacy_state_precedence` SQL view and reuse it for both
+  initial migration and every supported v1 bridge write; implement
+  active-conflict demotion once and reuse it for both initial migration and
   every supported v1 bridge write; add v1-projection multi-assignee and
   active-conflict rollback tests. Fresh and upgraded databases must converge to byte-equivalent v2 plus
   compatibility schema. Add `idx_mail_messages_task_id` through
