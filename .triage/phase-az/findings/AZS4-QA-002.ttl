@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "docs/architecture.md" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-09-10T16:09:12Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-09-10T15:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T15:29:16Z"^^xsd:dateTime ;

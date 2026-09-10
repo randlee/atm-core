@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/attention_schedule_store.rs, crates/atm-storage/src/attention.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-09-10T16:09:12Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-09-10T15:44:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T15:37:56Z"^^xsd:dateTime ;
