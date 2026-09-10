@@ -201,11 +201,12 @@ one transaction. No caller receives a connection or writer permit.
 database by ATM `1.6.0`. This is an approved ADR-061 **major** change, recorded
 in ADR-061 D6 and ADR-063 D6. Every `1.6.x` release retains the v1/v2 bridge.
 ATM `1.7.0` is the planned removal target and earliest permitted removal
-release, under a separate ADR-061 major approval. During `1.6.x`, the previous
-supported 1.5.14 binary must continue to
-open and read a migrated database and make its supported
-assign/acknowledge/complete writes without a crash or compatibility rejection.
-The bridge may reconcile those writes to authoritative v2 semantics.
+release, under a separate ADR-061 major approval. During `1.6.x`, the retained
+v1 projection and bridge continue to admit the supported
+assign/acknowledge/complete writes and reconcile them to authoritative v2
+semantics. The crate-level proof is a direct-v1-projection fixture; a real
+retained-1.5.14 executable against a migrated ledger is integration evidence
+owned by `AZ-TASK-CROSS-BINARY-COMPAT` in the Colima testbed.
 
 The migration builds the canonical v2 task ledger transactionally while
 retaining the v1 `tasks`/`task_events` compatibility projection and its
@@ -260,7 +261,8 @@ retaining the v1 `tasks`/`task_events` compatibility projection and its
    then lexical `TaskId`, active. Every surplus active task is demoted to
    `Assigned` with `MigratedActiveConflictDemotion`, exactly as in the
    one-time migration. The bridge must not introduce last-write-wins or a
-   second rejection policy. A retained 1.5.14 binary fixture must create
+   second rejection policy. The crate-level v1-projection compatibility fixture
+   must create
    multiple assignee rows and an active collision, then assign, acknowledge,
    and complete against the migrated database; the new binary reopens it and
    observes the same reconciled state and audit events. No v1 table/column is
@@ -396,7 +398,7 @@ insufficient.
   and retain the v1 tables/description compatibility projection for the
   approved coexistence window. Implement deterministic state precedence and
   active-conflict demotion once and reuse them for both initial migration and
-  every supported v1 bridge write; add previous-binary multi-assignee and
+  every supported v1 bridge write; add v1-projection multi-assignee and
   active-conflict rollback tests. Fresh and upgraded databases must converge to byte-equivalent v2 plus
   compatibility schema. Add `idx_mail_messages_task_id` through
   `mail_messages_index_ddl!()` and extend its migrated-versus-fresh
@@ -515,9 +517,11 @@ This is the sole authoritative acceptance list for AZ.2.
 7. Canonical v2 task/attempt rows contain no rendered body, duplicate
    description, template bytes, or Beads details. The temporary v1
    compatibility projection is the sole approved legacy-description exception.
-8. `STORAGE_SCHEMA_VERSION` is 2.0.0, fresh/upgraded schemas converge, and a
-   retained 1.5.14 binary can assign/ack/complete on the migrated database;
-   the new binary then observes those writes. No v1 object is dropped.
+8. `STORAGE_SCHEMA_VERSION` is 2.0.0; fresh/upgraded schemas converge; and the
+   crate-level v1-projection fixture proves supported assign/ack/complete
+   writes reconcile into the migrated ledger and are observed after reopening.
+   `AZ-TASK-CROSS-BINARY-COMPAT` separately owns retained-1.5.14 executable
+   evidence in the Colima integration testbed. No v1 object is dropped.
 9. Storage list/top-runnable tests prove the binding order and covering-index
    query plan without materializing unbounded task or event history.
 10. Every changed storage contract has matching Rust docs, boundary TOML, crate

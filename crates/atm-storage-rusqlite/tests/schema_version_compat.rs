@@ -39,7 +39,7 @@ CREATE TABLE task_events (
 "#;
 
 #[test]
-fn fresh_and_previous_binary_task_ledgers_converge_without_dropping_v1() {
+fn fresh_and_v1_projection_task_ledgers_converge_without_dropping_v1() {
     let root = tempfile::tempdir().expect("temporary root");
     let fresh_path = root.path().join("fresh.db");
     let upgraded_path = root.path().join("upgraded.db");
@@ -50,7 +50,7 @@ fn fresh_and_previous_binary_task_ledgers_converge_without_dropping_v1() {
     let legacy = Connection::open(&upgraded_path).expect("legacy connection");
     legacy
         .execute_batch(LEGACY_TASK_SCHEMA)
-        .expect("create previous-binary task schema");
+        .expect("create retained v1 projection schema");
     insert_legacy_task(
         &legacy,
         "compat-task",
@@ -64,26 +64,26 @@ fn fresh_and_previous_binary_task_ledgers_converge_without_dropping_v1() {
     let upgraded = SqliteStorageBackend::new(&upgraded_path).expect("upgrade previous binary");
     drop(upgraded);
 
-    // Model the retained 1.5.14 binary continuing to assign, acknowledge,
-    // and complete after migration. These are direct v1 table writes because
-    // the test intentionally does not link a second binary into this crate.
-    let previous_binary = Connection::open(&upgraded_path).expect("previous binary connection");
+    // Exercise supported v1 projection writes after migration. This crate-level
+    // fixture deliberately uses direct v1 table writes; cross-binary executable
+    // proof belongs to the Colima integration testbed.
+    let v1_projection = Connection::open(&upgraded_path).expect("v1 projection connection");
     insert_legacy_task(
-        &previous_binary,
+        &v1_projection,
         "compat-task",
         "beta",
         "active",
         "2026-01-02T00:00:00Z",
         "2026-01-02T00:00:00Z",
     );
-    previous_binary
+    v1_projection
         .execute(
             "UPDATE tasks SET state = 'complete', updated_at = '2026-01-03T00:00:00Z'
              WHERE team = 'compat-team' AND task_id = 'compat-task' AND assignee = 'beta'",
             [],
         )
-        .expect("previous binary completion");
-    drop(previous_binary);
+        .expect("v1 projection completion");
+    drop(v1_projection);
 
     let reopened = SqliteStorageBackend::new(&upgraded_path).expect("reopen upgraded ledger");
     drop(reopened);
@@ -140,7 +140,7 @@ fn insert_legacy_task(
              )",
             params![task_id, assignee, state, assigned_at, updated_at],
         )
-        .expect("previous binary task write");
+        .expect("v1 projection task write");
 }
 
 fn task_schema_objects(connection: &Connection) -> Vec<(String, String, String)> {
