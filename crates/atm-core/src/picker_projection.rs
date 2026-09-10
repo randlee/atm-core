@@ -111,11 +111,7 @@ pub fn build_picker_members_projection(
                 .map_or(RuntimeObservationAvailability::Unobserved, |value| {
                     value.availability
                 });
-            let status = if availability == RuntimeObservationAvailability::Fresh {
-                PickerMemberStatus::from(state)
-            } else {
-                PickerMemberStatus::Dead
-            };
+            let status = PickerMemberStatus::from(state);
             PickerMember {
                 id: format!("{}@{team}", member.name),
                 name: member.name.clone(),
@@ -345,14 +341,14 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_active_state_is_preserved_but_compatibility_status_is_dead() {
+    fn unavailable_active_state_preserves_compatibility_status() {
         let mut states = BTreeMap::new();
         let mut runtime = observation(RuntimeMemberState::Active);
         runtime.availability = RuntimeObservationAvailability::Unavailable;
         states.insert(MemberKey::new(team(), runtime.member.clone()), runtime);
         let projection =
             build_picker_members_projection(&team(), &[member("sender-a", None, None)], &states);
-        assert_eq!(projection.members[0].status, PickerMemberStatus::Dead);
+        assert_eq!(projection.members[0].status, PickerMemberStatus::Active);
         assert_eq!(
             projection.members[0].runtime_state,
             RuntimeMemberState::Active
@@ -377,7 +373,7 @@ mod tests {
             Some(&snapshot),
         );
 
-        assert_eq!(projection.members[0].status, PickerMemberStatus::Dead);
+        assert_eq!(projection.members[0].status, PickerMemberStatus::Active);
         assert_eq!(
             projection.members[0].runtime_state,
             RuntimeMemberState::Active
