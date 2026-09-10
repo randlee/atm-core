@@ -485,13 +485,71 @@ mod tests {
         RuntimeObservationAvailability, RuntimeObservationSource,
     };
     use atm_storage::types::{IsoTimestamp, SessionId};
-    use std::sync::Mutex;
+    use std::fmt;
+    use std::sync::{Arc, Mutex};
+    use tracing::{
+        Event, Subscriber,
+        field::{Field, Visit},
+    };
+    use tracing_subscriber::layer::{Context, Layer};
+    use tracing_subscriber::prelude::*;
 
     /// Neutral fixture identifiers: the subject under test is the
     /// write-through seam, not any particular team or agent. Production
     /// team/agent names must never appear as test fixture data.
     const TEST_TEAM: &str = "test-team";
     const TEST_AGENT: &str = "test-agent";
+
+    type CapturedFields = Vec<(String, String)>;
+    type CapturedEvents = Arc<Mutex<Vec<CapturedFields>>>;
+
+    #[derive(Clone, Default)]
+    struct CaptureLayer(CapturedEvents);
+
+    #[derive(Default)]
+    struct CaptureVisitor {
+        fields: CapturedFields,
+    }
+
+    impl Visit for CaptureVisitor {
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.fields
+                .push((field.name().to_owned(), value.to_owned()));
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+            self.fields
+                .push((field.name().to_owned(), format!("{value:?}")));
+        }
+    }
+
+    impl<S> Layer<S> for CaptureLayer
+    where
+        S: Subscriber,
+    {
+        fn on_event(&self, event: &Event<'_>, _context: Context<'_, S>) {
+            let mut visitor = CaptureVisitor::default();
+            event.record(&mut visitor);
+            self.0
+                .lock()
+                .expect("capture layer lock")
+                .push(visitor.fields);
+        }
+    }
+
+    fn capture_fields<T>(operation: impl FnOnce() -> T) -> (T, Vec<CapturedFields>) {
+        let fields = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = tracing_subscriber::registry().with(CaptureLayer(fields.clone()));
+        let result = tracing::subscriber::with_default(subscriber, operation);
+        let events = fields.lock().expect("capture layer lock").clone();
+        (result, events)
+    }
+
+    fn contains_field(event: &[(String, String)], field_name: &str, expected_value: &str) -> bool {
+        event
+            .iter()
+            .any(|(name, value)| name == field_name && value.trim_matches('"') == expected_value)
+    }
 
     #[derive(Default)]
     struct FakeDurableRoster {
@@ -730,6 +788,56 @@ mod tests {
         assert_eq!(
             mirror.load_runtime_observations(&team),
             vec![(agent, third[0].current.clone())]
+        );
+    }
+
+    #[test]
+    fn heartbeat_identity_mutation_emits_structured_audit_event_only_on_change() {
+        let durable = Arc::new(FakeDurableRoster::default());
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_AGENT);
+        durable
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
+                refreshed_at: None,
+            })
+            .unwrap();
+        let mirror = build_write_through_roster(durable).unwrap().mirror();
+        let observed_at: IsoTimestamp = "2030-01-01T00:00:00Z".parse().unwrap();
+        let update = RosterRuntimeObservationUpdate::observed(
+            agent,
+            RuntimeMemberState::Active,
+            RuntimeObservationSource::Heartbeat,
+            observed_at,
+            Some(RosterRuntimeIdentity {
+                pid: 41,
+                session_id: Some(SessionId::new("session-a").unwrap()),
+            }),
+        );
+
+        let (_, changed_events) = capture_fields(|| {
+            mirror.apply_runtime_observations(&team, std::slice::from_ref(&update))
+        });
+        assert_eq!(changed_events.len(), 1, "identity change emits one event");
+        let event = &changed_events[0];
+        assert!(contains_field(
+            event,
+            "event",
+            "roster_runtime_identity_changed"
+        ));
+        assert!(contains_field(event, "team", TEST_TEAM));
+        assert!(contains_field(event, "member", TEST_AGENT));
+        assert!(contains_field(event, "source", "Heartbeat"));
+        assert!(contains_field(event, "pid_mutated", "true"));
+        assert!(contains_field(event, "session_mutated", "true"));
+
+        let (_, unchanged_events) = capture_fields(|| {
+            mirror.apply_runtime_observations(&team, std::slice::from_ref(&update))
+        });
+        assert!(
+            unchanged_events.is_empty(),
+            "same identity must not emit a change audit event"
         );
     }
 
