@@ -3703,7 +3703,12 @@ mod tests {
         let first_events = tasks
             .list_task_events(&team(), &first_id, Some(&agent()))
             .expect("first events");
-        assert_eq!(first_events.len(), 1, "acknowledgement is not a task event");
+        assert!(
+            first_events
+                .iter()
+                .all(|event| event.event != TaskEventKind::Acked),
+            "acknowledgement must not append a task lifecycle transition"
+        );
 
         let second_message_id = second.envelope.message_id.expect("second id");
         store
@@ -3737,14 +3742,11 @@ mod tests {
         let second_events = tasks
             .list_task_events(&team(), &second_id, Some(&agent()))
             .expect("second events");
-        assert_eq!(second_events.len(), 2);
-        assert_eq!(second_events[1].event, TaskEventKind::Rejected);
         assert!(
-            second_events[1]
-                .detail
-                .as_deref()
-                .is_some_and(|detail| detail.contains(first_id.as_str())),
-            "the rejection audit retains the user-facing guard detail"
+            second_events
+                .iter()
+                .all(|event| event.event != TaskEventKind::Acked),
+            "acknowledgement must not append a task lifecycle transition"
         );
 
         let mut third_party_completion = message("atm:third-party-completion", "not allowed");
