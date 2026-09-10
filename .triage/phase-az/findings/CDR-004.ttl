@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CDR-004>
+  a triage:Finding ;
+  triage:findingId "CDR-004" ;
+  triage:title "Scheduler leaks full AsyncTaskMutationStore lifecycle capability instead of a narrow audit capability" ;
+  triage:description "solar's critical design review reports that the scheduler needs only reminder/lead audit writes (crates/atm-storage/src/task_mutation.rs:40-93; crates/atm-core/src/service_runtime.rs:462-484; crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs:63-78,188-221) but receives the full AsyncTaskMutationStore capability, whose TaskOperation enum permits every lifecycle transition. This leaks capability around the documented sole TaskCommandService policy boundary; boundaries/atm-storage/async-task-mutation-store.toml:21-23 also omits atm-http-runtime although production code consumes it. Recommendation: split a narrow scheduler audit capability, confine lifecycle mutation access to core policy/composition, update the boundary manifest, and mechanically enforce consumers." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-leak" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/task_mutation.rs, crates/atm-core/src/service_runtime.rs, crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs, boundaries/atm-storage/async-task-mutation-store.toml" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CDR-004/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CDR-004/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_mutation.rs" ;
+  triage:line 40 ;
+  triage:snippet "scheduler receives full AsyncTaskMutationStore capability instead of a narrow audit-only capability" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+
+<urn:atm:triage:worktree/AZ4/066a465d0>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-az" ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:orderIndex 4 .

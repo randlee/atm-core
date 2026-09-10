@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CDR-008>
+  a triage:Finding ;
+  triage:findingId "CDR-008" ;
+  triage:title "Phase plan table still marks AZ.1 and AZ.4 as planned despite all four sprints being merged" ;
+  triage:description "solar's critical design review reports that docs/plans/phase-az/phase-az-plan.md:130-137's authoritative phase table still marks AZ.1 and AZ.4 as planned although this assignment identifies all four sprints (AZ.1-AZ.4) as merged into integrate/phase-az. Recommendation: update the table during phase closure." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-az/phase-az-plan.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CDR-008/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CDR-008/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-az/phase-az-plan.md" ;
+  triage:line 130 ;
+  triage:snippet "phase table marks AZ.1 and AZ.4 as planned, not merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+
+<urn:atm:triage:worktree/AZ4/066a465d0>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-az" ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:orderIndex 4 .

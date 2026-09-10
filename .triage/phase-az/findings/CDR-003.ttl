@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CDR-003>
+  a triage:Finding ;
+  triage:findingId "CDR-003" ;
+  triage:title "PermanentlyFailed reservations suppress later opportunities for their still-eligible item" ;
+  triage:description "solar's critical design review reports that load_unfinished_reservation_for_item (crates/atm-storage-rusqlite/src/attention_schedule_store.rs:225-259,303-365,367-410) treats permanently_failed as unfinished. Every later opportunity selecting the still-eligible item therefore returns the old PermanentlyFailed reservation, and the pump (crates/atm-http-runtime/src/herdr_queue_wake.rs:613-636) skips every non-Reserved reservation. The item is never consumed/closed, so it remains selected but can never be nudged again; FIFO successors can remain trapped behind it. This contradicts sprint-AZ.4-attention-scheduler.md:193-200 and acceptance 7 at 454-458. Recommendation: make PermanentlyFailed cease deduplicating later opportunity ids (or define a separate explicit item suppression policy); preserve same-opportunity replay while allowing a later revision to create a fresh reservation. Add fifth-failure/later-opportunity and successor fairness tests." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "liveness-bug" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/attention_schedule_store.rs, crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CDR-003/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CDR-003/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 225 ;
+  triage:snippet "load_unfinished_reservation_for_item treats permanently_failed as unfinished" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+
+<urn:atm:triage:worktree/AZ4/066a465d0>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-az" ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:orderIndex 4 .

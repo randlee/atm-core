@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CDR-007>
+  a triage:Finding ;
+  triage:findingId "CDR-007" ;
+  triage:title "Task revision, reminder ordinal, and attention cursor revision remain raw u64 instead of typed newtypes" ;
+  triage:description "solar's critical design review reports that crates/atm-core/src/task_command.rs:90-98, crates/atm-storage/src/task_state.rs:197-220, and crates/atm-storage/src/attention.rs:183-223 keep task revision, reminder ordinal, and attention cursor revision as raw u64 values across boundaries, while roster revision and assignment attempt are already typed. Recommendation: introduce TaskRevision and AttentionCursorRevision, and consider ReminderOrdinal, under RBP-004." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "type-safety" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/task_command.rs, crates/atm-storage/src/task_state.rs, crates/atm-storage/src/attention.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CDR-007/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CDR-007/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_command.rs" ;
+  triage:line 90 ;
+  triage:snippet "raw u64 task revision / reminder ordinal / attention cursor revision, not newtypes" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+
+<urn:atm:triage:worktree/AZ4/066a465d0>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-az" ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:orderIndex 4 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CDR-006>
+  a triage:Finding ;
+  triage:findingId "CDR-006" ;
+  triage:title "docs/architecture.md misstates the HTTP API version that made the task route additive" ;
+  triage:description "solar's critical design review reports that docs/architecture.md:3255-3264 says the task route is additive in HTTP API 1.4.0, while crates/atm-core/src/protocol.rs:103 and ADR-061:107-111 correctly establish 1.5.0. Recommendation: correct the architecture baseline." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/architecture.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CDR-006/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CDR-006/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 3255 ;
+  triage:snippet "task route additive in HTTP API 1.4.0 -- should be 1.5.0 per protocol.rs:103 and ADR-061" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+
+<urn:atm:triage:worktree/AZ4/066a465d0>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-az" ;
+  triage:branch "integrate/phase-az" ;
+  triage:headSha "066a465d0" ;
+  triage:orderIndex 4 .
