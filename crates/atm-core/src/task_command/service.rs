@@ -198,9 +198,10 @@ impl CoreTaskCommandService {
         outcome: TaskOutcome,
     ) -> Result<TaskOperation, AtmError> {
         require_active_assignee(command, existing, "close")?;
+        let prepared_handoff = self.handoff(command, handoff, true, Some(&outcome))?;
         Ok(TaskOperation::Close {
             outcome,
-            handoff: self.handoff(command, handoff, true)?,
+            handoff: prepared_handoff,
         })
     }
 
@@ -218,7 +219,12 @@ impl CoreTaskCommandService {
             message: notice.message.clone(),
         };
         Ok(TaskOperation::LegacyCloseSucceeded {
-            completion_notice: self.handoff(command, &handoff, false)?,
+            completion_notice: self.handoff(
+                command,
+                &handoff,
+                false,
+                Some(&TaskOutcome::Succeeded),
+            )?,
         })
     }
 
@@ -239,9 +245,10 @@ impl CoreTaskCommandService {
                     existing,
                     latest_attempt,
                 )?;
+                let outcome = TaskOutcome::Aborted(TaskAbortReason::Cancelled);
                 Ok(TaskOperation::Close {
-                    outcome: TaskOutcome::Aborted(TaskAbortReason::Cancelled),
-                    handoff: self.handoff(command, handoff, true)?,
+                    handoff: self.handoff(command, handoff, true, Some(&outcome))?,
+                    outcome,
                 })
             }
             AbortInput::Superseded {
@@ -252,8 +259,11 @@ impl CoreTaskCommandService {
                 if successor_task_id == &command.task_id {
                     return Err(task_error("a successor task must use a new task id"));
                 }
+                let outcome = TaskOutcome::Aborted(TaskAbortReason::Superseded {
+                    successor_task_id: successor_task_id.clone(),
+                });
                 Ok(TaskOperation::Supersede {
-                    handoff: self.handoff(command, handoff, true)?,
+                    handoff: self.handoff(command, handoff, true, Some(&outcome))?,
                     successor_task_id: successor_task_id.clone(),
                     successor: Box::new(self.assignment_for(
                         command,
@@ -286,7 +296,13 @@ impl CoreTaskCommandService {
             assigner: command.actor.clone(),
             priority: input.priority,
             delivery_origin: MessageWriteOrigin::Local,
-            message: prepared_message(task_id, &command.actor, &input.assignee, &input.message),
+            message: prepared_message(
+                task_id,
+                &command.actor,
+                &input.assignee,
+                &input.message,
+                None,
+            ),
             template_sha: input.message.template_sha.clone(),
         })
     }
@@ -296,6 +312,7 @@ impl CoreTaskCommandService {
         command: &TaskMutationCommand,
         input: &HandoffInput,
         canonical: bool,
+        outcome: Option<&TaskOutcome>,
     ) -> Result<PreparedMessage, AtmError> {
         require_member(&self.runtime, &input.recipient)?;
         require_same_team(&command.actor, &input.recipient, "task handoff")?;
@@ -307,6 +324,7 @@ impl CoreTaskCommandService {
             &command.actor,
             &input.recipient,
             &input.message,
+            outcome,
         ))
     }
 
@@ -414,8 +432,16 @@ fn prepared_message(
     actor: &atm_storage::MemberKey,
     recipient: &atm_storage::MemberKey,
     input: &ComposedMessageInput,
+    terminal_outcome: Option<&TaskOutcome>,
 ) -> PreparedMessage {
     let (message_id, timestamp) = AtmMessageId::new_with_timestamp();
+    let mut extra = Map::new();
+    if let Some(outcome) = terminal_outcome {
+        extra.insert(
+            "taskOutcome".to_owned(),
+            serde_json::Value::String(outcome_name(outcome).to_owned()),
+        );
+    }
     let envelope = InboxMessage {
         from: actor.agent().clone(),
         source_chat_id: None,
@@ -435,7 +461,7 @@ fn prepared_message(
         expires_at: None,
         task_id: Some(task_id.clone()),
         task_complete: None,
-        extra: Map::new(),
+        extra,
     };
     PreparedMessage {
         message: Message {
@@ -444,6 +470,15 @@ fn prepared_message(
             message_key: MessageKey::from(message_id),
             envelope,
         },
+    }
+}
+
+fn outcome_name(outcome: &TaskOutcome) -> &'static str {
+    match outcome {
+        TaskOutcome::Succeeded => "succeeded",
+        TaskOutcome::Failed => "failed",
+        TaskOutcome::Aborted(TaskAbortReason::Cancelled) => "aborted_cancelled",
+        TaskOutcome::Aborted(TaskAbortReason::Superseded { .. }) => "aborted_superseded",
     }
 }
 
