@@ -78,6 +78,56 @@ CREATE INDEX IF NOT EXISTS idx_mail_messages_task_id
     ON mail_messages(team, json_extract(envelope_json, '$.taskId'));
 "#;
 
+const MIGRATE_V1_TASKS: &str = r#"
+WITH ranked AS (
+    SELECT team, task_id, assignee, assigner, state, assignment_message_id,
+           assigned_at, updated_at, reminder_count,
+           ROW_NUMBER() OVER (
+               PARTITION BY team, task_id
+               ORDER BY CASE state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                        updated_at DESC, assignee ASC
+           ) AS winner,
+           ROW_NUMBER() OVER (
+               PARTITION BY team, task_id
+               ORDER BY assigned_at ASC, assignee ASC
+           ) AS attempt
+      FROM tasks
+)
+INSERT OR IGNORE INTO tasks_v2(
+    team, task_id, current_assignee, state, outcome, abort_reason,
+    superseded_by, priority, original_assigned_at, current_attempt,
+    reminder_ordinal, revision, updated_at
+)
+SELECT team, task_id, assignee,
+       CASE state WHEN 'complete' THEN 'closed' ELSE state END,
+       CASE state WHEN 'complete' THEN 'succeeded' ELSE NULL END,
+       NULL, NULL, 'normal',
+       (SELECT MIN(other.assigned_at) FROM tasks AS other
+         WHERE other.team = ranked.team AND other.task_id = ranked.task_id),
+       attempt, reminder_count, 1, updated_at
+  FROM ranked WHERE winner = 1;
+
+WITH numbered AS (
+    SELECT team, task_id, assignee, assigner, assignment_message_id, assigned_at,
+           ROW_NUMBER() OVER (
+               PARTITION BY team, task_id ORDER BY assigned_at ASC, assignee ASC
+           ) AS attempt
+      FROM tasks
+)
+INSERT OR IGNORE INTO task_assignment_attempts(
+    team, task_id, attempt, assignee, assigner, assignment_message_id, template_sha, assigned_at
+)
+SELECT team, task_id, attempt, assignee, assigner, assignment_message_id, NULL, assigned_at
+  FROM numbered;
+
+INSERT OR IGNORE INTO task_events_v2(
+    team, task_id, seq, operation_id, attempt, at, actor, event, outcome, related_task_id, detail
+)
+SELECT team, task_id, 1, NULL, current_attempt, updated_at, current_assignee,
+       'migrated', outcome, NULL, 'migrated from retained v1 task projection'
+  FROM tasks_v2;
+"#;
+
 pub(crate) fn ensure_task_v2_schema(
     connection: &SqliteConnection,
     target: &SharedDbTarget,
@@ -85,6 +135,9 @@ pub(crate) fn ensure_task_v2_schema(
     connection
         .execute_batch(V2_TASK_DDL)
         .map_err(|error| sqlite_error(target, "failed to initialize task v2 schema", error))?;
+    connection
+        .execute_batch(MIGRATE_V1_TASKS)
+        .map_err(|error| sqlite_error(target, "failed to migrate v1 task projection", error))?;
     connection
         .execute(
             "INSERT INTO storage_schema_versions(component, version) VALUES ('task-ledger', ?1)
