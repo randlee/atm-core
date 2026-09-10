@@ -517,14 +517,14 @@ pub(super) fn load_pending_ack_source(
     decode_pending_acknowledgement_source(source, row)
 }
 
-type AcknowledgementSourceRow = (
-    String,
-    String,
-    i64,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
+struct AcknowledgementSourceRow {
+    message_key: String,
+    envelope_json: String,
+    read: i64,
+    pending_ack_at: Option<String>,
+    acknowledged_at: Option<String>,
+    expires_at: Option<String>,
+}
 
 fn load_acknowledgement_source_row(
     source: &AcknowledgementSource,
@@ -551,14 +551,14 @@ fn load_acknowledgement_source_row(
                 source.message_id.to_string()
             ],
             |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, Option<String>>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                ))
+                Ok(AcknowledgementSourceRow {
+                    message_key: row.get(0)?,
+                    envelope_json: row.get(1)?,
+                    read: row.get(2)?,
+                    pending_ack_at: row.get(3)?,
+                    acknowledged_at: row.get(4)?,
+                    expires_at: row.get(5)?,
+                })
             },
         )
         .optional()
@@ -615,13 +615,14 @@ fn decode_pending_acknowledgement_source(
     source: &AcknowledgementSource,
     row: AcknowledgementSourceRow,
 ) -> Result<Message, AtmError> {
-    let (message_key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row;
-    let mut envelope = serde_json::from_str::<atm_storage::schema::MessageEnvelope>(&envelope_json)
-        .map_err(|_| AtmError::mailbox_read("failed to decode acknowledgement source envelope"))?;
-    envelope.read = read != 0;
-    envelope.pending_ack_at = parse_timestamp(pending_ack_at, "pending_ack_at")?;
-    envelope.acknowledged_at = parse_timestamp(acknowledged_at, "acknowledged_at")?;
-    envelope.expires_at = parse_timestamp(expires_at, "expires_at")?;
+    let mut envelope = serde_json::from_str::<atm_storage::schema::MessageEnvelope>(
+        &row.envelope_json,
+    )
+    .map_err(|_| AtmError::mailbox_read("failed to decode acknowledgement source envelope"))?;
+    envelope.read = row.read != 0;
+    envelope.pending_ack_at = parse_timestamp(row.pending_ack_at, "pending_ack_at")?;
+    envelope.acknowledged_at = parse_timestamp(row.acknowledged_at, "acknowledged_at")?;
+    envelope.expires_at = parse_timestamp(row.expires_at, "expires_at")?;
     if envelope.pending_ack_at.is_none() {
         let state = if envelope.acknowledged_at.is_some() {
             "already acknowledged"
@@ -636,7 +637,7 @@ fn decode_pending_acknowledgement_source(
     Ok(Message {
         team: source.team.clone(),
         agent: source.agent.clone(),
-        message_key: MessageKey::new(message_key)?,
+        message_key: MessageKey::new(row.message_key)?,
         envelope,
     })
 }
