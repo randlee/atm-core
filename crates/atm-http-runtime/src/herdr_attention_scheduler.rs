@@ -40,7 +40,8 @@ pub(super) async fn finalize_attention(
             }
         },
     };
-    schedule_store.finalize(request).await
+    let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
+    schedule_store.finalize(request, deadline).await
 }
 
 /// Reserves at most one fair attention item for a committed idle opportunity.
@@ -74,12 +75,16 @@ pub(super) async fn reserve_next_attention(
     let Some(item) = selection.item else {
         return Ok(None);
     };
+    let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
     schedule_store
-        .reserve(AttentionReservationRequest {
-            opportunity,
-            expected_cursor_revision: cursor.revision,
-            item,
-        })
+        .reserve(
+            AttentionReservationRequest {
+                opportunity,
+                expected_cursor_revision: cursor.revision,
+                item,
+            },
+            deadline,
+        )
         .await
         .map(Some)
 }

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use atm_storage::{
-    AssignmentAttempt, AsyncAttentionScheduleStore, AtmError, AttentionCursor,
+    AssignmentAttempt, AsyncAttentionScheduleStore, AtmError, AtmErrorCode, AttentionCursor,
     AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionItem, AttentionLane,
     AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
     AttentionScheduleStore, IdleOpportunity, IdleOpportunityId, MAX_NUDGE_ATTEMPTS, MemberKey,
@@ -145,40 +145,56 @@ impl AsyncAttentionScheduleStore for SqliteAttentionScheduleStore {
     async fn reserve(
         &self,
         request: AttentionReservationRequest,
+        deadline: ReadDeadline,
     ) -> Result<AttentionReservation, AtmError> {
         let db = Arc::clone(&self.db);
-        execute_schedule_write(move || {
-            db.with_transaction(|connection| {
-                reserve_writer(connection, request)
-                    .map_err(|error| db.error("failed to reserve attention opportunity", error))
-            })
-        })
+        execute_schedule_write(
+            move || {
+                db.with_transaction(|connection| {
+                    reserve_writer(connection, request)
+                        .map_err(|error| db.error("failed to reserve attention opportunity", error))
+                })
+            },
+            deadline,
+        )
         .await
     }
 
     async fn finalize(
         &self,
         request: AttentionFinalizeRequest,
+        deadline: ReadDeadline,
     ) -> Result<AttentionReservation, AtmError> {
         let db = Arc::clone(&self.db);
-        execute_schedule_write(move || {
-            db.with_transaction(|connection| {
-                finalize_writer(connection, request)
-                    .map_err(|error| db.error("failed to finalize attention opportunity", error))
-            })
-        })
+        execute_schedule_write(
+            move || {
+                db.with_transaction(|connection| {
+                    finalize_writer(connection, request).map_err(|error| {
+                        db.error("failed to finalize attention opportunity", error)
+                    })
+                })
+            },
+            deadline,
+        )
         .await
     }
 }
 
 async fn execute_schedule_write<T>(
     operation: impl FnOnce() -> Result<T, AtmError> + Send + 'static,
+    deadline: ReadDeadline,
 ) -> Result<T, AtmError>
 where
     T: Send + 'static,
 {
-    tokio::task::spawn_blocking(operation)
+    tokio::time::timeout(deadline.remaining(), tokio::task::spawn_blocking(operation))
         .await
+        .map_err(|_| {
+            AtmError::new(
+                AtmErrorCode::WaitTimeout,
+                "attention schedule storage write exceeded its request deadline",
+            )
+        })?
         .map_err(|source| {
             AtmError::daemon_unavailable("attention schedule storage worker ended unexpectedly")
                 .with_cause(source)
@@ -655,24 +671,30 @@ mod tests {
             }
         );
         let reservation = store
-            .reserve(AttentionReservationRequest {
-                opportunity: opportunity.clone(),
-                expected_cursor_revision: 0,
-                item: AttentionItem::EphemeralMessage {
-                    member: member(),
-                    message_id: AtmMessageId::new(),
+            .reserve(
+                AttentionReservationRequest {
+                    opportunity: opportunity.clone(),
+                    expected_cursor_revision: 0,
+                    item: AttentionItem::EphemeralMessage {
+                        member: member(),
+                        message_id: AtmMessageId::new(),
+                    },
                 },
-            })
+                deadline(),
+            )
             .await
             .expect("reserve");
         assert_eq!(reservation.status, AttentionReservationStatus::Reserved);
         assert_eq!(
             store
-                .finalize(AttentionFinalizeRequest {
-                    member: member(),
-                    opportunity_id: opportunity.id,
-                    outcome: AttentionFinalizeOutcome::Delivered,
-                })
+                .finalize(
+                    AttentionFinalizeRequest {
+                        member: member(),
+                        opportunity_id: opportunity.id,
+                        outcome: AttentionFinalizeOutcome::Delivered,
+                    },
+                    deadline()
+                )
                 .await
                 .expect("finalize")
                 .status,
