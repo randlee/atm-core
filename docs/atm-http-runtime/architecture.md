@@ -1,20 +1,33 @@
-# Member lifecycle transition boundary
+# Canonical member-state and idle-opportunity boundary
 
-`MemberStateTransitionSink` is the replacement runtime's narrow, sealed
-notification boundary for a genuine heartbeat transition into `Idle`. The
-runtime records the in-memory observation first, drops its mutex guard, and
-then invokes the best-effort sink. It owns no storage or receiver implementation.
+The write-through RAM master roster owns the replacement runtime's one
+ephemeral `RuntimeMemberState` per durable member. Authenticated local heartbeat
+POSTs (including hook activity) and successful Herdr list polls call the same
+typed mutation seam. That mutation atomically records source,
+`last_observed_at`, state-edge time, and `RosterStateRevision`; `RuntimeHealth`
+is a projection-only reader and owns no member map.
 
-The active daemon composition supplies `DrainOnTransitionSink`. Its queue
+Each accepted `Idle` observation revision publishes one opaque
+`IdleOpportunityId` after the roster mutation commits. The publisher owns no
+queue/task query or receiver implementation. Failed or incomplete Herdr polls
+preserve the prior record and publish nothing. Successful covered unknown or
+absent poll entries become `Unknown`, never `Dead`/`Offline`; only an explicit
+heartbeat stop maps to `Offline`.
+
+Before Phase AZ, the active composition supplies the retained transition/recovery
+adapter. Its queue
 claim is performed on a blocking task, is guarded by the AQ1 delivery-channel
 classifier, and dispatches the rebuilt `NudgeKind::Queue` message through the
 ordinary receiver selector. A periodic kind-agnostic recovery sweep enumerates
 `PendingNudgeStore::list_pending_members` and repeats the same guarded atomic
 claim, so missed heartbeats and process restarts do not lose durable nudges.
 
-The transition callback is an optimization; the pending marker and recovery
-sweep are authoritative. Herdr members are left to AQ2.7 and bare-CLI members
-are handed off by AQ2.5, so neither path is claimed by AQ3.
+Phase AZ replaces direct transition/drain scheduling with the one attention
+selector. The selector consumes an idle opportunity, reserves zero or one
+message/task item, and revalidates that the master-roster member remains `Idle`
+at the opportunity's exact revision before emission. Neither raw Herdr output,
+heartbeat DTOs, nor `RuntimeHealth` snapshots are eligibility authorities.
+Bare-CLI behavior remains separate under ADR-054.
 
 # Auxiliary observability routes
 

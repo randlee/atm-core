@@ -4059,41 +4059,63 @@ writer admission and acknowledgements apply task transitions.
   state. The daemon must not maintain a replay store, remote outbox, or retry
   state.
 
-- `REQ-CORE-RUNTIME-002` Live agent status must not use SQLite as its
-  authoritative live truth.
+- `REQ-CORE-RUNTIME-002` Each durable roster member must have exactly one
+  canonical live agent state, owned by the runtime's ephemeral master-roster
+  record and never by SQLite.
 
   Required behavior:
-  - live status is runtime-owned daemon state
+  - live status is runtime-owned state layered on the matching master-roster
+    member in the write-through RAM roster mirror
   - SQLite stores canonical roster membership and optional routing metadata,
-    but not the current process `pid`
-  - daemon memory caches the current `pid` as observational metadata, not a
-    liveness-policy input
-  - daemon runtime state must include `last_active_at` for each known active
-    agent/member entry
+    but not lifecycle state, state revision, observation timestamps, current
+    process `pid`, or session id
+  - the ephemeral record contains one `RuntimeMemberState`; latest observation source,
+    typed observation availability, `last_observation_attempt_at`,
+    `last_observed_at`, `state_changed_at`, pid, session, and a monotonically
+    increasing `RosterStateRevision` are metadata for that one state, not
+    parallel state authorities
+  - daemon memory caches the current `pid` and session as observational
+    metadata, not independent liveness-policy inputs
+  - daemon runtime state includes `last_active_at` for each known active
+    member entry
   - the shared protocol must expose typed heartbeat request/response DTOs for
     runtime state updates and observational pid continuity
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
-  - roster truth and live-status truth must remain distinct
-- `pid` is transient daemon-owned runtime state rather than durable roster
-  truth and must not be persisted in SQLite
+  - durable roster fields and ephemeral live fields share one logical member
+    record while retaining distinct persistence domains
+  - roster removal atomically removes its ephemeral state; re-addition starts
+    at `Unknown` with a new revision sequence
+  - all live-state readers, including attention scheduling, runtime health,
+    doctor, `teams`, and `members`, read this record or a scoped projection of
+    it; a second global member-state map is forbidden
+  - `pid` is transient runtime state rather than durable roster truth and must
+    not be persisted in SQLite
 
 > **Phase AJ implemented contract.** The following clauses are reconciled with
 > the merged AJ.1–AJ.8 source and named tests in ADR-045's evidence table.
 
-- `REQ-CORE-RUNTIME-004` Runtime observation is best-effort telemetry, not a
-  business-policy input.
+- `REQ-CORE-RUNTIME-004` Accepted runtime observations converge on the one
+  ephemeral master-roster state. Runtime health is a projection, while the
+  Phase AZ idle-attention exception is the only workflow policy that may
+  consume the canonical state.
 
   Required behavior:
-  - successful heartbeat and successful local `send`, `read`, or `ack` may
-    update in-memory observation only
+  - an authenticated local heartbeat POST (including an external hook's
+    startup/active, idle, or stop event) and each successful Herdr `agent list`
+    poll update the same in-memory member record
+  - successful local `send`, `read`, or `ack` and graft activity update that
+    same record through their environment-attested activity observation
   - graft may update observation only through its environment-derived caller
     context; no other ingress or daemon side effect may synthesize an update
-  - each defined state/session value retains independent source and timestamp;
-    absent/default values are no-ops and cannot overwrite prior valid data;
-    accepted ingress order, not client-clock ordering, determines the current
-    observation; a trusted changed pid/session becomes the current observation
-    and is retained as diagnostic evidence only
+  - accepted runtime ingress order, not client-clock ordering, determines the
+    current state; every accepted state observation advances the per-member
+    `RosterStateRevision` and `last_observed_at`, including same-state evidence,
+    while `state_changed_at` changes only on a lifecycle edge
+  - each defined session/pid value retains source and timestamp metadata;
+    absent metadata is a no-op and cannot overwrite prior defined metadata; a
+    trusted changed pid/session becomes the current metadata and is retained as
+    diagnostic evidence only
   - every actual pid/session mutation, including initial set, emits one
     structured info audit event with prior/new value, member, source, and time;
     no-op input emits no mutation event
@@ -4101,9 +4123,20 @@ writer admission and acknowledgements apply task transitions.
     observation metadata: it is true only when a prior defined pid is replaced
     by a different defined pid; initial pid observation is audited but is not a
     replacement
-  - normal heartbeat, CLI, and graft updates may not restore `Unknown` or clear
-    a defined session; roster removal drops its runtime entry and a later re-add
-    starts without observation
+  - local heartbeat, CLI, and graft updates may not clear a defined session;
+    a successful Herdr poll maps working → `Active`, idle/done → `Idle`, blocked
+    → `Blocked`, and an unknown or absent member in the poll's covered roster
+    scope → `Unknown`
+  - a failed or incomplete Herdr poll is not a state observation: it preserves
+    the prior state and revision, marks observation availability unavailable
+    with an attempt timestamp, records a structured refresh diagnostic, and
+    creates no idle opportunity
+  - a successful Herdr result is applied as one scoped batch so readers cannot
+    observe a half-updated poll and the runtime does not clone the roster once
+    per member
+  - state ingress for a member absent from the current master roster must not
+    auto-create membership; it returns or records existing
+    `ATM_MEMBER_NOT_FOUND` without panic or state mutation
   - `Unknown` means no trustworthy state observation; `Offline` means an
     explicit heartbeat session-end observation. They are distinct values and
     must not be substituted for one another
@@ -4114,9 +4147,9 @@ writer admission and acknowledgements apply task transitions.
     lifecycle-state transition and is shown only for defined non-default state;
     human roster output renders its relative age while structured output keeps
     the absolute timestamp; repeated same-state evidence never resets it
-  - external hook heartbeat mapping is startup/active → `ActiveToolUse`, idle
-    → `Idle`, and stop → `SessionEnded`; ATM consumes, but does not install or
-    emit, those hooks
+  - external hook heartbeat mapping is startup/active → `ActiveToolUse`/`Active`,
+    idle → `Idle`, and stop → `SessionEnded`/`Offline`; ATM consumes, but does
+    not install or emit, those hooks
   - identity change and malformed/suppressed observation are retained
     anomalies, not roster lifecycle state. They must not reject ingress, emit
     `IdentityConflict`, degrade readiness, alter cache eviction, or alter
@@ -4130,15 +4163,25 @@ writer admission and acknowledgements apply task transitions.
     environment-attestation step; the daemon accepts it only on existing
     authenticated local UDS/loopback ingress, and remote HTTPS ingress clears
     it before shared dispatch
-  - session, pid, heartbeat activity, and derived state must not drive routing,
-    nudge, notification, retry, admission, delivery, or policy logic
-  - any exception requires an explicit requirement, ADR, boundary record, and
-    test; telemetry never enters SQLite, durable roster state, mail rows, or
-    message payloads
-  - the existing roster-view command may display a member's non-default state
-    age, defined pid, and shortened session identifier as an observational
-    projection; JSON preserves raw values. Default `Unknown` state with no
-    session/pid is omitted from human output
+  - session, pid, and observation metadata must not drive routing,
+    notification, retry, admission, or delivery logic
+  - the sole state-policy exception is Phase AZ attention eligibility: each
+    accepted `Idle` observation revision creates one idempotent
+    `IdleOpportunityId`; only the attention selector may reserve zero or one
+    queued-message nudge or task reminder for that opportunity, and it must
+    revalidate the same member's current canonical state and revision before
+    emission
+  - Herdr polling and heartbeat handlers update state and publish the idle
+    opportunity only; neither ingress may inspect queues/tasks or emit a nudge
+    directly
+  - any further exception requires an explicit requirement, ADR, boundary
+    record, and test; telemetry never enters SQLite, durable roster state, mail
+    rows, or message payloads
+  - roster-view commands display exact state plus availability/freshness from
+    the canonical record and may also show state age, defined pid, and shortened
+    session identifier; JSON preserves raw values. Human output may omit only
+    default `Unknown`/`Unobserved` with no session/pid, and must not collapse a
+    missing/unavailable projection into `Dead`
 
 ### 22.2 Singleton Daemon Runtime
 
