@@ -21,6 +21,9 @@ from rust_source import extract_fn_body
 ROUTER = Path("crates/atm-http-runtime/src/storage_and_nudge_router.rs")
 WRITE_OPS = Path("crates/atm-storage-rusqlite/src/writer/ops.rs")
 ALLOWED_WRITE_OPS = {
+    # AZ.2's storage-neutral task boundary is a mutation-only writer-lane
+    # operation; it performs no mailbox selection or read work.
+    "TaskMutation",
     "UpsertMessage",
     "UpsertMessages",
     "Acknowledge",

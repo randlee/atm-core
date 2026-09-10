@@ -8,6 +8,7 @@
 
 use super::ops::execute_task_mutation_message_upsert;
 use super::stmt_cache::WriterStatementCache;
+use super::task_projection::sync_v1_compat_projection;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::error::AtmError;
 use atm_storage::types::{AgentName, TaskId, TeamName};
@@ -73,13 +74,33 @@ pub(super) fn execute_task_mutation(
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<TaskMutationOutcome, AtmError> {
-    let fingerprint = serde_json::to_string(request).map_err(|error| {
+    let fingerprint = mutation_fingerprint(request)?;
+    if let Some(outcome) = replay_outcome(request, connection, target, &fingerprint)? {
+        return Ok(outcome);
+    }
+    let current_revision = load_current_revision(request, connection, target)?;
+    validate_expected_revision(request, current_revision)?;
+    let now = atm_storage::IsoTimestamp::now().to_string();
+    let transition = apply_operation(request, current_revision, connection, cache, target, &now)?;
+    finalize_mutation(request, connection, target, &fingerprint, transition, &now)
+}
+
+fn mutation_fingerprint(request: &TaskMutationRequest) -> Result<String, AtmError> {
+    serde_json::to_string(request).map_err(|error| {
         AtmError::new(
             AtmErrorCode::SerializationFailed,
             "failed to fingerprint task mutation",
         )
         .with_cause(error)
-    })?;
+    })
+}
+
+fn replay_outcome(
+    request: &TaskMutationRequest,
+    connection: &Connection,
+    target: &SharedDbTarget,
+    fingerprint: &str,
+) -> Result<Option<TaskMutationOutcome>, AtmError> {
     let replay: Option<(String, String)> = connection
         .query_row(
             "SELECT request_fingerprint, result_json FROM task_operations WHERE team = ?1 AND operation_id = ?2",
@@ -88,136 +109,116 @@ pub(super) fn execute_task_mutation(
         )
         .optional()
         .map_err(|error| sqlite_error(target, "failed to load task operation", error))?;
-    if let Some((previous_fingerprint, result)) = replay {
-        if previous_fingerprint != fingerprint {
-            return Err(task_error(
-                AtmErrorCode::TaskOperationConflict,
-                "task operation id was reused with different input",
-            ));
-        }
-        let mut outcome: TaskMutationOutcome = serde_json::from_str(&result).map_err(|error| {
-            AtmError::new(
-                AtmErrorCode::SerializationFailed,
-                "stored task operation result is invalid",
-            )
-            .with_cause(error)
-        })?;
-        outcome.replayed = true;
-        return Ok(outcome);
+    let Some((previous_fingerprint, result)) = replay else {
+        return Ok(None);
+    };
+    if previous_fingerprint != fingerprint {
+        return Err(task_error(
+            AtmErrorCode::TaskOperationConflict,
+            "task operation id was reused with different input",
+        ));
     }
+    let mut outcome: TaskMutationOutcome = serde_json::from_str(&result).map_err(|error| {
+        AtmError::new(
+            AtmErrorCode::SerializationFailed,
+            "stored task operation result is invalid",
+        )
+        .with_cause(error)
+    })?;
+    outcome.replayed = true;
+    Ok(Some(outcome))
+}
 
-    let current: Option<(String, Option<String>, u64)> = connection
+fn load_current_revision(
+    request: &TaskMutationRequest,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<Option<u64>, AtmError> {
+    connection
         .query_row(
-            "SELECT state, outcome, revision FROM tasks_v2 WHERE team = ?1 AND task_id = ?2",
+            "SELECT revision FROM tasks_v2 WHERE team = ?1 AND task_id = ?2",
             params![request.actor.team().as_str(), request.task_id.as_str()],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| row.get(0),
         )
         .optional()
-        .map_err(|error| sqlite_error(target, "failed to load v2 task", error))?;
+        .map_err(|error| sqlite_error(target, "failed to load v2 task", error))
+}
+
+fn validate_expected_revision(
+    request: &TaskMutationRequest,
+    current_revision: Option<u64>,
+) -> Result<(), AtmError> {
     if let Some(expected) = request.expected_revision
-        && current.as_ref().map(|row| row.2) != Some(expected)
+        && current_revision != Some(expected)
     {
         return Err(task_error(
             AtmErrorCode::TaskRevisionStale,
             "task revision is stale",
         ));
     }
+    Ok(())
+}
 
-    let now = atm_storage::IsoTimestamp::now().to_string();
-    let transition = match &request.operation {
-        TaskOperation::Assign(assignment) => {
-            if current.is_some() {
-                return Err(task_rejected(
-                    "logical task already exists; use reassign or reopen",
-                ));
-            }
-            if assignment.assignee.team() != request.actor.team()
-                || assignment.assigner.team() != request.actor.team()
-            {
-                return Err(task_rejected("cross-team task assignment is unsupported"));
-            }
-            let message_id = assignment_message_id(request, assignment)?;
-            validate_assignment(request, assignment)?;
-            persist_prepared_message(&assignment.message, connection, cache, target)?;
-            connection.execute(
-                "INSERT INTO tasks_v2(team, task_id, current_assignee, state, outcome, abort_reason, superseded_by, priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at)
-                 VALUES (?1, ?2, ?3, 'assigned', NULL, NULL, NULL, ?4, ?5, 1, 0, 1, ?5)",
-                params![request.actor.team().as_str(), request.task_id.as_str(), assignment.assignee.agent().as_str(), priority_name(assignment.priority), now],
-            ).map_err(|error| sqlite_error(target, "failed to insert v2 task", error))?;
-            connection.execute(
-                "INSERT INTO task_assignment_attempts(team, task_id, attempt, assignee, assigner, assignment_message_id, template_sha, assigned_at)
-                 VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7)",
-                params![request.actor.team().as_str(), request.task_id.as_str(), assignment.assignee.agent().as_str(), assignment.assigner.agent().as_str(), message_id, assignment.template_sha.as_ref().map(ToString::to_string), now],
-            ).map_err(|error| sqlite_error(target, "failed to insert task assignment attempt", error))?;
-            TransitionResult {
-                state: TaskLifecycleState::Assigned,
-                revision: 1,
-                event: "assigned",
-                detail: None,
-                related_task_id: None,
-            }
-        }
+fn apply_operation(
+    request: &TaskMutationRequest,
+    current_revision: Option<u64>,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+    now: &str,
+) -> Result<TransitionResult, AtmError> {
+    match &request.operation {
+        TaskOperation::Assign(assignment) => assign_v2(
+            connection,
+            cache,
+            target,
+            request,
+            assignment,
+            current_revision,
+            now,
+        ),
         TaskOperation::Start => transition_v2(
             connection,
             target,
             request,
             &TransitionSpec::open("active", "started"),
-            &now,
-        )?,
-        TaskOperation::Block { reason } => {
-            let result = transition_v2(
-                connection,
-                target,
-                request,
-                &TransitionSpec::open("blocked", "blocked").with_detail(reason.clone()),
-                &now,
-            )?;
-            clear_task_nudge_markers(connection, target, request)?;
-            result
-        }
+            now,
+        ),
+        TaskOperation::Block { reason } => transition_and_clear_markers(
+            connection,
+            target,
+            request,
+            &TransitionSpec::open("blocked", "blocked").with_detail(reason.clone()),
+            now,
+        ),
         TaskOperation::Unblock { resolution } => transition_v2(
             connection,
             target,
             request,
             &TransitionSpec::open("assigned", "unblocked").with_detail(resolution.clone()),
-            &now,
-        )?,
-        TaskOperation::Close { outcome, .. } => {
-            let TaskOperation::Close { handoff, .. } = &request.operation else {
-                unreachable!("matched close operation")
-            };
-            persist_prepared_message(handoff, connection, cache, target)?;
-            let result = transition_v2(
-                connection,
-                target,
-                request,
-                &TransitionSpec::closed(outcome.clone(), "closed"),
-                &now,
-            )?;
-            clear_task_nudge_markers(connection, target, request)?;
-            result
-        }
-        TaskOperation::LegacyCloseSucceeded { completion_notice } => {
-            persist_prepared_message(completion_notice, connection, cache, target)?;
-            let result = transition_v2(
-                connection,
-                target,
-                request,
-                &TransitionSpec::closed(TaskOutcome::Succeeded, "legacy_close_succeeded"),
-                &now,
-            )?;
-            clear_task_nudge_markers(connection, target, request)?;
-            result
-        }
-        TaskOperation::Reassign(assignment) => {
-            let result = reassign_v2(connection, cache, target, request, assignment, &now, false)?;
-            clear_task_nudge_markers(connection, target, request)?;
-            result
-        }
-        TaskOperation::Reopen(assignment) => {
-            let result = reassign_v2(connection, cache, target, request, assignment, &now, true)?;
-            clear_task_nudge_markers(connection, target, request)?;
-            result
+            now,
+        ),
+        TaskOperation::Close { outcome, handoff } => close_with_handoff(
+            connection,
+            cache,
+            target,
+            request,
+            handoff,
+            TransitionSpec::closed(outcome.clone(), "closed"),
+            now,
+        ),
+        TaskOperation::LegacyCloseSucceeded { completion_notice } => close_with_handoff(
+            connection,
+            cache,
+            target,
+            request,
+            completion_notice,
+            TransitionSpec::closed(TaskOutcome::Succeeded, "legacy_close_succeeded"),
+            now,
+        ),
+        TaskOperation::Reassign(assignment) | TaskOperation::Reopen(assignment) => {
+            let reopen = matches!(request.operation, TaskOperation::Reopen(_));
+            reassign_and_clear_markers(connection, cache, target, request, assignment, now, reopen)
         }
         TaskOperation::Supersede {
             handoff,
@@ -231,9 +232,58 @@ pub(super) fn execute_task_mutation(
             handoff,
             successor_task_id,
             successor,
-            &now,
-        )?,
-    };
+            now,
+        ),
+    }
+}
+
+fn transition_and_clear_markers(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    spec: &TransitionSpec,
+    at: &str,
+) -> Result<TransitionResult, AtmError> {
+    let result = transition_v2(connection, target, request, spec, at)?;
+    clear_task_nudge_markers(connection, target, request)?;
+    Ok(result)
+}
+
+fn close_with_handoff(
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    handoff: &atm_storage::PreparedMessage,
+    spec: TransitionSpec,
+    at: &str,
+) -> Result<TransitionResult, AtmError> {
+    persist_prepared_message(handoff, connection, cache, target)?;
+    transition_and_clear_markers(connection, target, request, &spec, at)
+}
+
+fn reassign_and_clear_markers(
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    assignment: &atm_storage::PreparedAssignment,
+    at: &str,
+    reopen: bool,
+) -> Result<TransitionResult, AtmError> {
+    let result = reassign_v2(connection, cache, target, request, assignment, at, reopen)?;
+    clear_task_nudge_markers(connection, target, request)?;
+    Ok(result)
+}
+
+fn finalize_mutation(
+    request: &TaskMutationRequest,
+    connection: &Connection,
+    target: &SharedDbTarget,
+    fingerprint: &str,
+    transition: TransitionResult,
+    now: &str,
+) -> Result<TaskMutationOutcome, AtmError> {
     let result = TaskMutationOutcome {
         task_id: request.task_id.clone(),
         state: transition.state.clone(),
@@ -258,7 +308,7 @@ pub(super) fn execute_task_mutation(
         transition.event,
         transition.detail.clone(),
         transition.related_task_id.clone(),
-        &now,
+        now,
     )?;
     sync_v1_compat_projection(connection, target, request.actor.team(), &request.task_id)?;
     if let Some(successor_task_id) = transition.related_task_id.as_ref() {
@@ -267,81 +317,40 @@ pub(super) fn execute_task_mutation(
     Ok(result)
 }
 
-/// Refreshes the retained 1.6.x row shape from a canonical v2 task after a
-/// committed lifecycle decision. The context marker suppresses the reciprocal
-/// v1 bridge triggers for just these projection writes; all statements run in
-/// the caller's writer transaction and therefore cannot leave the two
-/// projections partially reconciled.
-fn sync_v1_compat_projection(
+fn assign_v2(
     connection: &Connection,
+    cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-    team: &TeamName,
-    task_id: &TaskId,
-) -> Result<(), AtmError> {
-    connection
-        .execute(
-            "INSERT INTO task_v2_projection_context(singleton) VALUES (1)",
-            [],
-        )
-        .map_err(|error| sqlite_error(target, "failed to begin v1 task projection", error))?;
-
-    let result = (|| {
-        connection
-            .execute(
-                "UPDATE tasks
-                 SET state = 'complete', updated_at = (
-                         SELECT updated_at FROM tasks_v2 WHERE team = ?1 AND task_id = ?2
-                     )
-                 WHERE team = ?1 AND task_id = ?2",
-                params![team.as_str(), task_id.as_str()],
-            )
-            .map_err(|error| sqlite_error(target, "failed to retire stale v1 task rows", error))?;
-        connection
-            .execute(
-                "INSERT INTO tasks(
-                     team, task_id, assignee, assigner, state, assignment_message_id,
-                     description, assigned_at, updated_at, reminder_count, lead_notified_count
-                 )
-                 SELECT task.team, task.task_id, task.current_assignee, attempt.assigner,
-                        CASE task.state
-                            WHEN 'active' THEN 'active'
-                            WHEN 'closed' THEN 'complete'
-                            ELSE 'assigned'
-                        END,
-                        attempt.assignment_message_id,
-                        COALESCE((
-                            SELECT message_text FROM mail_messages
-                             WHERE team = task.team
-                               AND agent = task.current_assignee
-                               AND message_id = attempt.assignment_message_id
-                        ), '[canonical task assignment; see assignment message]'),
-                        task.original_assigned_at, task.updated_at, task.reminder_ordinal, 0
-                   FROM tasks_v2 AS task
-                   JOIN task_assignment_attempts AS attempt
-                     ON attempt.team = task.team
-                    AND attempt.task_id = task.task_id
-                    AND attempt.attempt = task.current_attempt
-                  WHERE task.team = ?1 AND task.task_id = ?2
-                 ON CONFLICT(team, task_id, assignee) DO UPDATE SET
-                     assigner = excluded.assigner,
-                     state = excluded.state,
-                     assignment_message_id = excluded.assignment_message_id,
-                     description = excluded.description,
-                     updated_at = excluded.updated_at,
-                     reminder_count = excluded.reminder_count",
-                params![team.as_str(), task_id.as_str()],
-            )
-            .map_err(|error| sqlite_error(target, "failed to refresh v1 task projection", error))?;
-        Ok(())
-    })();
-    let cleanup = connection
-        .execute(
-            "DELETE FROM task_v2_projection_context WHERE singleton = 1",
-            [],
-        )
-        .map(|_| ())
-        .map_err(|error| sqlite_error(target, "failed to end v1 task projection", error));
-    result.and(cleanup)
+    request: &TaskMutationRequest,
+    assignment: &atm_storage::PreparedAssignment,
+    current_revision: Option<u64>,
+    at: &str,
+) -> Result<TransitionResult, AtmError> {
+    if current_revision.is_some() {
+        return Err(task_rejected(
+            "logical task already exists; use reassign or reopen",
+        ));
+    }
+    if assignment.assignee.team() != request.actor.team()
+        || assignment.assigner.team() != request.actor.team()
+    {
+        return Err(task_rejected("cross-team task assignment is unsupported"));
+    }
+    let message_id = assignment_message_id(request, assignment)?;
+    persist_prepared_message(&assignment.message, connection, cache, target)?;
+    connection.execute(
+        "INSERT INTO tasks_v2(team, task_id, current_assignee, state, outcome, abort_reason, superseded_by, priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at)
+         VALUES (?1, ?2, ?3, 'assigned', NULL, NULL, NULL, ?4, ?5, 1, 0, 1, ?5)",
+        params![request.actor.team().as_str(), request.task_id.as_str(), assignment.assignee.agent().as_str(), priority_name(assignment.priority), at],
+    ).map_err(|error| sqlite_error(target, "failed to insert v2 task", error))?;
+    insert_assignment_attempt(connection, target, request, assignment, 1, &message_id, at)?;
+    Ok(TransitionResult {
+        state: TaskLifecycleState::Assigned,
+        revision: 1,
+        event: "assigned",
+        detail: None,
+        related_task_id: None,
+    })
 }
 
 fn transition_v2(
@@ -351,6 +360,29 @@ fn transition_v2(
     spec: &TransitionSpec,
     at: &str,
 ) -> Result<TransitionResult, AtmError> {
+    let (current, revision, assignee) = load_open_transition_task(connection, target, request)?;
+    let action = transition_action(spec)?;
+    let TaskLifecycleTransition::To(state) = lifecycle_transition(Some(&current), &action)
+        .map_err(|error| task_error(AtmErrorCode::TaskTransitionInvalid, error.detail))?;
+    if spec.next_state == "active" {
+        ensure_no_other_active_task(connection, target, request, &assignee)?;
+    }
+    let next_revision = revision.saturating_add(1);
+    update_transition_row(connection, target, request, spec, next_revision, at)?;
+    Ok(TransitionResult {
+        state,
+        revision: next_revision,
+        event: spec.event,
+        detail: spec.detail.clone(),
+        related_task_id: spec.related_task_id.clone(),
+    })
+}
+
+fn load_open_transition_task(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+) -> Result<(TaskLifecycleState, u64, String), AtmError> {
     let (current_state, revision, assignee): (String, u64, String) = connection
         .query_row(
             "SELECT state, revision, current_assignee FROM tasks_v2 WHERE team = ?1 AND task_id = ?2",
@@ -364,54 +396,72 @@ fn transition_v2(
         "blocked" => TaskLifecycleState::Blocked,
         _ => return Err(task_rejected("task transition requires an open task")),
     };
-    let action = match (spec.next_state, spec.terminal.as_ref(), spec.event) {
-        ("active", None, "started") => TaskLifecycleAction::Start,
-        ("blocked", None, "blocked") => TaskLifecycleAction::Block,
-        ("assigned", None, "unblocked") => TaskLifecycleAction::Unblock,
-        ("closed", Some(outcome), "legacy_close_succeeded") => {
-            if *outcome != TaskOutcome::Succeeded {
+    Ok((current, revision, assignee))
+}
+
+fn transition_action(spec: &TransitionSpec) -> Result<TaskLifecycleAction, AtmError> {
+    Ok(
+        match (spec.next_state, spec.terminal.as_ref(), spec.event) {
+            ("active", None, "started") => TaskLifecycleAction::Start,
+            ("blocked", None, "blocked") => TaskLifecycleAction::Block,
+            ("assigned", None, "unblocked") => TaskLifecycleAction::Unblock,
+            ("closed", Some(outcome), "legacy_close_succeeded") => {
+                if *outcome != TaskOutcome::Succeeded {
+                    return Err(task_error(
+                        AtmErrorCode::TaskTerminalMetadataInvalid,
+                        "legacy completion must succeed",
+                    ));
+                }
+                TaskLifecycleAction::LegacyCloseSucceeded
+            }
+            ("closed", Some(outcome), "closed") => TaskLifecycleAction::Close(outcome.clone()),
+            _ => {
                 return Err(task_error(
                     AtmErrorCode::TaskTerminalMetadataInvalid,
-                    "legacy completion must succeed",
+                    "task transition does not carry valid terminal metadata",
                 ));
             }
-            TaskLifecycleAction::LegacyCloseSucceeded
-        }
-        ("closed", Some(outcome), "closed") => TaskLifecycleAction::Close(outcome.clone()),
-        _ => {
-            return Err(task_error(
-                AtmErrorCode::TaskTerminalMetadataInvalid,
-                "task transition does not carry valid terminal metadata",
-            ));
-        }
-    };
-    let TaskLifecycleTransition::To(expected) = lifecycle_transition(Some(&current), &action)
-        .map_err(|error| task_error(AtmErrorCode::TaskTransitionInvalid, error.detail))?;
-    if spec.next_state == "active" {
-        let active_exists: bool = connection
-            .query_row(
-                "SELECT EXISTS(
-                    SELECT 1 FROM tasks_v2
-                    WHERE team = ?1 AND current_assignee = ?2 AND state = 'active' AND task_id <> ?3
-                )",
-                params![
-                    request.actor.team().as_str(),
-                    assignee,
-                    request.task_id.as_str()
-                ],
-                |row| row.get(0),
-            )
-            .map_err(|error| {
-                sqlite_error(target, "failed to check active task invariant", error)
-            })?;
-        if active_exists {
-            return Err(task_error(
-                AtmErrorCode::TaskActiveConflict,
-                "member already has an active task",
-            ));
-        }
+        },
+    )
+}
+
+fn ensure_no_other_active_task(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    assignee: &str,
+) -> Result<(), AtmError> {
+    let active_exists: bool = connection
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM tasks_v2
+                WHERE team = ?1 AND current_assignee = ?2 AND state = 'active' AND task_id <> ?3
+            )",
+            params![
+                request.actor.team().as_str(),
+                assignee,
+                request.task_id.as_str()
+            ],
+            |row| row.get(0),
+        )
+        .map_err(|error| sqlite_error(target, "failed to check active task invariant", error))?;
+    if active_exists {
+        return Err(task_error(
+            AtmErrorCode::TaskActiveConflict,
+            "member already has an active task",
+        ));
     }
-    let next_revision = revision.saturating_add(1);
+    Ok(())
+}
+
+fn update_transition_row(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    spec: &TransitionSpec,
+    next_revision: u64,
+    at: &str,
+) -> Result<(), AtmError> {
     let outcome_name = spec.terminal.as_ref().map(outcome_name);
     let abort_reason = spec.terminal.as_ref().map(abort_reason_name).transpose()?;
     connection
@@ -430,14 +480,7 @@ fn transition_v2(
             ],
         )
         .map_err(|error| sqlite_error(target, "failed to transition v2 task", error))?;
-    let state = expected;
-    Ok(TransitionResult {
-        state,
-        revision: next_revision,
-        event: spec.event,
-        detail: spec.detail.clone(),
-        related_task_id: spec.related_task_id.clone(),
-    })
+    Ok(())
 }
 
 fn assignment_message_id(
@@ -491,6 +534,57 @@ fn persist_prepared_message(
     }
 }
 
+fn insert_assignment_attempt(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    assignment: &atm_storage::PreparedAssignment,
+    attempt: u32,
+    message_id: &str,
+    at: &str,
+) -> Result<(), AtmError> {
+    insert_assignment_attempt_for(
+        connection,
+        target,
+        request.actor.team(),
+        &request.task_id,
+        assignment,
+        attempt,
+        message_id,
+        at,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn insert_assignment_attempt_for(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    team: &TeamName,
+    task_id: &TaskId,
+    assignment: &atm_storage::PreparedAssignment,
+    attempt: u32,
+    message_id: &str,
+    at: &str,
+) -> Result<(), AtmError> {
+    connection
+        .execute(
+            "INSERT INTO task_assignment_attempts(team, task_id, attempt, assignee, assigner, assignment_message_id, template_sha, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                team.as_str(),
+                task_id.as_str(),
+                attempt,
+                assignment.assignee.agent().as_str(),
+                assignment.assigner.agent().as_str(),
+                message_id,
+                assignment.template_sha.as_ref().map(ToString::to_string),
+                at,
+            ],
+        )
+        .map(|_| ())
+        .map_err(|error| sqlite_error(target, "failed to append task assignment attempt", error))
+}
+
 fn reassign_v2(
     connection: &Connection,
     cache: &mut WriterStatementCache,
@@ -501,6 +595,54 @@ fn reassign_v2(
     reopen: bool,
 ) -> Result<TransitionResult, AtmError> {
     let message_id = assignment_message_id(request, assignment)?;
+    let (revision, attempt) = reassignment_context(connection, target, request, reopen)?;
+    let next_attempt = attempt
+        .checked_add(1)
+        .ok_or_else(|| task_rejected("task assignment attempt overflow"))?;
+    persist_prepared_message(&assignment.message, connection, cache, target)?;
+    let next_revision = revision.saturating_add(1);
+    connection
+        .execute(
+            "UPDATE tasks_v2
+             SET current_assignee = ?3, state = 'assigned', outcome = NULL,
+                 abort_reason = NULL, superseded_by = NULL, priority = ?4,
+                 current_attempt = ?5, revision = ?6, updated_at = ?7
+             WHERE team = ?1 AND task_id = ?2",
+            params![
+                request.actor.team().as_str(),
+                request.task_id.as_str(),
+                assignment.assignee.agent().as_str(),
+                priority_name(assignment.priority),
+                next_attempt,
+                next_revision,
+                at
+            ],
+        )
+        .map_err(|error| sqlite_error(target, "failed to reassign v2 task", error))?;
+    insert_assignment_attempt(
+        connection,
+        target,
+        request,
+        assignment,
+        next_attempt,
+        &message_id,
+        at,
+    )?;
+    Ok(TransitionResult {
+        state: TaskLifecycleState::Assigned,
+        revision: next_revision,
+        event: if reopen { "reopened" } else { "reassigned" },
+        detail: None,
+        related_task_id: None,
+    })
+}
+
+fn reassignment_context(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    reopen: bool,
+) -> Result<(u64, u32), AtmError> {
     let (current_state, revision, attempt): (String, u64, u32) = connection
         .query_row(
             "SELECT state, revision, current_attempt FROM tasks_v2 WHERE team = ?1 AND task_id = ?2",
@@ -532,52 +674,7 @@ fn reassign_v2(
             "task reassignment must return task to assigned",
         ));
     };
-    let next_attempt = attempt
-        .checked_add(1)
-        .ok_or_else(|| task_rejected("task assignment attempt overflow"))?;
-    persist_prepared_message(&assignment.message, connection, cache, target)?;
-    let next_revision = revision.saturating_add(1);
-    connection
-        .execute(
-            "UPDATE tasks_v2
-             SET current_assignee = ?3, state = 'assigned', outcome = NULL,
-                 abort_reason = NULL, superseded_by = NULL, priority = ?4,
-                 current_attempt = ?5, revision = ?6, updated_at = ?7
-             WHERE team = ?1 AND task_id = ?2",
-            params![
-                request.actor.team().as_str(),
-                request.task_id.as_str(),
-                assignment.assignee.agent().as_str(),
-                priority_name(assignment.priority),
-                next_attempt,
-                next_revision,
-                at
-            ],
-        )
-        .map_err(|error| sqlite_error(target, "failed to reassign v2 task", error))?;
-    connection
-        .execute(
-            "INSERT INTO task_assignment_attempts(team, task_id, attempt, assignee, assigner, assignment_message_id, template_sha, assigned_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                request.actor.team().as_str(),
-                request.task_id.as_str(),
-                next_attempt,
-                assignment.assignee.agent().as_str(),
-                assignment.assigner.agent().as_str(),
-                message_id,
-                assignment.template_sha.as_ref().map(ToString::to_string),
-                at,
-            ],
-        )
-        .map_err(|error| sqlite_error(target, "failed to append task assignment attempt", error))?;
-    Ok(TransitionResult {
-        state: TaskLifecycleState::Assigned,
-        revision: next_revision,
-        event: if reopen { "reopened" } else { "reassigned" },
-        detail: None,
-        related_task_id: None,
-    })
+    Ok((revision, attempt))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -591,82 +688,28 @@ fn supersede_v2(
     successor: &atm_storage::PreparedAssignment,
     at: &str,
 ) -> Result<TransitionResult, AtmError> {
-    if successor_task_id == &request.task_id {
-        return Err(task_rejected("a successor task must use a new task id"));
-    }
-    let message_id = assignment_message_id_for(successor_task_id, request.actor.team(), successor)?;
-    let (current_state, revision): (String, u64) = connection
-        .query_row(
-            "SELECT state, revision FROM tasks_v2 WHERE team = ?1 AND task_id = ?2",
-            params![request.actor.team().as_str(), request.task_id.as_str()],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|error| {
-            sqlite_error(target, "task supersession requires an existing task", error)
-        })?;
-    let current = match current_state.as_str() {
-        "assigned" => TaskLifecycleState::Assigned,
-        "active" => TaskLifecycleState::Active,
-        "blocked" => TaskLifecycleState::Blocked,
-        "closed" => TaskLifecycleState::Closed(TaskOutcome::Failed),
-        _ => {
-            return Err(task_rejected(
-                "task supersession has an invalid current state",
-            ));
-        }
-    };
-    let TaskLifecycleTransition::To(TaskLifecycleState::Closed(_)) = lifecycle_transition(
-        Some(&current),
-        &TaskLifecycleAction::Supersede {
-            successor_task_id: successor_task_id.clone(),
-        },
-    )
-    .map_err(|error| task_error(AtmErrorCode::TaskTransitionInvalid, error.detail))?
-    else {
-        return Err(task_rejected("task supersession must close the old task"));
-    };
-    let successor_exists: bool = connection
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM tasks_v2 WHERE team = ?1 AND task_id = ?2)",
-            params![request.actor.team().as_str(), successor_task_id.as_str()],
-            |row| row.get(0),
-        )
-        .map_err(|error| sqlite_error(target, "failed to check successor task", error))?;
-    if successor_exists {
-        return Err(task_rejected("successor task id already exists"));
-    }
+    let (message_id, revision) =
+        supersession_context(connection, target, request, successor_task_id, successor)?;
     persist_prepared_message(handoff, connection, cache, target)?;
     persist_prepared_message(&successor.message, connection, cache, target)?;
     let next_revision = revision.saturating_add(1);
-    connection
-        .execute(
-            "UPDATE tasks_v2
-             SET state = 'closed', outcome = 'aborted', abort_reason = 'superseded',
-                 superseded_by = ?3, revision = ?4, updated_at = ?5
-             WHERE team = ?1 AND task_id = ?2",
-            params![
-                request.actor.team().as_str(),
-                request.task_id.as_str(),
-                successor_task_id.as_str(),
-                next_revision,
-                at
-            ],
-        )
-        .map_err(|error| sqlite_error(target, "failed to close superseded task", error))?;
-    connection
-        .execute(
-            "INSERT INTO tasks_v2(team, task_id, current_assignee, state, outcome, abort_reason, superseded_by, priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at)
-             VALUES (?1, ?2, ?3, 'assigned', NULL, NULL, NULL, ?4, ?5, 1, 0, 1, ?5)",
-            params![request.actor.team().as_str(), successor_task_id.as_str(), successor.assignee.agent().as_str(), priority_name(successor.priority), at],
-        )
-        .map_err(|error| sqlite_error(target, "failed to create successor task", error))?;
-    connection
-        .execute(
-            "INSERT INTO task_assignment_attempts(team, task_id, attempt, assignee, assigner, assignment_message_id, template_sha, assigned_at)
-             VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7)",
-            params![request.actor.team().as_str(), successor_task_id.as_str(), successor.assignee.agent().as_str(), successor.assigner.agent().as_str(), message_id, successor.template_sha.as_ref().map(ToString::to_string), at],
-        )
-        .map_err(|error| sqlite_error(target, "failed to create successor assignment attempt", error))?;
+    close_superseded_task(
+        connection,
+        target,
+        request,
+        successor_task_id,
+        next_revision,
+        at,
+    )?;
+    create_successor_task(
+        connection,
+        target,
+        request,
+        successor_task_id,
+        successor,
+        &message_id,
+        at,
+    )?;
     append_v2_event_for(
         connection,
         target,
@@ -691,6 +734,122 @@ fn supersede_v2(
         detail: None,
         related_task_id: Some(successor_task_id.clone()),
     })
+}
+
+fn supersession_context(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    successor_task_id: &TaskId,
+    successor: &atm_storage::PreparedAssignment,
+) -> Result<(String, u64), AtmError> {
+    if successor_task_id == &request.task_id {
+        return Err(task_rejected("a successor task must use a new task id"));
+    }
+    let message_id = assignment_message_id_for(successor_task_id, request.actor.team(), successor)?;
+    let (current_state, revision): (String, u64) = connection
+        .query_row(
+            "SELECT state, revision FROM tasks_v2 WHERE team = ?1 AND task_id = ?2",
+            params![request.actor.team().as_str(), request.task_id.as_str()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|error| {
+            sqlite_error(target, "task supersession requires an existing task", error)
+        })?;
+    validate_supersession_transition(&current_state, successor_task_id)?;
+    let successor_exists: bool = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM tasks_v2 WHERE team = ?1 AND task_id = ?2)",
+            params![request.actor.team().as_str(), successor_task_id.as_str()],
+            |row| row.get(0),
+        )
+        .map_err(|error| sqlite_error(target, "failed to check successor task", error))?;
+    if successor_exists {
+        return Err(task_rejected("successor task id already exists"));
+    }
+    Ok((message_id, revision))
+}
+
+fn validate_supersession_transition(
+    current_state: &str,
+    successor_task_id: &TaskId,
+) -> Result<(), AtmError> {
+    let current = match current_state {
+        "assigned" => TaskLifecycleState::Assigned,
+        "active" => TaskLifecycleState::Active,
+        "blocked" => TaskLifecycleState::Blocked,
+        "closed" => TaskLifecycleState::Closed(TaskOutcome::Failed),
+        _ => {
+            return Err(task_rejected(
+                "task supersession has an invalid current state",
+            ));
+        }
+    };
+    let TaskLifecycleTransition::To(TaskLifecycleState::Closed(_)) = lifecycle_transition(
+        Some(&current),
+        &TaskLifecycleAction::Supersede {
+            successor_task_id: successor_task_id.clone(),
+        },
+    )
+    .map_err(|error| task_error(AtmErrorCode::TaskTransitionInvalid, error.detail))?
+    else {
+        return Err(task_rejected("task supersession must close the old task"));
+    };
+    Ok(())
+}
+
+fn close_superseded_task(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    successor_task_id: &TaskId,
+    next_revision: u64,
+    at: &str,
+) -> Result<(), AtmError> {
+    connection
+        .execute(
+            "UPDATE tasks_v2
+             SET state = 'closed', outcome = 'aborted', abort_reason = 'superseded',
+                 superseded_by = ?3, revision = ?4, updated_at = ?5
+             WHERE team = ?1 AND task_id = ?2",
+            params![
+                request.actor.team().as_str(),
+                request.task_id.as_str(),
+                successor_task_id.as_str(),
+                next_revision,
+                at
+            ],
+        )
+        .map(|_| ())
+        .map_err(|error| sqlite_error(target, "failed to close superseded task", error))
+}
+
+fn create_successor_task(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    request: &TaskMutationRequest,
+    successor_task_id: &TaskId,
+    successor: &atm_storage::PreparedAssignment,
+    message_id: &str,
+    at: &str,
+) -> Result<(), AtmError> {
+    connection
+        .execute(
+            "INSERT INTO tasks_v2(team, task_id, current_assignee, state, outcome, abort_reason, superseded_by, priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at)
+             VALUES (?1, ?2, ?3, 'assigned', NULL, NULL, NULL, ?4, ?5, 1, 0, 1, ?5)",
+            params![request.actor.team().as_str(), successor_task_id.as_str(), successor.assignee.agent().as_str(), priority_name(successor.priority), at],
+        )
+        .map_err(|error| sqlite_error(target, "failed to create successor task", error))?;
+    insert_assignment_attempt_for(
+        connection,
+        target,
+        request.actor.team(),
+        successor_task_id,
+        successor,
+        1,
+        message_id,
+        at,
+    )
 }
 
 fn assignment_message_id_for(
