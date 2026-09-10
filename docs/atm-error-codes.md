@@ -182,8 +182,6 @@ Error codes should describe the failure class, not a specific prose message.
   task before starting another.
 - `ATM_TASK_TERMINAL_METADATA_INVALID` — provide a terminal outcome compatible
   with the current task state.
-- `ATM_TASK_COMPATIBILITY_FAILED` — inspect retained v1/v2 migration
-  diagnostics before retrying.
 - `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` — choose a same-host assignee;
   cross-host task handoff is not transactionally supported.
 - `ATM_TASK_LEAD_MISSING` — designate exactly one team lead before retrying a

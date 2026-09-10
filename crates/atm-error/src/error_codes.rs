@@ -124,8 +124,6 @@ pub enum AtmErrorCode {
     TaskActiveConflict,
     /// A terminal outcome/reason combination cannot be represented durably.
     TaskTerminalMetadataInvalid,
-    /// A retained v1 task write could not be reconciled into the v2 ledger.
-    TaskCompatibilityFailed,
     /// The v2 writer cannot atomically assign a task across hosts.
     TaskHandoffCrossHostUnsupported,
     /// A lead-authorized task mutation found no team lead.
@@ -310,7 +308,6 @@ impl AtmErrorCode {
             Self::TaskOperationConflict => "ATM_TASK_OPERATION_CONFLICT",
             Self::TaskActiveConflict => "ATM_TASK_ACTIVE_CONFLICT",
             Self::TaskTerminalMetadataInvalid => "ATM_TASK_TERMINAL_METADATA_INVALID",
-            Self::TaskCompatibilityFailed => "ATM_TASK_COMPATIBILITY_FAILED",
             Self::TaskHandoffCrossHostUnsupported => "ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED",
             Self::TaskLeadMissing => "ATM_TASK_LEAD_MISSING",
             Self::TaskLeadAmbiguous => "ATM_TASK_LEAD_AMBIGUOUS",
@@ -502,7 +499,6 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_TASK_OPERATION_CONFLICT" => AtmErrorCode::TaskOperationConflict,
         "ATM_TASK_ACTIVE_CONFLICT" => AtmErrorCode::TaskActiveConflict,
         "ATM_TASK_TERMINAL_METADATA_INVALID" => AtmErrorCode::TaskTerminalMetadataInvalid,
-        "ATM_TASK_COMPATIBILITY_FAILED" => AtmErrorCode::TaskCompatibilityFailed,
         "ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED" => AtmErrorCode::TaskHandoffCrossHostUnsupported,
         "ATM_TASK_LEAD_MISSING" => AtmErrorCode::TaskLeadMissing,
         "ATM_TASK_LEAD_AMBIGUOUS" => AtmErrorCode::TaskLeadAmbiguous,

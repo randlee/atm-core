@@ -383,8 +383,10 @@ insufficient.
 - [ ] D2 — Replace the pure task model in
   `crates/atm-storage/src/task_state.rs` with the types and legal transitions
   above. Add typed rejections for illegal transition, stale revision,
-  operation-id conflict, active-task conflict, invalid terminal metadata, and
-  v1/v2 compatibility failure. Reuse
+  operation-id conflict, active-task conflict, and invalid terminal metadata.
+  The retained v1 bridge deterministically reconciles every supported legacy
+  write; it has no separate compatibility-rejection path in this sprint.
+  Reuse
   `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` for every assignment-bearing
   mutation whose recipient is not same-host. Register public codes and recovery
   text in the unified ADR-032 error catalog and machine-readable boundary.

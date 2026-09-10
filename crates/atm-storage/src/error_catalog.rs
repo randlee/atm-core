@@ -71,9 +71,6 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
         AtmErrorCode::TaskActiveConflict => {
             "Complete, block, or reassign the member's active task before starting another."
         }
-        AtmErrorCode::TaskCompatibilityFailed => {
-            "Preserve the retained task projection and inspect migration diagnostics before retrying."
-        }
         AtmErrorCode::TaskHandoffCrossHostUnsupported => {
             "Use a same-host assignee; cross-host task handoff is not transactionally supported."
         }
