@@ -130,6 +130,7 @@ operation identity remains independent of every resulting message.
 | none | assign | Assigned | create logical row and attempt 1 |
 | Assigned | start | Active | append started event |
 | Assigned | legacy complete | Closed(Succeeded) | AZ.3 compatibility provenance only; persist completion notice |
+| Assigned | fail | Closed(Failed) | persist terminal handoff; invalidate all attempt nudges |
 | Assigned | block | Blocked | append reason; invalidate current attempt nudge |
 | Assigned | reassign | Assigned | append a new attempt; retain original ordering time |
 | Assigned | abort | Closed(Aborted) | persist handoff; invalidate all attempt nudges |
@@ -486,7 +487,9 @@ This is the sole authoritative acceptance list for AZ.2.
 1. The pure state table accepts every listed transition and rejects every
    unlisted transition; unblock is exactly `Blocked -> Assigned` and retains
    priority/original assignment time without activating. The legacy completion
-   provenance is the only `Assigned -> Closed(Succeeded)` compatibility route.
+   provenance is the only `Assigned -> Closed(Succeeded)` compatibility route;
+   explicit `fail` is the separate intentional `Assigned -> Closed(Failed)`
+   terminal route.
 2. One `TaskId` has one current row and immutable numbered attempts; reassign
    and reopen retain identity/history, while supersede atomically links a
    distinct successor id.
