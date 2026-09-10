@@ -31,7 +31,11 @@ forbidden = ["rusqlite::Connection"]
 request_types = ["TaskMutationRequest", "TaskOperationId", "PreparedAssignment", "PreparedMessage"]
 response_types = ["TaskMutationOutcome"]
 error_types = ["AtmError"]
-notes = ["storage never renders templates or stores a copied task body", "one request is one transaction and one idempotency key"]
+notes = [
+  "storage never renders templates or stores a copied task body",
+  "one request is one transaction and one idempotency key",
+  "review-only governed source modules: crates/atm-storage-rusqlite/src/writer/task_ops.rs and crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs; lint_rules, not review_gates, are the mechanically enforced controls",
+]
 
 [testing]
 allowed_test_double_paths = []
@@ -39,7 +43,7 @@ forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-ASYNC-TASK-MUTATION-REFERENCES"]
-review_gates = ["sealed_contract", "no_caller_owned_transaction", "no_sqlite_in_callers"]
+review_gates = ["manual_architecture_review"]
 
 [status]
 state = "concrete_landed"

@@ -32,7 +32,12 @@ forbidden = ["SqliteTaskStore", "rusqlite::Connection"]
 request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin", "EscalationScope"]
 response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<String>", "bool"]
 error_types = ["AtmError"]
-notes = ["retained v1 compatibility writer behavior remains during coexistence", "writer/ops.rs routes canonical v2 transitions only through AsyncTaskMutationStore", "D8 escalation recipient methods persist daemon/team scope rows in SQLite"]
+notes = [
+  "retained v1 compatibility writer behavior remains during coexistence",
+  "writer/ops.rs routes canonical v2 transitions only through AsyncTaskMutationStore",
+  "D8 escalation recipient methods persist daemon/team scope rows in SQLite",
+  "review-only governed source module: crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs; lint_rules, not review_gates, are the mechanically enforced controls",
+]
 
 [testing]
 allowed_test_double_paths = []
@@ -40,7 +45,7 @@ forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-TASK-STORE-SQLITE"]
-review_gates = ["private_sqlite_impl", "no_cli_sqlite_lookup"]
+review_gates = ["manual_architecture_review"]
 
 [status]
 state = "concrete_landed"
