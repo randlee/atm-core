@@ -4,17 +4,20 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    AsyncTaskLedgerReader, LogicalTaskRow, MemberKey, ReadDeadline, TaskMutationRequest,
-    TaskOperation, TaskOperationId, TaskRow, TaskState,
+    AssignmentAttempt, AsyncMessageReceivedHookEmitter, AsyncTaskLedgerReader,
+    AttentionReservationStatus, BuiltInPostSendDispatch, LogicalTaskRow, MemberKey, ReadDeadline,
+    TaskMutationRequest, TaskOperation, TaskOperationId, TaskRow, TaskState,
 };
-use atm_core::types::IsoTimestamp;
+use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::types::{IsoTimestamp, TaskId};
 
 use crate::herdr_escalation::{
     BLOCKED_NOTIFY_MS, EscalationKind, EscalationNotification, MAX_BLOCKED_ESCALATIONS_PER_TICK,
     escalate,
 };
-use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats};
+use crate::herdr_queue_wake::{HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats};
 
 const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
 const MAX_BLOCKED_TASKS_IN_BODY: usize = 8;
@@ -27,6 +30,81 @@ struct LeadAudit<'a> {
     at: IsoTimestamp,
     lead: atm_core::types::AgentName,
     message_id: atm_core::schema::AtmMessageId,
+}
+
+pub(crate) struct TaskReminderEmission {
+    pub(crate) member: MemberKey,
+    pub(crate) task_id: TaskId,
+    pub(crate) attempt: AssignmentAttempt,
+    pub(crate) row: LogicalTaskRow,
+    pub(crate) dispatch: BuiltInPostSendDispatch,
+}
+
+pub(crate) async fn emit_task_reminder(
+    pump: &HerdrQueueWakePump,
+    emission: TaskReminderEmission,
+    emitter: &dyn AsyncMessageReceivedHookEmitter,
+    now: IsoTimestamp,
+    stats: &mut HerdrQueueWakeStats,
+) -> Result<AttentionReservationStatus, AtmError> {
+    if let Err(error) = emitter
+        .emit_received_message(
+            emission.dispatch,
+            RequestDeadline::after(HERDR_REQUEST_DEADLINE),
+        )
+        .await
+    {
+        if error.code() == AtmErrorCode::HerdrUnavailable {
+            stats.breaker_open += 1;
+        }
+        stats.task_reminders_failed += 1;
+        return Ok(AttentionReservationStatus::PermanentlyFailed);
+    }
+    let mutation_store = pump.service_runtime.async_task_mutation_store()?;
+    let daemon_actor = "atm-daemon"
+        .parse()
+        .map_err(|_| AtmError::validation("invalid daemon task actor"))?;
+    match mutation_store
+        .apply(TaskMutationRequest {
+            operation_id: TaskOperationId::new(),
+            actor: MemberKey::new(emission.member.team().clone(), daemon_actor),
+            task_id: emission.task_id,
+            expected_revision: Some(emission.row.revision),
+            operation: TaskOperation::RecordReminder {
+                attempt: emission.attempt,
+                at: now,
+            },
+        })
+        .await
+    {
+        Ok(outcome) => {
+            let mut reminded = emission.row.clone();
+            reminded.reminder_ordinal = reminded.reminder_ordinal.saturating_add(1);
+            reminded.revision = outcome.revision;
+            maybe_escalate_task(
+                pump,
+                &emission.member,
+                &reminded,
+                outcome.revision,
+                now,
+                stats,
+            )
+            .await;
+        }
+        Err(error) => {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "task_reminder_record",
+                outcome = "failed",
+                error = %error,
+                member = %emission.member,
+                "Herdr task reminder audit write failed after accepted emission"
+            );
+        }
+    }
+    stats.prompted += 1;
+    stats.task_reminders += 1;
+    Ok(AttentionReservationStatus::Delivered)
 }
 
 pub(crate) async fn maybe_escalate_task(

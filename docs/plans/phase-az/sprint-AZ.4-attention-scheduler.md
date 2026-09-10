@@ -301,10 +301,10 @@ This is the sole authoritative deliverables list for AZ.4. Every item must land
 at a production-ready level; a pure selector without real pump integration, or
 runtime wiring without durable fairness, is insufficient.
 
-- [ ] D1 — Add the pure `AttentionLane`, `AttentionItem`, candidate,
+- [x] D1 — Add the pure `AttentionLane`, `AttentionItem`, candidate,
   selection, and opportunity contracts with typed `RosterStateRevision`,
   exhaustive eligibility/order/alternation tests, and no body-capable fields.
-- [ ] D2 — Add the storage-neutral sync/async schedule boundaries, private
+- [x] D2 — Add the storage-neutral sync/async schedule boundaries, private
   SQLite cursor/reservation tables, idempotent opportunity reservation/
   finalization, and bounded top-runnable task query. Bump
   `STORAGE_SCHEMA_VERSION` to 2.1.0 through the idempotent
@@ -312,7 +312,7 @@ runtime wiring without durable fairness, is insufficient.
   `shared_db::ensure_schema`; update matching boundary/schema/ADR-061 records,
   prove fresh/upgraded schema convergence, and rerun the older-consumer
   compatibility fixture.
-- [ ] D3 — Refactor `HerdrQueueWakePump` and heartbeat idle publication so each
+- [x] D3 — Refactor `HerdrQueueWakePump` and heartbeat idle publication so each
   accepted idle member/opportunity invokes the one shared selector after state
   has been committed to the canonical ephemeral master-roster record. Claims
   must apply downstream delivery-channel policy and revalidate exactly the
@@ -324,13 +324,13 @@ runtime wiring without durable fairness, is insufficient.
   selector/reservation orchestration into
   `crates/atm-http-runtime/src/herdr_attention_scheduler.rs` before the existing
   pump exceeds RULE-003; no lint-cap increase is authorized.
-- [ ] D4 — Make reminders attempt-aware and scheduler-derived: active before
+- [x] D4 — Make reminders attempt-aware and scheduler-derived: active before
   assigned, assigned priority/time ordering, 60-second repeat only while open,
   no blocked/closed reminder, old-attempt invalidation, and unblock without
   activation. Keep the escalation ordinal task-scoped across attempts, emit
   lead audit at every tenth successful reminder, and keep management
   escalation distinct from reminder eligibility.
-- [ ] D5 — Amend product/runtime/Herdr/storage requirements, architecture,
+- [x] D5 — Amend product/runtime/Herdr/storage requirements, architecture,
   `docs/task-lifecycle-schema.md`, ADR-061/ADR-062/ADR-063,
   machine-readable boundaries, and operator docs for
   `AttentionItem`, separate lanes, durable fairness, one-item opportunities,
@@ -341,7 +341,7 @@ runtime wiring without durable fairness, is insufficient.
   mail"/"Task body" requirements. Recheck
   ADR-036's capability inventory and matching boundary TOMLs, removing any
   remaining `OutboundMessageQuery` entry deleted by Phase AM.
-- [ ] D6 — Add real composed-runtime tests covering FIFO, persistent ordering,
+- [x] D6 — Add real composed-runtime tests covering FIFO, persistent ordering,
   alternating dual-lane opportunities, single-lane progress, restart cursor
   persistence, concurrent opportunity idempotency, read/ack suppression,
   Herdr/heartbeat convergence on one roster record, same-state idle revisions,

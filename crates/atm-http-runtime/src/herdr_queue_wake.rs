@@ -15,10 +15,9 @@ use std::time::Duration;
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    AssignmentAttempt, AsyncMessageReceivedHookEmitter, AttentionItem, AttentionReservation,
-    AttentionReservationStatus, DurableRosterStore, LogicalTaskRow, MemberKey,
-    MessageReceivedHookSelector, NudgeKind, PendingNudgeStore, ReadDeadline, TaskAssignmentAttempt,
-    TaskMutationRequest, TaskOperation, TaskOperationId,
+    AssignmentAttempt, AttentionItem, AttentionReservation, AttentionReservationStatus,
+    DurableRosterStore, LogicalTaskRow, MemberKey, MessageReceivedHookSelector, NudgeKind,
+    PendingNudgeStore, ReadDeadline, TaskAssignmentAttempt,
 };
 use atm_core::delivery_channel::{
     DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
@@ -38,6 +37,7 @@ use tokio::task::JoinHandle;
 
 use crate::herdr_breaker_escalation::HerdrBreakerEscalationGate;
 use crate::herdr_escalation::EscalationState;
+use crate::herdr_queue_wake_escalation::TaskReminderEmission;
 use crate::runtime_health::RuntimeHealth;
 use claim::ReleasePendingOnDrop;
 use support::{log_herdr_list_failure, member_order, runtime_state};
@@ -72,14 +72,6 @@ pub(crate) struct HerdrQueueWakeStats {
     pub notifications_failed: usize,
     pub task_step_skipped: bool,
     pub last_tick_at: Option<IsoTimestamp>,
-}
-
-struct TaskReminderEmission {
-    member: MemberKey,
-    task_id: TaskId,
-    attempt: AssignmentAttempt,
-    row: LogicalTaskRow,
-    dispatch: atm_core::boundary::BuiltInPostSendDispatch,
 }
 
 #[derive(Clone)]
@@ -806,7 +798,8 @@ impl HerdrQueueWakePump {
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
             return Ok(AttentionReservationStatus::Stale);
         };
-        self.emit_task_reminder(
+        crate::herdr_queue_wake_escalation::emit_task_reminder(
+            self,
             TaskReminderEmission {
                 member: member.clone(),
                 task_id: task_id.clone(),
@@ -856,73 +849,6 @@ impl HerdrQueueWakePump {
                     && assignment.assignment_message_id == assignment_message_id
             });
         Ok(assignment.map(|assignment| (row, assignment)))
-    }
-
-    async fn emit_task_reminder(
-        &self,
-        emission: TaskReminderEmission,
-        emitter: &dyn AsyncMessageReceivedHookEmitter,
-        now: IsoTimestamp,
-        stats: &mut HerdrQueueWakeStats,
-    ) -> Result<AttentionReservationStatus, AtmError> {
-        if let Err(error) = emitter
-            .emit_received_message(
-                emission.dispatch,
-                RequestDeadline::after(HERDR_REQUEST_DEADLINE),
-            )
-            .await
-        {
-            if error.code() == AtmErrorCode::HerdrUnavailable {
-                stats.breaker_open += 1;
-            }
-            stats.task_reminders_failed += 1;
-            return Ok(AttentionReservationStatus::PermanentlyFailed);
-        }
-        let mutation_store = self.service_runtime.async_task_mutation_store()?;
-        let daemon_actor = "atm-daemon"
-            .parse()
-            .map_err(|_| AtmError::validation("invalid daemon task actor"))?;
-        match mutation_store
-            .apply(TaskMutationRequest {
-                operation_id: TaskOperationId::new(),
-                actor: MemberKey::new(emission.member.team().clone(), daemon_actor),
-                task_id: emission.task_id,
-                expected_revision: Some(emission.row.revision),
-                operation: TaskOperation::RecordReminder {
-                    attempt: emission.attempt,
-                    at: now,
-                },
-            })
-            .await
-        {
-            Ok(outcome) => {
-                let mut reminded = emission.row.clone();
-                reminded.reminder_ordinal = reminded.reminder_ordinal.saturating_add(1);
-                reminded.revision = outcome.revision;
-                crate::herdr_queue_wake_escalation::maybe_escalate_task(
-                    self,
-                    &emission.member,
-                    &reminded,
-                    outcome.revision,
-                    now,
-                    stats,
-                )
-                .await;
-            }
-            Err(error) => {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "task_reminder_record",
-                    outcome = "failed",
-                    error = %error,
-                    member = %emission.member,
-                    "Herdr task reminder audit write failed after accepted emission"
-                );
-            }
-        }
-        stats.prompted += 1;
-        stats.task_reminders += 1;
-        Ok(AttentionReservationStatus::Delivered)
     }
 
     pub(crate) async fn rebuild_dispatch(
