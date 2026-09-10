@@ -1,0 +1,99 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002" ;
+  triage:title "Stale reviewed_for_release stamp on rewritten doc" ;
+  triage:description "docs/user-documents/nudge-templates.md:4 -- this file's body (title/description placeholder docs, all 5 default XML templates) was materially rewritten by sprint AZ.1 (commit a3fc25cb8, 8 lines changed), but its reviewed_for_release front-matter is still 1.4.4 while its sibling docs/user-documents/hooks.md, documenting the same contract change in the same sprint, was correctly bumped to 1.5.15. Confirmed via git show." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/user-documents/nudge-templates.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T00:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ-S1 ;
+  triage:foundAt "2026-09-10T00:47:28Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/AZ1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/AZ2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/AZ3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/AZ4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-002/AZ1-1>
+  a triage:Occurrence ;
+  triage:file "docs/user-documents/nudge-templates.md" ;
+  triage:line 4 ;
+  triage:snippet "reviewed_for_release: 1.4.4" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "729675822137df3517690f17406c682c8d4e357d" ;
+  triage:occursIn <urn:atm:triage:worktree/az1/729675822137df3517690f17406c682c8d4e357d> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/AZ2-1>
+  a triage:Occurrence ;
+  triage:file "docs/user-documents/nudge-templates.md" ;
+  triage:line 4 ;
+  triage:snippet "reviewed_for_release: 1.4.4" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "618484d78e3037055124db20bb5eb5b50f441564" ;
+  triage:occursIn <urn:atm:triage:worktree/az2/618484d78e3037055124db20bb5eb5b50f441564> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "docs/user-documents/nudge-templates.md" ;
+  triage:line 4 ;
+  triage:snippet "reviewed_for_release: 1.4.4" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4" ;
+  triage:occursIn <urn:atm:triage:worktree/az3/9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/AZ4-1>
+  a triage:Occurrence ;
+  triage:file "docs/user-documents/nudge-templates.md" ;
+  triage:line 4 ;
+  triage:snippet "reviewed_for_release: 1.4.4" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4" ;
+  triage:occursIn <urn:atm:triage:worktree/az4/9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4> .
+
+<urn:atm:triage:worktree/az1/729675822137df3517690f17406c682c8d4e357d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/az1" ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "729675822137df3517690f17406c682c8d4e357d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/az2/618484d78e3037055124db20bb5eb5b50f441564>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/az2" ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "618484d78e3037055124db20bb5eb5b50f441564" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/az3/9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/az3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/az4/9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/az4" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4" ;
+  triage:orderIndex 4 .

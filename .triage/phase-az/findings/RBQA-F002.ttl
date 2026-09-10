@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002" ;
+  triage:title "Duplicate compatibility DTOs with no drift guard" ;
+  triage:description "crates/atm-core/src/boundary/mod.rs:182,202 -- PostSendHookEventWire and ExternalPostSendHookPayload are structurally byte-identical (introduced/extended by sprint AZ.1) and legitimately kept separate per two independently-versioned compatibility windows (ADR-054), but nothing mechanically ties them together -- a future field change to PostSendHookEvent could silently desync the two byte-identical contracts AC1 depends on. Fix (either): share a private constructor helper, or add a parity test asserting serde_json::to_value equality between the two wrappers for a representative event." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "missing-drift-guard" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/boundary/mod.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T00:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ-S1 ;
+  triage:foundAt "2026-09-10T00:47:28Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AZ1-OCC1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AZ2-OCC1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002/AZ1-OCC1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 182 ;
+  triage:snippet "pub struct PostSendHookEventWire<'a> { ... } pub struct ExternalPostSendHookPayload<'a> { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "729675822137df3517690f17406c682c8d4e357d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ1/729675822137df3517690f17406c682c8d4e357d> .
+
+<urn:atm:triage:occurrence/RBQA-F002/AZ2-OCC1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 182 ;
+  triage:snippet "pub struct PostSendHookEventWire<'a> { ... } pub struct ExternalPostSendHookPayload<'a> { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "618484d78e3037055124db20bb5eb5b50f441564" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/618484d78e3037055124db20bb5eb5b50f441564> .
+
+<urn:atm:triage:worktree/AZ1/729675822137df3517690f17406c682c8d4e357d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/az1-task-nudge-contract" ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "729675822137df3517690f17406c682c8d4e357d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AZ2/618484d78e3037055124db20bb5eb5b50f441564>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/az2-task-domain-storage" ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "618484d78e3037055124db20bb5eb5b50f441564" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AZ3/9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/az3-task-command-handoff" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AZ4/9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/az4-attention-scheduler" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "9f70bbcf0060cb7d6d68c3314b66cb28c2296cd4" ;
+  triage:orderIndex 4 .
