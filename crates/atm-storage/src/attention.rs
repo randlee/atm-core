@@ -253,10 +253,12 @@ pub trait AsyncAttentionScheduleStore: sealed::Sealed + Send + Sync {
     async fn reserve(
         &self,
         request: AttentionReservationRequest,
+        deadline: ReadDeadline,
     ) -> Result<AttentionReservation, AtmError>;
     async fn finalize(
         &self,
         request: AttentionFinalizeRequest,
+        deadline: ReadDeadline,
     ) -> Result<AttentionReservation, AtmError>;
 }
 
