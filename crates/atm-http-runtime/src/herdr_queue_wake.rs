@@ -22,7 +22,9 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::{
     load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
 };
-use atm_core::protocol::RuntimeMemberState;
+use atm_core::protocol::{
+    RosterRuntimeObservationUpdate, RuntimeMemberState, RuntimeObservationSource,
+};
 use atm_core::types::IsoTimestamp;
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
 use tokio::sync::watch;
@@ -413,6 +415,7 @@ impl HerdrQueueWakePump {
                     self.collect_idle_members(
                         outcome.agents,
                         members,
+                        (self.clock)(),
                         stats,
                         &mut eligible,
                         &mut task_candidates,
@@ -420,6 +423,7 @@ impl HerdrQueueWakePump {
                 }
                 Err(error) => {
                     complete = false;
+                    self.record_unavailable_members(&members, (self.clock)());
                     if error.is_infrastructure() {
                         stats.breaker_open += 1;
                         let now = (self.clock)();
@@ -441,6 +445,7 @@ impl HerdrQueueWakePump {
         &self,
         agents: Vec<AgentSnapshot>,
         members: Vec<HerdrCandidate>,
+        observed_at: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
         eligible: &mut Vec<HerdrCandidate>,
         task_candidates: &mut Vec<TaskCandidate>,
@@ -449,8 +454,38 @@ impl HerdrQueueWakePump {
             .iter()
             .filter_map(|snapshot| snapshot.name.as_deref().map(|name| (name, snapshot)))
             .collect();
+        let mut updates_by_team = HashMap::new();
+        for member in &members {
+            let state = snapshots
+                .get(member.herdr_agent.as_str())
+                .map_or(RuntimeMemberState::Unknown, |snapshot| {
+                    runtime_state(snapshot.status)
+                });
+            updates_by_team
+                .entry(member.key.team().clone())
+                .or_insert_with(Vec::new)
+                .push(RosterRuntimeObservationUpdate::observed(
+                    member.key.agent().clone(),
+                    state,
+                    RuntimeObservationSource::HerdrPoll,
+                    observed_at,
+                    None,
+                ));
+        }
+        let mut accepted = HashMap::new();
+        for (team, updates) in updates_by_team {
+            for outcome in self
+                .service_runtime
+                .apply_roster_runtime_observations(&team, &updates)
+            {
+                accepted.insert(
+                    MemberKey::new(team.clone(), outcome.agent.clone()),
+                    outcome.current,
+                );
+            }
+        }
         for member in members {
-            let Some(snapshot) = snapshots.get(member.herdr_agent.as_str()) else {
+            if !snapshots.contains_key(member.herdr_agent.as_str()) {
                 if member.pending {
                     stats.not_present += 1;
                     tracing::info!(
@@ -463,30 +498,42 @@ impl HerdrQueueWakePump {
                     );
                 }
                 continue;
-            };
-            if snapshot.status == HerdrAgentStatus::Unknown {
-                continue;
             }
-            self.runtime_health
-                .record_herdr_poll_state(&member.key, runtime_state(snapshot.status));
+            let Some(observation) = accepted.get(&member.key) else {
+                continue;
+            };
             if matches!(
-                snapshot.status,
-                HerdrAgentStatus::Idle | HerdrAgentStatus::Done | HerdrAgentStatus::Blocked
+                observation.state,
+                RuntimeMemberState::Idle | RuntimeMemberState::Blocked
             ) {
                 task_candidates.push(TaskCandidate {
                     member: member.clone(),
-                    blocked: snapshot.status == HerdrAgentStatus::Blocked,
+                    blocked: observation.state == RuntimeMemberState::Blocked,
                 });
             }
-            if member.pending
-                && matches!(
-                    snapshot.status,
-                    HerdrAgentStatus::Idle | HerdrAgentStatus::Done
-                )
-            {
+            if member.pending && observation.state == RuntimeMemberState::Idle {
                 stats.idle_members += 1;
                 eligible.push(member);
             }
+        }
+    }
+
+    fn record_unavailable_members(&self, members: &[HerdrCandidate], observed_at: IsoTimestamp) {
+        let mut updates_by_team = HashMap::new();
+        for member in members {
+            updates_by_team
+                .entry(member.key.team().clone())
+                .or_insert_with(Vec::new)
+                .push(RosterRuntimeObservationUpdate::unavailable(
+                    member.key.agent().clone(),
+                    RuntimeObservationSource::HerdrPoll,
+                    observed_at,
+                ));
+        }
+        for (team, updates) in updates_by_team {
+            let _ = self
+                .service_runtime
+                .apply_roster_runtime_observations(&team, &updates);
         }
     }
 
@@ -1068,7 +1115,7 @@ mod tests {
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::NullObservability;
-    use atm_core::protocol::RuntimeMemberState;
+    use atm_core::protocol::{RuntimeMemberState, RuntimeObservationAvailability};
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
     use atm_core::test_support as atm_storage;
@@ -1568,8 +1615,9 @@ mod tests {
             },
         });
         let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
+        let runtime = assembly.service_runtime.clone();
         let pump = HerdrQueueWakePump::new(
-            assembly.service_runtime,
+            runtime.clone(),
             selector,
             super::RuntimeHealth::default(),
             process,
@@ -2924,7 +2972,11 @@ mod tests {
             "blocked task reminders never prompt Herdr"
         );
         assert_eq!(
-            health.snapshot().members[0].state,
+            runtime
+                .roster_ephemeral_state(key.team(), key.agent())
+                .expect("canonical member state")
+                .runtime
+                .state,
             RuntimeMemberState::Blocked,
         );
 
@@ -2952,7 +3004,14 @@ mod tests {
             "blocked and idle outcomes are audited"
         );
         assert_eq!(pump.stats().task_reminders, 1);
-        assert_eq!(health.snapshot().members[0].state, RuntimeMemberState::Idle);
+        assert_eq!(
+            runtime
+                .roster_ephemeral_state(key.team(), key.agent())
+                .expect("canonical member state")
+                .runtime
+                .state,
+            RuntimeMemberState::Idle
+        );
         assert_eq!(
             prompt_texts(&fake)
                 .iter()
@@ -2986,15 +3045,13 @@ mod tests {
             .service_runtime
             .async_task_ledger_reader()
             .expect("task reader");
-        let (roster_store, roster_runtime_mirror) =
-            atm_runtime_test_support::build_write_through_roster_for_test(
-                assembly.shared_roster_store_arc(),
-            )
-            .expect("write-through roster fixture hydrates from the isolated sqlite assembly");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(
+            assembly.shared_roster_store_arc(),
+        )
+        .expect("write-through roster fixture hydrates from the isolated sqlite assembly");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             assembly.message_store_arc(),
-            roster_store,
-            roster_runtime_mirror,
+            roster,
             assembly.nudge_template_override_store.clone(),
             Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
         )
@@ -3230,8 +3287,9 @@ mod tests {
             },
         });
         let process: Arc<dyn HerdrProcessAdapter> = fake.clone();
+        let runtime = assembly.service_runtime.clone();
         let pump = HerdrQueueWakePump::new(
-            assembly.service_runtime,
+            runtime.clone(),
             selector,
             super::RuntimeHealth::default(),
             process,
@@ -3239,6 +3297,16 @@ mod tests {
         pump.tick_once().await;
         assert_eq!(pump.stats().prompted, 0);
         assert!(pump.stats().breaker_open > 0);
+        let observation = runtime
+            .roster_ephemeral_state(&team, &"aq27-agent".parse().expect("agent"))
+            .expect("canonical roster member")
+            .runtime;
+        assert_eq!(observation.state, RuntimeMemberState::Unknown);
+        assert_eq!(observation.revision.get(), 0);
+        assert_eq!(
+            observation.availability,
+            RuntimeObservationAvailability::Unavailable
+        );
     }
 
     #[tokio::test]
@@ -3366,6 +3434,16 @@ mod tests {
                 .expect("pending members")
                 .contains(&key)
         );
+        let observation = runtime
+            .roster_ephemeral_state(key.team(), key.agent())
+            .expect("canonical roster member")
+            .runtime;
+        assert_eq!(observation.state, RuntimeMemberState::Unknown);
+        assert_eq!(observation.revision.get(), 1);
+        assert_eq!(
+            observation.availability,
+            RuntimeObservationAvailability::Fresh
+        );
     }
 
     #[tokio::test]
@@ -3418,26 +3496,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ac10_herdr_statuses_update_runtime_health_states() {
+    async fn ac10_herdr_statuses_update_canonical_roster_state() {
         let agents = vec![AgentSnapshot {
             name: Some("aq27-agent".to_owned()),
             pane_id: None,
             status: HerdrAgentStatus::Working,
             workspace_id: None,
         }];
-        let (_root, _runtime, _fake, pump, health, key) = build_test_pump_with_agents(agents);
+        let (_root, runtime, _fake, pump, health, key) = build_test_pump_with_agents(agents);
         pump.tick_once().await;
-        let member = health
-            .snapshot()
-            .members
-            .into_iter()
-            .find(|member| member.member.as_str() == key.agent().as_str())
-            .expect("Herdr member health observation");
+        let member = runtime
+            .roster_ephemeral_state(key.team(), key.agent())
+            .expect("Herdr member canonical observation")
+            .runtime;
         assert_eq!(member.state, RuntimeMemberState::Active);
         assert_eq!(
             member.state_changed_by,
             Some(atm_core::protocol::RuntimeObservationSource::HerdrPoll)
         );
+        assert!(health.snapshot().members.is_empty());
     }
 
     #[tokio::test]
@@ -3808,13 +3885,11 @@ mod tests {
             load_roster_calls: std::sync::atomic::AtomicUsize::new(0),
             list_teams_calls: std::sync::atomic::AtomicUsize::new(0),
         });
-        let (roster_store, roster_runtime_mirror) =
-            atm_runtime_test_support::build_write_through_roster_for_test(durable.clone())
-                .expect("write-through roster fixture hydrates from the counting fake");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(durable.clone())
+            .expect("write-through roster fixture hydrates from the counting fake");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             std::sync::Arc::new(UnusedMailStore),
-            roster_store,
-            roster_runtime_mirror,
+            roster,
             std::sync::Arc::new(NoopNudgeTemplateOverrideStore),
             std::sync::Arc::new(UnusedNonClaudeOutbound),
         );
@@ -3872,13 +3947,11 @@ mod tests {
             load_roster_calls: std::sync::atomic::AtomicUsize::new(0),
             list_teams_calls: std::sync::atomic::AtomicUsize::new(0),
         });
-        let (roster_store, roster_runtime_mirror) =
-            atm_runtime_test_support::build_write_through_roster_for_test(durable)
-                .expect("write-through roster fixture hydrates");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(durable)
+            .expect("write-through roster fixture hydrates");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             std::sync::Arc::new(UnusedMailStore),
-            roster_store,
-            roster_runtime_mirror,
+            roster,
             std::sync::Arc::new(NoopNudgeTemplateOverrideStore),
             std::sync::Arc::new(UnusedNonClaudeOutbound),
         );

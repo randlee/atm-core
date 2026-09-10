@@ -1719,13 +1719,11 @@ mod tests {
     }
 
     fn test_runtime_from_store(store: TestRosterStore) -> LocalServiceRuntime {
-        let (roster_store, roster_runtime_mirror) =
-            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(store))
-                .expect("write-through roster fixture hydrates from the in-memory fake");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(store))
+            .expect("write-through roster fixture hydrates from the in-memory fake");
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            roster_store,
-            roster_runtime_mirror,
+            roster,
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         )
@@ -2289,17 +2287,15 @@ mod tests {
             HOME_DIR_METADATA_KEY.to_string(),
             serde_json::json!("/repo/roster"),
         );
-        let (roster_store, roster_runtime_mirror) =
-            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
-                TestRosterStore {
-                    members: vec![roster_member],
-                },
-            ))
-            .expect("write-through roster fixture hydrates from the in-memory fake");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+            TestRosterStore {
+                members: vec![roster_member],
+            },
+        ))
+        .expect("write-through roster fixture hydrates from the in-memory fake");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            roster_store,
-            roster_runtime_mirror,
+            roster,
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         );
@@ -2776,6 +2772,12 @@ mod tests {
                 team: "ax6-doctor".parse().expect("team"),
                 member: "blocked".parse().expect("member"),
                 state: crate::protocol::RuntimeMemberState::Blocked,
+                revision: Default::default(),
+                availability: crate::protocol::RuntimeObservationAvailability::Fresh,
+                last_observation_attempt_by: None,
+                last_observation_attempt_at: Some(now),
+                last_observed_by: None,
+                last_observed_at: Some(now),
                 session_id: None,
                 pid: None,
                 last_active_at: None,
