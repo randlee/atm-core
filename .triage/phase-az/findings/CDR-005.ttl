@@ -15,40 +15,42 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_attention_scheduler.rs, crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T18:36:39Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CDR-005/AZ4-001> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CDR-005/AZ4-002> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/CDR-005/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
   triage:line 111 ;
   triage:snippet "ReadLaneError flattened to DaemonUnavailable string instead of AtmError::from" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "fe0d17a3d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/fe0d17a3d> .
 
 <urn:atm:triage:occurrence/CDR-005/AZ4-002>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 854 ;
   triage:snippet "ReadLaneError flattened to DaemonUnavailable string instead of AtmError::from" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "fe0d17a3d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/fe0d17a3d> .
 
-<urn:atm:triage:worktree/AZ4/066a465d0>
+<urn:atm:triage:worktree/AZ4/fe0d17a3d>
   a triage:WorktreeSnapshot ;
-  triage:path "integrate/phase-az" ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "fe0d17a3d" ;
   triage:orderIndex 4 .
