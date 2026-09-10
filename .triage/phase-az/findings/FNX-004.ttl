@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-004>
+  a triage:Finding ;
+  triage:findingId "FNX-004" ;
+  triage:title "Heartbeat-originated attention dispatch is an untracked, undrained detached tokio::spawn task" ;
+  triage:description "fenix's independent critical review of PR #1395 confirms the CDR-002 fix itself is real and well tested (IdleOpportunitySink installed on the router, heartbeat publishes post-commit for every accepted Idle revision including Idle-to-Idle, composed tests drive the real pump with no Herdr poll). The delivery mechanism is the gap: HerdrQueueWakePump::on_idle_opportunity does tokio::spawn(async move { ... }) with no retained JoinHandle, no RuntimeHealth counter, and nothing checking draining state; each call gets a fresh HerdrQueueWakeStats so HERDR_MAX_PROMPTS_PER_TICK no longer bounds prompt volume on this path. The router already owns the answer to this exact shape: DetachedReceivedHooks (router_support.rs:315-364), whose doc states 'never unobserved: every warning it produces is logged with the originating request id and counted on RuntimeHealth, and daemon shutdown drains whatever is still in flight instead of abandoning it mid-emission', with a bounded drain(deadline). Concrete consequence: during drain, heartbeats still arriving start brand-new nudge dispatches that nothing waits for. Recommendation: route heartbeat-originated dispatch through DetachedReceivedHooks (or an equivalent registry on the pump), add a RuntimeHealth counter, and skip publication when the runtime is draining. Add a test that a drain joins an in-flight heartbeat-originated dispatch." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "lifecycle-management" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-004/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FNX-004/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1008 ;
+  triage:snippet "IdleOpportunitySink::on_idle_opportunity spawns an untracked, undrained tokio task instead of registering through DetachedReceivedHooks" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
+
+<urn:atm:triage:worktree/AZ4/d0cb3f509>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:orderIndex 4 .

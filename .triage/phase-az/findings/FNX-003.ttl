@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-003>
+  a triage:Finding ;
+  triage:findingId "FNX-003" ;
+  triage:title "CDR-001 fix treats tasks_v2.revision as an authorization epoch, but audit writes bump it without changing authorization inputs" ;
+  triage:description "fenix's independent critical review of PR #1395 confirms the CDR-001 race fix itself is correct (authorized_revision() binds mutation to the service-read row, CASed in the writer transaction, with a genuinely deterministic race test at herdr_queue_wake.rs:1223-1325). The gap: revision is now load-bearing as an authorization epoch, but record_reminder and record_lead_notified (task_reminder.rs:28-36,77-85) both UPDATE tasks_v2 SET revision = ? without touching current_assignee or current_attempt, and the attention scheduler emits these autonomously every TASK_REMINDER_INTERVAL_MS=60000 against every open task. A scheduler audit write landing inside the service's read-then-mutate window now makes an otherwise-authorized atm task start/block/unblock/complete fail ATM_TASK_REVISION_STALE with no automatic retry -- a new spurious-failure mode with no test and no doc. It also falsifies sprint-AZ.3-task-command-handoff.md:204-206's claim that authorization is 'rechecked against the current revision inside it', since a revision bump from an audit write does not correspond to an authorization-relevant change. Recommendation (preferred, smaller change): have RecordReminder/RecordLeadNotified not advance revision, since they already carry their own reminder_ordinal/last_reminded_at for staleness tracking -- so the counter means only 'authorization inputs may have changed'. Add a test that a reminder audit landing between authorization and mutation does not fail an authorized transition." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "concurrency-correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/task_command/service.rs, crates/atm-storage-rusqlite/src/writer/task_reminder.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-003/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FNX-003/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_reminder.rs" ;
+  triage:line 28 ;
+  triage:snippet "record_reminder/record_lead_notified bump tasks_v2.revision without touching current_assignee/current_attempt, colliding with revision's new role as an authorization epoch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
+
+<urn:atm:triage:worktree/AZ4/d0cb3f509>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:orderIndex 4 .

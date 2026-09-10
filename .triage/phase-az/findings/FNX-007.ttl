@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-007>
+  a triage:Finding ;
+  triage:findingId "FNX-007" ;
+  triage:title "CDR-004 boundary-manifest clause left unimplemented; atm-http-runtime missing from allowed_dependents" ;
+  triage:description "fenix's independent critical review of PR #1395 reports CDR-004's recommendation had four parts; the manifest part was not done. boundaries/atm-storage/async-task-scheduler-audit-store.toml:22 declares allowed_dependents without atm-http-runtime, which is the capability's only real consumer (herdr_queue_wake_escalation.rs:64,192 call pump.service_runtime.async_task_scheduler_audit_store()). This is verbatim the omission CDR-004 named in the old manifest; boundaries/atm-storage/async-task-mutation-store.toml was also left unedited. Rated minor on evidence: lint_boundaries.py unions allowed_dependents across every record owned by the same package, and boundaries/atm-storage/task-store.toml already lists atm-http-runtime, so lint passes and the mechanical leak is closed -- only the document misstates who holds the capability. Recommendation: add atm-http-runtime to the new manifest and to async-task-mutation-store.toml's historical consumer record, or add a note that the field is a package-level union rather than a per-capability list." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundaries/atm-storage/async-task-scheduler-audit-store.toml, boundaries/atm-storage/async-task-mutation-store.toml" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-007/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FNX-007/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/async-task-scheduler-audit-store.toml" ;
+  triage:line 22 ;
+  triage:snippet "allowed_dependents omits atm-http-runtime, the capability's only real consumer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
+
+<urn:atm:triage:worktree/AZ4/d0cb3f509>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:orderIndex 4 .

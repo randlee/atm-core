@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-006>
+  a triage:Finding ;
+  triage:findingId "FNX-006" ;
+  triage:title "New cross-crate IdleOpportunitySink trait is unsealed beside a sealed sibling" ;
+  triage:description "fenix's independent critical review of PR #1395 reports that IdleOpportunitySink (runtime_health.rs:59) is a new public cross-crate capability seam, exported from the crate root and injected at composition, and is externally implementable -- immediately above it, MemberStateTransitionSink (:46), the sibling sink covering the same heartbeat handler, is sealed via atm_core::boundary::sealed::Sealed. IdleOpportunitySink also has no boundary manifest, while the two capabilities this PR adds on the storage side both got one. Given how much of this PR is about which crate may hold which capability, an unsealed seam here is the wrong default. Recommendation: add atm_core::boundary::sealed::Sealed to the supertrait bound (the two production impls -- HerdrQueueWakePump and the in-crate test recorder -- are both sealable), and file a boundary manifest for it." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "boundary-leak" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/runtime_health.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-006/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FNX-006/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/runtime_health.rs" ;
+  triage:line 59 ;
+  triage:snippet "pub trait IdleOpportunitySink: Send + Sync {} -- unsealed, unlike sibling MemberStateTransitionSink; no boundary manifest filed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
+
+<urn:atm:triage:worktree/AZ4/d0cb3f509>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:orderIndex 4 .
