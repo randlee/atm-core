@@ -14,6 +14,17 @@ message, logical task, immutable attempt/event records, operation replay row,
 and required pending-marker cleanup in one writer transaction. `TaskStore`
 remains the retained synchronous v1 read/audit compatibility surface.
 
+## AsyncTaskSchedulerAuditStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/async-task-scheduler-audit-store.toml](../../boundaries/atm-storage/async-task-scheduler-audit-store.toml)
+- [../../boundaries/atm-storage-rusqlite/async-task-scheduler-audit-store-sqlite.toml](../../boundaries/atm-storage-rusqlite/async-task-scheduler-audit-store-sqlite.toml)
+
+`AsyncTaskSchedulerAuditStore` is the scheduler's narrowed, Tokio-safe audit
+capability. It accepts only task-reminder and task-lead-notification audit
+requests and never grants logical-task lifecycle mutation, message delivery,
+SQLite, or writer-lane access.
+
 ## TaskStore
 
 Canonical machine-readable boundary source:

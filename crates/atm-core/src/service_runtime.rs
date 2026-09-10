@@ -314,6 +314,8 @@ pub struct LocalServiceRuntime {
     async_task_ledger_reader: Option<std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
     async_task_mutation_store:
         Option<std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>>,
+    async_task_scheduler_audit_store:
+        Option<std::sync::Arc<dyn atm_storage::AsyncTaskSchedulerAuditStore + Send + Sync>>,
     async_attention_schedule_store:
         Option<std::sync::Arc<dyn AsyncAttentionScheduleStore + Send + Sync>>,
     async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
@@ -373,6 +375,7 @@ impl LocalServiceRuntime {
             async_mailbox_reader: None,
             async_task_ledger_reader: None,
             async_task_mutation_store: None,
+            async_task_scheduler_audit_store: None,
             async_attention_schedule_store: None,
             async_message_search_store: None,
             roster_store: roster.store(),
@@ -472,7 +475,7 @@ impl LocalServiceRuntime {
     }
 
     /// Returns the runtime-selected Tokio task lifecycle mutation boundary.
-    pub fn async_task_mutation_store(
+    pub(crate) fn async_task_mutation_store(
         &self,
     ) -> Result<std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>, AtmError>
     {
@@ -481,6 +484,31 @@ impl LocalServiceRuntime {
                 "Tokio task mutation store was not installed in this runtime",
             )
         })
+    }
+
+    /// Attaches the scheduler's audit-only task writer selected by storage
+    /// composition. Scheduler code cannot obtain the lifecycle mutation port.
+    #[must_use]
+    pub fn with_async_task_scheduler_audit_store(
+        mut self,
+        store: std::sync::Arc<dyn atm_storage::AsyncTaskSchedulerAuditStore + Send + Sync>,
+    ) -> Self {
+        self.async_task_scheduler_audit_store = Some(store);
+        self
+    }
+
+    /// Returns the runtime-selected scheduler audit capability.
+    pub fn async_task_scheduler_audit_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn atm_storage::AsyncTaskSchedulerAuditStore + Send + Sync>, AtmError>
+    {
+        self.async_task_scheduler_audit_store
+            .clone()
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable(
+                    "Tokio task scheduler audit store was not installed in this runtime",
+                )
+            })
     }
 
     /// Attaches Tokio-safe durable cursor/reservation storage for the
@@ -711,7 +739,7 @@ impl LocalServiceRuntime {
         self.async_mailbox_reader()?
             .list_messages(scope, query, deadline)
             .await
-            .map_err(|error| AtmError::daemon_unavailable(error.to_string()))
+            .map_err(AtmError::from)
     }
 
     /// Performs the acknowledgement source transition and reply insertion on
@@ -1127,6 +1155,7 @@ mod tests {
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::InboxMessage;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use atm_storage::AtmError;
     use chrono::Utc;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1144,6 +1173,30 @@ mod tests {
     /// makes detection reliable without any timing assumption.
     const RACE_ATTEMPTS: usize = 64;
     use tempfile::tempdir;
+
+    #[test]
+    fn list_messages_preserves_read_lane_error_codes() {
+        for (error, expected) in [
+            (
+                atm_storage::ReadLaneError::Saturated { reason: "full" },
+                AtmErrorCode::DaemonConnectionSaturated,
+            ),
+            (
+                atm_storage::ReadLaneError::DeadlineExpired { stage: "read" },
+                AtmErrorCode::MailboxLockTimeout,
+            ),
+            (
+                atm_storage::ReadLaneError::Storage {
+                    code: AtmErrorCode::MailboxReadFailed,
+                    message: "storage".to_owned(),
+                    cause: None,
+                },
+                AtmErrorCode::MailboxReadFailed,
+            ),
+        ] {
+            assert_eq!(AtmError::from(error).code(), expected);
+        }
+    }
 
     struct UnusedRuntimeStore;
 

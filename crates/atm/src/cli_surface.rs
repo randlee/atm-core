@@ -98,7 +98,7 @@ pub(crate) fn command_surface_markdown(command: &Command) -> String {
          (see `crates/atm/src/cli_surface.rs`).\n\n",
     );
     render_command_markdown(command, 2, &mut out, "atm");
-    out
+    format!("{}\n", out.trim_end_matches('\n'))
 }
 
 fn render_command_markdown(

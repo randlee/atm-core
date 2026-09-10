@@ -1,0 +1,50 @@
+boundary_id = "BOUNDARY-AsyncTaskSchedulerAuditStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "AsyncTaskSchedulerAuditStore"
+
+[public]
+trait = "AsyncTaskSchedulerAuditStore"
+notes = "sealed Tokio-safe scheduler audit boundary; it cannot perform logical-task lifecycle transitions"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_storage::StorageHandles"]
+
+[ownership]
+io_owns = ["bounded_task_mutation_submission", "idempotent_task_audit_result"]
+io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn", "template_rendering"]
+
+[dependencies]
+# atm-http-runtime reaches these types only through atm-core's re-export; it has no direct Cargo edge to atm-storage, and task-store.toml forbids that edge.
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-storage-rusqlite", "atm-storage -> atm-core"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["TaskReminderAuditRequest", "TaskLeadNotificationAuditRequest", "TaskOperationId"]
+response_types = ["TaskMutationOutcome"]
+error_types = ["AtmError"]
+notes = [
+  "the request types intentionally omit lifecycle operations, assignment mail, and prepared messages",
+  "the SQLite adapter may translate the two audit requests through its private writer implementation",
+]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-ASYNC-TASK-SCHEDULER-AUDIT-REFERENCES"]
+review_gates = ["manual_architecture_review"]
+
+[status]
+state = "concrete_landed"
+notes = ["AZ.4", "CDR-004"]

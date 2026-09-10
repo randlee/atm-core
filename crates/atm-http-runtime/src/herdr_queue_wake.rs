@@ -2,6 +2,8 @@
 
 #[path = "herdr_queue_wake_claim.rs"]
 mod claim;
+#[path = "herdr_queue_wake_idle.rs"]
+mod idle;
 #[path = "herdr_queue_wake_reminders.rs"]
 mod reminders;
 #[path = "herdr_queue_wake_support.rs"]
@@ -17,7 +19,7 @@ use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AssignmentAttempt, AttentionItem, AttentionReservation, AttentionReservationStatus,
     DurableRosterStore, LogicalTaskRow, MemberKey, MessageReceivedHookSelector, NudgeKind,
-    PendingNudgeStore, ReadDeadline, TaskAssignmentAttempt,
+    PendingNudgeStore, ReadDeadline, ReadLaneError, TaskAssignmentAttempt,
 };
 use atm_core::delivery_channel::{
     DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
@@ -38,6 +40,7 @@ use tokio::task::JoinHandle;
 use crate::herdr_breaker_escalation::HerdrBreakerEscalationGate;
 use crate::herdr_escalation::EscalationState;
 use crate::herdr_queue_wake_escalation::TaskReminderEmission;
+use crate::router_support::DetachedReceivedHooks;
 use crate::runtime_health::RuntimeHealth;
 use claim::ReleasePendingOnDrop;
 use support::{log_herdr_list_failure, member_order, runtime_state};
@@ -52,6 +55,10 @@ pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 #[cfg(test)]
 pub(crate) use super::herdr_attention_scheduler::TASK_REMINDER_INTERVAL_MS;
 pub(crate) const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
+
+pub(super) fn task_ledger_read_error(error: ReadLaneError) -> AtmError {
+    AtmError::from(error)
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct HerdrQueueWakeStats {
@@ -91,6 +98,7 @@ pub struct HerdrQueueWakePump {
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
     release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    detached_hooks: DetachedReceivedHooks,
     #[cfg(test)]
     pub(crate) handoff_cleanup_test_gate:
         Arc<Mutex<Option<crate::herdr_queue_wake_test_gates::Gate>>>,
@@ -122,6 +130,7 @@ impl HerdrQueueWakePump {
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
             release_handles: Arc::new(Mutex::new(Vec::new())),
+            detached_hooks: DetachedReceivedHooks::default(),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
             #[cfg(test)]
@@ -174,6 +183,7 @@ impl HerdrQueueWakePump {
                 }
             }
             self.await_release_handles().await;
+            self.detached_hooks.drain(HERDR_REQUEST_DEADLINE).await;
         })
     }
 
@@ -620,66 +630,72 @@ impl HerdrQueueWakePump {
             if stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
                 break;
             }
-            let member = opportunity.member.clone();
-            match super::herdr_attention_scheduler::reserve_next_attention(
-                &self.service_runtime,
-                opportunity,
-                now,
-            )
-            .await
-            {
-                Ok(Some(reservation)) => {
-                    if reservation.status
-                        != atm_core::boundary::AttentionReservationStatus::Reserved
-                    {
-                        continue;
-                    }
-                    match self
-                        .dispatch_reserved_attention(&reservation, now, stats)
+            self.run_idle_opportunity(opportunity, now, stats).await;
+        }
+    }
+
+    async fn run_idle_opportunity(
+        &self,
+        opportunity: atm_core::boundary::IdleOpportunity,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        let member = opportunity.member.clone();
+        match super::herdr_attention_scheduler::reserve_next_attention(
+            &self.service_runtime,
+            opportunity,
+            now,
+        )
+        .await
+        {
+            Ok(Some(reservation)) => {
+                if reservation.status != atm_core::boundary::AttentionReservationStatus::Reserved {
+                    return;
+                }
+                match self
+                    .dispatch_reserved_attention(&reservation, now, stats)
+                    .await
+                {
+                    Ok(status) => {
+                        if let Err(error) = super::herdr_attention_scheduler::finalize_attention(
+                            &self.service_runtime,
+                            &reservation,
+                            status,
+                        )
                         .await
-                    {
-                        Ok(status) => {
-                            if let Err(error) =
-                                super::herdr_attention_scheduler::finalize_attention(
-                                    &self.service_runtime,
-                                    &reservation,
-                                    status,
-                                )
-                                .await
-                            {
-                                tracing::warn!(
-                                    subsystem = "herdr_queue_wake",
-                                    action = "finalize_attention",
-                                    outcome = "failed",
-                                    member = %member,
-                                    error = %error,
-                                    "attention reservation finalization failed"
-                                );
-                            }
-                        }
-                        Err(error) => {
+                        {
                             tracing::warn!(
                                 subsystem = "herdr_queue_wake",
-                                action = "dispatch_reserved_attention",
+                                action = "finalize_attention",
                                 outcome = "failed",
                                 member = %member,
                                 error = %error,
-                                "attention reservation dispatch failed"
+                                "attention reservation finalization failed"
                             );
                         }
                     }
+                    Err(error) => {
+                        tracing::warn!(
+                            subsystem = "herdr_queue_wake",
+                            action = "dispatch_reserved_attention",
+                            outcome = "failed",
+                            member = %member,
+                            error = %error,
+                            "attention reservation dispatch failed"
+                        );
+                    }
                 }
-                Ok(None) => {}
-                Err(error) => {
-                    tracing::warn!(
-                        subsystem = "herdr_queue_wake",
-                        action = "reserve_next_attention",
-                        outcome = "failed",
-                        member = %member,
-                        error = %error,
-                        "attention reservation failed"
-                    );
-                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "reserve_next_attention",
+                    outcome = "failed",
+                    member = %member,
+                    error = %error,
+                    "attention reservation failed"
+                );
             }
         }
     }
@@ -856,7 +872,7 @@ impl HerdrQueueWakePump {
         let Some(row) = reader
             .top_runnable_task(member.team().clone(), member.agent().clone(), deadline)
             .await
-            .map_err(|error| AtmError::daemon_unavailable(error.to_string()))?
+            .map_err(task_ledger_read_error)?
             .filter(|row| {
                 row.task_id == *task_id
                     && row.current_attempt == attempt
@@ -870,7 +886,7 @@ impl HerdrQueueWakePump {
         let assignment = reader
             .list_task_assignment_attempts(member.team().clone(), task_id.clone(), deadline)
             .await
-            .map_err(|error| AtmError::daemon_unavailable(error.to_string()))?
+            .map_err(task_ledger_read_error)?
             .into_iter()
             .find(|assignment| {
                 assignment.attempt == attempt
@@ -1087,8 +1103,8 @@ mod tests {
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MemberKey,
-        MessageReceivedHookSelector, PostSendEmissionPath, ReadDeadline, RosterEntry,
-        RosterHarness, RosterMemberKind,
+        MessageReceivedHookSelector, PostSendEmissionPath, ReadDeadline, ReadLaneError,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::NullObservability;
@@ -1169,6 +1185,139 @@ mod tests {
             sink.codes.lock().expect("codes").as_slice(),
             ["ATM_HERDR_UNAVAILABLE"]
         );
+    }
+
+    #[test]
+    fn reminder_reader_errors_preserve_the_reader_lane_code() {
+        for (error, expected) in [
+            (
+                ReadLaneError::Saturated {
+                    reason: "test saturation",
+                },
+                AtmErrorCode::DaemonConnectionSaturated,
+            ),
+            (
+                ReadLaneError::DeadlineExpired {
+                    stage: "test deadline",
+                },
+                AtmErrorCode::MailboxLockTimeout,
+            ),
+            (
+                ReadLaneError::Storage {
+                    code: AtmErrorCode::MailboxReadFailed,
+                    message: "test storage failure".to_owned(),
+                    cause: Some("test cause".to_owned()),
+                },
+                AtmErrorCode::MailboxReadFailed,
+            ),
+        ] {
+            assert_eq!(super::task_ledger_read_error(error).code(), expected);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cdr001_stale_assignee_transition_loses_the_real_writer_cas() {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("isolated runtime");
+        let team: TeamName = "cdr-race".parse().expect("team");
+        let lead = MemberKey::new(team.clone(), "lead".parse().expect("lead"));
+        let old_assignee = MemberKey::new(team.clone(), "old-assignee".parse().expect("agent"));
+        let new_assignee = MemberKey::new(team.clone(), "new-assignee".parse().expect("agent"));
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![
+                    herdr_member(&team, "lead"),
+                    herdr_member(&team, "old-assignee"),
+                    herdr_member(&team, "new-assignee"),
+                ],
+                refreshed_at: None,
+            })
+            .expect("roster");
+
+        let task_id: TaskId = "CDR-001-RACE".parse().expect("task id");
+        let writer_service = CoreTaskCommandService::new(assembly.service_runtime.clone());
+        writer_service
+            .execute(
+                TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
+                    operation_id: TaskOperationId::new(),
+                    actor: lead.clone(),
+                    task_id: task_id.clone(),
+                    expected_revision: None,
+                    action: TaskAction::Assign(AssignmentInput {
+                        assignee: old_assignee.clone(),
+                        priority: atm_core::boundary::TaskPriority::Normal,
+                        message: ComposedMessageInput {
+                            body: NonEmptyText::new("initial assignment").expect("task body"),
+                            template_sha: None,
+                        },
+                    }),
+                })),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("initial assignment through the real service and writer");
+
+        let (gated_reader, reached, resume) = atm_storage::testing::GateAfterTaskRead::new(
+            assembly
+                .service_runtime
+                .async_task_ledger_reader()
+                .expect("real async task reader"),
+        );
+        let old_service = CoreTaskCommandService::new(
+            assembly
+                .service_runtime
+                .clone()
+                .with_async_task_ledger_reader(Arc::new(gated_reader)),
+        );
+        let stale_transition = tokio::spawn(async move {
+            old_service
+                .execute(
+                    TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
+                        operation_id: TaskOperationId::new(),
+                        actor: old_assignee,
+                        task_id,
+                        expected_revision: None,
+                        action: TaskAction::Start,
+                    })),
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+        });
+        tokio::task::spawn_blocking(move || reached.recv())
+            .await
+            .expect("gate waiter join")
+            .expect("old actor must finish authorization before the reassign");
+
+        writer_service
+            .execute(
+                TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
+                    operation_id: TaskOperationId::new(),
+                    actor: lead,
+                    task_id: "CDR-001-RACE".parse().expect("task id"),
+                    expected_revision: None,
+                    action: TaskAction::Reassign(AssignmentInput {
+                        assignee: new_assignee,
+                        priority: atm_core::boundary::TaskPriority::Normal,
+                        message: ComposedMessageInput {
+                            body: NonEmptyText::new("replacement assignment").expect("task body"),
+                            template_sha: None,
+                        },
+                    }),
+                })),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("reassignment through the real service and writer");
+        resume.send(()).expect("release stale transition");
+
+        let error = stale_transition
+            .await
+            .expect("stale transition join")
+            .expect_err("old assignee must lose the writer compare-and-swap");
+        assert_eq!(error.code(), AtmErrorCode::TaskRevisionStale);
     }
 
     struct FakeSelector {
@@ -1996,7 +2145,7 @@ mod tests {
             .await
             .expect("logical task")
             .expect("assigned task");
-        assert_eq!(row.reminder_ordinal, 10);
+        assert_eq!(row.reminder_ordinal.get(), 10);
         let events = reader
             .list_task_lifecycle_events(
                 team,
@@ -2504,7 +2653,7 @@ mod tests {
             .await
             .expect("logical task")
             .expect("assigned task");
-        assert_eq!(row.reminder_ordinal, 1);
+        assert_eq!(row.reminder_ordinal.get(), 1);
     }
 
     #[tokio::test]
@@ -2528,7 +2677,7 @@ mod tests {
             .await
             .expect("logical task")
             .expect("assigned task");
-        assert_eq!(row.reminder_ordinal, 0);
+        assert_eq!(row.reminder_ordinal.get(), 0);
         assert_eq!(prompt_texts(&fake).len(), 1);
 
         *now.lock().expect("test clock lock") =
@@ -2552,7 +2701,7 @@ mod tests {
             .await
             .expect("logical task")
             .expect("assigned task");
-        assert_eq!(row.reminder_ordinal, 1);
+        assert_eq!(row.reminder_ordinal.get(), 1);
     }
 
     #[tokio::test]
@@ -2702,7 +2851,9 @@ mod tests {
                 .expect("task")
                 .expect("task row")
                 .reminder_ordinal,
-            u64::try_from(reminders_before_failure).expect("reminder count")
+            atm_storage::ReminderOrdinal::from_raw(
+                u64::try_from(reminders_before_failure).expect("reminder count"),
+            )
         );
         assert_eq!(pump.stats().task_reminders_failed, 1);
 
@@ -2753,7 +2904,7 @@ mod tests {
                 .expect("task")
                 .expect("row")
                 .reminder_ordinal,
-            0
+            atm_storage::ReminderOrdinal::default()
         );
 
         queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
@@ -2776,7 +2927,7 @@ mod tests {
                 .expect("task")
                 .expect("row")
                 .reminder_ordinal,
-            1
+            atm_storage::ReminderOrdinal::from_raw(1)
         );
 
         let (_root, runtime, fake, _pump, keys, now) =
@@ -2804,7 +2955,7 @@ mod tests {
                 .expect("task")
                 .expect("row")
                 .reminder_ordinal,
-            0
+            atm_storage::ReminderOrdinal::default()
         );
     }
 
@@ -2857,7 +3008,7 @@ mod tests {
             row.state,
             atm_storage::TaskLifecycleState::Assigned
         ));
-        assert_eq!(row.reminder_ordinal, 2);
+        assert_eq!(row.reminder_ordinal.get(), 2);
         assert_eq!(
             events
                 .iter()

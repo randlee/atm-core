@@ -72,6 +72,7 @@ pub struct StorageAndNudgeRouter {
     bare_cli_fifo: BareCliFifo,
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
     member_state_transition_sink: Option<Arc<dyn crate::MemberStateTransitionSink>>,
+    idle_opportunity_sink: Option<Arc<dyn crate::IdleOpportunitySink>>,
     detached_received_hooks: DetachedReceivedHooks,
 }
 
@@ -131,6 +132,7 @@ impl StorageAndNudgeRouter {
             bare_cli_fifo: Default::default(),
             bare_cli_queue_full_drops: Default::default(),
             member_state_transition_sink: None,
+            idle_opportunity_sink: None,
             detached_received_hooks: DetachedReceivedHooks::default(),
         }
     }
@@ -226,6 +228,16 @@ impl StorageAndNudgeRouter {
         sink: Arc<dyn crate::MemberStateTransitionSink>,
     ) -> Self {
         self.member_state_transition_sink = Some(sink);
+        self
+    }
+
+    /// Installs the shared attention scheduler notification. Every accepted
+    /// `Idle` roster revision reaches this sink after the roster lock has been
+    /// released, regardless of whether it came from a heartbeat or a Herdr
+    /// poll.
+    #[must_use]
+    pub fn with_idle_opportunity_sink(mut self, sink: Arc<dyn crate::IdleOpportunitySink>) -> Self {
+        self.idle_opportunity_sink = Some(sink);
         self
     }
 
@@ -659,58 +671,22 @@ impl StorageAndNudgeRouter {
         }
         let runtime = self.service_runtime.clone();
         let sink = self.member_state_transition_sink.clone();
+        let idle_opportunity_sink = self.idle_opportunity_sink.clone();
         self.control_path_sync_bridge
-            .run(deadline, move || {
-                let next_state = match request.activity {
-                    atm_core::protocol::HeartbeatActivity::ActiveToolUse => {
-                        atm_core::protocol::RuntimeMemberState::Active
-                    }
-                    atm_core::protocol::HeartbeatActivity::Idle => {
-                        atm_core::protocol::RuntimeMemberState::Idle
-                    }
-                    atm_core::protocol::HeartbeatActivity::SessionEnded => {
-                        atm_core::protocol::RuntimeMemberState::Offline
-                    }
-                };
-                let update = atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-                    request.member.clone(),
-                    next_state,
-                    atm_core::protocol::RuntimeObservationSource::Heartbeat,
-                    request.observed_at,
-                    Some(atm_core::protocol::RosterRuntimeIdentity {
-                        pid: request.pid,
-                        session_id: request.session_id.clone(),
-                    }),
-                );
-                let outcome = runtime
-                    .apply_roster_runtime_observations(&request.team, &[update])
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| {
-                        AtmError::agent_not_found(request.member.as_str(), request.team.as_str())
-                    })?;
-                let transition = (outcome.state_changed
-                    && outcome.current.state == atm_core::protocol::RuntimeMemberState::Idle)
-                    .then_some(outcome.previous_state);
-                let response = atm_core::protocol::TeamMemberHeartbeatResponse {
-                    team: request.team.clone(),
-                    member: request.member.clone(),
-                    pid: request.pid,
-                    pid_changed: outcome.pid_changed,
-                    state: outcome.current.state,
-                    last_active_at: outcome.current.last_active_at,
-                    session_id: outcome.current.session_id,
-                };
-                Ok((response, transition))
-            })
+            .run(deadline, move || heartbeat_update(&runtime, request))
             .await
-            .map(|(response, transition)| {
+            .map(|(response, transition, opportunity)| {
                 let member = atm_core::boundary::MemberKey::new(
                     response.team.clone(),
                     response.member.clone(),
                 );
                 if let (Some(from), Some(sink)) = (transition, sink.as_ref()) {
                     sink.on_transition(&member, from, atm_core::protocol::RuntimeMemberState::Idle);
+                }
+                if let (Some(opportunity), Some(sink)) =
+                    (opportunity, idle_opportunity_sink.as_ref())
+                {
+                    sink.on_idle_opportunity(opportunity);
                 }
                 ApiResponse::new(ResponseEnvelope::Heartbeat(response))
             })
@@ -861,6 +837,67 @@ impl StorageAndNudgeRouter {
         self.service_runtime.reload_roster_from_durable_store()?;
         Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
     }
+}
+
+fn heartbeat_update(
+    runtime: &LocalServiceRuntime,
+    request: atm_core::protocol::TeamMemberHeartbeatRequest,
+) -> Result<
+    (
+        atm_core::protocol::TeamMemberHeartbeatResponse,
+        Option<atm_core::protocol::RuntimeMemberState>,
+        Option<atm_core::boundary::IdleOpportunity>,
+    ),
+    AtmError,
+> {
+    let next_state = match request.activity {
+        atm_core::protocol::HeartbeatActivity::ActiveToolUse => {
+            atm_core::protocol::RuntimeMemberState::Active
+        }
+        atm_core::protocol::HeartbeatActivity::Idle => atm_core::protocol::RuntimeMemberState::Idle,
+        atm_core::protocol::HeartbeatActivity::SessionEnded => {
+            atm_core::protocol::RuntimeMemberState::Offline
+        }
+    };
+    let update = atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+        request.member.clone(),
+        next_state,
+        atm_core::protocol::RuntimeObservationSource::Heartbeat,
+        request.observed_at,
+        Some(atm_core::protocol::RosterRuntimeIdentity {
+            pid: request.pid,
+            session_id: request.session_id.clone(),
+        }),
+    );
+    let outcome = runtime
+        .apply_roster_runtime_observations(&request.team, &[update])
+        .into_iter()
+        .next()
+        .ok_or_else(|| AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))?;
+    let transition = (outcome.state_changed
+        && outcome.current.state == atm_core::protocol::RuntimeMemberState::Idle)
+        .then_some(outcome.previous_state);
+    let response = atm_core::protocol::TeamMemberHeartbeatResponse {
+        team: request.team.clone(),
+        member: request.member.clone(),
+        pid: request.pid,
+        pid_changed: outcome.pid_changed,
+        state: outcome.current.state,
+        last_active_at: outcome.current.last_active_at,
+        session_id: outcome.current.session_id,
+    };
+    let opportunity =
+        (outcome.current.state == atm_core::protocol::RuntimeMemberState::Idle).then(|| {
+            atm_core::boundary::IdleOpportunity {
+                id: Default::default(),
+                member: atm_core::boundary::MemberKey::new(
+                    response.team.clone(),
+                    response.member.clone(),
+                ),
+                roster_state_revision: outcome.current.revision,
+            }
+        });
+    Ok((response, transition, opportunity))
 }
 
 impl crate::RuntimeMaintenance for StorageAndNudgeRouter {
@@ -1068,9 +1105,10 @@ mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeClaim,
-        NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath,
-        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        IdleOpportunity, LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey,
+        MessageReceivedHookSelector, NudgeClaim, NudgeKind, PendingNudgeStore,
+        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness,
+        RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::observability_counters::{
@@ -1115,8 +1153,8 @@ mod tests {
     };
     use crate::{
         AuthenticatedConnector, BareCliFifo, BareCliQueueFullDrops, CanonicalWriteHandler,
-        NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, append_bare_cli_message,
-        canonical_api_router, canonical_message_router,
+        HerdrQueueWakePump, IdleOpportunitySink, NonZeroDuration, RuntimeHealth, RuntimeLimits,
+        RuntimeTimeouts, append_bare_cli_message, canonical_api_router, canonical_message_router,
     };
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
@@ -1135,6 +1173,55 @@ mod tests {
     impl DiagnosticCountersSource for CounterFixture {
         fn snapshot(&self) -> DiagnosticCounters {
             self.0
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingIdleOpportunitySink {
+        opportunities: Mutex<Vec<IdleOpportunity>>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for RecordingIdleOpportunitySink {}
+
+    impl IdleOpportunitySink for RecordingIdleOpportunitySink {
+        fn on_idle_opportunity(&self, opportunity: IdleOpportunity) {
+            self.opportunities
+                .lock()
+                .expect("record idle opportunity")
+                .push(opportunity);
+        }
+    }
+
+    struct RecordingAttentionEmitter {
+        emissions: AtomicUsize,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for RecordingAttentionEmitter {}
+
+    impl AsyncMessageReceivedHookEmitter for RecordingAttentionEmitter {
+        fn emit_received_message(
+            &self,
+            _dispatch: BuiltInPostSendDispatch,
+            _deadline: RequestDeadline,
+        ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>>
+        {
+            self.emissions.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Ok(PostSendEmissionPath::LocalHerdr) })
+        }
+    }
+
+    struct RecordingAttentionSelector {
+        emitter: RecordingAttentionEmitter,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for RecordingAttentionSelector {}
+
+    impl MessageReceivedHookSelector for RecordingAttentionSelector {
+        fn select_emitter(
+            &self,
+            _dispatch: &BuiltInPostSendDispatch,
+        ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+            Some(&self.emitter)
         }
     }
 
@@ -1434,6 +1521,7 @@ mod tests {
         pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         task_store: Arc<dyn TaskStore + Send + Sync>,
         async_task_ledger_reader: Arc<atm_runtime_test_support::InMemoryTaskLedgerReader>,
+        production_async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
         received_hook: Arc<RecordingReceivedHook>,
         runtime_health: RuntimeHealth,
         database_path: PathBuf,
@@ -1528,6 +1616,17 @@ mod tests {
         )
     }
 
+    fn fixture_assembly(with_recipient: bool) -> (TempDir, PathBuf, atm_runtime::RuntimeAssembly) {
+        let temporary_root = tempfile::tempdir().expect("temporary runtime root");
+        let database_path = temporary_root.path().join("mail.sqlite");
+        let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
+        let team: TeamName = "test-team".parse().expect("team");
+        if with_recipient {
+            seed_fixture_roster(&assembly.shared_roster_store_arc(), &team);
+        }
+        (temporary_root, database_path, assembly)
+    }
+
     fn fixture_with_selector_and_template_and_pending<F>(
         with_recipient: bool,
         hook_failure: Option<AtmError>,
@@ -1539,13 +1638,7 @@ mod tests {
     where
         F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
     {
-        let temporary_root = tempfile::tempdir().expect("temporary runtime root");
-        let database_path = temporary_root.path().join("mail.sqlite");
-        let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
-        let team: TeamName = "test-team".parse().expect("team");
-        if with_recipient {
-            seed_fixture_roster(&assembly.shared_roster_store_arc(), &team);
-        }
+        let (temporary_root, database_path, assembly) = fixture_assembly(with_recipient);
         let message_store = assembly.message_store_arc();
         let pending_nudge_store = assembly
             .service_runtime
@@ -1555,36 +1648,33 @@ mod tests {
             .service_runtime
             .task_store()
             .expect("sqlite task store");
+        let production_async_task_ledger_reader = assembly
+            .service_runtime
+            .async_task_ledger_reader()
+            .expect("sqlite task-ledger reader");
         let async_task_ledger_reader =
             Arc::new(atm_runtime_test_support::InMemoryTaskLedgerReader::default());
         let pending_nudge_store_for_runtime =
             pending_store_with_failures(&pending_nudge_store, pending_marker_failures);
-        let received_hook = Arc::new(RecordingReceivedHook {
-            message_store: Arc::clone(&message_store),
-            emitted_ids: Mutex::new(Vec::new()),
-            dispatches: Mutex::new(Vec::new()),
-            saw_durable_record: AtomicBool::new(false),
-            failure: hook_failure,
+        let received_hook = build_recording_received_hook(
+            Arc::clone(&message_store),
+            hook_failure,
             cancelled_on_drop,
-        });
+        );
         let home_dir = temporary_root.path().join("home");
         let current_dir = temporary_root.path().join("workspace");
         fs::create_dir_all(&home_dir).expect("create fixture home");
         fs::create_dir_all(&current_dir).expect("create fixture workspace");
         let health = RuntimeHealth::with_owner(99);
-        let service_runtime = match template_composer {
-            Some(composer) => assembly.service_runtime.with_template_composer(composer),
-            None => assembly.service_runtime,
-        };
-        let service_runtime =
-            attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
-        let service_runtime =
-            service_runtime.with_pending_nudge_store(pending_nudge_store_for_runtime);
-        let async_reader_for_runtime: Arc<dyn AsyncTaskLedgerReader + Send + Sync> =
-            async_task_ledger_reader.clone();
-        let service_runtime = service_runtime
-            .with_task_store(Arc::clone(&task_store))
-            .with_async_task_ledger_reader(async_reader_for_runtime);
+        let service_runtime = compose_fixture_service_runtime(
+            assembly.service_runtime,
+            template_composer,
+            &database_path,
+            with_recipient,
+            pending_nudge_store_for_runtime,
+            Arc::clone(&task_store),
+            async_task_ledger_reader.clone(),
+        );
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1599,6 +1689,7 @@ mod tests {
             pending_nudge_store,
             task_store,
             async_task_ledger_reader,
+            production_async_task_ledger_reader,
             received_hook,
             runtime_health: health,
             database_path,
@@ -1660,6 +1751,43 @@ mod tests {
                 refreshed_at: None,
             })
             .expect("seed recipient roster");
+    }
+
+    fn build_recording_received_hook(
+        message_store: Arc<dyn MessageStore + Send + Sync>,
+        failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+    ) -> Arc<RecordingReceivedHook> {
+        Arc::new(RecordingReceivedHook {
+            message_store,
+            emitted_ids: Mutex::new(Vec::new()),
+            dispatches: Mutex::new(Vec::new()),
+            saw_durable_record: AtomicBool::new(false),
+            failure,
+            cancelled_on_drop,
+        })
+    }
+
+    fn compose_fixture_service_runtime(
+        assembly_service_runtime: LocalServiceRuntime,
+        template_composer: Option<Arc<dyn atm_core::TemplateComposer>>,
+        database_path: &Path,
+        with_recipient: bool,
+        pending_nudge_store_for_runtime: Arc<dyn PendingNudgeStore + Send + Sync>,
+        task_store: Arc<dyn TaskStore + Send + Sync>,
+        async_reader_for_runtime: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    ) -> LocalServiceRuntime {
+        let service_runtime = match template_composer {
+            Some(composer) => assembly_service_runtime.with_template_composer(composer),
+            None => assembly_service_runtime,
+        };
+        let service_runtime =
+            attach_graft_receiver_store(service_runtime, database_path, with_recipient);
+        let service_runtime =
+            service_runtime.with_pending_nudge_store(pending_nudge_store_for_runtime);
+        service_runtime
+            .with_task_store(task_store)
+            .with_async_task_ledger_reader(async_reader_for_runtime)
     }
 
     fn attach_graft_receiver_store(
@@ -2244,6 +2372,152 @@ mod tests {
             idle_state,
             atm_core::protocol::RuntimeMemberState::Idle,
             "an idle heartbeat transitions the projected member state to Idle"
+        );
+    }
+
+    #[tokio::test]
+    async fn heartbeat_idle_revisions_reach_the_shared_attention_sink() {
+        let mut fixture = fixture(true, None, None);
+        let sink = Arc::new(RecordingIdleOpportunitySink::default());
+        fixture.router = fixture.router.with_idle_opportunity_sink(sink.clone());
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "recipient".parse().expect("agent");
+
+        for (activity, observed_at) in [
+            (HeartbeatActivity::ActiveToolUse, "2026-01-01T00:00:00Z"),
+            (HeartbeatActivity::Idle, "2026-01-01T00:00:01Z"),
+            (HeartbeatActivity::Idle, "2026-01-01T00:00:02Z"),
+        ] {
+            fixture
+                .router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                        team: team.clone(),
+                        member: member.clone(),
+                        pid: 7,
+                        observed_at: observed_at.parse().expect("timestamp"),
+                        activity,
+                        session_id: None,
+                    })),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("authenticated heartbeat");
+        }
+
+        let opportunities = sink
+            .opportunities
+            .lock()
+            .expect("read idle opportunities")
+            .clone();
+        assert_eq!(
+            opportunities.len(),
+            2,
+            "both accepted Idle revisions schedule"
+        );
+        assert!(opportunities.iter().all(|opportunity| {
+            opportunity.member == MemberKey::new(team.clone(), member.clone())
+        }));
+        assert_ne!(
+            opportunities[0].roster_state_revision, opportunities[1].roster_state_revision,
+            "an Idle heartbeat refreshes the canonical revision and must not be filtered as a transition-only event"
+        );
+    }
+
+    #[tokio::test]
+    async fn heartbeat_only_idle_revisions_run_the_real_attention_pump_without_a_poll() {
+        let mut fixture = fixture(true, None, None);
+        for index in 0..2 {
+            let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+                .with_origin_metadata(AtmMessageId::new(), IsoTimestamp::now())
+                .with_nudge_mode(NudgeMode::Deferred);
+            let response =
+                post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::CREATED,
+                "queued write {index}"
+            );
+        }
+
+        let selector = Arc::new(RecordingAttentionSelector {
+            emitter: RecordingAttentionEmitter {
+                emissions: AtomicUsize::new(0),
+            },
+        });
+        let pump = Arc::new(HerdrQueueWakePump::new(
+            fixture
+                .router
+                .service_runtime
+                .clone()
+                .with_async_task_ledger_reader(Arc::clone(
+                    &fixture.production_async_task_ledger_reader,
+                )),
+            selector.clone(),
+            fixture.runtime_health.clone(),
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+        ));
+        fixture.router = fixture.router.clone().with_idle_opportunity_sink(pump);
+
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "recipient".parse().expect("agent");
+        for (activity, observed_at) in [
+            (HeartbeatActivity::ActiveToolUse, "2026-01-01T00:00:00Z"),
+            (HeartbeatActivity::Idle, "2026-01-01T00:00:01Z"),
+        ] {
+            fixture
+                .router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                        team: team.clone(),
+                        member: member.clone(),
+                        pid: 7,
+                        observed_at: observed_at.parse().expect("timestamp"),
+                        activity,
+                        session_id: None,
+                    })),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("authenticated heartbeat");
+        }
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while selector.emitter.emissions.load(Ordering::SeqCst) != 1 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the first Idle heartbeat must reserve and dispatch without a Herdr poll");
+
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                    team,
+                    member,
+                    pid: 7,
+                    observed_at: "2026-01-01T00:00:02Z".parse().expect("timestamp"),
+                    activity: HeartbeatActivity::Idle,
+                    session_id: None,
+                })),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("Idle-to-Idle authenticated heartbeat");
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while selector.emitter.emissions.load(Ordering::SeqCst) != 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the Idle-to-Idle heartbeat must reserve and dispatch without a Herdr poll");
+        assert_eq!(
+            selector.emitter.emissions.load(Ordering::SeqCst),
+            2,
+            "the Idle-to-Idle refresh dispatched the second queued item through the real pump"
         );
     }
 

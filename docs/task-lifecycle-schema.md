@@ -41,7 +41,7 @@ an idempotent 2.1 ensure step, so a fresh 2.1 database and an upgraded 2.0
 database converge without changing v1 compatibility rows.
 
 `AsyncTaskMutationStore` is the sole v2 mutation capability. Every request has
-an independent `TaskOperationId` and optional expected revision. The SQLite
+an independent `TaskOperationId` and optional `TaskRevision` expected revision. The SQLite
 writer transaction persists any prepared assignment or handoff message, task
 projection, attempt/event records, operation replay result, and task-id-joined
 pending-marker cleanup together. Replaying identical input returns the original

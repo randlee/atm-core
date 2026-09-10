@@ -9,6 +9,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use atm_core::boundary::IdleOpportunity;
 use atm_core::protocol::{
     RosterRuntimeObservation, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
     RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
@@ -51,6 +52,14 @@ pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send +
     );
 }
 
+/// Receives an accepted canonical roster revision that is eligible for
+/// attention scheduling. The source (heartbeat or Herdr poll) is deliberately
+/// absent: the receiver gets only the post-commit member identity and revision
+/// it must revalidate before dispatch.
+pub trait IdleOpportunitySink: atm_core::boundary::sealed::Sealed + Send + Sync {
+    fn on_idle_opportunity(&self, opportunity: IdleOpportunity);
+}
+
 #[derive(Default)]
 struct RuntimeHealthState {
     lifecycle: Lifecycle,
@@ -65,6 +74,7 @@ struct RuntimeHealthState {
     blocking_core_bridge_stalls_total: u64,
     write_source_preflight_stalls_total: u64,
     detached_received_hook_warnings_total: u64,
+    idle_opportunity_dispatches_total: u64,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -107,6 +117,17 @@ impl RuntimeHealth {
         let mut state = self.lock();
         state.lifecycle = Lifecycle::Draining;
         state.detail = Some("replacement runtime is draining".to_owned());
+    }
+
+    #[must_use]
+    pub(crate) fn is_draining(&self) -> bool {
+        self.lock().lifecycle == Lifecycle::Draining
+    }
+
+    pub(crate) fn record_idle_opportunity_dispatch(&self) {
+        let mut state = self.lock();
+        state.idle_opportunity_dispatches_total =
+            state.idle_opportunity_dispatches_total.saturating_add(1);
     }
 
     pub fn mark_stopped(&self) {

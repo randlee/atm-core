@@ -187,7 +187,7 @@ fn validate_expected_revision(
     current_revision: Option<u64>,
 ) -> Result<(), AtmError> {
     if let Some(expected) = request.expected_revision
-        && current_revision != Some(expected)
+        && current_revision != Some(expected.get())
     {
         return Err(task_error(
             AtmErrorCode::TaskRevisionStale,
@@ -308,7 +308,7 @@ fn finalize_mutation(
     let result = TaskMutationOutcome {
         task_id: request.task_id.clone(),
         state: transition.state.clone(),
-        revision: transition.revision,
+        revision: atm_storage::TaskRevision::from_raw(transition.revision),
         message_id,
         successor_task_id: transition.related_task_id.clone(),
         current_assignee: Some(current_assignee),

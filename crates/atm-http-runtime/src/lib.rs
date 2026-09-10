@@ -119,7 +119,7 @@ pub use peer_stream::{
     AcceptedPeerStream, AuthenticatedPeerStream, EstablishedPeerStream, PeerStreamAdapter,
     PeerStreamFuture,
 };
-pub use runtime_health::{MemberStateTransitionSink, RuntimeHealth};
+pub use runtime_health::{IdleOpportunitySink, MemberStateTransitionSink, RuntimeHealth};
 pub use runtime_maintenance::{Draining, Running, RuntimeMaintenance, Stopped};
 use runtime_maintenance::{abort_and_join, finish_maintenance};
 pub use storage_and_nudge_router::StorageAndNudgeRouter;

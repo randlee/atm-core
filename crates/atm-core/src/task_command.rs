@@ -13,7 +13,7 @@ use crate::types::{TaskId, TeamName};
 use atm_storage::MemberKey;
 use atm_storage::{
     AssignmentAttempt, LogicalTaskRow, TaskLifecycleEventRow, TaskLifecycleState, TaskOutcome,
-    TaskPriority, TemplateSha,
+    TaskPriority, TaskRevision, TemplateSha,
 };
 
 pub use atm_storage::TaskOperationId;
@@ -93,7 +93,7 @@ pub struct TaskMutationCommand {
     pub operation_id: TaskOperationId,
     pub actor: MemberKey,
     pub task_id: TaskId,
-    pub expected_revision: Option<u64>,
+    pub expected_revision: Option<TaskRevision>,
     pub action: TaskAction,
 }
 
@@ -213,7 +213,7 @@ pub struct TaskMutationResponse {
     pub task_id: TaskId,
     pub prior_state: Option<TaskLifecycleState>,
     pub state: TaskLifecycleState,
-    pub revision: u64,
+    pub revision: TaskRevision,
     pub current_attempt: AssignmentAttempt,
     pub current_assignee: crate::types::AgentName,
     pub outcome: Option<TaskOutcome>,

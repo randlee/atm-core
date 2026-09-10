@@ -119,8 +119,10 @@ ADR-063 authorizes `AttentionScheduleStore` and its required
 `AsyncAttentionScheduleStore` companion as the twelfth semantic storage
 capability. The narrow contract owns only durable fair-lane cursors and
 identifier-only idle-opportunity reservations. `PendingNudgeStore` still owns
-message claims and the task reader/mutation store still own task state and
-reminder audit. The concrete SQLite adapter remains the only SQL owner; the
+message claims and the task reader/mutation store still own task state. The
+narrow `AsyncTaskSchedulerAuditStore` view of the already-authorized mutation
+store owns reminder audit without adding a semantic capability. The concrete
+SQLite adapter remains the only SQL owner; the
 Tokio runtime receives only the sealed contracts through composition.
 
 The prior runtime indirection is not a justification for SQLite-backed daemon

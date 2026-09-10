@@ -14,7 +14,7 @@ use atm_core::boundary::{
 use atm_core::error::AtmError;
 use atm_core::types::IsoTimestamp;
 
-use crate::herdr_queue_wake::{HERDR_REQUEST_DEADLINE, run_blocking};
+use crate::herdr_queue_wake::{HERDR_REQUEST_DEADLINE, run_blocking, task_ledger_read_error};
 
 pub(crate) const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
 
@@ -113,7 +113,7 @@ async fn next_persistent_task(
     reader
         .top_runnable_task(member.team().clone(), member.agent().clone(), deadline)
         .await
-        .map_err(|error| AtmError::daemon_unavailable(error.to_string()))
+        .map_err(task_ledger_read_error)
         .map(|row| row.and_then(|row| persistent_candidate(row, now)))
 }
 
@@ -141,10 +141,42 @@ pub(super) fn task_reminder_due(row: &LogicalTaskRow, now: IsoTimestamp) -> bool
 
 #[cfg(test)]
 mod tests {
-    use atm_core::boundary::{AssignmentAttempt, LogicalTaskRow, TaskLifecycleState, TaskPriority};
+    use atm_core::boundary::{
+        AssignmentAttempt, LogicalTaskRow, ReadLaneError, ReminderOrdinal, TaskLifecycleState,
+        TaskPriority, TaskRevision,
+    };
+    use atm_core::error::AtmErrorCode;
     use atm_core::schema::AtmMessageId;
 
-    use super::{persistent_candidate, task_reminder_due};
+    use super::{persistent_candidate, task_ledger_read_error, task_reminder_due};
+
+    #[test]
+    fn persistent_task_reader_errors_preserve_the_reader_lane_code() {
+        for (error, expected) in [
+            (
+                ReadLaneError::Saturated {
+                    reason: "test saturation",
+                },
+                AtmErrorCode::DaemonConnectionSaturated,
+            ),
+            (
+                ReadLaneError::DeadlineExpired {
+                    stage: "test deadline",
+                },
+                AtmErrorCode::MailboxLockTimeout,
+            ),
+            (
+                ReadLaneError::Storage {
+                    code: AtmErrorCode::MailboxReadFailed,
+                    message: "test storage failure".to_owned(),
+                    cause: Some("test cause".to_owned()),
+                },
+                AtmErrorCode::MailboxReadFailed,
+            ),
+        ] {
+            assert_eq!(task_ledger_read_error(error).code(), expected);
+        }
+    }
 
     #[test]
     fn persistent_candidate_carries_only_revalidation_metadata() {
@@ -158,8 +190,8 @@ mod tests {
             current_attempt: AssignmentAttempt::FIRST,
             assignment_message_id: AtmMessageId::new(),
             last_reminded_at: None,
-            reminder_ordinal: 0,
-            revision: 1,
+            reminder_ordinal: ReminderOrdinal::default(),
+            revision: TaskRevision::from_raw(1),
             updated_at: "2026-09-10T00:00:00Z".parse().expect("time"),
         };
 
@@ -181,8 +213,8 @@ mod tests {
             current_attempt: AssignmentAttempt::FIRST,
             assignment_message_id: AtmMessageId::new(),
             last_reminded_at: Some("2026-09-10T00:00:00Z".parse().expect("time")),
-            reminder_ordinal: 1,
-            revision: 2,
+            reminder_ordinal: ReminderOrdinal::from_raw(1),
+            revision: TaskRevision::from_raw(2),
             updated_at: "2026-09-10T00:00:00Z".parse().expect("time"),
         };
         assert!(!task_reminder_due(

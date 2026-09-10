@@ -8,7 +8,8 @@ use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AssignmentAttempt, AsyncMessageReceivedHookEmitter, AsyncTaskLedgerReader,
     AttentionReservationStatus, BuiltInPostSendDispatch, LogicalTaskRow, MemberKey, ReadDeadline,
-    TaskMutationRequest, TaskOperation, TaskOperationId, TaskRow, TaskState,
+    TaskLeadNotificationAuditRequest, TaskOperationId, TaskReminderAuditRequest, TaskRevision,
+    TaskRow, TaskState,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::{IsoTimestamp, TaskId};
@@ -26,7 +27,7 @@ const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 struct LeadAudit<'a> {
     member: &'a MemberKey,
     row: &'a LogicalTaskRow,
-    reminder_revision: u64,
+    reminder_revision: TaskRevision,
     at: IsoTimestamp,
     lead: atm_core::types::AgentName,
     message_id: atm_core::schema::AtmMessageId,
@@ -60,26 +61,24 @@ pub(crate) async fn emit_task_reminder(
         stats.task_reminders_failed += 1;
         return Ok(AttentionReservationStatus::PermanentlyFailed);
     }
-    let mutation_store = pump.service_runtime.async_task_mutation_store()?;
+    let audit_store = pump.service_runtime.async_task_scheduler_audit_store()?;
     let daemon_actor = "atm-daemon"
         .parse()
         .map_err(|_| AtmError::validation("invalid daemon task actor"))?;
-    match mutation_store
-        .apply(TaskMutationRequest {
+    match audit_store
+        .record_reminder(TaskReminderAuditRequest {
             operation_id: TaskOperationId::new(),
             actor: MemberKey::new(emission.member.team().clone(), daemon_actor),
             task_id: emission.task_id,
-            expected_revision: Some(emission.row.revision),
-            operation: TaskOperation::RecordReminder {
-                attempt: emission.attempt,
-                at: now,
-            },
+            expected_revision: emission.row.revision,
+            attempt: emission.attempt,
+            at: now,
         })
         .await
     {
         Ok(outcome) => {
             let mut reminded = emission.row.clone();
-            reminded.reminder_ordinal = reminded.reminder_ordinal.saturating_add(1);
+            reminded.reminder_ordinal = reminded.reminder_ordinal.increment();
             reminded.revision = outcome.revision;
             maybe_escalate_task(
                 pump,
@@ -111,7 +110,7 @@ pub(crate) async fn maybe_escalate_task(
     pump: &HerdrQueueWakePump,
     member: &MemberKey,
     row: &LogicalTaskRow,
-    reminder_revision: u64,
+    reminder_revision: TaskRevision,
     now: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
@@ -190,7 +189,7 @@ async fn record_lead_audit(
     audit: LeadAudit<'_>,
     stats: &mut HerdrQueueWakeStats,
 ) {
-    let mutation_store = match pump.service_runtime.async_task_mutation_store() {
+    let audit_store = match pump.service_runtime.async_task_scheduler_audit_store() {
         Ok(store) => store,
         Err(error) => {
             tracing::warn!(
@@ -206,18 +205,16 @@ async fn record_lead_audit(
     };
     let daemon_actor =
         atm_core::types::AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME);
-    if let Err(error) = mutation_store
-        .apply(TaskMutationRequest {
+    if let Err(error) = audit_store
+        .record_lead_notification(TaskLeadNotificationAuditRequest {
             operation_id: TaskOperationId::new(),
             actor: MemberKey::new(audit.member.team().clone(), daemon_actor),
             task_id: audit.row.task_id.clone(),
-            expected_revision: Some(audit.reminder_revision),
-            operation: TaskOperation::RecordLeadNotified {
-                attempt: audit.row.current_attempt,
-                at: audit.at,
-                lead: audit.lead,
-                message_id: audit.message_id,
-            },
+            expected_revision: audit.reminder_revision,
+            attempt: audit.row.current_attempt,
+            at: audit.at,
+            lead: audit.lead,
+            message_id: audit.message_id,
         })
         .await
     {

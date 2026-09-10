@@ -506,6 +506,45 @@ fn task_mutation_cannot_restore_a_second_message_write_pipeline() {
 }
 
 #[test]
+fn task_lifecycle_mutations_have_no_workspace_reexport_surface() {
+    let root = workspace_root();
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut files);
+    let forbidden = [
+        "AsyncTaskMutationStore",
+        "TaskMutationRequest",
+        "TaskOperation",
+    ];
+    let mut leaks = Vec::new();
+
+    for path in files {
+        let source = read_source(&path);
+        let mut public_use = String::new();
+        for line in source.lines() {
+            let trimmed = line.trim();
+            if public_use.is_empty() && !trimmed.starts_with("pub use") {
+                continue;
+            }
+            public_use.push_str(trimmed);
+            if !trimmed.ends_with(';') {
+                continue;
+            }
+            if (public_use.contains("atm_core::boundary") || public_use.contains("crate::boundary"))
+                && forbidden.iter().any(|symbol| public_use.contains(symbol))
+            {
+                leaks.push(path.strip_prefix(&root).unwrap().display().to_string());
+            }
+            public_use.clear();
+        }
+    }
+
+    assert!(
+        leaks.is_empty(),
+        "task lifecycle mutation capabilities must not be publicly re-exported: {leaks:?}"
+    );
+}
+
+#[test]
 fn task_command_service_has_one_sealed_core_implementation() {
     let root = workspace_root();
     let trait_source = read_source(&root.join("crates/atm-core/src/task_command.rs"));

@@ -114,18 +114,17 @@ pub struct PyAgentAddress {
     chat_id: Option<String>,
     #[pyo3(get)]
     team: String,
+    typed_agent: AgentName,
+    typed_chat_id: Option<ChatId>,
+    typed_team: TeamName,
 }
 
 impl PyAgentAddress {
     fn to_typed(&self) -> PyResult<AgentAddress> {
         AgentAddress::new(
-            self.agent.parse::<AgentName>().map_err(atm_error)?,
-            self.chat_id
-                .as_deref()
-                .map(str::parse::<ChatId>)
-                .transpose()
-                .map_err(atm_error)?,
-            Some(self.team.parse::<TeamName>().map_err(atm_error)?),
+            self.typed_agent.clone(),
+            self.typed_chat_id.clone(),
+            Some(self.typed_team.clone()),
             None,
         )
         .map_err(atm_error)
@@ -136,10 +135,15 @@ impl PyAgentAddress {
             .team()
             .cloned()
             .ok_or_else(|| atm_error(AtmError::validation("ATM address requires a team")))?;
+        let agent = address.agent().clone();
+        let chat_id = address.chat_id().cloned();
         Ok(Self {
-            agent: address.agent().to_string(),
-            chat_id: address.chat_id().map(ToString::to_string),
+            agent: agent.to_string(),
+            chat_id: chat_id.as_ref().map(ToString::to_string),
             team: team.to_string(),
+            typed_agent: agent,
+            typed_chat_id: chat_id,
+            typed_team: team,
         })
     }
 }
@@ -192,13 +196,21 @@ impl PyGraftSessionOptions {
 impl PyAgentAddress {
     #[new]
     fn new(agent: String, team: String, chat_id: Option<String>) -> PyResult<Self> {
-        let address = Self {
+        let typed_agent = agent.parse::<AgentName>().map_err(atm_error)?;
+        let typed_chat_id = chat_id
+            .as_deref()
+            .map(str::parse::<ChatId>)
+            .transpose()
+            .map_err(atm_error)?;
+        let typed_team = team.parse::<TeamName>().map_err(atm_error)?;
+        Ok(Self {
             agent,
             chat_id,
             team,
-        };
-        address.to_typed()?;
-        Ok(address)
+            typed_agent,
+            typed_chat_id,
+            typed_team,
+        })
     }
 
     fn __str__(&self) -> PyResult<String> {

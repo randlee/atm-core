@@ -5,9 +5,9 @@ use std::sync::Arc;
 use crate::{
     AsyncAttentionScheduleStore, AsyncGraftReceiverEndpointStore, AsyncMailboxReader,
     AsyncMessageSearchStore, AsyncMessageStore, AsyncTaskLedgerReader, AsyncTaskMutationStore,
-    AtmError, AttentionScheduleStore, DiagnosticTimelineStore, MessageSearchStore, MessageStore,
-    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterRuntimeMirror,
-    RosterStore, TaskStore, TemplateCatalogStore,
+    AsyncTaskSchedulerAuditStore, AtmError, AttentionScheduleStore, DiagnosticTimelineStore,
+    MessageSearchStore, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore,
+    PendingNudgeStore, RosterRuntimeMirror, RosterStore, TaskStore, TemplateCatalogStore,
 };
 
 /// Backend-neutral effective capacity settings for the single shared reader
@@ -110,6 +110,7 @@ pub struct StorageHandles {
     async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     async_task_mutation_store: Arc<dyn AsyncTaskMutationStore + Send + Sync>,
+    async_task_scheduler_audit_store: Arc<dyn AsyncTaskSchedulerAuditStore + Send + Sync>,
     async_attention_schedule_store: Arc<dyn AsyncAttentionScheduleStore + Send + Sync>,
     /// The indivisible write-through roster pair selected by composition.
     roster: WriteThroughRosterStore,
@@ -139,6 +140,7 @@ pub struct StorageHandleParts {
     pub async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     pub async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     pub async_task_mutation_store: Arc<dyn AsyncTaskMutationStore + Send + Sync>,
+    pub async_task_scheduler_audit_store: Arc<dyn AsyncTaskSchedulerAuditStore + Send + Sync>,
     pub async_attention_schedule_store: Arc<dyn AsyncAttentionScheduleStore + Send + Sync>,
     /// The write-through roster seam: the durable-write [`RosterStore`]
     /// handle and its paired RAM [`RosterRuntimeMirror`], carried as one
@@ -197,6 +199,7 @@ impl StorageHandles {
             async_mailbox_reader: parts.async_mailbox_reader,
             async_task_ledger_reader: parts.async_task_ledger_reader,
             async_task_mutation_store: parts.async_task_mutation_store,
+            async_task_scheduler_audit_store: parts.async_task_scheduler_audit_store,
             async_attention_schedule_store: parts.async_attention_schedule_store,
             roster: parts.roster,
             nudge_template_override_store: parts.nudge_template_override_store,
@@ -236,6 +239,13 @@ impl StorageHandles {
     /// Returns the Tokio-safe durable v2 task lifecycle mutation capability.
     pub fn async_task_mutation_store(&self) -> Arc<dyn AsyncTaskMutationStore + Send + Sync> {
         Arc::clone(&self.async_task_mutation_store)
+    }
+
+    /// Returns the scheduler's audit-only task writer capability.
+    pub fn async_task_scheduler_audit_store(
+        &self,
+    ) -> Arc<dyn AsyncTaskSchedulerAuditStore + Send + Sync> {
+        Arc::clone(&self.async_task_scheduler_audit_store)
     }
 
     /// Returns Tokio-safe durable idle-attention schedule metadata.

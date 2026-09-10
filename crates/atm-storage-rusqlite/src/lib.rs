@@ -74,8 +74,9 @@ use atm_storage::{
     TemplateCatalogStore,
 };
 use atm_storage::{
-    AsyncTaskMutationStore, AtmError, AttentionScheduleStore, EffectiveReaderPool,
-    EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory, StorageHandleParts, StorageHandles,
+    AsyncTaskMutationStore, AsyncTaskSchedulerAuditStore, AtmError, AttentionScheduleStore,
+    EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
+    StorageHandleParts, StorageHandles,
 };
 pub use diagnostic_timeline::{
     DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
@@ -314,6 +315,47 @@ impl AsyncTaskMutationStore for SqliteTaskMutationStore {
     ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
         self.db
             .submit_task_mutation_async_before(request, deadline)
+            .await
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncTaskSchedulerAuditStore for SqliteTaskMutationStore {
+    async fn record_reminder(
+        &self,
+        request: atm_storage::TaskReminderAuditRequest,
+    ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
+        self.db
+            .submit_task_mutation_async(atm_storage::TaskMutationRequest {
+                operation_id: request.operation_id,
+                actor: request.actor,
+                task_id: request.task_id,
+                expected_revision: Some(request.expected_revision),
+                operation: atm_storage::TaskOperation::RecordReminder {
+                    attempt: request.attempt,
+                    at: request.at,
+                },
+            })
+            .await
+    }
+
+    async fn record_lead_notification(
+        &self,
+        request: atm_storage::TaskLeadNotificationAuditRequest,
+    ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
+        self.db
+            .submit_task_mutation_async(atm_storage::TaskMutationRequest {
+                operation_id: request.operation_id,
+                actor: request.actor,
+                task_id: request.task_id,
+                expected_revision: Some(request.expected_revision),
+                operation: atm_storage::TaskOperation::RecordLeadNotified {
+                    attempt: request.attempt,
+                    at: request.at,
+                    lead: request.lead,
+                    message_id: request.message_id,
+                },
+            })
             .await
     }
 }
@@ -819,6 +861,7 @@ impl StorageFactory for SqliteStorageFactory {
             async_attention_schedule_store: backend.async_attention_schedule_store(),
             task_store: backend.task_store(),
             async_task_mutation_store: backend.async_task_mutation_store(),
+            async_task_scheduler_audit_store: backend.async_task_scheduler_audit_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
@@ -986,6 +1029,12 @@ impl SqliteStorageBackend {
 
     /// Returns the sealed Tokio-safe v2 logical-task mutation boundary.
     pub fn async_task_mutation_store(&self) -> Arc<dyn AsyncTaskMutationStore + Send + Sync> {
+        self.task_mutation_store.clone()
+    }
+
+    pub fn async_task_scheduler_audit_store(
+        &self,
+    ) -> Arc<dyn AsyncTaskSchedulerAuditStore + Send + Sync> {
         self.task_mutation_store.clone()
     }
 

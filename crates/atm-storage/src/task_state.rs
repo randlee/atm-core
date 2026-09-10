@@ -165,6 +165,60 @@ impl TaskPriority {
     }
 }
 
+/// Monotonic compare-and-swap revision for one logical task.
+#[derive(
+    Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash,
+)]
+#[serde(transparent)]
+pub struct TaskRevision(u64);
+
+impl TaskRevision {
+    #[must_use]
+    pub const fn from_raw(value: u64) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+/// One-based count of successful reminders for a task assignment.
+#[derive(
+    Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash,
+)]
+#[serde(transparent)]
+pub struct ReminderOrdinal(u64);
+
+impl ReminderOrdinal {
+    #[must_use]
+    pub const fn from_raw(value: u64) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    #[must_use]
+    pub const fn increment(self) -> Self {
+        Self(self.0.saturating_add(1))
+    }
+
+    #[must_use]
+    pub const fn is_multiple_of(self, value: u64) -> bool {
+        self.0.is_multiple_of(value)
+    }
+}
+
+impl std::fmt::Display for ReminderOrdinal {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
 /// One-based immutable assignment-attempt ordinal.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AssignmentAttempt(u32);
@@ -215,8 +269,8 @@ pub struct LogicalTaskRow {
     /// scheduler state, so a reassignment cannot inherit its predecessor's
     /// cadence.
     pub last_reminded_at: Option<IsoTimestamp>,
-    pub reminder_ordinal: u64,
-    pub revision: u64,
+    pub reminder_ordinal: ReminderOrdinal,
+    pub revision: TaskRevision,
     pub updated_at: IsoTimestamp,
 }
 

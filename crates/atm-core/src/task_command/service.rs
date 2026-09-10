@@ -87,6 +87,7 @@ impl CoreTaskCommandService {
             .map_err(AtmError::from)?;
         let attempts = load_attempts(&reader, &command, existing.is_some(), deadline).await?;
         let operation = self.prepare_operation(&command, existing.as_ref(), attempts.last())?;
+        let expected_revision = authorized_revision(&command, existing.as_ref())?;
         ensure_deadline_remaining(deadline)?;
         let outcome = self
             .mutation_store()?
@@ -95,7 +96,7 @@ impl CoreTaskCommandService {
                     operation_id: command.operation_id,
                     actor: command.actor,
                     task_id: command.task_id,
-                    expected_revision: command.expected_revision,
+                    expected_revision,
                     operation,
                 },
                 task_mutation_deadline(deadline)?,
@@ -762,4 +763,95 @@ fn authorization_error(message: impl Into<String>) -> AtmError {
         message,
         "Use an authorized task actor or inspect task history with: atm task events <task-id>",
     )
+}
+
+/// Binds an existing-task mutation to the exact row that policy authorized.
+///
+/// A caller may provide a CAS revision, but it must agree with the service
+/// snapshot. Omitting it does not opt an existing-task transition out of CAS:
+/// a concurrent reassignment must make the older authorization stale before
+/// the writer applies its operation.
+fn authorized_revision(
+    command: &TaskMutationCommand,
+    existing: Option<&atm_storage::LogicalTaskRow>,
+) -> Result<Option<atm_storage::TaskRevision>, AtmError> {
+    let Some(existing) = existing else {
+        return Ok(command.expected_revision);
+    };
+    if let Some(expected) = command.expected_revision
+        && expected != existing.revision
+    {
+        return Err(AtmError::new(
+            AtmErrorCode::TaskRevisionStale,
+            "task revision changed before the requested mutation was authorized",
+        ));
+    }
+    Ok(Some(existing.revision))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::authorized_revision;
+    use crate::task_command::{TaskAction, TaskMutationCommand, TaskOperationId};
+    use crate::types::{AgentName, TeamName};
+    use atm_storage::{
+        LogicalTaskRow, MemberKey, ReminderOrdinal, TaskId, TaskLifecycleState, TaskPriority,
+        TaskRevision,
+    };
+
+    fn command(expected_revision: Option<u64>) -> TaskMutationCommand {
+        TaskMutationCommand {
+            operation_id: TaskOperationId::new(),
+            actor: MemberKey::new(
+                TeamName::from_validated("team"),
+                AgentName::from_validated("agent"),
+            ),
+            task_id: "task".parse::<TaskId>().expect("task id"),
+            expected_revision: expected_revision.map(TaskRevision::from_raw),
+            action: TaskAction::Start,
+        }
+    }
+
+    fn existing(revision: u64) -> LogicalTaskRow {
+        LogicalTaskRow {
+            team: TeamName::from_validated("team"),
+            task_id: "task".parse::<TaskId>().expect("task id"),
+            current_assignee: AgentName::from_validated("agent"),
+            state: TaskLifecycleState::Assigned,
+            priority: TaskPriority::Normal,
+            original_assigned_at: "2026-09-10T00:00:00Z".parse().expect("timestamp"),
+            current_attempt: atm_storage::AssignmentAttempt::FIRST,
+            assignment_message_id: crate::schema::AtmMessageId::new(),
+            last_reminded_at: None,
+            reminder_ordinal: ReminderOrdinal::from_raw(0),
+            revision: TaskRevision::from_raw(revision),
+            updated_at: "2026-09-10T00:00:00Z".parse().expect("timestamp"),
+        }
+    }
+
+    #[test]
+    fn reassignment_after_authorization_leaves_the_old_mutation_stale() {
+        let authorized = existing(7);
+        assert_eq!(
+            authorized_revision(&command(None), Some(&authorized)).expect("bound revision"),
+            Some(TaskRevision::from_raw(7)),
+            "the writer must compare against the snapshot used for authorization"
+        );
+        let reassigned = existing(8);
+        assert_ne!(
+            authorized_revision(&command(None), Some(&authorized)).expect("bound revision"),
+            Some(reassigned.revision),
+            "a reassignment after authorization makes the old request fail writer CAS"
+        );
+    }
+
+    #[test]
+    fn caller_revision_must_match_the_authorized_snapshot() {
+        let error = authorized_revision(&command(Some(6)), Some(&existing(7)))
+            .expect_err("stale caller revision");
+        assert_eq!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::TaskRevisionStale
+        );
+    }
 }

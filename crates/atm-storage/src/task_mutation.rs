@@ -12,7 +12,7 @@ use crate::contract::{Message, sealed};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::task_state::{
-    AssignmentAttempt, TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority,
+    AssignmentAttempt, TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority, TaskRevision,
 };
 use crate::task_store::MessageWriteOrigin;
 use crate::types::{AgentName, IsoTimestamp, MemberKey, TaskId};
@@ -88,7 +88,7 @@ pub struct TaskMutationRequest {
     pub operation_id: TaskOperationId,
     pub actor: MemberKey,
     pub task_id: TaskId,
-    pub expected_revision: Option<u64>,
+    pub expected_revision: Option<TaskRevision>,
     pub operation: TaskOperation,
 }
 
@@ -97,7 +97,7 @@ pub struct TaskMutationRequest {
 pub struct TaskMutationOutcome {
     pub task_id: TaskId,
     pub state: TaskLifecycleState,
-    pub revision: u64,
+    pub revision: TaskRevision,
     /// Assignment or terminal-handoff message committed with this operation.
     /// The field is optional for state-only mutations and defaults while old
     /// persisted operation results remain readable during the interface bump.
@@ -111,6 +111,32 @@ pub struct TaskMutationOutcome {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_attempt: Option<crate::task_state::AssignmentAttempt>,
     pub replayed: bool,
+}
+
+/// A scheduler-owned, compare-and-swap reminder audit. This request cannot
+/// represent a lifecycle transition or a message write.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskReminderAuditRequest {
+    pub operation_id: TaskOperationId,
+    pub actor: MemberKey,
+    pub task_id: TaskId,
+    pub expected_revision: TaskRevision,
+    pub attempt: AssignmentAttempt,
+    pub at: IsoTimestamp,
+}
+
+/// A scheduler-owned, compare-and-swap lead-notification audit. This request
+/// cannot represent a lifecycle transition or a message write.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskLeadNotificationAuditRequest {
+    pub operation_id: TaskOperationId,
+    pub actor: MemberKey,
+    pub task_id: TaskId,
+    pub expected_revision: TaskRevision,
+    pub attempt: AssignmentAttempt,
+    pub at: IsoTimestamp,
+    pub lead: AgentName,
+    pub message_id: AtmMessageId,
 }
 
 /// A caller-owned deadline for admission to the ordered task-mutation writer.
@@ -153,5 +179,21 @@ pub trait AsyncTaskMutationStore: sealed::Sealed + Send + Sync {
         &self,
         request: TaskMutationRequest,
         deadline: TaskMutationDeadline,
+    ) -> Result<TaskMutationOutcome, AtmError>;
+}
+
+/// Tokio-safe capability for scheduler audit writes only. The attention
+/// scheduler receives this instead of [`AsyncTaskMutationStore`] so its type
+/// cannot express a task lifecycle transition.
+#[async_trait::async_trait]
+pub trait AsyncTaskSchedulerAuditStore: sealed::Sealed + Send + Sync {
+    async fn record_reminder(
+        &self,
+        request: TaskReminderAuditRequest,
+    ) -> Result<TaskMutationOutcome, AtmError>;
+
+    async fn record_lead_notification(
+        &self,
+        request: TaskLeadNotificationAuditRequest,
     ) -> Result<TaskMutationOutcome, AtmError>;
 }

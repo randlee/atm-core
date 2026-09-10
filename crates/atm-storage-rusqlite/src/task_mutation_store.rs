@@ -9,7 +9,7 @@ mod tests {
     use atm_storage::{
         MessageWriteOrigin, PreparedAssignment, PreparedMessage, ReadDeadline, TaskLedgerScope,
         TaskLifecycleState, TaskMutationRequest, TaskOperation, TaskOperationId, TaskOutcome,
-        TaskPriority,
+        TaskPriority, TaskRevision,
     };
     use serde_json::Map;
     use std::time::Duration;
@@ -472,7 +472,7 @@ mod tests {
             operation_id: TaskOperationId::new(),
             actor: lead.clone(),
             task_id: task_id.clone(),
-            expected_revision: Some(1),
+            expected_revision: Some(TaskRevision::from_raw(1)),
             operation: TaskOperation::Reassign(assignment(&task_id, assignee, &lead)),
         };
         let (left, right) =
@@ -690,6 +690,43 @@ mod tests {
             .expect("load reminded task")
             .expect("reminded task row");
         assert_eq!(reminded.last_reminded_at, Some(reminded_at));
+        assert_eq!(reminded.revision, first_attempt.revision);
+
+        let authorized_task = task("v2-reminder-audit-does-not-stale");
+        store
+            .apply(request(
+                lead.clone(),
+                authorized_task.clone(),
+                TaskOperation::Assign(assignment(&authorized_task, &worker, &lead)),
+            ))
+            .await
+            .expect("assign authorized transition task");
+        let authorized = reader
+            .load_logical_task(team(), authorized_task.clone(), deadline())
+            .await
+            .expect("load authorized task")
+            .expect("authorized task row");
+        store
+            .apply(request(
+                lead.clone(),
+                authorized_task.clone(),
+                TaskOperation::RecordReminder {
+                    attempt: authorized.current_attempt,
+                    at: reminded_at,
+                },
+            ))
+            .await
+            .expect("record intervening reminder audit");
+        store
+            .apply(TaskMutationRequest {
+                operation_id: TaskOperationId::new(),
+                actor: worker.clone(),
+                task_id: authorized_task,
+                expected_revision: Some(authorized.revision),
+                operation: TaskOperation::Start,
+            })
+            .await
+            .expect("reminder audit must not stale an authorized transition");
 
         store
             .apply(request(
@@ -830,7 +867,7 @@ mod tests {
             operation_id,
             actor: worker.clone(),
             task_id: task_id.clone(),
-            expected_revision: Some(1),
+            expected_revision: Some(TaskRevision::from_raw(1)),
             operation: TaskOperation::Start,
         };
         store.apply(start.clone()).await.expect("start");
@@ -838,7 +875,7 @@ mod tests {
             operation_id: TaskOperationId::new(),
             actor: worker.clone(),
             task_id: task_id.clone(),
-            expected_revision: Some(1),
+            expected_revision: Some(TaskRevision::from_raw(1)),
             operation: TaskOperation::Block {
                 reason: "stale request".to_owned(),
             },
