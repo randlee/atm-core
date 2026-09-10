@@ -15,16 +15,31 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_idle.rs, crates/atm-http-runtime/src/router_support.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "obsolete" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-10T21:26:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-10T22:37:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-014/AZ4-001> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-014/AZ4-002> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
-# v3: fenix (leading coordination on this round, per Rand) rules this moves
+# v4: CLOSED OBSOLETE / SUPERSEDED BY REDESIGN, not FIXED, per fenix's
+# explicit full-stop record-keeping instruction (message
+# 01M26QF5RPJ9ET26M0DZ08P2EM, itemizing SOLAR-CDR-009/FNX-014/FNX-024
+# together). This finding's v3 fold-in target (SOLAR-CDR-009's closure on
+# fix/az-cdr-followup-1) is itself obsolete: the observe_task/registry code
+# this finding's sub-item touched (router_support.rs:322-330) belongs to the
+# attention scheduler being deleted before AZ merge per solar's replacement
+# design (01M26Q8J7HRAGP5VAA66H4AWFV, re-ruling 01M26Q0Q4Q4QVRY18AJH40C4YA).
+# "Fixed" is withheld for the same reason as SOLAR-CDR-009: the mechanism it
+# would certify is not shippable. If the new design's Idle-trigger dispatch
+# path has an analogous draining/registration race, that gets filed fresh
+# against the new schema, not inherited from this record.
+#
+# v3 (superseded): fenix (leading coordination on this round, per Rand) rules this moves
 # deferred -> open, folded into SOLAR-CDR-009's closure as a required
 # sub-item, dispatched to arch-ctm on fix/az-cdr-followup-1. Rationale: this
 # finding's code (router_support.rs:322-330's unconstrained tokio::spawn in
@@ -59,9 +74,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_idle.rs" ;
   triage:line 9 ;
-  triage:snippet "check-then-push race between is_draining() and observe_task vs drain's take(); doc comment stale. Deferred per fenix's non-blocking PASS verdict on PR #1395" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "check-then-push race between is_draining() and observe_task vs drain's take(); doc comment stale. Closed obsolete/superseded by redesign -- the attention scheduler's Idle-dispatch registry is being deleted before AZ merge, not hardened." ;
+  triage:status "obsolete" ;
+  triage:closed true ;
   triage:branch "fix/az-critical-design-review-findings" ;
   triage:headSha "3b8a43fd3" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
@@ -77,9 +92,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/router_support.rs" ;
   triage:line 322 ;
-  triage:snippet "folded into SOLAR-CDR-009's closure as a required sub-item; dispatched to arch-ctm on fix/az-cdr-followup-1 per fenix's ruling (same tokio::spawn/registry code the lease/claim fix restructures)." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "folded into SOLAR-CDR-009's closure as a required sub-item; that closure is itself now obsolete/superseded by redesign (solar's replacement design 01M26Q8J7HRAGP5VAA66H4AWFV deletes this registry/spawn code before AZ merge)." ;
+  triage:status "obsolete" ;
+  triage:closed true ;
   triage:branch "fix/az-cdr-followup-1" ;
   triage:headSha "e20f2d0f5" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/e20f2d0f5> .

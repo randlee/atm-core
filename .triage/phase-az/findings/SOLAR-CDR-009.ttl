@@ -15,21 +15,51 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_idle.rs, crates/atm-http-runtime/src/router_support.rs, crates/atm-http-runtime/src/herdr_queue_wake.rs, crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "obsolete" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-10T21:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T21:17:35Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-10T22:35:20Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SOLAR-CDR-009/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# v2: CLOSED OBSOLETE / SUPERSEDED BY REDESIGN, not FIXED, per fenix's
+# explicit disposition ruling (message 01M26QC4APP9WWG974Q9PWB3YP), which
+# reviewed arch-ctm's fix (235bea865: both prune predicates now WHERE status
+# IN ('delivered','stale'), matching test COUNT, plus the three fenix_case
+# tests) and confirmed it correct and complete against the spec as given --
+# but withheld PASS because the spec itself is withdrawn. Solar re-ruled
+# against Rand's direct two-machine specification at 01M26Q0Q4Q4QVRY18AJH40C4YA
+# and published the full replacement design (sections A-H) at
+# 01M26Q8J7HRAGP5VAA66H4AWFV: the entire shared attention scheduler this
+# finding's fix operated on (AttentionLane, reservation status/retry/lease/
+# fence/finalize/tombstone machinery) is deleted before AZ merges, not
+# hardened. "Fixed" would assert the reservation model is now sound and
+# shippable; it is not shippable, so that status must not appear on the
+# record. Two of arch-ctm's tests carry forward verbatim as live
+# requirements against the new design per fenix's explicit instruction (they
+# encode the assignment-generation rule solar's section B retains
+# unchanged, and map onto his required test H7):
+#   - fenix_case5_new_assignment_attempt_is_eligible_with_a_fresh_budget
+#   - fenix_case6_a_new_message_id_is_independently_eligible
+# Also worth preserving as reference (not carried forward as requirements):
+# the barrier-based concurrency test and stale_owner_finalize_is_rejected_
+# after_reclaim, as worked examples of the concurrency traps H1-H4 must
+# cover. fenix_case3_prune_must_not_rearm_a_terminal_item dies with the
+# tombstones -- do not carry it. Branch fix/az-cdr-followup-1 stays frozen
+# at 235bea865, not deleted, until these tests are lifted into the
+# replacement work. arch-ctm's execution was correct throughout; the model
+# changed above him, not his implementation of it.
 
 <urn:atm:triage:occurrence/SOLAR-CDR-009/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 813 ;
-  triage:snippet "persistent-task path revalidates/emits/records audit with no reservation dispatch claim/lease; concurrent Idle opportunities can double-emit the same reminder. Fix dispatched to arch-ctm on stacked branch fix/az-cdr-followup-1 (base fix/az-critical-design-review-findings), per Rand's explicit instruction to keep PR #1395's branch frozen and land further findings on a stacked layer." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "persistent-task path revalidates/emits/records audit with no reservation dispatch claim/lease; concurrent Idle opportunities can double-emit the same reminder. Fix landed correct-and-complete against the withdrawn spec at 235bea865 (arch-ctm); closed obsolete/superseded by redesign, not fixed, per fenix's disposition ruling 01M26QC4APP9WWG974Q9PWB3YP. The attention scheduler this fix touched is being deleted before AZ merge -- see solar's replacement design 01M26Q8J7HRAGP5VAA66H4AWFV." ;
+  triage:status "obsolete" ;
+  triage:closed true ;
   triage:branch "fix/az-cdr-followup-1" ;
   triage:headSha "e20f2d0f5" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/e20f2d0f5> .
