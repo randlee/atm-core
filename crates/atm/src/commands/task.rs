@@ -685,7 +685,7 @@ fn json_response_with_assignment_age(
             .insert(
                 "assigned_age_seconds".to_owned(),
                 serde_json::Value::from(assigned_age_seconds(
-                    logical_task.original_assigned_at.clone().into_inner(),
+                    logical_task.original_assigned_at.into_inner(),
                     now,
                 )),
             );
