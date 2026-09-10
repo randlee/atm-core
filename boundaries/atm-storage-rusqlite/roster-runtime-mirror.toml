@@ -8,10 +8,8 @@ trait = "RosterRuntimeMirror"
 notes = "write-through RAM master-roster decorator relocated here from atm-core (FTQ-AW finding 1 on PR #1240); keeps durable roster columns synchronized and owns the one ephemeral per-member lifecycle record mutated in accepted order by authenticated heartbeats and Herdr polls"
 
 [implementation]
-type = "WriteThroughRosterView"
-module = "atm_storage_rusqlite::roster_runtime"
-visibility = "private"
-constructor = "private"
+visibility = "trait_only"
+constructor = "none"
 
 [composition]
 roots = ["atm_storage_rusqlite::roster_runtime::build_write_through_roster"]

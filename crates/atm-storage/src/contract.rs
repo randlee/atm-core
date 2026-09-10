@@ -1156,7 +1156,7 @@ pub struct RosterMemberEphemeralState {
 /// `boundaries/atm-storage-rusqlite/roster-store-sqlite.toml`). This trait
 /// exists so `atm-core` and other consumer crates can hold and call the
 /// mirror without depending on that concrete backend crate.
-pub trait RosterRuntimeMirror: Send + Sync {
+pub trait RosterRuntimeMirror: sealed::Sealed + Send + Sync {
     /// Reads one team's roster from RAM. Never issues a durable read.
     fn load_team_roster(&self, team: &TeamName) -> Vec<RosterMember>;
     /// Reads one roster member from RAM. Never issues a durable read.

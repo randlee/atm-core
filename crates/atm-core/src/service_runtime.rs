@@ -1114,65 +1114,7 @@ mod tests {
         }
 
         fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
-            unreachable!("task-store absence test does not list teams")
-        }
-    }
-
-    #[allow(
-        deprecated,
-        reason = "the task-store absence test only constructs the retained runtime"
-    )]
-    impl atm_storage::RosterRuntimeMirror for UnusedRuntimeStore {
-        fn load_team_roster(&self, _team: &TeamName) -> Vec<atm_storage::RosterMember> {
-            unreachable!("task-store absence test does not read the roster mirror")
-        }
-
-        fn load_roster_member(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Option<atm_storage::RosterMember> {
-            unreachable!("task-store absence test does not read the roster mirror")
-        }
-
-        fn list_teams(&self) -> Vec<TeamName> {
-            unreachable!("task-store absence test does not list teams")
-        }
-
-        fn ephemeral_state(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Option<atm_storage::RosterMemberEphemeralState> {
-            unreachable!("task-store absence test does not read ephemeral roster state")
-        }
-
-        fn apply_runtime_observations(
-            &self,
-            _team: &TeamName,
-            _updates: &[atm_storage::RosterRuntimeObservationUpdate],
-        ) -> Vec<atm_storage::RosterRuntimeMutationOutcome> {
-            unreachable!("task-store absence test does not mutate runtime roster state")
-        }
-
-        fn load_runtime_observations(
-            &self,
-            _team: &TeamName,
-        ) -> Vec<(AgentName, atm_storage::RosterRuntimeObservation)> {
-            unreachable!("task-store absence test does not read runtime roster state")
-        }
-
-        fn set_herdr_wake_pending(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _pending: bool,
-        ) -> bool {
-            unreachable!("task-store absence test does not mutate ephemeral roster state")
-        }
-
-        fn reload_from_durable(&self) -> Result<(), crate::error::AtmError> {
-            unreachable!("task-store absence test does not reload the roster mirror")
+            Ok(Vec::new())
         }
     }
 
@@ -1291,10 +1233,15 @@ mod tests {
 
     #[test]
     fn task_store_reports_the_not_installed_error() {
+        let (roster_store, roster_runtime) =
+            atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+                UnusedRuntimeStore,
+            ))
+            .expect("empty write-through roster fixture");
         let runtime = super::LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedRuntimeStore),
-            Arc::new(UnusedRuntimeStore),
-            Arc::new(UnusedRuntimeStore),
+            roster_store,
+            roster_runtime,
             Arc::new(UnusedRuntimeStore),
             Arc::new(super::LocalFileNonClaudeOutbound::new()),
         );
