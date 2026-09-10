@@ -15,22 +15,24 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_attention_scheduler.rs, crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T17:42:40Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T17:10:35Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T17:10:35Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/AZ4-001> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/AZ4-002> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RSH-004/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
   triage:line 43 ;
   triage:snippet "schedule_store.finalize(request).await" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az4-qa4-findings" ;
   triage:headSha "2e4f41406" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/2e4f41406> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
   triage:line 77 ;
   triage:snippet "schedule_store.reserve(AttentionReservationRequest { ... }).await" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az4-qa4-findings" ;
   triage:headSha "2e4f41406" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/2e4f41406> .

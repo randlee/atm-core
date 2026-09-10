@@ -15,21 +15,23 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T17:42:40Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T17:10:35Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T17:10:35Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-013/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AZS4-QA-013/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 192 ;
   triage:snippet "match tokio::time::timeout(HERDR_REQUEST_DEADLINE, handle).await {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az4-qa4-findings" ;
   triage:headSha "d4610bb72" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/d4610bb72> .
