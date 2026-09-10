@@ -4,8 +4,6 @@
 //! queue and task ledger retain ownership of their lifecycles; the scheduler
 //! owns only fair selection metadata.
 
-use std::time::Duration;
-
 use atm_core::LocalServiceRuntime;
 use atm_core::boundary::{
     AttentionCandidates, AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionReservation,
@@ -13,25 +11,12 @@ use atm_core::boundary::{
     IdleOpportunity, LogicalTaskRow, MemberKey, PendingNudgeStore, PersistentTaskCandidate,
     ReadDeadline, TaskLifecycleState, select_attention_item,
 };
-use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::error::AtmError;
 use atm_core::types::IsoTimestamp;
 
-const SCHEDULER_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
-pub(crate) const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
+use crate::herdr_queue_wake::{HERDR_REQUEST_DEADLINE, run_blocking};
 
-async fn run_blocking<T, F>(job: F) -> Result<T, AtmError>
-where
-    T: Send + 'static,
-    F: FnOnce() -> Result<T, AtmError> + Send + 'static,
-{
-    tokio::task::spawn_blocking(job).await.map_err(|source| {
-        AtmError::new(
-            AtmErrorCode::InternalError,
-            "pending-nudge inspection ended unexpectedly",
-        )
-        .with_cause(source)
-    })?
-}
+pub(crate) const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
 
 pub(super) async fn finalize_attention(
     runtime: &LocalServiceRuntime,
@@ -71,7 +56,7 @@ pub(super) async fn reserve_next_attention(
     let schedule_store = runtime.async_attention_schedule_store()?;
     let pending_store = runtime.pending_nudge_store()?;
     let member = opportunity.member.clone();
-    let deadline = ReadDeadline::new(SCHEDULER_REQUEST_DEADLINE)?;
+    let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
     let cursor = schedule_store
         .load_cursor(member.clone(), deadline)
         .await
@@ -103,24 +88,14 @@ async fn next_ephemeral(
     pending_store: std::sync::Arc<dyn PendingNudgeStore + Send + Sync>,
     member: MemberKey,
 ) -> Result<Option<EphemeralMessageCandidate>, AtmError> {
-    let deadline = ReadDeadline::new(SCHEDULER_REQUEST_DEADLINE)?;
-    tokio::time::timeout(
-        deadline.remaining(),
-        run_blocking(move || {
-            pending_store.peek_next_pending(&member).map(|claim| {
-                claim.map(|claim| EphemeralMessageCandidate {
-                    message_id: claim.msg,
-                })
+    run_blocking(move || {
+        pending_store.peek_next_pending(&member).map(|claim| {
+            claim.map(|claim| EphemeralMessageCandidate {
+                message_id: claim.msg,
             })
-        }),
-    )
+        })
+    })
     .await
-    .map_err(|_| {
-        AtmError::new(
-            AtmErrorCode::WaitTimeout,
-            "pending-nudge inspection exceeded the scheduler request deadline",
-        )
-    })?
 }
 
 async fn next_persistent_task(
@@ -129,7 +104,7 @@ async fn next_persistent_task(
     now: IsoTimestamp,
 ) -> Result<Option<PersistentTaskCandidate>, AtmError> {
     let reader = runtime.async_task_ledger_reader()?;
-    let deadline = ReadDeadline::new(SCHEDULER_REQUEST_DEADLINE)?;
+    let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
     reader
         .top_runnable_task(member.team().clone(), member.agent().clone(), deadline)
         .await
