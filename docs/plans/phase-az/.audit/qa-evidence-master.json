@@ -3,9 +3,9 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-10T00:24:31Z",
-    "end": "2026-09-10T01:58:06Z"
+    "end": "2026-09-10T05:58:11Z"
   },
-  "scope": "phase-az sprints AZ.1-AZ.4 (AZ.1-AZ.3 in progress, AZ.4 not yet dispatched)",
+  "scope": "phase-az sprints AZ.1-AZ.4 (AZ.1-AZ.3 merged into integrate/phase-az; AZ.4 in progress on feature/az4-attention-scheduler, PR #1387 open)",
   "count_basis": "headline/reviewer",
   "path_notes": "Built by team-lead (phase AZ orchestrator, sole .triage/.sprints writer) directly from ATM messages in the team-lead, arch-ctm, and quality-mgr queues (team atm-dev): every assignment_message_id is the team-lead->quality-mgr message carrying that QA task id (atm list quality-mgr --all --json); every result_message_id is quality-mgr's verdict message in team-lead's queue (atm list --all --json); Final Quality Report comment ids come from the GitHub issue-comments API for each PR. No verdict, run, or message id was fabricated; null means the value is not yet available (run in flight).",
   "runs": [
@@ -83,12 +83,37 @@
       "minor": 3,
       "count_basis": "headline/reviewer",
       "evidence": "Sprint AZ.2 QA-1: FAIL (4 blocking / 1 important / 3 minor) across 6 reviewers, PR #1379 @ 8585a58ead999ee0154e99b907fcdc42227b237e. PR comment: https://github.com/randlee/atm-core/pull/1379#issuecomment-5611617530. Deliverable completion 33.3% (2/6). Triaged as .triage/phase-az/findings/{AZS2-QA-001,AZS2-QA-002,AZS2-QA-003,AZS2-QA-005,AZS2-RBQA-001,AZS2-RBQA-002,AZS2-RBP-001,AZS2-QA-004}.ttl (63a3cbabf); consolidated fix dispatched to arch-ctm on feature/az3-task-command-handoff (highest branch already containing AZ-S2's code) as phase-az-s2-fix-1, msg 01M24HTB61KF6GR92X6JD9W0HN, result pending."
+    },
+    {
+      "run_id": "AZS3-QA4",
+      "aich_sprint": "AZ.3",
+      "phase_sprint": "AZ.3",
+      "pass": "QA-4",
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-10T05:48:22Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M24XRAM5KJ1SP74JS4427X9V",
+      "assignment_from": "team-lead",
+      "assignment_shared_path": null,
+      "assignment_summary": "phase-az-s3-qa-4 dispatched by team-lead (atm send --stdin) for PR #1382 at head 61a839f6a03f3fe55433e0b89410650b1799e207, single-finding recheck of AZS2-RBQA-002 (round 4)",
+      "result_time_utc": "2026-09-10T05:58:02Z",
+      "result_time_pst": null,
+      "result_message_id": "01M24YA16DD38MXKCMM9WRPBEE",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 0,
+      "minor": 1,
+      "count_basis": "headline/reviewer",
+      "evidence": "Sprint AZ.3 QA-4 (Final Quality Report): PASS (0 blocking / 0 important / 1 minor), PR #1382 @ 61a839f6a. AZS2-RBQA-002 genuinely closed on round 4, independently confirmed by quality-mgr direct execution, arch-qa static trace, and ruthless-boundary-qa static trace after a 3-round history of false/partial claims. Final Quality Report: https://github.com/randlee/atm-core/pull/1382#issuecomment-5613899534. Residual minor: AZS2-RBQA-002-FOLLOWUP (stale [contracts].notes wording, non-blocking) -- triaged and fixed separately via PR #1388 (merged, .triage/phase-az/findings/AZS2-RBQA-002-FOLLOWUP.ttl closed). PR #1382 merged into integrate/phase-az 2026-09-10T06:08:39Z."
     }
   ],
   "coverage_gaps": [
-    "AZ.1: QA-2 PASS 0/0/0, PR #1377 merge-ready pending standard CI gate (transient ttl-triage lint failure noted, not attributed to AZ.1).",
-    "AZ.2: QA-1 FAIL, 8 findings triaged and consolidated fix dispatched to arch-ctm on feature/az3-task-command-handoff (phase-az-s2-fix-1); result pending. No separate AZ-S2 QA-2 planned -- recheck will occur as part of AZ-S3's own QA-1 on the same (now-merged) branch.",
-    "AZ.3: dev dispatched 2026-09-10T01:48:48Z (arch-ctm ack 01:57:34Z); AZ-S2 fix folded into this branch's in-progress work per team-lead's phase-az-s2-fix-1 dispatch; no completion or QA yet.",
-    "AZ.4: not yet dispatched; pending AZ.3 completion and sequencing with the parallel #1378 canonical agent-state fix and its docs lane (PR #1380)."
+    "AZ.1: PR #1377 merged into integrate/phase-az.",
+    "AZ.2: findings folded into and closed on feature/az3-task-command-handoff (PR #1382); no separate AZ-S2 QA-2 -- recheck occurred as part of AZ-S3 QA passes on the same branch.",
+    "AZ.3: PR #1382 merged into integrate/phase-az 2026-09-10T06:08:39Z after QA-4 PASS. AZS2-RBQA-002-FOLLOWUP (minor, doc-only) fixed separately via PR #1388, merged.",
+    "AZ.4: dispatched to arch-ctm on feature/az4-attention-scheduler; PR #1387 open against integrate/phase-az, in-progress dev work, no QA run yet."
   ]
 }
