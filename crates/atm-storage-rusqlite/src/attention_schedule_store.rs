@@ -336,7 +336,7 @@ fn load_unfinished_reservation_for_item(
                     assignment_attempt, assignment_message_id, status, failed_attempts
              FROM attention_opportunities
              WHERE team = ?1 AND agent = ?2 AND lane = ?3
-               AND status IN ('reserved', 'permanently_failed')
+               AND status = 'reserved'
                AND message_id IS ?4 AND task_id IS ?5 AND assignment_attempt IS ?6
                AND assignment_message_id IS ?7
              ORDER BY rowid DESC LIMIT 1",
@@ -610,7 +610,7 @@ mod tests {
     }
 
     #[test]
-    fn retryable_failure_keeps_the_same_item_until_the_fifth_attempt() {
+    fn fifth_failed_reservation_allows_a_later_idle_opportunity() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.attention_schedule_store();
         let opportunity = IdleOpportunity {
@@ -647,6 +647,36 @@ mod tests {
                 }
             );
         }
+
+        let later_opportunity = IdleOpportunity {
+            id: IdleOpportunityId::new(),
+            member: member(),
+            roster_state_revision: RosterStateRevision::from_raw(8),
+        };
+        let retry = store
+            .reserve(AttentionReservationRequest {
+                opportunity: later_opportunity.clone(),
+                expected_cursor_revision: 1,
+                item: reservation.item.clone(),
+            })
+            .expect("later opportunity reserves the still-eligible item");
+        assert_eq!(retry.status, AttentionReservationStatus::Reserved);
+        assert_eq!(retry.failed_attempts, 0);
+        assert_eq!(retry.opportunity, later_opportunity);
+        assert_ne!(retry.opportunity.id, opportunity.id);
+        assert_eq!(
+            store
+                .reserve(AttentionReservationRequest {
+                    opportunity: later_opportunity,
+                    expected_cursor_revision: 1,
+                    item: reservation.item,
+                })
+                .expect("same opportunity replay")
+                .opportunity
+                .id,
+            retry.opportunity.id,
+            "the later opportunity stays idempotent while a terminal prior reservation does not suppress it"
+        );
     }
 
     #[tokio::test]
