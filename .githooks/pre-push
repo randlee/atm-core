@@ -8,7 +8,10 @@
 # Also gates pushes that touch triage TTL data (.triage/ or .sprints/):
 # validate-findings.py must pass before a broken finding/structure record
 # leaves this machine, so /sprint-report and /triage-report never see a
-# structural data gap that was pushable but unvalidated.
+# structural data gap that was pushable but unvalidated. lint_ttl_triage_consistency.py
+# (the same "ttl-triage" check `just lint`/CI runs) also runs here, against the
+# same extracted pushed-commit tree, so the canonical-sprint-form and
+# contradictory-status checks fail locally instead of costing a full CI cycle.
 #
 # Both the changed-file detection and the TTL validation itself operate on
 # the actual commits/tree being pushed (via `git rev-list`/`git diff-tree`
@@ -201,6 +204,29 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
             ttl_fail=1
         fi
     done
+
+    # Same-content, second lint: lint_ttl_triage_consistency.py is the exact
+    # "ttl-triage" check `just lint`/CI run (contradictory aggregate/branch
+    # status, and canonical vs. legacy sprint-id form on foundIn et al). It
+    # scans repo_root/.triage/**/*.ttl on disk, so it runs directly against
+    # the already-extracted per-phase triage dirs under $ref_root -- no
+    # second archive needed. Running it here means the exact class of CI
+    # failure it exists to catch is caught in seconds, pre-push, instead of
+    # a 30-50 minute CI round trip.
+    ttl_lint_rel=".just"
+    if git archive "$local_sha" -- "$ttl_lint_rel/lint_ttl_triage_consistency.py" "$ttl_lint_rel/lint_common.py" "$ttl_lint_rel/ttl-naming-legacy-allowlist.txt" 2>/dev/null | tar -x -C "$ref_root" 2>/dev/null; then
+        ttl_lint="$ref_root/$ttl_lint_rel/lint_ttl_triage_consistency.py"
+        if [ -f "$ttl_lint" ]; then
+            echo "pre-push: running ttl-triage lint against pushed commit $local_sha" >&2
+            lint_output=$(cd "$ref_root/$ttl_lint_rel" && python3 lint_ttl_triage_consistency.py --root "$ref_root" 2>&1)
+            lint_status=$?
+            if [ "$lint_status" -ne 0 ]; then
+                echo "$lint_output" >&2
+                echo "pre-push: REFUSED. ttl-triage lint failed at pushed commit $local_sha; repair per docs/triage/ttl-repair.md." >&2
+                ttl_fail=1
+            fi
+        fi
+    fi
 done
 
 if [ "$needs_rust_gate" -eq 1 ]; then
