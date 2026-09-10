@@ -1,0 +1,260 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS2-RBP-001>
+  a triage:Finding ;
+  triage:findingId "AZS2-RBP-001" ;
+  triage:title "6 new #[allow(clippy::too_many_arguments)] sites lack a reason" ;
+  triage:description "crates/atm-storage-rusqlite/src/writer/task_ops.rs:558,680,933, crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs:155,370,459 -- 6 sites confirmed via git grep at the pinned commit. Fix: convert to #[expect(clippy::too_many_arguments, reason = \"...\")] per M-LINT-OVERRIDE-EXPECT, or reduce arity via a request struct." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/writer/task_ops.rs, crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs (plus workspace-wide grep for #[allow(clippy:: without reason on files touched by AZ.2)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T02:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ-S2 ;
+  triage:foundAt "2026-09-10T02:11:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ1-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ1-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-7> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 155 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] (task_ops.rs line 155)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "ba205bbe91de5275b2c9848de591c8936f812fc0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ1/ba205bbe> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ1-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 370 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] (task_ops.rs line 370)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "ba205bbe91de5275b2c9848de591c8936f812fc0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ1/ba205bbe> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ1-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 459 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] (task_ops.rs line 459)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "ba205bbe91de5275b2c9848de591c8936f812fc0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ1/ba205bbe> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ1-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/batch.rs" ;
+  triage:line 3 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] pub(crate) fn writer_loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "ba205bbe91de5275b2c9848de591c8936f812fc0" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ1/ba205bbe> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 558 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] fn insert_assignment_attempt_for" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f25> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 680 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] fn supersede_v2" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f25> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 933 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] fn append_v2_event_for" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f25> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs" ;
+  triage:line 155 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] fn refresh_task_assignment" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f25> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs" ;
+  triage:line 370 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] fn acknowledge_completed_assignment" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f25> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs" ;
+  triage:line 459 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] fn append_task_event" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f25> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ2-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/batch.rs" ;
+  triage:line 3 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] pub(crate) fn writer_loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f25> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 618 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] (task_ops.rs line 618)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b24e7f1a44353801e1a830997f30b2831d5e0dee" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b24e7f1a> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 740 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] (task_ops.rs line 740)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b24e7f1a44353801e1a830997f30b2831d5e0dee" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b24e7f1a> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 993 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] (task_ops.rs line 993)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b24e7f1a44353801e1a830997f30b2831d5e0dee" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b24e7f1a> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs" ;
+  triage:line 155 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] fn refresh_task_assignment" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b24e7f1a44353801e1a830997f30b2831d5e0dee" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b24e7f1a> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs" ;
+  triage:line 370 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] fn acknowledge_completed_assignment" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b24e7f1a44353801e1a830997f30b2831d5e0dee" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b24e7f1a> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs" ;
+  triage:line 459 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] fn append_task_event" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b24e7f1a44353801e1a830997f30b2831d5e0dee" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b24e7f1a> .
+
+<urn:atm:triage:occurrence/AZS2-RBP-001/AZ3-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/batch.rs" ;
+  triage:line 3 ;
+  triage:snippet "#[allow(clippy::too_many_arguments)] pub(crate) fn writer_loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b24e7f1a44353801e1a830997f30b2831d5e0dee" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b24e7f1a> .
+
+<urn:atm:triage:worktree/AZ1/ba205bbe>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ1" ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "ba205bbe91de5275b2c9848de591c8936f812fc0" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AZ2/f04a9f25>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ2" ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AZ3/b24e7f1a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b24e7f1a44353801e1a830997f30b2831d5e0dee" ;
+  triage:orderIndex 3 .

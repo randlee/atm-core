@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS2-QA-004>
+  a triage:Finding ;
+  triage:findingId "AZS2-QA-004" ;
+  triage:title "phase-plan vs sprint-doc status conflict for AZ.2" ;
+  triage:description "docs/plans/phase-az/phase-az-plan.md:122 (says AZ.2 complete) vs. docs/plans/phase-az/sprint-AZ.2-task-domain-storage.md:8 (frontmatter status: planned, all D1-D6 checkboxes literally [ ]). Documentation-conformance only; code completeness is separately assessed by the Blocking findings (deliverables 2/6 = 33.3%). Fix: reconcile status fields once the Blocking/Important findings above are resolved and QA-2 confirms closure." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T02:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ-S2 ;
+  triage:foundAt "2026-09-10T02:11:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-QA-004/plan-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-QA-004/sprint-doc-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS2-QA-004/plan-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-az/phase-az-plan.md" ;
+  triage:line 122 ;
+  triage:snippet "AZ.2 marked complete in the phase plan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "ab97a015518bb6885cc0311f71a22241616c2282" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/ab97a015> .
+
+<urn:atm:triage:occurrence/AZS2-QA-004/sprint-doc-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-az/sprint-AZ.2-task-domain-storage.md" ;
+  triage:line 8 ;
+  triage:snippet "frontmatter status: planned, D1-D6 checkboxes all [ ]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "ab97a015518bb6885cc0311f71a22241616c2282" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/ab97a015> .
+
+<urn:atm:triage:worktree/AZ3/ab97a015>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "ab97a015518bb6885cc0311f71a22241616c2282" ;
+  triage:orderIndex 3 .

@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS2-QA-001>
+  a triage:Finding ;
+  triage:findingId "AZS2-QA-001" ;
+  triage:title "Assigned -> Close(Failed) transition not in the Legal Transitions table" ;
+  triage:description "crates/atm-storage/src/task_state.rs:107-108 -- lifecycle_transition() accepts (Assigned, Close(Failed)) -> Closed(Failed). This transition does not appear as a row in sprint AZ.2's own Legal Transitions table (only Assigned -> {start, legacy complete, block, reassign, abort} listed). AC1 states the pure table 'accepts every listed transition and rejects every unlisted transition.' Note: docs/task-lifecycle-schema.md:21 documents this exact behavior as intentional, so code is internally consistent with a second authoritative doc -- the defect is the sprint doc's own table is missing this row, not that the code is unsafe. Still a literal AC1 violation as written. Fix: add the missing Assigned|fail|Closed(Failed) row to the sprint doc's Legal Transitions table (and reconcile AC1 text), or remove the code path -- needs an explicit sprint-doc decision." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/task_state.rs, docs/plans/phase-az/sprint-AZ.2-task-domain-storage.md, docs/task-lifecycle-schema.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T02:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ-S2 ;
+  triage:foundAt "2026-09-10T02:11:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-QA-001/AZ2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-QA-001/AZ3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS2-QA-001/AZ2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 107 ;
+  triage:snippet "lifecycle_transition() accepts (Assigned, Close(Failed)) -> Closed(Failed)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f25f397a67734beda5a414e2d4723eaef83> .
+
+<urn:atm:triage:occurrence/AZS2-QA-001/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 107 ;
+  triage:snippet "lifecycle_transition() accepts (Assigned, Close(Failed)) -> Closed(Failed)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "ab97a015518bb6885cc0311f71a22241616c2282" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/ab97a015518bb6885cc0311f71a22241616c2282> .
+
+<urn:atm:triage:worktree/AZ1/ba205bbe91de5275b2c9848de591c8936f812fc0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ1" ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "ba205bbe91de5275b2c9848de591c8936f812fc0" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AZ2/f04a9f25f397a67734beda5a414e2d4723eaef83>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ2" ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AZ3/ab97a015518bb6885cc0311f71a22241616c2282>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "ab97a015518bb6885cc0311f71a22241616c2282" ;
+  triage:orderIndex 3 .
