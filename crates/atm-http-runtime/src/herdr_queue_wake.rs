@@ -1423,8 +1423,8 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(3), started.notified())
             .await
             .expect("a reminder reaches the emitter");
-        // A real barrier makes the pre-fix duplicate observable: both
-        // claimants must enter the emitter before either is released.
+        // The barrier gates the legitimate dispatch path; the final count
+        // after both spawned tasks join is the proof that only one emitted.
         assert_eq!(emissions.load(Ordering::SeqCst), 1);
         release.notify_waiters();
         first.await.expect("first dispatch join");

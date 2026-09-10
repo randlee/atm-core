@@ -428,14 +428,14 @@ fn prune_terminal_rows(connection: &Connection) -> rusqlite::Result<()> {
         now_unix_ms().saturating_sub(ATTENTION_MAX_AGE_DAYS.saturating_mul(24 * 60 * 60 * 1_000));
     connection.execute(
         "DELETE FROM attention_opportunities
-         WHERE status <> 'reserved' AND created_at < ?1",
+         WHERE status IN ('delivered', 'stale') AND created_at < ?1",
         params![cutoff],
     )?;
     connection.execute(
         "DELETE FROM attention_opportunities
          WHERE rowid IN (
              SELECT rowid FROM attention_opportunities
-             WHERE status <> 'reserved'
+             WHERE status IN ('delivered', 'stale')
              ORDER BY created_at DESC, rowid DESC
              LIMIT -1 OFFSET ?1
          )",
@@ -851,8 +851,181 @@ mod tests {
                 .opportunity
                 .id,
             retry.opportunity.id,
-            "the later opportunity stays idempotent while a terminal prior reservation does not suppress it"
+            "the later opportunity remains idempotent while the terminal prior reservation suppresses dispatch"
         );
+    }
+
+    #[test]
+    fn fenix_case3_prune_must_not_rearm_a_terminal_item() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        let opportunity = IdleOpportunity {
+            id: IdleOpportunityId::new(),
+            member: member(),
+            roster_state_revision: RosterStateRevision::from_raw(7),
+        };
+        let reservation = store
+            .reserve(AttentionReservationRequest {
+                opportunity: opportunity.clone(),
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: AttentionItem::EphemeralMessage {
+                    member: member(),
+                    message_id: AtmMessageId::new(),
+                },
+            })
+            .expect("reserve");
+        for _ in 1..=5 {
+            store
+                .finalize(AttentionFinalizeRequest {
+                    member: member(),
+                    opportunity_id: opportunity.id,
+                    outcome: AttentionFinalizeOutcome::RetryableFailure,
+                    lease_generation: reservation.lease_generation,
+                })
+                .expect("record retryable failure");
+        }
+
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE attention_opportunities SET created_at = 0 WHERE opportunity_id = ?1",
+                        params![opportunity.id.to_string()],
+                    )
+                    .expect("age the tombstone");
+                Ok(())
+            })
+            .expect("age the tombstone");
+
+        let later = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(8),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                item: reservation.item.clone(),
+            })
+            .expect("later reserve");
+        assert_eq!(
+            later.status,
+            AttentionReservationStatus::PermanentlyFailed,
+            "pruning must not re-arm a permanently failed attention item"
+        );
+        assert_eq!(later.failed_attempts, MAX_NUDGE_ATTEMPTS);
+        assert_eq!(later.disposition, AttentionClaimDisposition::Observed);
+    }
+
+    #[test]
+    fn fenix_case5_new_assignment_attempt_is_eligible_with_a_fresh_budget() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        let task_id: atm_storage::TaskId = "rearm-on-reassign".parse().expect("task id");
+        let assignment_message_id = AtmMessageId::new();
+        let first_attempt = AttentionItem::PersistentTaskReminder {
+            member: member(),
+            task_id: task_id.clone(),
+            attempt: AssignmentAttempt::new(1).expect("attempt"),
+            assignment_message_id,
+        };
+        let first_opportunity = IdleOpportunity {
+            id: IdleOpportunityId::new(),
+            member: member(),
+            roster_state_revision: RosterStateRevision::from_raw(1),
+        };
+        let reserved = store
+            .reserve(AttentionReservationRequest {
+                opportunity: first_opportunity.clone(),
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: first_attempt,
+            })
+            .expect("reserve attempt 1");
+        for _ in 1..=MAX_NUDGE_ATTEMPTS {
+            store
+                .finalize(AttentionFinalizeRequest {
+                    member: member(),
+                    opportunity_id: first_opportunity.id,
+                    outcome: AttentionFinalizeOutcome::RetryableFailure,
+                    lease_generation: reserved.lease_generation,
+                })
+                .expect("record retryable failure");
+        }
+
+        let next_attempt = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(2),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                item: AttentionItem::PersistentTaskReminder {
+                    member: member(),
+                    task_id,
+                    attempt: AssignmentAttempt::new(2).expect("attempt"),
+                    assignment_message_id,
+                },
+            })
+            .expect("a new assignment attempt reserves independently");
+        assert_eq!(next_attempt.status, AttentionReservationStatus::Reserved);
+        assert_eq!(next_attempt.failed_attempts, 0);
+        assert_eq!(
+            next_attempt.disposition,
+            AttentionClaimDisposition::Acquired
+        );
+        assert_ne!(next_attempt.opportunity.id, first_opportunity.id);
+    }
+
+    #[test]
+    fn fenix_case6_a_new_message_id_is_independently_eligible() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        let exhausted_opportunity = IdleOpportunity {
+            id: IdleOpportunityId::new(),
+            member: member(),
+            roster_state_revision: RosterStateRevision::from_raw(1),
+        };
+        let reserved = store
+            .reserve(AttentionReservationRequest {
+                opportunity: exhausted_opportunity.clone(),
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: AttentionItem::EphemeralMessage {
+                    member: member(),
+                    message_id: AtmMessageId::new(),
+                },
+            })
+            .expect("reserve first message");
+        for _ in 1..=MAX_NUDGE_ATTEMPTS {
+            store
+                .finalize(AttentionFinalizeRequest {
+                    member: member(),
+                    opportunity_id: exhausted_opportunity.id,
+                    outcome: AttentionFinalizeOutcome::RetryableFailure,
+                    lease_generation: reserved.lease_generation,
+                })
+                .expect("record retryable failure");
+        }
+
+        let other = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(2),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                item: AttentionItem::EphemeralMessage {
+                    member: member(),
+                    message_id: AtmMessageId::new(),
+                },
+            })
+            .expect("a different message reserves independently");
+        assert_eq!(other.status, AttentionReservationStatus::Reserved);
+        assert_eq!(other.failed_attempts, 0);
+        assert_eq!(other.disposition, AttentionClaimDisposition::Acquired);
+        assert_ne!(other.opportunity.id, exhausted_opportunity.id);
     }
 
     #[test]
@@ -1022,7 +1195,7 @@ mod tests {
             .with_connection(|connection| {
                 let terminal_count: i64 = connection
                     .query_row(
-                        "SELECT COUNT(*) FROM attention_opportunities WHERE status <> 'reserved'",
+                        "SELECT COUNT(*) FROM attention_opportunities WHERE status IN ('delivered', 'stale')",
                         [],
                         |row| row.get(0),
                     )
