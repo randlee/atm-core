@@ -78,11 +78,12 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         &self,
         team: TeamName,
         member: Option<AgentName>,
+        limit: Option<usize>,
         deadline: ReadDeadline,
     ) -> Result<Vec<LogicalTaskRow>, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                list_logical_tasks(connection, target, &team, member.as_ref())
+                list_logical_tasks(connection, target, &team, member.as_ref(), limit)
                     .map_err(read_lane_error)
             })
             .await
@@ -119,11 +120,13 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         &self,
         team: TeamName,
         task_id: TaskId,
+        limit: Option<usize>,
         deadline: ReadDeadline,
     ) -> Result<Vec<TaskLifecycleEventRow>, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                list_lifecycle_events(connection, target, &team, &task_id).map_err(read_lane_error)
+                list_lifecycle_events(connection, target, &team, &task_id, limit)
+                    .map_err(read_lane_error)
             })
             .await
     }
@@ -181,6 +184,7 @@ fn list_logical_tasks(
     target: &SharedDbTarget,
     team: &TeamName,
     member: Option<&AgentName>,
+    limit: Option<usize>,
 ) -> Result<Vec<LogicalTaskRow>, AtmError> {
     let mut statement = connection
         .prepare(
@@ -191,12 +195,17 @@ fn list_logical_tasks(
              ORDER BY CASE state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 WHEN 'blocked' THEN 2 ELSE 3 END,
                       CASE WHEN state = 'assigned' THEN CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END ELSE 0 END,
                       CASE WHEN state = 'closed' THEN updated_at END DESC,
-                      original_assigned_at ASC, task_id ASC",
+                      original_assigned_at ASC, task_id ASC
+             LIMIT ?3",
         )
         .map_err(|error| sqlite_error(target, "failed to prepare logical task list", error))?;
     statement
         .query_map(
-            params![team.as_str(), member.map(AgentName::as_str)],
+            params![
+                team.as_str(),
+                member.map(AgentName::as_str),
+                limit.map_or(i64::MAX, |value| value as i64),
+            ],
             decode_logical_task_row,
         )
         .map_err(|error| sqlite_error(target, "failed to list logical tasks", error))?
@@ -258,16 +267,21 @@ fn list_lifecycle_events(
     target: &SharedDbTarget,
     team: &TeamName,
     task_id: &TaskId,
+    limit: Option<usize>,
 ) -> Result<Vec<TaskLifecycleEventRow>, AtmError> {
     let mut statement = connection
         .prepare(
             "SELECT team, task_id, seq, operation_id, attempt, at, actor, event, outcome, related_task_id, detail
-             FROM task_events_v2 WHERE team = ?1 AND task_id = ?2 ORDER BY seq ASC",
+             FROM task_events_v2 WHERE team = ?1 AND task_id = ?2 ORDER BY seq ASC LIMIT ?3",
         )
         .map_err(|error| sqlite_error(target, "failed to prepare lifecycle event list", error))?;
     statement
         .query_map(
-            params![team.as_str(), task_id.as_str()],
+            params![
+                team.as_str(),
+                task_id.as_str(),
+                limit.map_or(i64::MAX, |value| value as i64),
+            ],
             decode_lifecycle_event,
         )
         .map_err(|error| sqlite_error(target, "failed to list lifecycle events", error))?

@@ -940,6 +940,7 @@ pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
         &self,
         _team: TeamName,
         _member: Option<AgentName>,
+        _limit: Option<usize>,
         _deadline: ReadDeadline,
     ) -> Result<Vec<crate::LogicalTaskRow>, ReadLaneError> {
         Err(ReadLaneError::Unavailable {
@@ -977,6 +978,7 @@ pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
         &self,
         _team: TeamName,
         _task_id: TaskId,
+        _limit: Option<usize>,
         _deadline: ReadDeadline,
     ) -> Result<Vec<crate::TaskLifecycleEventRow>, ReadLaneError> {
         Err(ReadLaneError::Unavailable {

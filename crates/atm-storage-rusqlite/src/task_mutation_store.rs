@@ -332,7 +332,7 @@ mod tests {
             .expect("cancel");
         let deadline = ReadDeadline::new(Duration::from_secs(1)).expect("deadline");
         let events = reader
-            .list_task_lifecycle_events(team(), task_id, deadline)
+            .list_task_lifecycle_events(team(), task_id, None, deadline)
             .await
             .expect("events");
         assert_eq!(
@@ -605,7 +605,7 @@ mod tests {
         }
         let deadline = || ReadDeadline::new(Duration::from_secs(1)).expect("deadline");
         let list = reader
-            .list_logical_tasks(team(), Some(worker.agent().clone()), deadline())
+            .list_logical_tasks(team(), Some(worker.agent().clone()), None, deadline())
             .await
             .expect("logical list");
         assert_eq!(
@@ -721,7 +721,7 @@ mod tests {
             ))
         );
         let rows = reader
-            .list_logical_tasks(team(), None, deadline())
+            .list_logical_tasks(team(), None, None, deadline())
             .await
             .expect("logical rows");
         assert!(rows.iter().any(|row| {
