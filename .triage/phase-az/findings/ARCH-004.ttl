@@ -8,31 +8,43 @@
   a triage:Finding ;
   triage:findingId "ARCH-004" ;
   triage:title "stale MemberKey doc comment references removed private path" ;
-  triage:description "crates/atm-storage/src/types.rs:1118-1119 -- doc comment on MemberKey references a 'private atm_http_runtime::runtime_health::MemberKey' that no longer exists anywhere in the workspace (confirmed via full-workspace grep: exactly one MemberKey definition exists). The comment describes a migration from a type that has already been fully removed. Discovered during PR #1381 QA but deferred to phase-az as documentation-consistency debt for a future sprint." ;
+  triage:description "crates/atm-storage/src/types.rs -- doc comment on MemberKey references a private 'atm_http_runtime::runtime_health::MemberKey' that no longer exists anywhere in the workspace (confirmed via full-workspace grep: exactly one MemberKey definition exists). The comment describes a migration from a type that has already been fully removed. Discovered during PR #1381 QA. Re-correlated 2026-09-10 by team-lead: solar already fixed the fix/1378-canonical-agent-state copy (c397064e5, tagged 'Finding: ARCH-004'), but feature/az3-task-command-handoff carries an independently-diverged copy of the same stale comment (branches share no merge relationship at this point) -- still open there at line 1008. Promoted to feature/az3-task-command-handoff (top of the current AZ stack) per team-lead's fix-on-top-of-stack strategy; not deferred to a future sprint." ;
   triage:phaseId "phase-az" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "documentation-consistency" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-09-09T20:45:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.2 ;
   triage:foundAt "2026-09-09T20:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/PR1381-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/AZ3-1> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ARCH-004/PR1381-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/types.rs" ;
-  triage:line 1118 ;
-  triage:snippet "/// This inner enum is the MemberKey backing for storage. The \"private atm_http_runtime::runtime_health::MemberKey\" migration is complete." ;
+  triage:line 1008 ;
+  triage:snippet "`atm_http_runtime::runtime_health::MemberKey`, whose migration onto this type is a non-blocking follow-up." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/1378-canonical-agent-state" ;
+  triage:headSha "c397064e56b0a01e5e6e04d2f5c7d8e5c3c1d0e9" ;
+  triage:occursIn <urn:atm:triage:worktree/PR1381/main> .
+
+<urn:atm:triage:occurrence/ARCH-004/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/types.rs" ;
+  triage:line 1008 ;
+  triage:snippet "`atm_http_runtime::runtime_health::MemberKey`, whose migration onto this type is a non-blocking follow-up." ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "fix/1378-canonical-agent-state" ;
-  triage:headSha "PR#1381" ;
-  triage:occursIn <urn:atm:triage:worktree/PR1381/main> .
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f> .
 
 <urn:atm:triage:worktree/PR1381/main>
   a triage:WorktreeSnapshot ;
@@ -41,9 +53,9 @@
   triage:headSha "PR#1381" ;
   triage:orderIndex 0 .
 
-<urn:atm:triage:worktree/AZ2/latest>
+<urn:atm:triage:worktree/AZ3/6937c547f>
   a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/AZ2" ;
-  triage:branch "feature/az2-task-domain-storage" ;
-  triage:headSha "latest" ;
-  triage:orderIndex 2 .
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:orderIndex 3 .
