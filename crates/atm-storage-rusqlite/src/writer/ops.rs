@@ -1,6 +1,7 @@
 use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
-use super::task_ops::{apply_task_acknowledgement, apply_task_message};
+use super::task_legacy_ops::{apply_task_acknowledgement, apply_task_message};
+use super::task_ops::execute_task_mutation;
 use crate::search_schema::{
     InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
     sync_template_projection,
@@ -15,8 +16,8 @@ use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DiagnosticEvent,
-    MessageWriteOrigin, TemplateMessageAdmission, TemplateRegistration,
-    TemplateRegistrationOutcome,
+    MessageWriteOrigin, TaskMutationOutcome, TaskMutationRequest, TemplateMessageAdmission,
+    TemplateRegistration, TemplateRegistrationOutcome,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
@@ -37,6 +38,8 @@ type DecomposedWorkflowColumns<'a> = (
 
 #[derive(Clone)]
 pub(crate) enum WriteOp {
+    /// Canonical v2 logical-task mutation, executed by the sole writer queue.
+    TaskMutation(Box<TaskMutationRequest>),
     /// The sole mutation admitted from the asynchronous mailbox-read path.
     /// It never carries immutable message contents or performs selection.
     ApplyReadDisplayState {
@@ -70,6 +73,10 @@ pub(crate) enum WriteOp {
 impl std::fmt::Debug for WriteOp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::TaskMutation(request) => formatter
+                .debug_tuple("TaskMutation")
+                .field(&request.task_id)
+                .finish(),
             Self::ApplyReadDisplayState {
                 mailbox,
                 message_ids,
@@ -112,6 +119,7 @@ impl std::fmt::Debug for WriteOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
+    TaskMutation(TaskMutationOutcome),
     ReadDisplayStateApplied,
     UpsertMessage {
         inserted: bool,
@@ -139,6 +147,8 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
+        WriteOp::TaskMutation(request) => execute_task_mutation(request, connection, cache, target)
+            .map(WriteOpResult::TaskMutation),
         WriteOp::ApplyReadDisplayState {
             mailbox,
             message_ids,
@@ -693,6 +703,37 @@ pub(super) fn execute_upsert_message(
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
+    execute_upsert_message_with_task_projection(record, provenance, connection, cache, target, true)
+}
+
+/// Persists a message prepared by the canonical v2 task mutation.  The
+/// mutation already owns the lifecycle state change, so routing this record
+/// through the retained v1 message/task adapter would create a second,
+/// divergent transition path.
+pub(super) fn execute_task_mutation_message_upsert(
+    record: &Message,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    execute_upsert_message_with_task_projection(
+        record,
+        MessageWriteOrigin::Local,
+        connection,
+        cache,
+        target,
+        false,
+    )
+}
+
+fn execute_upsert_message_with_task_projection(
+    record: &Message,
+    provenance: MessageWriteOrigin,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+    apply_legacy_task_projection: bool,
+) -> Result<WriteOpResult, AtmError> {
     let values = prepare_message_insert_values(record)?;
     let inserted = cache
         .insert_message_row(
@@ -748,7 +789,7 @@ pub(super) fn execute_upsert_message(
     } else {
         Some(Box::new(load_existing_message(record, connection, target)?))
     };
-    if inserted && provenance == MessageWriteOrigin::Local {
+    if inserted && apply_legacy_task_projection && provenance == MessageWriteOrigin::Local {
         apply_task_message(record, connection, cache, target)?;
     }
     Ok(WriteOpResult::UpsertMessage { inserted, existing })

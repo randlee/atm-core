@@ -1,6 +1,7 @@
 //! Backend-neutral task ledger types and the pure task state machine.
 
 use serde::{Deserialize, Serialize};
+use ulid::Ulid;
 
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
@@ -29,6 +30,287 @@ impl TaskState {
             Self::Active => "active",
             Self::Complete => "complete",
         }
+    }
+}
+
+/// Canonical v2 state for a logical task. `TaskState` above remains the
+/// narrow v1 compatibility projection until the approved coexistence window
+/// ends; new task-domain code must use this richer state.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskLifecycleState {
+    Assigned,
+    Active,
+    Blocked,
+    Closed(TaskOutcome),
+}
+
+/// A durable terminal result is carried only by `Closed`, making an open
+/// lifecycle state with terminal metadata unrepresentable in Rust.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskOutcome {
+    Succeeded,
+    Failed,
+    Aborted(TaskAbortReason),
+}
+
+/// Pure lifecycle input used by every storage adapter before it changes a
+/// durable task row.  Message preparation is intentionally absent: it is an
+/// admission concern owned by the mutation contract, not state-machine data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskLifecycleAction {
+    Assign,
+    Start,
+    Block,
+    Unblock,
+    Reassign,
+    Reopen,
+    Close(TaskOutcome),
+    LegacyCloseSucceeded,
+    Supersede { successor_task_id: TaskId },
+}
+
+/// Result of applying [`TaskLifecycleAction`] to a current logical state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskLifecycleTransition {
+    To(TaskLifecycleState),
+}
+
+/// The canonical v2 legal-transition table.  In particular, ordinary close
+/// does not let an unstarted assignment claim success: the retained
+/// `LegacyCloseSucceeded` adapter is the sole compatibility route for that
+/// historical behavior.
+pub fn lifecycle_transition(
+    current: Option<&TaskLifecycleState>,
+    action: &TaskLifecycleAction,
+) -> Result<TaskLifecycleTransition, TaskRejected> {
+    use TaskLifecycleAction as Action;
+    use TaskLifecycleState as State;
+
+    match (current, action) {
+        (None, Action::Assign) => Ok(TaskLifecycleTransition::To(State::Assigned)),
+        (Some(State::Assigned), Action::Start) => Ok(TaskLifecycleTransition::To(State::Active)),
+        (Some(State::Assigned), Action::Block) | (Some(State::Active), Action::Block) => {
+            Ok(TaskLifecycleTransition::To(State::Blocked))
+        }
+        (Some(State::Blocked), Action::Unblock) => Ok(TaskLifecycleTransition::To(State::Assigned)),
+        (Some(State::Assigned | State::Blocked), Action::Reassign) => {
+            Ok(TaskLifecycleTransition::To(State::Assigned))
+        }
+        (Some(State::Closed(_)), Action::Reassign | Action::Reopen) => {
+            Ok(TaskLifecycleTransition::To(State::Assigned))
+        }
+        (Some(State::Assigned), Action::LegacyCloseSucceeded) => Ok(TaskLifecycleTransition::To(
+            State::Closed(TaskOutcome::Succeeded),
+        )),
+        (Some(State::Assigned), Action::Close(TaskOutcome::Failed))
+        | (Some(State::Active), Action::Close(TaskOutcome::Succeeded | TaskOutcome::Failed)) => {
+            let Action::Close(outcome) = action else {
+                unreachable!("matched a close action")
+            };
+            Ok(TaskLifecycleTransition::To(State::Closed(outcome.clone())))
+        }
+        (
+            Some(State::Assigned | State::Active | State::Blocked),
+            Action::Close(TaskOutcome::Aborted(TaskAbortReason::Cancelled)),
+        ) => Ok(TaskLifecycleTransition::To(State::Closed(
+            TaskOutcome::Aborted(TaskAbortReason::Cancelled),
+        ))),
+        (
+            Some(State::Assigned | State::Active | State::Blocked),
+            Action::Supersede { successor_task_id },
+        ) => Ok(TaskLifecycleTransition::To(State::Closed(
+            TaskOutcome::Aborted(TaskAbortReason::Superseded {
+                successor_task_id: successor_task_id.clone(),
+            }),
+        ))),
+        _ => Err(TaskRejected::new("illegal task lifecycle transition")),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskAbortReason {
+    Cancelled,
+    Superseded { successor_task_id: TaskId },
+}
+
+/// Explicit durable sort key for open task lists.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskPriority {
+    High,
+    Normal,
+    Low,
+}
+
+impl TaskPriority {
+    #[must_use]
+    pub const fn rank(self) -> u8 {
+        match self {
+            Self::High => 0,
+            Self::Normal => 1,
+            Self::Low => 2,
+        }
+    }
+}
+
+/// One-based immutable assignment-attempt ordinal.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AssignmentAttempt(u32);
+
+impl AssignmentAttempt {
+    pub const FIRST: Self = Self(1);
+
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+
+    pub fn new(value: u32) -> Result<Self, TaskRejected> {
+        if value == 0 {
+            return Err(TaskRejected::new(
+                "task assignment attempt must be one-based",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    pub fn next(self) -> Result<Self, TaskRejected> {
+        self.0
+            .checked_add(1)
+            .map(Self)
+            .ok_or_else(|| TaskRejected::new("task assignment attempt overflow"))
+    }
+}
+
+/// Canonical v2 current projection.  The older [`TaskRow`] below remains the
+/// deliberately narrow v1 compatibility shape for the approved coexistence
+/// window; new callers must use this type.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LogicalTaskRow {
+    pub team: TeamName,
+    pub task_id: TaskId,
+    pub current_assignee: AgentName,
+    pub state: TaskLifecycleState,
+    pub priority: TaskPriority,
+    pub original_assigned_at: IsoTimestamp,
+    pub current_attempt: AssignmentAttempt,
+    pub reminder_ordinal: u64,
+    pub revision: u64,
+    pub updated_at: IsoTimestamp,
+}
+
+/// Immutable assignment history for one logical task.  It deliberately
+/// references the canonical message/template records rather than carrying
+/// rendered text, template bytes, variables, or a copied description.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskAssignmentAttempt {
+    pub team: TeamName,
+    pub task_id: TaskId,
+    pub attempt: AssignmentAttempt,
+    pub assignee: AgentName,
+    pub assigner: AgentName,
+    pub assignment_message_id: AtmMessageId,
+    pub template_sha: Option<crate::types::TemplateSha>,
+    pub assigned_at: IsoTimestamp,
+}
+
+/// Append-only v2 task-lifecycle event vocabulary.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskLifecycleEventKind {
+    Assigned,
+    Started,
+    Blocked,
+    Unblocked,
+    Reassigned,
+    Reopened,
+    Closed,
+    Superseded,
+    Rejected,
+    Reminded,
+    LeadNotified,
+    Migrated,
+    MigratedActiveConflictDemotion,
+    LegacyCloseSucceeded,
+    LegacyV1Updated,
+}
+
+impl TaskLifecycleEventKind {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Assigned => "assigned",
+            Self::Started => "started",
+            Self::Blocked => "blocked",
+            Self::Unblocked => "unblocked",
+            Self::Reassigned => "reassigned",
+            Self::Reopened => "reopened",
+            Self::Closed => "closed",
+            Self::Superseded => "superseded",
+            Self::Rejected => "rejected",
+            Self::Reminded => "reminded",
+            Self::LeadNotified => "lead_notified",
+            Self::Migrated => "migrated",
+            Self::MigratedActiveConflictDemotion => "migrated_active_conflict_demotion",
+            Self::LegacyCloseSucceeded => "legacy_close_succeeded",
+            Self::LegacyV1Updated => "legacy_v1_updated",
+        }
+    }
+}
+
+/// Immutable v2 audit row.  As with [`TaskAssignmentAttempt`], no rendered
+/// task body is persisted in this projection.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskLifecycleEventRow {
+    pub team: TeamName,
+    pub task_id: TaskId,
+    pub seq: u64,
+    pub operation_id: Option<TaskOperationId>,
+    pub attempt: Option<AssignmentAttempt>,
+    pub at: IsoTimestamp,
+    pub actor: AgentName,
+    pub event: TaskLifecycleEventKind,
+    pub outcome: Option<TaskOutcome>,
+    pub related_task_id: Option<TaskId>,
+    pub detail: Option<String>,
+}
+
+/// Client-generated idempotency identity for a task operation. It is
+/// purposefully distinct from `AtmMessageId`: one operation can produce
+/// messages, but it never borrows a message identity.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct TaskOperationId(Ulid);
+
+impl TaskOperationId {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Ulid::new())
+    }
+
+    #[must_use]
+    pub const fn as_ulid(self) -> Ulid {
+        self.0
+    }
+
+    pub fn parse(value: &str) -> Result<Self, TaskRejected> {
+        Ulid::from_string(value)
+            .map(Self)
+            .map_err(|_| TaskRejected::new("task operation id is invalid"))
+    }
+}
+
+impl Default for TaskOperationId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for TaskOperationId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
     }
 }
 
@@ -219,8 +501,9 @@ pub struct TaskEventRow {
 #[cfg(test)]
 mod tests {
     use super::{
-        TaskEvent, TaskEventKind, TaskEventMarker, TaskRow, TaskState, Transition, admit,
-        transition,
+        AssignmentAttempt, TaskAbortReason, TaskEvent, TaskEventKind, TaskEventMarker,
+        TaskLifecycleAction, TaskLifecycleState, TaskLifecycleTransition, TaskOutcome,
+        TaskPriority, TaskRow, TaskState, Transition, admit, lifecycle_transition, transition,
     };
     use crate::schema::AtmMessageId;
     use crate::task_store::ReminderOutcome;
@@ -281,6 +564,81 @@ mod tests {
             );
             assert_eq!(value.as_str(), expected);
         }
+    }
+
+    #[test]
+    fn v2_lifecycle_keeps_terminal_metadata_inside_closed() {
+        let successor = "AZ.3".parse().expect("task id");
+        let state = TaskLifecycleState::Closed(TaskOutcome::Aborted(TaskAbortReason::Superseded {
+            successor_task_id: successor,
+        }));
+        assert_eq!(
+            serde_json::to_string(&state).expect("serialize lifecycle state"),
+            r#"{"closed":{"aborted":{"superseded":{"successor_task_id":"AZ.3"}}}}"#
+        );
+        assert_eq!(TaskPriority::High.rank(), 0);
+        assert_eq!(TaskPriority::Normal.rank(), 1);
+        assert_eq!(TaskPriority::Low.rank(), 2);
+    }
+
+    #[test]
+    fn v2_lifecycle_transition_table_preserves_the_legacy_success_boundary() {
+        let assigned = TaskLifecycleState::Assigned;
+        let active = TaskLifecycleState::Active;
+        let blocked = TaskLifecycleState::Blocked;
+        let closed = TaskLifecycleState::Closed(TaskOutcome::Failed);
+
+        assert_eq!(
+            lifecycle_transition(None, &TaskLifecycleAction::Assign),
+            Ok(TaskLifecycleTransition::To(TaskLifecycleState::Assigned))
+        );
+        assert_eq!(
+            lifecycle_transition(Some(&assigned), &TaskLifecycleAction::Start),
+            Ok(TaskLifecycleTransition::To(TaskLifecycleState::Active))
+        );
+        assert_eq!(
+            lifecycle_transition(Some(&blocked), &TaskLifecycleAction::Unblock),
+            Ok(TaskLifecycleTransition::To(TaskLifecycleState::Assigned))
+        );
+        assert_eq!(
+            lifecycle_transition(Some(&closed), &TaskLifecycleAction::Reopen),
+            Ok(TaskLifecycleTransition::To(TaskLifecycleState::Assigned))
+        );
+        assert!(
+            lifecycle_transition(
+                Some(&assigned),
+                &TaskLifecycleAction::Close(TaskOutcome::Succeeded)
+            )
+            .is_err()
+        );
+        assert_eq!(
+            lifecycle_transition(Some(&assigned), &TaskLifecycleAction::LegacyCloseSucceeded),
+            Ok(TaskLifecycleTransition::To(TaskLifecycleState::Closed(
+                TaskOutcome::Succeeded
+            )))
+        );
+        assert!(
+            lifecycle_transition(
+                Some(&blocked),
+                &TaskLifecycleAction::Close(TaskOutcome::Failed)
+            )
+            .is_err()
+        );
+        assert_eq!(
+            lifecycle_transition(
+                Some(&active),
+                &TaskLifecycleAction::Close(TaskOutcome::Succeeded)
+            ),
+            Ok(TaskLifecycleTransition::To(TaskLifecycleState::Closed(
+                TaskOutcome::Succeeded
+            )))
+        );
+    }
+
+    #[test]
+    fn assignment_attempt_is_one_based_and_checked() {
+        assert_eq!(AssignmentAttempt::FIRST.get(), 1);
+        assert_eq!(AssignmentAttempt::FIRST.next().expect("second").get(), 2);
     }
 
     fn row(task_id: &str, state: TaskState) -> TaskRow {

@@ -87,6 +87,12 @@ CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
 -- so it cannot serve that global-key lookup without scanning a growing table.
 CREATE INDEX IF NOT EXISTS idx_mail_messages_message_key
     ON mail_messages(message_key);
+
+-- Task lifecycle transitions invalidate every task-linked pending nudge via
+-- `(team, taskId)`.  This belongs in the mailbox schema owner's canonical
+-- index batch so fresh databases and rebuilds remain identical.
+CREATE INDEX IF NOT EXISTS idx_mail_messages_task_id
+    ON mail_messages(team, json_extract(envelope_json, '$.taskId'));
 "#
     };
 }

@@ -172,6 +172,20 @@ Error codes should describe the failure class, not a specific prose message.
   daemon-originated messages`
 - `ATM_TASK_STALLED` — check the assignee or close the task: `atm send <assignee>
   --task-complete <task_id> --stdin`
+- `ATM_TASK_TRANSITION_INVALID` — reload the task lifecycle and choose a legal
+  transition before retrying.
+- `ATM_TASK_REVISION_STALE` — reload the task and retry with its current
+  revision and a new operation id.
+- `ATM_TASK_OPERATION_CONFLICT` — an operation id may only replay identical
+  task-mutation input.
+- `ATM_TASK_ACTIVE_CONFLICT` — complete, block, or reassign the member's active
+  task before starting another.
+- `ATM_TASK_TERMINAL_METADATA_INVALID` — provide a terminal outcome compatible
+  with the current task state.
+- `ATM_TASK_COMPATIBILITY_FAILED` — inspect retained v1/v2 migration
+  diagnostics before retrying.
+- `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` — choose a same-host assignee;
+  cross-host task handoff is not transactionally supported.
 - `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to
   its Herdr agent and answer the prompt`
 - `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` — Herdr exposes an unnamed agent;

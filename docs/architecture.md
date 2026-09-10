@@ -3239,3 +3239,15 @@ message delivery channel. It carries the persisted `message_id`, summary-backed
 `title`, and optional `task_id`; a missing summary is an empty title. Rendered
 message bodies and task-row descriptions remain durable-read data available
 only through `atm read`.
+
+### 21.11 Phase AZ.2 logical-task storage boundary
+
+The Tokio-facing task mutation path uses the sealed
+`AsyncTaskMutationStore`. The backend owns its ordered SQLite writer and
+transaction; callers prepare canonical assignment/handoff messages and never
+receive a connection, writer permit, or template renderer. The v2 current
+projection, immutable attempts, append-only events, operation replay result,
+and task-id-joined pending-marker invalidation commit together. The retained
+v1 `TaskStore` is a coexistence reader/audit bridge, not an alternate mutation
+owner. Logical task ordering is queried in the storage reader lane so command
+and idle consumers cannot recreate it differently.

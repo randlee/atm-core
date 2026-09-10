@@ -59,6 +59,24 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
             "Correct the referenced path or file-policy input before retrying."
         }
         AtmErrorCode::WaitTimeout => "Retry after the bounded operation becomes available.",
+        AtmErrorCode::TaskTransitionInvalid | AtmErrorCode::TaskTerminalMetadataInvalid => {
+            "Reload the task lifecycle and choose a legal transition before retrying."
+        }
+        AtmErrorCode::TaskRevisionStale => {
+            "Reload the task and retry with its current revision and a new operation id."
+        }
+        AtmErrorCode::TaskOperationConflict => {
+            "Reuse an operation id only with byte-identical task mutation input."
+        }
+        AtmErrorCode::TaskActiveConflict => {
+            "Complete, block, or reassign the member's active task before starting another."
+        }
+        AtmErrorCode::TaskCompatibilityFailed => {
+            "Preserve the retained task projection and inspect migration diagnostics before retrying."
+        }
+        AtmErrorCode::TaskHandoffCrossHostUnsupported => {
+            "Use a same-host assignee; cross-host task handoff is not transactionally supported."
+        }
         AtmErrorCode::TestFakeTransportInjectionFailed => {
             "Repair the test transport fixture before retrying."
         }

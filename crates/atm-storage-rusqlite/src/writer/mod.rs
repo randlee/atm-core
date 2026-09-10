@@ -2,7 +2,9 @@ mod ops;
 mod ops_envelope;
 mod shutdown_support;
 mod stmt_cache;
+mod task_legacy_ops;
 mod task_ops;
+mod task_projection;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use shutdown_support::{

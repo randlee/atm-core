@@ -88,3 +88,20 @@ their source. Fan-out is capped at eight recipients per escalation.
 This is a fresh Phase AX design, not restoration of the AC.6 scaffolding. It
 replaces the historical Claude-code/Pydantic deferral because ATM tasks are
 cross-host records derived from messages the Rust daemon already persists.
+
+## Amendment — Phase AZ.2 logical lifecycle
+
+ADR-063 governs the replacement of the message-derived three-state model with
+one stable logical `(team, TaskId)` record. `Assigned`, `Active`, and `Blocked`
+are open; `Closed(TaskOutcome)` is terminal. Attempts and events are immutable,
+and `TaskOperationId` is independent of message identity. The pure transition
+table makes `Blocked -> Assigned` explicit and prohibits ordinary success from
+an unstarted assignment; only the retained legacy-completion adapter has that
+compatibility provenance. Reassign/reopen add attempts under the same identity;
+supersede closes the old task as aborted and creates a distinct successor.
+
+SQLite v2 is authoritative. `tasks`/`task_events` and their description field
+remain a version-bounded 1.6.x bridge, not a second lifecycle authority. The
+sealed async mutation boundary owns idempotency, CAS, message/handoff
+persistence, events, and task-id-joined pending-marker cleanup in one writer
+transaction.

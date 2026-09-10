@@ -59,12 +59,13 @@ CREATE TABLE IF NOT EXISTS task_events (
 
 /// Initializes the task-ledger schema outside the generic shared DB module.
 pub(crate) fn ensure_schema(
-    connection: &SqliteConnection,
+    connection: &mut SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     connection
         .execute_batch(TASK_SCHEMA_DDL)
-        .map_err(|error| sqlite_error(target, "failed to initialize task ledger schema", error))
+        .map_err(|error| sqlite_error(target, "failed to initialize task ledger schema", error))?;
+    crate::schema_version::ensure_task_v2_schema(connection, target)
 }
 
 impl SqliteTaskStore {

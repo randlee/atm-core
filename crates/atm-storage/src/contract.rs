@@ -81,6 +81,7 @@ impl AsRef<str> for MessageKey {
 }
 
 pub use crate::peer_contract::*;
+pub use crate::task_mutation::*;
 pub use crate::task_state::{TaskEventRow, TaskRow};
 pub use crate::task_store::*;
 
@@ -928,6 +929,57 @@ pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
         member: Option<AgentName>,
         deadline: ReadDeadline,
     ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
+
+    /// Returns current v2 logical-task projections in the binding task-list
+    /// order.  Implementations must keep this ordering storage-owned so CLI
+    /// and idle consumers cannot diverge.
+    async fn list_logical_tasks(
+        &self,
+        _team: TeamName,
+        _member: Option<AgentName>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<crate::LogicalTaskRow>, ReadLaneError> {
+        Err(ReadLaneError::Unavailable {
+            message: "logical task projections are unavailable in this storage adapter".to_owned(),
+        })
+    }
+
+    /// Returns the active task, otherwise the first assigned task, and never
+    /// returns blocked or closed work.
+    async fn top_runnable_task(
+        &self,
+        _team: TeamName,
+        _member: AgentName,
+        _deadline: ReadDeadline,
+    ) -> Result<Option<crate::LogicalTaskRow>, ReadLaneError> {
+        Err(ReadLaneError::Unavailable {
+            message: "logical task projections are unavailable in this storage adapter".to_owned(),
+        })
+    }
+
+    /// Lists immutable assignment attempts for a logical task.
+    async fn list_task_assignment_attempts(
+        &self,
+        _team: TeamName,
+        _task_id: TaskId,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<crate::TaskAssignmentAttempt>, ReadLaneError> {
+        Err(ReadLaneError::Unavailable {
+            message: "logical task projections are unavailable in this storage adapter".to_owned(),
+        })
+    }
+
+    /// Lists append-only v2 lifecycle events for a logical task.
+    async fn list_task_lifecycle_events(
+        &self,
+        _team: TeamName,
+        _task_id: TaskId,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<crate::TaskLifecycleEventRow>, ReadLaneError> {
+        Err(ReadLaneError::Unavailable {
+            message: "logical task projections are unavailable in this storage adapter".to_owned(),
+        })
+    }
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {

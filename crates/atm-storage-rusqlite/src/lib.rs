@@ -25,6 +25,7 @@ mod reader_pool;
 pub mod roster_runtime;
 mod roster_store;
 mod schema_support;
+mod schema_version;
 mod search_reader;
 mod search_schema;
 mod search_store;
@@ -33,6 +34,7 @@ mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod shared_db_support;
 mod task_ledger_reader;
+mod task_mutation_store;
 mod task_sql;
 mod task_store;
 mod team_roster_schema;
@@ -68,8 +70,8 @@ use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TaskStore, TemplateCatalogStore};
 use atm_storage::{
-    AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
-    StorageHandleParts, StorageHandles,
+    AsyncTaskMutationStore, AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics,
+    IsoTimestamp, StorageFactory, StorageHandleParts, StorageHandles,
 };
 pub use diagnostic_timeline::{
     DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
@@ -187,6 +189,11 @@ struct SqliteTaskStore {
 }
 
 #[derive(Debug)]
+struct SqliteTaskMutationStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
 struct SqlitePeerConfigStore {
     db: Arc<SharedDb>,
 }
@@ -280,6 +287,17 @@ impl SqliteRosterStore {
 
 impl atm_storage::contract::sealed::Sealed for SqliteMessageStore {}
 impl atm_storage::contract::sealed::Sealed for SqliteRosterStore {}
+impl atm_storage::contract::sealed::Sealed for SqliteTaskMutationStore {}
+
+#[async_trait::async_trait]
+impl AsyncTaskMutationStore for SqliteTaskMutationStore {
+    async fn apply(
+        &self,
+        request: atm_storage::TaskMutationRequest,
+    ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
+        self.db.submit_task_mutation_async(request).await
+    }
+}
 
 impl MessageStore for SqliteMessageStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError> {
@@ -613,6 +631,7 @@ pub struct SqliteStorageBackend {
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     pending_nudge_store: Arc<SqlitePendingNudgeStore>,
     task_store: Arc<SqliteTaskStore>,
+    task_mutation_store: Arc<SqliteTaskMutationStore>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
@@ -776,6 +795,7 @@ impl StorageFactory for SqliteStorageFactory {
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
             task_store: backend.task_store(),
+            async_task_mutation_store: backend.async_task_mutation_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
@@ -825,6 +845,9 @@ impl SqliteStorageBackend {
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
+            task_mutation_store: Arc::new(SqliteTaskMutationStore {
+                db: Arc::clone(&db),
+            }),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -851,6 +874,9 @@ impl SqliteStorageBackend {
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
+            task_mutation_store: Arc::new(SqliteTaskMutationStore {
+                db: Arc::clone(&db),
+            }),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -915,6 +941,11 @@ impl SqliteStorageBackend {
 
     pub fn task_store(&self) -> Arc<dyn TaskStore + Send + Sync> {
         self.task_store.clone()
+    }
+
+    /// Returns the sealed Tokio-safe v2 logical-task mutation boundary.
+    pub fn async_task_mutation_store(&self) -> Arc<dyn AsyncTaskMutationStore + Send + Sync> {
+        self.task_mutation_store.clone()
     }
 
     pub fn graft_receiver_endpoint_store(

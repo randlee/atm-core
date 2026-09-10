@@ -5097,3 +5097,16 @@ rendered template text, or `TaskRow.description`; only `atm read` crosses the
 message-body boundary. Writers emit canonical `title` and the additive legacy
 `description` alias with the identical title value until the compatibility
 window closes.
+
+## Phase AZ.2 logical task storage contract
+
+Canonical task state is one stable `(team, task_id)` logical record with one
+current assignee, immutable assignment attempts, append-only lifecycle events,
+priority, optimistic revision, and an idempotent operation id. The legal open
+states are `assigned`, `active`, and `blocked`; terminal state is
+`closed(succeeded|failed|aborted)`. Unblock returns `blocked` work to assigned
+without activating it. Task ordering is Active first, then Assigned by
+High/Normal/Low priority and original assignment time, then Blocked; closed
+history is terminal-time descending. The v1 task projection remains only for
+the ADR-061 1.6.x coexistence window and may not become a second v2 mutation
+policy. See [task lifecycle schema](task-lifecycle-schema.md).
