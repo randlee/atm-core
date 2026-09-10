@@ -29,16 +29,16 @@
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
   triage:line 1 ;
-  triage:snippet "task_ledger_read_error duplicated verbatim in herdr_queue_wake.rs instead of shared via pub(super)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "task_ledger_read_error duplicated verbatim in herdr_queue_wake.rs instead of shared via pub(super). Occurrence closure had been missed when the finding-level status was set to fixed; corrected after fenix's PR #1395 critical review (F11) flagged the mismatch." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "fe0d17a3d" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/fe0d17a3d> .
+  triage:headSha "dcbf13fb9" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/dcbf13fb9> .
 
-<urn:atm:triage:worktree/AZ4/fe0d17a3d>
+<urn:atm:triage:worktree/AZ4/dcbf13fb9>
   a triage:WorktreeSnapshot ;
   triage:path "fix/az-critical-design-review-findings" ;
   triage:branch "fix/az-critical-design-review-findings" ;
-  triage:headSha "fe0d17a3d" ;
+  triage:headSha "dcbf13fb9" ;
   triage:orderIndex 4 .
