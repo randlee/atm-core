@@ -19,7 +19,7 @@ io_owns = ["bounded_task_mutation_submission", "idempotent_task_audit_result"]
 io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn", "template_rendering"]
 
 [dependencies]
-allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-http-runtime", "atm-runtime", "atm-storage-rusqlite"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-storage-rusqlite", "atm-storage -> atm-core"]
 
