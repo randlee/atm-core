@@ -4,9 +4,10 @@ use std::sync::Arc;
 
 use crate::{
     AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncMessageSearchStore,
-    AsyncMessageStore, AsyncTaskLedgerReader, AtmError, DiagnosticTimelineStore,
-    MessageSearchStore, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore,
-    PendingNudgeStore, RosterRuntimeMirror, RosterStore, TaskStore, TemplateCatalogStore,
+    AsyncMessageStore, AsyncTaskLedgerReader, AsyncTaskMutationStore, AtmError,
+    DiagnosticTimelineStore, MessageSearchStore, MessageStore, NudgeTemplateOverrideStore,
+    PeerConfigStore, PendingNudgeStore, RosterRuntimeMirror, RosterStore, TaskStore,
+    TemplateCatalogStore,
 };
 
 /// Backend-neutral effective capacity settings for the single shared reader
@@ -108,6 +109,7 @@ pub struct StorageHandles {
     async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    async_task_mutation_store: Arc<dyn AsyncTaskMutationStore + Send + Sync>,
     roster_store: Arc<dyn RosterStore + Send + Sync>,
     /// Runtime-owned, write-through RAM roster mirror paired with
     /// `roster_store`. Every roster consumer reads through this handle
@@ -137,6 +139,7 @@ pub struct StorageHandleParts {
     pub async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     pub async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     pub async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    pub async_task_mutation_store: Arc<dyn AsyncTaskMutationStore + Send + Sync>,
     /// The write-through roster seam: the durable-write [`RosterStore`]
     /// handle and its paired RAM [`RosterRuntimeMirror`], carried as one
     /// value that only [`WriteThroughRosterStore::from_write_through_view`]
@@ -163,6 +166,7 @@ impl fmt::Debug for StorageHandles {
             .field("message_store", &"dyn MessageStore")
             .field("async_message_store", &"dyn AsyncMessageStore")
             .field("async_task_ledger_reader", &"dyn AsyncTaskLedgerReader")
+            .field("async_task_mutation_store", &"dyn AsyncTaskMutationStore")
             .field("roster_store", &"dyn RosterStore")
             .field("roster_runtime_mirror", &"dyn RosterRuntimeMirror")
             .field(
@@ -192,6 +196,7 @@ impl StorageHandles {
             async_message_store: parts.async_message_store,
             async_mailbox_reader: parts.async_mailbox_reader,
             async_task_ledger_reader: parts.async_task_ledger_reader,
+            async_task_mutation_store: parts.async_task_mutation_store,
             roster_store: parts.roster.store(),
             roster_runtime_mirror: parts.roster.mirror(),
             nudge_template_override_store: parts.nudge_template_override_store,
@@ -225,6 +230,11 @@ impl StorageHandles {
     /// Returns the bounded read-only task-ledger lane selected by composition.
     pub fn async_task_ledger_reader(&self) -> Arc<dyn AsyncTaskLedgerReader + Send + Sync> {
         Arc::clone(&self.async_task_ledger_reader)
+    }
+
+    /// Returns the Tokio-safe durable v2 task lifecycle mutation capability.
+    pub fn async_task_mutation_store(&self) -> Arc<dyn AsyncTaskMutationStore + Send + Sync> {
+        Arc::clone(&self.async_task_mutation_store)
     }
 
     pub fn roster_store(&self) -> Arc<dyn RosterStore + Send + Sync> {

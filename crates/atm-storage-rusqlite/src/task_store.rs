@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS task_events (
 
 /// Initializes the task-ledger schema outside the generic shared DB module.
 pub(crate) fn ensure_schema(
-    connection: &SqliteConnection,
+    connection: &mut SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     connection
