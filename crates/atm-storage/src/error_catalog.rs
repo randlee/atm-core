@@ -77,6 +77,12 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
         AtmErrorCode::TaskHandoffCrossHostUnsupported => {
             "Use a same-host assignee; cross-host task handoff is not transactionally supported."
         }
+        AtmErrorCode::TaskLeadMissing => {
+            "Designate exactly one team lead before retrying the lead-authorized task mutation."
+        }
+        AtmErrorCode::TaskLeadAmbiguous => {
+            "Resolve the team roster to exactly one lead before retrying the task mutation."
+        }
         AtmErrorCode::TestFakeTransportInjectionFailed => {
             "Repair the test transport fixture before retrying."
         }

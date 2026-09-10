@@ -27,6 +27,7 @@ pub mod send;
 pub(crate) mod send_fan_out;
 pub(crate) mod send_to;
 pub(crate) mod sender_roster;
+pub mod task;
 pub(crate) mod task_ledger;
 pub mod teams;
 pub mod templates;
@@ -51,6 +52,7 @@ pub use queue::QueueCommand;
 pub use read::ReadCommand;
 pub use search::SearchCommand;
 pub use send::SendCommand;
+pub use task::TaskCommand;
 pub use teams::TeamsCommand;
 pub use templates::TemplatesCommand;
 
@@ -140,6 +142,7 @@ enum Command {
     Teams(TeamsCommand),
     Members(MembersCommand),
     Templates(TemplatesCommand),
+    Task(TaskCommand),
 }
 
 impl Command {
@@ -168,6 +171,7 @@ impl Command {
             Self::Teams(command) => command.run(observability).await,
             Self::Members(command) => command.run(observability).await,
             Self::Templates(command) => command.run(observability).await,
+            Self::Task(command) => command.run(observability).await,
         }
     }
 }

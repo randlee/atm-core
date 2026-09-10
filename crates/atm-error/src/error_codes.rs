@@ -128,6 +128,10 @@ pub enum AtmErrorCode {
     TaskCompatibilityFailed,
     /// The v2 writer cannot atomically assign a task across hosts.
     TaskHandoffCrossHostUnsupported,
+    /// A lead-authorized task mutation found no team lead.
+    TaskLeadMissing,
+    /// A lead-authorized task mutation found more than one team lead.
+    TaskLeadAmbiguous,
     ObservabilityEmitFailed,
     ObservabilityQueryFailed,
     ObservabilityFollowFailed,
@@ -308,6 +312,8 @@ impl AtmErrorCode {
             Self::TaskTerminalMetadataInvalid => "ATM_TASK_TERMINAL_METADATA_INVALID",
             Self::TaskCompatibilityFailed => "ATM_TASK_COMPATIBILITY_FAILED",
             Self::TaskHandoffCrossHostUnsupported => "ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED",
+            Self::TaskLeadMissing => "ATM_TASK_LEAD_MISSING",
+            Self::TaskLeadAmbiguous => "ATM_TASK_LEAD_AMBIGUOUS",
             _ => return None,
         })
     }
@@ -498,6 +504,8 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_TASK_TERMINAL_METADATA_INVALID" => AtmErrorCode::TaskTerminalMetadataInvalid,
         "ATM_TASK_COMPATIBILITY_FAILED" => AtmErrorCode::TaskCompatibilityFailed,
         "ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED" => AtmErrorCode::TaskHandoffCrossHostUnsupported,
+        "ATM_TASK_LEAD_MISSING" => AtmErrorCode::TaskLeadMissing,
+        "ATM_TASK_LEAD_AMBIGUOUS" => AtmErrorCode::TaskLeadAmbiguous,
         _ => return None,
     })
 }

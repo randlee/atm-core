@@ -11,6 +11,7 @@ use super::{
 };
 use crate::boundary::{Message, MessageKey};
 use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
 use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::summary::build_summary;
 use crate::service_runtime::LocalServiceRuntime;
@@ -662,12 +663,16 @@ fn require_unique_lead(
         .filter(|member| member.agent_type == AgentType::Lead)
         .collect();
     match leads.as_slice() {
-        [] => Err(task_error(
+        [] => Err(AtmError::new(
+            AtmErrorCode::TaskLeadMissing,
             "task lead authority is unavailable because the team has no lead",
         )),
         [lead] if lead.agent_name == *command.actor.agent() => Ok(()),
         [_] => Err(task_error("task mutation requires the team lead")),
-        _ => Err(task_error("task lead authority is ambiguous")),
+        _ => Err(AtmError::new(
+            AtmErrorCode::TaskLeadAmbiguous,
+            "task lead authority is ambiguous",
+        )),
     }
 }
 

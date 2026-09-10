@@ -19,6 +19,7 @@ use crate::protocol::{
 use crate::read::{PeekQuery, ReadQuery};
 use crate::search::SearchRequest;
 use crate::send::WriteRequest;
+use crate::task_command::TaskCommandRequest;
 use crate::types::HostName;
 use base64::Engine as _;
 
@@ -42,6 +43,7 @@ const GRAFT_RECEIVER_UNREGISTER_PATH: &str = "/v1/atm/graft/receiver/unregister"
 const GRAFT_RECEIVER_LOOKUP_PATH: &str = "/v1/atm/graft/receiver/lookup";
 const RUNTIME_RELOAD_PATH: &str = "/v1/atm/runtime/reload";
 const SEARCH_PATH: &str = "/v1/atm/messages/search";
+const TASK_PATH: &str = "/v1/atm/tasks";
 
 /// One registered HTTP route, published from the same constants as request encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -67,6 +69,7 @@ pub enum HttpRouteKind {
     GraftReceiverUnregister,
     GraftReceiverLookup,
     Search,
+    Task,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -183,6 +186,13 @@ const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
             path_template: GRAFT_RECEIVER_REFRESH_PATH,
         },
     },
+    HttpRouteSpec {
+        kind: HttpRouteKind::Task,
+        route: HttpRoute {
+            method: "POST",
+            path_template: TASK_PATH,
+        },
+    },
 ];
 
 /// Registered HTTP route inventory for documentation conformance tests.
@@ -209,6 +219,7 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
         HttpRouteKind::GraftReceiverUnregister => &HTTP_ROUTE_SPECS[12],
         HttpRouteKind::GraftReceiverLookup => &HTTP_ROUTE_SPECS[13],
         HttpRouteKind::GraftReceiverRefresh => &HTTP_ROUTE_SPECS[14],
+        HttpRouteKind::Task => &HTTP_ROUTE_SPECS[15],
     }
 }
 
@@ -221,6 +232,7 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::Clear(_) => HttpRouteKind::Clear,
         RequestEnvelope::Doctor(_) => HttpRouteKind::Doctor,
         RequestEnvelope::Search(_) => HttpRouteKind::Search,
+        RequestEnvelope::Task(_) => HttpRouteKind::Task,
         RequestEnvelope::ReloadRuntimeView => HttpRouteKind::RuntimeReload,
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
@@ -373,6 +385,7 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         // Search is a bodyless GET. Its typed request is encoded as the
         // URL-safe `request` query value in `encode_http_request`.
         RequestEnvelope::Search(_) => Ok(Vec::new()),
+        RequestEnvelope::Task(value) => serde_json::to_vec(value),
         RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
     }
     .map_err(AtmError::from)
@@ -441,6 +454,7 @@ fn decode_success_response(
             .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
         RequestEnvelope::Search(_) => decode_response_body(body, "search")
             .map(|value| ResponseEnvelope::Search(Box::new(value))),
+        RequestEnvelope::Task(_) => decode_response_body(body, "task").map(ResponseEnvelope::Task),
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
     }
@@ -462,6 +476,7 @@ pub enum ApiRequest {
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     Search(Box<SearchRequest>),
+    Task(Box<TaskCommandRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     QueueGetNext(QueueGetNextRequest),
@@ -498,6 +513,7 @@ impl ApiRequest {
             Self::Clear(query) => RequestEnvelope::Clear(query),
             Self::Doctor(query) => RequestEnvelope::Doctor(query),
             Self::Search(query) => RequestEnvelope::Search(query),
+            Self::Task(request) => RequestEnvelope::Task(request),
             Self::CompatibilityPreflight(preflight) => {
                 RequestEnvelope::CompatibilityPreflight(preflight)
             }
@@ -532,6 +548,7 @@ impl From<RequestEnvelope> for ApiRequest {
             RequestEnvelope::Clear(query) => Self::Clear(query),
             RequestEnvelope::Doctor(query) => Self::Doctor(query),
             RequestEnvelope::Search(query) => Self::Search(query),
+            RequestEnvelope::Task(request) => Self::Task(request),
             RequestEnvelope::CompatibilityPreflight(preflight) => {
                 Self::CompatibilityPreflight(preflight)
             }

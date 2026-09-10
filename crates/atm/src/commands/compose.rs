@@ -100,6 +100,36 @@ impl ComposeCommand {
     }
 }
 
+/// Render a task command's template with the same local composition contract
+/// used by `atm compose`. Only rendered text leaves this CLI adapter; source
+/// paths and variable-file paths are never persisted in task metadata.
+pub(crate) fn render_template_for_task(template: &Path, vars: Option<&Path>) -> Result<String> {
+    let (_home_dir, current_dir) = resolve_command_runtime_context("task")?;
+    let vars = vars.map(|value| value.display().to_string());
+    let source = load_template_source(template, &current_dir, vars.as_deref(), &[], None)?;
+    let root = TemplateRoot {
+        canonical_path: source
+            .source
+            .canonical_file_path
+            .as_deref()
+            .and_then(Path::parent)
+            .ok_or_else(|| anyhow::anyhow!("template path has no parent directory"))?
+            .to_path_buf(),
+    };
+    let rendered = atm_daemon_bootstrap::template_composer()
+        .compose_file(&source.source, &source.vars, &root)
+        .map_err(anyhow::Error::from)?;
+    let max_bytes = atm_core::load_atm_config(&current_dir)?
+        .map(|config| {
+            config.max_message_bytes.as_usize().ok_or_else(|| {
+                anyhow::anyhow!("configured max_message_bytes does not fit this platform")
+            })
+        })
+        .transpose()?
+        .unwrap_or(input::default_message_max_bytes());
+    input::validate_message_text_with_limit(rendered.text, max_bytes).map_err(Into::into)
+}
+
 struct LoadedTemplate {
     source: TemplateSource,
     vars: Map<String, Value>,

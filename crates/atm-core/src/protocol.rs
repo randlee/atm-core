@@ -24,6 +24,7 @@ use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::schema::AtmMessageId;
 use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
+use crate::task_command::{TaskCommandRequest, TaskCommandResponse};
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
 pub use atm_storage::{
@@ -67,6 +68,8 @@ pub enum RequestEnvelope {
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     Search(Box<SearchRequest>),
+    /// Canonical durable task query or mutation.
+    Task(Box<TaskCommandRequest>),
     /// Authenticated local control request that reloads the daemon's durable runtime view.
     ReloadRuntimeView,
 }
@@ -88,12 +91,13 @@ pub enum ResponseEnvelope {
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
     Search(Box<SearchResponse>),
+    Task(TaskCommandResponse),
     RuntimeViewReloaded,
     Error(AtmError),
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.3.0";
+pub const HTTP_API_VERSION: &str = "1.4.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
