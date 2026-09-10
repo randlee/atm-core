@@ -8,35 +8,37 @@
   a triage:Finding ;
   triage:findingId "CDR-003" ;
   triage:title "PermanentlyFailed reservations suppress later opportunities for their still-eligible item" ;
-  triage:description "solar's critical design review reports that load_unfinished_reservation_for_item (crates/atm-storage-rusqlite/src/attention_schedule_store.rs:225-259,303-365,367-410) treats permanently_failed as unfinished. Every later opportunity selecting the still-eligible item therefore returns the old PermanentlyFailed reservation, and the pump (crates/atm-http-runtime/src/herdr_queue_wake.rs:613-636) skips every non-Reserved reservation. The item is never consumed/closed, so it remains selected but can never be nudged again; FIFO successors can remain trapped behind it. This contradicts sprint-AZ.4-attention-scheduler.md:193-200 and acceptance 7 at 454-458. Recommendation: make PermanentlyFailed cease deduplicating later opportunity ids (or define a separate explicit item suppression policy); preserve same-opportunity replay while allowing a later revision to create a fresh reservation. Add fifth-failure/later-opportunity and successor fairness tests." ;
+  triage:description "solar's critical design review reports that load_unfinished_reservation_for_item (crates/atm-storage-rusqlite/src/attention_schedule_store.rs:225-259,303-365,367-410) treats permanently_failed as unfinished. Every later opportunity selecting the still-eligible item therefore returns the old PermanentlyFailed reservation, and the pump (crates/atm-http-runtime/src/herdr_queue_wake.rs:613-636) skips every non-Reserved reservation. The item is never consumed/closed, so it remains selected but can never be nudged again; FIFO successors can remain trapped behind it. This contradicts sprint-AZ.4-attention-scheduler.md:193-200 and acceptance 7 at 454-458. Recommendation: make PermanentlyFailed cease deduplicating later opportunity ids (or define a separate explicit item suppression policy); preserve same-opportunity replay while allowing a later revision to create a fresh reservation. Add fifth-failure/later-opportunity and successor fairness tests. RESOLUTION (team-lead, 2026-09-10, deciding a split QA verdict at quality-mgr's request): fix at d109035be is REAL and correct (narrows load_unfinished_reservation_for_item's dedup filter to status='reserved' only; same-opportunity idempotency preserved; verified by all 3 reviewers). fifth_failed_reservation_allows_a_later_idle_opportunity (attention_schedule_store.rs:612-680) satisfies the fifth-failure/later-opportunity test ask. On the separate 'successor fairness' test ask: quality-mgr independently traced that dispatch_ephemeral_attention (herdr_queue_wake.rs:752-804) always finalizes a failure as Stale, never RetryableFailure, so the ephemeral/FIFO lane can never reach PermanentlyFailed at all -- CDR-003's dedup bug is reachable only via the persistent-task lane (dispatch_task_reminder_attention / herdr_queue_wake_escalation.rs's emit_task_reminder). On that lane, priority ordering is an explicit by-design cross-lane-fairness rule (sprint-AZ.4 acceptance 5: 'Priority never changes cross-lane fairness'); a lower-priority task waiting behind a repeatedly-failing higher-priority one is intended behavior, not starvation. No additional successor-fairness test is architecturally required. A related req-qa finding tying this to PendingNudgeStore's separate 10x-consecutive-release ceiling (pending_nudge_store.rs/herdr_queue_wake_claim.rs) is out of scope for CDR-003: that ceiling governs the ephemeral lane's FIFO fairness under repeated releases and is not coupled to this reservation-dedup bug, since the ephemeral lane never produces PermanentlyFailed. Not filed as a separate finding -- informational only, no defect identified." ;
   triage:phaseId "phase-az" ;
   triage:triageMode "initial_pass" ;
   triage:category "liveness-bug" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/attention_schedule_store.rs, crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T18:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CDR-003/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/CDR-003/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
   triage:line 225 ;
   triage:snippet "load_unfinished_reservation_for_item treats permanently_failed as unfinished" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d109035be" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/d109035be> .
 
-<urn:atm:triage:worktree/AZ4/066a465d0>
+<urn:atm:triage:worktree/AZ4/d109035be>
   a triage:WorktreeSnapshot ;
-  triage:path "integrate/phase-az" ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d109035be" ;
   triage:orderIndex 4 .
