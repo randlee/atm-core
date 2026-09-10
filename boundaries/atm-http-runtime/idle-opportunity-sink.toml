@@ -33,7 +33,7 @@ response_types = ["none"]
 error_types = ["none; notification is best effort"]
 
 [testing]
-allowed_test_double_paths = ["crate::herdr_queue_wake::HerdrQueueWakePump", "crate::storage_and_nudge_router::tests::RecordingIdleOpportunitySink"]
+allowed_test_double_paths = ["crate::herdr_queue_wake_idle::HerdrQueueWakePump", "crate::storage_and_nudge_router::RecordingIdleOpportunitySink"]
 forbidden_test_bypasses = ["inline_storage_claim"]
 
 [enforcement]
