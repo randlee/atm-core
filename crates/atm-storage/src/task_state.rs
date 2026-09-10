@@ -182,11 +182,6 @@ impl TaskRevision {
     pub const fn get(self) -> u64 {
         self.0
     }
-
-    #[must_use]
-    pub const fn next(self) -> Self {
-        Self(self.0.saturating_add(1))
-    }
 }
 
 /// One-based count of successful reminders for a task assignment.
