@@ -297,6 +297,16 @@ impl AsyncTaskMutationStore for SqliteTaskMutationStore {
     ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
         self.db.submit_task_mutation_async(request).await
     }
+
+    async fn apply_before(
+        &self,
+        request: atm_storage::TaskMutationRequest,
+        deadline: atm_storage::TaskMutationDeadline,
+    ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
+        self.db
+            .submit_task_mutation_async_before(request, deadline)
+            .await
+    }
 }
 
 impl MessageStore for SqliteMessageStore {

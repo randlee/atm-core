@@ -72,8 +72,8 @@ pub use search::{
     StoredWorkflowMetadata, TimeRange,
 };
 pub use task_mutation::{
-    AsyncTaskMutationStore, PreparedAssignment, PreparedMessage, TaskMutationOutcome,
-    TaskMutationRequest, TaskOperation,
+    AsyncTaskMutationStore, PreparedAssignment, PreparedMessage, TaskMutationDeadline,
+    TaskMutationOutcome, TaskMutationRequest, TaskOperation,
 };
 pub use task_state::{
     AssignmentAttempt, DAEMON_ACTOR_NAME, LogicalTaskRow, TaskAbortReason, TaskActor,

@@ -97,7 +97,7 @@ pub enum ResponseEnvelope {
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.4.0";
+pub const HTTP_API_VERSION: &str = "1.5.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
@@ -173,9 +173,9 @@ mod compatibility_version_tests {
 
     #[test]
     fn http_api_version_exposes_independent_major() {
-        let version = HttpApiVersion::parse("1.4.0").expect("HTTP API version");
+        let version = HttpApiVersion::parse("1.5.0").expect("HTTP API version");
         assert_eq!(version.major(), 1);
-        assert_eq!(version.to_string(), "1.4.0");
+        assert_eq!(version.to_string(), "1.5.0");
         assert!(HttpApiVersion::parse("1.4").is_err());
     }
 

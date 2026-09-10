@@ -7,6 +7,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+use crate::api::RequestDeadline;
 use crate::error::AtmError;
 use crate::types::{TaskId, TeamName};
 use atm_storage::MemberKey;
@@ -224,7 +225,11 @@ pub struct TaskMutationResponse {
 /// The sole shared policy/service boundary for task commands.
 #[async_trait]
 pub trait TaskCommandService: crate::boundary::sealed::Sealed + Send + Sync {
-    async fn execute(&self, request: TaskCommandRequest) -> Result<TaskCommandResponse, AtmError>;
+    async fn execute(
+        &self,
+        request: TaskCommandRequest,
+        deadline: RequestDeadline,
+    ) -> Result<TaskCommandResponse, AtmError>;
 }
 
 #[cfg(test)]

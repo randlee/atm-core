@@ -384,12 +384,37 @@ impl SharedDb {
     ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
         match self
             .writer
-            .submit_async(WriteOp::TaskMutation(Box::new(request)))
+            .submit_async(WriteOp::TaskMutation {
+                request: Box::new(request),
+                deadline: None,
+            })
             .await?
         {
             WriteOpResult::TaskMutation(outcome) => Ok(outcome),
             other => Err(AtmError::daemon_unavailable(format!(
                 "sqlite writer returned the wrong result for task mutation: {other:?}"
+            ))),
+        }
+    }
+
+    /// Submits a task mutation that becomes a no-op before execution if the
+    /// caller's request budget expires while it waits behind the shared writer.
+    pub(crate) async fn submit_task_mutation_async_before(
+        &self,
+        request: atm_storage::TaskMutationRequest,
+        deadline: atm_storage::TaskMutationDeadline,
+    ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::TaskMutation {
+                request: Box::new(request),
+                deadline: Some(deadline),
+            })
+            .await?
+        {
+            WriteOpResult::TaskMutation(outcome) => Ok(outcome),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for bounded task mutation: {other:?}"
             ))),
         }
     }

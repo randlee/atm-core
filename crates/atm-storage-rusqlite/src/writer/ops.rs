@@ -39,7 +39,10 @@ type DecomposedWorkflowColumns<'a> = (
 #[derive(Clone)]
 pub(crate) enum WriteOp {
     /// Canonical v2 logical-task mutation, executed by the sole writer queue.
-    TaskMutation(Box<TaskMutationRequest>),
+    TaskMutation {
+        request: Box<TaskMutationRequest>,
+        deadline: Option<atm_storage::TaskMutationDeadline>,
+    },
     /// The sole mutation admitted from the asynchronous mailbox-read path.
     /// It never carries immutable message contents or performs selection.
     ApplyReadDisplayState {
@@ -73,7 +76,7 @@ pub(crate) enum WriteOp {
 impl std::fmt::Debug for WriteOp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::TaskMutation(request) => formatter
+            Self::TaskMutation { request, .. } => formatter
                 .debug_tuple("TaskMutation")
                 .field(&request.task_id)
                 .finish(),
@@ -117,6 +120,20 @@ impl std::fmt::Debug for WriteOp {
     }
 }
 
+impl WriteOp {
+    pub(crate) fn expired_task_mutation_error(&self) -> Option<AtmError> {
+        match self {
+            Self::TaskMutation {
+                deadline: Some(deadline),
+                ..
+            } if deadline.expired() => Some(AtmError::daemon_unavailable(
+                "task mutation deadline expired before sqlite writer execution",
+            )),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
     TaskMutation(TaskMutationOutcome),
@@ -147,8 +164,10 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
-        WriteOp::TaskMutation(request) => execute_task_mutation(request, connection, cache, target)
-            .map(WriteOpResult::TaskMutation),
+        WriteOp::TaskMutation { request, .. } => {
+            execute_task_mutation(request, connection, cache, target)
+                .map(WriteOpResult::TaskMutation)
+        }
         WriteOp::ApplyReadDisplayState {
             mailbox,
             message_ids,

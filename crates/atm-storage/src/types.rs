@@ -1003,10 +1003,8 @@ impl fmt::Display for PaneId {
 /// The canonical durable-mailbox member key for nudge and queue surfaces.
 ///
 /// One team-scoped agent identity. This is the key every pending-nudge,
-/// drain, sweep, and pump surface uses; features must not define their own
-/// per-surface member key. Distinct from the private
-/// `atm_http_runtime::runtime_health::MemberKey`, whose migration onto this
-/// type is a non-blocking follow-up.
+/// drain, sweep, pump, and runtime projection surface uses; features must not
+/// define a private per-surface member key.
 ///
 /// # Examples
 ///

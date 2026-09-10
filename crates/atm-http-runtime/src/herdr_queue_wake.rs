@@ -1412,13 +1412,16 @@ mod tests {
         task_id: TaskId,
     ) {
         CoreTaskCommandService::new(runtime.clone())
-            .execute(TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
-                operation_id: TaskOperationId::new(),
-                actor: key.clone(),
-                task_id,
-                expected_revision: None,
-                action: TaskAction::Start,
-            })))
+            .execute(
+                TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
+                    operation_id: TaskOperationId::new(),
+                    actor: key.clone(),
+                    task_id,
+                    expected_revision: None,
+                    action: TaskAction::Start,
+                })),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
             .await
             .expect("explicit task start");
     }

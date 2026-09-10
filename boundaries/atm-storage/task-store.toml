@@ -38,7 +38,7 @@ notes = [
   "provenance: transitions apply only to MessageWriteOrigin::Local inserts and to the acknowledgement op",
   "CLI (atm) reads TaskRow/TaskEventRow through atm_storage::contract; daemon crates import through atm_core::boundary",
   "escalation recipients: list_escalation_recipients, add_escalation_recipient and remove_escalation_recipient store daemon or team-scoped ADR-040 addresses; team resolution falls back to the daemon list only when the team list is empty",
-  "review-only governed source module: crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs; lint_rules, not review_gates, are the mechanically enforced controls",
+  "review-only governed source module: crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs; no named lint rule in this boundary file is mechanically dispatched today",
 ]
 
 [testing]

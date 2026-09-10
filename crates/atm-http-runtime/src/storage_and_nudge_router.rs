@@ -495,11 +495,26 @@ impl StorageAndNudgeRouter {
         }
         match request {
             ApiRequest::Write(_) => unreachable!("writes use the canonical write path"),
-            ApiRequest::Task(request) => CoreTaskCommandService::new(self.service_runtime.clone())
-                .execute(*request)
+            ApiRequest::Task(request) => {
+                let remaining = deadline.remaining().ok_or_else(|| {
+                    AtmError::daemon_unavailable(
+                        "task command request deadline expired before service dispatch",
+                    )
+                })?;
+                tokio::time::timeout(
+                    remaining,
+                    CoreTaskCommandService::new(self.service_runtime.clone())
+                        .execute(*request, deadline),
+                )
                 .await
+                .map_err(|_| {
+                    AtmError::daemon_unavailable(
+                        "task command request deadline expired during service dispatch",
+                    )
+                })?
                 .map(ResponseEnvelope::Task)
-                .map(ApiResponse::new),
+                .map(ApiResponse::new)
+            }
             ApiRequest::Messages(request) => match *request {
                 atm_core::api::MessageCollectionRequest::List(query) => {
                     self.list_messages(query, deadline).await

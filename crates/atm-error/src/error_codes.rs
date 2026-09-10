@@ -116,6 +116,8 @@ pub enum AtmErrorCode {
     /// A requested logical-task state transition is not legal from its
     /// current durable lifecycle state.
     TaskTransitionInvalid,
+    /// A caller is not authorized for the requested logical-task operation.
+    TaskAuthorizationDenied,
     /// A task mutation's optimistic revision does not match the durable row.
     TaskRevisionStale,
     /// A task operation id was replayed with different request bytes.
@@ -304,6 +306,7 @@ impl AtmErrorCode {
             Self::AckInvalidState => "ATM_ACK_INVALID_STATE",
             Self::ClearInvalidState => "ATM_CLEAR_INVALID_STATE",
             Self::TaskTransitionInvalid => "ATM_TASK_TRANSITION_INVALID",
+            Self::TaskAuthorizationDenied => "ATM_TASK_AUTHORIZATION_DENIED",
             Self::TaskRevisionStale => "ATM_TASK_REVISION_STALE",
             Self::TaskOperationConflict => "ATM_TASK_OPERATION_CONFLICT",
             Self::TaskActiveConflict => "ATM_TASK_ACTIVE_CONFLICT",
@@ -495,6 +498,7 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_ACK_INVALID_STATE" => AtmErrorCode::AckInvalidState,
         "ATM_CLEAR_INVALID_STATE" => AtmErrorCode::ClearInvalidState,
         "ATM_TASK_TRANSITION_INVALID" => AtmErrorCode::TaskTransitionInvalid,
+        "ATM_TASK_AUTHORIZATION_DENIED" => AtmErrorCode::TaskAuthorizationDenied,
         "ATM_TASK_REVISION_STALE" => AtmErrorCode::TaskRevisionStale,
         "ATM_TASK_OPERATION_CONFLICT" => AtmErrorCode::TaskOperationConflict,
         "ATM_TASK_ACTIVE_CONFLICT" => AtmErrorCode::TaskActiveConflict,

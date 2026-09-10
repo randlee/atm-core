@@ -263,6 +263,10 @@ pub(crate) fn process_batch(
         Vec::with_capacity(batch_len);
     let mut queued_writes = batch.into_iter().peekable();
     while let Some(queued) = queued_writes.next() {
+        if let Some(error) = queued.op.expired_task_mutation_error() {
+            replies.push((queued.reply, Err(error)));
+            continue;
+        }
         if !is_batchable_message_admission(&queued) {
             replies.push(process_queued_write(
                 target,
@@ -414,6 +418,9 @@ pub(crate) fn process_queued_write(
     cache: &mut stmt_cache::WriterStatementCache,
     queued: QueuedWrite,
 ) -> (ReplyTx, Result<WriteOpResult, AtmError>) {
+    if let Some(error) = queued.op.expired_task_mutation_error() {
+        return (queued.reply, Err(error));
+    }
     let savepoint = match transaction.savepoint() {
         Ok(savepoint) => savepoint,
         Err(error) => {

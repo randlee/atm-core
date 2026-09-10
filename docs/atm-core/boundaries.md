@@ -101,6 +101,17 @@ Notes:
 - on the earlier compatibility line, this kept raw watch APIs out of store,
   transport, and service logic.
 
+## TaskCommandService
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/task-command-service.toml](../../boundaries/atm-core/task-command-service.toml)
+
+`TaskCommandService` is the sealed, shared policy boundary for every canonical
+task query and lifecycle mutation. `CoreTaskCommandService` is its sole
+permitted implementation. The CLI and HTTP runtime adapt requests into this
+service; they must not recreate task authorization, transition policy, SQLite
+access, or a second message-write pipeline.
+
 ## ReconcileCoordinator
 
 Canonical machine-readable boundary source:

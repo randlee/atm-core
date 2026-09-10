@@ -482,6 +482,7 @@ fn task_mutation_cannot_restore_a_second_message_write_pipeline() {
     let writer_surfaces = [
         "crates/atm-storage-rusqlite/src/task_mutation_store.rs",
         "crates/atm-storage-rusqlite/src/writer/task_ops.rs",
+        "crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs",
     ]
     .iter()
     .map(|path| read_source(&root.join(path)))
@@ -501,6 +502,39 @@ fn task_mutation_cannot_restore_a_second_message_write_pipeline() {
         service_surfaces.contains("AsyncTaskMutationStore")
             && writer_surfaces.contains("PreparedMessage"),
         "task mutations must carry prepared mail through the sealed async mutation boundary"
+    );
+}
+
+#[test]
+fn task_command_service_has_one_sealed_core_implementation() {
+    let root = workspace_root();
+    let trait_source = read_source(&root.join("crates/atm-core/src/task_command.rs"));
+    assert!(
+        trait_source.contains("pub trait TaskCommandService")
+            && trait_source.contains("crate::boundary::sealed::Sealed + Send + Sync"),
+        "TaskCommandService must remain an atm-core-owned sealed boundary"
+    );
+
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut files);
+    let implementation_marker = ["impl TaskCommandService", "for CoreTaskCommandService"].join(" ");
+    let implementations: Vec<_> = files
+        .into_iter()
+        .filter_map(|path| {
+            let source = read_source(&path);
+            source.contains(&implementation_marker).then(|| {
+                path.strip_prefix(&root)
+                    .expect("workspace source path")
+                    .display()
+                    .to_string()
+                    .replace('\\', "/")
+            })
+        })
+        .collect();
+    assert_eq!(
+        implementations,
+        vec!["crates/atm-core/src/task_command/service.rs"],
+        "CoreTaskCommandService is the sole TaskCommandService implementation"
     );
 }
 

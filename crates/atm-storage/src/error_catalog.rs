@@ -62,6 +62,9 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
         AtmErrorCode::TaskTransitionInvalid | AtmErrorCode::TaskTerminalMetadataInvalid => {
             "Reload the task lifecycle and choose a legal transition before retrying."
         }
+        AtmErrorCode::TaskAuthorizationDenied => {
+            "Use an actor authorized for this task operation before retrying."
+        }
         AtmErrorCode::TaskRevisionStale => {
             "Reload the task and retry with its current revision and a new operation id."
         }

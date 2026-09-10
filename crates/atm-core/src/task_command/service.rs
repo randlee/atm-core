@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use async_trait::async_trait;
 use serde_json::Map;
 
@@ -9,6 +7,7 @@ use super::{
     TaskEventsResponse, TaskListQuery, TaskListResponse, TaskListScope, TaskMutationCommand,
     TaskMutationResponse, TaskPage,
 };
+use crate::api::RequestDeadline;
 use crate::boundary::{Message, MessageKey};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
@@ -18,10 +17,9 @@ use crate::service_runtime::LocalServiceRuntime;
 use atm_storage::{
     AgentType, AsyncTaskLedgerReader, AsyncTaskMutationStore, MessageWriteOrigin,
     PreparedAssignment, PreparedMessage, ReadDeadline, TaskAbortReason, TaskAssignmentAttempt,
-    TaskLedgerScope, TaskLifecycleState, TaskMutationRequest, TaskOperation, TaskOutcome,
+    TaskLedgerScope, TaskLifecycleState, TaskMutationDeadline, TaskMutationRequest, TaskOperation,
+    TaskOutcome,
 };
-
-const TASK_COMMAND_READ_DEADLINE: Duration = Duration::from_secs(5);
 
 /// The core-owned task command service. Its runtime owns injected reader and
 /// writer capabilities, so command policy never sees a concrete SQLite type.
@@ -36,7 +34,11 @@ impl CoreTaskCommandService {
         Self { runtime }
     }
 
-    async fn list(&self, query: TaskListQuery) -> Result<TaskListResponse, AtmError> {
+    async fn list(
+        &self,
+        query: TaskListQuery,
+        deadline: RequestDeadline,
+    ) -> Result<TaskListResponse, AtmError> {
         let rows = self
             .reader()?
             .list_logical_tasks(
@@ -44,48 +46,60 @@ impl CoreTaskCommandService {
                 query.assignee,
                 storage_scope(query.scope),
                 storage_limit(query.page),
-                read_deadline()?,
+                read_deadline(deadline)?,
             )
             .await
             .map_err(AtmError::from)?;
         Ok(TaskListResponse { rows })
     }
 
-    async fn events(&self, query: TaskEventQuery) -> Result<TaskEventsResponse, AtmError> {
+    async fn events(
+        &self,
+        query: TaskEventQuery,
+        deadline: RequestDeadline,
+    ) -> Result<TaskEventsResponse, AtmError> {
         let rows = self
             .reader()?
             .list_task_lifecycle_events(
                 query.team,
                 query.task_id,
                 storage_limit(query.page),
-                read_deadline()?,
+                read_deadline(deadline)?,
             )
             .await
             .map_err(AtmError::from)?;
         Ok(TaskEventsResponse { rows })
     }
 
-    async fn mutate(&self, command: TaskMutationCommand) -> Result<TaskMutationResponse, AtmError> {
+    async fn mutate(
+        &self,
+        command: TaskMutationCommand,
+        deadline: RequestDeadline,
+    ) -> Result<TaskMutationResponse, AtmError> {
         let reader = self.reader()?;
         let existing = reader
             .load_logical_task(
                 command.actor.team().clone(),
                 command.task_id.clone(),
-                read_deadline()?,
+                read_deadline(deadline)?,
             )
             .await
             .map_err(AtmError::from)?;
-        let attempts = load_attempts(&reader, &command, existing.is_some()).await?;
+        let attempts = load_attempts(&reader, &command, existing.is_some(), deadline).await?;
         let operation = self.prepare_operation(&command, existing.as_ref(), attempts.last())?;
+        ensure_deadline_remaining(deadline)?;
         let outcome = self
             .mutation_store()?
-            .apply(TaskMutationRequest {
-                operation_id: command.operation_id,
-                actor: command.actor,
-                task_id: command.task_id,
-                expected_revision: command.expected_revision,
-                operation,
-            })
+            .apply_before(
+                TaskMutationRequest {
+                    operation_id: command.operation_id,
+                    actor: command.actor,
+                    task_id: command.task_id,
+                    expected_revision: command.expected_revision,
+                    operation,
+                },
+                task_mutation_deadline(deadline)?,
+            )
             .await?;
         response_from_outcome(command.operation_id, existing, outcome)
     }
@@ -131,7 +145,9 @@ impl CoreTaskCommandService {
         input: &AssignmentInput,
     ) -> Result<TaskOperation, AtmError> {
         if existing.is_some() {
-            return Err(task_error("task already exists; use reassign or reopen"));
+            return Err(transition_error(
+                "task already exists; use reassign or reopen",
+            ));
         }
         require_distinct_member(&command.actor, &input.assignee, "initial assignment")?;
         Ok(TaskOperation::Assign(self.assignment(command, input)?))
@@ -274,7 +290,7 @@ impl CoreTaskCommandService {
             } => {
                 require_assigner_or_lead(&self.runtime, command, latest_attempt)?;
                 if successor_task_id == &command.task_id {
-                    return Err(task_error("a successor task must use a new task id"));
+                    return Err(transition_error("a successor task must use a new task id"));
                 }
                 let outcome = TaskOutcome::Aborted(TaskAbortReason::Superseded {
                     successor_task_id: successor_task_id.clone(),
@@ -360,16 +376,22 @@ impl crate::boundary::sealed::Sealed for CoreTaskCommandService {}
 
 #[async_trait]
 impl TaskCommandService for CoreTaskCommandService {
-    async fn execute(&self, request: TaskCommandRequest) -> Result<TaskCommandResponse, AtmError> {
+    async fn execute(
+        &self,
+        request: TaskCommandRequest,
+        deadline: RequestDeadline,
+    ) -> Result<TaskCommandResponse, AtmError> {
         match request {
-            TaskCommandRequest::List(query) => {
-                self.list(query).await.map(TaskCommandResponse::List)
-            }
-            TaskCommandRequest::Events(query) => {
-                self.events(query).await.map(TaskCommandResponse::Events)
-            }
+            TaskCommandRequest::List(query) => self
+                .list(query, deadline)
+                .await
+                .map(TaskCommandResponse::List),
+            TaskCommandRequest::Events(query) => self
+                .events(query, deadline)
+                .await
+                .map(TaskCommandResponse::Events),
             TaskCommandRequest::Mutate(command) => self
-                .mutate(*command)
+                .mutate(*command, deadline)
                 .await
                 .map(TaskCommandResponse::Mutation),
         }
@@ -390,14 +412,35 @@ fn storage_limit(page: TaskPage) -> Option<usize> {
     }
 }
 
-fn read_deadline() -> Result<ReadDeadline, AtmError> {
-    ReadDeadline::new(TASK_COMMAND_READ_DEADLINE)
+fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
+    ReadDeadline::new(deadline.remaining().ok_or_else(|| {
+        AtmError::daemon_unavailable("task command request deadline expired before storage read")
+    })?)
+}
+
+fn task_mutation_deadline(deadline: RequestDeadline) -> Result<TaskMutationDeadline, AtmError> {
+    let remaining = deadline.remaining().ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "request deadline expired before task mutation writer admission",
+        )
+    })?;
+    TaskMutationDeadline::after(remaining)
+}
+
+fn ensure_deadline_remaining(deadline: RequestDeadline) -> Result<(), AtmError> {
+    if deadline.expired() {
+        return Err(AtmError::daemon_unavailable(
+            "task command request deadline expired before storage mutation",
+        ));
+    }
+    Ok(())
 }
 
 async fn load_attempts(
     reader: &std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     command: &TaskMutationCommand,
     exists: bool,
+    deadline: RequestDeadline,
 ) -> Result<Vec<TaskAssignmentAttempt>, AtmError> {
     if !exists {
         return Ok(Vec::new());
@@ -406,7 +449,7 @@ async fn load_attempts(
         .list_task_assignment_attempts(
             command.actor.team().clone(),
             command.task_id.clone(),
-            read_deadline()?,
+            read_deadline(deadline)?,
         )
         .await
         .map_err(AtmError::from)
@@ -418,11 +461,11 @@ fn response_from_outcome(
     outcome: atm_storage::TaskMutationOutcome,
 ) -> Result<TaskMutationResponse, AtmError> {
     let current_attempt = outcome.current_attempt.ok_or_else(|| {
-        task_error("stored task mutation result lacks the committed assignment attempt")
+        transition_error("stored task mutation result lacks the committed assignment attempt")
     })?;
-    let current_assignee = outcome
-        .current_assignee
-        .ok_or_else(|| task_error("stored task mutation result lacks the committed assignee"))?;
+    let current_assignee = outcome.current_assignee.ok_or_else(|| {
+        transition_error("stored task mutation result lacks the committed assignee")
+    })?;
     let terminal_outcome = match &outcome.state {
         TaskLifecycleState::Closed(value) => Some(value.clone()),
         TaskLifecycleState::Assigned | TaskLifecycleState::Active | TaskLifecycleState::Blocked => {
@@ -506,7 +549,7 @@ fn require_member(
     runtime
         .roster_member(member.team(), member.agent())
         .map(|_| ())
-        .ok_or_else(|| task_error("task actor or recipient is not a roster member"))
+        .ok_or_else(|| authorization_error("task actor or recipient is not a roster member"))
 }
 
 fn require_same_team(
@@ -515,7 +558,9 @@ fn require_same_team(
     operation: &str,
 ) -> Result<(), AtmError> {
     if left.team() != right.team() {
-        return Err(task_error(format!("{operation} must remain in one team")));
+        return Err(authorization_error(format!(
+            "{operation} must remain in one team"
+        )));
     }
     Ok(())
 }
@@ -527,7 +572,7 @@ fn require_distinct_member(
 ) -> Result<(), AtmError> {
     require_same_team(left, right, operation)?;
     if left.agent() == right.agent() {
-        return Err(task_error(format!(
+        return Err(authorization_error(format!(
             "{operation} recipient must differ from the actor"
         )));
     }
@@ -538,7 +583,7 @@ fn require_existing_state<'task>(
     task: Option<&'task atm_storage::LogicalTaskRow>,
     operation: &str,
 ) -> Result<&'task atm_storage::LogicalTaskRow, AtmError> {
-    task.ok_or_else(|| task_error(format!("{operation} requires an existing task")))
+    task.ok_or_else(|| transition_error(format!("{operation} requires an existing task")))
 }
 
 fn require_open<'task>(
@@ -547,7 +592,9 @@ fn require_open<'task>(
 ) -> Result<&'task atm_storage::LogicalTaskRow, AtmError> {
     let task = require_existing_state(task, operation)?;
     if matches!(task.state, TaskLifecycleState::Closed(_)) {
-        return Err(task_error(format!("{operation} requires an open task")));
+        return Err(transition_error(format!(
+            "{operation} requires an open task"
+        )));
     }
     Ok(task)
 }
@@ -558,7 +605,9 @@ fn require_closed<'task>(
 ) -> Result<&'task atm_storage::LogicalTaskRow, AtmError> {
     let task = require_existing_state(task, operation)?;
     if !matches!(task.state, TaskLifecycleState::Closed(_)) {
-        return Err(task_error(format!("{operation} requires a closed task")));
+        return Err(transition_error(format!(
+            "{operation} requires a closed task"
+        )));
     }
     Ok(task)
 }
@@ -569,7 +618,9 @@ fn require_current_assignee(
 ) -> Result<(), AtmError> {
     let task = require_open(task, "task mutation")?;
     if command.actor.agent() != &task.current_assignee {
-        return Err(task_error("task mutation requires the current assignee"));
+        return Err(authorization_error(
+            "task mutation requires the current assignee",
+        ));
     }
     Ok(())
 }
@@ -580,8 +631,13 @@ fn require_active_assignee(
     operation: &str,
 ) -> Result<(), AtmError> {
     let task = require_open(task, operation)?;
-    if task.state != TaskLifecycleState::Active || command.actor.agent() != &task.current_assignee {
-        return Err(task_error(format!(
+    if task.state != TaskLifecycleState::Active {
+        return Err(transition_error(format!(
+            "{operation} requires an active task"
+        )));
+    }
+    if command.actor.agent() != &task.current_assignee {
+        return Err(authorization_error(format!(
             "{operation} requires the active task assignee"
         )));
     }
@@ -597,7 +653,7 @@ fn require_assigned_or_active(
         task.state,
         TaskLifecycleState::Assigned | TaskLifecycleState::Active
     ) {
-        return Err(task_error(format!(
+        return Err(transition_error(format!(
             "{operation} requires an assigned or active task"
         )));
     }
@@ -612,7 +668,7 @@ fn require_reassignment_actor(
 ) -> Result<(), AtmError> {
     let task = require_existing_state(task, "reassign")?;
     if task.state == TaskLifecycleState::Active {
-        return Err(task_error("reassign cannot interrupt active work"));
+        return Err(transition_error("reassign cannot interrupt active work"));
     }
     if command.actor.agent() == &task.current_assignee
         || is_current_assigner(command, latest_attempt)
@@ -634,7 +690,7 @@ fn require_assignee_or_assigner(
     {
         return Ok(());
     }
-    Err(task_error(format!(
+    Err(authorization_error(format!(
         "{operation} requires the assignee or assigner"
     )))
 }
@@ -684,7 +740,7 @@ fn require_unique_lead(
             "task lead authority is unavailable because the team has no lead",
         )),
         [lead] if lead.agent_name == *command.actor.agent() => Ok(()),
-        [_] => Err(task_error("task mutation requires the team lead")),
+        [_] => Err(authorization_error("task mutation requires the team lead")),
         _ => Err(AtmError::new(
             AtmErrorCode::TaskLeadAmbiguous,
             "task lead authority is ambiguous",
@@ -692,9 +748,18 @@ fn require_unique_lead(
     }
 }
 
-fn task_error(message: impl Into<String>) -> AtmError {
-    AtmError::validation_with_recovery(
+fn transition_error(message: impl Into<String>) -> AtmError {
+    AtmError::new_with_recovery(
+        AtmErrorCode::TaskTransitionInvalid,
         message,
         "Inspect task history with: atm task events <task-id>",
+    )
+}
+
+fn authorization_error(message: impl Into<String>) -> AtmError {
+    AtmError::new_with_recovery(
+        AtmErrorCode::TaskAuthorizationDenied,
+        message,
+        "Use an authorized task actor or inspect task history with: atm task events <task-id>",
     )
 }

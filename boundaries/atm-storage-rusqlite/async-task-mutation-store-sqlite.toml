@@ -38,12 +38,12 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
-lint_rules = ["LINT-BOUNDARY-ASYNC-TASK-MUTATION-SQLITE"]
+lint_rules = ["LINT-BOUNDARY-ASYNC-TASK-MUTATION-REFERENCES"]
 review_gates = ["manual_architecture_review"]
 
 [status]
 state = "concrete_landed"
 notes = [
   "AZ.2",
-  "review-only governed source modules: crates/atm-storage-rusqlite/src/writer/task_ops.rs and crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs; lint_rules, not review_gates, are the mechanically enforced controls",
+  "The named mutation-reference lint governs this adapter boundary; source modules crates/atm-storage-rusqlite/src/writer/task_ops.rs and crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs remain explicit review scope.",
 ]

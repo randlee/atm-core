@@ -23,6 +23,15 @@ impl AtmError {
         }
     }
 
+    /// Constructs a stable coded error with operation-specific recovery text.
+    pub fn new_with_recovery(
+        code: AtmErrorCode,
+        detail: impl Into<String>,
+        recovery: impl Into<String>,
+    ) -> Self {
+        Self::with_recovery(code, detail, recovery)
+    }
+
     fn with_recovery(
         code: AtmErrorCode,
         detail: impl Into<String>,

@@ -82,8 +82,8 @@ impl AsRef<str> for MessageKey {
 
 pub use crate::peer_contract::*;
 pub use crate::task_mutation::{
-    AsyncTaskMutationStore, PreparedAssignment, PreparedMessage, TaskMutationOutcome,
-    TaskMutationRequest, TaskOperation,
+    AsyncTaskMutationStore, PreparedAssignment, PreparedMessage, TaskMutationDeadline,
+    TaskMutationOutcome, TaskMutationRequest, TaskOperation,
 };
 pub use crate::task_state::{TaskEventRow, TaskRow};
 pub use crate::task_store::*;

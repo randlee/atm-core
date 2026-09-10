@@ -97,6 +97,11 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-10 — AZ.3 task command service:** `HTTP_API_VERSION` moves from
+  `1.4.0` to `1.5.0`. The canonical `/v1/atm/tasks` request/response exchange
+  carries task queries and lifecycle mutations. Existing routes and payloads
+  remain additive and a retained 1.4.0 consumer continues using its known
+  routes; a 1.4.0 daemon rejects the new route before any task mutation.
 - **2026-09-09 — AZ.3:** `HTTP_API_VERSION` moves from `1.3.0` to `1.4.0`.
   The additive `/v1/atm/tasks` request/response exchange carries canonical
   task queries and lifecycle mutations. Existing v1.3 routes and payloads are
@@ -137,8 +142,9 @@ migration functions directly.
 
 - `HTTP_API_VERSION` first moved to `1.1.0` as the current wire, AY.15 moved it
   to `1.2.0` for the additive doctor-presence field, and
-  DOCTOR-HERDR-TARGET-R1 moves it to `1.3.0` for endpoint findings, and AZ.3
-  moves it to `1.4.0` for the additive task exchange; it is
+  DOCTOR-HERDR-TARGET-R1 moves it to `1.3.0` for endpoint findings, issue
+  #1378 moves it to `1.4.0` for runtime-state fields, and AZ.3 moves it to
+  `1.5.0` for the additive task exchange; it is
   bumped on every later governed-interface change.
 - Herdr support becomes a matrix, not a single version; per-release
   conformance fixtures are required.
