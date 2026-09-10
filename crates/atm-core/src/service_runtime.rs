@@ -314,6 +314,8 @@ pub struct LocalServiceRuntime {
     async_task_ledger_reader: Option<std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
     async_task_mutation_store:
         Option<std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>>,
+    async_task_scheduler_audit_store:
+        Option<std::sync::Arc<dyn atm_storage::AsyncTaskSchedulerAuditStore + Send + Sync>>,
     async_attention_schedule_store:
         Option<std::sync::Arc<dyn AsyncAttentionScheduleStore + Send + Sync>>,
     async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
@@ -373,6 +375,7 @@ impl LocalServiceRuntime {
             async_mailbox_reader: None,
             async_task_ledger_reader: None,
             async_task_mutation_store: None,
+            async_task_scheduler_audit_store: None,
             async_attention_schedule_store: None,
             async_message_search_store: None,
             roster_store: roster.store(),
@@ -481,6 +484,31 @@ impl LocalServiceRuntime {
                 "Tokio task mutation store was not installed in this runtime",
             )
         })
+    }
+
+    /// Attaches the scheduler's audit-only task writer selected by storage
+    /// composition. Scheduler code cannot obtain the lifecycle mutation port.
+    #[must_use]
+    pub fn with_async_task_scheduler_audit_store(
+        mut self,
+        store: std::sync::Arc<dyn atm_storage::AsyncTaskSchedulerAuditStore + Send + Sync>,
+    ) -> Self {
+        self.async_task_scheduler_audit_store = Some(store);
+        self
+    }
+
+    /// Returns the runtime-selected scheduler audit capability.
+    pub fn async_task_scheduler_audit_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn atm_storage::AsyncTaskSchedulerAuditStore + Send + Sync>, AtmError>
+    {
+        self.async_task_scheduler_audit_store
+            .clone()
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable(
+                    "Tokio task scheduler audit store was not installed in this runtime",
+                )
+            })
     }
 
     /// Attaches Tokio-safe durable cursor/reservation storage for the

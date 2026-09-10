@@ -506,6 +506,37 @@ fn task_mutation_cannot_restore_a_second_message_write_pipeline() {
 }
 
 #[test]
+fn attention_scheduler_has_only_the_task_audit_capability() {
+    let root = workspace_root();
+    let scheduler =
+        read_source(&root.join("crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs"));
+    let runtime = read_source(&root.join("crates/atm-core/src/service_runtime.rs"));
+
+    assert!(
+        scheduler.contains("async_task_scheduler_audit_store")
+            && scheduler.contains("TaskReminderAuditRequest")
+            && scheduler.contains("TaskLeadNotificationAuditRequest"),
+        "the attention scheduler must use the narrow task-audit boundary"
+    );
+    for forbidden in [
+        "AsyncTaskMutationStore",
+        "TaskMutationRequest",
+        "TaskOperation::",
+        "PreparedAssignment",
+        "PreparedMessage",
+    ] {
+        assert!(
+            !scheduler.contains(forbidden),
+            "the attention scheduler must not regain lifecycle capability `{forbidden}`"
+        );
+    }
+    assert!(
+        runtime.contains("async_task_scheduler_audit_store"),
+        "runtime composition must expose the scheduler's separate audit capability"
+    );
+}
+
+#[test]
 fn task_command_service_has_one_sealed_core_implementation() {
     let root = workspace_root();
     let trait_source = read_source(&root.join("crates/atm-core/src/task_command.rs"));

@@ -113,6 +113,32 @@ pub struct TaskMutationOutcome {
     pub replayed: bool,
 }
 
+/// A scheduler-owned, compare-and-swap reminder audit. This request cannot
+/// represent a lifecycle transition or a message write.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskReminderAuditRequest {
+    pub operation_id: TaskOperationId,
+    pub actor: MemberKey,
+    pub task_id: TaskId,
+    pub expected_revision: u64,
+    pub attempt: AssignmentAttempt,
+    pub at: IsoTimestamp,
+}
+
+/// A scheduler-owned, compare-and-swap lead-notification audit. This request
+/// cannot represent a lifecycle transition or a message write.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskLeadNotificationAuditRequest {
+    pub operation_id: TaskOperationId,
+    pub actor: MemberKey,
+    pub task_id: TaskId,
+    pub expected_revision: u64,
+    pub attempt: AssignmentAttempt,
+    pub at: IsoTimestamp,
+    pub lead: AgentName,
+    pub message_id: AtmMessageId,
+}
+
 /// A caller-owned deadline for admission to the ordered task-mutation writer.
 ///
 /// The deadline is transport metadata, not part of the idempotent mutation
@@ -153,5 +179,21 @@ pub trait AsyncTaskMutationStore: sealed::Sealed + Send + Sync {
         &self,
         request: TaskMutationRequest,
         deadline: TaskMutationDeadline,
+    ) -> Result<TaskMutationOutcome, AtmError>;
+}
+
+/// Tokio-safe capability for scheduler audit writes only. The attention
+/// scheduler receives this instead of [`AsyncTaskMutationStore`] so its type
+/// cannot express a task lifecycle transition.
+#[async_trait::async_trait]
+pub trait AsyncTaskSchedulerAuditStore: sealed::Sealed + Send + Sync {
+    async fn record_reminder(
+        &self,
+        request: TaskReminderAuditRequest,
+    ) -> Result<TaskMutationOutcome, AtmError>;
+
+    async fn record_lead_notification(
+        &self,
+        request: TaskLeadNotificationAuditRequest,
     ) -> Result<TaskMutationOutcome, AtmError>;
 }
