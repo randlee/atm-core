@@ -9,6 +9,7 @@ use super::ops::{
     mark_source_acknowledged,
 };
 use super::stmt_cache::WriterStatementCache;
+use super::task_ops::task_rejected;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use crate::task_sql;
 use atm_storage::contract::Message;
@@ -18,15 +19,6 @@ use atm_storage::task_state::{TaskEvent, TaskRow, TaskState, Transition, admit, 
 use atm_storage::types::{AgentName, TaskId, TeamName};
 use atm_storage::{AtmErrorCode, MessageWriteOrigin};
 use rusqlite::{Connection, OptionalExtension, params};
-
-const TASK_RECOVERY: &str = "Run: atm list --task-events <task_id> --member <assignee>";
-
-fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
-    AtmError::new(
-        AtmErrorCode::TaskTransitionInvalid,
-        format!("{detail}; {TASK_RECOVERY}"),
-    )
-}
 
 fn load_task_row(
     connection: &Connection,

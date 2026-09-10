@@ -102,11 +102,6 @@ migration functions directly.
   carries task queries and lifecycle mutations. Existing routes and payloads
   remain additive and a retained 1.4.0 consumer continues using its known
   routes; a 1.4.0 daemon rejects the new route before any task mutation.
-- **2026-09-09 — AZ.3:** `HTTP_API_VERSION` moves from `1.3.0` to `1.4.0`.
-  The additive `/v1/atm/tasks` request/response exchange carries canonical
-  task queries and lifecycle mutations. Existing v1.3 routes and payloads are
-  unchanged; older consumers continue using their known routes and a v1.3
-  daemon rejects the new route before any task mutation.
 - **2026-09-09 — DOCTOR-HERDR-TARGET-R1:** `HTTP_API_VERSION` moves from
   `1.2.0` to `1.3.0`. The optional `findings` collection on each Herdr endpoint
   observation carries target-resolution and named-session diagnostics. Empty

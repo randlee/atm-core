@@ -1031,7 +1031,7 @@ fn abort_reason_name(value: &TaskOutcome) -> Result<Option<&'static str>, AtmErr
     }
 }
 
-fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
+pub(super) fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
     task_error(AtmErrorCode::TaskTransitionInvalid, detail)
 }
 

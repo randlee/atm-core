@@ -135,6 +135,12 @@ impl HttpApiVersion {
     pub const fn major(&self) -> u64 {
         self.0.major
     }
+
+    /// Whether this API version can use a route introduced at `minimum`.
+    #[must_use]
+    pub fn supports_at_least(&self, minimum: &Self) -> bool {
+        self.0 >= minimum.0
+    }
 }
 
 fn parse_semver(value: &str, label: &str) -> Result<Version, AtmError> {

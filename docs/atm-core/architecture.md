@@ -367,9 +367,14 @@ Architectural rule:
 Store-family rule:
 - `MailStore` owns message lifecycle state
 - `RosterStore` owns durable team/member roster state only
-- task storage is currently out of scope; any future task storage line starts
-  from canonical Claude-code schema rather than from preserved transition
-  scaffolding
+- `TaskCommandService` is the sealed, storage-neutral command-policy boundary
+  for durable task queries and lifecycle mutations; its sole core
+  implementation validates authorization, lifecycle state, prepared handoff
+  mail, idempotency, and request deadlines before using
+  `AsyncTaskMutationStore`
+- `AsyncTaskMutationStore` owns the one SQLite writer transaction that commits
+  a task projection/event together with any prepared assignment or terminal
+  handoff message; adapters must not create a second task/message write path
 - daemon-owned live `pid` state and other session-transient runtime data stay
   outside `RosterStore`
 - `TeamConfig` / `config.json` stays a config-ingress document, not the durable

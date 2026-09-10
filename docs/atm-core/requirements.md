@@ -788,3 +788,14 @@ Historical note:
 derive an event title from `MessageEnvelope.text`, rendered J2 content, or
 `TaskRow.description`. Wire readers accept legacy `description`; compatibility
 writers emit both names with the same bounded title value.
+
+## 12.1 Phase AZ task-command boundary
+
+`atm-core` owns the sealed `TaskCommandService` command-policy boundary for
+task list/event reads and every lifecycle mutation. The service validates actor
+authorization, state transitions, idempotency, prepared assignment or handoff
+mail, and the caller's `RequestDeadline`; it delegates durable mutation only to
+`AsyncTaskMutationStore`. The storage implementation commits the task event and
+projection with its prepared message through the sole SQLite writer transaction.
+Neither CLI nor HTTP adapters may open SQLite, recreate task policy, or add a
+second task/message persistence path.

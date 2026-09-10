@@ -11,9 +11,10 @@ use serde::de::DeserializeOwned;
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
 use crate::list::ListQuery;
 use crate::protocol::{
-    CompatibilityPreflight, QueueGetNextRequest, RequestEnvelope, ResponseEnvelope,
+    CompatibilityPreflight, HttpApiVersion, QueueGetNextRequest, RequestEnvelope, ResponseEnvelope,
     TeamMemberHeartbeatRequest,
 };
 use crate::read::{PeekQuery, ReadQuery};
@@ -44,6 +45,7 @@ const GRAFT_RECEIVER_LOOKUP_PATH: &str = "/v1/atm/graft/receiver/lookup";
 const RUNTIME_RELOAD_PATH: &str = "/v1/atm/runtime/reload";
 const SEARCH_PATH: &str = "/v1/atm/messages/search";
 const TASK_PATH: &str = "/v1/atm/tasks";
+const TASK_ROUTE_INTRODUCED_IN: &str = "1.5.0";
 
 /// One registered HTTP route, published from the same constants as request encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -200,6 +202,18 @@ pub fn http_route_surface() -> impl Iterator<Item = HttpRoute> {
     HTTP_ROUTE_SPECS.iter().map(|spec| spec.route)
 }
 
+/// Route inventory exposed by a retained API-version fixture.
+///
+/// This is deliberately derived from the canonical route table rather than a
+/// hand-maintained test list, so a new route must declare its introduction
+/// version before compatibility tests can exercise an older router surface.
+pub fn http_route_surface_for_version(version: &HttpApiVersion) -> impl Iterator<Item = HttpRoute> {
+    HTTP_ROUTE_SPECS
+        .iter()
+        .filter(move |spec| route_supported_by(spec, version))
+        .map(|spec| spec.route)
+}
+
 fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
     // Keep outbound route selection exhaustive: adding a route kind cannot
     // compile until its shared codec entry is selected here.
@@ -254,6 +268,39 @@ pub fn http_route_kind(method: &str, path: &str) -> Option<HttpRouteKind> {
     HTTP_ROUTE_SPECS.iter().find_map(|spec| {
         (spec.route.method == method && spec.route.path_template == path).then_some(spec.kind)
     })
+}
+
+/// Resolves a route as a retained API-version router would, before request
+/// decoding or mutation dispatch.
+pub fn http_route_kind_for_version(
+    version: &HttpApiVersion,
+    method: &str,
+    path: &str,
+) -> Result<HttpRouteKind, AtmError> {
+    let Some(kind) = http_route_kind(method, path) else {
+        return Err(AtmError::validation_with_recovery(
+            format!("unsupported daemon HTTP route {method} {path}"),
+            "use a method and path from the daemon HTTP route contract and retry",
+        ));
+    };
+    let spec = route_spec(kind);
+    if route_supported_by(spec, version) {
+        return Ok(kind);
+    }
+    Err(AtmError::new(
+        AtmErrorCode::ClientDaemonVersionIncompatible,
+        format!(
+            "HTTP route {method} {path} requires API {TASK_ROUTE_INTRODUCED_IN} or later; retained server is {version}"
+        ),
+    ))
+}
+
+fn route_supported_by(spec: &HttpRouteSpec, version: &HttpApiVersion) -> bool {
+    spec.kind != HttpRouteKind::Task
+        || version.supports_at_least(
+            &HttpApiVersion::parse(TASK_ROUTE_INTRODUCED_IN)
+                .expect("task route introduction version must be valid semver"),
+        )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
