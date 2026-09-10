@@ -2150,7 +2150,7 @@ mod tests {
             .await
             .expect("logical task")
             .expect("assigned task");
-        assert_eq!(row.reminder_ordinal, 10);
+        assert_eq!(row.reminder_ordinal.get(), 10);
         let events = reader
             .list_task_lifecycle_events(
                 team,
@@ -2658,7 +2658,7 @@ mod tests {
             .await
             .expect("logical task")
             .expect("assigned task");
-        assert_eq!(row.reminder_ordinal, 1);
+        assert_eq!(row.reminder_ordinal.get(), 1);
     }
 
     #[tokio::test]
@@ -2682,7 +2682,7 @@ mod tests {
             .await
             .expect("logical task")
             .expect("assigned task");
-        assert_eq!(row.reminder_ordinal, 0);
+        assert_eq!(row.reminder_ordinal.get(), 0);
         assert_eq!(prompt_texts(&fake).len(), 1);
 
         *now.lock().expect("test clock lock") =
@@ -2706,7 +2706,7 @@ mod tests {
             .await
             .expect("logical task")
             .expect("assigned task");
-        assert_eq!(row.reminder_ordinal, 1);
+        assert_eq!(row.reminder_ordinal.get(), 1);
     }
 
     #[tokio::test]
@@ -2856,7 +2856,9 @@ mod tests {
                 .expect("task")
                 .expect("task row")
                 .reminder_ordinal,
-            u64::try_from(reminders_before_failure).expect("reminder count")
+            atm_storage::ReminderOrdinal::from_raw(
+                u64::try_from(reminders_before_failure).expect("reminder count"),
+            )
         );
         assert_eq!(pump.stats().task_reminders_failed, 1);
 
@@ -2907,7 +2909,7 @@ mod tests {
                 .expect("task")
                 .expect("row")
                 .reminder_ordinal,
-            0
+            atm_storage::ReminderOrdinal::default()
         );
 
         queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
@@ -2930,7 +2932,7 @@ mod tests {
                 .expect("task")
                 .expect("row")
                 .reminder_ordinal,
-            1
+            atm_storage::ReminderOrdinal::from_raw(1)
         );
 
         let (_root, runtime, fake, _pump, keys, now) =
@@ -2958,7 +2960,7 @@ mod tests {
                 .expect("task")
                 .expect("row")
                 .reminder_ordinal,
-            0
+            atm_storage::ReminderOrdinal::default()
         );
     }
 
@@ -3011,7 +3013,7 @@ mod tests {
             row.state,
             atm_storage::TaskLifecycleState::Assigned
         ));
-        assert_eq!(row.reminder_ordinal, 2);
+        assert_eq!(row.reminder_ordinal.get(), 2);
         assert_eq!(
             events
                 .iter()

@@ -774,7 +774,7 @@ fn authorization_error(message: impl Into<String>) -> AtmError {
 fn authorized_revision(
     command: &TaskMutationCommand,
     existing: Option<&atm_storage::LogicalTaskRow>,
-) -> Result<Option<u64>, AtmError> {
+) -> Result<Option<atm_storage::TaskRevision>, AtmError> {
     let Some(existing) = existing else {
         return Ok(command.expected_revision);
     };
@@ -794,7 +794,10 @@ mod tests {
     use super::authorized_revision;
     use crate::task_command::{TaskAction, TaskMutationCommand, TaskOperationId};
     use crate::types::{AgentName, TeamName};
-    use atm_storage::{LogicalTaskRow, MemberKey, TaskId, TaskLifecycleState, TaskPriority};
+    use atm_storage::{
+        LogicalTaskRow, MemberKey, ReminderOrdinal, TaskId, TaskLifecycleState, TaskPriority,
+        TaskRevision,
+    };
 
     fn command(expected_revision: Option<u64>) -> TaskMutationCommand {
         TaskMutationCommand {
@@ -804,7 +807,7 @@ mod tests {
                 AgentName::from_validated("agent"),
             ),
             task_id: "task".parse::<TaskId>().expect("task id"),
-            expected_revision,
+            expected_revision: expected_revision.map(TaskRevision::from_raw),
             action: TaskAction::Start,
         }
     }
@@ -820,8 +823,8 @@ mod tests {
             current_attempt: atm_storage::AssignmentAttempt::FIRST,
             assignment_message_id: crate::schema::AtmMessageId::new(),
             last_reminded_at: None,
-            reminder_ordinal: 0,
-            revision,
+            reminder_ordinal: ReminderOrdinal::from_raw(0),
+            revision: TaskRevision::from_raw(revision),
             updated_at: "2026-09-10T00:00:00Z".parse().expect("timestamp"),
         }
     }
@@ -831,7 +834,7 @@ mod tests {
         let authorized = existing(7);
         assert_eq!(
             authorized_revision(&command(None), Some(&authorized)).expect("bound revision"),
-            Some(7),
+            Some(TaskRevision::from_raw(7)),
             "the writer must compare against the snapshot used for authorization"
         );
         let reassigned = existing(8);

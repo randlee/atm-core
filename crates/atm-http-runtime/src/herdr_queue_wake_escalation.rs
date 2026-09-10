@@ -8,8 +8,8 @@ use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AssignmentAttempt, AsyncMessageReceivedHookEmitter, AsyncTaskLedgerReader,
     AttentionReservationStatus, BuiltInPostSendDispatch, LogicalTaskRow, MemberKey, ReadDeadline,
-    TaskLeadNotificationAuditRequest, TaskOperationId, TaskReminderAuditRequest, TaskRow,
-    TaskState,
+    TaskLeadNotificationAuditRequest, TaskOperationId, TaskReminderAuditRequest, TaskRevision,
+    TaskRow, TaskState,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::{IsoTimestamp, TaskId};
@@ -27,7 +27,7 @@ const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 struct LeadAudit<'a> {
     member: &'a MemberKey,
     row: &'a LogicalTaskRow,
-    reminder_revision: u64,
+    reminder_revision: TaskRevision,
     at: IsoTimestamp,
     lead: atm_core::types::AgentName,
     message_id: atm_core::schema::AtmMessageId,
@@ -78,7 +78,7 @@ pub(crate) async fn emit_task_reminder(
     {
         Ok(outcome) => {
             let mut reminded = emission.row.clone();
-            reminded.reminder_ordinal = reminded.reminder_ordinal.saturating_add(1);
+            reminded.reminder_ordinal = reminded.reminder_ordinal.increment();
             reminded.revision = outcome.revision;
             maybe_escalate_task(
                 pump,
@@ -110,7 +110,7 @@ pub(crate) async fn maybe_escalate_task(
     pump: &HerdrQueueWakePump,
     member: &MemberKey,
     row: &LogicalTaskRow,
-    reminder_revision: u64,
+    reminder_revision: TaskRevision,
     now: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {

@@ -38,11 +38,11 @@ pub mod roles {
 
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use attention::{
-    AsyncAttentionScheduleStore, AttentionCandidates, AttentionCursor, AttentionFinalizeOutcome,
-    AttentionFinalizeRequest, AttentionItem, AttentionLane, AttentionReservation,
-    AttentionReservationRequest, AttentionReservationStatus, AttentionScheduleStore,
-    AttentionSelection, EphemeralMessageCandidate, IdleOpportunity, IdleOpportunityId,
-    PersistentTaskCandidate, select_attention_item,
+    AsyncAttentionScheduleStore, AttentionCandidates, AttentionCursor, AttentionCursorRevision,
+    AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionItem, AttentionLane,
+    AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
+    AttentionScheduleStore, AttentionSelection, EphemeralMessageCandidate, IdleOpportunity,
+    IdleOpportunityId, PersistentTaskCandidate, select_attention_item,
 };
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
@@ -89,11 +89,12 @@ pub use task_mutation::{
     TaskMutationRequest, TaskOperation, TaskReminderAuditRequest,
 };
 pub use task_state::{
-    AssignmentAttempt, DAEMON_ACTOR_NAME, LogicalTaskRow, TaskAbortReason, TaskActor,
-    TaskAssignmentAttempt, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
+    AssignmentAttempt, DAEMON_ACTOR_NAME, LogicalTaskRow, ReminderOrdinal, TaskAbortReason,
+    TaskActor, TaskAssignmentAttempt, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
     TaskLedgerScope, TaskLifecycleAction, TaskLifecycleEventKind, TaskLifecycleEventRow,
     TaskLifecycleState, TaskLifecycleTransition, TaskOperationId, TaskOutcome, TaskPriority,
-    TaskRejected, TaskRow, TaskState, Transition, admit, lifecycle_transition, transition,
+    TaskRejected, TaskRevision, TaskRow, TaskState, Transition, admit, lifecycle_transition,
+    transition,
 };
 pub use task_store::{
     DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,

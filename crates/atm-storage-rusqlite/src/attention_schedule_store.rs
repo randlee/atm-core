@@ -212,12 +212,12 @@ fn load_cursor(connection: &Connection, member: &MemberKey) -> rusqlite::Result<
     Ok(match row {
         None => AttentionCursor {
             next_lane: AttentionLane::Ephemeral,
-            revision: 0,
+            revision: atm_storage::AttentionCursorRevision::from_raw(0),
         },
         Some((lane, revision)) => AttentionCursor {
             next_lane: parse_lane(&lane)
                 .map_err(|_| attention_schedule_invariant("invalid attention cursor lane"))?,
-            revision,
+            revision: atm_storage::AttentionCursorRevision::from_raw(revision),
         },
     })
 }
@@ -558,6 +558,7 @@ fn decode_reservation_with_offset(
 mod tests {
     use super::*;
     use crate::SqliteStorageBackend;
+    use atm_storage::AttentionCursorRevision;
     use atm_storage::{AgentName, AtmMessageId, ReadDeadline, TeamName};
     use std::time::Duration;
 
@@ -583,7 +584,7 @@ mod tests {
         };
         let request = AttentionReservationRequest {
             opportunity: opportunity.clone(),
-            expected_cursor_revision: 0,
+            expected_cursor_revision: AttentionCursorRevision::from_raw(0),
             item: item.clone(),
         };
         let first = store.reserve(request.clone()).expect("reserve");
@@ -593,7 +594,7 @@ mod tests {
             store.load_cursor(&member()).expect("cursor"),
             AttentionCursor {
                 next_lane: AttentionLane::PersistentTask,
-                revision: 1,
+                revision: AttentionCursorRevision::from_raw(1),
             }
         );
         assert_eq!(
@@ -621,7 +622,7 @@ mod tests {
         let reservation = store
             .reserve(AttentionReservationRequest {
                 opportunity: opportunity.clone(),
-                expected_cursor_revision: 0,
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
                 item: AttentionItem::EphemeralMessage {
                     member: member(),
                     message_id: AtmMessageId::new(),
@@ -656,7 +657,7 @@ mod tests {
         let retry = store
             .reserve(AttentionReservationRequest {
                 opportunity: later_opportunity.clone(),
-                expected_cursor_revision: 1,
+                expected_cursor_revision: AttentionCursorRevision::from_raw(1),
                 item: reservation.item.clone(),
             })
             .expect("later opportunity reserves the still-eligible item");
@@ -668,7 +669,7 @@ mod tests {
             store
                 .reserve(AttentionReservationRequest {
                     opportunity: later_opportunity,
-                    expected_cursor_revision: 1,
+                    expected_cursor_revision: AttentionCursorRevision::from_raw(1),
                     item: reservation.item,
                 })
                 .expect("same opportunity replay")
@@ -697,14 +698,14 @@ mod tests {
                 .expect("cursor"),
             AttentionCursor {
                 next_lane: AttentionLane::Ephemeral,
-                revision: 0,
+                revision: AttentionCursorRevision::from_raw(0),
             }
         );
         let reservation = store
             .reserve(
                 AttentionReservationRequest {
                     opportunity: opportunity.clone(),
-                    expected_cursor_revision: 0,
+                    expected_cursor_revision: AttentionCursorRevision::from_raw(0),
                     item: AttentionItem::EphemeralMessage {
                         member: member(),
                         message_id: AtmMessageId::new(),

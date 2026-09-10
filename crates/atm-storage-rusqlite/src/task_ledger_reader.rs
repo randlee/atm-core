@@ -387,8 +387,8 @@ fn decode_logical_task_row(row: &Row<'_>) -> rusqlite::Result<LogicalTaskRow> {
             .get::<_, Option<String>>(13)?
             .map(|value| parse_value(&value, "logical task reminder time"))
             .transpose()?,
-        reminder_ordinal: row.get(10)?,
-        revision: row.get(11)?,
+        reminder_ordinal: atm_storage::ReminderOrdinal::from_raw(row.get(10)?),
+        revision: atm_storage::TaskRevision::from_raw(row.get(11)?),
         updated_at: parse_value(&row.get::<_, String>(12)?, "logical task update time")?,
     })
 }

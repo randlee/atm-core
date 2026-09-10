@@ -16,8 +16,9 @@ use crate::contract::{
     ReadLaneError, sealed,
 };
 use crate::task_state::{
-    AssignmentAttempt, LogicalTaskRow, TaskAssignmentAttempt, TaskEventRow, TaskLedgerScope,
-    TaskLifecycleEventRow, TaskLifecycleState, TaskPriority, TaskRow, TaskState,
+    AssignmentAttempt, LogicalTaskRow, ReminderOrdinal, TaskAssignmentAttempt, TaskEventRow,
+    TaskLedgerScope, TaskLifecycleEventRow, TaskLifecycleState, TaskPriority, TaskRevision,
+    TaskRow, TaskState,
 };
 use crate::types::{AgentName, IsoTimestamp, OwnerGeneration, TaskId, TeamName};
 
@@ -433,8 +434,8 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
                     current_attempt: AssignmentAttempt::FIRST,
                     assignment_message_id: row.assignment_message_id,
                     last_reminded_at: row.last_reminded_at,
-                    reminder_ordinal: u64::from(row.reminder_count),
-                    revision: 0,
+                    reminder_ordinal: ReminderOrdinal::from_raw(u64::from(row.reminder_count)),
+                    revision: TaskRevision::default(),
                     updated_at: row.updated_at,
                 })
             })

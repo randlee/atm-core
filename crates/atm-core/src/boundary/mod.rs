@@ -12,15 +12,16 @@ pub use atm_storage::contract::RosterStore as DurableRosterStore;
 pub use atm_storage::contract::{AckTransition, Message, MessageKey};
 pub use atm_storage::{
     AssignmentAttempt, AsyncAttentionScheduleStore, AsyncTaskLedgerReader, AsyncTaskMutationStore,
-    AsyncTaskSchedulerAuditStore, AttentionCandidates, AttentionCursor, AttentionFinalizeOutcome,
-    AttentionFinalizeRequest, AttentionItem, AttentionReservation, AttentionReservationRequest,
-    AttentionReservationStatus, AttentionScheduleStore, BuiltInNudgeTemplateKind,
-    DAEMON_ACTOR_NAME, EphemeralMessageCandidate, EscalationScope, IdleOpportunity, LogicalTaskRow,
-    MAX_ESCALATION_RECIPIENTS, NudgeTemplateOverrideStore, PersistentTaskCandidate, ReadDeadline,
-    ReadLaneError, ReminderOutcome, TASK_STALLED_REMINDER_THRESHOLD, TaskAssignmentAttempt,
-    TaskEventKind, TaskEventRow, TaskLeadNotificationAuditRequest, TaskLifecycleState,
-    TaskOperationId, TaskPriority, TaskReminderAuditRequest, TaskRow, TaskStore,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, select_attention_item,
+    AsyncTaskSchedulerAuditStore, AttentionCandidates, AttentionCursor, AttentionCursorRevision,
+    AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionItem, AttentionReservation,
+    AttentionReservationRequest, AttentionReservationStatus, AttentionScheduleStore,
+    BuiltInNudgeTemplateKind, DAEMON_ACTOR_NAME, EphemeralMessageCandidate, EscalationScope,
+    IdleOpportunity, LogicalTaskRow, MAX_ESCALATION_RECIPIENTS, NudgeTemplateOverrideStore,
+    PersistentTaskCandidate, ReadDeadline, ReadLaneError, ReminderOrdinal, ReminderOutcome,
+    TASK_STALLED_REMINDER_THRESHOLD, TaskAssignmentAttempt, TaskEventKind, TaskEventRow,
+    TaskLeadNotificationAuditRequest, TaskLifecycleState, TaskOperationId, TaskPriority,
+    TaskReminderAuditRequest, TaskRevision, TaskRow, TaskStore, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, select_attention_item,
 };
 
 /// Durable at-most-once delivery state for deferred (`atm queue`) nudges.

@@ -9,7 +9,7 @@ mod tests {
     use atm_storage::{
         MessageWriteOrigin, PreparedAssignment, PreparedMessage, ReadDeadline, TaskLedgerScope,
         TaskLifecycleState, TaskMutationRequest, TaskOperation, TaskOperationId, TaskOutcome,
-        TaskPriority,
+        TaskPriority, TaskRevision,
     };
     use serde_json::Map;
     use std::time::Duration;
@@ -472,7 +472,7 @@ mod tests {
             operation_id: TaskOperationId::new(),
             actor: lead.clone(),
             task_id: task_id.clone(),
-            expected_revision: Some(1),
+            expected_revision: Some(TaskRevision::from_raw(1)),
             operation: TaskOperation::Reassign(assignment(&task_id, assignee, &lead)),
         };
         let (left, right) =
@@ -830,7 +830,7 @@ mod tests {
             operation_id,
             actor: worker.clone(),
             task_id: task_id.clone(),
-            expected_revision: Some(1),
+            expected_revision: Some(TaskRevision::from_raw(1)),
             operation: TaskOperation::Start,
         };
         store.apply(start.clone()).await.expect("start");
@@ -838,7 +838,7 @@ mod tests {
             operation_id: TaskOperationId::new(),
             actor: worker.clone(),
             task_id: task_id.clone(),
-            expected_revision: Some(1),
+            expected_revision: Some(TaskRevision::from_raw(1)),
             operation: TaskOperation::Block {
                 reason: "stale request".to_owned(),
             },

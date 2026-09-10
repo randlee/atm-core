@@ -142,7 +142,8 @@ pub(super) fn task_reminder_due(row: &LogicalTaskRow, now: IsoTimestamp) -> bool
 #[cfg(test)]
 mod tests {
     use atm_core::boundary::{
-        AssignmentAttempt, LogicalTaskRow, ReadLaneError, TaskLifecycleState, TaskPriority,
+        AssignmentAttempt, LogicalTaskRow, ReadLaneError, ReminderOrdinal, TaskLifecycleState,
+        TaskPriority, TaskRevision,
     };
     use atm_core::error::AtmErrorCode;
     use atm_core::schema::AtmMessageId;
@@ -189,8 +190,8 @@ mod tests {
             current_attempt: AssignmentAttempt::FIRST,
             assignment_message_id: AtmMessageId::new(),
             last_reminded_at: None,
-            reminder_ordinal: 0,
-            revision: 1,
+            reminder_ordinal: ReminderOrdinal::default(),
+            revision: TaskRevision::from_raw(1),
             updated_at: "2026-09-10T00:00:00Z".parse().expect("time"),
         };
 
@@ -212,8 +213,8 @@ mod tests {
             current_attempt: AssignmentAttempt::FIRST,
             assignment_message_id: AtmMessageId::new(),
             last_reminded_at: Some("2026-09-10T00:00:00Z".parse().expect("time")),
-            reminder_ordinal: 1,
-            revision: 2,
+            reminder_ordinal: ReminderOrdinal::from_raw(1),
+            revision: TaskRevision::from_raw(2),
             updated_at: "2026-09-10T00:00:00Z".parse().expect("time"),
         };
         assert!(!task_reminder_due(

@@ -184,7 +184,31 @@ pub fn select_attention_item(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AttentionCursor {
     pub next_lane: AttentionLane,
-    pub revision: u64,
+    pub revision: AttentionCursorRevision,
+}
+
+/// Monotonic compare-and-swap revision for one member's attention cursor.
+#[derive(
+    Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash,
+)]
+#[serde(transparent)]
+pub struct AttentionCursorRevision(u64);
+
+impl AttentionCursorRevision {
+    #[must_use]
+    pub const fn from_raw(value: u64) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    #[must_use]
+    pub const fn next(self) -> Self {
+        Self(self.0.saturating_add(1))
+    }
 }
 
 /// The finite result of one reservation. A permanent delivery failure never
@@ -219,7 +243,7 @@ pub struct AttentionReservation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AttentionReservationRequest {
     pub opportunity: IdleOpportunity,
-    pub expected_cursor_revision: u64,
+    pub expected_cursor_revision: AttentionCursorRevision,
     pub item: AttentionItem,
 }
 

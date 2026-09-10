@@ -12,7 +12,7 @@ use crate::contract::{Message, sealed};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::task_state::{
-    AssignmentAttempt, TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority,
+    AssignmentAttempt, TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority, TaskRevision,
 };
 use crate::task_store::MessageWriteOrigin;
 use crate::types::{AgentName, IsoTimestamp, MemberKey, TaskId};
@@ -88,7 +88,7 @@ pub struct TaskMutationRequest {
     pub operation_id: TaskOperationId,
     pub actor: MemberKey,
     pub task_id: TaskId,
-    pub expected_revision: Option<u64>,
+    pub expected_revision: Option<TaskRevision>,
     pub operation: TaskOperation,
 }
 
@@ -97,7 +97,7 @@ pub struct TaskMutationRequest {
 pub struct TaskMutationOutcome {
     pub task_id: TaskId,
     pub state: TaskLifecycleState,
-    pub revision: u64,
+    pub revision: TaskRevision,
     /// Assignment or terminal-handoff message committed with this operation.
     /// The field is optional for state-only mutations and defaults while old
     /// persisted operation results remain readable during the interface bump.
@@ -120,7 +120,7 @@ pub struct TaskReminderAuditRequest {
     pub operation_id: TaskOperationId,
     pub actor: MemberKey,
     pub task_id: TaskId,
-    pub expected_revision: u64,
+    pub expected_revision: TaskRevision,
     pub attempt: AssignmentAttempt,
     pub at: IsoTimestamp,
 }
@@ -132,7 +132,7 @@ pub struct TaskLeadNotificationAuditRequest {
     pub operation_id: TaskOperationId,
     pub actor: MemberKey,
     pub task_id: TaskId,
-    pub expected_revision: u64,
+    pub expected_revision: TaskRevision,
     pub attempt: AssignmentAttempt,
     pub at: IsoTimestamp,
     pub lead: AgentName,
