@@ -3,8 +3,9 @@ phase: AZ
 sprint: AZ.1
 title: Bounded task-nudge metadata contract
 branch: feature/az1-task-nudge-contract
-integration_branch: develop
-status: planned
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/az1-task-nudge-contract
+integration_branch: integrate/phase-az
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: standalone
@@ -184,7 +185,7 @@ field rename, documentation-only update, test-only proof, or partial consumer
 migration cannot satisfy the sprint while any listed runtime projection or
 acceptance criterion remains open.
 
-- [ ] D1 — Amend the normative notification contract in
+- [x] D1 — Amend the normative notification contract in
   `docs/requirements.md`, `docs/architecture.md`, `docs/atm/requirements.md`,
   `docs/atm/architecture.md`, `docs/atm-core/requirements.md`,
   `docs/atm-core/architecture.md`, `docs/atm-core/boundaries.md`,
@@ -211,24 +212,24 @@ acceptance criterion remains open.
   Append the internal/graft both-sides compatibility plan to
   `docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md`, including the
   1.5.14 reader fixture and 1.5.15 title-aware receiver floor.
-- [ ] D2 — Replace the body-capable `PostSendHookEvent.description` semantic
+- [x] D2 — Replace the body-capable `PostSendHookEvent.description` semantic
   with `title` in `crates/atm-core/src/boundary/mod.rs`. Add one summary-only
   normalization helper and use it from
   `crates/atm-core/src/send/hook.rs::post_send_event_from_message` and
   `crates/atm-core/src/nudge_dispatch.rs::rebuild_received_hook_dispatch`.
   Delete both `envelope.text` fallbacks.
-- [ ] D3 — In `crates/atm-core/src/nudge_dispatch.rs`, build Task reminders
+- [x] D3 — In `crates/atm-core/src/nudge_dispatch.rs`, build Task reminders
   from the persisted assignment message's summary. Preserve reminder delivery
   when that message/title is missing by using the empty title. Do not read
   `TaskRow.description`; do not change task admission, the `tasks` schema, or
   task list/order output.
-- [ ] D4 — Update `crates/atm-core/src/send/nudge_template.rs` and
+- [x] D4 — Update `crates/atm-core/src/send/nudge_template.rs` and
   `docs/user-documents/nudge-templates.md` plus its delivery, queue, task, and
   management examples: defaults use `{{title}}`, the renderer exposes
   `title`, and `description` is a deprecated title-only alias for persisted
   overrides. All seven kinds must render without a body source, including
   acknowledge-family templates.
-- [ ] D5 — Carry the renamed/title-only event through retained consumers and
+- [x] D5 — Carry the renamed/title-only event through retained consumers and
   test fixtures in `crates/atm-core/src/graft.rs`,
   `crates/atm-core/tests/nudge_mode.rs`,
   `crates/atm/src/commands/internal_nudge.rs`,
@@ -249,7 +250,7 @@ acceptance criterion remains open.
   plus deprecated title-only `description`; all new readers accept either
   spelling. The 1.5.15 `atm-graft`/hermes-atm reader ships before the
   deprecated key can be removed.
-- [ ] D6 — Add the focused regression suite in the files above plus
+- [x] D6 — Add the focused regression suite in the files above plus
   `crates/atm-core/src/send/tests.rs`,
   `crates/atm-core/src/send/post_write_tests.rs`,
   `crates/atm-core/tests/nudge_dispatch.rs`, and

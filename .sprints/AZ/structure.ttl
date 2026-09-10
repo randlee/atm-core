@@ -1,0 +1,9 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAZ a triage:Phase .
+
+triage:AZ.1 a triage:Sprint ; triage:inPhase triage:PhaseAZ ; triage:order 1 ; triage:criteria "docs/plans/phase-az/sprint-AZ.1-task-nudge-contract.md" ; triage:branch "feature/az1-task-nudge-contract" .
+triage:AZ.2 a triage:Sprint ; triage:inPhase triage:PhaseAZ ; triage:order 2 ; triage:criteria "docs/plans/phase-az/sprint-AZ.2-task-domain-storage.md" ; triage:branch "feature/az2-task-domain-storage" .
+triage:AZ.3 a triage:Sprint ; triage:inPhase triage:PhaseAZ ; triage:order 3 ; triage:criteria "docs/plans/phase-az/sprint-AZ.3-task-command-handoff.md" ; triage:branch "feature/az3-task-command-handoff" .
+triage:AZ.4 a triage:Sprint ; triage:inPhase triage:PhaseAZ ; triage:order 4 ; triage:criteria "docs/plans/phase-az/sprint-AZ.4-attention-scheduler.md" ; triage:branch "feature/az4-attention-scheduler" .

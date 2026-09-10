@@ -14,9 +14,10 @@ use super::{
     persist_message, prepare_send_context, prepare_threaded_message,
 };
 use crate::boundary::{
-    HerdrNudgeTarget, LocalSteerTarget, LocalTmuxNudgeTarget, MailMessageState,
-    MailStoreMailboxMetadataRow, Message, MessageKey, NonClaudeOutboundDeliveryRequest,
-    PostSendBuiltInTarget, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+    BuiltInNudgeTemplateKind, HerdrNudgeTarget, LocalSteerTarget, LocalTmuxNudgeTarget,
+    MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
+    NonClaudeOutboundDeliveryRequest, PostSendBuiltInTarget, PostSendHookEvent, RosterEntry,
+    RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -560,7 +561,7 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         recipient: AgentName::from_validated("recipient"),
         recipient_team: TeamName::from_validated(TEST_TEAM),
         message_id: "01KZ0000000000000000000000".parse().expect("message"),
-        description: "rendered description".to_owned(),
+        title: "rendered description".to_owned(),
         requires_ack: false,
         is_ack: false,
         task_id: None,
@@ -631,7 +632,7 @@ fn post_send_herdr_skips_a_nonconforming_canonical_recipient_without_panicking()
         recipient: AgentName::from_validated("TeamLead"),
         recipient_team: TeamName::from_validated(TEST_TEAM),
         message_id: "01KZ0000000000000000000000".parse().expect("message"),
-        description: "invalid herdr canonical name".to_owned(),
+        title: "invalid herdr canonical name".to_owned(),
         requires_ack: false,
         is_ack: false,
         task_id: None,
@@ -674,6 +675,32 @@ pub(super) fn outbound_message() -> InboxMessage {
         task_complete: None,
         extra: Map::new(),
     }
+}
+
+#[test]
+fn post_send_event_projects_summary_and_never_immutable_body() {
+    let sentinel = "PRIVATE-J2-RENDERED-BODY-SENTINEL";
+    let mut envelope = outbound_message();
+    envelope.text = sentinel.to_owned();
+    envelope.summary = Some("review phase AZ contract".to_owned());
+    let logical = crate::delivery_plan::LogicalMessage::new(envelope, false, false)
+        .expect("message id is present");
+    let recipient = ResolvedRecipient {
+        agent: AgentName::from_validated("recipient"),
+        team: TeamName::from_validated(TEST_TEAM),
+    };
+
+    let event = super::hook::post_send_event_from_message(&recipient, &logical, None)
+        .expect("event projection");
+    let rendered = super::nudge_template::render_built_in_nudge(
+        &event,
+        super::nudge_template::default_template(BuiltInNudgeTemplateKind::Task),
+    )
+    .expect("rendered nudge");
+
+    assert_eq!(event.title, "review phase AZ contract");
+    assert!(rendered.contains("review phase AZ contract"));
+    assert!(!rendered.contains(sentinel));
 }
 pub(super) fn send_request(home_dir: &Path) -> SendRequest {
     SendRequest::new(

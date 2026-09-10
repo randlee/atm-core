@@ -50,7 +50,9 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
         ("from", qualified_sender_identity(event)),
         ("team", event.recipient_team.to_string()),
         ("message_id", event.message_id.to_string()),
-        ("description", event.description.clone()),
+        ("title", event.title.clone()),
+        // Persisted overrides may still use this title-only compatibility alias.
+        ("description", event.title.clone()),
         (
             "task_id",
             event
@@ -65,19 +67,19 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
 pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
     match kind {
         BuiltInNudgeTemplateKind::Delivery => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <description>{{title}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::DeliveryAck => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <description>{{title}}</description>\n  <action>execute the assigned task</action>\n  <when idle=\"immediate\" busy=\"after-current-task\"/>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::Queue => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <description>{{title}}</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::QueueAck => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <description>{{title}}</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::Task => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <task id=\"{{task_id}}\">{{description}}</task>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <task id=\"{{task_id}}\">{{title}}</task>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::Acknowledge => {
             "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\"/>"
@@ -142,7 +144,7 @@ mod tests {
             recipient: AgentName::from_validated(TEST_ARCH_CTM),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
-            description: "review failing smoke lane".to_string(),
+            title: "review failing smoke lane".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,

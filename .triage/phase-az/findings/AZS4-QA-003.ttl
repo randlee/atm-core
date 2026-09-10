@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS4-QA-003>
+  a triage:Finding ;
+  triage:findingId "AZS4-QA-003" ;
+  triage:title "schema_version_compat.rs missing coverage for new attention tables" ;
+  triage:description "crates/atm-storage-rusqlite/tests/schema_version_compat.rs has no coverage of the new attention_lane_cursors and attention_opportunities tables introduced by this sprint's STORAGE_SCHEMA_VERSION bump (2.0.0 -> 2.1.0). The storage-schema-bump acceptance criterion is therefore unverified." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/tests/schema_version_compat.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-09-10T16:09:12Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-09-10T15:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T15:29:16Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-003/AZ4-missing-coverage> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS4-QA-003/AZ4-missing-coverage>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/tests/schema_version_compat.rs" ;
+  triage:line 1 ;
+  triage:snippet "Missing schema migration test coverage for attention_lane_cursors, attention_opportunities" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfd> .
+
+<urn:atm:triage:worktree/AZ4/7f5df3bfd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ4" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:orderIndex 4 .

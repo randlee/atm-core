@@ -104,6 +104,11 @@ migration functions directly.
   Receivers default every added field when it is omitted, and older consumers
   may ignore the additive fields. The retained pre-1.4 payload test proves the
   same-major compatibility path. This is a minor, backward-compatible bump.
+- **2026-09-10 — AZ.3 task command service:** `HTTP_API_VERSION` moves from
+  `1.4.0` to `1.5.0`. The canonical `/v1/atm/tasks` request/response exchange
+  carries task queries and lifecycle mutations. Existing routes and payloads
+  remain additive and a retained 1.4.0 consumer continues using its known
+  routes; a 1.4.0 daemon rejects the new route before any task mutation.
 - **2026-09-09 — DOCTOR-HERDR-TARGET-R1:** `HTTP_API_VERSION` moves from
   `1.2.0` to `1.3.0`. The optional `findings` collection on each Herdr endpoint
   observation carries target-resolution and named-session diagnostics. Empty
@@ -130,17 +135,31 @@ migration functions directly.
   rejection. The bridge may reconcile those writes to authoritative v2
   constraints, including deterministic active-conflict demotion; exact v1
   state semantics are not part of the rollback guarantee.
+- **2026-09-10 — AZ.2 implementation:** the v2 task, attempt, event, and
+  operation projections, retained v1 bridge, and fresh-versus-upgraded
+  compatibility fixture implement this approved boundary without removing a
+  v1 table or column.
+- **2026-09-10 — AZ.4 additive attention schedule:**
+  `STORAGE_SCHEMA_VERSION` moves from `2.0.0` to `2.1.0`. The idempotent
+  `attention_schedule_store::ensure_schema` step adds only cursor and
+  identifier-only reservation tables. Existing 2.0 consumers ignore those
+  tables, so this is a backward-compatible minor storage-schema change; fresh
+  and upgraded schemas must converge and the retained 1.5.14 consumer fixture
+  remains required.
 
 ## Consequences
 
 - `HTTP_API_VERSION` first moved to `1.1.0` as the current wire, AY.15 moved it
   to `1.2.0` for the additive doctor-presence field, and
-  DOCTOR-HERDR-TARGET-R1 moved it to `1.3.0` for endpoint findings. Issue
-  #1378 moves it to `1.4.0` for canonical runtime-state revision and freshness
-  fields; it is bumped on every later governed-interface change.
+  DOCTOR-HERDR-TARGET-R1 moves it to `1.3.0` for endpoint findings, issue
+  #1378 moves it to `1.4.0` for runtime-state fields, and AZ.3 moves it to
+  `1.5.0` for the additive task exchange; it is
+  bumped on every later governed-interface change.
 - Herdr support becomes a matrix, not a single version; per-release
   conformance fixtures are required.
 - SQLite migrations gain a declared version and an explicit rollback test
   against the previous release binary.
+- The Phase AZ sequence is SQLite `2.0.0` for the approved task-domain major
+  migration followed by `2.1.0` for additive fair attention scheduling.
 - Plan documents must list their intended interface changes so phase-end
   drift review has something to diff against.

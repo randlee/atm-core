@@ -44,8 +44,8 @@ cache and cannot own durable delivery state or concrete backend types.
 
 This section is the follow-up ADR required by ADR-018 §3 before Phase AN adds
 its fourth and fifth optional storage capabilities. The existing optional
-capabilities are `PeerConfigStore`, `OutboundMessageQuery`, and
-`NudgeTemplateOverrideStore`; Phase AN may add exactly these two additional
+capabilities are `PeerConfigStore` and `NudgeTemplateOverrideStore`; Phase AN
+may add exactly these two additional
 sealed, backend-neutral capabilities:
 
 - `TemplateCatalogStore`, for immutable content-addressed template
@@ -92,8 +92,8 @@ here.
 
 `PendingNudgeStore` is a new sealed, backend-neutral optional capability
 trait on the `atm-storage` shared contract, joining `PeerConfigStore`,
-`OutboundMessageQuery`, `NudgeTemplateOverrideStore`, `TemplateCatalogStore`,
-and `MessageSearchStore` as the sixth. It is recorded machine-readably in
+`NudgeTemplateOverrideStore`, `TemplateCatalogStore`, and `MessageSearchStore`.
+It is recorded machine-readably in
 `boundaries/atm-storage/pending-nudge-store.toml` and enforced by
 `crates/atm-architecture/tests/pending_nudge_store_boundary.rs`, following
 the same pattern the Phase AN extension above established. As with that
@@ -102,6 +102,26 @@ trait: a seventh requires its own new ADR under ADR-018 §3, counted from
 ADR-054 forward.
 
 ## Consequences
+
+### Amendment — Phase AZ.2 capability inventory correction
+
+`OutboundMessageQuery` was deleted in Phase AM and is not an active storage
+capability. ADR-063 recounts the live inventory and authorizes
+`AsyncTaskMutationStore` as the sealed Tokio-safe canonical task-lifecycle
+mutation boundary. Its SQLite adapter owns the existing ordered writer
+transaction; composition exposes only the trait through `StorageHandles`.
+The retained `TaskStore` stays a v1 compatibility read/audit capability and
+cannot become a second mutation policy.
+
+### Amendment — Phase AZ.4 attention scheduling
+
+ADR-063 authorizes `AttentionScheduleStore` and its required
+`AsyncAttentionScheduleStore` companion as the twelfth semantic storage
+capability. The narrow contract owns only durable fair-lane cursors and
+identifier-only idle-opportunity reservations. `PendingNudgeStore` still owns
+message claims and the task reader/mutation store still own task state and
+reminder audit. The concrete SQLite adapter remains the only SQL owner; the
+Tokio runtime receives only the sealed contracts through composition.
 
 The prior runtime indirection is not a justification for SQLite-backed daemon
 state. Phase AI deletes it while preserving normal storage shutdown through a

@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-019>
+  a triage:Finding ;
+  triage:findingId "FNX-019" ;
+  triage:title "service_runtime.rs's map_read_lane_error is a superfluous one-line wrapper" ;
+  triage:description "quality-mgr's QA-2 pass on PR #1395 (head 3b8a43fd3) reports crates/atm-core/src/service_runtime.rs:1148's map_read_lane_error(error: atm_storage::ReadLaneError) -> AtmError just returns AtmError::from(error) -- an existing From impl is already available, so the wrapper adds no behavior. Same pattern as the pre-existing task_ledger_read_error wrapper in crates/atm-http-runtime/src/herdr_queue_wake.rs:59 (also just AtmError::from(error)). Recommendation: replace .map_err(map_read_lane_error) at service_runtime.rs:742 with .map_err(AtmError::from) and delete the wrapper fn (updating its direct test-assertion call site at service_runtime.rs:1200); leaving herdr_queue_wake.rs's task_ledger_read_error alone is acceptable since it is pre-existing and out of this PR's diff, but doing both keeps the codebase consistent since quality-mgr flagged the duplication pattern." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "simplification" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/service_runtime.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T20:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-019/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+# v2: closed fixed -- verified by quality-mgr's QA-3 pass on PR #1395 @ e20f2d0f5
+# (PASS 0/0/0 across arch-qa/req-qa/rust-qa-agent/ruthless-boundary-qa, full
+# suite re-confirmed clean) plus team-lead direct source verification.
+# map_read_lane_error wrapper removed at service_runtime.rs; call site now uses AtmError::from directly, migrated test still covers all 3 ReadLaneError cases.
+
+<urn:atm:triage:occurrence/FNX-019/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 1148 ;
+  triage:snippet "map_read_lane_error is a superfluous AtmError::from wrapper; quality-mgr QA-2 finding #5 on PR #1395" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
+
+<urn:atm:triage:worktree/AZ4/3b8a43fd3-r>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:orderIndex 4 .

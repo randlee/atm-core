@@ -29,6 +29,14 @@ at the opportunity's exact revision before emission. Neither raw Herdr output,
 heartbeat DTOs, nor `RuntimeHealth` snapshots are eligibility authorities.
 Bare-CLI behavior remains separate under ADR-054.
 
+The selection boundary carries identifiers only. A durable per-member cursor
+alternates queued-message and persistent-task lanes when both are due; task
+priority remains local to the persistent lane. The selected queue claim or
+task's current assignment attempt is revalidated immediately before a bounded
+metadata-only prompt. Scheduler reservations retry the same item and become
+permanently failed only after five retryable delivery failures; that terminal
+status never closes or consumes the underlying task/message lifecycle.
+
 # Auxiliary observability routes
 
 `GET /v1/health` and `GET /v1/diagnostics` are mounted outside the canonical
@@ -64,3 +72,10 @@ diagnostic timeline (`DiagnosticTimelineStore`):
   non-cancellable `spawn_blocking` query is still running), plus an overall
   `query_deadline` covering the whole request. Saturation and deadline
   timeouts both return `503 Service Unavailable`.
+
+## Phase AZ received-hook projection
+
+The Tokio runtime forwards the core-built bounded event without reopening or
+rendering durable message text. It preserves the metadata-only `title` and
+optional `task_id` through Tmux, Herdr, Graft, and queued dispatch selection;
+message text is read later through the normal mailbox API.

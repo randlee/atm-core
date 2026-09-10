@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-002>
+  a triage:Finding ;
+  triage:findingId "FNX-002" ;
+  triage:title "CDR-005 repeatable sweep missed the mailbox-list residual occurrence" ;
+  triage:description "fenix's independent critical review of PR #1395 reports that CDR-005 is recorded triage:repeatable true but its sweep covered only two files, missing one live occurrence of the same error-flattening pattern at service_runtime.rs:742 on the mailbox-list path. git grep for the flattening pattern returns only this one remaining line at the reviewed head. AsyncMailboxReader::list_messages returns ReadLaneError, and the From<ReadLaneError> for AtmError impl at contract.rs:409-419 exists specifically to preserve the lane outcome as the machine-visible cause instead of flattening it into unavailability. Flattening here loses DaemonConnectionSaturated and MailboxLockTimeout, so a saturated reader pool on atm list / threaded-message validation is misreported as DaemonUnavailable and loses its retry classification. Recommendation: use .map_err(AtmError::from), and extend the error-code preservation test pattern already added in herdr_queue_wake.rs:1195-1221 to this call site." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/service_runtime.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-002/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FNX-002/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 742 ;
+  triage:snippet ".map_err(|error| AtmError::daemon_unavailable(error.to_string())) flattens ReadLaneError instead of using .map_err(AtmError::from)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "51648beef" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/51648beef> .
+
+<urn:atm:triage:worktree/AZ4/51648beef>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "51648beef" ;
+  triage:orderIndex 4 .

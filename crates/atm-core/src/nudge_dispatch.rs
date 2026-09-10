@@ -11,6 +11,7 @@
 
 use crate::boundary::{
     BuiltInPostSendDispatch, MemberKey, Message, MessageKey, NudgeKind, PostSendHookEvent,
+    nudge_title,
 };
 use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
@@ -18,7 +19,7 @@ use crate::schema::{AtmMessageId, authenticated_source_host};
 use crate::send::NudgeMode;
 use crate::send::hook::build_built_in_dispatch;
 use crate::service_runtime::LocalServiceRuntime;
-use atm_storage::TaskRow;
+use atm_storage::{TaskAssignmentAttempt, TaskRow};
 
 /// Clears the exact durable queue marker after a successful handoff.
 ///
@@ -130,12 +131,7 @@ pub fn rebuild_received_hook_dispatch(
         recipient: member.agent().clone(),
         recipient_team: member.team().clone(),
         message_id,
-        description: message
-            .envelope
-            .summary
-            .clone()
-            .filter(|summary| !summary.trim().is_empty())
-            .unwrap_or_else(|| message.envelope.text.clone()),
+        title: nudge_title(message.envelope.summary.as_deref()),
         requires_ack: message.envelope.requires_ack,
         is_ack: message.envelope.acknowledges_message_id.is_some(),
         task_id: message.envelope.task_id.clone(),
@@ -150,10 +146,11 @@ pub fn rebuild_received_hook_dispatch(
     build_built_in_dispatch(runtime, &delivery_snapshot, &event, nudge_mode)
 }
 
-/// Builds a deferred Task reminder without requiring the assignment message
-/// to remain in the mailbox. A missing assignment record only removes the
-/// optional source-host attribution; the durable task row remains sufficient
-/// to render the reminder body.
+/// Builds a deferred Task reminder from assignment-message metadata.
+///
+/// A missing assignment record only removes optional source-host/title
+/// metadata. The durable task row remains sufficient for reminder eligibility,
+/// but its historical description is never a nudge input.
 pub fn build_task_reminder_dispatch(
     runtime: &LocalServiceRuntime,
     member: &MemberKey,
@@ -170,9 +167,11 @@ pub fn build_task_reminder_dispatch(
     if !delivery_snapshot.local_herdr_post_send {
         return Ok(None);
     }
-    let sender_host = runtime
+    let assignment_message = runtime
         .message_store
-        .load_message(&MessageKey::from(row.assignment_message_id))?
+        .load_message(&MessageKey::from(row.assignment_message_id))?;
+    let sender_host = assignment_message
+        .as_ref()
         .map(|message| authenticated_source_host(&message.envelope))
         .transpose()?
         .flatten();
@@ -184,10 +183,61 @@ pub fn build_task_reminder_dispatch(
         recipient: row.assignee.clone(),
         recipient_team: row.team.clone(),
         message_id: row.assignment_message_id,
-        description: row.description.clone(),
+        title: nudge_title(
+            assignment_message
+                .as_ref()
+                .and_then(|message| message.envelope.summary.as_deref()),
+        ),
         requires_ack: true,
         is_ack: false,
         task_id: Some(row.task_id.clone()),
+        recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
+    };
+    build_built_in_dispatch(runtime, &delivery_snapshot, &event, NudgeMode::Deferred)
+}
+
+/// Builds a deferred v2 task reminder from immutable assignment-attempt
+/// metadata.  The scheduler supplies only identifiers and provenance: the
+/// title is still reloaded from the canonical assignment message, while task
+/// objective text remains unavailable to the nudge path.
+pub fn build_logical_task_reminder_dispatch(
+    runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    task_id: &crate::types::TaskId,
+    assignment: &TaskAssignmentAttempt,
+) -> Result<Option<BuiltInPostSendDispatch>, AtmError> {
+    let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
+        runtime,
+        member.team(),
+        member.agent(),
+    )?;
+    if !delivery_snapshot.local_herdr_post_send {
+        return Ok(None);
+    }
+    let assignment_message = runtime
+        .message_store
+        .load_message(&MessageKey::from(assignment.assignment_message_id))?;
+    let sender_host = assignment_message
+        .as_ref()
+        .map(|message| authenticated_source_host(&message.envelope))
+        .transpose()?
+        .flatten();
+    let event = PostSendHookEvent {
+        sender: assignment.assigner.clone(),
+        sender_chat_id: None,
+        sender_team: assignment.team.clone(),
+        sender_host,
+        recipient: member.agent().clone(),
+        recipient_team: member.team().clone(),
+        message_id: assignment.assignment_message_id,
+        title: nudge_title(
+            assignment_message
+                .as_ref()
+                .and_then(|message| message.envelope.summary.as_deref()),
+        ),
+        requires_ack: true,
+        is_ack: false,
+        task_id: Some(task_id.clone()),
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };
     build_built_in_dispatch(runtime, &delivery_snapshot, &event, NudgeMode::Deferred)

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZ3-ADR061-DUP-ENTRY>
+  a triage:Finding ;
+  triage:findingId "AZ3-ADR061-DUP-ENTRY" ;
+  triage:title "ADR-061 carries two contradictory AZ.3 D5 entries after the SCHEMA-COLLISION fix" ;
+  triage:description "docs/adr/ADR-061-governed-interface-schema-versioning.md:100-109 now has two contradictory AZ.3 D5 entries: the correct 2026-09-10 (1.4.0->1.5.0) entry sits directly above an uncorrected stale 2026-09-09 entry claiming 1.3.0->1.4.0. Introduced by this round's own SCHEMA-COLLISION fix, which added the new entry without removing the old one. docs/plans/phase-az/phase-az-plan.md:174 also still states the stale bump. Fix: delete the stale ADR-061 entry and correct the plan doc. Source: QA-2 on PR #1382 (https://github.com/randlee/atm-core/pull/1382)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/adr/ADR-061-governed-interface-schema-versioning.md, docs/plans/phase-az/phase-az-plan.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZ3-ADR061-DUP-ENTRY/AZ3-1> ;
+  triage:closedAt "2026-09-10T05:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AZ3-ADR061-DUP-ENTRY/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-061-governed-interface-schema-versioning.md" ;
+  triage:line 100 ;
+  triage:snippet "two AZ.3 D5 entries: 2026-09-10 (1.4.0->1.5.0, correct) directly above stale 2026-09-09 (1.3.0->1.4.0)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "05e35a69716f9ef85bd7379d9a6ffb84553cfadf" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b8900296c> .
+
+<urn:atm:triage:worktree/AZ3/b8900296c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:orderIndex 3 .

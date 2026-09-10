@@ -194,3 +194,14 @@ Existing SQLite override tables are rebuilt on database open when their
 constraint does not include `queue`; accepted rows are copied, retired rows
 are dropped with a warning naming the team and kind, and unknown rows fail the
 open loudly. Fresh databases use the seven-value constraint directly.
+
+## Amendment — Phase AZ bounded nudge metadata (2026-09-09)
+
+All receiver nudges are bounded projections of persisted message metadata:
+`message_id`, summary-backed `title` (empty when summary is absent), and
+optional `task_id`. Immutable message text, rendered template bodies, and
+`TaskRow.description` are excluded from every built-in and adapter path; only
+`atm read` retrieves a body. The canonical model field is `title`; temporary
+compatibility output uses an explicit wire projection that also emits
+`description` with the same title value, while readers accept old
+`description`-only payloads.

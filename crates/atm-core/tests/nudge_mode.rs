@@ -682,7 +682,7 @@ fn assert_herdr_rendered_default(
     let expected = atm_core::send::default_template(expected_kind)
         .replace("{{from}}", &dispatch.event.source_address().to_string())
         .replace("{{message_id}}", &dispatch.event.message_id.to_string())
-        .replace("{{description}}", &dispatch.event.description)
+        .replace("{{title}}", &dispatch.event.title)
         .replace(
             "{{task_id}}",
             dispatch

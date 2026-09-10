@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZ3-CROSS-HOST-UNREACHABLE>
+  a triage:Finding ;
+  triage:findingId "AZ3-CROSS-HOST-UNREACHABLE" ;
+  triage:title "cross-host task-handoff rejection (AC3) is unimplemented end-to-end; guard is unreachable in production" ;
+  triage:description "AZ.3's own Authorization/Closure sections and Acceptance Criterion 3 require every cross-host recipient to reject before mutation with ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED. Confirmed unimplemented end-to-end by req-qa and independently re-verified by quality-mgr via direct read of all four files: (1) MemberKey (crates/atm-storage/src/types.rs:1020-1024) has no host field at all; (2) every CLI recipient argument (crates/atm/src/commands/task.rs) is typed as bare AgentName, whose FromStr (types.rs:374-378) rejects '@'/'.' via validate_path_segment, so a host-qualified address cannot even be typed; (3) CoreTaskCommandService hardcodes delivery_origin: MessageWriteOrigin::Local unconditionally (crates/atm-core/src/task_command/service.rs:331); (4) the cross-host rejection in task_mutation_store.rs:530-536,898 only fires when delivery_origin != Local, a state produced only by a unit test that manually overwrites the private field (task_mutation_store.rs:357). No production caller can ever exercise the guard. Fix: either implement real cross-host addressing end-to-end, or descope AC3/Authorization section language to state the guard is defense-in-depth for a future cross-host transport, not a reachable contract today. Source: QA-2 on PR #1382 (https://github.com/randlee/atm-core/pull/1382), req-qa + quality-mgr independent confirmation." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/types.rs, crates/atm/src/commands/task.rs, crates/atm-core/src/task_command/service.rs, crates/atm-storage/src/task_mutation_store.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZ3-CROSS-HOST-UNREACHABLE/AZ3-1> ;
+  triage:deferredNote "Descoped, not implemented: sprint doc's AC3/Authorization language now honestly states ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED is defense-in-depth for a future cross-host transport, not a reachable AZ.3 contract. Code is unchanged (MemberKey still has no host field, delivery_origin still hardcoded Local). Confirmed by req-qa and arch-qa independently at QA-3." ;
+  triage:closedAt "2026-09-10T05:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AZ3-CROSS-HOST-UNREACHABLE/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_command/service.rs" ;
+  triage:line 331 ;
+  triage:snippet "delivery_origin: MessageWriteOrigin::Local -- hardcoded, never set from real caller-host state" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "05e35a69716f9ef85bd7379d9a6ffb84553cfadf" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b8900296c> .
+
+<urn:atm:triage:worktree/AZ3/b8900296c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:orderIndex 3 .

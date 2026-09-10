@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-022>
+  a triage:Finding ;
+  triage:findingId "FNX-022" ;
+  triage:title "AsyncTaskMutationStore exposes an unbounded apply() against its own bounded-submission boundary contract" ;
+  triage:description "fenix (lead, this round) and solar jointly identified and verified: boundaries/atm-storage/async-task-mutation-store.toml:18 declares io_owns = [\"bounded_task_mutation_submission\", \"idempotent_task_result\"], yet AsyncTaskMutationStore still exposes an unbounded apply() beside apply_before() (atm-storage/src/task_mutation.rs:172-182). apply_before has exactly one production caller (atm-core/src/task_command/service.rs:94); apply has zero production callers -- all 37 call sites are in crates/atm-storage-rusqlite/src/task_mutation_store.rs, entirely inside #[cfg(test)] mod tests. The trait violates its own declared owned-I/O contract, pre-existing (state = concrete_landed, landed with AZ.2/CDR-004), not introduced by the SOLAR-CDR-009 work. Must land before Phase AZ merges. Fix per solar's ruling, verified by fenix: (1) delete apply from the trait, apply_before becomes the sole method -- no compatibility argument, trait is new/unmerged; (2) convert the 37 test call sites to apply_before through one local generous-deadline test helper; (3) delete the unbounded SQLite impl at atm-storage-rusqlite/src/lib.rs:308; (4) delete SharedDb::submit_task_mutation_async itself (shared_db.rs:381) once its only other callers (lib.rs:329, :347 -- the two audit methods FNX's SOLAR-CDR-009 boundary ruling converts to the bounded path) are gone, leaving one bounded mutation surface; (5) boundary update -- add TaskMutationDeadline to async-task-mutation-store.toml [contracts] request_types and align the AZ.2 trait snippet/boundary docs to show apply_before as the sole method. No capability-count change, no ADR-036 inventory change. SEQUENCING: step 4 is only valid after the SOLAR-CDR-009 fix lands in layer 1 (arch-ctm converting lib.rs:329/:347 to the bounded audit path) -- cipher must verify submit_task_mutation_async genuinely has zero remaining callers at that point before deleting it, not assume it landed as specified." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "boundary-compliance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/task_mutation.rs, crates/atm-storage-rusqlite/src/lib.rs, crates/atm-storage-rusqlite/src/shared_db.rs, crates/atm-storage-rusqlite/src/task_mutation_store.rs, boundaries/atm-storage/async-task-mutation-store.toml" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:43:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T21:41:06Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-022/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+# dispatchReady false: assigned as layer 2 (cipher) on fix/az-cdr-followup-2,
+# ordered LAST within that layer (after FNX-020, FNX-021) per fenix's
+# routing -- mechanical removal + 37 test conversions is cipher work, not
+# arch-ctm's. Held until layer 1 (SOLAR-CDR-009/FNX-014) pushes; step 4 of
+# the fix additionally requires layer 1's audit-boundedness change
+# (FNX-016..019-adjacent trait work in this same dispatch round) to have
+# actually landed before deleting submit_task_mutation_async.
+
+<urn:atm:triage:occurrence/FNX-022/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_mutation.rs" ;
+  triage:line 172 ;
+  triage:snippet "apply() has zero production callers (all 37 call sites are test-only); trait violates its own bounded_task_mutation_submission boundary contract. Pre-existing, landed with AZ.2/CDR-004." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/e20f2d0f5> .

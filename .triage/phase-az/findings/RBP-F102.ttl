@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F102>
+  a triage:Finding ;
+  triage:findingId "RBP-F102" ;
+  triage:title "PyAgentAddress re-parses fields instead of caching typed values like its sibling type" ;
+  triage:description "quality-mgr's phase-ending review (rust-best-practices-agent, independently verified) reports that PyAgentAddress re-parses instead of caching typed fields, unlike its sibling PyGraftSessionOptions which caches. Recommendation: cache the typed fields on construction to match the established sibling pattern." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-graft-python/src/lib.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F102/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F102/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "PyAgentAddress re-parses fields instead of caching typed values (unlike sibling PyGraftSessionOptions)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "bde3aa786" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/bde3aa786> .
+
+<urn:atm:triage:worktree/AZ4/bde3aa786>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "bde3aa786" ;
+  triage:orderIndex 4 .

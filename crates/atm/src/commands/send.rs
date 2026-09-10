@@ -7,8 +7,10 @@ use atm_core::address::AgentAddress;
 use atm_core::load_atm_config;
 use atm_core::send::{
     MessageClassification, NudgeMode, SendMessageSource, SendRequest, TemplateSendSource, input,
+    render_template_source_for_task, resolve_message_body,
 };
 use atm_core::send_to::classify_recipient_locality;
+use atm_core::task_command::{ComposedMessageInput, NonEmptyText};
 // `RecipientLocality` itself is only referenced (unqualified) by the
 // `#[cfg(unix)]` fan-out integration test in `mod tests` below; production
 // code here only calls `classify_recipient_locality`, never names the
@@ -17,7 +19,7 @@ use atm_core::send_to::classify_recipient_locality;
 use atm_core::send_to::RecipientLocality;
 use atm_core::types::{AgentIdentity, HostName, TaskId, TeamName};
 use atm_daemon_bootstrap::with_default_peer_address_stores;
-use atm_storage::{AtmError, PeerConfigStore, RosterStore, TrustedPeer};
+use atm_storage::{AtmError, AtmErrorCode, MemberKey, PeerConfigStore, RosterStore, TrustedPeer};
 use clap::Args;
 
 use crate::commands::caller_context::{
@@ -201,6 +203,9 @@ impl SendCommand {
             nudge_mode,
             attachment_note,
         )?;
+        if request.task_id.is_some() || request.task_complete.is_some() {
+            return run_legacy_task_send(observability, request).await;
+        }
         let peer_host = request
             .to
             .as_ref()
@@ -579,6 +584,84 @@ impl SendCommand {
                 .map_err(Into::into)
         }
     }
+}
+
+/// Adapt deprecated task-linked sends to the canonical task service before the
+/// ordinary send pipeline is selected. This keeps historical parsing at the
+/// edge while ensuring task messages use the one prepared mutation/write path.
+async fn run_legacy_task_send(
+    observability: &CliObservability,
+    request: SendRequest,
+) -> Result<()> {
+    let recipient = request
+        .to
+        .as_ref()
+        .expect("ordinary send requests always have a recipient");
+    if recipient.host().is_some()
+        || recipient
+            .team()
+            .is_some_and(|team| team != &request.caller_team)
+    {
+        return Err(AtmError::new(
+            AtmErrorCode::TaskHandoffCrossHostUnsupported,
+            "task-linked legacy sends require a same-host recipient in the caller team",
+        )
+        .into());
+    }
+    let message = legacy_task_message(&request)?;
+    let actor = MemberKey::new(request.caller_team.clone(), request.caller_identity.clone());
+    let recipient = MemberKey::new(request.caller_team, recipient.agent().clone());
+    match (request.task_id, request.task_complete) {
+        (Some(task_id), None) => {
+            crate::commands::task::run_legacy_assign(
+                observability,
+                actor,
+                task_id,
+                recipient,
+                message,
+            )
+            .await
+        }
+        (None, Some(task_id)) => {
+            crate::commands::task::run_legacy_complete(
+                observability,
+                actor,
+                task_id,
+                recipient,
+                message,
+            )
+            .await
+        }
+        _ => unreachable!("SendRequest rejects simultaneous task assignment and completion"),
+    }
+}
+
+fn legacy_task_message(request: &SendRequest) -> Result<ComposedMessageInput> {
+    let (body, template_sha) = match &request.message_source {
+        SendMessageSource::Template(source) => {
+            let composer = atm_daemon_bootstrap::template_composer();
+            let (body, template_sha) = render_template_source_for_task(
+                composer.as_ref(),
+                source,
+                request.max_message_bytes,
+            )?;
+            (body, Some(template_sha))
+        }
+        SendMessageSource::Inline(_) | SendMessageSource::File { .. } => (
+            resolve_message_body(
+                &request.message_source,
+                &request.current_dir,
+                &request.home_dir,
+                &request.caller_team,
+                request.max_message_bytes,
+            )?,
+            None,
+        ),
+    };
+    Ok(ComposedMessageInput {
+        body: NonEmptyText::new(body)?,
+        template_sha,
+    })
 }
 
 /// Combines optional message text with the decision-(d) attachment note:

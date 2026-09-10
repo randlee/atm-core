@@ -2,6 +2,18 @@
 
 This document records shared storage-neutral contracts owned by `atm-storage`.
 
+## AsyncTaskMutationStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/async-task-mutation-store.toml](../../boundaries/atm-storage/async-task-mutation-store.toml)
+
+`AsyncTaskMutationStore` owns exactly one idempotent logical-task lifecycle
+mutation. It accepts prepared canonical messages but no renderer, database
+connection, writer permit, or body-copy field. The concrete backend commits the
+message, logical task, immutable attempt/event records, operation replay row,
+and required pending-marker cleanup in one writer transaction. `TaskStore`
+remains the retained synchronous v1 read/audit compatibility surface.
+
 ## TaskStore
 
 Canonical machine-readable boundary source:
@@ -13,6 +25,23 @@ appends reminder or lead-notification audit rows. The backend message-writer
 transaction alone applies `Assigned`, `Acked`, and `Completed` state changes.
 `MessageWriteOrigin::Peer` deliberately persists a peer receipt without
 changing the local task ledger.
+
+## AttentionScheduleStore and AsyncAttentionScheduleStore
+
+Canonical machine-readable boundary sources:
+- [../../boundaries/atm-storage/attention-schedule-store.toml](../../boundaries/atm-storage/attention-schedule-store.toml)
+- [../../boundaries/atm-storage/async-attention-schedule-store.toml](../../boundaries/atm-storage/async-attention-schedule-store.toml)
+- [../../boundaries/atm-storage-rusqlite/attention-schedule-store-sqlite.toml](../../boundaries/atm-storage-rusqlite/attention-schedule-store-sqlite.toml)
+- [../../boundaries/atm-storage-rusqlite/async-attention-schedule-store-sqlite.toml](../../boundaries/atm-storage-rusqlite/async-attention-schedule-store-sqlite.toml)
+
+`AttentionScheduleStore` owns only durable, per-member fair-lane cursors and
+idempotent reservation/finalization for one canonical idle opportunity. Its
+DTOs contain lane, member, opportunity/revision, message id, or task/attempt
+and assignment-message ids; they never contain message text, task description,
+template data, a SQLite handle, or an emitter. `AsyncAttentionScheduleStore` is
+the required Tokio-safe companion, not a separate semantic capability. Queue
+claims remain in `PendingNudgeStore` and task lifecycle/reminder audit remain
+in the task ledger.
 
 ## TemplateCatalogStore
 

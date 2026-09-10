@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F004>
+  a triage:Finding ;
+  triage:findingId "RBQA-F004" ;
+  triage:title "AsyncTaskLedgerReader::list_tasks/list_task_events dead behind ListCommand::run's short-circuit" ;
+  triage:description "quality-mgr's phase-ending review (ruthless-boundary-qa) reports that crates/atm/src/commands/list.rs's ListCommand::run short-circuits to CoreTaskCommandService before ever reaching AsyncTaskLedgerReader::list_tasks/list_task_events, leaving both methods dead in production (only reachable from tests). Note: this finding was originally suggested by quality-mgr as 'RBQA-F001', but that id is already a closed AZ.1 finding on a different topic (dead RuntimeObservationSource::LocalCommand-adjacent code) -- 'RBQA-F003' was also already taken (a closed PR #1381 dead-code finding, misfiled/re-correlated 2026-09-10) -- so this finding is filed as RBQA-F004 to avoid collision with either existing record. Fix: either wire ListCommand::run to use AsyncTaskLedgerReader for these two read paths, or remove the now-dead trait methods if CoreTaskCommandService fully supersedes them." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/src/commands/list.rs" ;
+  triage:status "false_positive" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBQA-F004/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 317 ;
+  triage:snippet "cipher reported not reproducible; team-lead independently verified via grep+read that blocked_tasks() at herdr_queue_wake_escalation.rs:306-320 calls reader.list_tasks(member.team().clone(), Some(member.agent().clone()), deadline).await in production. AsyncTaskLedgerReader::list_tasks is not dead -- the original finding's premise (ListCommand::run's short-circuit) is true but does not make the trait method globally dead, since this second call site consumes it. Closed as false_positive, not fixed." ;
+  triage:status "false_positive" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
+
+<urn:atm:triage:worktree/AZ4/d0cb3f509>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:orderIndex 4 .

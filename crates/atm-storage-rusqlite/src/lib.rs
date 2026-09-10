@@ -8,6 +8,7 @@
 //! message and roster contracts.
 
 mod analyst_query;
+mod attention_schedule_store;
 mod diagnostic_timeline;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
@@ -25,6 +26,7 @@ mod reader_pool;
 pub mod roster_runtime;
 mod roster_store;
 mod schema_support;
+mod schema_version;
 mod search_reader;
 mod search_schema;
 mod search_store;
@@ -33,6 +35,7 @@ mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod shared_db_support;
 mod task_ledger_reader;
+mod task_mutation_store;
 mod task_sql;
 mod task_store;
 mod team_roster_schema;
@@ -66,10 +69,13 @@ use atm_storage::contract::{
 };
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TaskStore, TemplateCatalogStore};
 use atm_storage::{
-    AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
-    StorageHandleParts, StorageHandles,
+    AsyncAttentionScheduleStore, AsyncMessageSearchStore, MessageSearchStore, TaskStore,
+    TemplateCatalogStore,
+};
+use atm_storage::{
+    AsyncTaskMutationStore, AtmError, AttentionScheduleStore, EffectiveReaderPool,
+    EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory, StorageHandleParts, StorageHandles,
 };
 pub use diagnostic_timeline::{
     DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
@@ -182,7 +188,17 @@ struct SqlitePendingNudgeStore {
 }
 
 #[derive(Debug)]
+struct SqliteAttentionScheduleStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
 struct SqliteTaskStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
+struct SqliteTaskMutationStore {
     db: Arc<SharedDb>,
 }
 
@@ -280,6 +296,27 @@ impl SqliteRosterStore {
 
 impl atm_storage::contract::sealed::Sealed for SqliteMessageStore {}
 impl atm_storage::contract::sealed::Sealed for SqliteRosterStore {}
+impl atm_storage::contract::sealed::Sealed for SqliteTaskMutationStore {}
+
+#[async_trait::async_trait]
+impl AsyncTaskMutationStore for SqliteTaskMutationStore {
+    async fn apply(
+        &self,
+        request: atm_storage::TaskMutationRequest,
+    ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
+        self.db.submit_task_mutation_async(request).await
+    }
+
+    async fn apply_before(
+        &self,
+        request: atm_storage::TaskMutationRequest,
+        deadline: atm_storage::TaskMutationDeadline,
+    ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
+        self.db
+            .submit_task_mutation_async_before(request, deadline)
+            .await
+    }
+}
 
 impl MessageStore for SqliteMessageStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError> {
@@ -612,7 +649,10 @@ pub struct SqliteStorageBackend {
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     pending_nudge_store: Arc<SqlitePendingNudgeStore>,
+    attention_schedule_store: Arc<SqliteAttentionScheduleStore>,
+    async_attention_schedule_store: Arc<dyn AsyncAttentionScheduleStore + Send + Sync>,
     task_store: Arc<SqliteTaskStore>,
+    task_mutation_store: Arc<SqliteTaskMutationStore>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
@@ -775,7 +815,10 @@ impl StorageFactory for SqliteStorageFactory {
             roster,
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
+            attention_schedule_store: backend.attention_schedule_store(),
+            async_attention_schedule_store: backend.async_attention_schedule_store(),
             task_store: backend.task_store(),
+            async_task_mutation_store: backend.async_task_mutation_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
@@ -824,7 +867,14 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            attention_schedule_store: Arc::new(SqliteAttentionScheduleStore::new(Arc::clone(&db))),
+            async_attention_schedule_store: Arc::new(SqliteAttentionScheduleStore::new(
+                Arc::clone(&db),
+            )),
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
+            task_mutation_store: Arc::new(SqliteTaskMutationStore {
+                db: Arc::clone(&db),
+            }),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -850,7 +900,14 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            attention_schedule_store: Arc::new(SqliteAttentionScheduleStore::new(Arc::clone(&db))),
+            async_attention_schedule_store: Arc::new(SqliteAttentionScheduleStore::new(
+                Arc::clone(&db),
+            )),
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
+            task_mutation_store: Arc::new(SqliteTaskMutationStore {
+                db: Arc::clone(&db),
+            }),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -913,8 +970,23 @@ impl SqliteStorageBackend {
         self.pending_nudge_store.clone()
     }
 
+    pub fn attention_schedule_store(&self) -> Arc<dyn AttentionScheduleStore + Send + Sync> {
+        self.attention_schedule_store.clone()
+    }
+
+    pub fn async_attention_schedule_store(
+        &self,
+    ) -> Arc<dyn AsyncAttentionScheduleStore + Send + Sync> {
+        self.async_attention_schedule_store.clone()
+    }
+
     pub fn task_store(&self) -> Arc<dyn TaskStore + Send + Sync> {
         self.task_store.clone()
+    }
+
+    /// Returns the sealed Tokio-safe v2 logical-task mutation boundary.
+    pub fn async_task_mutation_store(&self) -> Arc<dyn AsyncTaskMutationStore + Send + Sync> {
+        self.task_mutation_store.clone()
     }
 
     pub fn graft_receiver_endpoint_store(
@@ -3599,7 +3671,7 @@ mod tests {
     }
 
     #[test]
-    fn task_ack_guard_rolls_back_the_reply_and_keeps_the_second_task_pending() {
+    fn task_acknowledgement_settles_mail_without_starting_the_task() {
         struct ReplyBuilder {
             actor: AgentName,
         }
@@ -3667,23 +3739,20 @@ mod tests {
                 .expect("first task")
                 .expect("first row")
                 .state,
-            TaskState::Active
+            TaskState::Assigned
         );
         let first_events = tasks
             .list_task_events(&team(), &first_id, Some(&agent()))
             .expect("first events");
-        assert_eq!(
+        assert!(
             first_events
                 .iter()
-                .map(|event| event.seq)
-                .collect::<Vec<_>>(),
-            vec![1, 2],
-            "task event sequences are gapless per task key"
+                .all(|event| event.event != TaskEventKind::Acked),
+            "acknowledgement must not append a task lifecycle transition"
         );
-        assert_eq!(first_events[1].event, TaskEventKind::Acked);
 
         let second_message_id = second.envelope.message_id.expect("second id");
-        let error = store
+        store
             .acknowledge_message_atomically(
                 &AcknowledgementSource {
                     team: second.team.clone(),
@@ -3692,8 +3761,7 @@ mod tests {
                 },
                 Arc::new(ReplyBuilder { actor: agent() }),
             )
-            .expect_err("second acknowledgement must respect G1");
-        assert!(error.message().contains(first_id.as_str()));
+            .expect("second acknowledgement");
         assert_eq!(
             tasks
                 .load_task(&member, &second_id)
@@ -3708,21 +3776,18 @@ mod tests {
                 .expect("second source")
                 .expect("second source row")
                 .envelope
-                .pending_ack_at
+                .acknowledged_at
                 .is_some(),
-            "a rejected acknowledgement rolls back its source mutation"
+            "acknowledgement remains durable even though task state is unchanged"
         );
         let second_events = tasks
             .list_task_events(&team(), &second_id, Some(&agent()))
             .expect("second events");
-        assert_eq!(second_events.len(), 2);
-        assert_eq!(second_events[1].event, TaskEventKind::Rejected);
         assert!(
-            second_events[1]
-                .detail
-                .as_deref()
-                .is_some_and(|detail| detail.contains(first_id.as_str())),
-            "the rejection audit retains the user-facing guard detail"
+            second_events
+                .iter()
+                .all(|event| event.event != TaskEventKind::Acked),
+            "acknowledgement must not append a task lifecycle transition"
         );
 
         let mut third_party_completion = message("atm:third-party-completion", "not allowed");

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-107>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-107" ;
+  triage:title "project-plan.md AZ status table is stale" ;
+  triage:description "quality-mgr's phase-ending review (req-qa) reports that docs/project-plan.md's phase-az status table has not been updated to reflect AZ.1-AZ.4 sprint completion and merge into integrate/phase-az. Cosmetic doc-staleness; trivial fix once the phase is confirmed complete." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/project-plan.md" ;
+  triage:status "false_positive" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-107/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-107/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1770 ;
+  triage:snippet "cipher reported not reproducible; team-lead independently verified via direct read of docs/project-plan.md:1770-1778 that the phase-az status table already shows AZ.1/AZ.2/AZ.3/AZ.4 all as complete -- the claim was already false at filing time. Closed as false_positive, not fixed." ;
+  triage:status "false_positive" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
+
+<urn:atm:triage:worktree/AZ4/d0cb3f509>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:orderIndex 4 .

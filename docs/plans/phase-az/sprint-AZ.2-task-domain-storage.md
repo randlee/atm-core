@@ -5,7 +5,7 @@ title: Durable task domain and storage migration
 branch: feature/az2-task-domain-storage
 integration_branch: feature/az1-task-nudge-contract
 final_integration_branch: develop
-status: planned
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: stacked
@@ -130,6 +130,7 @@ operation identity remains independent of every resulting message.
 | none | assign | Assigned | create logical row and attempt 1 |
 | Assigned | start | Active | append started event |
 | Assigned | legacy complete | Closed(Succeeded) | AZ.3 compatibility provenance only; persist completion notice |
+| Assigned | fail | Closed(Failed) | persist terminal handoff; invalidate all attempt nudges |
 | Assigned | block | Blocked | append reason; invalidate current attempt nudge |
 | Assigned | reassign | Assigned | append a new attempt; retain original ordering time |
 | Assigned | abort | Closed(Aborted) | persist handoff; invalidate all attempt nudges |
@@ -200,11 +201,12 @@ one transaction. No caller receives a connection or writer permit.
 database by ATM `1.6.0`. This is an approved ADR-061 **major** change, recorded
 in ADR-061 D6 and ADR-063 D6. Every `1.6.x` release retains the v1/v2 bridge.
 ATM `1.7.0` is the planned removal target and earliest permitted removal
-release, under a separate ADR-061 major approval. During `1.6.x`, the previous
-supported 1.5.14 binary must continue to
-open and read a migrated database and make its supported
-assign/acknowledge/complete writes without a crash or compatibility rejection.
-The bridge may reconcile those writes to authoritative v2 semantics.
+release, under a separate ADR-061 major approval. During `1.6.x`, the retained
+v1 projection and bridge continue to admit the supported
+assign/acknowledge/complete writes and reconcile them to authoritative v2
+semantics. The crate-level proof is a direct-v1-projection fixture; a real
+retained-1.5.14 executable against a migrated ledger is integration evidence
+owned by `AZ-TASK-CROSS-BINARY-COMPAT` in the Colima testbed.
 
 The migration builds the canonical v2 task ledger transactionally while
 retaining the v1 `tasks`/`task_events` compatibility projection and its
@@ -225,7 +227,9 @@ retaining the v1 `tasks`/`task_events` compatibility projection and its
    and an active row wins over an assigned row. Every non-winning source row,
    including its assignee, state, timestamp, and deterministic source key, is
    recorded in the append-only `Migrated` event; no live row silently becomes
-   closed and no fully completed logical task reopens.
+   closed and no fully completed logical task reopens. An unrecognized legacy
+   state has the lowest precedence and safely projects to `Assigned`, while
+   the migration audit detail retains its original value.
 4. Remediate pre-existing `(team, assignee)` active conflicts deterministically.
    The active task with earliest `original_assigned_at`, then lexical `TaskId`,
    remains `Active`; every other conflicting active task becomes `Assigned`
@@ -259,7 +263,8 @@ retaining the v1 `tasks`/`task_events` compatibility projection and its
    then lexical `TaskId`, active. Every surplus active task is demoted to
    `Assigned` with `MigratedActiveConflictDemotion`, exactly as in the
    one-time migration. The bridge must not introduce last-write-wins or a
-   second rejection policy. A retained 1.5.14 binary fixture must create
+   second rejection policy. The crate-level v1-projection compatibility fixture
+   must create
    multiple assignee rows and an active collision, then assign, acknowledge,
    and complete against the migrated database; the new binary reopens it and
    observes the same reconciled state and audit events. No v1 table/column is
@@ -366,7 +371,7 @@ This is the sole authoritative deliverables list for AZ.2. Every item must land
 at a production-ready level; type-only, schema-only, or test-only completion is
 insufficient.
 
-- [ ] D1 — Amend `docs/requirements.md`, `docs/architecture.md`,
+- [x] D1 — Amend `docs/requirements.md`, `docs/architecture.md`,
   create the canonical `docs/task-lifecycle-schema.md`, amend
   `docs/atm-storage/boundaries.md`, amend ADR-061/ADR-062, maintain the accepted
   `ADR-063-phase-az-task-and-attention-capabilities.md`, and index it in
@@ -377,36 +382,40 @@ insufficient.
   from ADR-036's capability inventory and update its matching boundary TOMLs.
   Preserve Rand's explicit ADR-061 major-change approval and version-bounded
   coexistence record in ADR-061 D6, ADR-063 D6, and the phase plan.
-- [ ] D2 — Replace the pure task model in
+- [x] D2 — Replace the pure task model in
   `crates/atm-storage/src/task_state.rs` with the types and legal transitions
   above. Add typed rejections for illegal transition, stale revision,
-  operation-id conflict, active-task conflict, invalid terminal metadata, and
-  v1/v2 compatibility failure. Reuse
+  operation-id conflict, active-task conflict, and invalid terminal metadata.
+  The retained v1 bridge deterministically reconciles every supported legacy
+  write; it has no separate compatibility-rejection path in this sprint.
+  Reuse
   `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` for every assignment-bearing
   mutation whose recipient is not same-host. Register public codes and recovery
   text in the unified ADR-032 error catalog and machine-readable boundary.
-- [ ] D3 — Extend storage-neutral contracts in
+- [x] D3 — Extend storage-neutral contracts in
   `crates/atm-storage/src/task_store.rs`, `contract.rs`, and `factory.rs`
   with logical-task/attempt/event reads, the binding list/top-runnable ordering,
   and the bounded `AsyncTaskMutationStore`. Update the synchronous compatibility store only as
   a delegating test/legacy bridge; it must not become a second mutation policy.
-- [ ] D4 — Implement the transactional v2 migration and indexes in
+- [x] D4 — Implement the transactional v2 migration and indexes in
   `atm-storage-rusqlite`, introduce/persist `STORAGE_SCHEMA_VERSION = 2.0.0`,
   and retain the v1 tables/description compatibility projection for the
-  approved coexistence window. Implement deterministic state precedence and
-  active-conflict demotion once and reuse them for both initial migration and
-  every supported v1 bridge write; add previous-binary multi-assignee and
+  approved coexistence window. Implement deterministic state precedence in the
+  canonical `task_legacy_state_precedence` SQL view and reuse it for both
+  initial migration and every supported v1 bridge write; implement
+  active-conflict demotion once and reuse it for both initial migration and
+  every supported v1 bridge write; add v1-projection multi-assignee and
   active-conflict rollback tests. Fresh and upgraded databases must converge to byte-equivalent v2 plus
   compatibility schema. Add `idx_mail_messages_task_id` through
   `mail_messages_index_ddl!()` and extend its migrated-versus-fresh
   index-identity test; Phase AZ deletes no v1 table or column.
-- [ ] D5 — Implement all mutation transactions in the existing SQLite writer
+- [x] D5 — Implement all mutation transactions in the existing SQLite writer
   lane, including idempotent results, compare-and-swap revision, active
   uniqueness, same-host prepared-assignment validation, message persistence,
   assignment acknowledgement normalization, supersession linkage, a dedicated
   idempotent operations table, and task-id-joined pending-nudge cleanup across
   all task-linked messages.
-- [ ] D6 — Update machine-readable task/read/mutation boundary records and add
+- [x] D6 — Update machine-readable task/read/mutation boundary records and add
   pure-state, migration, replay, malformed-legacy, retry, concurrent-start,
   concurrent-reassign, bridge-time multi-assignee/active-conflict reconciliation,
   atomic-rollback, no-body, and queue-cleanup tests using temporary SQLite
@@ -486,7 +495,9 @@ This is the sole authoritative acceptance list for AZ.2.
 1. The pure state table accepts every listed transition and rejects every
    unlisted transition; unblock is exactly `Blocked -> Assigned` and retains
    priority/original assignment time without activating. The legacy completion
-   provenance is the only `Assigned -> Closed(Succeeded)` compatibility route.
+   provenance is the only `Assigned -> Closed(Succeeded)` compatibility route;
+   explicit `fail` is the separate intentional `Assigned -> Closed(Failed)`
+   terminal route.
 2. One `TaskId` has one current row and immutable numbered attempts; reassign
    and reopen retain identity/history, while supersede atomically links a
    distinct successor id.
@@ -512,9 +523,11 @@ This is the sole authoritative acceptance list for AZ.2.
 7. Canonical v2 task/attempt rows contain no rendered body, duplicate
    description, template bytes, or Beads details. The temporary v1
    compatibility projection is the sole approved legacy-description exception.
-8. `STORAGE_SCHEMA_VERSION` is 2.0.0, fresh/upgraded schemas converge, and a
-   retained 1.5.14 binary can assign/ack/complete on the migrated database;
-   the new binary then observes those writes. No v1 object is dropped.
+8. `STORAGE_SCHEMA_VERSION` is 2.0.0; fresh/upgraded schemas converge; and the
+   crate-level v1-projection fixture proves supported assign/ack/complete
+   writes reconcile into the migrated ledger and are observed after reopening.
+   `AZ-TASK-CROSS-BINARY-COMPAT` separately owns retained-1.5.14 executable
+   evidence in the Colima integration testbed. No v1 object is dropped.
 9. Storage list/top-runnable tests prove the binding order and covering-index
    query plan without materializing unbounded task or event history.
 10. Every changed storage contract has matching Rust docs, boundary TOML, crate

@@ -1,7 +1,7 @@
 ---
 title: Hooks
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.5.15
 ---
 
 # Hooks
@@ -65,9 +65,12 @@ Important rules:
 - if no matching external post-send hook rule exists, ATM falls back to the
   shipped built-in nudge path
 
-The hook payload arrives in `ATM_POST_SEND` as ATM-owned JSON. That payload
-includes the sender, recipient, team, `message_id`, description, task id,
-ack-related flags, and other supported post-send fields.
+The hook payload arrives in `ATM_POST_SEND` as ATM-owned JSON. It includes
+sender, recipient, team, `message_id`, a summary-backed `title`, optional task
+id, and ack-related flags. During the compatibility window it also emits
+deprecated `description` with exactly the same value as `title`. Neither field
+contains the message body or a task description: use `atm read --message-id`
+to retrieve the durable message content.
 
 ATM-aware hook lookup does not follow the invoking shell `cwd`. When
 `ATM_IDENTITY` and `ATM_TEAM` resolve an ATM-enabled caller, ATM loads the

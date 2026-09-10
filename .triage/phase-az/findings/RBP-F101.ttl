@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F101>
+  a triage:Finding ;
+  triage:findingId "RBP-F101" ;
+  triage:title "canonical_timestamp eagerly clones regardless of branch via map_or" ;
+  triage:description "quality-mgr's phase-ending review (rust-best-practices-agent, independently verified) reports that tool_types.rs's canonical_timestamp uses map_or(value.clone(), ...), which eagerly evaluates and clones the default argument regardless of which branch is taken. One-line fix: use map_or_else so the clone is only produced on the None branch." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "efficiency" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/tool_types.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F101/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F101/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/tool_types.rs" ;
+  triage:line 404 ;
+  triage:snippet "cipher: original finding cited crates/atm-core/src/tool_types.rs, which does not exist -- the actual file is crates/atm-graft-python/src/tool_types.rs (relocated by an earlier phase). Fixed by switching to map_or_else at line 404." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "9ddc2f84d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/9ddc2f84d> .
+
+<urn:atm:triage:worktree/AZ4/9ddc2f84d>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "9ddc2f84d" ;
+  triage:orderIndex 4 .

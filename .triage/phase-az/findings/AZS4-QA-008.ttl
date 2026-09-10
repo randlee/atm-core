@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS4-QA-008>
+  a triage:Finding ;
+  triage:findingId "AZS4-QA-008" ;
+  triage:title "next_ephemeral's run_blocking call remains unbounded after partial hardening fix (RSH-001)" ;
+  triage:description "Reported by quality-mgr's formal QA-1 verdict for AZ.4 (PR #1387) as RSH-001, described as a partial fix: rust-service-hardening-agent's earlier finding about unbounded spawn_blocking usage was fixed for most call sites in this sprint's diff, but crates/atm-http-runtime/src/herdr_attention_scheduler.rs's next_ephemeral function (around line 102-114 in the version at pinned head 7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d) still calls run_blocking without a timeout/deadline bound, unlike reserve_next_attention and next_persistent_task which use ReadDeadline/SCHEDULER_REQUEST_DEADLINE. Confirmed by quality-mgr's rust-service-hardening-agent reviewer at pinned head 7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d via git show." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-09-10T16:09:12Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-09-10T15:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T15:37:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-008/AZ4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS4-QA-008/AZ4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
+  triage:line 106 ;
+  triage:snippet "run_blocking(move || {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ4" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:orderIndex 4 .

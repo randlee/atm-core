@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-011>
+  a triage:Finding ;
+  triage:findingId "FNX-011" ;
+  triage:title "idle-opportunity-sink.toml allowed_test_double_paths names modules/paths that do not resolve" ;
+  triage:description "fenix's re-verification pass on PR #1395 (head 3b8a43fd3) reports boundaries/atm-http-runtime/idle-opportunity-sink.toml:36's allowed_test_double_paths lists crate::herdr_queue_wake_idle::HerdrQueueWakePump and crate::storage_and_nudge_router::RecordingIdleOpportunitySink, neither of which resolves. herdr_queue_wake_idle.rs is pulled in via #[path] as a submodule of herdr_queue_wake (crate::herdr_queue_wake::idle), not a top-level crate::herdr_queue_wake_idle module, and HerdrQueueWakePump is declared in herdr_queue_wake.rs itself. RecordingIdleOpportunitySink lives inside mod tests at storage_and_nudge_router.rs:1171, missing the tests:: segment that sibling manifests get right. Separately, HerdrQueueWakePump is the production implementor, not a test double, so listing it under [testing] mis-describes it. lint_boundaries.py's validate_rust_path only checks syntax, not existence, so this passes lint. Recommendation: correct to crate::storage_and_nudge_router::tests::RecordingIdleOpportunitySink and drop the pump entry (or move it to a field denoting the production implementor). Deferred: cosmetic manifest-path correction with no mechanical enforcement impact; does not block merge per fenix's PASS verdict." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundaries/atm-http-runtime/idle-opportunity-sink.toml" ;
+  triage:status "false_positive" ;
+  triage:closedAt "2026-09-10T21:13:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:13:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-011/AZ4-001> ;
+  triage:triageRecordVersion "3" .
+
+# v3, team-lead direct verification (head e20f2d0f5): the v2 "semantically
+# correct" paths this finding mandated actually FAIL lint_boundaries.py.
+# Ran the scanner directly: it computes a trait-only implementor's manifest
+# path from physical source location (file name, ignoring #[path] module
+# remapping and inline `mod tests` nesting), not real Rust name resolution.
+# crate::herdr_queue_wake_idle::HerdrQueueWakePump and
+# crate::storage_and_nudge_router::RecordingIdleOpportunitySink -- the
+# ORIGINAL, pre-fenix-finding manifest text -- are what the tool requires,
+# confirmed via a clean `python3 .just/lint_boundaries.py` run after
+# reverting to them (commit e20f2d0f5). The manifest was never actually
+# defective; this is a lint-tool limitation (physical-path matching, not
+# true resolution) misdiagnosed as a manifest error by both fenix's
+# re-verification and quality-mgr's independent QA-2 pass. No further
+# action needed.
+
+# v2: quality-mgr's independent QA-2 pass (head 3b8a43fd3) flagged the same
+# defect independently (her finding #1), verified across arch-qa/req-qa/
+# ruthless-boundary-qa disagreement in favor of arch-qa: the pump path should
+# read crate::herdr_queue_wake::HerdrQueueWakePump (HerdrQueueWakePump is
+# declared in herdr_queue_wake.rs; herdr_queue_wake_idle is a #[path]
+# submodule, not a top-level crate path, confirmed by team-lead via direct
+# source read). Reconciled with fenix's alternate ("drop the pump entry"):
+# team-lead elects to correct both paths to resolve rather than drop the
+# pump entry, since quality-mgr's own gate requires this finding closed, not
+# deferred. Reopened for dispatch as part of a consolidated minor cleanup
+# alongside FNX-012/013/015 and quality-mgr's QA-2 items (FNX-016..019).
+
+<urn:atm:triage:occurrence/FNX-011/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-http-runtime/idle-opportunity-sink.toml" ;
+  triage:line 36 ;
+  triage:snippet "allowed_test_double_paths lists two non-resolving paths; deferred per fenix's non-blocking PASS verdict on PR #1395" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
+
+<urn:atm:triage:worktree/AZ4/3b8a43fd3-r>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:orderIndex 4 .

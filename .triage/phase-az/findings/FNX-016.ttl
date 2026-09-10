@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-016>
+  a triage:Finding ;
+  triage:findingId "FNX-016" ;
+  triage:title "docs/atm-rusqlite/boundaries.md missing adapter sections for the two new async-task stores" ;
+  triage:description "quality-mgr's QA-2 pass on PR #1395 (head 3b8a43fd3) reports docs/atm-rusqlite/boundaries.md has no adapter section for SqliteAsyncTaskMutationStoreAdapter or SqliteAsyncTaskSchedulerAuditStoreAdapter, both landed by this PR's earlier CDR fix round (FNX-001..006). Sibling adapters in the same doc each get a section. Recommendation: add the two missing sections following the existing per-adapter doc pattern." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/atm-rusqlite/boundaries.md" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T20:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-016/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+# v2: closed fixed -- verified by quality-mgr's QA-3 pass on PR #1395 @ e20f2d0f5
+# (PASS 0/0/0 across arch-qa/req-qa/rust-qa-agent/ruthless-boundary-qa, full
+# suite re-confirmed clean) plus team-lead direct source verification.
+# docs/atm-rusqlite/boundaries.md adapter sections added for both SqliteAsyncTaskMutationStoreAdapter and SqliteAsyncTaskSchedulerAuditStoreAdapter.
+
+<urn:atm:triage:occurrence/FNX-016/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/boundaries.md" ;
+  triage:snippet "missing adapter sections for SqliteAsyncTaskMutationStoreAdapter and SqliteAsyncTaskSchedulerAuditStoreAdapter; quality-mgr QA-2 finding #2 on PR #1395" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
+
+<urn:atm:triage:worktree/AZ4/3b8a43fd3-r>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:orderIndex 4 .

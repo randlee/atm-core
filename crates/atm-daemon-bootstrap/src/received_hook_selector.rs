@@ -770,7 +770,7 @@ mod tests {
                 recipient: "receiver".parse::<AgentName>().expect("agent"),
                 recipient_team: "team".parse::<TeamName>().expect("team"),
                 message_id: "01KZ0000000000000000000000".parse().expect("message"),
-                description: "test".to_owned(),
+                title: "test".to_owned(),
                 requires_ack: false,
                 is_ack: false,
                 task_id: None,

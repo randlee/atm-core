@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-021>
+  a triage:Finding ;
+  triage:findingId "FNX-021" ;
+  triage:title "Start does not cancel the task's nudge markers; Unblock's should-it-clear status was ambiguous" ;
+  triage:description "fenix's Phase AZ task/nudge state-machine review reports task_ops.rs:218 (Start) and :232 (Unblock) use plain transition_v2 with no marker clear, while Block, Close, LegacyCloseSucceeded, Reassign, Reopen, and Supersede all route through transition_and_clear_markers. Start is the most-travelled transition in the whole state machine: 'I have started the work' is not treated as a cancellation, so the assignment message's nudge marker stays live and reminders continue while the task is active -- the most counterintuitive gap in the machine. Ruling (fenix, lead, made directly since it is a semantic call inside existing behavior rather than a change to it): Start clears task nudge markers (starting is the agent acting on the nudge, an acknowledgement); Unblock does not (unblocking returns the task to assigned, where reminders are the correct behavior). Fix: route Start through transition_and_clear_markers like the other terminal/re-notify transitions; leave Unblock as plain transition_v2." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "state-machine-correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T21:26:03Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-021/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+# dispatchReady false: assigned as layer 2 (cipher) on fix/az-cdr-followup-2,
+# same as FNX-020 -- HELD until layer 1 (SOLAR-CDR-009/FNX-014/S4) pushes.
+# One-line ruling fix per fenix; no file overlap with layer 1.
+
+<urn:atm:triage:occurrence/FNX-021/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 218 ;
+  triage:snippet "Start (:218) uses plain transition_v2, no marker clear; Unblock (:232) likewise, ruled correct as-is. Layer-2 fix: route Start through transition_and_clear_markers." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/e20f2d0f5> .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-105>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-105" ;
+  triage:title "trailing blank line in generated CLI-reference doc" ;
+  triage:description "quality-mgr's phase-ending review (req-qa) reports a trailing blank line left in the generated CLI-reference documentation for the phase-az task commands. Note: originally suggested by quality-mgr as 'QA-002', renumbered to ATM-QA-105 since ATM-QA-002 (AZ.1 nudge-templates.md staleness) and ATM-QA-104 (AZS3 boundary_enforcement.rs writer-surface scan gap) are both already existing, unrelated, closed findings under those ids. Cosmetic; trivial fix." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/atm/cli-reference-1-5-14.md" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-105/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-105/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "docs/atm/cli-reference-1-5-14.md" ;
+  triage:line 1 ;
+  triage:snippet "cipher: original finding cited docs/cli-reference.md, an unversioned path that does not exist -- the actual generated doc is docs/atm/cli-reference-1-5-14.md. Fixed the CLI-doc generator's trailing newline and regenerated the doc." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "c9b62e580" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/c9b62e580> .
+
+<urn:atm:triage:worktree/AZ4/c9b62e580>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "c9b62e580" ;
+  triage:orderIndex 4 .

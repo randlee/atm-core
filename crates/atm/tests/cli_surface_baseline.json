@@ -3125,6 +3125,1135 @@
       "args": [
         {
           "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "task",
+      "subcommands": [
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "actor",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "assign_to",
+              "long": "assign-to",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "assignment_text",
+              "long": "assignment-text",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "file",
+              "long": "file",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "handoff",
+              "long": "handoff",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "reason",
+              "long": "reason",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stdin",
+              "long": "stdin",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "successor_priority",
+              "long": "successor-priority",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "successor_task_id",
+              "long": "successor-task-id",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "template",
+              "long": "template",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "text",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "vars",
+              "long": "vars",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "abort",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "actor",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "file",
+              "long": "file",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "priority",
+              "long": "priority",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stdin",
+              "long": "stdin",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "template",
+              "long": "template",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "text",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "to",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "vars",
+              "long": "vars",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "assign",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "actor",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "reason",
+              "long": "reason",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "block",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "actor",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "file",
+              "long": "file",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "handoff",
+              "long": "handoff",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stdin",
+              "long": "stdin",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "template",
+              "long": "template",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "text",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "vars",
+              "long": "vars",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "complete",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "all",
+              "long": "all",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "assignee",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "limit",
+              "long": "limit",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "events",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "actor",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "file",
+              "long": "file",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "handoff",
+              "long": "handoff",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stdin",
+              "long": "stdin",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "template",
+              "long": "template",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "text",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "vars",
+              "long": "vars",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "fail",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "agent",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "all",
+              "long": "all",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "assignee",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "closed",
+              "long": "closed",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "limit",
+              "long": "limit",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "list",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "actor",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "assignee",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "file",
+              "long": "file",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stdin",
+              "long": "stdin",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "template",
+              "long": "template",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "text",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "vars",
+              "long": "vars",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "reassign",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "actor",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "assignee",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "file",
+              "long": "file",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stdin",
+              "long": "stdin",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "template",
+              "long": "template",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "text",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "vars",
+              "long": "vars",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "reopen",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "actor",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "start",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "actor",
+              "long": "as",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "resolution",
+              "long": "resolution",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "task_id",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "team",
+              "long": "team",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "unblock",
+          "subcommands": []
+        }
+      ]
+    },
+    {
+      "args": [
+        {
+          "has_default": true,
           "id": "json",
           "long": "json",
           "num_args": {

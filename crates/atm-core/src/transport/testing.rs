@@ -126,6 +126,9 @@ impl LoopbackClientTransport {
             RequestEnvelope::Search(_) => Err(AtmError::daemon_unavailable(
                 "loopback search transport is not wired outside the replacement daemon runtime",
             )),
+            RequestEnvelope::Task(_) => Err(AtmError::daemon_unavailable(
+                "loopback task transport is not wired outside the replacement daemon runtime",
+            )),
             RequestEnvelope::ReloadRuntimeView => Err(AtmError::daemon_unavailable(
                 "runtime reload requires the running daemon control plane",
             )),

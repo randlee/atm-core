@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-009>
+  a triage:Finding ;
+  triage:findingId "FNX-009" ;
+  triage:title "CDR-007's revision newtypes leave three design docs stale; boundaries.md missing the new sqlite manifest" ;
+  triage:description "fenix's independent critical review of PR #1395 reports CDR-007 changed expected_revision to Option<TaskRevision> and revision to TaskRevision (task_command.rs, task_mutation.rs, task_state.rs), but docs/plans/phase-az/sprint-AZ.2-task-domain-storage.md:158, sprint-AZ.3-task-command-handoff.md:111, and docs/task-lifecycle-schema.md:44 still declare the old Option<u64> signature -- the same doc-drift class CDR-006 was filed for. Separately, docs/atm-rusqlite/boundaries.md was correctly repaired for ARCH-006, but its 'Canonical machine-readable boundary sources' list covers only 7 of 18 manifests in boundaries/atm-storage-rusqlite/ and omits the new async-task-scheduler-audit-store-sqlite.toml this PR authors. Recommendation: update the three declared signatures, and either add the new manifest to boundaries.md or scope its heading to 'the adapters documented below'." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-az/sprint-AZ.2-task-domain-storage.md, docs/plans/phase-az/sprint-AZ.3-task-command-handoff.md, docs/task-lifecycle-schema.md, docs/atm-rusqlite/boundaries.md" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-009/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FNX-009/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-az/sprint-AZ.2-task-domain-storage.md" ;
+  triage:line 158 ;
+  triage:snippet "declared signature still reads pub expected_revision: Option<u64>, stale relative to CDR-007's Option<TaskRevision>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "1bd244ce7" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/1bd244ce7> .
+
+<urn:atm:triage:worktree/AZ4/1bd244ce7>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "1bd244ce7" ;
+  triage:orderIndex 4 .

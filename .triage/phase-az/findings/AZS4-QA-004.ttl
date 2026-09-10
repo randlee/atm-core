@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS4-QA-004>
+  a triage:Finding ;
+  triage:findingId "AZS4-QA-004" ;
+  triage:title "attention.rs selector-contract test coverage far short of D1's exhaustive claim" ;
+  triage:description "crates/atm-storage/src/attention.rs has only 2 #[test] functions, but sprint deliverable D1 claims exhaustive selector-contract test coverage (e.g. lane alternation, tie-breaking, empty-candidate cases). Confirmed by quality-mgr directly via git show 7f5df3bfd:crates/atm-storage/src/attention.rs (pinned commit, not live worktree)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/attention.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-09-10T16:09:12Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-09-10T15:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T15:29:16Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-004/AZ4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS4-QA-004/AZ4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/attention.rs" ;
+  triage:line 1 ;
+  triage:snippet "Test coverage gap: module-level test count mismatch vs deliverable D1 exhaustive claim" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ4" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:orderIndex 4 .

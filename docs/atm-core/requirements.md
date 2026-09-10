@@ -781,3 +781,22 @@ Historical note:
 - new work must use the direct post-send emitter seam instead of treating
   `DeliveryPlan`, `ReplyDeliveryPlan`, or `NotificationSink` as the governing
   send-path contract
+
+## 12. Phase AZ received-hook metadata boundary
+
+`PostSendHookEvent.title` is derived solely from persisted
+`MessageEnvelope.summary`, normalized to empty when absent. Core must never
+derive an event title from `MessageEnvelope.text`, rendered J2 content, or
+`TaskRow.description`. Wire readers accept legacy `description`; compatibility
+writers emit both names with the same bounded title value.
+
+## 12.1 Phase AZ task-command boundary
+
+`atm-core` owns the sealed `TaskCommandService` command-policy boundary for
+task list/event reads and every lifecycle mutation. The service validates actor
+authorization, state transitions, idempotency, prepared assignment or handoff
+mail, and the caller's `RequestDeadline`; it delegates durable mutation only to
+`AsyncTaskMutationStore`. The storage implementation commits the task event and
+projection with its prepared message through the sole SQLite writer transaction.
+Neither CLI nor HTTP adapters may open SQLite, recreate task policy, or add a
+second task/message persistence path.

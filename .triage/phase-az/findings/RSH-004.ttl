@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-004>
+  a triage:Finding ;
+  triage:findingId "RSH-004" ;
+  triage:title "finalize_attention/reserve_next_attention call the schedule store with no deadline at all" ;
+  triage:description "quality-mgr's QA-4 verdict (rust-service-hardening-agent) reports that crates/atm-http-runtime/src/herdr_attention_scheduler.rs:43 (finalize_attention) and :77-84 (reserve_next_attention's schedule_store.reserve call) invoke the attention-schedule store's finalize/reserve operations with no deadline wrapper at all, unlike every other call in this pump (which now use run_blocking/HERDR_REQUEST_DEADLINE after ARCH-005's fix). The underlying implementation, crates/atm-storage-rusqlite/src/attention_schedule_store.rs execute_schedule_write (lines 174-186), does a bare unbounded tokio::task::spawn_blocking(operation).await with no timeout. This is reachable during normal tick_once() operation on every scheduler poll, not just shutdown/Drop, so a stuck SQLite write here can hang the live polling pump indefinitely." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "reliability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_attention_scheduler.rs, crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T17:42:40Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T17:10:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T17:10:35Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/AZ4-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/AZ4-002> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RSH-004/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
+  triage:line 43 ;
+  triage:snippet "schedule_store.finalize(request).await" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az4-qa4-findings" ;
+  triage:headSha "2e4f41406" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/2e4f41406> .
+
+<urn:atm:triage:occurrence/RSH-004/AZ4-002>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
+  triage:line 77 ;
+  triage:snippet "schedule_store.reserve(AttentionReservationRequest { ... }).await" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az4-qa4-findings" ;
+  triage:headSha "2e4f41406" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/2e4f41406> .
+
+<urn:atm:triage:worktree/AZ4/2e4f41406>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az4-qa4-findings" ;
+  triage:branch "fix/az4-qa4-findings" ;
+  triage:headSha "2e4f41406" ;
+  triage:orderIndex 4 .

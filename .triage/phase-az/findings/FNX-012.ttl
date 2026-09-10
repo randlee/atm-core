@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-012>
+  a triage:Finding ;
+  triage:findingId "FNX-012" ;
+  triage:title "FNX-007's replacement comment asserts task-store.toml covers atm-http-runtime, which it does not" ;
+  triage:description "fenix's re-verification pass on PR #1395 (head 3b8a43fd3) reports that the FNX-007 replacement comment in boundaries/atm-storage/async-task-scheduler-audit-store.toml:22 says lint_boundaries.py unions manifests by owner_package and that task-store.toml covers atm-http-runtime's re-exported consumption. The union-semantics half is correct, but task-store.toml's allowed_dependents does NOT list atm-http-runtime and its forbidden_edges explicitly names atm-http-runtime -> atm-storage. The comment sits exactly where a future reader decides whether to add the entry, so as written it invites cipher's original (reverted) mistake back. Recommendation: replace with the actual reason -- atm-http-runtime consumes these types only through atm-core's re-export, there is no atm-http-runtime -> atm-storage Cargo edge, and task-store.toml forbids one; allowed_dependents therefore never lists atm-http-runtime. Deferred: one-line comment correction, no mechanical/lint impact, does not block merge per fenix's PASS verdict." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundaries/atm-storage/async-task-scheduler-audit-store.toml" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-012/AZ4-001> ;
+  triage:triageRecordVersion "3" .
+
+# v3: closed fixed -- verified by quality-mgr's QA-3 pass on PR #1395 @ e20f2d0f5
+# (PASS 0/0/0 across arch-qa/req-qa/rust-qa-agent/ruthless-boundary-qa, full
+# suite re-confirmed clean) plus team-lead direct source verification.
+# comment corrected at boundaries/atm-storage/async-task-scheduler-audit-store.toml -- now states the real reason (atm-http-runtime reaches these types only through atm-core's re-export, no direct Cargo edge, task-store.toml forbids it).
+
+# v2: reopened for dispatch as part of a consolidated minor cleanup pass
+# (quality-mgr's QA-2 FAIL under her own 0/0/0 gate; team-lead elects to
+# close all cheap doc/manifest-only minors rather than override the gate).
+
+<urn:atm:triage:occurrence/FNX-012/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/async-task-scheduler-audit-store.toml" ;
+  triage:line 22 ;
+  triage:snippet "replacement comment says task-store.toml covers atm-http-runtime; it actually forbids that edge. Deferred per fenix's non-blocking PASS verdict on PR #1395" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
+
+<urn:atm:triage:worktree/AZ4/3b8a43fd3-r>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:orderIndex 4 .

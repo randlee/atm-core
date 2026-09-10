@@ -4,63 +4,142 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventKind, TaskEventRow,
-    TaskRow, TaskState,
+    AssignmentAttempt, AsyncMessageReceivedHookEmitter, AsyncTaskLedgerReader,
+    AttentionReservationStatus, BuiltInPostSendDispatch, LogicalTaskRow, MemberKey, ReadDeadline,
+    TaskMutationRequest, TaskOperation, TaskOperationId, TaskRow, TaskState,
 };
-use atm_core::types::IsoTimestamp;
+use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::types::{IsoTimestamp, TaskId};
 
 use crate::herdr_escalation::{
     BLOCKED_NOTIFY_MS, EscalationKind, EscalationNotification, MAX_BLOCKED_ESCALATIONS_PER_TICK,
     escalate,
 };
-use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, run_blocking};
+use crate::herdr_queue_wake::{HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats};
 
 const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
 const MAX_BLOCKED_TASKS_IN_BODY: usize = 8;
 const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 
-pub(crate) struct TaskReminderContext<'a> {
-    pub(crate) reader: &'a (dyn AsyncTaskLedgerReader + Send + Sync),
-    pub(crate) task_store: &'a Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-    pub(crate) member: &'a MemberKey,
+struct LeadAudit<'a> {
+    member: &'a MemberKey,
+    row: &'a LogicalTaskRow,
+    reminder_revision: u64,
+    at: IsoTimestamp,
+    lead: atm_core::types::AgentName,
+    message_id: atm_core::schema::AtmMessageId,
+}
+
+pub(crate) struct TaskReminderEmission {
+    pub(crate) member: MemberKey,
+    pub(crate) task_id: TaskId,
+    pub(crate) attempt: AssignmentAttempt,
+    pub(crate) row: LogicalTaskRow,
+    pub(crate) dispatch: BuiltInPostSendDispatch,
+}
+
+pub(crate) async fn emit_task_reminder(
+    pump: &HerdrQueueWakePump,
+    emission: TaskReminderEmission,
+    emitter: &dyn AsyncMessageReceivedHookEmitter,
+    now: IsoTimestamp,
+    stats: &mut HerdrQueueWakeStats,
+) -> Result<AttentionReservationStatus, AtmError> {
+    if let Err(error) = emitter
+        .emit_received_message(
+            emission.dispatch,
+            RequestDeadline::after(HERDR_REQUEST_DEADLINE),
+        )
+        .await
+    {
+        if error.code() == AtmErrorCode::HerdrUnavailable {
+            stats.breaker_open += 1;
+        }
+        stats.task_reminders_failed += 1;
+        return Ok(AttentionReservationStatus::PermanentlyFailed);
+    }
+    let mutation_store = pump.service_runtime.async_task_mutation_store()?;
+    let daemon_actor = "atm-daemon"
+        .parse()
+        .map_err(|_| AtmError::validation("invalid daemon task actor"))?;
+    match mutation_store
+        .apply(TaskMutationRequest {
+            operation_id: TaskOperationId::new(),
+            actor: MemberKey::new(emission.member.team().clone(), daemon_actor),
+            task_id: emission.task_id,
+            expected_revision: Some(emission.row.revision),
+            operation: TaskOperation::RecordReminder {
+                attempt: emission.attempt,
+                at: now,
+            },
+        })
+        .await
+    {
+        Ok(outcome) => {
+            let mut reminded = emission.row.clone();
+            reminded.reminder_ordinal = reminded.reminder_ordinal.saturating_add(1);
+            reminded.revision = outcome.revision;
+            maybe_escalate_task(
+                pump,
+                &emission.member,
+                &reminded,
+                outcome.revision,
+                now,
+                stats,
+            )
+            .await;
+        }
+        Err(error) => {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "task_reminder_record",
+                outcome = "failed",
+                error = %error,
+                member = %emission.member,
+                "Herdr task reminder audit write failed after accepted emission"
+            );
+        }
+    }
+    stats.prompted += 1;
+    stats.task_reminders += 1;
+    Ok(AttentionReservationStatus::Delivered)
 }
 
 pub(crate) async fn maybe_escalate_task(
     pump: &HerdrQueueWakePump,
-    reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
-    task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-    row: &TaskRow,
+    member: &MemberKey,
+    row: &LogicalTaskRow,
+    reminder_revision: u64,
     now: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
-    let threshold = row
-        .lead_notified_count
-        .saturating_add(1)
-        .saturating_mul(atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD);
-    if row.reminder_count < threshold {
+    if !row.reminder_ordinal.is_multiple_of(u64::from(
+        atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD,
+    )) {
         return;
     }
-    let events = match reminder_events(reader, row).await {
-        Ok(events) => events,
+    let task_store = match pump.service_runtime.task_store() {
+        Ok(store) => store,
         Err(error) => {
             tracing::warn!(
                 subsystem = "herdr_queue_wake",
-                action = "task_escalation_events",
+                action = "task_lead_escalation_store",
                 outcome = "failed",
                 task_id = %row.task_id,
                 error = %error,
-                "Task escalation skipped because reminder events could not be read"
+                "Task escalation skipped because the task store is unavailable"
             );
             return;
         }
     };
-    let body = task_escalation_body(row, now, &events);
-    let notification = task_escalation_notification(row, now);
+    let body = task_escalation_body(member, row);
+    let notification = task_escalation_notification(member, row);
     let outcome = escalate(
         &pump.service_runtime,
         pump.herdr_process.as_ref(),
-        Some(task_store),
+        Some(&task_store),
         &pump.daemon_home,
         &row.team,
         &body,
@@ -70,89 +149,83 @@ pub(crate) async fn maybe_escalate_task(
     .await;
     record_escalation_stats(stats, &outcome);
     if let (Some(lead), Some(message_id)) = (outcome.lead, outcome.lead_write) {
-        record_lead_audit(task_store, row, now, lead, message_id, stats).await;
+        record_lead_audit(
+            pump,
+            LeadAudit {
+                member,
+                row,
+                reminder_revision,
+                at: now,
+                lead,
+                message_id,
+            },
+            stats,
+        )
+        .await;
     }
 }
 
-async fn reminder_events(
-    reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
-    row: &TaskRow,
-) -> Result<Vec<TaskEventRow>, atm_core::error::AtmError> {
-    let deadline = ReadDeadline::new(TASK_READ_DEADLINE)
-        .map_err(|error| atm_core::error::AtmError::daemon_unavailable(error.to_string()))?;
-    reader
-        .list_task_events(
-            row.team.clone(),
-            row.task_id.clone(),
-            Some(row.assignee.clone()),
-            deadline,
-        )
-        .await
-        .map_err(|error| atm_core::error::AtmError::daemon_unavailable(error.to_string()))
-}
-
-fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow]) -> String {
-    let first = events
-        .iter()
-        .find(|event| event.event == TaskEventKind::Reminded)
-        .map(|event| event.at)
-        .unwrap_or(row.assigned_at);
-    let outcome = events
-        .iter()
-        .rev()
-        .find(|event| event.event == TaskEventKind::Reminded)
-        .and_then(|event| event.outcome)
-        .map(ReminderOutcome::as_str)
-        .unwrap_or("unknown");
+fn task_escalation_body(member: &MemberKey, row: &LogicalTaskRow) -> String {
     format!(
-        "task {} assigned to {} by {} has been reminded {} times\n(first {}, last {}, last outcome {}).\nRun: atm list --task-events {} --member {}",
-        row.task_id,
-        row.assignee,
-        row.assigner,
-        row.reminder_count,
-        first,
-        row.last_reminded_at.unwrap_or(now),
-        outcome,
-        row.task_id,
-        row.assignee,
+        "task {} assigned to {} has reached reminder ordinal {}.\nRun: atm task list {}",
+        row.task_id, row.current_assignee, row.reminder_ordinal, member,
     )
 }
 
-fn task_escalation_notification(row: &TaskRow, now: IsoTimestamp) -> EscalationNotification {
+fn task_escalation_notification(
+    member: &MemberKey,
+    row: &LogicalTaskRow,
+) -> EscalationNotification {
     EscalationNotification {
         title: "ATM task escalation".to_owned(),
         body: format!(
-            "reason=lead_notified task_id={} member={} reminder_count={} last_reminded_at={} remediation=atm list --task-events {} --member {}",
-            row.task_id,
-            row.assignee,
-            row.reminder_count,
-            row.last_reminded_at.unwrap_or(now),
-            row.task_id,
-            row.assignee,
+            "reason=lead_notified task_id={} member={} reminder_ordinal={} remediation=atm task list {}",
+            row.task_id, member, row.reminder_ordinal, member,
         ),
     }
 }
 
 async fn record_lead_audit(
-    task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-    row: &TaskRow,
-    now: IsoTimestamp,
-    lead: atm_core::types::AgentName,
-    message_id: atm_core::schema::AtmMessageId,
+    pump: &HerdrQueueWakePump,
+    audit: LeadAudit<'_>,
     stats: &mut HerdrQueueWakeStats,
 ) {
-    let store = Arc::clone(task_store);
-    let member = MemberKey::new(row.team.clone(), row.assignee.clone());
-    let task_id = row.task_id.clone();
-    if let Err(error) =
-        run_blocking(move || store.record_lead_notified(&member, &task_id, now, &lead, &message_id))
-            .await
+    let mutation_store = match pump.service_runtime.async_task_mutation_store() {
+        Ok(store) => store,
+        Err(error) => {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "task_lead_notification_record",
+                outcome = "failed",
+                task_id = %audit.row.task_id,
+                error = %error,
+                "Task lead notification audit store is unavailable"
+            );
+            return;
+        }
+    };
+    let daemon_actor =
+        atm_core::types::AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME);
+    if let Err(error) = mutation_store
+        .apply(TaskMutationRequest {
+            operation_id: TaskOperationId::new(),
+            actor: MemberKey::new(audit.member.team().clone(), daemon_actor),
+            task_id: audit.row.task_id.clone(),
+            expected_revision: Some(audit.reminder_revision),
+            operation: TaskOperation::RecordLeadNotified {
+                attempt: audit.row.current_attempt,
+                at: audit.at,
+                lead: audit.lead,
+                message_id: audit.message_id,
+            },
+        })
+        .await
     {
         tracing::warn!(
             subsystem = "herdr_queue_wake",
             action = "task_lead_notification_record",
             outcome = "failed",
-            task_id = %row.task_id,
+            task_id = %audit.row.task_id,
             error = %error,
             "Task lead notification audit write failed"
         );

@@ -323,3 +323,10 @@ Required Phase R rules:
   matrix in `docs/requirements.md` §4.1 exactly, including the `atm doctor`
   exception and the rule that explicit CLI override wins over env when both are
   present
+
+## Phase AZ CLI nudge metadata
+
+CLI-produced and CLI-consumed nudges must use `title` as bounded summary
+metadata, with `description` accepted only as a deprecated equal-value wire
+alias. CLI rendering must not substitute a message body or task description;
+the explicit `atm read --message-id` action is the sole body-retrieval path.

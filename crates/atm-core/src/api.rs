@@ -11,14 +11,16 @@ use serde::de::DeserializeOwned;
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
 use crate::list::ListQuery;
 use crate::protocol::{
-    CompatibilityPreflight, QueueGetNextRequest, RequestEnvelope, ResponseEnvelope,
+    CompatibilityPreflight, HttpApiVersion, QueueGetNextRequest, RequestEnvelope, ResponseEnvelope,
     TeamMemberHeartbeatRequest,
 };
 use crate::read::{PeekQuery, ReadQuery};
 use crate::search::SearchRequest;
 use crate::send::WriteRequest;
+use crate::task_command::TaskCommandRequest;
 use crate::types::HostName;
 use base64::Engine as _;
 
@@ -42,6 +44,8 @@ const GRAFT_RECEIVER_UNREGISTER_PATH: &str = "/v1/atm/graft/receiver/unregister"
 const GRAFT_RECEIVER_LOOKUP_PATH: &str = "/v1/atm/graft/receiver/lookup";
 const RUNTIME_RELOAD_PATH: &str = "/v1/atm/runtime/reload";
 const SEARCH_PATH: &str = "/v1/atm/messages/search";
+const TASK_PATH: &str = "/v1/atm/tasks";
+const TASK_ROUTE_INTRODUCED_IN: &str = "1.5.0";
 
 /// One registered HTTP route, published from the same constants as request encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -67,6 +71,7 @@ pub enum HttpRouteKind {
     GraftReceiverUnregister,
     GraftReceiverLookup,
     Search,
+    Task,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -183,11 +188,30 @@ const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
             path_template: GRAFT_RECEIVER_REFRESH_PATH,
         },
     },
+    HttpRouteSpec {
+        kind: HttpRouteKind::Task,
+        route: HttpRoute {
+            method: "POST",
+            path_template: TASK_PATH,
+        },
+    },
 ];
 
 /// Registered HTTP route inventory for documentation conformance tests.
 pub fn http_route_surface() -> impl Iterator<Item = HttpRoute> {
     HTTP_ROUTE_SPECS.iter().map(|spec| spec.route)
+}
+
+/// Route inventory exposed by a retained API-version fixture.
+///
+/// This is deliberately derived from the canonical route table rather than a
+/// hand-maintained test list, so a new route must declare its introduction
+/// version before compatibility tests can exercise an older router surface.
+pub fn http_route_surface_for_version(version: &HttpApiVersion) -> impl Iterator<Item = HttpRoute> {
+    HTTP_ROUTE_SPECS
+        .iter()
+        .filter(move |spec| route_supported_by(spec, version))
+        .map(|spec| spec.route)
 }
 
 fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
@@ -209,6 +233,7 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
         HttpRouteKind::GraftReceiverUnregister => &HTTP_ROUTE_SPECS[12],
         HttpRouteKind::GraftReceiverLookup => &HTTP_ROUTE_SPECS[13],
         HttpRouteKind::GraftReceiverRefresh => &HTTP_ROUTE_SPECS[14],
+        HttpRouteKind::Task => &HTTP_ROUTE_SPECS[15],
     }
 }
 
@@ -221,6 +246,7 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::Clear(_) => HttpRouteKind::Clear,
         RequestEnvelope::Doctor(_) => HttpRouteKind::Doctor,
         RequestEnvelope::Search(_) => HttpRouteKind::Search,
+        RequestEnvelope::Task(_) => HttpRouteKind::Task,
         RequestEnvelope::ReloadRuntimeView => HttpRouteKind::RuntimeReload,
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
@@ -242,6 +268,39 @@ pub fn http_route_kind(method: &str, path: &str) -> Option<HttpRouteKind> {
     HTTP_ROUTE_SPECS.iter().find_map(|spec| {
         (spec.route.method == method && spec.route.path_template == path).then_some(spec.kind)
     })
+}
+
+/// Resolves a route as a retained API-version router would, before request
+/// decoding or mutation dispatch.
+pub fn http_route_kind_for_version(
+    version: &HttpApiVersion,
+    method: &str,
+    path: &str,
+) -> Result<HttpRouteKind, AtmError> {
+    let Some(kind) = http_route_kind(method, path) else {
+        return Err(AtmError::validation_with_recovery(
+            format!("unsupported daemon HTTP route {method} {path}"),
+            "use a method and path from the daemon HTTP route contract and retry",
+        ));
+    };
+    let spec = route_spec(kind);
+    if route_supported_by(spec, version) {
+        return Ok(kind);
+    }
+    Err(AtmError::new(
+        AtmErrorCode::ClientDaemonVersionIncompatible,
+        format!(
+            "HTTP route {method} {path} requires API {TASK_ROUTE_INTRODUCED_IN} or later; retained server is {version}"
+        ),
+    ))
+}
+
+fn route_supported_by(spec: &HttpRouteSpec, version: &HttpApiVersion) -> bool {
+    spec.kind != HttpRouteKind::Task
+        || version.supports_at_least(
+            &HttpApiVersion::parse(TASK_ROUTE_INTRODUCED_IN)
+                .expect("task route introduction version must be valid semver"),
+        )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -373,6 +432,7 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         // Search is a bodyless GET. Its typed request is encoded as the
         // URL-safe `request` query value in `encode_http_request`.
         RequestEnvelope::Search(_) => Ok(Vec::new()),
+        RequestEnvelope::Task(value) => serde_json::to_vec(value),
         RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
     }
     .map_err(AtmError::from)
@@ -441,6 +501,7 @@ fn decode_success_response(
             .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
         RequestEnvelope::Search(_) => decode_response_body(body, "search")
             .map(|value| ResponseEnvelope::Search(Box::new(value))),
+        RequestEnvelope::Task(_) => decode_response_body(body, "task").map(ResponseEnvelope::Task),
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
     }
@@ -462,6 +523,7 @@ pub enum ApiRequest {
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     Search(Box<SearchRequest>),
+    Task(Box<TaskCommandRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     QueueGetNext(QueueGetNextRequest),
@@ -498,6 +560,7 @@ impl ApiRequest {
             Self::Clear(query) => RequestEnvelope::Clear(query),
             Self::Doctor(query) => RequestEnvelope::Doctor(query),
             Self::Search(query) => RequestEnvelope::Search(query),
+            Self::Task(request) => RequestEnvelope::Task(request),
             Self::CompatibilityPreflight(preflight) => {
                 RequestEnvelope::CompatibilityPreflight(preflight)
             }
@@ -532,6 +595,7 @@ impl From<RequestEnvelope> for ApiRequest {
             RequestEnvelope::Clear(query) => Self::Clear(query),
             RequestEnvelope::Doctor(query) => Self::Doctor(query),
             RequestEnvelope::Search(query) => Self::Search(query),
+            RequestEnvelope::Task(request) => Self::Task(request),
             RequestEnvelope::CompatibilityPreflight(preflight) => {
                 Self::CompatibilityPreflight(preflight)
             }
@@ -764,6 +828,9 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 pub fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::ReloadRuntimeView
+        RequestEnvelope::Write(_)
+            | RequestEnvelope::Clear(_)
+            | RequestEnvelope::Task(_)
+            | RequestEnvelope::ReloadRuntimeView
     )
 }

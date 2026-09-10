@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-015>
+  a triage:Finding ;
+  triage:findingId "FNX-015" ;
+  triage:title "created_at DEFAULT 0 discards the entire pre-upgrade terminal-row history on first prune" ;
+  triage:description "fenix's re-verification pass on PR #1395 (head 3b8a43fd3) reports attention_schedule_store.rs:54's created_at INTEGER NOT NULL DEFAULT 0 means every row that existed before the additive migration is older than any retention cutoff, so the first post-upgrade reserve_writer call deletes all pre-existing non-reserved rows in one statement rather than aging them out gradually over 30 days. reserved rows are correctly exempt and nothing live is lost, but the discard is immediate and total on upgrade rather than gradual, and the migration comment does not say so. The added test ages rows to created_at = 0 by hand and so cannot distinguish this from intended behavior. Recommendation: either backfill created_at to the migration timestamp so existing rows age out normally, or state in the ensure-step comment that the 2.1 upgrade drops pre-existing terminal opportunity rows on first prune. Deferred: no live data loss, cosmetic/documentation gap in migration behavior; does not block merge per fenix's PASS verdict." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "data-migration" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-015/AZ4-001> ;
+  triage:triageRecordVersion "3" .
+
+# v3: closed fixed -- verified by quality-mgr's QA-3 pass on PR #1395 @ e20f2d0f5
+# (PASS 0/0/0 across arch-qa/req-qa/rust-qa-agent/ruthless-boundary-qa, full
+# suite re-confirmed clean) plus team-lead direct source verification.
+# doc comment added at attention_schedule_store.rs:102 -- "The 2.1 upgrade drops all pre-existing terminal opportunity rows on the first prune; reserved rows are exempt." -- per fenix's documentation-only alternative resolution.
+
+# v2: reopened for dispatch via fenix's documentation-only resolution path
+# ("...or state in the ensure-step comment that the 2.1 upgrade drops
+# pre-existing terminal opportunity rows on first prune") -- no backfill
+# migration, comment only; fenix's phrasing treats this as a full alternative
+# resolution, not a partial one.
+
+<urn:atm:triage:occurrence/FNX-015/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 54 ;
+  triage:snippet "created_at DEFAULT 0 discards all pre-upgrade terminal rows on first prune instead of aging them gradually. Deferred per fenix's non-blocking PASS verdict on PR #1395" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
+
+<urn:atm:triage:worktree/AZ4/3b8a43fd3-r>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:orderIndex 4 .

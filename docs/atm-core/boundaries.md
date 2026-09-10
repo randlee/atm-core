@@ -101,6 +101,17 @@ Notes:
 - on the earlier compatibility line, this kept raw watch APIs out of store,
   transport, and service logic.
 
+## TaskCommandService
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/task-command-service.toml](../../boundaries/atm-core/task-command-service.toml)
+
+`TaskCommandService` is the sealed, shared policy boundary for every canonical
+task query and lifecycle mutation. `CoreTaskCommandService` is its sole
+permitted implementation. The CLI and HTTP runtime adapt requests into this
+service; they must not recreate task authorization, transition policy, SQLite
+access, or a second message-write pipeline.
+
 ## ReconcileCoordinator
 
 Canonical machine-readable boundary source:
@@ -583,3 +594,11 @@ Rules:
 - Endpoint values are already-sanitized symbolic display values. Raw homes,
   config roots, sockets, and named pipes never enter core, report JSON, or
   human output; the separate host-wide breaker report is not endpoint state.
+
+## Phase AZ message-received metadata boundary
+
+`MessageReceivedHookEmitter` receives a bounded `PostSendHookEvent`: message
+id, summary-backed title, optional task id, and routing metadata. The boundary
+forbids immutable message text, rendered templates, and task descriptions.
+Compatibility serialization emits `title` plus same-value deprecated
+`description`; deserialization accepts title, description, or both.

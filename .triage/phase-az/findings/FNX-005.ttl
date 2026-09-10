@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-005>
+  a triage:Finding ;
+  triage:findingId "FNX-005" ;
+  triage:title "attention_opportunities has no retention, and the CDR-003 fix removes its only incidental per-item bound" ;
+  triage:description "fenix's independent critical review of PR #1395 confirms the CDR-003 fix is correct (load_unfinished_reservation_for_item now filters AND status = 'reserved', with a genuine test exercising five failures to PermanentlyFailed then a later opportunity reserving the same still-eligible item). The side effect: a permanently_failed row previously suppressed all later reservations for that item forever, incidentally bounding rows at roughly one terminal chain per item; it no longer does. The attention_opportunities table has no retention of any kind -- no DELETE, no age bound, no row cap, no prune anywhere in attention_schedule_store.rs; rows are only ever UPDATEd to a terminal status. Steady-state growth is now one row per reservation, and the persistent lane alone reserves once per open task per 60s. The repo already has the pattern this needs: diagnostic_timeline ships DIAGNOSTIC_MAX_AGE_DAYS/DIAGNOSTIC_MAX_ROWS (re-exported at atm-storage-rusqlite/src/lib.rs:81-84) for exactly this shape of append-mostly table. Recommendation: add an age or row-count bound for terminal (delivered/stale/permanently_failed) reservations, modelled on the diagnostic-timeline constants, and a test that terminal rows are pruned while reserved rows are never pruned." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "data-retention" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-005/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FNX-005/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 41 ;
+  triage:snippet "attention_opportunities has no age/row-count bound for terminal reservation rows; CDR-003 removed the only incidental per-item bound" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "51648beef" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/51648beef> .
+
+<urn:atm:triage:worktree/AZ4/51648beef>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "51648beef" ;
+  triage:orderIndex 4 .

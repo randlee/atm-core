@@ -1,0 +1,164 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS4-QA-007>
+  a triage:Finding ;
+  triage:findingId "AZS4-QA-007" ;
+  triage:title "Generic InvalidQuery error mapping loses diagnostic context (RBP-F001)" ;
+  triage:description "The attention-scheduler storage path maps 11 distinct error conditions down to the single generic rusqlite::Error::InvalidQuery variant across attention_schedule_store.rs, discarding the diagnostic context needed to distinguish cursor-revision mismatch, member mismatch, lane parse failure, opportunity-id parse failure, and other cases at the call site or in logs. Confirmed by quality-mgr's rust-best-practices-agent reviewer, primary site load_cursor's parse_lane mapping at line 187. Workspace sweep (repeatable pattern) confirmed 10 additional sites in the same file at pinned head 7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/attention_schedule_store.rs, crates/atm-storage/src/attention.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-09-10T16:09:12Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-09-10T15:44:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T15:37:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-007/AZ4-11> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 187 ;
+  triage:snippet "next_lane: parse_lane(&lane).map_err(|_| rusqlite::Error::InvalidQuery)?," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 230 ;
+  triage:snippet "return Err(rusqlite::Error::InvalidQuery);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 233 ;
+  triage:snippet "return Err(rusqlite::Error::InvalidQuery);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 317 ;
+  triage:snippet "IdleOpportunityId::parse(&id).map_err(|_| rusqlite::Error::InvalidQuery)?," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 332 ;
+  triage:snippet "return Err(rusqlite::Error::InvalidQuery);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 456 ;
+  triage:snippet ".map_err(|_| rusqlite::Error::InvalidQuery)?," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 463 ;
+  triage:snippet ".map_err(|_| rusqlite::Error::InvalidQuery)?," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 465 ;
+  triage:snippet ".map_err(|_| rusqlite::Error::InvalidQuery)?," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 469 ;
+  triage:snippet ".map_err(|_| rusqlite::Error::InvalidQuery)?," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 471 ;
+  triage:snippet "_ => return Err(rusqlite::Error::InvalidQuery)," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:occurrence/AZS4-QA-007/AZ4-11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 478 ;
+  triage:snippet "_ => return Err(rusqlite::Error::InvalidQuery)," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d> .
+
+<urn:atm:triage:worktree/AZ4/7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ4" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:orderIndex 4 .

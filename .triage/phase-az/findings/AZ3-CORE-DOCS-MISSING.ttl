@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZ3-CORE-DOCS-MISSING>
+  a triage:Finding ;
+  triage:findingId "AZ3-CORE-DOCS-MISSING" ;
+  triage:title "docs/atm-core/architecture.md and requirements.md not updated for task_command" ;
+  triage:description "docs/atm-core/architecture.md and docs/atm-core/requirements.md -- both named in AZ.3's own Affected-paths list -- have zero mentions of task_command/TaskCommandService, despite the top-level docs/architecture.md and docs/atm-core/boundaries.md being updated by this round's fixes. Fix: add task_command/TaskCommandService coverage to both crate-local docs. Source: QA-2 on PR #1382 (https://github.com/randlee/atm-core/pull/1382), req-qa." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/atm-core/architecture.md, docs/atm-core/requirements.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZ3-CORE-DOCS-MISSING/AZ3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZ3-CORE-DOCS-MISSING/AZ3-2> ;
+  triage:closedAt "2026-09-10T05:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AZ3-CORE-DOCS-MISSING/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "zero mentions of task_command / TaskCommandService" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "05e35a69716f9ef85bd7379d9a6ffb84553cfadf" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b8900296c> .
+
+<urn:atm:triage:occurrence/AZ3-CORE-DOCS-MISSING/AZ3-2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "zero mentions of task_command / TaskCommandService" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "05e35a69716f9ef85bd7379d9a6ffb84553cfadf" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b8900296c> .
+
+<urn:atm:triage:worktree/AZ3/b8900296c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:orderIndex 3 .

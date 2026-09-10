@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-007>
+  a triage:Finding ;
+  triage:findingId "ARCH-007" ;
+  triage:title "task_ledger_read_error helper duplicated instead of shared via pub(super) re-export" ;
+  triage:description "quality-mgr's CDR-005 QA verdict (arch-qa) reports that herdr_attention_scheduler.rs and herdr_queue_wake.rs each define their own copy of the same one-line task_ledger_read_error helper (both delegate to the identical AtmError::from(ReadLaneError) mapping) instead of sharing one via a pub(super) re-export, which the codebase already does for TASK_REMINDER_INTERVAL_MS. Flagged IMPORTANT/maintainability but explicitly non-blocking by arch-qa since neither copy duplicates the actual code-mapping logic. Recommend a trivial consolidation in a housekeeping pass." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "maintainability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_attention_scheduler.rs, crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T18:36:39Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T18:36:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ARCH-007/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
+  triage:line 1 ;
+  triage:snippet "task_ledger_read_error duplicated verbatim in herdr_queue_wake.rs instead of shared via pub(super). Occurrence closure had been missed when the finding-level status was set to fixed; corrected after fenix's PR #1395 critical review (F11) flagged the mismatch." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "dcbf13fb9" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/dcbf13fb9> .
+
+<urn:atm:triage:worktree/AZ4/dcbf13fb9>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "dcbf13fb9" ;
+  triage:orderIndex 4 .

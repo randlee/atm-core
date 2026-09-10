@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-001>
+  a triage:Finding ;
+  triage:findingId "FNX-001" ;
+  triage:title "AsyncTaskSchedulerAuditStore is a new storage capability that no landed ADR authorizes" ;
+  triage:description "fenix's independent critical review of PR #1395 (CDR-004's fix) reports that AsyncTaskSchedulerAuditStore is threaded through composition as a first-class sealed capability trait (StorageHandleParts/StorageHandles in factory.rs, LocalServiceRuntime, assemble_runtime, plus two new boundary manifests marked concrete_landed), but no ADR was amended. ADR-063:102 states 'No thirteenth semantic capability is authorized by this ADR' and its D3 inventory lists twelve, not containing this trait. ADR-036:123's AZ.4 amendment says 'the task reader/mutation store still own task state and reminder audit', which the implementation now contradicts by moving reminder audit to a separate capability. ADR-036:100-102 also states the amendment authorizes no further optional storage capability trait. A defensible counter-reading exists (a narrowed view of already-authorized capability #11, backed by the identical concrete adapter, adding no new SQL ownership) but that exemption has never been recorded the way ADR-036:61 explicitly recorded it for async companions. Recommendation: amend ADR-063 D3 and ADR-036's AZ.4 amendment with one paragraph declaring that a narrowed capability view of an already-authorized semantic store backed by the same adapter is not a separate semantic capability, mirroring ADR-036:61's async-companion rule, and correct ADR-036:123's sentence to say the audit view (not the mutation store) owns reminder audit. Doc-only; no code change required." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "governance" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/adr/ADR-063.md, docs/adr/ADR-036.md" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-001/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FNX-001/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_mutation.rs" ;
+  triage:line 189 ;
+  triage:snippet "AsyncTaskSchedulerAuditStore introduced as an uncataloged thirteenth semantic capability; ADR-063 D3 and ADR-036's AZ.4 amendment not amended to authorize or reconcile it" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "51648beef" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/51648beef> .
+
+<urn:atm:triage:worktree/AZ4/51648beef>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "51648beef" ;
+  triage:orderIndex 4 .

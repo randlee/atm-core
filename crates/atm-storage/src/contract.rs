@@ -81,6 +81,8 @@ impl AsRef<str> for MessageKey {
 }
 
 pub use crate::peer_contract::*;
+pub use crate::task_ledger::AsyncTaskLedgerReader;
+pub use crate::task_mutation::*;
 pub use crate::task_state::{TaskEventRow, TaskRow};
 pub use crate::task_store::*;
 
@@ -907,47 +909,18 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
     ) -> Result<Option<IsoTimestamp>, ReadLaneError>;
 }
 
-/// Tokio-safe, read-only task-ledger capability.
-///
-/// Task rows and their append-only audit events are a separate durable
-/// projection from mailbox messages. Implementations must use a bounded
-/// storage-owned reader lane and must not enter the ordered writer lane.
-#[async_trait::async_trait]
-pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
-    async fn list_tasks(
-        &self,
-        team: TeamName,
-        member: Option<AgentName>,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskRow>, ReadLaneError>;
-
-    async fn list_task_events(
-        &self,
-        team: TeamName,
-        task_id: TaskId,
-        member: Option<AgentName>,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
-}
-
 pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
 
-    /// Lists every effective roster name across the durable database.
-    ///
-    /// Backends with a native projection should override this with one query.
-    /// The fallback preserves the contract for narrow test doubles.
+    /// Lists every effective roster name; native backends should override the fallback query.
     fn unique_names(&self) -> Result<Vec<RosterUniqueName>, AtmError> {
         let mut names = Vec::new();
         for team in self.list_teams()? {
-            names.extend(
-                self.load_roster(&team)?
-                    .members
-                    .iter()
-                    .map(RosterUniqueName::from_member),
-            );
+            for member in &self.load_roster(&team)?.members {
+                names.push(RosterUniqueName::from_member(member));
+            }
         }
         Ok(names)
     }
@@ -996,6 +969,12 @@ pub enum RuntimeObservationAvailability {
 pub struct RosterStateRevision(u64);
 
 impl RosterStateRevision {
+    /// Reconstructs a revision persisted by the scheduler metadata store.
+    #[must_use]
+    pub const fn from_raw(value: u64) -> Self {
+        Self(value)
+    }
+
     #[must_use]
     pub const fn get(self) -> u64 {
         self.0
@@ -1279,6 +1258,23 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
     ///
     /// Returns [`AtmError`] if the underlying storage operation fails.
     fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError>;
+
+    /// Reads the FIFO candidate without changing its marker. Scheduler code
+    /// uses this before reserving one cross-lane idle opportunity; ordinary
+    /// queue delivery continues to use [`Self::claim_next_pending`].
+    fn peek_next_pending(&self, _member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+        Ok(None)
+    }
+
+    /// Conditionally claims exactly the previously reserved message. A lost
+    /// read/ack race returns `None` rather than selecting a later message.
+    fn claim_pending(
+        &self,
+        _member: &MemberKey,
+        _message: &AtmMessageId,
+    ) -> Result<Option<NudgeClaim>, AtmError> {
+        Ok(None)
+    }
 
     /// Restores the marker after a failed dispatch.
     ///

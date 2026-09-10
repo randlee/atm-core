@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-024>
+  a triage:Finding ;
+  triage:findingId "FNX-024" ;
+  triage:title "PermanentlyFailed attention tombstones have no retirement trigger -- suppression is exempted from pruning but never actually released" ;
+  triage:description "Arising from the f642edabe regression review on SOLAR-CDR-009 (arch-ctm deleted the reserved_until<0 sentinel outright rather than replacing it, which fenix caught and solar root-caused with a contract ruling). solar's contract: PermanentlyFailed is terminal for the exact attention item generation only, never for the underlying message/task -- identity is (member, message_id) for the ephemeral lane and (member, task_id, assignment_attempt, assignment_message_id) for the persistent lane. Reassign/Reopen mint a new assignment_attempt and therefore a fresh identity with a fresh budget automatically (verified: reassign_v2 at atm-storage-rusqlite/src/writer/task_ops.rs:626-644 derives next_attempt via a checked increment). Start/Block/Unblock retain the same attempt and must not reset the budget (verified: task_ops.rs:218,:232 route through plain transition_v2, never touching current_attempt). Because prune_terminal_rows must now exempt PermanentlyFailed rows from generic age/count pruning (required in the current CDR-009 patch, so a load-bearing suppression tombstone cannot be deleted out from under it), those tombstones would otherwise accumulate unboundedly forever -- solar: 'intentionally UNBOUNDED until this finding closes,' not bounded in practice, that characterization must not reach the fix report or docs. AttentionScheduleStore cannot itself decide retirement: ADR-063 D2 gives it only cursors and reservations, explicitly not message or task lifecycle, and its boundary forbids that dependency -- so retirement must be pushed in, not pulled. Required fix shape (solar, adopted by fenix): a push-based, idempotent retirement operation on AttentionScheduleStore. The owning lifecycle/orchestration path (task/message state transitions) supplies the exact typed item identity (AttentionItemIdentity or an equivalent lane-specific typed identity) to this operation AFTER the source transition commits; AttentionScheduleStore deletes or supersedes only its own tombstone for that identity and never queries message or task state, preserving ADR-063 D2. A crash before the retirement call leaves a harmless suppressing tombstone (not a re-armed item); retry/reconciliation simply repeats the idempotent call. Required test coverage: task reassign/reopen retires the old identity's tombstone (new attempt is independently eligible, per FNX already-covered case, but the OLD identity's row must now actually be retired/removed, not merely superseded by a new insert); Start and Unblock must NOT trigger retirement (same attempt, budget must stay suppressed -- overlaps FNX-021's Start marker-clear semantics but is a distinct mechanism, keep implementations apart per fenix's routing note); message retirement is pushed only when the message stops being pending (read or otherwise resolved), not merely on delivery of one reservation attempt. Delivered/Stale row retention remains bounded independently via the existing generic age/count pruning (unaffected -- those two statuses stay ordinarily prunable; only PermanentlyFailed is exempted and needs this push-based retirement instead)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "concurrency-correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/attention.rs, crates/atm-storage-rusqlite/src/attention_schedule_store.rs, crates/atm-storage-rusqlite/src/writer/task_ops.rs, crates/atm-core/src/nudge_dispatch (or equivalent lifecycle/orchestration call site that owns task/message state transitions)" ;
+  triage:status "obsolete" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T22:22:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T22:11:19Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-10T22:33:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-024/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+# v2: CLOSED OBSOLETE per fenix's explicit instruction (message
+# 01M26Q3M8KNG5SVFQ8CK324GJM), relaying solar's re-ruling against Rand's
+# direct two-machine specification: the entire attention scheduler --
+# AttentionLane, attention_lane_cursors, the multi-lane fairness policy,
+# and the whole reservation status/retry/lease/fence/finalize/tombstone
+# machinery, including attention_opportunities and its PermanentlyFailed
+# rows -- is deleted, not hardened, and replaced with a two-machine design
+# (roster presence + task lifecycle, nudges as a derived durable queue
+# item). There will be no PermanentlyFailed tombstones in the replacement,
+# so a retirement trigger for them has no object to act on. Superseded by
+# whatever durable-delivery/outbox design solar publishes for the
+# replacement; not carried forward as a requirement onto that design
+# automatically -- if the new design needs an analogous
+# retire-a-terminal-item mechanism, that gets filed fresh against the new
+# schema, not inherited from this record.
+#
+# v1 (superseded): filed blocking per solar's original contract ruling on
+# the f642edabe regression, before the broader architecture re-ruling.
+
+<urn:atm:triage:occurrence/FNX-024/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:line 426 ;
+  triage:snippet "prune_terminal_rows has no exemption for PermanentlyFailed rows yet (required separately in the current CDR-009 patch); once exempted, nothing ever retires them -- no push-based retirement operation exists. Blocking, must land before Phase AZ merges." ;
+  triage:status "obsolete" ;
+  triage:closed true ;
+  triage:branch "fix/az-cdr-followup-1" ;
+  triage:headSha "8e66775b2" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/8e66775b2> .

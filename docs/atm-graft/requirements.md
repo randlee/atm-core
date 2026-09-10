@@ -389,3 +389,10 @@ Scope-simplification rule for the first implementation pass:
     durable `bucket_counts.unread` or `bucket_counts.pending_ack` is non-zero
   - a zero-count restart emits no steer; a live steer nudge during the delay
     remains a normal one-event wake-up
+
+## Phase AZ host-nudge metadata
+
+`REQ-GRAFT-NOTIFY-001` nudge payloads additionally carry a summary-backed
+`title` (and optional `task_id`) only. `description` is a deprecated
+same-value wire alias for staged readers; it never denotes message text or a
+task-row description. The embedded host reads the full message through ATM.

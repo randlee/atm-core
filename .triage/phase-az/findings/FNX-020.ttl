@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-020>
+  a triage:Finding ;
+  triage:findingId "FNX-020" ;
+  triage:title "Exhausted nudge markers are unrepresentable and uncancellable -- list_pending_members and claim_next_pending disagree" ;
+  triage:description "fenix's Phase AZ task/nudge state-machine review (from Rand's direct question about persistent nudges that cannot be cancelled) reports pending_nudge_store.rs:223-224's claim_next_pending filters nudge_attempts < MAX_NUDGE_ATTEMPTS (5), while requeue_pending re-sets nudge_pending_at while incrementing attempts -- so at attempt 5 a row is marked pending but permanently unclaimable. list_pending_members has no attempts predicate at all (WHERE nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL), so the two queries disagree: the member is reported pending forever, the claim returns None forever. The only clears are clear_pending_on_read (needs the message actually read) and the task-linked clear; there is no operator cancel (atm teams clear-nudge-template is template overrides, not markers). herdr_candidates therefore keeps the member and runs a claim_next_pending query every 5s per stuck marker indefinitely. Not a starvation risk -- process_candidate returns before touching stats.prompted, so a stuck member consumes no prompt slot; the cost is wasted queries and an uncancellable marker, exactly the symptom Rand reported. Root cause is a modelling gap: exhaustion is encoded as the absence of a state (pending but unclaimable) rather than a terminal state -- something unnamed cannot be reported, cancelled, or tested. Verified pre-existing and unchanged by phase-az: identical queries at develop c5939a176 and at PR #1395 head e20f2d0f5. In scope for this round because AZ layers a second retry machine on top of it (the SOLAR-CDR-009 reservation-ownership consolidation) and because it is the live symptom. solar's D2 ruling on the required fix shape: PendingNudgeStore owns 'gave up' (ADR-054 already makes nudge_attempts the single owner of queue retry state; AttentionScheduleStore must never become the queued-message retry owner). Correct boundary shape is two typed projections on PendingNudgeStore, one owner: an attempts-bounded claimable projection for scheduler discovery, and a typed exhausted projection for doctor/health/operator tooling, both derived from the same durable marker/attempt state. Do not silently clear an exhausted marker (hides an undelivered message). Any operator-cancel command must go through a higher-level authorized service asking PendingNudgeStore for a durable explicit cancellation/disposition -- never mutate SQL from CLI code or create scheduler-owned truth. Same sealed trait; no new (13th) capability; no ADR-036/boundary TOML inventory change." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "concurrency-correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/pending_nudge_store.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T21:26:03Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-020/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+# dispatchReady false: assigned as layer 2 (cipher) on a new stacked branch
+# (fix/az-cdr-followup-2) on top of fix/az-cdr-followup-1, per fenix's
+# dispatch plan -- HELD until layer 1 (SOLAR-CDR-009/FNX-014/S4) pushes, so
+# cipher is not rebasing under a moving base, even though there is no file
+# overlap (pending_nudge_store.rs vs layer 1's four files).
+
+<urn:atm:triage:occurrence/FNX-020/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/pending_nudge_store.rs" ;
+  triage:line 223 ;
+  triage:snippet "list_pending_members and claim_next_pending disagree on attempts-exhausted rows; no operator cancel path. Pre-AZ defect, identical at develop c5939a176 -- not attributed to this phase's diff, but in scope for this round." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/e20f2d0f5> .

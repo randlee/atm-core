@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-008>
+  a triage:Finding ;
+  triage:findingId "FNX-008" ;
+  triage:title "CDR-007 added two unused public constructors" ;
+  triage:description "fenix's independent critical review of PR #1395 reports TaskRevision::next() (task_state.rs:187) and AttentionCursorRevision::next() (attention.rs:209) have no caller anywhere at the reviewed head. The writers that would use them still compute raw arithmetic (task_ops.rs:395,631,726 and task_reminder.rs:28,77 all do revision.saturating_add(1) on a u64 and wrap with TaskRevision::from_raw at the boundary). Both are pub, so dead_code will never flag them -- violates the repo's no-unused-code rule. Recommendation: either delete both next() methods, or use them at the writer boundary (the better shape -- it would let writers stop round-tripping through raw u64)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/task_state.rs, crates/atm-storage/src/attention.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-008/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FNX-008/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_state.rs" ;
+  triage:line 187 ;
+  triage:snippet "TaskRevision::next() and AttentionCursorRevision::next() are unused pub constructors" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "a0866b960" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/a0866b960> .
+
+<urn:atm:triage:worktree/AZ4/a0866b960>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "a0866b960" ;
+  triage:orderIndex 4 .

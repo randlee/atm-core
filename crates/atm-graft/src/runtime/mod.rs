@@ -976,7 +976,7 @@ mod tests {
             recipient: AgentName::from_validated(TEST_QA),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: AtmMessageId::new(),
-            description: "review failing smoke lane".to_string(),
+            title: "review failing smoke lane".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,
@@ -988,8 +988,8 @@ mod tests {
         let event = request_event();
         HostNudge {
             kind: NudgeKind::Steer,
-            body: event.description.clone(),
-            notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
+            body: event.title.clone(),
+            notice_text: format!("📬 from {}\n{}", event.source_address(), event.title),
             event,
         }
     }

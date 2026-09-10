@@ -367,9 +367,16 @@ Architectural rule:
 Store-family rule:
 - `MailStore` owns message lifecycle state
 - `RosterStore` owns durable team/member roster state only
-- task storage is currently out of scope; any future task storage line starts
-  from canonical Claude-code schema rather than from preserved transition
-  scaffolding
+- `TaskCommandService` is the sealed, storage-neutral command-policy boundary
+  for durable task queries and lifecycle mutations; its sole core
+  implementation validates authorization, lifecycle state, prepared handoff
+  mail, idempotency, and request deadlines before using
+  `AsyncTaskMutationStore`
+- `AsyncTaskMutationStore` owns the one SQLite writer transaction that commits
+  a task projection/event together with any prepared assignment or terminal
+  handoff message; adapters must not create a second task/message write path
+- daemon-owned live `pid` state and other session-transient runtime data stay
+  outside `RosterStore`
 - canonical live state, `pid`, session, freshness, and revision stay in the
   ephemeral half of the write-through RAM master-roster record exposed through
   `RosterRuntimeMirror`; they never enter the durable `RosterStore`
@@ -726,3 +733,11 @@ Architectural rules:
 - warning diagnostics emitted by `atm-core` must also select a registry code
 - the source registry must stay aligned with
   [`../atm-error-codes.md`](../atm-error-codes.md)
+
+## 7. Phase AZ bounded post-send event
+
+The core event model has one canonical summary field, `title`. Explicit wire
+projection DTOs provide the temporary `description` compatibility key rather
+than restoring a duplicate model field. Queue reminders load only the
+assignment message metadata needed for title and provenance; immutable bodies
+remain behind the mailbox read boundary.

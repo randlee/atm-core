@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-025>
+  a triage:Finding ;
+  triage:findingId "FNX-025" ;
+  triage:title "No operator control over the nudge-path state machines -- needs one durable task-queue-nudge automation control under the two-machine design" ;
+  triage:description "Originates from Rand directly (relayed by fenix, not from her review): \"I want several simple state machines. and I need to be able to stop the additional interconnected state machines that are getting executed.\" fenix verified the basis independently before filing: grepped the workspace for any disable/enable/pause/quiet-hours config, env var, or flag reaching herdr_queue_wake, herdr_escalation, or the attention store -- there is none. tick_once (herdr_queue_wake.rs:246) runs the whole chain unconditionally every tick. The only granularity an operator has today is stopping the daemon entirely. Required outcome: durable, observable, restart-stable operator controls -- atm doctor should print which control(s) are live -- where OFF/Disabled means the affected work is never materialized (not materialized-then-discarded). CURRENT SHAPE (v2, superseded from the original seven-to-four proposal by solar's re-ruling against Rand's actual two-machine specification): the task-queue nudge path has exactly two domain machines -- roster ephemeral member state (presence) and task lifecycle (Assigned/Active) -- and a nudge is a derived, durably queued action, not a third domain state machine. The entire shared attention scheduler (AttentionLane, attention_lane_cursors, multi-lane fairness, reservation status/retry/lease/fence/finalize/tombstone machinery, release_streaks, attention-owned escalation) is being deleted and replaced, not consolidated, so the original attention-global/lane/escalation control proposal is withdrawn along with the machines it would have controlled. What replaces it: ONE durable task-queue-nudge automation control, preferably gating the Idle and Close triggers independently if Rand needs selective stopping, default enabled. Disabled means no new derived nudge work is materialized. Existing already-queued work's disposition on disable (pause-and-resume vs cancel) must be stated explicitly in the design, not left implicit. If ephemeral unread-message nudges remain as an independent path (open question for Rand, per solar), they stay on the existing pending-message delivery path and do not need shared-scheduler machinery preserved just for coexistence. Routing is to solar for the replacement design (an ADR record citing Rand's original direct message/issue, not fenix's relay, per solar's classification), not arch-ctm or cipher, and this finding must not be dispatched to any dev agent until that design is published. CDR-009 is explicitly unaffected by (i.e., orthogonal to, not gated by) this finding; conversely this finding does not gate on CDR-009 either since that whole model is being replaced." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "operability" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs, crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs, crates/atm-core/src/commands/doctor (or equivalent atm doctor surface), plus whatever new durable nudge/outbox module solar's replacement design introduces" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T22:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T22:23:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-025/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+# v2: narrowed per fenix's relay of solar's re-ruling against Rand's actual
+# two-machine specification (solar's re-ruling: 01M26Q0Q4Q4QVRY18AJH40C4YA;
+# fenix's hold actioning it: 01M26Q3M8KNG5SVFQ8CK324GJM), itself reconciling
+# solar's own prior five-authority/four-control ruling (message
+# 01M26PV26JB0EMA26HMPT0GEG2), which is now superseded in turn. The
+# original seven-to-four decomposition and its four proposed controls
+# (attention-global/lane/escalation/Herdr-polling) are withdrawn along with
+# the attention scheduler they would have governed -- replaced by the
+# single task-queue-nudge automation control described above. Solar
+# published the full replacement design (sections A-H, ten required
+# adversarial tests, section F = this finding's control shape) at
+# 01M26Q8J7HRAGP5VAA66H4AWFV. Per Rand's full-stop order relayed by fenix
+# (01M26QF5RPJ9ET26M0DZ08P2EM): DO NOT DISPATCH this or any part of A-H,
+# even after solar republishes with fenix's start-notification gap folded
+# in, until Rand has a plan he calls solid. Still routed to solar, still
+# dispatchReady false, still blocking (Rand's product need is unmet either
+# way) -- what changed is the shape of what gets built, not whether it
+# gates merge.
+#
+# v1 (superseded): routed to solar for an architecture ruling on fenix's
+# original proposed seven-to-four machine decomposition (and likely an
+# ADR) before any dev dispatch -- explicitly not arch-ctm or cipher, and
+# explicitly not to be folded into SOLAR-CDR-009/az-cdr-followup-1's active
+# dispatch. Filed blocking per fenix's relay of Rand's direct instruction.
+
+<urn:atm:triage:occurrence/FNX-025/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 246 ;
+  triage:snippet "tick_once runs the entire nudge-path chain unconditionally every tick with no per-machine disable switch; release_streaks (:92, in-RAM hashmap) and herdr_queue_wake_escalation.rs's EscalationState (:51, in-RAM hashmap) additionally have no persistence path, so they cannot be switched off durably or observably at all." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-cdr-followup-1" ;
+  triage:headSha "8e66775b2" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/8e66775b2> .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CDR-002>
+  a triage:Finding ;
+  triage:findingId "CDR-002" ;
+  triage:title "Heartbeat-originated Idle observations never enter the AZ.4 attention scheduler" ;
+  triage:description "solar's critical design review reports that crates/atm-http-runtime/src/storage_and_nudge_router.rs:649-716 is the only production constructor of IdleOpportunity, driven by the Herdr poll path. Heartbeat updates the canonical roster but publishes only an old MemberStateTransitionSink event, only when state_changed is true (crates/atm-daemon-bootstrap/src/queue_drain.rs:28-52,95-124). The composed DrainOnTransitionSink invokes drain_one and explicitly admits only Tmux/Graft, not Herdr (crates/atm-http-runtime/src/herdr_queue_wake.rs:474-586). Thus heartbeat cannot trigger AZ.4 scheduling, and accepted Idle-to-Idle heartbeat revisions publish nothing. This contradicts sprint-AZ.4-attention-scheduler.md:49-68,157-173,315-320 and acceptance 8 at 459-463. Recommendation: have the canonical roster mutation owner publish a source-neutral post-commit IdleOpportunity for every accepted Idle revision, consumed by the same scheduler from poll and heartbeat; retire heartbeat's scheduling dependency on the old drain sink. Add composed heartbeat-only and Idle-to-Idle tests proving reservation/emission without a Herdr poll." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "missing-integration" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/storage_and_nudge_router.rs, crates/atm-daemon-bootstrap/src/queue_drain.rs, crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T18:50:33Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CDR-002/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CDR-002/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 649 ;
+  triage:snippet "IdleOpportunity constructed only from the Herdr poll path, not from heartbeat" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "dc8f0164b" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/dc8f0164b> .
+
+<urn:atm:triage:worktree/AZ4/dc8f0164b>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "dc8f0164b" ;
+  triage:orderIndex 4 .

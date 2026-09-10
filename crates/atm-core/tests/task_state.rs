@@ -179,7 +179,7 @@ fn task_row(
 }
 
 #[test]
-fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_store() {
+fn synchronous_tmux_task_write_keeps_acknowledgement_mail_only_and_completes() {
     let (root, runtime, team) = setup(RosterHarness::ClaudeCode);
     let home = root.path().join("home");
     std::fs::create_dir_all(&home).expect("home");
@@ -198,7 +198,11 @@ fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_sto
         &runtime,
     )
     .expect("task acknowledgement");
-    assert_eq!(task_row(&runtime, &team, &task_id).state, TaskState::Active);
+    assert_eq!(
+        task_row(&runtime, &team, &task_id).state,
+        TaskState::Assigned,
+        "only `atm task start` may activate assigned work"
+    );
 
     let (mut completion, _) = task_write_request(&home, &team, "sender", task_id.clone());
     completion.task_id = None;
@@ -212,13 +216,11 @@ fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_sto
         .expect("installed task store")
         .list_task_events(&team, &task_id, Some(&row.assignee))
         .expect("task events");
-    assert_eq!(
+    assert!(
         events
             .iter()
-            .filter(|event| event.event == TaskEventKind::Acked)
-            .count(),
-        1,
-        "one successful acknowledgement appends exactly one Acked event"
+            .all(|event| event.event != TaskEventKind::Acked),
+        "acknowledgement must not append a lifecycle event"
     );
 }
 
@@ -259,7 +261,11 @@ fn deferred_herdr_prepare_persists_the_same_task_assignment() {
         &runtime,
     )
     .expect("task acknowledgement");
-    assert_eq!(task_row(&runtime, &team, &task_id).state, TaskState::Active);
+    assert_eq!(
+        task_row(&runtime, &team, &task_id).state,
+        TaskState::Assigned,
+        "deferred delivery does not change mail-only acknowledgement semantics"
+    );
 }
 
 #[test]

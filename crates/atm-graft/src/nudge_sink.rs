@@ -86,7 +86,7 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
         let notice_text = format!(
             "📬 from {}\n{}",
             dispatch.event.source_address(),
-            dispatch.event.description
+            dispatch.event.title
         );
         self.deliver(HostNudge {
             event: dispatch.event.clone(),
@@ -151,7 +151,7 @@ mod tests {
             recipient: TEST_ARCH_CTM.parse().expect("recipient"),
             recipient_team: TEST_TEAM.parse().expect("team"),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
-            description: "review failing smoke lane".to_string(),
+            title: "review failing smoke lane".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,
@@ -179,8 +179,8 @@ mod tests {
         let event = request_event();
         sink.deliver(HostNudge {
             kind: atm_core::boundary::NudgeKind::Steer,
-            notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
-            body: event.description.clone(),
+            notice_text: format!("📬 from {}\n{}", event.source_address(), event.title),
+            body: event.title.clone(),
             event,
         })
         .expect("delivery");
@@ -235,8 +235,8 @@ mod tests {
         let error = sink
             .deliver(HostNudge {
                 kind: atm_core::boundary::NudgeKind::Steer,
-                notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
-                body: event.description.clone(),
+                notice_text: format!("📬 from {}\n{}", event.source_address(), event.title),
+                body: event.title.clone(),
                 event,
             })
             .expect_err("typed error");

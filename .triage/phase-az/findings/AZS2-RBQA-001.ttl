@@ -1,0 +1,166 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS2-RBQA-001>
+  a triage:Finding ;
+  triage:findingId "AZS2-RBQA-001" ;
+  triage:title "Active>Assigned>Complete precedence logic duplicated across 6+ SQL sites" ;
+  triage:description "crates/atm-storage-rusqlite/src/schema_version.rs -- task_v1_insert_bridge trigger and task_v1_update_bridge trigger contain 10 identical CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END precedence expressions duplicated at lines 117, 119, 155, 193, 195, 210, 216, 226, 236, 245. This contradicts AZ.2 design requirement D4: 'Implement deterministic state precedence and active-conflict demotion once and reuse them for both initial migration and every supported v1 bridge write.' Fix: factor the precedence expression into one canonical SQL artifact referenced by all sites." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-duplication" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-09-10T03:38:26Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-09-10T02:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.2 ;
+  triage:foundAt "2026-09-10T02:11:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-10> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 117 ;
+  triage:snippet "CASE preferred.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 119 ;
+  triage:snippet "CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 155 ;
+  triage:snippet "ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 193 ;
+  triage:snippet "CASE preferred.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 195 ;
+  triage:snippet "CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 210 ;
+  triage:snippet "ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 216 ;
+  triage:snippet "ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 226 ;
+  triage:snippet "ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 236 ;
+  triage:snippet "ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-001/AZ2-OCC-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/schema_version.rs" ;
+  triage:line 245 ;
+  triage:snippet "ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ2/f04a9f2> .
+
+<urn:atm:triage:worktree/AZ1/ba205bb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ1" ;
+  triage:branch "feature/az1-task-nudge-contract" ;
+  triage:headSha "ba205bb" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AZ2/f04a9f2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ2" ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "f04a9f2" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AZ3/b24e7f1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b24e7f1" ;
+  triage:orderIndex 3 .

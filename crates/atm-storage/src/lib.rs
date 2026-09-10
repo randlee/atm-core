@@ -2,6 +2,7 @@
 //! for ATM backends and their callers.
 
 pub mod analyst_query;
+pub mod attention;
 pub mod contract;
 pub mod diagnostics;
 pub mod error;
@@ -13,6 +14,8 @@ mod peer_contract;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
+mod task_ledger;
+pub mod task_mutation;
 pub mod task_state;
 pub mod task_store;
 pub mod template_catalog;
@@ -34,6 +37,13 @@ pub mod roles {
 }
 
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
+pub use attention::{
+    AsyncAttentionScheduleStore, AttentionCandidates, AttentionCursor, AttentionFinalizeOutcome,
+    AttentionFinalizeRequest, AttentionItem, AttentionLane, AttentionReservation,
+    AttentionReservationRequest, AttentionReservationStatus, AttentionScheduleStore,
+    AttentionSelection, EphemeralMessageCandidate, IdleOpportunity, IdleOpportunityId,
+    PersistentTaskCandidate, select_attention_item,
+};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
     AcknowledgementSource, AgentType, AsyncGraftReceiverEndpointStore, AsyncMailboxReader,
@@ -73,9 +83,16 @@ pub use search::{
     SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
     StoredWorkflowMetadata, TimeRange,
 };
+pub use task_mutation::{
+    AsyncTaskMutationStore, PreparedAssignment, PreparedMessage, TaskMutationDeadline,
+    TaskMutationOutcome, TaskMutationRequest, TaskOperation,
+};
 pub use task_state::{
-    DAEMON_ACTOR_NAME, TaskActor, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
-    TaskRejected, TaskRow, TaskState, Transition, admit, transition,
+    AssignmentAttempt, DAEMON_ACTOR_NAME, LogicalTaskRow, TaskAbortReason, TaskActor,
+    TaskAssignmentAttempt, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
+    TaskLedgerScope, TaskLifecycleAction, TaskLifecycleEventKind, TaskLifecycleEventRow,
+    TaskLifecycleState, TaskLifecycleTransition, TaskOperationId, TaskOutcome, TaskPriority,
+    TaskRejected, TaskRow, TaskState, Transition, admit, lifecycle_transition, transition,
 };
 pub use task_store::{
     DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,

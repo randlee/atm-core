@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-010>
+  a triage:Finding ;
+  triage:findingId "FNX-010" ;
+  triage:title "GateAfterTaskRead test double blocks a Tokio worker via std::sync::mpsc inside an async fn" ;
+  triage:description "fenix's independent critical review of PR #1395 reports the GateAfterTaskRead test double (crates/atm-storage/src/testing.rs, load_logical_task) is properly registered in allowed_test_double_paths, but the gate calls std::sync::mpsc::Receiver::recv() inside async fn load_logical_task, blocking the calling Tokio worker until the test releases it. It works only because the one caller is #[tokio::test(flavor = \"multi_thread\", worker_threads = 2)] paired with spawn_blocking for the waiter (herdr_queue_wake.rs:1223,1294-1297). Any later use on a current-thread runtime, or with the gate held while the releasing task needs the same worker, deadlocks rather than failing -- the wrong primitive in a crate whose entire Async* companion family exists to keep blocking calls off Tokio tasks. Recommendation: use tokio::sync::oneshot/Notify for the gate, or document the multi-thread requirement on GateAfterTaskRead::new." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "test-infrastructure" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/testing.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T19:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T19:42:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-010/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FNX-010/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/testing.rs" ;
+  triage:line 1 ;
+  triage:snippet "GateAfterTaskRead::load_logical_task blocks a Tokio worker via std::sync::mpsc::Receiver::recv() inside an async fn" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "7248e41d8" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7248e41d8> .
+
+<urn:atm:triage:worktree/AZ4/7248e41d8>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "7248e41d8" ;
+  triage:orderIndex 4 .

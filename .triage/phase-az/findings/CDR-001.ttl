@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CDR-001>
+  a triage:Finding ;
+  triage:findingId "CDR-001" ;
+  triage:title "Task authorization is not atomically bound to the state it authorized -- reassignment race" ;
+  triage:description "solar's phase-ending critical design review (phase-az-critical-design-review) reports that crates/atm-core/src/task_command/service.rs:79-104 (TaskCommandService) reads a task, authorizes against that snapshot, and forwards the caller's optional expected_revision unchanged to crates/atm-storage-rusqlite/src/writer/task_ops.rs:185-197,381-396. When expected_revision is None, the writer performs no revision check; transition_v2 rereads state but does not re-authorize the actor against the current assignee/attempt. A reassignment can commit between authorization and mutation, after which the old assignee's Start/Block/Unblock/Close request can mutate the new assignee's task. This contradicts sprint-AZ.3-task-command-handoff.md:204-206. Recommendation: for every existing-task mutation, bind the storage request to the service-read revision even when the caller omits CAS, while separately validating any caller-supplied revision; alternatively carry an authorization precondition into the transaction. Add deterministic reassignment-vs-transition race tests." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "concurrency-correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/task_command/service.rs, crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T18:50:33Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CDR-001/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CDR-001/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_command/service.rs" ;
+  triage:line 79 ;
+  triage:snippet "expected_revision forwarded unchanged; no re-authorization against current assignee/attempt" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "dc8f0164b" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/dc8f0164b> .
+
+<urn:atm:triage:worktree/AZ4/dc8f0164b>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "dc8f0164b" ;
+  triage:orderIndex 4 .

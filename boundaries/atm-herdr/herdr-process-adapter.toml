@@ -82,4 +82,5 @@ notes = [
   "AQ2.6 owns the immediate steer adapter contract; AQ2.7 reuses the same adapter for wait/get queue wake behavior",
   "HerdrSession remains owned by AQ1 delivery_channel.rs; this crate consumes the session string only for child HERDR_SESSION",
   "Phase AX.2: prompt text is caller-supplied rendered built-in nudge template text; the adapter never composes or alters it (2026-09-05)",
+  "Phase AZ: caller-rendered prompt text is a bounded message-id/title/optional-task-id projection and never contains immutable message text or TaskRow.description (2026-09-09)",
 ]

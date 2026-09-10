@@ -1,0 +1,100 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-014>
+  a triage:Finding ;
+  triage:findingId "FNX-014" ;
+  triage:title "Heartbeat drain guard has a narrow check-then-push window; DetachedReceivedHooks doc no longer matches the new entry point" ;
+  triage:description "fenix's re-verification pass on PR #1395 (head 3b8a43fd3) reports on_idle_opportunity (herdr_queue_wake_idle.rs:9) checks runtime_health.is_draining() then calls observe_task, which pushes the JoinHandle into the registry (router_support.rs:320). drain (router_support.rs:358) does std::mem::take(&mut *self.lock()) once, from the pump's shutdown path. A dispatch that passes the draining check but pushes after drain has taken the vector is therefore never joined -- a narrow shutdown-only window reproducing the original finding's failure mode. Also, the DetachedReceivedHooks doc (router_support.rs:310) still promises 'every warning it produces is logged with the originating request id and counted on RuntimeHealth', which is no longer true of the new entry point: observe_task takes neither a RuntimeHealth nor a RequestId, produces no WarningEntry, and run_idle_opportunity logs failures with member and no request id; idle_opportunity_dispatches_total counts attempts, not outcomes. Recommendation: take the draining decision inside the registry lock (or have observe_task return whether the push was accepted and abort the task if not), and amend the doc comment to describe both entry points. Deferred: narrow shutdown-only race, self-healing per the pre-existing reservation retry mechanism; does not block merge per fenix's PASS verdict." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "concurrency-correctness" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_idle.rs, crates/atm-http-runtime/src/router_support.rs" ;
+  triage:status "obsolete" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:26:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-10T22:37:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-014/AZ4-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-014/AZ4-002> ;
+  triage:triageRecordVersion "4" .
+
+# v4: CLOSED OBSOLETE / SUPERSEDED BY REDESIGN, not FIXED, per fenix's
+# explicit full-stop record-keeping instruction (message
+# 01M26QF5RPJ9ET26M0DZ08P2EM, itemizing SOLAR-CDR-009/FNX-014/FNX-024
+# together). This finding's v3 fold-in target (SOLAR-CDR-009's closure on
+# fix/az-cdr-followup-1) is itself obsolete: the observe_task/registry code
+# this finding's sub-item touched (router_support.rs:322-330) belongs to the
+# attention scheduler being deleted before AZ merge per solar's replacement
+# design (01M26Q8J7HRAGP5VAA66H4AWFV, re-ruling 01M26Q0Q4Q4QVRY18AJH40C4YA).
+# "Fixed" is withheld for the same reason as SOLAR-CDR-009: the mechanism it
+# would certify is not shippable. If the new design's Idle-trigger dispatch
+# path has an analogous draining/registration race, that gets filed fresh
+# against the new schema, not inherited from this record.
+#
+# v3 (superseded): fenix (leading coordination on this round, per Rand) rules this moves
+# deferred -> open, folded into SOLAR-CDR-009's closure as a required
+# sub-item, dispatched to arch-ctm on fix/az-cdr-followup-1. Rationale: this
+# finding's code (router_support.rs:322-330's unconstrained tokio::spawn in
+# observe_task) is exactly what solar's required closure restructures
+# anyway (a per-member claim/lease will change this spawn and its registry
+# interaction), so the marginal cost of fixing it in the same pass is near
+# zero and leaving it deferred means touching the same lines twice.
+# Acceptance criterion added: the draining decision and the handle
+# registration must happen under the same lock, so a dispatch that passes
+# the draining check cannot be pushed after drain has taken the vector.
+# Supersedes the v2 deferral below (that reasoning was correct at the time;
+# the concurrency-design decision it was waiting on is now being made
+# anyway via SOLAR-CDR-009).
+
+# v2, team-lead judgment call (documented override of quality-mgr's stated
+# 0-blocking/0-important/0-minor merge gate for this one finding only):
+# upheld as deferred against quality-mgr's QA-2 FAIL verdict on PR #1395
+# (head 3b8a43fd3), which did not independently raise this item. Rationale:
+# fenix, the independent critical design reviewer, already issued a
+# non-blocking PASS classifying this as a narrow, shutdown-only,
+# self-healing race (the pre-existing reservation retry mechanism recovers
+# any dropped dispatch); a full fix requires either moving the draining
+# check inside the registry lock or having observe_task report back whether
+# its push was accepted -- a concurrency-design decision, not a mechanical
+# cleanup fit for a last-minute consolidated minor pass. The doc-comment half
+# of fenix's recommendation (describe both entry points accurately) IS being
+# fixed in the same consolidated cleanup dispatch as FNX-011/012/013/015 and
+# quality-mgr's QA-2 items FNX-016..019; only the lock-restructuring stays
+# deferred.
+
+<urn:atm:triage:occurrence/FNX-014/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_idle.rs" ;
+  triage:line 9 ;
+  triage:snippet "check-then-push race between is_draining() and observe_task vs drain's take(); doc comment stale. Closed obsolete/superseded by redesign -- the attention scheduler's Idle-dispatch registry is being deleted before AZ merge, not hardened." ;
+  triage:status "obsolete" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
+
+<urn:atm:triage:worktree/AZ4/3b8a43fd3-r>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:occurrence/FNX-014/AZ4-002>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/router_support.rs" ;
+  triage:line 322 ;
+  triage:snippet "folded into SOLAR-CDR-009's closure as a required sub-item; that closure is itself now obsolete/superseded by redesign (solar's replacement design 01M26Q8J7HRAGP5VAA66H4AWFV deletes this registry/spawn code before AZ merge)." ;
+  triage:status "obsolete" ;
+  triage:closed true ;
+  triage:branch "fix/az-cdr-followup-1" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/e20f2d0f5> .

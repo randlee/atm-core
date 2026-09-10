@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-023>
+  a triage:Finding ;
+  triage:findingId "FNX-023" ;
+  triage:title "AsyncTaskSchedulerAuditStore violated its own bounded_task_mutation_submission boundary contract prior to SOLAR-CDR-009" ;
+  triage:description "fenix's SOLAR-CDR-009 fix review identified that boundaries/atm-storage/async-task-scheduler-audit-store.toml declares io_owns = [\"bounded_task_mutation_submission\", \"idempotent_task_audit_result\"], yet both AsyncTaskSchedulerAuditStore methods (record_reminder, record_lead_notification -- atm-storage/src/task_mutation.rs:189-199 prior to the fix) took no deadline and routed through SharedDb::submit_task_mutation_async (unbounded), directly violating the trait's own declared owned-I/O contract. Pre-existing, landed with AZ.2/CDR-004, not introduced by the SOLAR-CDR-009 work. fenix ruled this be filed on the record as its own finding rather than silently repaired inside a CDR-009 commit, with the resolution documented here rather than left implicit. Resolution: fixed as part of arch-ctm's SOLAR-CDR-009 closure (fix/az-cdr-followup-1). Both methods now take TaskMutationDeadline and route through submit_task_mutation_async_before (atm-storage/src/task_mutation.rs:190-200; atm-storage-rusqlite/src/lib.rs:330,:352 in commit 9309cb819, carried forward unchanged through 8e66775b2). boundaries/atm-storage/async-task-scheduler-audit-store.toml was updated in the same fix to add TaskMutationDeadline to [contracts] request_types and to note that both audit writes reject expired queued operations -- confirmed by fenix to be exactly the authorized scope and nothing more, per the design-ruling-before-capability-adding-fix convention." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "boundary-compliance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/task_mutation.rs, crates/atm-storage-rusqlite/src/lib.rs, boundaries/atm-storage/async-task-scheduler-audit-store.toml" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T22:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T22:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-10T22:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-023/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+# Filed already-fixed per fenix's explicit request (her SOLAR-CDR-009 review
+# section on the audit-trait boundary): the violation predates this phase's
+# fix work, so it belongs on the record as its own finding with the CDR-009
+# closure's audit-bounding change (arch-ctm, commits 9309cb819/8e66775b2)
+# recorded as its resolution -- not folded silently into the SOLAR-CDR-009
+# finding itself. dispatchReady false: no further dev work required.
+
+<urn:atm:triage:occurrence/FNX-023/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_mutation.rs" ;
+  triage:line 189 ;
+  triage:snippet "record_reminder/record_lead_notification took no deadline, routed through unbounded SharedDb::submit_task_mutation_async, violating the trait's own bounded_task_mutation_submission boundary contract. Fixed via TaskMutationDeadline + submit_task_mutation_async_before in the SOLAR-CDR-009 closure." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-cdr-followup-1" ;
+  triage:headSha "8e66775b2" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/8e66775b2> .
+
+<urn:atm:triage:worktree/AZ4/8e66775b2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-cdr-followup-1" ;
+  triage:branch "fix/az-cdr-followup-1" ;
+  triage:headSha "8e66775b2" ;
+  triage:orderIndex 6 .

@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CDR-005>
+  a triage:Finding ;
+  triage:findingId "CDR-005" ;
+  triage:title "Scheduler flattens structured ReadLaneError into opaque DaemonUnavailable strings" ;
+  triage:description "solar's critical design review reports that three scheduler reads (crates/atm-http-runtime/src/herdr_attention_scheduler.rs:111-117; crates/atm-http-runtime/src/herdr_queue_wake.rs:854-873) flatten ReadLaneError into DaemonUnavailable strings although the storage contract (crates/atm-storage/src/contract.rs:405-418) provides a structured conversion preserving saturation, deadline, storage code, and cause. Recommendation: use AtmError::from and add error-code preservation tests for saturated, deadline, and storage failures." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_attention_scheduler.rs, crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T18:36:39Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CDR-005/AZ4-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CDR-005/AZ4-002> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CDR-005/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
+  triage:line 111 ;
+  triage:snippet "ReadLaneError flattened to DaemonUnavailable string instead of AtmError::from" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "fe0d17a3d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/fe0d17a3d> .
+
+<urn:atm:triage:occurrence/CDR-005/AZ4-002>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 854 ;
+  triage:snippet "ReadLaneError flattened to DaemonUnavailable string instead of AtmError::from" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "fe0d17a3d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/fe0d17a3d> .
+
+<urn:atm:triage:worktree/AZ4/fe0d17a3d>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "fe0d17a3d" ;
+  triage:orderIndex 4 .

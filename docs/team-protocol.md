@@ -8,7 +8,8 @@ This protocol is mandatory for all ATM team communications.
 - Example: `ack, working on <task>`
 2. Execute the requested task.
 3. Send a completion message with a concise summary of what was done. When
-   closing a tracked task, use `atm send <assigner> --task-complete <id> --stdin`
+   closing a tracked task, use `atm task complete <id> --handoff <agent>
+   <message-source>` before reporting completion.
    before reporting completion.
 - Example: `task complete: <summary>`
 4. Receiver immediately acknowledges completion if it requires ack.

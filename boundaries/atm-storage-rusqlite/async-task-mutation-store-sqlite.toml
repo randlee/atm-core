@@ -1,0 +1,56 @@
+boundary_id = "BOUNDARY-AsyncTaskMutationStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteAsyncTaskMutationStoreAdapter"
+
+[public]
+trait = "AsyncTaskMutationStore"
+
+[implementation]
+type = "SqliteTaskMutationStore"
+module = "atm_storage_rusqlite"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["ordered_writer_submission", "sqlite_transaction"]
+io_forbidden = ["socket_io", "process_spawn", "template_rendering"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-runtime -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteTaskMutationStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["TaskMutationRequest"]
+response_types = ["TaskMutationOutcome"]
+error_types = ["AtmError"]
+notes = [
+  "review-only governed source module: crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs; lint_rules remains undispatched while [enforcement].io_forbidden_source_modules scanning is real and active (added in prior fix-4 round)",
+]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-ASYNC-TASK-MUTATION-REFERENCES"]
+review_gates = ["manual_architecture_review"]
+
+[enforcement.io_forbidden_source_modules]
+socket_io = ["atm_storage_rusqlite::writer::task_ops", "atm_storage_rusqlite::writer::task_legacy_ops"]
+process_spawn = ["atm_storage_rusqlite::writer::task_ops", "atm_storage_rusqlite::writer::task_legacy_ops"]
+template_rendering = ["atm_storage_rusqlite::writer::task_ops", "atm_storage_rusqlite::writer::task_legacy_ops"]
+
+[status]
+state = "concrete_landed"
+notes = [
+  "AZ.2",
+]

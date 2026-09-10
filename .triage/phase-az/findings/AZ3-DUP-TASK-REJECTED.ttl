@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZ3-DUP-TASK-REJECTED>
+  a triage:Finding ;
+  triage:findingId "AZ3-DUP-TASK-REJECTED" ;
+  triage:title "task_rejected() helper duplicated verbatim across writer/task_ops.rs and writer/task_legacy_ops.rs" ;
+  triage:description "task_rejected() is independently duplicated verbatim in both writer/task_ops.rs:1034 and writer/task_legacy_ops.rs:22-29 rather than sharing one owner. Fix: extract to a single shared helper used by both modules. Source: QA-2 on PR #1382 (https://github.com/randlee/atm-core/pull/1382), ruthless-boundary-qa." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-duplication" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/writer/task_ops.rs, crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZ3-DUP-TASK-REJECTED/AZ3-1> ;
+  triage:closedAt "2026-09-10T05:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AZ3-DUP-TASK-REJECTED/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 1034 ;
+  triage:snippet "fn task_rejected(...) -- duplicated verbatim in writer/task_legacy_ops.rs:22-29" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "05e35a69716f9ef85bd7379d9a6ffb84553cfadf" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b8900296c> .
+
+<urn:atm:triage:worktree/AZ3/b8900296c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:orderIndex 3 .

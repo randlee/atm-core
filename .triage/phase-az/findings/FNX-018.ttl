@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FNX-018>
+  a triage:Finding ;
+  triage:findingId "FNX-018" ;
+  triage:title "prune_terminal_rows row-cap (10k) branch is untested" ;
+  triage:description "quality-mgr's QA-2 pass on PR #1395 (head 3b8a43fd3) reports attention_schedule_store.rs's prune_terminal_rows has no test exercising the ATTENTION_MAX_TERMINAL_ROWS (~10000) row-cap DELETE branch (only the created_at-age branch is covered). Distinct from FNX-013 (hot-path placement/indexing) -- this is a test-coverage gap on the cap logic itself. Recommendation: add a test that seeds more than 10k terminal rows and asserts the row-cap DELETE trims to the configured limit." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T20:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FNX-018/AZ4-001> ;
+  triage:triageRecordVersion "2" .
+
+# v2: closed fixed -- verified by quality-mgr's QA-3 pass on PR #1395 @ e20f2d0f5
+# (PASS 0/0/0 across arch-qa/req-qa/rust-qa-agent/ruthless-boundary-qa, full
+# suite re-confirmed clean) plus team-lead direct source verification.
+# row-cap test added (pruning_caps_terminal_rows_at_the_configured_limit) -- rust-qa-agent stress-ran it 20x, deterministic per QA-3.
+
+<urn:atm:triage:occurrence/FNX-018/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:snippet "row-cap (10k) prune branch untested; quality-mgr QA-2 finding #4 on PR #1395" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/3b8a43fd3-r> .
+
+<urn:atm:triage:worktree/AZ4/3b8a43fd3-r>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "3b8a43fd3" ;
+  triage:orderIndex 4 .
