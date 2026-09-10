@@ -9,6 +9,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::Result;
+use atm_core::load_atm_config;
+use atm_core::send::{TemplateSendSource, input, render_template_source_for_task};
 use atm_core::task_command::{
     AbortInput, AssignmentInput, ComposedMessageInput, HandoffInput, NonEmptyText, TaskAction,
     TaskCommandRequest, TaskCommandResponse, TaskEventQuery, TaskListQuery, TaskListScope,
@@ -464,9 +466,11 @@ impl MessageSource {
                 text
             }
             (None, None, false, Some(path)) => {
-                // This is the same local `atm compose` renderer contract; only
-                // rendered body crosses the task service boundary.
-                crate::commands::compose::render_template_for_task(&path, self.vars.as_deref())?
+                let (body, template_sha) = render_task_template(&path, self.vars.as_deref())?;
+                return Ok(ComposedMessageInput {
+                    body: NonEmptyText::new(body)?,
+                    template_sha: Some(template_sha),
+                });
             }
             _ => {
                 return Err(atm_core::error::AtmError::validation(
@@ -480,6 +484,57 @@ impl MessageSource {
             template_sha: None,
         })
     }
+}
+
+/// Verify and render a task template using the same captured-source admission
+/// policy as ordinary sends. Only the rendered body and immutable SHA cross
+/// into the task service; task metadata never carries a source path or vars.
+fn render_task_template(
+    template: &std::path::Path,
+    vars: Option<&std::path::Path>,
+) -> Result<(String, atm_storage::TemplateSha)> {
+    let (_, current_dir) = resolve_command_runtime_context("task")?;
+    let path = if template.is_absolute() {
+        template.to_path_buf()
+    } else {
+        current_dir.join(template)
+    };
+    let canonical_template_path = std::fs::canonicalize(&path)?;
+    let canonical_template_root = canonical_template_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("template path has no parent directory"))?
+        .to_path_buf();
+    let raw_file_bytes = std::fs::read(&canonical_template_path)?;
+    let var_file_values = match vars {
+        Some(path) => {
+            let value: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
+            value
+                .as_object()
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("--vars must contain a JSON object"))?
+        }
+        None => serde_json::Map::new(),
+    };
+    let max_message_bytes = load_atm_config(&current_dir)?
+        .map(|config| {
+            config.max_message_bytes.as_usize().ok_or_else(|| {
+                anyhow::anyhow!("configured max_message_bytes does not fit this platform")
+            })
+        })
+        .transpose()?
+        .unwrap_or(input::default_message_max_bytes());
+    let source = TemplateSendSource {
+        canonical_template_path,
+        canonical_template_root,
+        raw_file_bytes,
+        input_defaults: serde_json::Map::new(),
+        var_file_values,
+        explicit_values: serde_json::Map::new(),
+        environment_values: serde_json::Map::new(),
+    };
+    let composer = atm_daemon_bootstrap::template_composer();
+    render_template_source_for_task(composer.as_ref(), &source, max_message_bytes)
+        .map_err(Into::into)
 }
 
 async fn mutate(
