@@ -80,9 +80,33 @@ pub(super) fn execute_task_mutation(
     }
     let current_revision = load_current_revision(request, connection, target)?;
     validate_expected_revision(request, current_revision)?;
+    let message_id = operation_message_id(&request.operation);
     let now = atm_storage::IsoTimestamp::now().to_string();
     let transition = apply_operation(request, current_revision, connection, cache, target, &now)?;
-    finalize_mutation(request, connection, target, &fingerprint, transition, &now)
+    finalize_mutation(
+        request,
+        connection,
+        target,
+        &fingerprint,
+        transition,
+        message_id,
+        &now,
+    )
+}
+
+fn operation_message_id(operation: &TaskOperation) -> Option<atm_storage::AtmMessageId> {
+    let message = match operation {
+        TaskOperation::Assign(assignment)
+        | TaskOperation::Reassign(assignment)
+        | TaskOperation::Reopen(assignment) => Some(&assignment.message),
+        TaskOperation::Close { handoff, .. }
+        | TaskOperation::LegacyCloseSucceeded {
+            completion_notice: handoff,
+        }
+        | TaskOperation::Supersede { handoff, .. } => Some(handoff),
+        TaskOperation::Start | TaskOperation::Block { .. } | TaskOperation::Unblock { .. } => None,
+    };
+    message.and_then(|prepared| prepared.message.envelope.message_id)
 }
 
 fn mutation_fingerprint(request: &TaskMutationRequest) -> Result<String, AtmError> {
@@ -282,12 +306,15 @@ fn finalize_mutation(
     target: &SharedDbTarget,
     fingerprint: &str,
     transition: TransitionResult,
+    message_id: Option<atm_storage::AtmMessageId>,
     now: &str,
 ) -> Result<TaskMutationOutcome, AtmError> {
     let result = TaskMutationOutcome {
         task_id: request.task_id.clone(),
         state: transition.state.clone(),
         revision: transition.revision,
+        message_id,
+        successor_task_id: transition.related_task_id.clone(),
         replayed: false,
     };
     let result_json = serde_json::to_string(&result).map_err(|error| {

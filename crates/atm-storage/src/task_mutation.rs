@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::contract::{Message, sealed};
 use crate::error::AtmError;
+use crate::schema::AtmMessageId;
 use crate::task_state::{TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority};
 use crate::task_store::MessageWriteOrigin;
 use crate::types::{MemberKey, TaskId};
@@ -78,6 +79,13 @@ pub struct TaskMutationOutcome {
     pub task_id: TaskId,
     pub state: TaskLifecycleState,
     pub revision: u64,
+    /// Assignment or terminal-handoff message committed with this operation.
+    /// The field is optional for state-only mutations and defaults while old
+    /// persisted operation results remain readable during the interface bump.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<AtmMessageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub successor_task_id: Option<TaskId>,
     pub replayed: bool,
 }
 

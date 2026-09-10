@@ -138,6 +138,8 @@ mod tests {
         assert!(!first.replayed);
         assert_eq!(replay.state, TaskLifecycleState::Assigned);
         assert!(replay.replayed);
+        assert!(first.message_id.is_some());
+        assert_eq!(replay.message_id, first.message_id);
         backend
             .shared_db_for_test()
             .with_connection(|connection| {
