@@ -15,21 +15,23 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T17:10:35Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T16:34:10Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T16:34:10Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-005/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ARCH-005/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
   triage:line 22 ;
   triage:snippet "fn run_blocking<F, T>(f: F) -> impl std::future::Future<Output = Result<T>>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "34c6d256c" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/34c6d256c> .

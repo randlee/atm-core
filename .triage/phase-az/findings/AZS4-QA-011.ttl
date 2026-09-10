@@ -15,7 +15,9 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs, crates/atm-http-runtime/src/herdr_queue_wake_claim.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T17:10:35Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T16:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
@@ -27,15 +29,15 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-011/AZ4-005> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-011/AZ4-006> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-011/AZ4-007> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AZS4-QA-011/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 227 ;
   triage:snippet "let pending_members = match run_blocking({" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042> .
@@ -45,8 +47,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 248 ;
   triage:snippet "let candidates = match run_blocking({" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042> .
@@ -56,8 +58,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 723 ;
   triage:snippet "run_blocking(move || claim_store.claim_pending(&claim_member, &message_id)).await?" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042> .
@@ -67,8 +69,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 786 ;
   triage:snippet "let dispatch = run_blocking(move || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042> .
@@ -78,8 +80,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 861 ;
   triage:snippet "let message = run_blocking(move || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042> .
@@ -89,8 +91,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 891 ;
   triage:snippet "let _ = run_blocking(move || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042> .
@@ -100,8 +102,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_claim.rs" ;
   triage:line 117 ;
   triage:snippet "impl ReleasePendingOnDrop { fn release_in_drop(&mut self) { ... tokio::runtime::Handle::spawn_blocking(...) } }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "34c6d256c" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/34c6d256c> .
