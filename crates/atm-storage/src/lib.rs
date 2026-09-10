@@ -13,6 +13,7 @@ mod peer_contract;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
+pub mod task_mutation;
 pub mod task_state;
 pub mod task_store;
 pub mod template_catalog;
@@ -69,6 +70,10 @@ pub use search::{
     SearchLimit, SearchMatchField, SearchMetadataMatch, SearchPageRequest, SearchResultKey,
     SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
     StoredWorkflowMetadata, TimeRange,
+};
+pub use task_mutation::{
+    AsyncTaskMutationStore, PreparedAssignment, PreparedMessage, TaskMutationOutcome,
+    TaskMutationRequest, TaskOperation,
 };
 pub use task_state::{
     AssignmentAttempt, DAEMON_ACTOR_NAME, TaskAbortReason, TaskActor, TaskEvent, TaskEventKind,
