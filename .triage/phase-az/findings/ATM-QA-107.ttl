@@ -15,28 +15,30 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "docs/project-plan.md" ;
-  triage:status "open" ;
+  triage:status "false_positive" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-107/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-107/AZ4-001>
   a triage:Occurrence ;
   triage:file "docs/project-plan.md" ;
-  triage:line 1 ;
-  triage:snippet "phase-az status table stale relative to AZ.1-AZ.4 merge state" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:line 1770 ;
+  triage:snippet "cipher reported not reproducible; team-lead independently verified via direct read of docs/project-plan.md:1770-1778 that the phase-az status table already shows AZ.1/AZ.2/AZ.3/AZ.4 all as complete -- the claim was already false at filing time. Closed as false_positive, not fixed." ;
+  triage:status "false_positive" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
 
-<urn:atm:triage:worktree/AZ4/066a465d0>
+<urn:atm:triage:worktree/AZ4/d0cb3f509>
   a triage:WorktreeSnapshot ;
-  triage:path "integrate/phase-az" ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
   triage:orderIndex 4 .

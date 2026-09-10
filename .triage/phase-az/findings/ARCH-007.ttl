@@ -15,13 +15,15 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_attention_scheduler.rs, crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T18:36:39Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T18:36:39Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ARCH-007/AZ4-001>
   a triage:Occurrence ;

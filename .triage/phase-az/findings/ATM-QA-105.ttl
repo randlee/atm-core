@@ -14,29 +14,31 @@
   triage:category "documentation-consistency" ;
   triage:severity "minor" ;
   triage:repeatable false ;
-  triage:sweepScope "docs/cli-reference.md" ;
-  triage:status "open" ;
+  triage:sweepScope "docs/atm/cli-reference-1-5-14.md" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-105/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-105/AZ4-001>
   a triage:Occurrence ;
-  triage:file "docs/cli-reference.md" ;
+  triage:file "docs/atm/cli-reference-1-5-14.md" ;
   triage:line 1 ;
-  triage:snippet "trailing blank line in generated CLI-reference doc section for task commands" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:snippet "cipher: original finding cited docs/cli-reference.md, an unversioned path that does not exist -- the actual generated doc is docs/atm/cli-reference-1-5-14.md. Fixed the CLI-doc generator's trailing newline and regenerated the doc." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "c9b62e580" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/c9b62e580> .
 
-<urn:atm:triage:worktree/AZ4/066a465d0>
+<urn:atm:triage:worktree/AZ4/c9b62e580>
   a triage:WorktreeSnapshot ;
-  triage:path "integrate/phase-az" ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "c9b62e580" ;
   triage:orderIndex 4 .

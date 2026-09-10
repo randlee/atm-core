@@ -15,28 +15,30 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-graft-python/src/lib.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F102/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBP-F102/AZ4-001>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/src/lib.rs" ;
   triage:line 1 ;
   triage:snippet "PyAgentAddress re-parses fields instead of caching typed values (unlike sibling PyGraftSessionOptions)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "bde3aa786" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/bde3aa786> .
 
-<urn:atm:triage:worktree/AZ4/066a465d0>
+<urn:atm:triage:worktree/AZ4/bde3aa786>
   a triage:WorktreeSnapshot ;
-  triage:path "integrate/phase-az" ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "bde3aa786" ;
   triage:orderIndex 4 .

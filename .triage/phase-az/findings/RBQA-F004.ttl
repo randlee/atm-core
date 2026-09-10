@@ -15,28 +15,30 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm/src/commands/list.rs" ;
-  triage:status "open" ;
+  triage:status "false_positive" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T18:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T18:03:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F004/AZ4-001>
   a triage:Occurrence ;
-  triage:file "crates/atm/src/commands/list.rs" ;
-  triage:line 1 ;
-  triage:snippet "ListCommand::run short-circuits to CoreTaskCommandService before AsyncTaskLedgerReader::list_tasks/list_task_events" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 317 ;
+  triage:snippet "cipher reported not reproducible; team-lead independently verified via grep+read that blocked_tasks() at herdr_queue_wake_escalation.rs:306-320 calls reader.list_tasks(member.team().clone(), Some(member.agent().clone()), deadline).await in production. AsyncTaskLedgerReader::list_tasks is not dead -- the original finding's premise (ListCommand::run's short-circuit) is true but does not make the trait method globally dead, since this second call site consumes it. Closed as false_positive, not fixed." ;
+  triage:status "false_positive" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/d0cb3f509> .
 
-<urn:atm:triage:worktree/AZ4/066a465d0>
+<urn:atm:triage:worktree/AZ4/d0cb3f509>
   a triage:WorktreeSnapshot ;
-  triage:path "integrate/phase-az" ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "d0cb3f509" ;
   triage:orderIndex 4 .

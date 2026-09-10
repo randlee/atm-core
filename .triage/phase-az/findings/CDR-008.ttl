@@ -15,28 +15,30 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "docs/plans/phase-az/phase-az-plan.md" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-10T19:21:43Z"^^xsd:dateTime ;
+  triage:closedBy "cipher" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T17:50:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T17:48:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CDR-008/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/CDR-008/AZ4-001>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-az/phase-az-plan.md" ;
   triage:line 130 ;
   triage:snippet "phase table marks AZ.1 and AZ.4 as planned, not merged" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
-  triage:occursIn <urn:atm:triage:worktree/AZ4/066a465d0> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e02de63ab" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/e02de63ab> .
 
-<urn:atm:triage:worktree/AZ4/066a465d0>
+<urn:atm:triage:worktree/AZ4/e02de63ab>
   a triage:WorktreeSnapshot ;
-  triage:path "integrate/phase-az" ;
-  triage:branch "integrate/phase-az" ;
-  triage:headSha "066a465d0" ;
+  triage:path "fix/az-critical-design-review-findings" ;
+  triage:branch "fix/az-critical-design-review-findings" ;
+  triage:headSha "e02de63ab" ;
   triage:orderIndex 4 .
