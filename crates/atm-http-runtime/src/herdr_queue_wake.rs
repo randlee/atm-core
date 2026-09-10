@@ -1030,13 +1030,19 @@ where
     T: Send + 'static,
     F: FnOnce() -> Result<T, AtmError> + Send + 'static,
 {
-    tokio::task::spawn_blocking(job).await.map_err(|source| {
-        AtmError::new(
-            AtmErrorCode::InternalError,
-            "Herdr queue wake blocking operation ended unexpectedly",
-        )
-        .with_cause(source)
-    })?
+    match tokio::time::timeout(HERDR_REQUEST_DEADLINE, tokio::task::spawn_blocking(job)).await {
+        Ok(joined) => joined.map_err(|source| {
+            AtmError::new(
+                AtmErrorCode::InternalError,
+                "Herdr queue wake blocking operation ended unexpectedly",
+            )
+            .with_cause(source)
+        })?,
+        Err(_) => Err(AtmError::new(
+            AtmErrorCode::WaitTimeout,
+            "Herdr queue wake blocking operation exceeded its request deadline",
+        )),
+    }
 }
 
 #[cfg(test)]
