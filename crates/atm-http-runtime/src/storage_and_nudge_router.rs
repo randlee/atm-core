@@ -1144,8 +1144,8 @@ mod tests {
     };
     use crate::{
         AuthenticatedConnector, BareCliFifo, BareCliQueueFullDrops, CanonicalWriteHandler,
-        IdleOpportunitySink, NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
-        append_bare_cli_message, canonical_api_router, canonical_message_router,
+        HerdrQueueWakePump, IdleOpportunitySink, NonZeroDuration, RuntimeHealth, RuntimeLimits,
+        RuntimeTimeouts, append_bare_cli_message, canonical_api_router, canonical_message_router,
     };
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
@@ -1178,6 +1178,39 @@ mod tests {
                 .lock()
                 .expect("record idle opportunity")
                 .push(opportunity);
+        }
+    }
+
+    struct RecordingAttentionEmitter {
+        emissions: AtomicUsize,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for RecordingAttentionEmitter {}
+
+    impl AsyncMessageReceivedHookEmitter for RecordingAttentionEmitter {
+        fn emit_received_message(
+            &self,
+            _dispatch: BuiltInPostSendDispatch,
+            _deadline: RequestDeadline,
+        ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>>
+        {
+            self.emissions.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Ok(PostSendEmissionPath::LocalHerdr) })
+        }
+    }
+
+    struct RecordingAttentionSelector {
+        emitter: RecordingAttentionEmitter,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for RecordingAttentionSelector {}
+
+    impl MessageReceivedHookSelector for RecordingAttentionSelector {
+        fn select_emitter(
+            &self,
+            _dispatch: &BuiltInPostSendDispatch,
+        ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+            Some(&self.emitter)
         }
     }
 
@@ -1477,6 +1510,7 @@ mod tests {
         pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         task_store: Arc<dyn TaskStore + Send + Sync>,
         async_task_ledger_reader: Arc<atm_runtime_test_support::InMemoryTaskLedgerReader>,
+        production_async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
         received_hook: Arc<RecordingReceivedHook>,
         runtime_health: RuntimeHealth,
         database_path: PathBuf,
@@ -1598,6 +1632,10 @@ mod tests {
             .service_runtime
             .task_store()
             .expect("sqlite task store");
+        let production_async_task_ledger_reader = assembly
+            .service_runtime
+            .async_task_ledger_reader()
+            .expect("sqlite task-ledger reader");
         let async_task_ledger_reader =
             Arc::new(atm_runtime_test_support::InMemoryTaskLedgerReader::default());
         let pending_nudge_store_for_runtime =
@@ -1642,6 +1680,7 @@ mod tests {
             pending_nudge_store,
             task_store,
             async_task_ledger_reader,
+            production_async_task_ledger_reader,
             received_hook,
             runtime_health: health,
             database_path,
@@ -2337,6 +2376,102 @@ mod tests {
         assert_ne!(
             opportunities[0].roster_state_revision, opportunities[1].roster_state_revision,
             "an Idle heartbeat refreshes the canonical revision and must not be filtered as a transition-only event"
+        );
+    }
+
+    #[tokio::test]
+    async fn heartbeat_only_idle_revisions_run_the_real_attention_pump_without_a_poll() {
+        let mut fixture = fixture(true, None, None);
+        for index in 0..2 {
+            let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+                .with_origin_metadata(AtmMessageId::new(), IsoTimestamp::now())
+                .with_nudge_mode(NudgeMode::Deferred);
+            let response =
+                post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::CREATED,
+                "queued write {index}"
+            );
+        }
+
+        let selector = Arc::new(RecordingAttentionSelector {
+            emitter: RecordingAttentionEmitter {
+                emissions: AtomicUsize::new(0),
+            },
+        });
+        let pump = Arc::new(HerdrQueueWakePump::new(
+            fixture
+                .router
+                .service_runtime
+                .clone()
+                .with_async_task_ledger_reader(Arc::clone(
+                    &fixture.production_async_task_ledger_reader,
+                )),
+            selector.clone(),
+            fixture.runtime_health.clone(),
+            Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default()),
+        ));
+        fixture.router = fixture.router.clone().with_idle_opportunity_sink(pump);
+
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "recipient".parse().expect("agent");
+        for (activity, observed_at) in [
+            (HeartbeatActivity::ActiveToolUse, "2026-01-01T00:00:00Z"),
+            (HeartbeatActivity::Idle, "2026-01-01T00:00:01Z"),
+        ] {
+            fixture
+                .router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                        team: team.clone(),
+                        member: member.clone(),
+                        pid: 7,
+                        observed_at: observed_at.parse().expect("timestamp"),
+                        activity,
+                        session_id: None,
+                    })),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("authenticated heartbeat");
+        }
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while selector.emitter.emissions.load(Ordering::SeqCst) != 1 {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("the first Idle heartbeat must reserve and dispatch without a Herdr poll");
+
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                    team,
+                    member,
+                    pid: 7,
+                    observed_at: "2026-01-01T00:00:02Z".parse().expect("timestamp"),
+                    activity: HeartbeatActivity::Idle,
+                    session_id: None,
+                })),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("Idle-to-Idle authenticated heartbeat");
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while selector.emitter.emissions.load(Ordering::SeqCst) != 2 {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("the Idle-to-Idle heartbeat must reserve and dispatch without a Herdr poll");
+        assert_eq!(
+            selector.emitter.emissions.load(Ordering::SeqCst),
+            2,
+            "the Idle-to-Idle refresh dispatched the second queued item through the real pump"
         );
     }
 

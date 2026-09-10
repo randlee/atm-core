@@ -1220,6 +1220,111 @@ mod tests {
         }
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cdr001_stale_assignee_transition_loses_the_real_writer_cas() {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("isolated runtime");
+        let team: TeamName = "cdr-race".parse().expect("team");
+        let lead = MemberKey::new(team.clone(), "lead".parse().expect("lead"));
+        let old_assignee = MemberKey::new(team.clone(), "old-assignee".parse().expect("agent"));
+        let new_assignee = MemberKey::new(team.clone(), "new-assignee".parse().expect("agent"));
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![
+                    herdr_member(&team, "lead"),
+                    herdr_member(&team, "old-assignee"),
+                    herdr_member(&team, "new-assignee"),
+                ],
+                refreshed_at: None,
+            })
+            .expect("roster");
+
+        let task_id: TaskId = "CDR-001-RACE".parse().expect("task id");
+        let writer_service = CoreTaskCommandService::new(assembly.service_runtime.clone());
+        writer_service
+            .execute(
+                TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
+                    operation_id: TaskOperationId::new(),
+                    actor: lead.clone(),
+                    task_id: task_id.clone(),
+                    expected_revision: None,
+                    action: TaskAction::Assign(AssignmentInput {
+                        assignee: old_assignee.clone(),
+                        priority: atm_core::boundary::TaskPriority::Normal,
+                        message: ComposedMessageInput {
+                            body: NonEmptyText::new("initial assignment").expect("task body"),
+                            template_sha: None,
+                        },
+                    }),
+                })),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("initial assignment through the real service and writer");
+
+        let (gated_reader, reached, resume) = atm_storage::testing::GateAfterTaskRead::new(
+            assembly
+                .service_runtime
+                .async_task_ledger_reader()
+                .expect("real async task reader"),
+        );
+        let old_service = CoreTaskCommandService::new(
+            assembly
+                .service_runtime
+                .clone()
+                .with_async_task_ledger_reader(Arc::new(gated_reader)),
+        );
+        let stale_transition = tokio::spawn(async move {
+            old_service
+                .execute(
+                    TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
+                        operation_id: TaskOperationId::new(),
+                        actor: old_assignee,
+                        task_id,
+                        expected_revision: None,
+                        action: TaskAction::Start,
+                    })),
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+        });
+        tokio::task::spawn_blocking(move || reached.recv())
+            .await
+            .expect("gate waiter join")
+            .expect("old actor must finish authorization before the reassign");
+
+        writer_service
+            .execute(
+                TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
+                    operation_id: TaskOperationId::new(),
+                    actor: lead,
+                    task_id: "CDR-001-RACE".parse().expect("task id"),
+                    expected_revision: None,
+                    action: TaskAction::Reassign(AssignmentInput {
+                        assignee: new_assignee,
+                        priority: atm_core::boundary::TaskPriority::Normal,
+                        message: ComposedMessageInput {
+                            body: NonEmptyText::new("replacement assignment").expect("task body"),
+                            template_sha: None,
+                        },
+                    }),
+                })),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("reassignment through the real service and writer");
+        resume.send(()).expect("release stale transition");
+
+        let error = stale_transition
+            .await
+            .expect("stale transition join")
+            .expect_err("old assignee must lose the writer compare-and-swap");
+        assert_eq!(error.code(), AtmErrorCode::TaskRevisionStale);
+    }
+
     struct FakeSelector {
         emitter: FakeEmitter,
     }

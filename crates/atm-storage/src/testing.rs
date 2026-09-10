@@ -16,8 +16,8 @@ use crate::contract::{
     ReadLaneError, sealed,
 };
 use crate::task_state::{
-    AssignmentAttempt, LogicalTaskRow, TaskEventRow, TaskLifecycleState, TaskPriority, TaskRow,
-    TaskState,
+    AssignmentAttempt, LogicalTaskRow, TaskAssignmentAttempt, TaskEventRow, TaskLedgerScope,
+    TaskLifecycleEventRow, TaskLifecycleState, TaskPriority, TaskRow, TaskState,
 };
 use crate::types::{AgentName, IsoTimestamp, OwnerGeneration, TaskId, TeamName};
 
@@ -185,6 +185,143 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
 pub struct InMemoryTaskLedgerReader {
     tasks: std::sync::Mutex<Vec<TaskRow>>,
     events: std::sync::Mutex<Vec<TaskEventRow>>,
+}
+
+/// A test-only delegating reader that pauses exactly once after reading a
+/// logical task. It makes an authorization/write race reproducible while the
+/// caller continues to use the production reader and mutation store.
+pub struct GateAfterTaskRead {
+    inner: std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    reached: std::sync::mpsc::Sender<()>,
+    resume: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+    pending_gate: std::sync::atomic::AtomicBool,
+}
+
+impl GateAfterTaskRead {
+    #[must_use]
+    pub fn new(
+        inner: std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    ) -> (
+        Self,
+        std::sync::mpsc::Receiver<()>,
+        std::sync::mpsc::Sender<()>,
+    ) {
+        let (reached, reached_rx) = std::sync::mpsc::channel();
+        let (resume_tx, resume) = std::sync::mpsc::channel();
+        (
+            Self {
+                inner,
+                reached,
+                resume: std::sync::Mutex::new(resume),
+                pending_gate: std::sync::atomic::AtomicBool::new(true),
+            },
+            reached_rx,
+            resume_tx,
+        )
+    }
+}
+
+impl sealed::Sealed for GateAfterTaskRead {}
+
+#[async_trait::async_trait]
+impl AsyncTaskLedgerReader for GateAfterTaskRead {
+    async fn list_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        self.inner.list_tasks(team, member, deadline).await
+    }
+
+    async fn list_task_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        self.inner
+            .list_task_events(team, task_id, member, deadline)
+            .await
+    }
+
+    async fn list_logical_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        scope: TaskLedgerScope,
+        limit: Option<usize>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<LogicalTaskRow>, ReadLaneError> {
+        self.inner
+            .list_logical_tasks(team, member, scope, limit, deadline)
+            .await
+    }
+
+    async fn top_runnable_task(
+        &self,
+        team: TeamName,
+        member: AgentName,
+        deadline: ReadDeadline,
+    ) -> Result<Option<LogicalTaskRow>, ReadLaneError> {
+        self.inner.top_runnable_task(team, member, deadline).await
+    }
+
+    async fn load_logical_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Option<LogicalTaskRow>, ReadLaneError> {
+        let row = self
+            .inner
+            .load_logical_task(team, task_id, deadline)
+            .await?;
+        if self
+            .pending_gate
+            .swap(false, std::sync::atomic::Ordering::AcqRel)
+        {
+            self.reached
+                .send(())
+                .map_err(|_| ReadLaneError::Unavailable {
+                    message: "task-read gate receiver dropped".to_owned(),
+                })?;
+            self.resume
+                .lock()
+                .map_err(|_| ReadLaneError::Unavailable {
+                    message: "task-read gate lock poisoned".to_owned(),
+                })?
+                .recv()
+                .map_err(|_| ReadLaneError::Unavailable {
+                    message: "task-read gate resume sender dropped".to_owned(),
+                })?;
+        }
+        Ok(row)
+    }
+
+    async fn list_task_assignment_attempts(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskAssignmentAttempt>, ReadLaneError> {
+        self.inner
+            .list_task_assignment_attempts(team, task_id, deadline)
+            .await
+    }
+
+    async fn list_task_lifecycle_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        limit: Option<usize>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskLifecycleEventRow>, ReadLaneError> {
+        self.inner
+            .list_task_lifecycle_events(team, task_id, limit, deadline)
+            .await
+    }
 }
 
 impl InMemoryTaskLedgerReader {
