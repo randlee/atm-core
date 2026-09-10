@@ -41,24 +41,25 @@ replayable.
 
 ## Reminder cycle
 
-The Tokio-owned Herdr queue wake pump polls every 5 seconds. After it drains
-ordinary deferred mail, it checks open tasks for Herdr-backed members reported
-as idle, done, or blocked. It selects the oldest active task (or the oldest
-assigned task when none is active) and re-sends the Task body at most once per
-member every 60 seconds. Drain comes first and shares the same per-tick prompt
-budget, so a queue prompt counts as that member's reminder attempt for the
-tick.
+AZ.4 replaces the historical drain-first reminder sequence with one fair idle
+attention selector. Each accepted canonical `Idle` roster revision has one
+durable opportunity which may reserve zero or one identifier-only item:
+ephemeral queued message or persistent task reminder. With both lanes due, the
+persisted cursor alternates lanes; task priority orders only within the task
+lane. The selector revalidates the exact idle revision and selected queue or
+task/attempt immediately before emitting the bounded nudge metadata. It never
+re-sends a task body.
 
-This is Herdr-only. A member that has moved to another backend receives no
-reminder from this pump. `idle_members` retains its queue-dashboard meaning:
-it counts only members that are both idle and have pending deferred mail.
-
-Blocked members are recorded as runtime state `blocked`, receive no Herdr
-prompt, and append a `reminded` audit event with outcome `blocked` on the same
-cadence. Rendering failures append `unrenderable`; successful emissions append
-`emitted`. These events update reminder bookkeeping only and never transition
-task state. If the optional task store is unavailable, only the reminder step
-is skipped; deferred-mail draining continues.
+A task reminder is eligible only for the current `Assigned` or `Active`
+attempt and only after its 60-second current-attempt cadence. `Blocked` and
+`Closed` tasks receive no normal reminder; unblock returns work to assigned
+ordering without starting it. Successful delivery appends a `RecordReminder`
+audit and advances the task-scoped ordinal, without acknowledging or changing
+task state. The tenth, twentieth, and later tenth successful reminders retain
+the lead-escalation boundary. Queue claim/release/requeue remains owned by
+`PendingNudgeStore`; transient scheduler failure keeps the same durable
+reservation until its fifth failure terminalizes the reservation, not the
+underlying message or task.
 
 ## Lead notification and escalation
 

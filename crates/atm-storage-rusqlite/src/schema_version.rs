@@ -6,7 +6,7 @@ use rusqlite::TransactionBehavior;
 
 /// ADR-061-approved major storage schema. The v1 projection remains present
 /// for all 1.6.x readers and writers.
-pub(crate) const STORAGE_SCHEMA_VERSION: &str = "2.0.0";
+pub(crate) const STORAGE_SCHEMA_VERSION: &str = "2.1.0";
 
 const V2_TASK_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS storage_schema_versions (

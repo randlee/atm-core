@@ -193,10 +193,12 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let async_mailbox_reader = storage.async_mailbox_reader();
     let async_task_ledger_reader = storage.async_task_ledger_reader();
     let async_task_mutation_store = storage.async_task_mutation_store();
+    let async_attention_schedule_store = storage.async_attention_schedule_store();
     let async_message_search_store = storage.async_message_search_store();
     let template_catalog_store = storage.template_catalog_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
     let pending_nudge_store = storage.pending_nudge_store();
+    let attention_schedule_store = storage.attention_schedule_store();
     let task_store = storage.task_store();
     let graft_receiver_endpoint_store = storage.graft_receiver_endpoint_store();
     let peer_config_store = storage.peer_config_store();
@@ -211,8 +213,10 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     .with_async_mailbox_reader(Arc::clone(&async_mailbox_reader))
     .with_async_task_ledger_reader(async_task_ledger_reader)
     .with_async_task_mutation_store(async_task_mutation_store)
+    .with_async_attention_schedule_store(async_attention_schedule_store)
     .with_async_message_search_store(async_message_search_store)
     .with_pending_nudge_store(pending_nudge_store)
+    .with_attention_schedule_store(attention_schedule_store)
     .with_task_store(task_store)
     .with_graft_receiver_endpoint_store(graft_receiver_endpoint_store)
     .with_template_rendering(template_catalog_store, template_composer.clone());

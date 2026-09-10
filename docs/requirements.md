@@ -2972,10 +2972,11 @@ Required rules:
   assignment acknowledgement implicit
 - every transition, rejection, resend, and reminder is append-only audit data;
   the durable tables and replay contract are defined by ADR-062
-- the Tokio Herdr queue wake pump checks open tasks after draining deferred
-  mail: for an idle or done Herdr assignee it re-sends the Task body no more
-  than once per 60 seconds, sharing the drain prompt budget; a blocked assignee
-  receives no prompt but records a `blocked` reminder on the same cadence
+- each canonical idle revision gives the fair attention selector one chance to
+  reserve either an eligible queued message or the current eligible task
+  attempt, never both; emitted prompts contain only message id, title, and
+  optional task id, and a successful task reminder records its attempt-aware
+  audit without changing lifecycle state
 
 ## 16. Observability Requirements
 
@@ -5115,3 +5116,24 @@ High/Normal/Low priority and original assignment time, then Blocked; closed
 history is terminal-time descending. The v1 task projection remains only for
 the ADR-061 1.6.x coexistence window and may not become a second v2 mutation
 policy. See [task lifecycle schema](task-lifecycle-schema.md).
+
+## Phase AZ.4 fair idle attention contract
+
+Each accepted canonical `Idle` roster revision may create one
+`IdleOpportunityId`. The fair attention selector is the only runtime policy
+that may reserve work for that opportunity, and it reserves zero or one
+identifier-only item: the oldest eligible queued message or the current open
+task reminder. When both lanes remain due, a durable per-member cursor
+alternates the lanes across opportunities; task priority orders candidates only
+within the task lane. A message read or acknowledged before its conditional
+queue claim is suppressed. A task is revalidated as the current `Active` or
+`Assigned` attempt at the same roster revision before prompt emission; blocked
+and closed tasks are ineligible, and unblock never starts work.
+
+The selector and its reservation contain no body-capable field. Emitted prompts
+remain the metadata projection defined above, and the recipient obtains the
+body only through `atm read`. Delivery retry keeps the same reservation and
+item; a fifth retryable failure terminalizes that reservation as
+`PermanentlyFailed`, never the message or task. A successful task reminder
+records the current-attempt audit and preserves task-scoped lead escalation
+ordinal; it does not acknowledge, start, or close the task.

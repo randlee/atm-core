@@ -742,6 +742,7 @@ pub(crate) fn ensure_schema(
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
     crate::task_store::ensure_schema(connection, target)?;
+    crate::attention_schedule_store::ensure_schema(connection, target)?;
     ensure_column(
         connection,
         target,

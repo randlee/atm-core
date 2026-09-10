@@ -229,3 +229,15 @@ the logical task projection, immutable assignment attempts, append-only events,
 prepared message persistence, and terminal/block/reassign/supersede marker
 cleanup. The bounded reader pool owns logical list, attempt, event, and
 top-runnable reads; it never receives a writer connection.
+
+## 8.1 Phase AZ.4 attention reservation
+
+The SQLite adapter alone owns the `attention_lane_cursors` and
+`attention_opportunities` SQL. A reservation advances the per-member fair
+cursor together with its selected identifier-only item. Replaying the same
+idle opportunity returns that reservation rather than selecting another lane.
+Finalization is idempotent: delivery and stale outcomes terminalize it, while
+retryable failure increments `failed_attempts` and retains the reservation
+until the fifth failure. The adapter never claims a queue message, mutates a
+task lifecycle state, renders a nudge, or exposes a SQLite connection above the
+storage boundary.

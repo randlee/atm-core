@@ -25,16 +25,16 @@ use std::sync::Arc;
 
 pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
-type DecomposedWorkflowColumns<'a> = (
-    Option<&'a str>,
-    Option<&'a str>,
-    Option<&'a str>,
-    Option<&'a str>,
-    Option<&'a str>,
-    Option<&'a str>,
-    Option<String>,
-    Option<String>,
-);
+struct DecomposedWorkflowColumns<'a> {
+    workflow_scope_kind: Option<&'a str>,
+    workflow_scope_id: Option<&'a str>,
+    workflow_state: Option<&'a str>,
+    workflow_stage: Option<&'a str>,
+    workflow_transition: Option<&'a str>,
+    workflow_iteration: Option<&'a str>,
+    applied_template_tags_json: Option<String>,
+    effective_tags_json: Option<String>,
+}
 
 #[derive(Clone)]
 pub(crate) enum WriteOp {
@@ -188,9 +188,11 @@ pub(crate) fn execute(
         WriteOp::AdmitTemplateMessage(admission) => {
             execute_admit_template_message(admission, connection, cache, target)
         }
-        WriteOp::RecordDiagnostics(events) => execute_diagnostic_batch(events, connection, target),
+        WriteOp::RecordDiagnostics(events) => {
+            super::diagnostics::execute_batch(events, connection, target)
+        }
         WriteOp::PruneDiagnostics { now_unix_ms } => {
-            execute_diagnostic_prune(*now_unix_ms, connection, target)
+            super::diagnostics::execute_prune(*now_unix_ms, connection, target)
         }
     }
 }
@@ -233,42 +235,6 @@ fn execute_admit_template_message(
             "sqlite writer returned the wrong result while admitting a template message: {other:?}"
         ))),
     }
-}
-
-fn execute_diagnostic_batch(
-    events: &[DiagnosticEvent],
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<WriteOpResult, AtmError> {
-    for event in events {
-        connection.execute(
-            "INSERT INTO diagnostic_events (ts_unix_ms, level, component, code, correlation_id, origin, message, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![event.ts_unix_ms, event.level, event.component, event.code, event.correlation_id, event.origin, event.message, event.detail],
-        ).map_err(|error| sqlite_error(target, "failed to record diagnostic timeline batch", error))?;
-    }
-    Ok(WriteOpResult::DiagnosticsRecorded)
-}
-
-fn execute_diagnostic_prune(
-    now_unix_ms: i64,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<WriteOpResult, AtmError> {
-    let cutoff = now_unix_ms - crate::DIAGNOSTIC_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000;
-    let expired_rows = connection
-        .execute(
-            "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)",
-            params![cutoff, crate::DIAGNOSTIC_PRUNE_BATCH],
-        )
-        .map_err(|error| sqlite_error(target, "failed to prune expired diagnostic events", error))?;
-    if expired_rows > 0 {
-        return Ok(WriteOpResult::DiagnosticsPruned(expired_rows as u64));
-    }
-    let excess_rows = connection.execute(
-        "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms DESC, id DESC LIMIT ?1 OFFSET ?2)",
-        params![crate::DIAGNOSTIC_PRUNE_BATCH, crate::DIAGNOSTIC_MAX_ROWS],
-    ).map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
-    Ok(WriteOpResult::DiagnosticsPruned(excess_rows as u64))
 }
 
 fn execute_read_display_state(
@@ -387,16 +353,7 @@ fn persist_decomposed_message_columns(
     vars_json: String,
     tags_json: String,
 ) -> Result<(), AtmError> {
-    let (
-        workflow_scope_kind,
-        workflow_scope_id,
-        workflow_state,
-        workflow_stage,
-        workflow_transition,
-        workflow_iteration,
-        applied_template_tags_json,
-        effective_tags_json,
-    ) = decomposed_workflow_columns(admission)?;
+    let columns = decomposed_workflow_columns(admission)?;
     let changed = connection
         .execute(
             "UPDATE mail_messages
@@ -413,14 +370,14 @@ fn persist_decomposed_message_columns(
                 admission.message.category.as_deref(),
                 tags_json,
                 admission.message.content_format.as_deref(),
-                workflow_scope_kind,
-                workflow_scope_id,
-                workflow_state,
-                workflow_stage,
-                workflow_transition,
-                workflow_iteration,
-                applied_template_tags_json,
-                effective_tags_json,
+                columns.workflow_scope_kind,
+                columns.workflow_scope_id,
+                columns.workflow_state,
+                columns.workflow_stage,
+                columns.workflow_transition,
+                columns.workflow_iteration,
+                columns.applied_template_tags_json,
+                columns.effective_tags_json,
                 admission.message.key.as_str(),
             ],
         )
@@ -444,27 +401,36 @@ fn decomposed_workflow_columns(
     admission: &DecomposedMessageAdmission,
 ) -> Result<DecomposedWorkflowColumns<'_>, AtmError> {
     match admission.message.workflow.as_ref() {
-        Some(workflow) => Ok((
-            Some(workflow.snapshot.scope_kind.as_str()),
-            Some(workflow.snapshot.scope_id.as_str()),
-            Some(workflow.snapshot.state.as_str()),
-            Some(workflow.snapshot.stage.as_str()),
-            Some(workflow.snapshot.transition.as_str()),
-            workflow
+        Some(workflow) => Ok(DecomposedWorkflowColumns {
+            workflow_scope_kind: Some(workflow.snapshot.scope_kind.as_str()),
+            workflow_scope_id: Some(workflow.snapshot.scope_id.as_str()),
+            workflow_state: Some(workflow.snapshot.state.as_str()),
+            workflow_stage: Some(workflow.snapshot.stage.as_str()),
+            workflow_transition: Some(workflow.snapshot.transition.as_str()),
+            workflow_iteration: workflow
                 .snapshot
                 .iteration
                 .as_ref()
                 .map(|iteration| iteration.as_str()),
-            Some(serialize_json(
+            applied_template_tags_json: Some(serialize_json(
                 &workflow.tag_provenance.applied_template_tags,
                 "applied template tags",
             )?),
-            Some(serialize_json(
+            effective_tags_json: Some(serialize_json(
                 &workflow.tag_provenance.effective_tags,
                 "effective tags",
             )?),
-        )),
-        None => Ok((None, None, None, None, None, None, None, None)),
+        }),
+        None => Ok(DecomposedWorkflowColumns {
+            workflow_scope_kind: None,
+            workflow_scope_id: None,
+            workflow_state: None,
+            workflow_stage: None,
+            workflow_transition: None,
+            workflow_iteration: None,
+            applied_template_tags_json: None,
+            effective_tags_json: None,
+        }),
     }
 }
 
@@ -551,14 +517,14 @@ pub(super) fn load_pending_ack_source(
     decode_pending_acknowledgement_source(source, row)
 }
 
-type AcknowledgementSourceRow = (
-    String,
-    String,
-    i64,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
+struct AcknowledgementSourceRow {
+    message_key: String,
+    envelope_json: String,
+    read: i64,
+    pending_ack_at: Option<String>,
+    acknowledged_at: Option<String>,
+    expires_at: Option<String>,
+}
 
 fn load_acknowledgement_source_row(
     source: &AcknowledgementSource,
@@ -585,14 +551,14 @@ fn load_acknowledgement_source_row(
                 source.message_id.to_string()
             ],
             |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, Option<String>>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                ))
+                Ok(AcknowledgementSourceRow {
+                    message_key: row.get(0)?,
+                    envelope_json: row.get(1)?,
+                    read: row.get(2)?,
+                    pending_ack_at: row.get(3)?,
+                    acknowledged_at: row.get(4)?,
+                    expires_at: row.get(5)?,
+                })
             },
         )
         .optional()
@@ -649,13 +615,14 @@ fn decode_pending_acknowledgement_source(
     source: &AcknowledgementSource,
     row: AcknowledgementSourceRow,
 ) -> Result<Message, AtmError> {
-    let (message_key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row;
-    let mut envelope = serde_json::from_str::<atm_storage::schema::MessageEnvelope>(&envelope_json)
-        .map_err(|_| AtmError::mailbox_read("failed to decode acknowledgement source envelope"))?;
-    envelope.read = read != 0;
-    envelope.pending_ack_at = parse_timestamp(pending_ack_at, "pending_ack_at")?;
-    envelope.acknowledged_at = parse_timestamp(acknowledged_at, "acknowledged_at")?;
-    envelope.expires_at = parse_timestamp(expires_at, "expires_at")?;
+    let mut envelope = serde_json::from_str::<atm_storage::schema::MessageEnvelope>(
+        &row.envelope_json,
+    )
+    .map_err(|_| AtmError::mailbox_read("failed to decode acknowledgement source envelope"))?;
+    envelope.read = row.read != 0;
+    envelope.pending_ack_at = parse_timestamp(row.pending_ack_at, "pending_ack_at")?;
+    envelope.acknowledged_at = parse_timestamp(row.acknowledged_at, "acknowledged_at")?;
+    envelope.expires_at = parse_timestamp(row.expires_at, "expires_at")?;
     if envelope.pending_ack_at.is_none() {
         let state = if envelope.acknowledged_at.is_some() {
             "already acknowledged"
@@ -670,7 +637,7 @@ fn decode_pending_acknowledgement_source(
     Ok(Message {
         team: source.team.clone(),
         agent: source.agent.clone(),
-        message_key: MessageKey::new(message_key)?,
+        message_key: MessageKey::new(row.message_key)?,
         envelope,
     })
 }

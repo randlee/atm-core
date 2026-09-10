@@ -84,6 +84,73 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
         })
     }
 
+    fn peek_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+        let db = Arc::clone(&self.db);
+        let member = member.clone();
+        self.db.read(move |connection| {
+            connection
+                .query_row(
+                    "SELECT message_key, nudge_attempts FROM mail_message_states
+                 WHERE team = ?1 AND agent = ?2 AND nudge_pending_at IS NOT NULL
+                   AND read = 0 AND deleted_at IS NULL AND nudge_attempts < ?3
+                 ORDER BY message_key ASC LIMIT 1",
+                    params![
+                        member.team().as_str(),
+                        member.agent().as_str(),
+                        MAX_NUDGE_ATTEMPTS
+                    ],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?)),
+                )
+                .optional()
+                .map_err(|error| db.error("failed to peek pending nudge", error))?
+                .map(|(message_key, attempt)| {
+                    Ok(NudgeClaim {
+                        msg: MessageKey::new(message_key)?.as_atm_message_id()?,
+                        attempt,
+                    })
+                })
+                .transpose()
+        })
+    }
+
+    fn claim_pending(
+        &self,
+        member: &MemberKey,
+        message: &AtmMessageId,
+    ) -> Result<Option<NudgeClaim>, AtmError> {
+        let message_key = MessageKey::from(*message);
+        let at_raw = IsoTimestamp::now().to_string();
+        self.db.with_transaction(|connection| {
+            connection
+                .query_row(
+                    "UPDATE mail_message_states SET nudge_pending_at = NULL, updated_at = ?4
+                 WHERE team = ?1 AND agent = ?2 AND message_key = ?3
+                   AND nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL
+                   AND nudge_attempts < ?5
+                 RETURNING nudge_attempts",
+                    params![
+                        member.team().as_str(),
+                        member.agent().as_str(),
+                        message_key.as_str(),
+                        at_raw,
+                        MAX_NUDGE_ATTEMPTS
+                    ],
+                    |row| row.get::<_, u32>(0),
+                )
+                .optional()
+                .map_err(|error| {
+                    self.db
+                        .error("failed to claim reserved pending nudge", error)
+                })
+                .map(|attempt| {
+                    attempt.map(|attempt| NudgeClaim {
+                        msg: *message,
+                        attempt,
+                    })
+                })
+        })
+    }
+
     fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
         let message_key = MessageKey::from(claim.msg);
         let at_raw = IsoTimestamp::now().to_string();

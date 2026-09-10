@@ -10,9 +10,9 @@ use std::sync::{Arc, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
 use atm_storage::{
-    AsyncGraftReceiverEndpointStore, AsyncMessageSearchStore,
-    AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader, GraftReceiverLease,
-    MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
+    AsyncAttentionScheduleStore, AsyncGraftReceiverEndpointStore, AsyncMessageSearchStore,
+    AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader, AttentionScheduleStore,
+    GraftReceiverLease, MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
     RosterMemberEphemeralState, RosterRuntimeMirror, RosterRuntimeMutationOutcome,
     RosterRuntimeObservation, RosterRuntimeObservationUpdate, RosterStore as SharedRosterStore,
     TaskStore, TemplateCatalogStore, WriteThroughRosterStore,
@@ -314,6 +314,8 @@ pub struct LocalServiceRuntime {
     async_task_ledger_reader: Option<std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
     async_task_mutation_store:
         Option<std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>>,
+    async_attention_schedule_store:
+        Option<std::sync::Arc<dyn AsyncAttentionScheduleStore + Send + Sync>>,
     async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) nudge_template_override_store:
@@ -324,6 +326,7 @@ pub struct LocalServiceRuntime {
     /// (`atm queue`) nudges. Unset in runtimes that never enqueue a deferred
     /// nudge, e.g. plain-text mailbox tests.
     pending_nudge_store: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
+    attention_schedule_store: Option<std::sync::Arc<dyn AttentionScheduleStore + Send + Sync>>,
     task_store: Option<std::sync::Arc<dyn TaskStore + Send + Sync>>,
     graft_receiver_endpoint_store:
         Option<std::sync::Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>>,
@@ -370,11 +373,13 @@ impl LocalServiceRuntime {
             async_mailbox_reader: None,
             async_task_ledger_reader: None,
             async_task_mutation_store: None,
+            async_attention_schedule_store: None,
             async_message_search_store: None,
             roster_store: roster.store(),
             nudge_template_override_store,
             non_claude_outbound,
             pending_nudge_store: None,
+            attention_schedule_store: None,
             task_store: None,
             graft_receiver_endpoint_store: None,
             template_composer: None,
@@ -478,6 +483,28 @@ impl LocalServiceRuntime {
         })
     }
 
+    /// Attaches Tokio-safe durable cursor/reservation storage for the
+    /// replacement-runtime idle-attention scheduler.
+    #[must_use]
+    pub fn with_async_attention_schedule_store(
+        mut self,
+        store: std::sync::Arc<dyn AsyncAttentionScheduleStore + Send + Sync>,
+    ) -> Self {
+        self.async_attention_schedule_store = Some(store);
+        self
+    }
+
+    /// Returns the Tokio-safe scheduler metadata store selected by composition.
+    pub fn async_attention_schedule_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn AsyncAttentionScheduleStore + Send + Sync>, AtmError> {
+        self.async_attention_schedule_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the Tokio idle-attention schedule store was not installed in this runtime",
+            )
+        })
+    }
+
     /// Attaches the Tokio-safe typed search capability selected by the one
     /// storage composition root.  HTTP awaits this port directly; it never
     /// opens a synchronous SQLite reader on a request worker.
@@ -524,6 +551,28 @@ impl LocalServiceRuntime {
         self.pending_nudge_store.clone().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "the deferred-nudge pending store was not installed in this runtime",
+            )
+        })
+    }
+
+    /// Installs durable cursor/reservation storage for the replacement-runtime
+    /// idle-attention scheduler.
+    #[must_use]
+    pub fn with_attention_schedule_store(
+        mut self,
+        store: std::sync::Arc<dyn AttentionScheduleStore + Send + Sync>,
+    ) -> Self {
+        self.attention_schedule_store = Some(store);
+        self
+    }
+
+    /// Returns the scheduler metadata store selected by composition.
+    pub fn attention_schedule_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn AttentionScheduleStore + Send + Sync>, AtmError> {
+        self.attention_schedule_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the idle-attention schedule store was not installed in this runtime",
             )
         })
     }
@@ -803,6 +852,14 @@ impl fmt::Debug for LocalServiceRuntime {
                 &std::sync::Arc::as_ptr(&self.non_claude_outbound),
             )
             .field("pending_nudge_store", &self.pending_nudge_store.is_some())
+            .field(
+                "attention_schedule_store",
+                &self.attention_schedule_store.is_some(),
+            )
+            .field(
+                "async_attention_schedule_store",
+                &self.async_attention_schedule_store.is_some(),
+            )
             .field(
                 "graft_receiver_endpoint_store",
                 &self.graft_receiver_endpoint_store.is_some(),

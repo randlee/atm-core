@@ -2,6 +2,7 @@
 //! for ATM backends and their callers.
 
 pub mod analyst_query;
+pub mod attention;
 pub mod contract;
 pub mod diagnostics;
 pub mod error;
@@ -36,6 +37,13 @@ pub mod roles {
 }
 
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
+pub use attention::{
+    AsyncAttentionScheduleStore, AttentionCandidates, AttentionCursor, AttentionFinalizeOutcome,
+    AttentionFinalizeRequest, AttentionItem, AttentionLane, AttentionReservation,
+    AttentionReservationRequest, AttentionReservationStatus, AttentionScheduleStore,
+    AttentionSelection, EphemeralMessageCandidate, IdleOpportunity, IdleOpportunityId,
+    PersistentTaskCandidate, select_attention_item,
+};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
     AcknowledgementSource, AgentType, AsyncGraftReceiverEndpointStore, AsyncMailboxReader,

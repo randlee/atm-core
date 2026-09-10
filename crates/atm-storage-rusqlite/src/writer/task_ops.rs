@@ -6,9 +6,13 @@
 //! `atm_storage::task_state` defines the pure, backend-neutral transition
 //! table this module's SQL mirrors; nothing here changes that table's rules.
 
+#[path = "task_terminal.rs"]
+mod task_terminal;
+
 use super::ops::execute_task_mutation_message_upsert;
 use super::stmt_cache::WriterStatementCache;
 use super::task_projection::sync_v1_compat_projection;
+use super::task_reminder::{record_lead_notified, record_reminder};
 use super::task_snapshot::current_projection_snapshot;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::error::AtmError;
@@ -57,12 +61,12 @@ impl TransitionSpec {
     }
 }
 
-struct TransitionResult {
-    state: TaskLifecycleState,
-    revision: u64,
-    event: &'static str,
-    detail: Option<String>,
-    related_task_id: Option<TaskId>,
+pub(super) struct TransitionResult {
+    pub(super) state: TaskLifecycleState,
+    pub(super) revision: u64,
+    pub(super) event: &'static str,
+    pub(super) detail: Option<String>,
+    pub(super) related_task_id: Option<TaskId>,
 }
 
 /// Applies a canonical v2 mutation inside the existing writer transaction.
@@ -82,7 +86,12 @@ pub(super) fn execute_task_mutation(
     let current_revision = load_current_revision(request, connection, target)?;
     validate_expected_revision(request, current_revision)?;
     let message_id = operation_message_id(&request.operation);
-    let now = atm_storage::IsoTimestamp::now().to_string();
+    let now = match &request.operation {
+        TaskOperation::RecordReminder { at, .. } | TaskOperation::RecordLeadNotified { at, .. } => {
+            at.to_string()
+        }
+        _ => atm_storage::IsoTimestamp::now().to_string(),
+    };
     let transition = apply_operation(request, current_revision, connection, cache, target, &now)?;
     finalize_mutation(
         request,
@@ -105,7 +114,11 @@ fn operation_message_id(operation: &TaskOperation) -> Option<atm_storage::AtmMes
             completion_notice: handoff,
         }
         | TaskOperation::Supersede { handoff, .. } => Some(handoff),
-        TaskOperation::Start | TaskOperation::Block { .. } | TaskOperation::Unblock { .. } => None,
+        TaskOperation::Start
+        | TaskOperation::Block { .. }
+        | TaskOperation::Unblock { .. }
+        | TaskOperation::RecordReminder { .. }
+        | TaskOperation::RecordLeadNotified { .. } => None,
     };
     message.and_then(|prepared| prepared.message.envelope.message_id)
 }
@@ -223,42 +236,22 @@ fn apply_operation(
             &TransitionSpec::open("assigned", "unblocked").with_detail(resolution.clone()),
             now,
         ),
-        TaskOperation::Close { outcome, handoff } => close_with_handoff(
-            connection,
-            cache,
-            target,
-            request,
-            handoff,
-            TransitionSpec::closed(outcome.clone(), "closed"),
-            now,
-        ),
-        TaskOperation::LegacyCloseSucceeded { completion_notice } => close_with_handoff(
-            connection,
-            cache,
-            target,
-            request,
-            completion_notice,
-            TransitionSpec::closed(TaskOutcome::Succeeded, "legacy_close_succeeded"),
-            now,
-        ),
-        TaskOperation::Reassign(assignment) | TaskOperation::Reopen(assignment) => {
-            let reopen = matches!(request.operation, TaskOperation::Reopen(_));
-            reassign_and_clear_markers(connection, cache, target, request, assignment, now, reopen)
+        TaskOperation::RecordReminder { attempt, at } => {
+            record_reminder(connection, target, request, *attempt, at)
         }
-        TaskOperation::Supersede {
-            handoff,
-            successor_task_id,
-            successor,
-        } => supersede_v2(
-            connection,
-            cache,
-            target,
-            request,
-            handoff,
-            successor_task_id,
-            successor,
-            now,
-        ),
+        TaskOperation::RecordLeadNotified {
+            attempt,
+            at,
+            lead,
+            message_id,
+        } => record_lead_notified(connection, target, request, *attempt, at, lead, message_id),
+        TaskOperation::Close { .. }
+        | TaskOperation::LegacyCloseSucceeded { .. }
+        | TaskOperation::Reassign(_)
+        | TaskOperation::Reopen(_)
+        | TaskOperation::Supersede { .. } => {
+            task_terminal::apply(request, connection, cache, target, now)
+        }
     }
 }
 

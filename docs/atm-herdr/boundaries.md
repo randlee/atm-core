@@ -181,3 +181,7 @@ Phase AZ additionally forbids message-body and task-description content from
 the adapter's rendered nudge input. Its accepted input is the upstream bounded
 projection of message id, summary-backed title, optional task id, and
 remediation text; the adapter must not expand that projection.
+
+The adapter receives no attention cursor, reservation, queue candidate, or
+task candidate. `atm-http-runtime` selects and revalidates at most one item for
+one canonical idle opportunity before calling this boundary.

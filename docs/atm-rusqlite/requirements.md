@@ -194,3 +194,14 @@ row, and demotes surplus active rows deterministically before creating the
 active uniqueness index. The existing writer lane owns every v2 mutation; it
 atomically persists prepared canonical messages, task records, and task-id
 joined pending-marker cleanup without storing copied body text.
+
+## Phase AZ.4 attention schedule storage
+
+`attention_lane_cursors` and `attention_opportunities` are the additive 2.1
+SQLite schedule projection. They store only fair-lane cursor metadata and one
+reservation keyed by `(member, idle opportunity)`, with selected identifier
+metadata and durable retry count. They must not copy queue, task, message body,
+or template lifecycle state. `ensure_schema` installs and upgrades the tables
+idempotently; a retryable reservation failure keeps the same item through four
+retries and becomes `PermanentlyFailed` on the fifth without closing the
+underlying message or task.

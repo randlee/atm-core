@@ -29,6 +29,14 @@ at the opportunity's exact revision before emission. Neither raw Herdr output,
 heartbeat DTOs, nor `RuntimeHealth` snapshots are eligibility authorities.
 Bare-CLI behavior remains separate under ADR-054.
 
+The selection boundary carries identifiers only. A durable per-member cursor
+alternates queued-message and persistent-task lanes when both are due; task
+priority remains local to the persistent lane. The selected queue claim or
+task's current assignment attempt is revalidated immediately before a bounded
+metadata-only prompt. Scheduler reservations retry the same item and become
+permanently failed only after five retryable delivery failures; that terminal
+status never closes or consumes the underlying task/message lifecycle.
+
 # Auxiliary observability routes
 
 `GET /v1/health` and `GET /v1/diagnostics` are mounted outside the canonical

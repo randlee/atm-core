@@ -477,3 +477,6 @@ Herdr prompt input remains caller-rendered built-in nudge text, but that text
 may contain only message id, summary-backed title, optional task id, and
 remediation metadata. It must not contain immutable message bodies, rendered
 J2 bodies, or task-row descriptions; `atm read` remains the body boundary.
+The adapter is not an attention scheduler: it receives one already-selected,
+identifier-only bounded projection and never inspects queue or task state to
+choose another item.

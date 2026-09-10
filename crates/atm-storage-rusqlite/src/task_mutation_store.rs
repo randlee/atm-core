@@ -650,6 +650,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn logical_reader_projects_reminder_cadence_for_current_attempt_only() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.async_task_mutation_store();
+        let reader = backend.async_task_ledger_reader();
+        let lead = member("lead");
+        let worker = member("worker");
+        let alternate = member("alternate");
+        let task_id = task("v2-reminder-attempt-projection");
+        store
+            .apply(request(
+                lead.clone(),
+                task_id.clone(),
+                TaskOperation::Assign(assignment(&task_id, &worker, &lead)),
+            ))
+            .await
+            .expect("assign first attempt");
+        let deadline = || ReadDeadline::new(Duration::from_secs(1)).expect("deadline");
+        let first_attempt = reader
+            .load_logical_task(team(), task_id.clone(), deadline())
+            .await
+            .expect("load first attempt")
+            .expect("first task row");
+        let reminded_at: IsoTimestamp = "2026-09-10T00:00:00Z".parse().expect("timestamp");
+        store
+            .apply(request(
+                lead.clone(),
+                task_id.clone(),
+                TaskOperation::RecordReminder {
+                    attempt: first_attempt.current_attempt,
+                    at: reminded_at,
+                },
+            ))
+            .await
+            .expect("record first-attempt reminder");
+        let reminded = reader
+            .load_logical_task(team(), task_id.clone(), deadline())
+            .await
+            .expect("load reminded task")
+            .expect("reminded task row");
+        assert_eq!(reminded.last_reminded_at, Some(reminded_at));
+
+        store
+            .apply(request(
+                lead.clone(),
+                task_id.clone(),
+                TaskOperation::Reassign(assignment(&task_id, &alternate, &lead)),
+            ))
+            .await
+            .expect("reassign to second attempt");
+        let reassigned = reader
+            .top_runnable_task(team(), alternate.agent().clone(), deadline())
+            .await
+            .expect("read second attempt")
+            .expect("second task row");
+        assert_ne!(reassigned.current_attempt, first_attempt.current_attempt);
+        assert_eq!(reassigned.last_reminded_at, None);
+    }
+
+    #[tokio::test]
     async fn reassign_reopen_and_supersede_preserve_history_and_identity() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.async_task_mutation_store();

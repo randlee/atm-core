@@ -11,9 +11,11 @@ use serde::{Deserialize, Serialize};
 use crate::contract::{Message, sealed};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
-use crate::task_state::{TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority};
+use crate::task_state::{
+    AssignmentAttempt, TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority,
+};
 use crate::task_store::MessageWriteOrigin;
-use crate::types::{AgentName, MemberKey, TaskId};
+use crate::types::{AgentName, IsoTimestamp, MemberKey, TaskId};
 
 /// A validated, admitted message committed by the same task transaction.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -51,6 +53,21 @@ pub enum TaskOperation {
     },
     Reassign(PreparedAssignment),
     Reopen(PreparedAssignment),
+    /// Appends one successful, attempt-checked reminder audit without changing
+    /// lifecycle state. Scheduler-owned metadata never mutates this row.
+    RecordReminder {
+        attempt: AssignmentAttempt,
+        at: IsoTimestamp,
+    },
+    /// Appends one successful lead-notification audit for the current
+    /// assignment attempt. The scheduler invokes this only after the lead
+    /// mail write succeeds at a ten-reminder escalation boundary.
+    RecordLeadNotified {
+        attempt: AssignmentAttempt,
+        at: IsoTimestamp,
+        lead: AgentName,
+        message_id: crate::schema::AtmMessageId,
+    },
     Close {
         outcome: TaskOutcome,
         handoff: PreparedMessage,
