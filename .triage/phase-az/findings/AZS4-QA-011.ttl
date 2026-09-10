@@ -8,13 +8,13 @@
   a triage:Finding ;
   triage:findingId "AZS4-QA-011" ;
   triage:title "Unbounded run_blocking helper in herdr_queue_wake.rs has no timeout wrapper across 6+ call sites" ;
-  triage:description "quality-mgr's formal QA-2 verdict (rust-service-hardening-agent, RSH-003) reports that herdr_queue_wake.rs's own run_blocking helper (crates/atm-http-runtime/src/herdr_queue_wake.rs:1028, distinct from the scheduler's already-fixed helper closed under AZS4-QA-008/RSH-001) wraps tokio::task::spawn_blocking with no timeout across 6+ call sites: pending-store reads (line 227), candidate reads (line 248), claim/release (line 723), escalation dispatch (line 786), escalation mail (line 861), and roster reads (line 891) -- all awaited inside the single sequential pump task, so a blocking-store stall at any one call site would hang the whole pump silently with no bound." ;
+  triage:description "quality-mgr's formal QA-2 verdict (rust-service-hardening-agent, RSH-003) reports that herdr_queue_wake.rs's own run_blocking helper (crates/atm-http-runtime/src/herdr_queue_wake.rs:1028, distinct from the scheduler's already-fixed helper closed under AZS4-QA-008/RSH-001) wraps tokio::task::spawn_blocking with no timeout across 6+ call sites: pending-store reads (line 227), candidate reads (line 248), claim/release (line 723), escalation dispatch (line 786), escalation mail (line 861), and roster reads (line 891) -- all awaited inside the single sequential pump task, so a blocking-store stall at any one call site would hang the whole pump silently with no bound. REOPENED 2026-09-10T16:34:10Z: cipher's fix (e8c2dafd6, wrapping the shared run_blocking helper in tokio::time::timeout(HERDR_REQUEST_DEADLINE, ...)) correctly bounds all 6 original call sites -- confirmed by quality-mgr's QA-3 pass. However QA-3's rust-service-hardening-agent found, and quality-mgr independently confirmed via git-show at 34c6d256c, a 7th unbounded path: ReleasePendingOnDrop::release_in_drop (crates/atm-http-runtime/src/herdr_queue_wake_claim.rs:117-148, invoked from Drop::drop at line 158) spawns the claim release/requeue job via tokio::runtime::Handle::spawn_blocking directly -- never through the shared run_blocking helper -- so it has no HERDR_REQUEST_DEADLINE bound (Drop can't .await the async wrapper). The resulting JoinHandle is joined by await_release_handles with no timeout either, so a stuck store call hangs unbounded and can block pump shutdown." ;
   triage:phaseId "phase-az" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "reliability" ;
   triage:severity "important" ;
   triage:repeatable true ;
-  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs, crates/atm-http-runtime/src/herdr_queue_wake_claim.rs" ;
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T16:20:00Z"^^xsd:dateTime ;
@@ -26,7 +26,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-011/AZ4-004> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-011/AZ4-005> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-011/AZ4-006> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-011/AZ4-007> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AZS4-QA-011/AZ4-001>
   a triage:Occurrence ;
@@ -94,9 +95,27 @@
   triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
   triage:occursIn <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042> .
 
+<urn:atm:triage:occurrence/AZS4-QA-011/AZ4-007>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_claim.rs" ;
+  triage:line 117 ;
+  triage:snippet "impl ReleasePendingOnDrop { fn release_in_drop(&mut self) { ... tokio::runtime::Handle::spawn_blocking(...) } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "34c6d256c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/34c6d256c> .
+
 <urn:atm:triage:worktree/AZ4/3b2d78bf3d7047857990235dd6dc1ec432e5b042>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/AZ4" ;
   triage:branch "feature/az4-attention-scheduler" ;
   triage:headSha "3b2d78bf3d7047857990235dd6dc1ec432e5b042" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AZ4/34c6d256c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ4" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "34c6d256c" ;
   triage:orderIndex 4 .

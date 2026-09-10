@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-005>
+  a triage:Finding ;
+  triage:findingId "ARCH-005" ;
+  triage:title "Duplicate private run_blocking helper in herdr_attention_scheduler.rs diverges from the shared hardened helper" ;
+  triage:description "quality-mgr's QA-3 verdict (arch-qa) reports that crates/atm-http-runtime/src/herdr_attention_scheduler.rs:22 defines its own private run_blocking helper with no built-in timeout, diverging from the shared hardened helper (crates/atm-http-runtime/src/herdr_queue_wake.rs:1028) that cipher fixed under AZS4-QA-011 to wrap tokio::time::timeout(HERDR_REQUEST_DEADLINE, ...). The scheduler's one call site stays bounded only via a second, independently-declared SCHEDULER_REQUEST_DEADLINE constant duplicating HERDR_REQUEST_DEADLINE's value -- two sources of truth for the same timeout bound that can silently drift apart. Recommended fix: delete the local duplicate run_blocking and SCHEDULER_REQUEST_DEADLINE, call the shared helper (and shared deadline constant) directly." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "maintainability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T16:34:10Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T16:34:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-005/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-005/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_attention_scheduler.rs" ;
+  triage:line 22 ;
+  triage:snippet "fn run_blocking<F, T>(f: F) -> impl std::future::Future<Output = Result<T>>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "34c6d256c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/34c6d256c> .
+
+<urn:atm:triage:worktree/AZ4/34c6d256c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ4" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "34c6d256c" ;
+  triage:orderIndex 4 .
