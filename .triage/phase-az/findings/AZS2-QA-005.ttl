@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/schema_version.rs, crates/atm-storage-rusqlite/tests/schema_version_compat.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-09-10T03:38:26Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-09-10T02:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.2 ;
   triage:foundAt "2026-09-10T02:11:59Z"^^xsd:dateTime ;
@@ -29,10 +31,10 @@
   triage:file "crates/atm-storage-rusqlite/tests/schema_version_compat.rs" ;
   triage:line 0 ;
   triage:snippet "malformed-legacy test category (missing)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/az2-task-domain-storage" ;
-  triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
   triage:occursIn <urn:atm:triage:worktree/AZ2> .
 
 <urn:atm:triage:occurrence/AZS2-QA-005/AZ3-1>
@@ -40,10 +42,10 @@
   triage:file "crates/atm-storage-rusqlite/tests/schema_version_compat.rs" ;
   triage:line 0 ;
   triage:snippet "malformed-legacy test category (missing) -- verified still absent on AZ3 via merge-forward, agent's initial 'fixed' summary claim was incorrect and not present in this canonical record" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az3-task-command-handoff" ;
-  triage:headSha "ab97a015518bb6885cc0311f71a22241616c2282" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
   triage:occursIn <urn:atm:triage:worktree/AZ3> .
 
 <urn:atm:triage:worktree/AZ1>

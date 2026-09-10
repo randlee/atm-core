@@ -8,7 +8,7 @@
   a triage:Finding ;
   triage:findingId "AZS2-RBQA-002" ;
   triage:title "boundary TOML review_gates have no mechanical enforcement; task_legacy_ops.rs ungoverned" ;
-  triage:description "boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml:42, boundaries/atm-storage/task-store.toml -- review_gates entries like sole_writer_transaction/no_caller_owned_transaction/no_sqlite_in_callers are only syntax-validated as identifier strings by .just/lint_boundaries.py, with no actual mechanical check behind the name. crates/atm-storage-rusqlite/src/writer/task_legacy_ops.rs (the retained v1 write path) is not named as a governed module in any of the three AZ.2 boundary TOMLs. Fix: either extend lint_boundaries.py with a name-keyed dispatch for these gates, or downgrade the TOML fields to notes so they don't imply enforcement that doesn't exist; add task_legacy_ops.rs to the governed module list." ;
+  triage:description "boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml:42, boundaries/atm-storage/task-store.toml -- the 2026-09-10 fix attempt asserted 'lint_rules, not review_gates, are the mechanically enforced controls' but this claim is FALSE. Independent re-verification at 6937c547f confirms: (1) .just/lint_boundaries.py validates syntax only (line 1518-1521 validates identifier strings), never executes any named lint rule; (2) grep -rn LINT-BOUNDARY-ASYNC-TASK-MUTATION-SQLITE .just/ returns zero hits outside the TOML declaration itself; (3) the attempted fix made enforcement worse by claiming false mechanical enforcement in the TOML notes field. STILL OPEN -- boundary governance is not mechanically enforced." ;
   triage:phaseId "phase-az" ;
   triage:triageMode "initial_pass" ;
   triage:category "boundary-governance" ;
