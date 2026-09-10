@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — amended by issue #1378
 
 ## Context
 
