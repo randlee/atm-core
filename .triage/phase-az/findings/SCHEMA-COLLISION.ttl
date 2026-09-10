@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SCHEMA-COLLISION>
+  a triage:Finding ;
+  triage:findingId "SCHEMA-COLLISION" ;
+  triage:title "HTTP_API_VERSION collides with PR #1381's already-landed bump" ;
+  triage:description "crates/atm-core/src/protocol.rs:100 -- HTTP_API_VERSION still \"1.4.0\", matching this branch's own (now-superseded) sprint doc text. This branch forked before PR #1381 (issue #1378) landed its own 1.3.0->1.4.0 bump on develop, and before PR #1384 cascaded AZ.3's plan docs to the corrected 1.4.0->1.5.0 sequencing. That doc correction was never applied to this branch's code. Confirmed present at head 6937c547f. Fix: rebase onto develop (post #1381/#1384), bump HTTP_API_VERSION to 1.5.0, update both openapi.yaml files' version field and inline baseline prose, docs/atm-daemon/http-api.md, the ADR-061 D5 record (sequenced after the roster-state 1.3.0->1.4.0 entry), and review crates/atm-http-runtime/tests/http_v1_3_compat.rs (the immediately-prior baseline is now 1.4.0, not 1.3.0). Source: schema-reviewer, QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "schema-versioning" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T03:46:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SCHEMA-COLLISION/AZ3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SCHEMA-COLLISION/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 100 ;
+  triage:snippet "pub const HTTP_API_VERSION: &str = \"1.4.0\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c> .
+
+<urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:orderIndex 3 .

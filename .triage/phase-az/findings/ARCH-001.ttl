@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-001" ;
+  triage:title "new sealed TaskCommandService trait has zero boundary governance" ;
+  triage:description "TaskCommandService (crates/atm-core/src/task_command.rs:226) is a new sealed trait, implemented by CoreTaskCommandService (crates/atm-core/src/task_command/service.rs:359), consumed cross-crate by atm-http-runtime. boundaries/atm-core/task-command-service.toml -- explicitly named in the sprint doc's own \"Affected paths\" list -- does not exist anywhere in the repo, confirmed at head 6937c547f. docs/atm-core/boundaries.md has zero prose mentions of TaskCommandService. .just/lint_boundaries.py has no rule enumerating \"every sealed-trait impl has a boundary record.\" Independently corroborated by req-qa (filed as ATM-QA-101) and ruthless-boundary-qa (filed as RBQA-F001 in that reviewer's own numbering, scored Important -- same underlying fact; treated here as Blocking per arch-qa's evidence-backed framing and the sprint doc's own explicit deliverable listing). Note: this repo's phase-az triage directory already has an unrelated finding file named RBQA-F001.ttl from AZ.1's QA-1 pass -- do not reuse that filename; this finding is filed as ARCH-001 with ATM-QA-101 and the reviewer's own RBQA-F001 label recorded here only as corroborating source ids, not as this record's finding id. Fix: add boundaries/atm-core/task-command-service.toml naming CoreTaskCommandService as the sole permitted impl site, matching the pattern used for TaskStore/AsyncTaskLedgerReader/AsyncTaskMutationStore, plus matching prose in docs/atm-core/boundaries.md. Source: QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494), corroborated by req-qa/ruthless-boundary-qa/arch-qa." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-governance" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T03:49:15Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/AZ3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-001/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_command.rs" ;
+  triage:line 226 ;
+  triage:snippet "pub trait TaskCommandService: crate::boundary::sealed::Sealed + Send + Sync {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f> .
+
+<urn:atm:triage:worktree/AZ3/6937c547f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:orderIndex 3 .

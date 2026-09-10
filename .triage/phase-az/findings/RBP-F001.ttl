@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-F001" ;
+  triage:title "task-command error handling collapses ~14 distinct failure modes into one generic error code" ;
+  triage:description "crates/atm-core/src/task_command/service.rs:695 (task_error() helper) is the sole error constructor for require_member, require_same_team, require_distinct_member, require_existing_state, require_open, require_closed, require_current_assignee, require_active_assignee, require_assigned_or_active, the reassign-active-conflict case, and require_assignee_or_assigner -- all producing the same generic AtmErrorCode::MessageValidationFailed with identical recovery text, even though require_unique_lead two branches later in the same file correctly uses distinct TaskLeadMissing/TaskLeadAmbiguous codes, and the storage layer already codes the identical 'illegal transition' concept as AtmErrorCode::TaskTransitionInvalid. Confirmed at head 6937c547f. Fix: route the transition-shaped checks through TaskTransitionInvalid to match the storage layer, and introduce distinct stable codes for the authorization-shaped checks. Source: QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T03:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/AZ3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_command/service.rs" ;
+  triage:line 695 ;
+  triage:snippet "fn task_error(message: impl Into<String>) -> AtmError {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c> .
+
+<urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:orderIndex 3 .

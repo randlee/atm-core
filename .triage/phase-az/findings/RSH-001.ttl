@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-001>
+  a triage:Finding ;
+  triage:findingId "RSH-001" ;
+  triage:title "new Task HTTP route silently drops the caller's RequestDeadline" ;
+  triage:description "storage_and_nudge_router.rs:498-502: ApiRequest::Task(request) => CoreTaskCommandService::new(...).execute(*request).await never threads the ambient deadline: RequestDeadline parameter into execute(), unlike every sibling arm in the same dispatch_non_write match (list/peek/receive/clear/doctor/search/heartbeat/queue_get_next/graft_receiver_*). TaskCommandService::execute has no deadline parameter at all. CoreTaskCommandService instead uses a hardcoded TASK_COMMAND_READ_DEADLINE = Duration::from_secs(5) per read call inside mutate(), performing two such reads sequentially before an unbounded-at-this-layer write -- exceeding the product's canonical SERVER_REQUEST_BUDGET of 3s, while the client already computes and sends a real deadline for Task requests. This reintroduces the exact client/server request-budget mismatch class previously fixed in PR #1095, and regresses against sprint deliverable D2's own explicit requirement to preserve structured errors, deadlines, and retry operation ids. Confirmed present at head 6937c547f. Fix: thread the caller's RequestDeadline into CoreTaskCommandService::execute and bound its internal reads/mutation by the actual remaining budget instead of the hardcoded 5s constant. Source: QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "runtime-hardening" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T03:49:38Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/AZ3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-001/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 498 ;
+  triage:snippet "ApiRequest::Task(request) => CoreTaskCommandService::new(...).execute(*request).await" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c> .
+
+<urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:orderIndex 3 .

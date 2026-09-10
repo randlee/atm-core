@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-002>
+  a triage:Finding ;
+  triage:findingId "RSH-002" ;
+  triage:title "backpressure risk contingent on RSH-001" ;
+  triage:description "Because the Task mutation path has no tie to the caller's actual request budget (see RSH-001, blocking, same branch/head), a slow-resolving mutation can occupy the single ordered SQLite writer queue (shared with ordinary message sends/receives) for multiples of the daemon's normal per-request budget. Fix alongside RSH-001; add a test proving a stalled Task mutation cannot starve concurrent message writes. Source: QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "runtime-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T03:49:51Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/AZ3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-002/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_command/service.rs" ;
+  triage:line 68 ;
+  triage:snippet "async fn mutate(&self, command: TaskMutationCommand)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/.worktrees/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c> .
+
+<urn:atm:triage:worktree/.worktrees/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:orderIndex 3 .

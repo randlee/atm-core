@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-104>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-104" ;
+  triage:title "boundary_enforcement.rs writer-surface scan omits the legacy v1 bridge" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs:472-505 (task_mutation_cannot_restore_a_second_message_write_pipeline) scans only task_mutation_store.rs and writer/task_ops.rs as 'writer_surfaces,' omitting writer/task_legacy_ops.rs -- itself a SQLite task writer module per its own doc comment and explicitly named in AZ.2's affected paths. D5 requires this mechanical scan to cover the SQLite task writer surfaces (plural); the legacy v1 bridge write path is left unguarded by this specific tripwire. Related to AZS2-RBQA-002 (same governance-gap pattern). Confirmed at head 6937c547f. Fix: add writer/task_legacy_ops.rs to the writer_surfaces list scanned by task_mutation_cannot_restore_a_second_message_write_pipeline. Source: QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-governance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T04:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-104/AZ3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-104/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 482 ;
+  triage:snippet "crates/atm-storage-rusqlite/src/writer/task_ops.rs (omits task_legacy_ops.rs)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c> .
+
+<urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:orderIndex 3 .
