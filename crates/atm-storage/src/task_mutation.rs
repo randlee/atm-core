@@ -114,8 +114,13 @@ impl TaskMutationDeadline {
     }
 
     #[must_use]
-    pub fn expired(self) -> bool {
+    pub fn is_expired(self) -> bool {
         Instant::now() >= self.0
+    }
+
+    #[must_use]
+    pub fn already_expired() -> Self {
+        Self(Instant::now())
     }
 }
 

@@ -126,7 +126,7 @@ impl WriteOp {
             Self::TaskMutation {
                 deadline: Some(deadline),
                 ..
-            } if deadline.expired() => Some(AtmError::daemon_unavailable(
+            } if deadline.is_expired() => Some(AtmError::daemon_unavailable(
                 "task mutation deadline expired before sqlite writer execution",
             )),
             _ => None,

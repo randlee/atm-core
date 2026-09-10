@@ -1167,8 +1167,7 @@ mod tests {
         let team: TeamName = "writer-deadline".parse().expect("team");
         let actor = MemberKey::new(team, "lead".parse().expect("agent"));
         let task_id: TaskId = "expired-writer-task".parse().expect("task");
-        let deadline = TaskMutationDeadline::after(Duration::from_nanos(1)).expect("deadline");
-        std::thread::sleep(Duration::from_millis(1));
+        let deadline = TaskMutationDeadline::already_expired();
         let (task_reply, task_receiver) = mpsc::sync_channel(1);
         let expired_task = QueuedWrite {
             op: Box::new(WriteOp::TaskMutation {

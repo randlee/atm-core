@@ -263,12 +263,8 @@ pub(crate) fn process_batch(
         Vec::with_capacity(batch_len);
     let mut queued_writes = batch.into_iter().peekable();
     while let Some(queued) = queued_writes.next() {
-        if let Some(error) = queued.op.expired_task_mutation_error() {
-            replies.push((queued.reply, Err(error)));
-            continue;
-        }
         if !is_batchable_message_admission(&queued) {
-            replies.push(process_queued_write(
+            replies.push(process_or_reject_queued_write(
                 target,
                 &mut transaction,
                 cache,
@@ -418,9 +414,6 @@ pub(crate) fn process_queued_write(
     cache: &mut stmt_cache::WriterStatementCache,
     queued: QueuedWrite,
 ) -> (ReplyTx, Result<WriteOpResult, AtmError>) {
-    if let Some(error) = queued.op.expired_task_mutation_error() {
-        return (queued.reply, Err(error));
-    }
     let savepoint = match transaction.savepoint() {
         Ok(savepoint) => savepoint,
         Err(error) => {
@@ -455,6 +448,19 @@ pub(crate) fn process_queued_write(
         result => finalize_queued_write(target, savepoint, result),
     };
     (reply, result)
+}
+
+fn process_or_reject_queued_write(
+    target: &SharedDbTarget,
+    transaction: &mut rusqlite::Transaction<'_>,
+    cache: &mut stmt_cache::WriterStatementCache,
+    queued: QueuedWrite,
+) -> (ReplyTx, Result<WriteOpResult, AtmError>) {
+    if let Some(error) = queued.op.expired_task_mutation_error() {
+        (queued.reply, Err(error))
+    } else {
+        process_queued_write(target, transaction, cache, queued)
+    }
 }
 
 fn finalize_queued_write(
