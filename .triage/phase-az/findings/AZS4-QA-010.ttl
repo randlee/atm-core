@@ -8,7 +8,7 @@
   a triage:Finding ;
   triage:findingId "AZS4-QA-010" ;
   triage:title "Positional-tuple swap risk in attention-scheduler code (RBP-F003)" ;
-  triage:description "Construction of tuple at crates/atm-storage-rusqlite/src/attention_schedule_store.rs:272 in load_unfinished_reservation_for_item() with (AttentionLane, Option<String> message_id, Option<String> task_id, Option<u32> attempt, Option<String> assignment_message_id) - three same-typed string ID values that could be swapped without compiler error." ;
+  triage:description "CORRECTED 2026-09-10T15:49:00Z: the original triage pass mis-scoped this to attention_schedule_store.rs:272 (load_unfinished_reservation_for_item()) -- a real but different, unfiled rust-best-practices-agent 'out-of-scope observation', not RBP-F003. quality-mgr independently confirmed the actual RBP-F003 site is crates/atm-storage-rusqlite/src/writer/ops.rs:520, the AcknowledgementSourceRow type alias: a 6-field positional tuple (String, String, i64, Option<String>, Option<String>, Option<String>) with 3 same-shaped trailing Option<String> timestamp fields that could be silently swapped without a compiler error. Cipher's fix at attention_schedule_store.rs (load_unfinished_reservation_for_item -> named UnfinishedReservationFilter struct, commit 12ec29436) is a legitimate improvement but does not close this finding -- writer/ops.rs:520 is still unchanged." ;
   triage:phaseId "phase-az" ;
   triage:triageMode "initial_pass" ;
   triage:category "maintainability" ;
@@ -17,17 +17,17 @@
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-09-10T15:40:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-09-10T15:49:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T15:37:56Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-010/az4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AZS4-QA-010/az4-1>
   a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
-  triage:line 272 ;
-  triage:snippet "let (lane, message_id, task_id, attempt, assignment_message_id) = match item" ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 520 ;
+  triage:snippet "type AcknowledgementSourceRow = (String, String, i64, Option<String>, Option<String>, Option<String>);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/az4-attention-scheduler" ;
