@@ -15,14 +15,16 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.2 ;
   triage:foundAt "2026-09-09T20:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/PR1381-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/AZ3-1> ;
-  triage:triageRecordVersion "2" .
+  triage:closedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/ARCH-004/PR1381-1>
   a triage:Occurrence ;
@@ -40,10 +42,10 @@
   triage:file "crates/atm-storage/src/types.rs" ;
   triage:line 1008 ;
   triage:snippet "`atm_http_runtime::runtime_health::MemberKey`, whose migration onto this type is a non-blocking follow-up." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az3-task-command-handoff" ;
-  triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f> .
 
 <urn:atm:triage:worktree/PR1381/main>
