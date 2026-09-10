@@ -3,9 +3,10 @@
 use std::sync::Arc;
 
 use atm_storage::{
-    AssignmentAttempt, AtmError, AttentionCursor, AttentionFinalizeRequest, AttentionItem,
-    AttentionLane, AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
-    AttentionScheduleStore, IdleOpportunity, IdleOpportunityId, MemberKey, RosterStateRevision,
+    AssignmentAttempt, AtmError, AttentionCursor, AttentionFinalizeOutcome,
+    AttentionFinalizeRequest, AttentionItem, AttentionLane, AttentionReservation,
+    AttentionReservationRequest, AttentionReservationStatus, AttentionScheduleStore,
+    IdleOpportunity, IdleOpportunityId, MemberKey, RosterStateRevision,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS attention_opportunities (
     assignment_attempt INTEGER NULL CHECK(assignment_attempt >= 1),
     assignment_message_id TEXT NULL,
     status TEXT NOT NULL CHECK(status IN ('reserved', 'delivered', 'stale', 'permanently_failed')),
+    failed_attempts INTEGER NOT NULL DEFAULT 0 CHECK(failed_attempts >= 0),
     PRIMARY KEY (team, agent, opportunity_id),
     CHECK((lane = 'ephemeral' AND message_id IS NOT NULL AND task_id IS NULL
            AND assignment_attempt IS NULL AND assignment_message_id IS NULL)
@@ -55,7 +57,13 @@ pub(crate) fn ensure_schema(
                 "failed to initialize attention scheduler schema",
                 error,
             )
+        })?;
+    connection
+        .execute_batch("ALTER TABLE attention_opportunities ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0 CHECK(failed_attempts >= 0);")
+        .or_else(|error| {
+            if error.to_string().contains("duplicate column name") { Ok(()) } else { Err(error) }
         })
+        .map_err(|error| sqlite_error(target, "failed to add attention retry counter", error))
 }
 
 impl SqliteAttentionScheduleStore {
@@ -132,6 +140,30 @@ pub(crate) fn reserve_writer(
     )? {
         return Ok(existing);
     }
+    if let Some(mut existing) = load_unfinished_reservation_for_item(
+        connection,
+        &request.opportunity.member,
+        &request.item,
+    )? {
+        // A retry consumes a later idle observation, but retains the durable
+        // reservation identity and failure counter.  Refreshing only the
+        // observed roster revision lets dispatch revalidate against the
+        // current idle state without minting a second attempt chain.
+        if existing.status == AttentionReservationStatus::Reserved {
+            connection.execute(
+                "UPDATE attention_opportunities SET roster_state_revision = ?4
+                 WHERE team = ?1 AND agent = ?2 AND opportunity_id = ?3",
+                params![
+                    request.opportunity.member.team().as_str(),
+                    request.opportunity.member.agent().as_str(),
+                    existing.opportunity.id.to_string(),
+                    request.opportunity.roster_state_revision.get(),
+                ],
+            )?;
+            existing.opportunity.roster_state_revision = request.opportunity.roster_state_revision;
+        }
+        return Ok(existing);
+    }
     let cursor = load_cursor(connection, &request.opportunity.member)?;
     if cursor.revision != request.expected_cursor_revision {
         return Err(rusqlite::Error::InvalidQuery);
@@ -143,8 +175,8 @@ pub(crate) fn reserve_writer(
     connection.execute(
         "INSERT INTO attention_opportunities(
             team, agent, opportunity_id, roster_state_revision, lane, message_id, task_id,
-            assignment_attempt, assignment_message_id, status
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'reserved')",
+            assignment_attempt, assignment_message_id, status, failed_attempts
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'reserved', 0)",
         params![
             request.opportunity.member.team().as_str(),
             request.opportunity.member.agent().as_str(),
@@ -167,7 +199,66 @@ pub(crate) fn reserve_writer(
         opportunity: request.opportunity,
         item: request.item,
         status: AttentionReservationStatus::Reserved,
+        failed_attempts: 0,
     })
+}
+
+fn load_unfinished_reservation_for_item(
+    connection: &Connection,
+    member: &MemberKey,
+    item: &AttentionItem,
+) -> rusqlite::Result<Option<AttentionReservation>> {
+    let (lane, message_id, task_id, attempt, assignment_message_id) = match item {
+        AttentionItem::EphemeralMessage { message_id, .. } => (
+            AttentionLane::Ephemeral,
+            Some(message_id.to_string()),
+            None,
+            None,
+            None,
+        ),
+        AttentionItem::PersistentTaskReminder {
+            task_id,
+            attempt,
+            assignment_message_id,
+            ..
+        } => (
+            AttentionLane::PersistentTask,
+            None,
+            Some(task_id.to_string()),
+            Some(attempt.get()),
+            Some(assignment_message_id.to_string()),
+        ),
+    };
+    connection
+        .query_row(
+            "SELECT opportunity_id, roster_state_revision, lane, message_id, task_id,
+                    assignment_attempt, assignment_message_id, status, failed_attempts
+             FROM attention_opportunities
+             WHERE team = ?1 AND agent = ?2 AND lane = ?3
+               AND status IN ('reserved', 'permanently_failed')
+               AND message_id IS ?4 AND task_id IS ?5 AND assignment_attempt IS ?6
+               AND assignment_message_id IS ?7
+             ORDER BY rowid DESC LIMIT 1",
+            params![
+                member.team().as_str(),
+                member.agent().as_str(),
+                lane.as_str(),
+                message_id,
+                task_id,
+                attempt,
+                assignment_message_id,
+            ],
+            |row| {
+                let id: String = row.get(0)?;
+                decode_reservation_with_offset(
+                    row,
+                    member.clone(),
+                    IdleOpportunityId::parse(&id).map_err(|_| rusqlite::Error::InvalidQuery)?,
+                    1,
+                )
+            },
+        )
+        .optional()
 }
 
 pub(crate) fn finalize_writer(
@@ -176,18 +267,38 @@ pub(crate) fn finalize_writer(
 ) -> rusqlite::Result<AttentionReservation> {
     let existing = load_reservation(connection, &request.member, request.opportunity_id)?
         .ok_or(rusqlite::Error::QueryReturnedNoRows)?;
-    if existing.status != AttentionReservationStatus::Reserved && existing.status != request.status
-    {
+    if existing.status != AttentionReservationStatus::Reserved {
         return Err(rusqlite::Error::InvalidQuery);
     }
+    let (status, failed_attempts) = match request.outcome {
+        AttentionFinalizeOutcome::Delivered => (
+            AttentionReservationStatus::Delivered,
+            existing.failed_attempts,
+        ),
+        AttentionFinalizeOutcome::Stale => {
+            (AttentionReservationStatus::Stale, existing.failed_attempts)
+        }
+        AttentionFinalizeOutcome::RetryableFailure => {
+            let failed_attempts = existing.failed_attempts.saturating_add(1);
+            (
+                if failed_attempts >= 5 {
+                    AttentionReservationStatus::PermanentlyFailed
+                } else {
+                    AttentionReservationStatus::Reserved
+                },
+                failed_attempts,
+            )
+        }
+    };
     connection.execute(
-        "UPDATE attention_opportunities SET status = ?4
+        "UPDATE attention_opportunities SET status = ?4, failed_attempts = ?5
          WHERE team = ?1 AND agent = ?2 AND opportunity_id = ?3 AND status = 'reserved'",
         params![
             request.member.team().as_str(),
             request.member.agent().as_str(),
             request.opportunity_id.to_string(),
-            status_name(request.status)
+            status_name(status),
+            failed_attempts,
         ],
     )?;
     load_reservation(connection, &request.member, request.opportunity_id)?
@@ -202,7 +313,7 @@ fn load_reservation(
     connection
         .query_row(
             "SELECT roster_state_revision, lane, message_id, task_id, assignment_attempt,
-                assignment_message_id, status
+                assignment_message_id, status, failed_attempts
          FROM attention_opportunities
          WHERE team = ?1 AND agent = ?2 AND opportunity_id = ?3",
             params![
@@ -262,27 +373,37 @@ fn decode_reservation(
     member: MemberKey,
     id: IdleOpportunityId,
 ) -> rusqlite::Result<AttentionReservation> {
-    let revision: u64 = row.get(0)?;
-    let lane: String = row.get(1)?;
-    let status: String = row.get(6)?;
+    decode_reservation_with_offset(row, member, id, 0)
+}
+
+fn decode_reservation_with_offset(
+    row: &Row<'_>,
+    member: MemberKey,
+    id: IdleOpportunityId,
+    offset: usize,
+) -> rusqlite::Result<AttentionReservation> {
+    let revision: u64 = row.get(offset)?;
+    let lane: String = row.get(offset + 1)?;
+    let status: String = row.get(offset + 6)?;
+    let failed_attempts: u32 = row.get(offset + 7)?;
     let item = match lane.as_str() {
         "ephemeral" => AttentionItem::EphemeralMessage {
             member: member.clone(),
             message_id: row
-                .get::<_, String>(2)?
+                .get::<_, String>(offset + 2)?
                 .parse()
                 .map_err(|_| rusqlite::Error::InvalidQuery)?,
         },
         "persistent_task" => AttentionItem::PersistentTaskReminder {
             member: member.clone(),
             task_id: row
-                .get::<_, String>(3)?
+                .get::<_, String>(offset + 3)?
                 .parse()
                 .map_err(|_| rusqlite::Error::InvalidQuery)?,
-            attempt: AssignmentAttempt::new(row.get(4)?)
+            attempt: AssignmentAttempt::new(row.get(offset + 4)?)
                 .map_err(|_| rusqlite::Error::InvalidQuery)?,
             assignment_message_id: row
-                .get::<_, String>(5)?
+                .get::<_, String>(offset + 5)?
                 .parse()
                 .map_err(|_| rusqlite::Error::InvalidQuery)?,
         },
@@ -303,6 +424,7 @@ fn decode_reservation(
         },
         item,
         status,
+        failed_attempts,
     })
 }
 
@@ -352,11 +474,51 @@ mod tests {
                 .finalize(AttentionFinalizeRequest {
                     member: member(),
                     opportunity_id: opportunity.id,
-                    status: AttentionReservationStatus::Delivered,
+                    outcome: AttentionFinalizeOutcome::Delivered,
                 })
                 .expect("finalize")
                 .status,
             AttentionReservationStatus::Delivered
         );
+    }
+
+    #[test]
+    fn retryable_failure_keeps_the_same_item_until_the_fifth_attempt() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        let opportunity = IdleOpportunity {
+            id: IdleOpportunityId::new(),
+            member: member(),
+            roster_state_revision: RosterStateRevision::from_raw(7),
+        };
+        let reservation = store
+            .reserve(AttentionReservationRequest {
+                opportunity: opportunity.clone(),
+                expected_cursor_revision: 0,
+                item: AttentionItem::EphemeralMessage {
+                    member: member(),
+                    message_id: AtmMessageId::new(),
+                },
+            })
+            .expect("reserve");
+        for attempt in 1..=5 {
+            let updated = store
+                .finalize(AttentionFinalizeRequest {
+                    member: member(),
+                    opportunity_id: opportunity.id,
+                    outcome: AttentionFinalizeOutcome::RetryableFailure,
+                })
+                .expect("record retryable failure");
+            assert_eq!(updated.item, reservation.item);
+            assert_eq!(updated.failed_attempts, attempt);
+            assert_eq!(
+                updated.status,
+                if attempt < 5 {
+                    AttentionReservationStatus::Reserved
+                } else {
+                    AttentionReservationStatus::PermanentlyFailed
+                }
+            );
+        }
     }
 }

@@ -4,28 +4,24 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use atm_core::boundary::{
-    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventKind, TaskEventRow,
-    TaskRow, TaskState,
-};
+use atm_core::boundary::{AsyncTaskLedgerReader, MemberKey, ReadDeadline, TaskRow, TaskState};
+#[cfg(test)]
+use atm_core::boundary::{ReminderOutcome, TaskEventKind, TaskEventRow};
 use atm_core::types::IsoTimestamp;
 
 use crate::herdr_escalation::{
     BLOCKED_NOTIFY_MS, EscalationKind, EscalationNotification, MAX_BLOCKED_ESCALATIONS_PER_TICK,
     escalate,
 };
-use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, run_blocking};
+#[cfg(test)]
+use crate::herdr_queue_wake::run_blocking;
+use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats};
 
 const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
 const MAX_BLOCKED_TASKS_IN_BODY: usize = 8;
 const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 
-pub(crate) struct TaskReminderContext<'a> {
-    pub(crate) reader: &'a (dyn AsyncTaskLedgerReader + Send + Sync),
-    pub(crate) task_store: &'a Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-    pub(crate) member: &'a MemberKey,
-}
-
+#[cfg(test)]
 pub(crate) async fn maybe_escalate_task(
     pump: &HerdrQueueWakePump,
     reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
@@ -74,6 +70,7 @@ pub(crate) async fn maybe_escalate_task(
     }
 }
 
+#[cfg(test)]
 async fn reminder_events(
     reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
     row: &TaskRow,
@@ -91,6 +88,7 @@ async fn reminder_events(
         .map_err(|error| atm_core::error::AtmError::daemon_unavailable(error.to_string()))
 }
 
+#[cfg(test)]
 fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow]) -> String {
     let first = events
         .iter()
@@ -118,6 +116,7 @@ fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow
     )
 }
 
+#[cfg(test)]
 fn task_escalation_notification(row: &TaskRow, now: IsoTimestamp) -> EscalationNotification {
     EscalationNotification {
         title: "ATM task escalation".to_owned(),
@@ -133,6 +132,7 @@ fn task_escalation_notification(row: &TaskRow, now: IsoTimestamp) -> EscalationN
     }
 }
 
+#[cfg(test)]
 async fn record_lead_audit(
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     row: &TaskRow,

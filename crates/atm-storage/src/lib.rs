@@ -38,11 +38,11 @@ pub mod roles {
 
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use attention::{
-    AsyncAttentionScheduleStore, AttentionCandidates, AttentionCursor, AttentionFinalizeRequest,
-    AttentionItem, AttentionLane, AttentionReservation, AttentionReservationRequest,
-    AttentionReservationStatus, AttentionScheduleStore, AttentionSelection,
-    EphemeralMessageCandidate, IdleOpportunity, IdleOpportunityId, PersistentTaskCandidate,
-    select_attention_item,
+    AsyncAttentionScheduleStore, AttentionCandidates, AttentionCursor, AttentionFinalizeOutcome,
+    AttentionFinalizeRequest, AttentionItem, AttentionLane, AttentionReservation,
+    AttentionReservationRequest, AttentionReservationStatus, AttentionScheduleStore,
+    AttentionSelection, EphemeralMessageCandidate, IdleOpportunity, IdleOpportunityId,
+    PersistentTaskCandidate, select_attention_item,
 };
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,

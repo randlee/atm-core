@@ -11,10 +11,15 @@ pub use atm_storage::TaskState;
 pub use atm_storage::contract::RosterStore as DurableRosterStore;
 pub use atm_storage::contract::{AckTransition, Message, MessageKey};
 pub use atm_storage::{
-    AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, DAEMON_ACTOR_NAME, EscalationScope,
-    MAX_ESCALATION_RECIPIENTS, NudgeTemplateOverrideStore, ReadDeadline, ReminderOutcome,
-    TASK_STALLED_REMINDER_THRESHOLD, TaskEventKind, TaskEventRow, TaskRow, TaskStore,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+    AssignmentAttempt, AsyncTaskLedgerReader, AsyncTaskMutationStore, AttentionCandidates,
+    AttentionCursor, AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionItem,
+    AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
+    AttentionScheduleStore, BuiltInNudgeTemplateKind, DAEMON_ACTOR_NAME, EphemeralMessageCandidate,
+    EscalationScope, IdleOpportunity, LogicalTaskRow, MAX_ESCALATION_RECIPIENTS,
+    NudgeTemplateOverrideStore, PersistentTaskCandidate, ReadDeadline, ReminderOutcome,
+    TASK_STALLED_REMINDER_THRESHOLD, TaskAssignmentAttempt, TaskEventKind, TaskEventRow,
+    TaskLifecycleState, TaskMutationRequest, TaskOperation, TaskOperationId, TaskPriority, TaskRow,
+    TaskStore, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, select_attention_item,
 };
 
 /// Durable at-most-once delivery state for deferred (`atm queue`) nudges.

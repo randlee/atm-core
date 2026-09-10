@@ -198,12 +198,20 @@ pub enum AttentionReservationStatus {
     PermanentlyFailed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttentionFinalizeOutcome {
+    Delivered,
+    Stale,
+    RetryableFailure,
+}
+
 /// The durable, replayable reservation for one opportunity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AttentionReservation {
     pub opportunity: IdleOpportunity,
     pub item: AttentionItem,
     pub status: AttentionReservationStatus,
+    pub failed_attempts: u32,
 }
 
 /// One optimistic reservation request. `expected_cursor_revision` prevents a
@@ -220,7 +228,7 @@ pub struct AttentionReservationRequest {
 pub struct AttentionFinalizeRequest {
     pub member: MemberKey,
     pub opportunity_id: IdleOpportunityId,
-    pub status: AttentionReservationStatus,
+    pub outcome: AttentionFinalizeOutcome,
 }
 
 /// Storage-neutral synchronous scheduler metadata capability.
