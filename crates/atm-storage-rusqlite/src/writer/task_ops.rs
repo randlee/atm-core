@@ -12,7 +12,7 @@ mod task_terminal;
 use super::ops::execute_task_mutation_message_upsert;
 use super::stmt_cache::WriterStatementCache;
 use super::task_projection::sync_v1_compat_projection;
-use super::task_reminder::record_reminder;
+use super::task_reminder::{record_lead_notified, record_reminder};
 use super::task_snapshot::current_projection_snapshot;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::error::AtmError;
@@ -87,7 +87,9 @@ pub(super) fn execute_task_mutation(
     validate_expected_revision(request, current_revision)?;
     let message_id = operation_message_id(&request.operation);
     let now = match &request.operation {
-        TaskOperation::RecordReminder { at, .. } => at.to_string(),
+        TaskOperation::RecordReminder { at, .. } | TaskOperation::RecordLeadNotified { at, .. } => {
+            at.to_string()
+        }
         _ => atm_storage::IsoTimestamp::now().to_string(),
     };
     let transition = apply_operation(request, current_revision, connection, cache, target, &now)?;
@@ -115,7 +117,8 @@ fn operation_message_id(operation: &TaskOperation) -> Option<atm_storage::AtmMes
         TaskOperation::Start
         | TaskOperation::Block { .. }
         | TaskOperation::Unblock { .. }
-        | TaskOperation::RecordReminder { .. } => None,
+        | TaskOperation::RecordReminder { .. }
+        | TaskOperation::RecordLeadNotified { .. } => None,
     };
     message.and_then(|prepared| prepared.message.envelope.message_id)
 }
@@ -236,6 +239,12 @@ fn apply_operation(
         TaskOperation::RecordReminder { attempt, at } => {
             record_reminder(connection, target, request, *attempt, at)
         }
+        TaskOperation::RecordLeadNotified {
+            attempt,
+            at,
+            lead,
+            message_id,
+        } => record_lead_notified(connection, target, request, *attempt, at, lead, message_id),
         TaskOperation::Close { .. }
         | TaskOperation::LegacyCloseSucceeded { .. }
         | TaskOperation::Reassign(_)

@@ -59,6 +59,15 @@ pub enum TaskOperation {
         attempt: AssignmentAttempt,
         at: IsoTimestamp,
     },
+    /// Appends one successful lead-notification audit for the current
+    /// assignment attempt. The scheduler invokes this only after the lead
+    /// mail write succeeds at a ten-reminder escalation boundary.
+    RecordLeadNotified {
+        attempt: AssignmentAttempt,
+        at: IsoTimestamp,
+        lead: AgentName,
+        message_id: crate::schema::AtmMessageId,
+    },
     Close {
         outcome: TaskOutcome,
         handoff: PreparedMessage,

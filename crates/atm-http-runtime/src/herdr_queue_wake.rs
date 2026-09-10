@@ -882,7 +882,7 @@ impl HerdrQueueWakePump {
         let daemon_actor = "atm-daemon"
             .parse()
             .map_err(|_| AtmError::validation("invalid daemon task actor"))?;
-        if let Err(error) = mutation_store
+        match mutation_store
             .apply(TaskMutationRequest {
                 operation_id: TaskOperationId::new(),
                 actor: MemberKey::new(emission.member.team().clone(), daemon_actor),
@@ -895,14 +895,30 @@ impl HerdrQueueWakePump {
             })
             .await
         {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "task_reminder_record",
-                outcome = "failed",
-                error = %error,
-                member = %emission.member,
-                "Herdr task reminder audit write failed after accepted emission"
-            );
+            Ok(outcome) => {
+                let mut reminded = emission.row.clone();
+                reminded.reminder_ordinal = reminded.reminder_ordinal.saturating_add(1);
+                reminded.revision = outcome.revision;
+                crate::herdr_queue_wake_escalation::maybe_escalate_task(
+                    self,
+                    &emission.member,
+                    &reminded,
+                    outcome.revision,
+                    now,
+                    stats,
+                )
+                .await;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "task_reminder_record",
+                    outcome = "failed",
+                    error = %error,
+                    member = %emission.member,
+                    "Herdr task reminder audit write failed after accepted emission"
+                );
+            }
         }
         stats.prompted += 1;
         stats.task_reminders += 1;
@@ -1103,7 +1119,7 @@ mod tests {
     use super::support::{log_herdr_list_failure, runtime_state};
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats, TASK_REMINDER_INTERVAL_MS,
+        HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, TASK_REMINDER_INTERVAL_MS,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -1980,253 +1996,74 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ax6_01_task_threshold_uses_separate_fixed_herdr_notification() {
-        let (root, runtime, fake, pump, task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    async fn az4_task_reminder_records_v2_lead_audit_at_every_tenth_delivery() {
+        let (root, runtime, fake, pump, keys, now) =
+            build_v2_task_only_pump(vec![HerdrAgentStatus::Idle]).await;
+        let pump = pump.with_daemon_home(root.path().join("home"));
         let team = keys[0].team().clone();
         let mut roster = runtime
             .shared_roster_store_arc()
             .load_roster(&team)
             .expect("roster");
-        let mut lead = herdr_member(&team, "ax6-lead");
+        let mut lead = herdr_member(&team, "az4-lead");
         lead.agent_type = atm_storage::AgentType::Lead;
         roster.members.push(lead);
         runtime
             .shared_roster_store_arc()
             .save_roster(&roster)
             .expect("roster");
-        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
-        let mut row = task_store.row(&keys[0], &task_id);
-        row.reminder_count = atm_storage::TASK_STALLED_REMINDER_THRESHOLD;
-        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
-        let pump = pump.with_daemon_home(root.path().join("home"));
-        let mut stats = HerdrQueueWakeStats::default();
-        let timestamp = *now.lock().expect("clock");
 
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &row,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-
-        let notifications: Vec<_> = fake
-            .calls()
-            .into_iter()
-            .filter_map(|call| match call {
-                atm_herdr::testing::FakeHerdrCall::Notify { title, body } => Some((title, body)),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(notifications.len(), 1);
-        assert_eq!(notifications[0].0, "ATM task escalation");
-        assert!(notifications[0].1.contains("reason=lead_notified"));
-        assert!(notifications[0].1.contains("AX5-TASK-00"));
-        assert!(!notifications[0].1.contains("assigned to"));
-    }
-
-    #[tokio::test]
-    async fn ax6_01_task_threshold_doubles_after_each_lead_notification() {
-        let (root, runtime, fake, pump, task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = keys[0].team().clone();
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        let mut lead = herdr_member(&team, "ax6-lead");
-        lead.agent_type = atm_storage::AgentType::Lead;
-        roster.members.push(lead);
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
-        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
-        let pump = pump.with_daemon_home(root.path().join("home"));
-        let timestamp = *now.lock().expect("clock");
-        let mut stats = HerdrQueueWakeStats::default();
-
-        let mut tenth = task_store
-            .load_task(&keys[0], &task_id)
-            .expect("task")
-            .expect("row");
-        tenth.reminder_count = 10;
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &tenth,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-
-        let mut nineteenth = tenth.clone();
-        nineteenth.reminder_count = 19;
-        nineteenth.lead_notified_count = 1;
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &nineteenth,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-
-        let mut twentieth = nineteenth;
-        twentieth.reminder_count = 20;
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &twentieth,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-
-        assert_eq!(stats.lead_notifications, 2);
-        assert_eq!(notifications(&fake), 2);
-    }
-
-    #[tokio::test]
-    async fn ax6_01_failed_lead_write_retries_at_next_reminder() {
-        let (root, runtime, fake, pump, task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = keys[0].team().clone();
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        let mut lead = herdr_member(&team, "ax6-lead");
-        lead.agent_type = atm_storage::AgentType::Lead;
-        roster.members.push(lead);
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
-        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
-        let timestamp = *now.lock().expect("clock");
-        let mut tenth = task_store
-            .load_task(&keys[0], &task_id)
-            .expect("task")
-            .expect("row");
-        tenth.reminder_count = 10;
-        let mut failed_stats = HerdrQueueWakeStats::default();
-
-        crate::herdr_escalation::fail_next_escalation_mail_write();
-
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump.clone().with_daemon_home(root.path().join("home")),
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &tenth,
-            timestamp,
-            &mut failed_stats,
-        )
-        .await;
-        assert_eq!(failed_stats.lead_notifications, 0);
-
-        let mut eleventh = tenth;
-        eleventh.reminder_count = 11;
-        let mut retry_stats = HerdrQueueWakeStats::default();
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump.with_daemon_home(root.path().join("home")),
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &eleventh,
-            timestamp,
-            &mut retry_stats,
-        )
-        .await;
-
-        assert_eq!(retry_stats.lead_notifications, 1);
-        assert_eq!(
-            notifications(&fake),
-            2,
-            "Herdr still notifies on both attempts"
-        );
-    }
-
-    #[tokio::test]
-    async fn ax6_01_no_lead_or_multiple_leads_still_notify_herdr() {
-        let (root, runtime, fake, pump, task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = keys[0].team().clone();
-        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
-        let mut row = task_store.row(&keys[0], &task_id);
-        row.reminder_count = atm_storage::TASK_STALLED_REMINDER_THRESHOLD;
-        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
-        let pump = pump.with_daemon_home(root.path().join("home"));
-        let mut stats = HerdrQueueWakeStats::default();
-        let timestamp = *now.lock().expect("clock");
-
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &row,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-        assert_eq!(stats.lead_notifications, 0);
-        assert_eq!(notifications(&fake), 1);
-
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        for name in ["ax6-lead-a", "ax6-lead-b"] {
-            let mut lead = herdr_member(&team, name);
-            lead.agent_type = atm_storage::AgentType::Lead;
-            roster.members.push(lead);
+        pump.tick_once().await;
+        for minute in 1..10 {
+            *now.lock().expect("clock") =
+                IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z"))
+                    .expect("timestamp");
+            queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+            pump.tick_once().await;
         }
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
+
+        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
+        let reader = runtime
+            .async_task_ledger_reader()
+            .expect("logical task reader");
+        let row = reader
+            .load_logical_task(
+                team.clone(),
+                task_id.clone(),
+                ReadDeadline::new(HERDR_REQUEST_DEADLINE).expect("deadline"),
+            )
+            .await
+            .expect("logical task")
+            .expect("assigned task");
+        assert_eq!(row.reminder_ordinal, 10);
+        let events = reader
+            .list_task_lifecycle_events(
+                team,
+                task_id,
+                None,
+                ReadDeadline::new(HERDR_REQUEST_DEADLINE).expect("deadline"),
+            )
+            .await
+            .expect("task events");
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.event.as_str() == "lead_notified")
+                .count(),
+            1
+        );
+        assert_eq!(pump.stats().lead_notifications, 1);
+        assert_eq!(notifications(&fake), 1);
+        assert_eq!(
             runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &row,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-        assert_eq!(stats.lead_notifications, 0);
-        assert_eq!(notifications(&fake), 2);
+                .task_store()
+                .expect("compatibility task store")
+                .load_task(&keys[0], &"AX5-TASK-00".parse().expect("task id"))
+                .expect("compatibility task")
+                .expect("compatibility row")
+                .lead_notified_count,
+            1
+        );
     }
 
     #[tokio::test]

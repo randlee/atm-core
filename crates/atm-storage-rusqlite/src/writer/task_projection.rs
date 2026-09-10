@@ -40,7 +40,10 @@ pub(super) fn sync_v1_compat_projection(
                           WHERE event.team = task.team AND event.task_id = task.task_id
                             AND event.event = 'reminded'
                           ORDER BY event.seq DESC LIMIT 1),
-                        task.reminder_ordinal, 0
+                        task.reminder_ordinal,
+                        (SELECT COUNT(*) FROM task_events_v2 AS event
+                          WHERE event.team = task.team AND event.task_id = task.task_id
+                            AND event.event = 'lead_notified')
                    FROM tasks_v2 AS task JOIN task_assignment_attempts AS attempt
                      ON attempt.team = task.team AND attempt.task_id = task.task_id
                     AND attempt.attempt = task.current_attempt
@@ -50,7 +53,8 @@ pub(super) fn sync_v1_compat_projection(
                      assignment_message_id = excluded.assignment_message_id,
                      description = excluded.description, updated_at = excluded.updated_at,
                      last_reminded_at = excluded.last_reminded_at,
-                     reminder_count = excluded.reminder_count",
+                     reminder_count = excluded.reminder_count,
+                     lead_notified_count = excluded.lead_notified_count",
                 params![team.as_str(), task_id.as_str()],
             )
             .map_err(|error| sqlite_error(target, "failed to refresh v1 task projection", error))?;

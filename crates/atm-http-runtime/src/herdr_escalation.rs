@@ -5,9 +5,6 @@ use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
-#[cfg(test)]
-use std::cell::Cell;
-
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::TaskStore;
@@ -32,7 +29,6 @@ static DAEMON_ACTOR: LazyLock<AgentName> =
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum EscalationKind {
     BreakerOpened,
-    #[cfg(test)]
     LeadNotified,
     BlockedEscalated,
 }
@@ -41,7 +37,6 @@ impl EscalationKind {
     const fn as_str(self) -> &'static str {
         match self {
             Self::BreakerOpened => "breaker_opened",
-            #[cfg(test)]
             Self::LeadNotified => "lead_notified",
             Self::BlockedEscalated => "blocked_escalated",
         }
@@ -49,16 +44,6 @@ impl EscalationKind {
 }
 pub(crate) const BLOCKED_NOTIFY_MS: u64 = 60_000;
 pub(crate) const BLOCKED_RENOTIFY_MS: u64 = 600_000;
-
-#[cfg(test)]
-std::thread_local! {
-    static FAIL_NEXT_ESCALATION_MAIL_WRITE: Cell<bool> = const { Cell::new(false) };
-}
-
-#[cfg(test)]
-pub(crate) fn fail_next_escalation_mail_write() {
-    FAIL_NEXT_ESCALATION_MAIL_WRITE.with(|fail| fail.set(true));
-}
 
 /// Pump-owned blocked episode state. Keeping this state with the escalation
 /// policy prevents the queue-wake file from becoming the owner of D6 data.
@@ -388,13 +373,6 @@ async fn write_escalation_mail(
     recipient: &str,
     body: &str,
 ) -> Result<atm_core::schema::AtmMessageId, AtmError> {
-    #[cfg(test)]
-    if FAIL_NEXT_ESCALATION_MAIL_WRITE.with(|fail| fail.replace(false)) {
-        return Err(AtmError::new(
-            atm_core::error_codes::AtmErrorCode::InternalError,
-            "injected escalation mail write failure",
-        ));
-    }
     let runtime = runtime.clone();
     let body = body.to_owned();
     let daemon_home = daemon_home.to_path_buf();

@@ -56,7 +56,8 @@ pub(super) fn apply(
         | TaskOperation::Start
         | TaskOperation::Block { .. }
         | TaskOperation::Unblock { .. }
-        | TaskOperation::RecordReminder { .. } => {
+        | TaskOperation::RecordReminder { .. }
+        | TaskOperation::RecordLeadNotified { .. } => {
             unreachable!("caller routes only completion and reassignment operations")
         }
     }
