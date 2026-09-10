@@ -6,8 +6,8 @@ use atm_storage::{
     AssignmentAttempt, AsyncAttentionScheduleStore, AtmError, AttentionCursor,
     AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionItem, AttentionLane,
     AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
-    AttentionScheduleStore, IdleOpportunity, IdleOpportunityId, MemberKey, ReadDeadline,
-    ReadLaneError, RosterStateRevision,
+    AttentionScheduleStore, IdleOpportunity, IdleOpportunityId, MAX_NUDGE_ATTEMPTS, MemberKey,
+    ReadDeadline, ReadLaneError, RosterStateRevision,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -342,7 +342,7 @@ pub(crate) fn finalize_writer(
         AttentionFinalizeOutcome::RetryableFailure => {
             let failed_attempts = existing.failed_attempts.saturating_add(1);
             (
-                if failed_attempts >= 5 {
+                if failed_attempts >= MAX_NUDGE_ATTEMPTS {
                     AttentionReservationStatus::PermanentlyFailed
                 } else {
                     AttentionReservationStatus::Reserved
