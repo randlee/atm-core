@@ -11,7 +11,7 @@
   "runs": [
     {
       "run_id": "AZS1-QA1",
-      "aich_sprint": "AZ-S1",
+      "aich_sprint": "AZ.1",
       "phase_sprint": "AZ.1",
       "pass": "QA-1",
       "run_type": "qa",
@@ -36,7 +36,7 @@
     },
     {
       "run_id": "AZS1-QA2",
-      "aich_sprint": "AZ-S1",
+      "aich_sprint": "AZ.1",
       "phase_sprint": "AZ.1",
       "pass": "QA-2",
       "run_type": "qa",
@@ -61,7 +61,7 @@
     },
     {
       "run_id": "AZS2-QA1",
-      "aich_sprint": "AZ-S2",
+      "aich_sprint": "AZ.2",
       "phase_sprint": "AZ.2",
       "pass": "QA-1",
       "run_type": "qa",
