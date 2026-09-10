@@ -196,6 +196,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let async_message_store = storage.async_message_store();
     let async_mailbox_reader = storage.async_mailbox_reader();
     let async_task_ledger_reader = storage.async_task_ledger_reader();
+    let async_task_mutation_store = storage.async_task_mutation_store();
     let async_message_search_store = storage.async_message_search_store();
     let template_catalog_store = storage.template_catalog_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
@@ -214,6 +215,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     .with_async_message_store(Arc::clone(&async_message_store))
     .with_async_mailbox_reader(Arc::clone(&async_mailbox_reader))
     .with_async_task_ledger_reader(async_task_ledger_reader)
+    .with_async_task_mutation_store(async_task_mutation_store)
     .with_async_message_search_store(async_message_search_store)
     .with_pending_nudge_store(pending_nudge_store)
     .with_task_store(task_store)

@@ -311,6 +311,8 @@ pub struct LocalServiceRuntime {
     async_message_store: Option<std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>>,
     async_mailbox_reader: Option<std::sync::Arc<dyn atm_storage::AsyncMailboxReader + Send + Sync>>,
     async_task_ledger_reader: Option<std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
+    async_task_mutation_store:
+        Option<std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>>,
     async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) nudge_template_override_store:
@@ -370,6 +372,7 @@ impl LocalServiceRuntime {
             async_message_store: None,
             async_mailbox_reader: None,
             async_task_ledger_reader: None,
+            async_task_mutation_store: None,
             async_message_search_store: None,
             roster_store,
             nudge_template_override_store,
@@ -450,6 +453,30 @@ impl LocalServiceRuntime {
         self.async_task_ledger_reader.clone().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "Tokio task-ledger reader was not installed in this runtime",
+            )
+        })
+    }
+
+    /// Attaches the Tokio-safe task lifecycle mutation capability selected by
+    /// the storage composition root. Task commands use this one typed writer
+    /// boundary; they never open a SQLite connection themselves.
+    #[must_use]
+    pub fn with_async_task_mutation_store(
+        mut self,
+        store: std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>,
+    ) -> Self {
+        self.async_task_mutation_store = Some(store);
+        self
+    }
+
+    /// Returns the runtime-selected Tokio task lifecycle mutation boundary.
+    pub fn async_task_mutation_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>, AtmError>
+    {
+        self.async_task_mutation_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio task mutation store was not installed in this runtime",
             )
         })
     }
