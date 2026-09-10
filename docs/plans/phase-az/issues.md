@@ -10,7 +10,8 @@ replace repository issue numbers or QA triage authority.
 | `AZ-TASK-COMPLETE-PENDING` | planned | AZ.2 | Block/close/reassign/reopen/supersede atomically join canonical messages by `(team, task_id)` and invalidate assignment, progress, requeued, and legacy task-linked pending markers. Missing historical messages are audit facts and cannot retain a marker. |
 | `AZ-TASK-COMMANDS` | planned | AZ.3 | Canonical task CLI/API, authorization, explicit start, durable handoffs, supersession, and legacy adapters pass end-to-end. |
 | `AZ-IDLE-INTERLEAVING` | planned | AZ.4 | One derived selector emits at most one item per idle opportunity and alternates the separate ephemeral/persistent lanes across restart. |
-| `AZ-GOVERNED-INTERFACES` | planned | AZ.2/AZ.3/AZ.4 | HTTP API 1.4.0 and storage schema 2.0.0/2.1.0 carry ADR-061 records and older-consumer tests; ADR-061 D6 and ADR-063 D6 record the approved `1.6.x` coexistence window and ATM `1.7.0` as the planned and earliest permitted bridge-removal release. |
+| `AZ-GOVERNED-INTERFACES` | planned | AZ.2/AZ.3/AZ.4 | HTTP API 1.5.0 and storage schema 2.0.0/2.1.0 carry ADR-061 records and older-consumer tests; ADR-061 D6 and ADR-063 D6 record the approved `1.6.x` coexistence window and ATM `1.7.0` as the planned and earliest permitted bridge-removal release. |
+| `GH-1378-CANONICAL-AGENT-STATE` | prerequisite | pre-AZ.4 | Herdr poll and authenticated heartbeat POST converge on one ephemeral master-roster state; health/CLI are projections; the canonical state/revision seam is available for AZ.4 to mint one idempotent opportunity per accepted idle revision; failed polls and stale revisions emit nothing. |
 
 ## Binding clarifications
 
@@ -21,6 +22,10 @@ replace repository issue numbers or QA triage authority.
 - An idle opportunity derives one `AttentionItem`: either an ephemeral queued
   message or a persistent task reminder. Their lifecycle storage remains
   separate; only a small scheduler cursor records which lane is next.
+- The opportunity source is one canonical ephemeral master-roster state, not
+  raw Herdr output, a heartbeat-only transition, or `RuntimeHealth`. Herdr and
+  authenticated hook/heartbeat updates share accepted-mutation ordering;
+  source and timestamps are metadata only.
 - A material objective change is never an in-place edit. It closes the old task
   as `Aborted(Superseded)` and creates a linked, distinct successor `TaskId`.
 
@@ -39,7 +44,7 @@ replace repository issue numbers or QA triage authority.
 | `AZ-DES-001` | AZ.1 uses dual-key internal/graft wire DTOs, a deserialization alias, reader-first 1.5.14/1.5.15 skew tests, and an ADR-054 amendment. |
 | `AZ-DES-002` | AZ.3 D5 and its path list own `crates/atm-core/src/send/mod.rs` assignment dispatch/queue suppression. |
 | `AZ-DES-003` | Canonical terminal handoff is same-host only; cross-host rejects before mutation. |
-| `AZ-DES-004` | The phase governed-interface matrix specifies HTTP 1.4.0 and storage 2.0.0/2.1.0 records, migrations, compatibility tests, and Rand's approved `1.6.x` bridge window. |
+| `AZ-DES-004` | The phase governed-interface matrix specifies HTTP 1.5.0 and storage 2.0.0/2.1.0 records, migrations, compatibility tests, and Rand's approved `1.6.x` bridge window. |
 | `AZ-DES-005` | Typed legacy completion preserves assigner/assignee and Assigned/Active behavior without widening canonical completion. |
 | `AZ-DES-006` | AZ.2 retains ack activation; AZ.3 lands the mail-only ack switch atomically with explicit start. |
 | `AZ-DES-007` | All sprint validations run the line-count gate and AZ.2/AZ.3/AZ.4 authorize split modules. |

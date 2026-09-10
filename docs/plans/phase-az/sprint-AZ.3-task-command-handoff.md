@@ -269,11 +269,11 @@ acknowledgement, or clear protection.
 
 AZ.3's additive task routes, request variants, and optional response fields are
 an ADR-061 minor change. In the same implementation change,
-`HTTP_API_VERSION` moves from `1.3.0` to `1.4.0`; both maintained OpenAPI files,
+`HTTP_API_VERSION` moves from `1.4.0` to `1.5.0`; both maintained OpenAPI files,
 the CLI surface baseline, HTTP/peer ICD, and ADR-061 D5 version record are
-updated. A retained 1.3.0 client/daemon fixture proves the older consumer still
+updated. A retained 1.4.0 client/daemon fixture proves the older consumer still
 uses every pre-AZ route and ignores additive task response fields. New task
-requests sent to a 1.3.0 daemon fail with the existing typed unsupported-route/
+requests sent to a 1.4.0 daemon fail with the existing typed unsupported-route/
 version response before mutation. Herdr IPC and SQLite versions do not change
 in this sprint.
 
@@ -290,8 +290,8 @@ completion is insufficient.
 - [ ] D2 — Add canonical HTTP request/response routing and replacement-runtime
   composition for task queries and mutations. Update the API schema/ICD and
   client mapping; preserve structured errors, deadlines, and retry operation
-  ids. Bump `HTTP_API_VERSION` to 1.4.0, update both OpenAPI documents and the
-  surface baseline, append the ADR-061 D5 record, and prove a 1.3.0 consumer's
+  ids. Bump `HTTP_API_VERSION` to 1.5.0, update both OpenAPI documents and the
+  surface baseline, append the ADR-061 D5 record, and prove a 1.4.0 consumer's
   pre-AZ surface remains compatible.
 - [ ] D3 — Implement the complete clap surface, human tables, JSON responses,
   command-specific validation, help text, and installed user documentation.
@@ -454,8 +454,8 @@ This is the sole authoritative acceptance list for AZ.3.
 8. CLI, core, API, crate, boundary, protocol, error, help, and user documents
    describe the same grammar, auth matrix, output, transition, and migration
    contract.
-9. The HTTP API reports 1.4.0; both OpenAPI files, surface baseline, and ADR-061
-   D5 record agree, and a retained 1.3.0 consumer passes its old-route
+9. The HTTP API reports 1.5.0; both OpenAPI files, surface baseline, and ADR-061
+   D5 record agree, and a retained 1.4.0 consumer passes its old-route
    compatibility suite.
 
 ## Required validation

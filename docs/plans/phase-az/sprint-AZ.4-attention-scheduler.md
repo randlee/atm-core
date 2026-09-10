@@ -14,6 +14,10 @@ dependency_relations:
     dependent: AZ.4
     relation: must_follow
     rationale: The scheduler consumes AZ.3's public lifecycle behavior and AZ.2's attempt-aware query/invalidation contracts; merge AZ.3 forward before every AZ.4 round and merge its PR first.
+  - prerequisite: issue #1378 canonical agent-state fix on develop
+    dependent: AZ.4
+    relation: must_follow
+    rationale: The scheduler consumes the one ephemeral master-roster state and revision-checked idle-opportunity seam; merge the fix forward before AZ.4 implementation and every later round.
 ---
 
 # AZ.4 — Fair idle attention scheduler
@@ -26,9 +30,46 @@ preserves separate message and task lifecycle storage, alternates fairly when
 both lanes remain due, and repeats task reminders only while the selected
 assignment attempt remains open and unblocked.
 
+Issue #1378 is a prerequisite: Herdr poll and authenticated heartbeat POST
+observations must already converge on the one ephemeral master-roster member
+state. This sprint consumes that owner and must not retain raw poll results or
+`RuntimeHealth` as an eligibility authority.
+
 This sprint closes the runtime behavior at production quality. It does not
 change the AZ.1 metadata boundary or the AZ.2/AZ.3 task transition and command
 contracts.
+
+## Canonical idle-opportunity source
+
+The write-through RAM master roster owns one `RuntimeMemberState` per durable
+member plus `RosterStateRevision`, typed observation availability,
+`last_observation_attempt_at`, `last_observed_at`, `state_changed_at`, and source
+metadata. Source and availability metadata never form a second state.
+
+- a successful Herdr list poll updates every covered roster member: working →
+  `Active`, idle/done → `Idle`, blocked → `Blocked`, and unknown/absent →
+  `Unknown`;
+- an authenticated local heartbeat POST, including hook-originated activity,
+  updates the same record: active → `Active`, idle → `Idle`, and stop →
+  `Offline`;
+- failed/incomplete polls preserve state/revision, mark observation unavailable,
+  and publish no opportunity;
+- every accepted state observation advances the revision, including same-state
+  evidence; `state_changed_at` advances only on an actual edge;
+- each accepted `Idle` revision mints one opaque `IdleOpportunityId` paired
+  with `(MemberKey, RosterStateRevision)`. Retries reuse that id; a later idle
+  observation receives a new id.
+
+The state mutation owner publishes the opportunity after committing the RAM
+record. It never reads pending messages or tasks and never emits a prompt.
+Delivery-channel policy is evaluated downstream; an idle observation from
+either accepted source may reach the same scheduler, but a member without an
+eligible push channel emits nothing. A scoped Herdr result is one batch roster
+mutation, not one whole-roster clone per member.
+This dynamic externally observed lifecycle remains an enum/revision state
+machine; typestate is intentionally not used because roster members are
+heterogeneous runtime records whose state changes arrive concurrently from two
+authenticated sources.
 
 ## Derived attention model
 
@@ -56,6 +97,12 @@ pub struct AttentionCandidates {
     pub task: Option<PersistentTaskCandidate>,
 }
 
+pub struct IdleOpportunity {
+    pub id: IdleOpportunityId,
+    pub member: MemberKey,
+    pub roster_state_revision: RosterStateRevision,
+}
+
 pub fn select_attention_item(
     next_lane: AttentionLane,
     candidates: AttentionCandidates,
@@ -74,7 +121,8 @@ Projection later reloads the AZ.1 persisted title by
 
 ## Eligibility, ordering, and fairness
 
-For one idle agent:
+For one agent whose canonical master-roster record is `Idle` at the opportunity
+revision:
 
 1. The ephemeral candidate is the first eligible pending queue message in
    `message_id`/ULID FIFO order. If it became read and acknowledged before the
@@ -102,17 +150,24 @@ ephemeral lane.
 Assignment admission never puts task mail on the ordinary message-key pending
 queue and never emits an immediate post-send task nudge. This selector is the
 only path that may choose a task reminder, after confirming that the assignment
-attempt is the assignee's top runnable task and that the assignee is idle.
+attempt is the assignee's top runnable task and that the assignee's canonical
+roster record is `Idle`. Raw Herdr list output, heartbeat request fields, and
+`RuntimeHealth` snapshots are forbidden selector inputs.
 
 ## Runtime flow
 
 ```text
-idle/done heartbeat
+successful Herdr poll or authenticated heartbeat POST
+  -> atomically update the member's canonical ephemeral roster state/revision
+  -> if the committed state is Idle, publish one IdleOpportunityId + revision
+  -> shared attention scheduler consumes that opportunity
+  -> apply downstream delivery-channel eligibility
   -> query first ephemeral candidate and top persistent candidate independently
   -> pure select_attention_item(cursor, candidates)
   -> reserve that one item under one IdleOpportunityId
   -> atomically claim only the selected lane
-  -> revalidate idle state and candidate eligibility
+  -> re-read the master roster and require Idle at the same revision
+  -> revalidate candidate eligibility
   -> project one AZ.1 bounded nudge and emit
   -> finalize the owning lane and reservation
 ```
@@ -126,6 +181,14 @@ and item. This is an at-most-one-*item* contract, not an impossible claim that a
 process crash can make an external prompt sink exactly-once. The global prompt
 budget still bounds a pump tick, but it no longer permits two different items
 for one member/opportunity.
+
+If the roster member disappears, changes away from `Idle`, or advances beyond
+the opportunity revision before emission, the reservation finalizes `Stale`
+without a prompt. A failed Herdr refresh does not advance the state revision
+and therefore cannot create an opportunity; it marks observation unavailable.
+Runtime-health and CLI
+projection lag never affects selection because selection and revalidation read
+the master-roster owner directly.
 
 An ephemeral item is consumed after its one accepted nudge. A transient failure
 before accepted emission follows the shared
@@ -159,6 +222,7 @@ pub struct AttentionCursor {
 
 pub struct AttentionReservation {
     pub opportunity_id: IdleOpportunityId,
+    pub roster_state_revision: RosterStateRevision,
     pub item: AttentionItem,
     pub status: AttentionReservationStatus,
 }
@@ -238,8 +302,8 @@ at a production-ready level; a pure selector without real pump integration, or
 runtime wiring without durable fairness, is insufficient.
 
 - [ ] D1 — Add the pure `AttentionLane`, `AttentionItem`, candidate,
-  selection, and opportunity-id contracts with exhaustive eligibility/order/
-  alternation tests and no body-capable fields.
+  selection, and opportunity contracts with typed `RosterStateRevision`,
+  exhaustive eligibility/order/alternation tests, and no body-capable fields.
 - [ ] D2 — Add the storage-neutral sync/async schedule boundaries, private
   SQLite cursor/reservation tables, idempotent opportunity reservation/
   finalization, and bounded top-runnable task query. Bump
@@ -248,9 +312,14 @@ runtime wiring without durable fairness, is insufficient.
   `shared_db::ensure_schema`; update matching boundary/schema/ADR-061 records,
   prove fresh/upgraded schema convergence, and rerun the older-consumer
   compatibility fixture.
-- [ ] D3 — Refactor `HerdrQueueWakePump` so each idle member/opportunity invokes
-  the one selector, claims/revalidates exactly the selected lane, and emits no
-  more than one prompt. Preserve global prompt budget, shutdown, breaker,
+- [ ] D3 — Refactor `HerdrQueueWakePump` and heartbeat idle publication so each
+  accepted idle member/opportunity invokes the one shared selector after state
+  has been committed to the canonical ephemeral master-roster record. Claims
+  must apply downstream delivery-channel policy and revalidate exactly the
+  selected lane and the same roster state/revision, emitting no more than one
+  prompt.
+  Remove any scheduler read of raw Herdr snapshots or a `RuntimeHealth` member
+  map. Preserve global prompt budget, shutdown, breaker,
   delivery-channel, and shared `MAX_NUDGE_ATTEMPTS` retry behavior. Split the
   selector/reservation orchestration into
   `crates/atm-http-runtime/src/herdr_attention_scheduler.rs` before the existing
@@ -266,15 +335,20 @@ runtime wiring without durable fairness, is insufficient.
   machine-readable boundaries, and operator docs for
   `AttentionItem`, separate lanes, durable fairness, one-item opportunities,
   cadence, retry terminalization, task-scoped escalation counting, queue-cleanup
-  interaction, lifecycle-blocked versus runtime-blocked vocabulary, and the
-  replacement of stale "after draining mail"/"Task body" requirements. Recheck
+  interaction, lifecycle-blocked versus runtime-blocked vocabulary, canonical
+  roster-state ownership, observation-to-opportunity publication,
+  stale-revision suppression, and the replacement of stale "after draining
+  mail"/"Task body" requirements. Recheck
   ADR-036's capability inventory and matching boundary TOMLs, removing any
   remaining `OutboundMessageQuery` entry deleted by Phase AM.
 - [ ] D6 — Add real composed-runtime tests covering FIFO, persistent ordering,
   alternating dual-lane opportunities, single-lane progress, restart cursor
   persistence, concurrent opportunity idempotency, read/ack suppression,
-  close/block/reassign races, transient emit failures, shutdown, breaker, and
-  absence of body sentinels in emitted prompts. Extend the ADR-054 frozen
+  Herdr/heartbeat convergence on one roster record, same-state idle revisions,
+  failed-poll preservation, stale-state/revision suppression, absence of a
+  second member map, close/block/reassign races, transient emit failures,
+  shutdown, breaker, and absence of body sentinels in emitted prompts. Extend
+  the ADR-054 frozen
   nudge-identifier inventory only for identifiers actually introduced; never
   bulk-regenerate the allowlist.
 
@@ -329,6 +403,13 @@ docs/plans/phase-az/issues.md
 docs/project-plan.md
 ```
 
+Issue #1378 changes to `RosterRuntimeMirror`, its concrete RAM mirror, and
+`RuntimeHealth` are prerequisite inputs and should already be present through
+the merged `develop` parent. AZ.4 owns the opportunity publisher/subscriber and
+may adjust those public composition seams only as needed to mint and revalidate
+`IdleOpportunity` from the canonical roster state/revision; it must not restore
+duplicate member-state ownership.
+
 ### Paths to delete
 
 None. The existing pump methods may be collapsed or renamed in place, but no
@@ -355,7 +436,8 @@ This is the sole authoritative acceptance list for AZ.4.
 2. For each idle opportunity, composed-runtime tests observe zero or one
    selected item, never one from each lane. Same-opportunity replay and
    concurrent attempts return the same reservation; sink retry cannot change
-   its item identity.
+   its item identity. The opportunity originates only from a committed
+   canonical `Idle` roster-state revision.
 3. With both lanes continuously due, observed sequence is ephemeral, task,
    ephemeral, task across ticks and process restart. With one lane empty, the
    other progresses without artificial delay.
@@ -374,14 +456,19 @@ This is the sole authoritative acceptance list for AZ.4.
    eligibility or emitting a second item. Both lanes use the one
    `MAX_NUDGE_ATTEMPTS = 5`; `PermanentlyFailed` occurs on the fifth failed
    reservation delivery and never closes its message/task.
-8. Emitted prompts satisfy AZ.1's bounded title contract; unique message/task
+8. Herdr poll and authenticated heartbeat POST update the same master-roster
+   member record. Successful covered unknown/absent observations become
+   `Unknown`; failed polls preserve state and create no opportunity. A changed
+   or missing member and a newer revision suppress stale emission, and neither
+   `RuntimeHealth` nor raw poll output is an eligibility authority.
+9. Emitted prompts satisfy AZ.1's bounded title contract; unique message/task
    body sentinels never appear. No legacy daemon code or direct SQLite access is
    introduced.
-9. Requirements, architecture, ADR, crate docs, user docs, Rust contracts, and
+10. Requirements, architecture, ADR, crate docs, user docs, Rust contracts, and
    boundary TOMLs describe the same one-item, fair, persistent scheduler;
    ADR-036 and matching boundary TOMLs contain no stale
    `OutboundMessageQuery` entry.
-10. `STORAGE_SCHEMA_VERSION` is 2.1.0; fresh and 2.0-upgraded schemas are
+11. `STORAGE_SCHEMA_VERSION` is 2.1.0; fresh and 2.0-upgraded schemas are
     byte-equivalent, the prior consumer ignores the additive tables, and the
     ADR-061 version record agrees.
 
@@ -414,6 +501,9 @@ runtime composition, and temporary databases only.
   scheduler rows.
 - AZ.4 does not modify the legacy synchronous daemon, run a live/test daemon, or
   perform a tag, release, package publish, or installation.
-- AZ.4 changes only the Herdr idle attention pump. The bare-CLI pull contract
-  remains ADR-054's existing behavior: each pull drains all steer items and at
-  most one oldest queue item; this sprint makes no universal scheduler claim.
+- AZ.4 changes only the replacement runtime's push-capable idle-attention path.
+  Both Herdr and authenticated heartbeat/hook observations feed it through the
+  canonical roster state, with delivery-channel filtering downstream. The
+  bare-CLI pull contract remains ADR-054's existing behavior: each pull drains
+  all steer items and at most one oldest queue item; this sprint makes no
+  universal scheduler claim.

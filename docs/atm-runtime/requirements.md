@@ -18,6 +18,9 @@ live in `atm-daemon`.
   - `StorageBackends<M, R>` over the shared `atm-storage` message/roster traits
   - legacy compile-bridge `MailStore`
   - legacy compile-bridge `RosterStore`
+  - the paired write-through `RosterStore`/`RosterRuntimeMirror` handles over
+    one RAM master-roster record; durable roster fields hydrate from SQLite,
+    while live state/freshness/revision fields remain ephemeral only
 - `atm-runtime` must expose storage-neutral runtime inputs to callers through
   the `atm-core` trait surfaces frozen by `Phase AA`.
 - `atm-runtime` must own the concrete `ConfigDoctor` implementation used by

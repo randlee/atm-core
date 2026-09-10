@@ -1100,10 +1100,13 @@ complete. Phase AJ is not closed: a final holistic QA gate finding (a
 transport-trust-boundary gap in heartbeat ingress) must be remediated and
 reverified before its final status changes.
 
-AJ keeps roster runtime observation in daemon memory: successful
-environment-attested CLI/graft activity and heartbeat converge on one current
-entry. Session, pid, and state are diagnostic telemetry, not inputs to routing,
-nudge, retry, admission, delivery, notification, or policy.
+AJ established in-memory roster observation: successful environment-attested
+CLI/graft activity and heartbeat converge on one current entry. Issue #1378
+later corrects the replacement-runtime owner so successful Herdr polls converge
+on that same ephemeral master-roster member record and `RuntimeHealth` becomes a
+projection only. Session, pid, source, and timestamp metadata remain
+non-policy inputs; Phase AZ explicitly permits only canonical `Idle` state
+revisions to publish attention opportunities.
 
 | Sprint | Status | Branch | Purpose |
 | --- | --- | --- | --- |
@@ -1744,6 +1747,12 @@ selector over independent ephemeral-message and persistent-task lanes.
 `Blocked -> Assigned` is explicit and never auto-starts. Existing tasks migrate
 at normal priority; one current assignee per task and one active task per
 `(team, agent)` are transactionally enforced.
+
+Issue #1378 is a pre-AZ.4 prerequisite. It makes the RAM master roster the sole
+ephemeral agent-state owner, routes both Herdr polls and authenticated
+heartbeat/hook POSTs through it, and leaves `RuntimeHealth` projection-only.
+Each accepted canonical idle revision may publish one opportunity to AZ.4;
+delivery-channel filtering remains downstream and bare-CLI pull is unchanged.
 
 The governed-interface sequence is HTTP API 1.3.0 → 1.4.0 in AZ.3 and SQLite
 schema 2.0.0 (major task migration) → 2.1.0 (additive attention tables) in
