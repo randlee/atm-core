@@ -215,3 +215,10 @@ Initial use cases:
 - output-format decisions
 - observability bootstrap wiring
 - command-dispatch structure
+
+## 5. Phase AZ nudge rendering
+
+Built-in nudge templates receive `title`, not message text. Existing template
+overrides may use the deprecated `description` placeholder, which resolves to
+the same title during the compatibility window. A task reminder identifies its
+assignment message and task id; it does not render a task-row body.

@@ -445,3 +445,11 @@ only Herdr queue/drain mechanism: it polls the Herdr roster and prompts from
 the durable ATM pending-marker store. A prompt being accepted does not mean
 that the message was read. Only `atm read`, which clears the pending marker,
 means read; the durable ATM mailbox remains the source of truth.
+
+## Addendum (2026-09-09): bounded nudge payload compatibility
+
+Both `steer` and `queue` mechanisms carry the same bounded metadata contract:
+message id, summary-backed title, and optional task id. Compatibility writers
+emit canonical `title` plus deprecated same-value `description`; readers accept
+either or both. This does not add a message-body delivery path: immutable
+message content and task descriptions remain available only through `atm read`.

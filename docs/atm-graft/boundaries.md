@@ -83,3 +83,8 @@ Rules:
 - registry leases carry the receiver generation needed to make lifecycle
   updates owner-checked; they remain one receiver endpoint per current
   `(root, team, agent)`, not a multi-chat session registry
+
+Phase AZ narrows this boundary's event content to message id, title, optional
+task id, and routing metadata. Graft accepts legacy `description` on read and
+emits it only as a same-value compatibility alias beside canonical `title`;
+neither key may carry durable body text.

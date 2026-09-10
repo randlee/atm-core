@@ -32,7 +32,7 @@ forbidden = ["NotificationSink::deliver", "DeliveryPlan", "ReplyDeliveryPlan", "
 request_types = ["PostSendHookEvent"]
 response_types = ["typed receiver-hook emission success"]
 error_types = ["AtmError"]
-notes = ["receive-path callers retain errors as warnings after persistence; hook failure never redefines receive success"]
+notes = ["receive-path callers retain errors as warnings after persistence; hook failure never redefines receive success", "Phase AZ: PostSendHookEvent is a bounded projection of message id, summary-backed title, optional task id, and routing metadata. Immutable message text, rendered templates, and TaskRow.description are forbidden."]
 
 [testing]
 allowed_test_double_paths = [

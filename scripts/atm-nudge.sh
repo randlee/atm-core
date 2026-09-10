@@ -30,7 +30,7 @@ pane = payload.get("recipient_pane_id") or ""
 from_value = payload.get("from") or ""
 message_id = payload.get("message_id") or ""
 task_id = payload.get("task_id") or ""
-description = payload.get("description") or payload.get("summary") or ""
+title = payload.get("title") or ""
 requires_ack = payload.get("requires_ack") is True
 is_ack = payload.get("is_ack") is True
 
@@ -52,9 +52,9 @@ else:
     if requires_ack:
         parts.append("<action>ack the message</action>")
     if task_id:
-        parts.append(f'<task id="{task_id}">{description}</task>')
+        parts.append(f'<task id="{task_id}">{title}</task>')
     else:
-        parts.append(f"<description>{description}</description>")
+        parts.append(f"<description>{title}</description>")
     parts.extend(
         [
             "<action>execute the assigned task</action>",

@@ -21,7 +21,7 @@ use ulid::Ulid;
 use crate::api::RequestDeadline;
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, NudgeKind, PostSendBuiltInTarget,
-    PostSendEmissionPath, PostSendHookEvent,
+    PostSendEmissionPath, PostSendHookEvent, PostSendHookEventWire,
 };
 use crate::error::{AtmError, AtmErrorCode};
 use crate::list::{ListOutcome, ListQuery};
@@ -37,7 +37,7 @@ pub const MAX_GRAFT_POST_SEND_FRAME_BYTES: usize = 1024 * 1024;
 /// Interval between non-blocking accept polls in the receiver loop.
 pub const GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct GraftPostSendRequest {
     pub event: PostSendHookEvent,
     /// The ATM nudge taxonomy kind carried over the graft channel. Missing
@@ -48,6 +48,21 @@ pub struct GraftPostSendRequest {
     /// Canonical database-resolved `<atm …>` nudge text. The receiver must
     /// inject this text, never substitute the stored message description.
     pub rendered_nudge: String,
+}
+
+impl Serialize for GraftPostSendRequest {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut state = serializer.serialize_struct("GraftPostSendRequest", 3)?;
+        state.serialize_field("event", &PostSendHookEventWire::new(&self.event))?;
+        state.serialize_field("kind", &self.kind)?;
+        state.serialize_field("rendered_nudge", &self.rendered_nudge)?;
+        state.end()
+    }
 }
 
 const fn default_graft_kind() -> NudgeKind {
@@ -776,16 +791,24 @@ mod tests {
     #[test]
     fn pre_aq2_wire_request_defaults_to_steer_kind() {
         let event = test_event();
+        let mut legacy_event = serde_json::to_value(event).expect("serialize legacy event");
+        let title = legacy_event["title"].as_str().expect("title").to_owned();
+        legacy_event
+            .as_object_mut()
+            .expect("event object")
+            .remove("title");
+        legacy_event["description"] = serde_json::Value::String(title.clone());
         let old_wire = serde_json::json!({
             "capability_base64url": "capability",
             "request": {
-                "event": event,
+                "event": legacy_event,
                 "rendered_nudge": "<atm>legacy</atm>"
             }
         });
         let decoded: GraftPostSendWireRequest =
             serde_json::from_value(old_wire).expect("old wire shape remains readable");
         assert_eq!(decoded.request.kind, NudgeKind::Steer);
+        assert_eq!(decoded.request.event.title, title);
     }
 
     #[test]
@@ -1142,6 +1165,11 @@ mod tests {
         let mut keys = object.keys().map(String::as_str).collect::<Vec<_>>();
         keys.sort_unstable();
         assert_eq!(keys, vec!["event", "kind", "rendered_nudge"]);
+        assert_eq!(serialized["event"]["title"], "loopback graft transport");
+        assert_eq!(
+            serialized["event"]["description"],
+            "loopback graft transport"
+        );
         assert!(!serialized.to_string().contains("full immutable body"));
     }
 

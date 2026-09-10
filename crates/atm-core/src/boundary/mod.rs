@@ -104,7 +104,7 @@ pub trait StatusSource: sealed::Sealed {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError>;
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
 pub struct PostSendHookEvent {
     pub sender: AgentName,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -120,13 +120,100 @@ pub struct PostSendHookEvent {
     pub recipient_team: TeamName,
     pub message_id: AtmMessageId,
     /// Persisted `MessageEnvelope.summary`, normalized so blank metadata is empty.
-    /// Older payloads may deserialize through the title-only compatibility alias.
-    #[serde(rename = "title", alias = "description")]
+    /// Readers accept the legacy `description` wire key during the Phase AZ
+    /// transition; the canonical in-memory field remains title-only.
     pub title: String,
     pub requires_ack: bool,
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
     pub recipient_pane_id: Option<PaneId>,
+}
+
+#[derive(serde::Deserialize)]
+struct PostSendHookEventWireInput {
+    sender: AgentName,
+    #[serde(default)]
+    sender_chat_id: Option<ChatId>,
+    sender_team: TeamName,
+    #[serde(default)]
+    sender_host: Option<HostName>,
+    recipient: AgentName,
+    recipient_team: TeamName,
+    message_id: AtmMessageId,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    requires_ack: bool,
+    is_ack: bool,
+    task_id: Option<TaskId>,
+    recipient_pane_id: Option<PaneId>,
+}
+
+impl<'de> serde::Deserialize<'de> for PostSendHookEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let input = PostSendHookEventWireInput::deserialize(deserializer)?;
+        Ok(Self {
+            sender: input.sender,
+            sender_chat_id: input.sender_chat_id,
+            sender_team: input.sender_team,
+            sender_host: input.sender_host,
+            recipient: input.recipient,
+            recipient_team: input.recipient_team,
+            message_id: input.message_id,
+            title: input.title.or(input.description).unwrap_or_default(),
+            requires_ack: input.requires_ack,
+            is_ack: input.is_ack,
+            task_id: input.task_id,
+            recipient_pane_id: input.recipient_pane_id,
+        })
+    }
+}
+
+/// Compatibility projection for post-send wire payloads.
+///
+/// `title` is canonical. `description` is emitted only as an additive wire
+/// alias for receivers which have not yet adopted the Phase AZ title field;
+/// both values are the same bounded metadata and never message text.
+#[derive(serde::Serialize)]
+pub struct PostSendHookEventWire<'a> {
+    #[serde(flatten)]
+    event: &'a PostSendHookEvent,
+    description: &'a str,
+}
+
+impl<'a> PostSendHookEventWire<'a> {
+    #[must_use]
+    pub fn new(event: &'a PostSendHookEvent) -> Self {
+        Self {
+            event,
+            description: &event.title,
+        }
+    }
+}
+
+/// `ATM_POST_SEND` compatibility payload for external post-send hooks.
+///
+/// Hook consumers should read `title`. `description` remains present only for
+/// the documented migration window and is always byte-identical to `title`.
+#[derive(serde::Serialize)]
+pub struct ExternalPostSendHookPayload<'a> {
+    #[serde(flatten)]
+    event: &'a PostSendHookEvent,
+    description: &'a str,
+}
+
+impl<'a> ExternalPostSendHookPayload<'a> {
+    #[must_use]
+    pub fn new(event: &'a PostSendHookEvent) -> Self {
+        Self {
+            event,
+            description: &event.title,
+        }
+    }
 }
 
 /// Normalizes persisted summary metadata for a bounded nudge title.
@@ -187,11 +274,26 @@ pub enum BuiltInNudgeSinkTarget {
     Graft,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Deserialize, PartialEq, Eq)]
 pub struct InternalNudgeEnvelope {
     pub event: PostSendHookEvent,
     pub sink_target: BuiltInNudgeSinkTarget,
     pub template: ResolvedBuiltInNudgeTemplate,
+}
+
+impl serde::Serialize for InternalNudgeEnvelope {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut state = serializer.serialize_struct("InternalNudgeEnvelope", 3)?;
+        state.serialize_field("event", &PostSendHookEventWire::new(&self.event))?;
+        state.serialize_field("sink_target", &self.sink_target)?;
+        state.serialize_field("template", &self.template)?;
+        state.end()
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]

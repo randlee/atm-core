@@ -469,3 +469,10 @@ The `atm-herdr` crate docs must remain aligned with:
 - `HR-VER-001`
   - the pin table in `ADR-058` and this crate's fixture-derived tests
     name the same `0.8.2` / protocol `20` pair
+
+## Phase AZ bounded prompt input
+
+Herdr prompt input remains caller-rendered built-in nudge text, but that text
+may contain only message id, summary-backed title, optional task id, and
+remediation metadata. It must not contain immutable message bodies, rendered
+J2 bodies, or task-row descriptions; `atm read` remains the body boundary.

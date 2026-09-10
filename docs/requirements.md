@@ -5050,3 +5050,13 @@ writer admission and acknowledgements apply task transitions.
     state fields in the same record
   - any scoped exclusions for the semantic-literal gate must stay narrow and
     explicit; they must not exempt ordinary production code wholesale
+
+## Phase AZ nudge-metadata contract
+
+All post-send and queued/reminder nudges are bounded metadata projections:
+`message_id`, `title` (the persisted message summary, or empty when absent),
+and `task_id` when present. They must never contain immutable message text,
+rendered template text, or `TaskRow.description`; only `atm read` crosses the
+message-body boundary. Writers emit canonical `title` and the additive legacy
+`description` alias with the identical title value until the compatibility
+window closes.

@@ -172,3 +172,8 @@ depends on `atm-core`, which is most of the workspace), and `atm-herdr`
 must not reach sideways into its own consumers (`atm-daemon-bootstrap`,
 `atm-http-runtime`), which would create a dependency cycle the composition
 root in §9 of `architecture.md` relies on not existing.
+
+Phase AZ additionally forbids message-body and task-description content from
+the adapter's rendered nudge input. Its accepted input is the upstream bounded
+projection of message id, summary-backed title, optional task id, and
+remediation text; the adapter must not expand that projection.

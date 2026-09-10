@@ -33,7 +33,7 @@ forbidden = ["DaemonPostSendHookEmitter", "GraftPostSendPort"]
 request_types = ["BuiltInPostSendDispatch"]
 response_types = ["PostSendEmissionPath"]
 error_types = ["AtmError"]
-notes = ["An injected hook error is returned to the receive path, which reports it as a warning after durable persistence."]
+notes = ["An injected hook error is returned to the receive path, which reports it as a warning after durable persistence.", "Phase AZ: Graft receives title-only nudge metadata and may deserialize legacy description only as an equal-value compatibility alias; it must not receive durable message or task-description content."]
 
 [testing]
 allowed_test_double_paths = []

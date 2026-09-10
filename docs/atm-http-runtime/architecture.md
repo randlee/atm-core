@@ -51,3 +51,10 @@ diagnostic timeline (`DiagnosticTimelineStore`):
   non-cancellable `spawn_blocking` query is still running), plus an overall
   `query_deadline` covering the whole request. Saturation and deadline
   timeouts both return `503 Service Unavailable`.
+
+## Phase AZ received-hook projection
+
+The Tokio runtime forwards the core-built bounded event without reopening or
+rendering durable message text. It preserves the metadata-only `title` and
+optional `task_id` through Tmux, Herdr, Graft, and queued dispatch selection;
+message text is read later through the normal mailbox API.

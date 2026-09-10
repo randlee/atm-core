@@ -307,12 +307,12 @@ class TestBuildMessage(unittest.TestCase):
         self.assertIn('message-id="01JSENDTEST0000000000000000"', message)
         self.assertIn("execute the assigned task", message)
 
-    def test_send_message_includes_description_when_present(self):
+    def test_send_message_includes_title_when_present(self):
         message = _MOD.build_message(
             TEST_TEAM,
             {
                 "message_id": "01JSENDTEST0000000000000000",
-                "summary": "review failing smoke lane",
+                "title": "review failing smoke lane",
             },
         )
         self.assertIn('message-id="01JSENDTEST0000000000000000"', message)
@@ -327,17 +327,31 @@ class TestBuildMessage(unittest.TestCase):
         self.assertIn('message-id="01JREQACK00000000000000000"', message)
         self.assertIn("execute the assigned task", message)
 
-    def test_task_message_uses_task_element(self):
+    def test_task_message_uses_task_element_with_title_only(self):
         message = _MOD.build_message(
             TEST_TEAM,
             {
                 "message_id": "01JTASKTEST0000000000000000",
                 "task_id": "AD.22",
-                "description": "finish cleanup",
+                "title": "finish cleanup",
             },
         )
         self.assertIn('<task id="AD.22">finish cleanup</task>', message)
         self.assertNotIn("<description>", message)
+
+    def test_message_never_uses_legacy_description_or_summary_as_title(self):
+        secret = "PRIVATE-BODY-SENTINEL"
+        message = _MOD.build_message(
+            TEST_TEAM,
+            {
+                "message_id": "01JTASKTEST0000000000000000",
+                "task_id": "AD.22",
+                "description": secret,
+                "summary": secret,
+            },
+        )
+        self.assertNotIn(secret, message)
+        self.assertIn('<task id="AD.22"></task>', message)
 
     def test_ack_message_uses_compact_ack_shape(self):
         message = _MOD.build_message(

@@ -4018,8 +4018,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn templated_send_over_loopback_tcp_uses_decomposed_admission_once() {
-        let body = "template body";
+    async fn templated_send_over_loopback_tcp_projects_explicit_title_without_rendered_body() {
+        let body = "PRIVATE-ADMITTED-J2-BODY-SENTINEL";
+        let title = "verify release handoff";
         let fixture = fixture_with_selector_and_template(
             true,
             None,
@@ -4031,14 +4032,16 @@ mod tests {
                 })
             },
         );
-        let write = template_write_request(&fixture, body);
+        let mut write = template_write_request(&fixture, body);
+        write.summary_override = Some(title.to_owned());
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = to_bytes(response.into_body(), usize::MAX)
+        let response_body = to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("response body");
-        let response: serde_json::Value = serde_json::from_slice(&body).expect("response JSON");
+        let response: serde_json::Value =
+            serde_json::from_slice(&response_body).expect("response JSON");
         let message_id = response["message_id"].as_str().expect("message id");
         let snapshot = inspect_template_admission_for_test(
             &fixture.database_path,
@@ -4061,6 +4064,20 @@ mod tests {
             stored.message_text, None,
             "decomposed row never retains rendered plain body"
         );
+        let dispatches = fixture
+            .received_hook
+            .dispatches
+            .lock()
+            .expect("inspect template nudge dispatches");
+        assert_eq!(dispatches.len(), 1);
+        assert_eq!(dispatches[0].event.message_id.to_string(), message_id);
+        assert_eq!(dispatches[0].event.title, title);
+        assert!(!format!("{:?}", dispatches[0]).contains(body));
+        let PostSendBuiltInTarget::Graft(target) = &dispatches[0].target else {
+            panic!("template fixture uses graft delivery");
+        };
+        assert!(target.rendered_nudge.contains(title));
+        assert!(!target.rendered_nudge.contains(body));
     }
 
     #[tokio::test]

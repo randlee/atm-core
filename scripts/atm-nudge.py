@@ -246,12 +246,8 @@ def build_message(team: str, payload: dict[str, object] | None = None) -> str:
     message_id = str(payload.get("message_id", "")).strip()
     task_id = str(payload.get("task_id", "")).strip()
     requires_ack = payload.get("requires_ack") is True
-    description = ""
-    for key in ("description", "summary"):
-        value = payload.get(key)
-        if isinstance(value, str) and value.strip():
-            description = value.strip()
-            break
+    title_value = payload.get("title")
+    title = title_value.strip() if isinstance(title_value, str) else ""
     base_attrs: list[str] = []
     if from_value:
         base_attrs.append(f'from="{from_value}"')
@@ -268,11 +264,9 @@ def build_message(team: str, payload: dict[str, object] | None = None) -> str:
     if requires_ack:
         body.append("<action>ack the message</action>")
     if task_id:
-        body.append(f"<task id=\"{task_id}\">{description}</task>")
-    elif description:
-        body.append(f"<description>{description}</description>")
+        body.append(f"<task id=\"{task_id}\">{title}</task>")
     else:
-        body.append("<description></description>")
+        body.append(f"<description>{title}</description>")
     body.extend(
         [
             "<action>execute the assigned task</action>",
