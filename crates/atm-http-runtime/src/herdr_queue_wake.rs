@@ -189,7 +189,36 @@ impl HerdrQueueWakePump {
                 return;
             }
             for handle in handles {
-                let _ = handle.await;
+                match tokio::time::timeout(HERDR_REQUEST_DEADLINE, handle).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(source)) => {
+                        let error = AtmError::new(
+                            AtmErrorCode::InternalError,
+                            "Herdr queue wake claim release task ended unexpectedly",
+                        )
+                        .with_cause(source);
+                        tracing::warn!(
+                            subsystem = "herdr_queue_wake",
+                            action = "queue_claim_release",
+                            outcome = "failed",
+                            error = %error,
+                            "failed to join Herdr queue claim release task during shutdown"
+                        );
+                    }
+                    Err(_) => {
+                        let error = AtmError::new(
+                            AtmErrorCode::WaitTimeout,
+                            "Herdr queue wake claim release exceeded its request deadline",
+                        );
+                        tracing::warn!(
+                            subsystem = "herdr_queue_wake",
+                            action = "queue_claim_release",
+                            outcome = "timed_out",
+                            error = %error,
+                            "timed out joining Herdr queue claim release task during shutdown"
+                        );
+                    }
+                }
             }
         }
     }
