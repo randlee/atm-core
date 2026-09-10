@@ -8,11 +8,11 @@
   a triage:Finding ;
   triage:findingId "AZS4-QA-006" ;
   triage:title "Lead-escalation path is #[cfg(test)]-gated production code with no real caller" ;
-  triage:description "herdr_escalation.rs (LeadNotified variant) and herdr_queue_wake_escalation.rs (maybe_escalate_task + helpers) are entirely #[cfg(test)]-gated (13 occurrences), meaning this lead-escalation path never actually runs in production, only in tests. Confirmed by quality-mgr directly via git show 7f5df3bfd:<path> for both files (pinned commit, not live worktree)." ;
+  triage:description "herdr_escalation.rs (LeadNotified variant) and herdr_queue_wake_escalation.rs (maybe_escalate_task + helpers) are entirely #[cfg(test)]-gated (13 occurrences), meaning this lead-escalation path never actually runs in production, only in tests. Confirmed by quality-mgr directly via git show 7f5df3bfd:<path> for both files (pinned commit, not live worktree). Re-triaged 2026-09-10T15:39:00Z: quality-mgr's formal QA-1 verdict (arch-qa's independent full trace, reported as ARCH-002, 8 call sites all test-only) upgrades this finding from important to blocking. Reassigned from cipher (fix/az4-important-minor-findings) to arch-ctm (feature/az4-attention-scheduler) per three-tier routing -- blocking work is arch-ctm's." ;
   triage:phaseId "phase-az" ;
   triage:triageMode "initial_pass" ;
   triage:category "dead-code" ;
-  triage:severity "important" ;
+  triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_escalation.rs, crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
   triage:status "open" ;
