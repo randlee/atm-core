@@ -1,7 +1,11 @@
 //! Tokio-owned polling pump for deferred Herdr queue nudges.
 
+#[path = "herdr_queue_wake_claim.rs"]
+mod claim;
 #[path = "herdr_queue_wake_reminders.rs"]
 mod reminders;
+#[path = "herdr_queue_wake_support.rs"]
+mod support;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -11,7 +15,10 @@ use std::time::Duration;
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
+    AssignmentAttempt, AsyncMessageReceivedHookEmitter, AttentionItem, AttentionReservation,
+    AttentionReservationStatus, DurableRosterStore, LogicalTaskRow, MemberKey,
+    MessageReceivedHookSelector, NudgeKind, PendingNudgeStore, ReadDeadline, TaskAssignmentAttempt,
+    TaskMutationRequest, TaskOperation, TaskOperationId,
 };
 use atm_core::delivery_channel::{
     DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
@@ -24,14 +31,16 @@ use atm_core::nudge_dispatch::{
 use atm_core::protocol::{
     RosterRuntimeObservationUpdate, RuntimeMemberState, RuntimeObservationSource,
 };
-use atm_core::types::IsoTimestamp;
-use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
+use atm_core::types::{IsoTimestamp, TaskId};
+use atm_herdr::{AgentSnapshot, HerdrProcessAdapter};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 use crate::herdr_breaker_escalation::HerdrBreakerEscalationGate;
 use crate::herdr_escalation::EscalationState;
 use crate::runtime_health::RuntimeHealth;
+use claim::ReleasePendingOnDrop;
+use support::{log_herdr_list_failure, member_order, runtime_state};
 
 /// Poll cadence required by AQ2.7.
 pub const HERDR_POLL_INTERVAL_MS: u64 = 5_000;
@@ -40,7 +49,8 @@ pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 /// Minimum spacing between task reminders for one Herdr assignee.
-pub const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
+#[cfg(test)]
+pub(crate) use super::herdr_attention_scheduler::TASK_REMINDER_INTERVAL_MS;
 pub(crate) const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -62,6 +72,14 @@ pub(crate) struct HerdrQueueWakeStats {
     pub notifications_failed: usize,
     pub task_step_skipped: bool,
     pub last_tick_at: Option<IsoTimestamp>,
+}
+
+struct TaskReminderEmission {
+    member: MemberKey,
+    task_id: TaskId,
+    attempt: AssignmentAttempt,
+    row: LogicalTaskRow,
+    dispatch: atm_core::boundary::BuiltInPostSendDispatch,
 }
 
 #[derive(Clone)]
@@ -595,18 +613,19 @@ impl HerdrQueueWakePump {
                     {
                         continue;
                     }
-                    let dispatch = super::herdr_attention_scheduler::dispatch_reserved_attention(
-                        self,
-                        reservation.clone(),
-                        now,
-                        stats,
-                    )
-                    .await;
-                    match dispatch {
-                        Ok(super::herdr_attention_scheduler::AttentionDispatchDisposition::Finalized(status)) => {
-                            if let Err(error) = super::herdr_attention_scheduler::finalize_attention(
-                                &self.service_runtime, &reservation, status,
-                            ).await {
+                    match self
+                        .dispatch_reserved_attention(&reservation, now, stats)
+                        .await
+                    {
+                        Ok(status) => {
+                            if let Err(error) =
+                                super::herdr_attention_scheduler::finalize_attention(
+                                    &self.service_runtime,
+                                    &reservation,
+                                    status,
+                                )
+                                .await
+                            {
                                 tracing::warn!(
                                     subsystem = "herdr_queue_wake",
                                     action = "finalize_attention",
@@ -653,6 +672,241 @@ impl HerdrQueueWakePump {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .retain(|member, _| members.contains(member));
+    }
+
+    async fn dispatch_reserved_attention(
+        &self,
+        reservation: &AttentionReservation,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+    ) -> Result<AttentionReservationStatus, AtmError> {
+        let member = match &reservation.item {
+            AttentionItem::EphemeralMessage { member, .. }
+            | AttentionItem::PersistentTaskReminder { member, .. } => member,
+        };
+        let roster_is_current = self
+            .service_runtime
+            .roster_ephemeral_state(member.team(), member.agent())
+            .is_some_and(|state| {
+                state.runtime.state == RuntimeMemberState::Idle
+                    && state.runtime.revision == reservation.opportunity.roster_state_revision
+            });
+        if !roster_is_current {
+            return Ok(AttentionReservationStatus::Stale);
+        }
+        match &reservation.item {
+            AttentionItem::EphemeralMessage { member, message_id } => {
+                self.dispatch_ephemeral_attention(member.clone(), *message_id, stats)
+                    .await
+            }
+            AttentionItem::PersistentTaskReminder {
+                member,
+                task_id,
+                attempt,
+                assignment_message_id,
+            } => {
+                self.dispatch_task_reminder_attention(
+                    member,
+                    task_id,
+                    *attempt,
+                    *assignment_message_id,
+                    now,
+                    stats,
+                )
+                .await
+            }
+        }
+    }
+
+    async fn dispatch_ephemeral_attention(
+        &self,
+        member: MemberKey,
+        message_id: atm_core::schema::AtmMessageId,
+        stats: &mut HerdrQueueWakeStats,
+    ) -> Result<AttentionReservationStatus, AtmError> {
+        let pending_store = self.service_runtime.pending_nudge_store()?;
+        let claim_member = member.clone();
+        let claim_store = Arc::clone(&pending_store);
+        let Some(claim) =
+            run_blocking(move || claim_store.claim_pending(&claim_member, &message_id)).await?
+        else {
+            return Ok(AttentionReservationStatus::Stale);
+        };
+        let mut guard =
+            self.queue_claim_guard(Arc::clone(&pending_store), member.clone(), claim.clone());
+        let dispatch = match self.rebuild_dispatch(&member, claim.msg).await {
+            Ok(Some(dispatch)) => dispatch,
+            Ok(None) | Err(_) => {
+                guard.release_without_input().await;
+                stats.released += 1;
+                return Ok(AttentionReservationStatus::Stale);
+            }
+        };
+        let Some(emitter) = self.selector.select_emitter(&dispatch) else {
+            guard.release_without_input().await;
+            stats.released += 1;
+            return Ok(AttentionReservationStatus::Stale);
+        };
+        #[cfg(test)]
+        self.notify_prompt_started_test_gate();
+        match emitter
+            .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
+            .await
+        {
+            Ok(_) => {
+                self.complete_successful_claim(&member, &claim, &mut guard, stats)
+                    .await;
+                Ok(AttentionReservationStatus::Delivered)
+            }
+            Err(error) => {
+                if error.code() == AtmErrorCode::HerdrUnavailable {
+                    stats.breaker_open += 1;
+                }
+                if error.code() == AtmErrorCode::HerdrPromptFailed {
+                    guard.requeue().await;
+                } else {
+                    guard.release_without_input().await;
+                }
+                stats.released += 1;
+                Ok(AttentionReservationStatus::Stale)
+            }
+        }
+    }
+
+    async fn dispatch_task_reminder_attention(
+        &self,
+        member: &MemberKey,
+        task_id: &TaskId,
+        attempt: AssignmentAttempt,
+        assignment_message_id: atm_core::schema::AtmMessageId,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+    ) -> Result<AttentionReservationStatus, AtmError> {
+        let Some((row, assignment)) = self
+            .load_current_task_reminder(member, task_id, attempt, assignment_message_id, now)
+            .await?
+        else {
+            return Ok(AttentionReservationStatus::Stale);
+        };
+        let runtime = self.service_runtime.clone();
+        let dispatch_member = member.clone();
+        let dispatch_task_id = task_id.clone();
+        let dispatch = run_blocking(move || {
+            atm_core::nudge_dispatch::build_logical_task_reminder_dispatch(
+                &runtime,
+                &dispatch_member,
+                &dispatch_task_id,
+                &assignment,
+            )
+        })
+        .await?;
+        let Some(dispatch) = dispatch else {
+            return Ok(AttentionReservationStatus::PermanentlyFailed);
+        };
+        let Some(emitter) = self.selector.select_emitter(&dispatch) else {
+            return Ok(AttentionReservationStatus::Stale);
+        };
+        self.emit_task_reminder(
+            TaskReminderEmission {
+                member: member.clone(),
+                task_id: task_id.clone(),
+                attempt,
+                row,
+                dispatch,
+            },
+            emitter,
+            now,
+            stats,
+        )
+        .await
+    }
+
+    async fn load_current_task_reminder(
+        &self,
+        member: &MemberKey,
+        task_id: &TaskId,
+        attempt: AssignmentAttempt,
+        assignment_message_id: atm_core::schema::AtmMessageId,
+        now: IsoTimestamp,
+    ) -> Result<Option<(LogicalTaskRow, TaskAssignmentAttempt)>, AtmError> {
+        let reader = self.service_runtime.async_task_ledger_reader()?;
+        let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
+        let Some(row) = reader
+            .top_runnable_task(member.team().clone(), member.agent().clone(), deadline)
+            .await
+            .map_err(|error| AtmError::daemon_unavailable(error.to_string()))?
+            .filter(|row| {
+                row.task_id == *task_id
+                    && row.current_attempt == attempt
+                    && row.assignment_message_id == assignment_message_id
+                    && super::herdr_attention_scheduler::task_reminder_due(row, now)
+            })
+        else {
+            return Ok(None);
+        };
+        let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
+        let assignment = reader
+            .list_task_assignment_attempts(member.team().clone(), task_id.clone(), deadline)
+            .await
+            .map_err(|error| AtmError::daemon_unavailable(error.to_string()))?
+            .into_iter()
+            .find(|assignment| {
+                assignment.attempt == attempt
+                    && assignment.assignee == *member.agent()
+                    && assignment.assignment_message_id == assignment_message_id
+            });
+        Ok(assignment.map(|assignment| (row, assignment)))
+    }
+
+    async fn emit_task_reminder(
+        &self,
+        emission: TaskReminderEmission,
+        emitter: &dyn AsyncMessageReceivedHookEmitter,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+    ) -> Result<AttentionReservationStatus, AtmError> {
+        if let Err(error) = emitter
+            .emit_received_message(
+                emission.dispatch,
+                RequestDeadline::after(HERDR_REQUEST_DEADLINE),
+            )
+            .await
+        {
+            if error.code() == AtmErrorCode::HerdrUnavailable {
+                stats.breaker_open += 1;
+            }
+            stats.task_reminders_failed += 1;
+            return Ok(AttentionReservationStatus::PermanentlyFailed);
+        }
+        let mutation_store = self.service_runtime.async_task_mutation_store()?;
+        let daemon_actor = "atm-daemon"
+            .parse()
+            .map_err(|_| AtmError::validation("invalid daemon task actor"))?;
+        if let Err(error) = mutation_store
+            .apply(TaskMutationRequest {
+                operation_id: TaskOperationId::new(),
+                actor: MemberKey::new(emission.member.team().clone(), daemon_actor),
+                task_id: emission.task_id,
+                expected_revision: Some(emission.row.revision),
+                operation: TaskOperation::RecordReminder {
+                    attempt: emission.attempt,
+                    at: now,
+                },
+            })
+            .await
+        {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "task_reminder_record",
+                outcome = "failed",
+                error = %error,
+                member = %emission.member,
+                "Herdr task reminder audit write failed after accepted emission"
+            );
+        }
+        stats.prompted += 1;
+        stats.task_reminders += 1;
+        Ok(AttentionReservationStatus::Delivered)
     }
 
     pub(crate) async fn rebuild_dispatch(
@@ -770,26 +1024,6 @@ impl HerdrQueueWakePump {
     }
 }
 
-fn log_herdr_list_failure(session: &Option<HerdrSession>, error: &atm_herdr::HerdrError) {
-    let code = AtmError::from(error.clone()).code();
-    tracing::warn!(
-        subsystem = "herdr_queue_wake",
-        action = "herdr_list",
-        outcome = "failed",
-        session = ?session,
-        code = %code,
-        failure_class = error.diagnostic_name(),
-        error = ?error,
-        "Herdr queue wake list failed: {code}"
-    );
-}
-
-impl crate::RuntimeMaintenance for HerdrQueueWakePump {
-    fn start(&self, shutdown: watch::Receiver<()>) -> JoinHandle<()> {
-        Arc::new(self.clone()).start(shutdown)
-    }
-}
-
 #[derive(Clone)]
 struct HerdrCandidate {
     key: MemberKey,
@@ -863,187 +1097,13 @@ where
     })?
 }
 
-fn member_order(left: &MemberKey, right: &MemberKey) -> std::cmp::Ordering {
-    left.team()
-        .as_str()
-        .cmp(right.team().as_str())
-        .then_with(|| left.agent().as_str().cmp(right.agent().as_str()))
-}
-
-fn runtime_state(status: HerdrAgentStatus) -> RuntimeMemberState {
-    match status {
-        HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
-        HerdrAgentStatus::Working => RuntimeMemberState::Active,
-        HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
-        HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
-    }
-}
-
-pub(crate) struct ReleasePendingOnDrop {
-    store: Arc<dyn PendingNudgeStore + Send + Sync>,
-    member: MemberKey,
-    claim: atm_core::boundary::NudgeClaim,
-    release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
-    release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
-    /// Clears the member's ephemeral Herdr wake-pending roster flag when this
-    /// claim attempt concludes (success, requeue, or release), regardless of
-    /// which exit path was taken. Set alongside claiming a pending nudge in
-    /// [`HerdrQueueWakePump::process_candidate`]; this is the real production
-    /// transition the ephemeral roster state exists to track (FTQ-AW finding
-    /// 4 on PR #1240 -- previously this state had no production caller).
-    service_runtime: LocalServiceRuntime,
-    armed: bool,
-}
-
-impl ReleasePendingOnDrop {
-    pub(crate) fn new(
-        store: Arc<dyn PendingNudgeStore + Send + Sync>,
-        member: MemberKey,
-        claim: atm_core::boundary::NudgeClaim,
-        release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
-        service_runtime: LocalServiceRuntime,
-        release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
-    ) -> Self {
-        Self {
-            store,
-            member,
-            claim,
-            release_streaks,
-            release_handles,
-            service_runtime,
-            armed: true,
-        }
-    }
-
-    pub(crate) async fn release_without_input(&mut self) {
-        if !self.armed {
-            return;
-        }
-        let should_requeue = self.claim_release_action();
-        self.armed = false;
-        let store = Arc::clone(&self.store);
-        let member = self.member.clone();
-        let claim = self.claim.clone();
-        if let Err(error) = run_blocking(move || {
-            if should_requeue {
-                store.requeue_pending(&member, &claim)
-            } else {
-                store.release_pending(&member, &claim)
-            }
-        })
-        .await
-        {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "queue_claim_release",
-                outcome = "failed",
-                error = %error,
-                member = %self.member,
-                "failed to resolve Herdr queue claim"
-            );
-        }
-    }
-
-    pub(crate) async fn requeue(&mut self) {
-        if !self.armed {
-            return;
-        }
-        self.release_streaks
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(&self.member);
-        self.armed = false;
-        let store = Arc::clone(&self.store);
-        let member = self.member.clone();
-        let claim = self.claim.clone();
-        if let Err(error) = run_blocking(move || store.requeue_pending(&member, &claim)).await {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "queue_claim_requeue",
-                outcome = "failed",
-                error = %error,
-                member = %self.member,
-                "failed to requeue Herdr queue claim"
-            );
-        }
-    }
-
-    fn claim_release_action(&self) -> bool {
-        let mut streaks = self
-            .release_streaks
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let streak = streaks.entry(self.member.clone()).or_default();
-        if *streak >= HERDR_MAX_CONSECUTIVE_RELEASES {
-            streaks.remove(&self.member);
-            true
-        } else {
-            *streak = streak.saturating_add(1);
-            false
-        }
-    }
-
-    fn release_in_drop(&mut self) {
-        if !self.armed {
-            return;
-        }
-        let should_requeue = self.claim_release_action();
-        self.armed = false;
-        let store = Arc::clone(&self.store);
-        let member = self.member.clone();
-        let claim = self.claim.clone();
-        let release = move || {
-            let result = if should_requeue {
-                store.requeue_pending(&member, &claim)
-            } else {
-                store.release_pending(&member, &claim)
-            };
-            if let Err(error) = result {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "queue_claim_release",
-                    outcome = "failed",
-                    error = %error,
-                    member = %member,
-                    "failed to resolve Herdr queue claim during drop"
-                );
-            }
-        };
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            let release_handle = handle.spawn_blocking(release);
-            let mut release_handles = self
-                .release_handles
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            release_handles.retain(|handle| !handle.is_finished());
-            release_handles.push(release_handle);
-        } else {
-            release();
-        }
-    }
-
-    pub(crate) fn disarm(&mut self) {
-        self.armed = false;
-    }
-}
-
-impl Drop for ReleasePendingOnDrop {
-    fn drop(&mut self) {
-        self.release_in_drop();
-        self.service_runtime.set_roster_herdr_wake_pending(
-            self.member.team(),
-            self.member.agent(),
-            false,
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::claim::ReleasePendingOnDrop;
+    use super::support::{log_herdr_list_failure, runtime_state};
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats, ReleasePendingOnDrop,
-        TASK_REMINDER_INTERVAL_MS, log_herdr_list_failure, runtime_state,
+        HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats, TASK_REMINDER_INTERVAL_MS,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -2536,7 +2596,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
+    async fn ax5_02_ephemeral_selection_defers_the_task_lane() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-BUDGET".parse().expect("task id");
         queue_task_message(
@@ -2577,7 +2637,7 @@ mod tests {
         assert_eq!(
             prompt_texts(&fake).len(),
             4,
-            "two drains, queue, then reminder"
+            "each idle opportunity selects only one attention lane"
         );
     }
 
@@ -3011,7 +3071,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
+    async fn ax5_05_attention_selection_and_clock_control_task_cadence() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-REMINDER".parse().expect("task id");
         queue_task_message(
@@ -3034,9 +3094,8 @@ mod tests {
             Arc::new(move || *clock_now.lock().expect("test clock lock")),
         );
 
-        // The pre-existing queue entry and then the task's own deferred
-        // marker consume the first two ticks. Neither may produce a second
-        // prompt from the reminder step in the same tick.
+        // The existing ephemeral item and task assignment each receive one
+        // idle opportunity. Neither may produce a second prompt in one pass.
         pump.tick_once().await;
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("future timestamp");
@@ -3203,6 +3262,10 @@ mod tests {
             .service_runtime
             .attention_schedule_store()
             .expect("attention schedule store");
+        let async_attention_schedule = assembly
+            .service_runtime
+            .async_attention_schedule_store()
+            .expect("async attention schedule store");
         let async_reader = assembly
             .service_runtime
             .async_task_ledger_reader()
@@ -3219,6 +3282,7 @@ mod tests {
         )
         .with_pending_nudge_store(pending)
         .with_attention_schedule_store(attention_schedule)
+        .with_async_attention_schedule_store(async_attention_schedule)
         .with_async_task_ledger_reader(async_reader);
         let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
         fake.queue_list_result(Ok(HerdrListOutcome {
@@ -3239,7 +3303,11 @@ mod tests {
         let pump = HerdrQueueWakePump::new(runtime, selector, health, process);
 
         pump.tick_once().await;
-        assert_eq!(pump.stats().prompted, 1, "queue drain remains active");
+        assert_eq!(
+            pump.stats().prompted,
+            1,
+            "ephemeral selection remains active"
+        );
         assert_eq!(pump.stats().task_reminders, 0);
         assert!(pump.stats().task_step_skipped);
     }

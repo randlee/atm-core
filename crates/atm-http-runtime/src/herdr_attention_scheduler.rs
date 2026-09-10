@@ -1,262 +1,36 @@
 //! Identifier-only selection and durable reservation for one idle opportunity.
 //!
-//! This module deliberately stops before message reconstruction or prompt
-//! emission. The queue and task ledger retain ownership of those lifecycles;
-//! the scheduler owns only fair selection metadata.
+//! This module stops before message reconstruction or prompt emission. The
+//! queue and task ledger retain ownership of their lifecycles; the scheduler
+//! owns only fair selection metadata.
 
-use std::sync::Arc;
+use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::boundary::{
-    AttentionCandidates, AttentionCursor, AttentionFinalizeOutcome, AttentionFinalizeRequest,
-    AttentionItem, AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
-    AttentionScheduleStore, EphemeralMessageCandidate, IdleOpportunity, LogicalTaskRow, MemberKey,
-    NudgeClaim, PendingNudgeStore, PersistentTaskCandidate, ReadDeadline, TaskAssignmentAttempt,
-    TaskLifecycleState, TaskMutationRequest, TaskOperation, TaskOperationId, select_attention_item,
+    AttentionCandidates, AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionReservation,
+    AttentionReservationRequest, AttentionReservationStatus, EphemeralMessageCandidate,
+    IdleOpportunity, LogicalTaskRow, MemberKey, PendingNudgeStore, PersistentTaskCandidate,
+    ReadDeadline, TaskLifecycleState, select_attention_item,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::IsoTimestamp;
 
-use super::herdr_queue_wake::{HERDR_REQUEST_DEADLINE, TASK_REMINDER_INTERVAL_MS, run_blocking};
+const SCHEDULER_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
+pub(crate) const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
 
-pub(super) enum AttentionDispatchDisposition {
-    Finalized(AttentionReservationStatus),
-}
-
-enum Claim {
-    Queue {
-        member: MemberKey,
-        claim: NudgeClaim,
-        guard: super::herdr_queue_wake::ReleasePendingOnDrop,
-    },
-    Task {
-        member: MemberKey,
-        row: LogicalTaskRow,
-        assignment: TaskAssignmentAttempt,
-    },
-}
-
-pub(super) async fn dispatch_reserved_attention(
-    pump: &super::herdr_queue_wake::HerdrQueueWakePump,
-    reservation: AttentionReservation,
-    _now: IsoTimestamp,
-    stats: &mut super::herdr_queue_wake::HerdrQueueWakeStats,
-) -> Result<AttentionDispatchDisposition, AtmError> {
-    let member = match &reservation.item {
-        AttentionItem::EphemeralMessage { member, .. }
-        | AttentionItem::PersistentTaskReminder { member, .. } => member,
-    };
-    let roster_is_current = pump
-        .service_runtime
-        .roster_ephemeral_state(member.team(), member.agent())
-        .is_some_and(|state| {
-            state.runtime.state == atm_core::protocol::RuntimeMemberState::Idle
-                && state.runtime.revision == reservation.opportunity.roster_state_revision
-        });
-    if !roster_is_current {
-        return Ok(AttentionDispatchDisposition::Finalized(
-            AttentionReservationStatus::Stale,
-        ));
-    }
-    match reservation.item {
-        AttentionItem::EphemeralMessage { member, message_id } => {
-            let pending_store = pump.service_runtime.pending_nudge_store()?;
-            let claim_member = member.clone();
-            let claim_store = Arc::clone(&pending_store);
-            let Some(claim) =
-                run_blocking(move || claim_store.claim_pending(&claim_member, &message_id)).await?
-            else {
-                return Ok(AttentionDispatchDisposition::Finalized(
-                    AttentionReservationStatus::Stale,
-                ));
-            };
-            let guard =
-                pump.queue_claim_guard(Arc::clone(&pending_store), member.clone(), claim.clone());
-            let claim = Claim::Queue {
-                member,
-                claim,
-                guard,
-            };
-            let Claim::Queue {
-                member,
-                claim,
-                mut guard,
-            } = claim
-            else {
-                unreachable!("queue claim is constructed above")
-            };
-            let dispatch = match pump.rebuild_dispatch(&member, claim.msg).await {
-                Ok(Some(dispatch)) => dispatch,
-                Ok(None) | Err(_) => {
-                    guard.release_without_input().await;
-                    stats.released += 1;
-                    return Ok(AttentionDispatchDisposition::Finalized(
-                        AttentionReservationStatus::Stale,
-                    ));
-                }
-            };
-            let Some(emitter) = pump.selector.select_emitter(&dispatch) else {
-                guard.release_without_input().await;
-                stats.released += 1;
-                return Ok(AttentionDispatchDisposition::Finalized(
-                    AttentionReservationStatus::Stale,
-                ));
-            };
-            #[cfg(test)]
-            pump.notify_prompt_started_test_gate();
-            match emitter
-                .emit_received_message(
-                    dispatch,
-                    atm_core::api::RequestDeadline::after(HERDR_REQUEST_DEADLINE),
-                )
-                .await
-            {
-                Ok(_) => {
-                    pump.complete_successful_claim(&member, &claim, &mut guard, stats)
-                        .await;
-                    Ok(AttentionDispatchDisposition::Finalized(
-                        AttentionReservationStatus::Delivered,
-                    ))
-                }
-                Err(error) => {
-                    if error.code() == AtmErrorCode::HerdrUnavailable {
-                        stats.breaker_open += 1;
-                    }
-                    match error.code() {
-                        AtmErrorCode::HerdrPromptFailed => guard.requeue().await,
-                        _ => guard.release_without_input().await,
-                    }
-                    stats.released += 1;
-                    // Queued messages retain their own claim/requeue policy.
-                    // Marking this scheduler reservation stale permits the
-                    // queue owner to select the exact message again on a
-                    // future idle observation instead of converting its
-                    // delivery failure into a task-style retry chain.
-                    Ok(AttentionDispatchDisposition::Finalized(
-                        AttentionReservationStatus::Stale,
-                    ))
-                }
-            }
-        }
-        AttentionItem::PersistentTaskReminder {
-            member,
-            task_id,
-            attempt,
-            assignment_message_id,
-        } => {
-            let reader = pump.service_runtime.async_task_ledger_reader()?;
-            let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
-            let Some(row) = reader
-                .top_runnable_task(member.team().clone(), member.agent().clone(), deadline)
-                .await
-                .map_err(|error| AtmError::daemon_unavailable(error.to_string()))?
-                .filter(|row| {
-                    row.task_id == task_id
-                        && row.current_attempt == attempt
-                        && row.assignment_message_id == assignment_message_id
-                        && task_reminder_due(row, _now)
-                })
-            else {
-                return Ok(AttentionDispatchDisposition::Finalized(
-                    AttentionReservationStatus::Stale,
-                ));
-            };
-            let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
-            let Some(assignment) = reader
-                .list_task_assignment_attempts(member.team().clone(), task_id.clone(), deadline)
-                .await
-                .map_err(|error| AtmError::daemon_unavailable(error.to_string()))?
-                .into_iter()
-                .find(|assignment| {
-                    assignment.attempt == attempt
-                        && assignment.assignee == *member.agent()
-                        && assignment.assignment_message_id == assignment_message_id
-                })
-            else {
-                return Ok(AttentionDispatchDisposition::Finalized(
-                    AttentionReservationStatus::Stale,
-                ));
-            };
-            let claim = Claim::Task {
-                member: member.clone(),
-                row,
-                assignment,
-            };
-            let Claim::Task {
-                member,
-                row,
-                assignment,
-            } = claim
-            else {
-                unreachable!("task claim is constructed above")
-            };
-            let runtime = pump.service_runtime.clone();
-            let dispatch_member = member.clone();
-            let dispatch_task_id = task_id.clone();
-            let dispatch = run_blocking(move || {
-                atm_core::nudge_dispatch::build_logical_task_reminder_dispatch(
-                    &runtime,
-                    &dispatch_member,
-                    &dispatch_task_id,
-                    &assignment,
-                )
-            })
-            .await?;
-            let Some(dispatch) = dispatch else {
-                return Ok(AttentionDispatchDisposition::Finalized(
-                    AttentionReservationStatus::PermanentlyFailed,
-                ));
-            };
-            let Some(emitter) = pump.selector.select_emitter(&dispatch) else {
-                return Ok(AttentionDispatchDisposition::Finalized(
-                    AttentionReservationStatus::Stale,
-                ));
-            };
-            if let Err(error) = emitter
-                .emit_received_message(
-                    dispatch,
-                    atm_core::api::RequestDeadline::after(HERDR_REQUEST_DEADLINE),
-                )
-                .await
-            {
-                if error.code() == AtmErrorCode::HerdrUnavailable {
-                    stats.breaker_open += 1;
-                }
-                stats.task_reminders_failed += 1;
-                return Ok(AttentionDispatchDisposition::Finalized(
-                    AttentionReservationStatus::PermanentlyFailed,
-                ));
-            }
-            let mutation_store = pump.service_runtime.async_task_mutation_store()?;
-            let daemon_actor = "atm-daemon"
-                .parse()
-                .map_err(|_| AtmError::validation("invalid daemon task actor"))?;
-            if let Err(error) = mutation_store
-                .apply(TaskMutationRequest {
-                    operation_id: TaskOperationId::new(),
-                    actor: MemberKey::new(member.team().clone(), daemon_actor),
-                    task_id,
-                    expected_revision: Some(row.revision),
-                    operation: TaskOperation::RecordReminder { attempt, at: _now },
-                })
-                .await
-            {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "task_reminder_record",
-                    outcome = "failed",
-                    error = %error,
-                    member = %member,
-                    "Herdr task reminder audit write failed after accepted emission"
-                );
-            }
-            stats.prompted += 1;
-            stats.task_reminders += 1;
-            Ok(AttentionDispatchDisposition::Finalized(
-                AttentionReservationStatus::Delivered,
-            ))
-        }
-    }
+async fn run_blocking<T, F>(job: F) -> Result<T, AtmError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, AtmError> + Send + 'static,
+{
+    tokio::task::spawn_blocking(job).await.map_err(|source| {
+        AtmError::new(
+            AtmErrorCode::InternalError,
+            "pending-nudge inspection ended unexpectedly",
+        )
+        .with_cause(source)
+    })?
 }
 
 pub(super) async fn finalize_attention(
@@ -264,7 +38,7 @@ pub(super) async fn finalize_attention(
     reservation: &AttentionReservation,
     status: AttentionReservationStatus,
 ) -> Result<AttentionReservation, AtmError> {
-    let schedule_store = runtime.attention_schedule_store()?;
+    let schedule_store = runtime.async_attention_schedule_store()?;
     let request = AttentionFinalizeRequest {
         member: reservation.opportunity.member.clone(),
         opportunity_id: reservation.opportunity.id,
@@ -281,24 +55,28 @@ pub(super) async fn finalize_attention(
             }
         },
     };
-    run_blocking(move || schedule_store.finalize(request)).await
+    schedule_store.finalize(request).await
 }
 
 /// Reserves at most one fair attention item for a committed idle opportunity.
 ///
-/// The caller claims the selected lane afterwards and finalizes this durable
-/// reservation as delivered or stale. The result never carries message or
-/// task text.
+/// The runtime claims the selected lane afterwards and finalizes this durable
+/// reservation as delivered or stale. The result never carries message or task
+/// text.
 pub(super) async fn reserve_next_attention(
     runtime: &LocalServiceRuntime,
     opportunity: IdleOpportunity,
     now: IsoTimestamp,
 ) -> Result<Option<AttentionReservation>, AtmError> {
-    let schedule_store = runtime.attention_schedule_store()?;
+    let schedule_store = runtime.async_attention_schedule_store()?;
     let pending_store = runtime.pending_nudge_store()?;
     let member = opportunity.member.clone();
-    let cursor = load_cursor(Arc::clone(&schedule_store), member.clone()).await?;
-    let ephemeral = next_ephemeral(Arc::clone(&pending_store), member.clone()).await?;
+    let deadline = ReadDeadline::new(SCHEDULER_REQUEST_DEADLINE)?;
+    let cursor = schedule_store
+        .load_cursor(member.clone(), deadline)
+        .await
+        .map_err(AtmError::from)?;
+    let ephemeral = next_ephemeral(pending_store, member.clone()).await?;
     let persistent_task = next_persistent_task(runtime, member.clone(), now).await?;
     let selection = select_attention_item(
         member,
@@ -311,26 +89,18 @@ pub(super) async fn reserve_next_attention(
     let Some(item) = selection.item else {
         return Ok(None);
     };
-    let reservation = run_blocking(move || {
-        schedule_store.reserve(AttentionReservationRequest {
+    schedule_store
+        .reserve(AttentionReservationRequest {
             opportunity,
             expected_cursor_revision: cursor.revision,
             item,
         })
-    })
-    .await?;
-    Ok(Some(reservation))
-}
-
-async fn load_cursor(
-    schedule_store: Arc<dyn AttentionScheduleStore + Send + Sync>,
-    member: MemberKey,
-) -> Result<AttentionCursor, AtmError> {
-    run_blocking(move || schedule_store.load_cursor(&member)).await
+        .await
+        .map(Some)
 }
 
 async fn next_ephemeral(
-    pending_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+    pending_store: std::sync::Arc<dyn PendingNudgeStore + Send + Sync>,
     member: MemberKey,
 ) -> Result<Option<EphemeralMessageCandidate>, AtmError> {
     run_blocking(move || {
@@ -349,7 +119,7 @@ async fn next_persistent_task(
     now: IsoTimestamp,
 ) -> Result<Option<PersistentTaskCandidate>, AtmError> {
     let reader = runtime.async_task_ledger_reader()?;
-    let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
+    let deadline = ReadDeadline::new(SCHEDULER_REQUEST_DEADLINE)?;
     reader
         .top_runnable_task(member.team().clone(), member.agent().clone(), deadline)
         .await
@@ -370,7 +140,7 @@ fn persistent_candidate(row: LogicalTaskRow, now: IsoTimestamp) -> Option<Persis
     })
 }
 
-fn task_reminder_due(row: &LogicalTaskRow, now: IsoTimestamp) -> bool {
+pub(super) fn task_reminder_due(row: &LogicalTaskRow, now: IsoTimestamp) -> bool {
     row.last_reminded_at.is_none_or(|last_reminded_at| {
         now.into_inner()
             .signed_duration_since(last_reminded_at.into_inner())

@@ -5,7 +5,7 @@ title: Fair idle attention scheduler
 branch: feature/az4-attention-scheduler
 integration_branch: feature/az3-task-command-handoff
 final_integration_branch: develop
-status: planned
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: stacked

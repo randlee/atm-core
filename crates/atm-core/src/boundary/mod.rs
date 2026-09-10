@@ -11,9 +11,9 @@ pub use atm_storage::TaskState;
 pub use atm_storage::contract::RosterStore as DurableRosterStore;
 pub use atm_storage::contract::{AckTransition, Message, MessageKey};
 pub use atm_storage::{
-    AssignmentAttempt, AsyncTaskLedgerReader, AsyncTaskMutationStore, AttentionCandidates,
-    AttentionCursor, AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionItem,
-    AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
+    AssignmentAttempt, AsyncAttentionScheduleStore, AsyncTaskLedgerReader, AsyncTaskMutationStore,
+    AttentionCandidates, AttentionCursor, AttentionFinalizeOutcome, AttentionFinalizeRequest,
+    AttentionItem, AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
     AttentionScheduleStore, BuiltInNudgeTemplateKind, DAEMON_ACTOR_NAME, EphemeralMessageCandidate,
     EscalationScope, IdleOpportunity, LogicalTaskRow, MAX_ESCALATION_RECIPIENTS,
     NudgeTemplateOverrideStore, PersistentTaskCandidate, ReadDeadline, ReminderOutcome,

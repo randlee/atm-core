@@ -139,6 +139,13 @@ migration functions directly.
   operation projections, retained v1 bridge, and fresh-versus-upgraded
   compatibility fixture implement this approved boundary without removing a
   v1 table or column.
+- **2026-09-10 — AZ.4 additive attention schedule:**
+  `STORAGE_SCHEMA_VERSION` moves from `2.0.0` to `2.1.0`. The idempotent
+  `attention_schedule_store::ensure_schema` step adds only cursor and
+  identifier-only reservation tables. Existing 2.0 consumers ignore those
+  tables, so this is a backward-compatible minor storage-schema change; fresh
+  and upgraded schemas must converge and the retained 1.5.14 consumer fixture
+  remains required.
 
 ## Consequences
 
@@ -152,5 +159,7 @@ migration functions directly.
   conformance fixtures are required.
 - SQLite migrations gain a declared version and an explicit rollback test
   against the previous release binary.
+- The Phase AZ sequence is SQLite `2.0.0` for the approved task-domain major
+  migration followed by `2.1.0` for additive fair attention scheduling.
 - Plan documents must list their intended interface changes so phase-end
   drift review has something to diff against.

@@ -665,6 +665,11 @@ The Herdr adapter receives already-rendered, bounded title metadata from the
 runtime. It performs no body lookup, template rendering, or task-description
 fallback, preserving the same nudge contract as Tmux and Graft.
 
+AZ.4's fair attention selector lives above this adapter. The adapter receives
+at most one already-selected message/task metadata projection for a canonical
+idle opportunity; it never queries a queue, task ledger, or roster state to
+choose or retry a different item.
+
 The CLI alternative has no removal release or ownership-key cleanup planned.
 AY.9 records automated compatibility and lifecycle gates only; release
 readiness, not this sprint, owns live proof.

@@ -54,6 +54,13 @@ assignment time, then blocked tasks. `age` is elapsed time since the original
 assignment. Closed history and event history are bounded to 200 rows unless
 you select `--limit` (at most 10,000) or explicit `--all`.
 
+When your runtime reports you idle, ATM may send one bounded reminder for the
+top runnable task or one queued message. These lanes alternate fairly when
+both are due. A reminder identifies the assignment message and task only; read
+the assignment with `atm read` for its instructions. A reminder never starts,
+acknowledges, or closes the task, and lifecycle-blocked or closed tasks receive
+no normal reminder.
+
 `atm send --task-id`, `atm send --task-complete`, `atm list --tasks`, and
 `atm list --task-events` remain temporary compatibility adapters. Prefer the
 canonical commands above; their migration warnings identify the replacement.

@@ -1,3 +1,4 @@
+mod diagnostics;
 mod ops;
 mod ops_envelope;
 mod shutdown_support;

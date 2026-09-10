@@ -30,11 +30,15 @@ Active task or the first Assigned task; it never returns Blocked or Closed.
 
 ## Coexistence and mutation
 
-`STORAGE_SCHEMA_VERSION = 2.0.0` is an ADR-061 approved major change. ATM
-1.6.x retains a bidirectional v1 bridge; 1.7.0 is the earliest separately
-approved removal target. Migration collapses v1 rows by `Active > Assigned >
-Complete`, records each source row, and deterministically demotes surplus
-active rows before the `(team, current_assignee)` active unique index exists.
+`STORAGE_SCHEMA_VERSION = 2.1.0` contains ADR-061's approved 2.0.0 major task
+domain migration plus AZ.4's additive attention tables. ATM 1.6.x retains a
+bidirectional v1 bridge; 1.7.0 is the earliest separately approved removal
+target. Migration collapses v1 rows by `Active > Assigned > Complete`, records
+each source row, and deterministically demotes surplus active rows before the
+`(team, current_assignee)` active unique index exists. The additive
+`attention_lane_cursors` and `attention_opportunities` tables are installed by
+an idempotent 2.1 ensure step, so a fresh 2.1 database and an upgraded 2.0
+database converge without changing v1 compatibility rows.
 
 `AsyncTaskMutationStore` is the sole v2 mutation capability. Every request has
 an independent `TaskOperationId` and optional expected revision. The SQLite
@@ -49,3 +53,28 @@ locally admitted recipient is eligible for this transaction; a peer-origin
 recipient is rejected before any message, operation, task, attempt, or event
 is written with `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED`. Cross-host task
 handoff remains outside this storage transaction boundary.
+
+## Idle attention scheduling
+
+The scheduler is not another task or message lifecycle table. It owns only a
+per-member next-lane cursor and an `IdleOpportunityId` reservation containing
+the selected lane plus message or task/attempt identities. It never stores a
+body, rendered template text, or task description. The queue remains the owner
+of queue claim/release/requeue; the task ledger remains the owner of task state
+and attempt-aware reminder audit.
+
+For one canonical `Idle` roster revision, the selector reserves zero or one
+item. When both lanes are due it alternates ephemeral message then persistent
+task across committed reservations; task priority orders only candidates within
+the persistent lane. A selected task is revalidated against its current
+assignee, attempt, state, and 60-second cadence immediately before emission.
+Blocked and closed tasks are ineligible. Successful task reminders append a
+`RecordReminder` event for the current attempt; they do not acknowledge, start,
+or close work. Reassignment invalidates the old attempt and unblock returns the
+task to assigned ordering without activation.
+
+Delivery retries keep the same reservation and item identity. Each retryable
+failure increments durable `failed_attempts`; the fifth is
+`PermanentlyFailed`. That terminalizes the reservation only, never its message
+or task. A successful ephemeral nudge consumes its queue claim; read or
+acknowledged messages that lose the conditional claim are suppressed.

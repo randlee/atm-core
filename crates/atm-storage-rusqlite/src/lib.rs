@@ -69,7 +69,10 @@ use atm_storage::contract::{
 };
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TaskStore, TemplateCatalogStore};
+use atm_storage::{
+    AsyncAttentionScheduleStore, AsyncMessageSearchStore, MessageSearchStore, TaskStore,
+    TemplateCatalogStore,
+};
 use atm_storage::{
     AsyncTaskMutationStore, AtmError, AttentionScheduleStore, EffectiveReaderPool,
     EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory, StorageHandleParts, StorageHandles,
@@ -647,6 +650,7 @@ pub struct SqliteStorageBackend {
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     pending_nudge_store: Arc<SqlitePendingNudgeStore>,
     attention_schedule_store: Arc<SqliteAttentionScheduleStore>,
+    async_attention_schedule_store: Arc<dyn AsyncAttentionScheduleStore + Send + Sync>,
     task_store: Arc<SqliteTaskStore>,
     task_mutation_store: Arc<SqliteTaskMutationStore>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
@@ -812,6 +816,7 @@ impl StorageFactory for SqliteStorageFactory {
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
             attention_schedule_store: backend.attention_schedule_store(),
+            async_attention_schedule_store: backend.async_attention_schedule_store(),
             task_store: backend.task_store(),
             async_task_mutation_store: backend.async_task_mutation_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
@@ -863,6 +868,9 @@ impl SqliteStorageBackend {
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
             attention_schedule_store: Arc::new(SqliteAttentionScheduleStore::new(Arc::clone(&db))),
+            async_attention_schedule_store: Arc::new(SqliteAttentionScheduleStore::new(
+                Arc::clone(&db),
+            )),
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             task_mutation_store: Arc::new(SqliteTaskMutationStore {
                 db: Arc::clone(&db),
@@ -893,6 +901,9 @@ impl SqliteStorageBackend {
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
             attention_schedule_store: Arc::new(SqliteAttentionScheduleStore::new(Arc::clone(&db))),
+            async_attention_schedule_store: Arc::new(SqliteAttentionScheduleStore::new(
+                Arc::clone(&db),
+            )),
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             task_mutation_store: Arc::new(SqliteTaskMutationStore {
                 db: Arc::clone(&db),
@@ -961,6 +972,12 @@ impl SqliteStorageBackend {
 
     pub fn attention_schedule_store(&self) -> Arc<dyn AttentionScheduleStore + Send + Sync> {
         self.attention_schedule_store.clone()
+    }
+
+    pub fn async_attention_schedule_store(
+        &self,
+    ) -> Arc<dyn AsyncAttentionScheduleStore + Send + Sync> {
+        self.async_attention_schedule_store.clone()
     }
 
     pub fn task_store(&self) -> Arc<dyn TaskStore + Send + Sync> {

@@ -113,6 +113,16 @@ transaction; composition exposes only the trait through `StorageHandles`.
 The retained `TaskStore` stays a v1 compatibility read/audit capability and
 cannot become a second mutation policy.
 
+### Amendment — Phase AZ.4 attention scheduling
+
+ADR-063 authorizes `AttentionScheduleStore` and its required
+`AsyncAttentionScheduleStore` companion as the twelfth semantic storage
+capability. The narrow contract owns only durable fair-lane cursors and
+identifier-only idle-opportunity reservations. `PendingNudgeStore` still owns
+message claims and the task reader/mutation store still own task state and
+reminder audit. The concrete SQLite adapter remains the only SQL owner; the
+Tokio runtime receives only the sealed contracts through composition.
+
 The prior runtime indirection is not a justification for SQLite-backed daemon
 state. Phase AI deletes it while preserving normal storage shutdown through a
 storage-owned lifecycle method if one remains necessary. Architecture checks

@@ -3,10 +3,11 @@
 use std::sync::Arc;
 
 use atm_storage::{
-    AssignmentAttempt, AtmError, AttentionCursor, AttentionFinalizeOutcome,
-    AttentionFinalizeRequest, AttentionItem, AttentionLane, AttentionReservation,
-    AttentionReservationRequest, AttentionReservationStatus, AttentionScheduleStore,
-    IdleOpportunity, IdleOpportunityId, MemberKey, RosterStateRevision,
+    AssignmentAttempt, AsyncAttentionScheduleStore, AtmError, AttentionCursor,
+    AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionItem, AttentionLane,
+    AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
+    AttentionScheduleStore, IdleOpportunity, IdleOpportunityId, MemberKey, ReadDeadline,
+    ReadLaneError, RosterStateRevision,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -107,6 +108,66 @@ impl AttentionScheduleStore for SqliteAttentionScheduleStore {
             })
         })
     }
+}
+
+#[async_trait::async_trait]
+impl AsyncAttentionScheduleStore for SqliteAttentionScheduleStore {
+    async fn load_cursor(
+        &self,
+        member: MemberKey,
+        deadline: ReadDeadline,
+    ) -> Result<AttentionCursor, ReadLaneError> {
+        let db = Arc::clone(&self.db);
+        self.db
+            .read_with_deadline_async(deadline.remaining(), move |connection| {
+                load_cursor(connection, &member)
+                    .map_err(|error| db.error("failed to read attention cursor", error))
+            })
+            .await
+            .map_err(crate::mailbox_reader::read_lane_storage_error)
+    }
+
+    async fn reserve(
+        &self,
+        request: AttentionReservationRequest,
+    ) -> Result<AttentionReservation, AtmError> {
+        let db = Arc::clone(&self.db);
+        execute_schedule_write(move || {
+            db.with_transaction(|connection| {
+                reserve_writer(connection, request)
+                    .map_err(|error| db.error("failed to reserve attention opportunity", error))
+            })
+        })
+        .await
+    }
+
+    async fn finalize(
+        &self,
+        request: AttentionFinalizeRequest,
+    ) -> Result<AttentionReservation, AtmError> {
+        let db = Arc::clone(&self.db);
+        execute_schedule_write(move || {
+            db.with_transaction(|connection| {
+                finalize_writer(connection, request)
+                    .map_err(|error| db.error("failed to finalize attention opportunity", error))
+            })
+        })
+        .await
+    }
+}
+
+async fn execute_schedule_write<T>(
+    operation: impl FnOnce() -> Result<T, AtmError> + Send + 'static,
+) -> Result<T, AtmError>
+where
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(operation)
+        .await
+        .map_err(|source| {
+            AtmError::daemon_unavailable("attention schedule storage worker ended unexpectedly")
+                .with_cause(source)
+        })?
 }
 
 fn load_cursor(connection: &Connection, member: &MemberKey) -> rusqlite::Result<AttentionCursor> {
@@ -432,7 +493,8 @@ fn decode_reservation_with_offset(
 mod tests {
     use super::*;
     use crate::SqliteStorageBackend;
-    use atm_storage::{AgentName, AtmMessageId, TeamName};
+    use atm_storage::{AgentName, AtmMessageId, ReadDeadline, TeamName};
+    use std::time::Duration;
 
     fn member() -> MemberKey {
         MemberKey::new(
@@ -520,5 +582,52 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[tokio::test]
+    async fn async_store_uses_bounded_read_and_off_executor_write_paths() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.async_attention_schedule_store();
+        let opportunity = IdleOpportunity {
+            id: IdleOpportunityId::new(),
+            member: member(),
+            roster_state_revision: RosterStateRevision::from_raw(7),
+        };
+        let deadline = || ReadDeadline::new(Duration::from_secs(1)).expect("deadline");
+
+        assert_eq!(
+            store
+                .load_cursor(member(), deadline())
+                .await
+                .expect("cursor"),
+            AttentionCursor {
+                next_lane: AttentionLane::Ephemeral,
+                revision: 0,
+            }
+        );
+        let reservation = store
+            .reserve(AttentionReservationRequest {
+                opportunity: opportunity.clone(),
+                expected_cursor_revision: 0,
+                item: AttentionItem::EphemeralMessage {
+                    member: member(),
+                    message_id: AtmMessageId::new(),
+                },
+            })
+            .await
+            .expect("reserve");
+        assert_eq!(reservation.status, AttentionReservationStatus::Reserved);
+        assert_eq!(
+            store
+                .finalize(AttentionFinalizeRequest {
+                    member: member(),
+                    opportunity_id: opportunity.id,
+                    outcome: AttentionFinalizeOutcome::Delivered,
+                })
+                .await
+                .expect("finalize")
+                .status,
+            AttentionReservationStatus::Delivered
+        );
     }
 }

@@ -1,0 +1,48 @@
+boundary_id = "BOUNDARY-AsyncAttentionScheduleStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteAsyncAttentionScheduleStoreAdapter"
+
+[public]
+trait = "AsyncAttentionScheduleStore"
+
+[implementation]
+type = "SqliteAttentionScheduleStore"
+module = "atm_storage_rusqlite::attention_schedule_store"
+visibility = "private"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["bounded_reader_pool", "off_executor_sqlite_transaction", "sqlite_attention_metadata"]
+io_forbidden = ["socket_io", "process_spawn", "message_delivery", "template_rendering"]
+
+[dependencies]
+allowed_dependents = ["atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteAttentionScheduleStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["MemberKey", "ReadDeadline", "AttentionReservationRequest", "AttentionFinalizeRequest"]
+response_types = ["AttentionCursor", "AttentionReservation"]
+error_types = ["ReadLaneError", "AtmError"]
+notes = ["Cursor reads await the shared reader pool; reserve and finalize run in backend-owned blocking workers, never on a Tokio runtime worker."]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+io_forbidden_source_modules = { socket_io = ["atm_storage_rusqlite::attention_schedule_store"], process_spawn = ["atm_storage_rusqlite::attention_schedule_store"], message_delivery = ["atm_storage_rusqlite::attention_schedule_store"], template_rendering = ["atm_storage_rusqlite::attention_schedule_store"] }
+lint_rules = ["LINT-BOUNDARY-ASYNC-ATTENTION-SCHEDULE-SQLITE"]
+review_gates = ["private_sqlite_impl", "identifier_only_rows", "no_sync_sqlite_on_tokio"]
+
+[status]
+state = "concrete_landed"
+notes = ["AZ.4"]
