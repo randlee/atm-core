@@ -123,7 +123,7 @@ owner. It does not alter ADR-054's bare-CLI pull behavior.
 | `AZ-TASK-COMPLETE-PENDING` | In scope | AZ.2 atomically joins canonical messages by `(team, task_id)` and invalidates every task-linked pending marker—not only assignment-attempt ids—when a task blocks, closes, reassigns, reopens, or is superseded. |
 | `AZ-GOVERNED-INTERFACES` | In scope | AZ.2/AZ.3/AZ.4 implement the ADR-061 version, migration, record, and older-consumer matrix; ADR-061 D6 and ADR-063 D6 record Rand's approval of the major storage change and its version-bounded coexistence window. |
 | `AZ-IDLE-INTERLEAVING` | In scope | AZ.4 replaces drain-first reminder scheduling with the one-item fair selector. |
-| `GH-1378-CANONICAL-AGENT-STATE` | Prerequisite / consumed by AZ.4 | Issue #1378 removes duplicate `RuntimeHealth` member-state ownership, makes Herdr poll and authenticated heartbeat POST converge on the ephemeral master-roster record, and exposes revision-checked idle opportunities before AZ.4 scheduler work begins. |
+| `GH-1378-CANONICAL-AGENT-STATE` | Prerequisite / consumed by AZ.4 | Issue #1378 removes duplicate `RuntimeHealth` member-state ownership, makes Herdr poll and authenticated heartbeat POST converge on the ephemeral master-roster record, and exposes the canonical state/revision seam from which AZ.4 mints revision-checked idle opportunities. |
 
 These are planning identifiers, not substitutes for repository issue numbers.
 

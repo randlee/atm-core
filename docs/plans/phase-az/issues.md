@@ -11,7 +11,7 @@ replace repository issue numbers or QA triage authority.
 | `AZ-TASK-COMMANDS` | planned | AZ.3 | Canonical task CLI/API, authorization, explicit start, durable handoffs, supersession, and legacy adapters pass end-to-end. |
 | `AZ-IDLE-INTERLEAVING` | planned | AZ.4 | One derived selector emits at most one item per idle opportunity and alternates the separate ephemeral/persistent lanes across restart. |
 | `AZ-GOVERNED-INTERFACES` | planned | AZ.2/AZ.3/AZ.4 | HTTP API 1.4.0 and storage schema 2.0.0/2.1.0 carry ADR-061 records and older-consumer tests; ADR-061 D6 and ADR-063 D6 record the approved `1.6.x` coexistence window and ATM `1.7.0` as the planned and earliest permitted bridge-removal release. |
-| `GH-1378-CANONICAL-AGENT-STATE` | prerequisite | pre-AZ.4 | Herdr poll and authenticated heartbeat POST converge on one ephemeral master-roster state; health/CLI are projections; each accepted idle revision publishes one idempotent opportunity; failed polls and stale revisions emit nothing. |
+| `GH-1378-CANONICAL-AGENT-STATE` | prerequisite | pre-AZ.4 | Herdr poll and authenticated heartbeat POST converge on one ephemeral master-roster state; health/CLI are projections; the canonical state/revision seam is available for AZ.4 to mint one idempotent opportunity per accepted idle revision; failed polls and stale revisions emit nothing. |
 
 ## Binding clarifications
 

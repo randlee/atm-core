@@ -405,8 +405,9 @@ docs/project-plan.md
 
 Issue #1378 changes to `RosterRuntimeMirror`, its concrete RAM mirror, and
 `RuntimeHealth` are prerequisite inputs and should already be present through
-the merged `develop` parent. AZ.4 may adjust their public composition seams only
-as needed to subscribe to and revalidate `IdleOpportunity`; it must not restore
+the merged `develop` parent. AZ.4 owns the opportunity publisher/subscriber and
+may adjust those public composition seams only as needed to mint and revalidate
+`IdleOpportunity` from the canonical roster state/revision; it must not restore
 duplicate member-state ownership.
 
 ### Paths to delete
