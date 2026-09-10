@@ -16,8 +16,8 @@ use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DiagnosticEvent,
-    MessageWriteOrigin, TaskMutationOutcome, TaskMutationRequest, TemplateMessageAdmission,
-    TemplateRegistration, TemplateRegistrationOutcome,
+    MessageWriteOrigin, TaskMutationDeadline, TaskMutationOutcome, TaskMutationRequest,
+    TemplateMessageAdmission, TemplateRegistration, TemplateRegistrationOutcome,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
@@ -39,10 +39,7 @@ type DecomposedWorkflowColumns<'a> = (
 #[derive(Clone)]
 pub(crate) enum WriteOp {
     /// Canonical v2 logical-task mutation, executed by the sole writer queue.
-    TaskMutation {
-        request: Box<TaskMutationRequest>,
-        deadline: Option<atm_storage::TaskMutationDeadline>,
-    },
+    TaskMutation(Box<TaskMutationRequest>, Option<TaskMutationDeadline>),
     /// The sole mutation admitted from the asynchronous mailbox-read path.
     /// It never carries immutable message contents or performs selection.
     ApplyReadDisplayState {
@@ -54,9 +51,7 @@ pub(crate) enum WriteOp {
         record: Box<Message>,
         provenance: MessageWriteOrigin,
     },
-    /// A related group of immutable records that must either all become
-    /// visible or none do.  AI.31 uses this for the ACK reply and the
-    /// acknowledged source record.
+    /// Immutable records committed atomically (AI.31 ACK reply + source).
     UpsertMessages(Vec<Message>),
     Acknowledge {
         source: AcknowledgementSource,
@@ -76,7 +71,7 @@ pub(crate) enum WriteOp {
 impl std::fmt::Debug for WriteOp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::TaskMutation { request, .. } => formatter
+            Self::TaskMutation(request, _) => formatter
                 .debug_tuple("TaskMutation")
                 .field(&request.task_id)
                 .finish(),
@@ -120,20 +115,6 @@ impl std::fmt::Debug for WriteOp {
     }
 }
 
-impl WriteOp {
-    pub(crate) fn expired_task_mutation_error(&self) -> Option<AtmError> {
-        match self {
-            Self::TaskMutation {
-                deadline: Some(deadline),
-                ..
-            } if deadline.is_expired() => Some(AtmError::daemon_unavailable(
-                "task mutation deadline expired before sqlite writer execution",
-            )),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
     TaskMutation(TaskMutationOutcome),
@@ -164,7 +145,7 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
-        WriteOp::TaskMutation { request, .. } => {
+        WriteOp::TaskMutation(request, _) => {
             execute_task_mutation(request, connection, cache, target)
                 .map(WriteOpResult::TaskMutation)
         }

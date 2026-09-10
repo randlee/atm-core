@@ -384,10 +384,7 @@ impl SharedDb {
     ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
         match self
             .writer
-            .submit_async(WriteOp::TaskMutation {
-                request: Box::new(request),
-                deadline: None,
-            })
+            .submit_async(WriteOp::TaskMutation(Box::new(request), None))
             .await?
         {
             WriteOpResult::TaskMutation(outcome) => Ok(outcome),
@@ -406,10 +403,7 @@ impl SharedDb {
     ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
         match self
             .writer
-            .submit_async(WriteOp::TaskMutation {
-                request: Box::new(request),
-                deadline: Some(deadline),
-            })
+            .submit_async(WriteOp::TaskMutation(Box::new(request), Some(deadline)))
             .await?
         {
             WriteOpResult::TaskMutation(outcome) => Ok(outcome),
