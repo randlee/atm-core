@@ -6,9 +6,13 @@
 //! `atm_storage::task_state` defines the pure, backend-neutral transition
 //! table this module's SQL mirrors; nothing here changes that table's rules.
 
+#[path = "task_terminal.rs"]
+mod task_terminal;
+
 use super::ops::execute_task_mutation_message_upsert;
 use super::stmt_cache::WriterStatementCache;
 use super::task_projection::sync_v1_compat_projection;
+use super::task_reminder::record_reminder;
 use super::task_snapshot::current_projection_snapshot;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::error::AtmError;
@@ -57,12 +61,12 @@ impl TransitionSpec {
     }
 }
 
-struct TransitionResult {
-    state: TaskLifecycleState,
-    revision: u64,
-    event: &'static str,
-    detail: Option<String>,
-    related_task_id: Option<TaskId>,
+pub(super) struct TransitionResult {
+    pub(super) state: TaskLifecycleState,
+    pub(super) revision: u64,
+    pub(super) event: &'static str,
+    pub(super) detail: Option<String>,
+    pub(super) related_task_id: Option<TaskId>,
 }
 
 /// Applies a canonical v2 mutation inside the existing writer transaction.
@@ -230,90 +234,16 @@ fn apply_operation(
             now,
         ),
         TaskOperation::RecordReminder { attempt, at } => {
-            record_reminder_v2(connection, target, request, *attempt, at)
+            record_reminder(connection, target, request, *attempt, at)
         }
-        TaskOperation::Close { outcome, handoff } => close_with_handoff(
-            connection,
-            cache,
-            target,
-            request,
-            handoff,
-            TransitionSpec::closed(outcome.clone(), "closed"),
-            now,
-        ),
-        TaskOperation::LegacyCloseSucceeded { completion_notice } => close_with_handoff(
-            connection,
-            cache,
-            target,
-            request,
-            completion_notice,
-            TransitionSpec::closed(TaskOutcome::Succeeded, "legacy_close_succeeded"),
-            now,
-        ),
-        TaskOperation::Reassign(assignment) | TaskOperation::Reopen(assignment) => {
-            let reopen = matches!(request.operation, TaskOperation::Reopen(_));
-            reassign_and_clear_markers(connection, cache, target, request, assignment, now, reopen)
+        TaskOperation::Close { .. }
+        | TaskOperation::LegacyCloseSucceeded { .. }
+        | TaskOperation::Reassign(_)
+        | TaskOperation::Reopen(_)
+        | TaskOperation::Supersede { .. } => {
+            task_terminal::apply(request, connection, cache, target, now)
         }
-        TaskOperation::Supersede {
-            handoff,
-            successor_task_id,
-            successor,
-        } => supersede_v2(
-            connection,
-            cache,
-            target,
-            request,
-            handoff,
-            successor_task_id,
-            successor,
-            now,
-        ),
     }
-}
-
-fn record_reminder_v2(
-    connection: &Connection,
-    target: &SharedDbTarget,
-    request: &TaskMutationRequest,
-    attempt: atm_storage::AssignmentAttempt,
-    at: &atm_storage::IsoTimestamp,
-) -> Result<TransitionResult, AtmError> {
-    let (state, revision, current_attempt): (String, u64, u32) = connection
-        .query_row(
-            "SELECT state, revision, current_attempt FROM tasks_v2 WHERE team = ?1 AND task_id = ?2",
-            params![request.actor.team().as_str(), request.task_id.as_str()],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .map_err(|error| sqlite_error(target, "task reminder requires an existing task", error))?;
-    if !matches!(state.as_str(), "assigned" | "active") || current_attempt != attempt.get() {
-        return Err(task_rejected("task reminder attempt is no longer runnable"));
-    }
-    let next_revision = revision.saturating_add(1);
-    connection
-        .execute(
-            "UPDATE tasks_v2 SET reminder_ordinal = reminder_ordinal + 1, revision = ?3, updated_at = ?4
-             WHERE team = ?1 AND task_id = ?2 AND state IN ('assigned', 'active') AND current_attempt = ?5",
-            params![
-                request.actor.team().as_str(),
-                request.task_id.as_str(),
-                next_revision,
-                at.to_string(),
-                attempt.get(),
-            ],
-        )
-        .map_err(|error| sqlite_error(target, "failed to record v2 task reminder", error))?;
-    let state = match state.as_str() {
-        "assigned" => TaskLifecycleState::Assigned,
-        "active" => TaskLifecycleState::Active,
-        _ => unreachable!("checked runnable task state"),
-    };
-    Ok(TransitionResult {
-        state,
-        revision: next_revision,
-        event: "reminded",
-        detail: None,
-        related_task_id: None,
-    })
 }
 
 fn transition_and_clear_markers(

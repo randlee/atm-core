@@ -3,9 +3,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AsyncAttentionScheduleStore, AsyncGraftReceiverEndpointStore, AsyncMailboxReader,
-    AsyncMessageSearchStore, AsyncMessageStore, AsyncTaskLedgerReader, AsyncTaskMutationStore,
-    AtmError, AttentionScheduleStore, DiagnosticTimelineStore, MessageSearchStore, MessageStore,
+    AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncMessageSearchStore,
+    AsyncMessageStore, AsyncTaskLedgerReader, AsyncTaskMutationStore, AtmError,
+    AttentionScheduleStore, DiagnosticTimelineStore, MessageSearchStore, MessageStore,
     NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterRuntimeMirror,
     RosterStore, TaskStore, TemplateCatalogStore,
 };
@@ -115,7 +115,6 @@ pub struct StorageHandles {
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     attention_schedule_store: Arc<dyn AttentionScheduleStore + Send + Sync>,
-    async_attention_schedule_store: Arc<dyn AsyncAttentionScheduleStore + Send + Sync>,
     task_store: Arc<dyn TaskStore + Send + Sync>,
     graft_receiver_endpoint_store: Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
@@ -148,7 +147,6 @@ pub struct StorageHandleParts {
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     pub attention_schedule_store: Arc<dyn AttentionScheduleStore + Send + Sync>,
-    pub async_attention_schedule_store: Arc<dyn AsyncAttentionScheduleStore + Send + Sync>,
     pub task_store: Arc<dyn TaskStore + Send + Sync>,
     pub graft_receiver_endpoint_store: Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
@@ -201,7 +199,6 @@ impl StorageHandles {
             nudge_template_override_store: parts.nudge_template_override_store,
             pending_nudge_store: parts.pending_nudge_store,
             attention_schedule_store: parts.attention_schedule_store,
-            async_attention_schedule_store: parts.async_attention_schedule_store,
             task_store: parts.task_store,
             graft_receiver_endpoint_store: parts.graft_receiver_endpoint_store,
             peer_config_store: parts.peer_config_store,
@@ -261,12 +258,6 @@ impl StorageHandles {
     /// Returns durable identifier-only idle-attention scheduling metadata.
     pub fn attention_schedule_store(&self) -> Arc<dyn AttentionScheduleStore + Send + Sync> {
         Arc::clone(&self.attention_schedule_store)
-    }
-
-    pub fn async_attention_schedule_store(
-        &self,
-    ) -> Arc<dyn AsyncAttentionScheduleStore + Send + Sync> {
-        Arc::clone(&self.async_attention_schedule_store)
     }
 
     /// Returns the durable task-ledger capability selected by composition.

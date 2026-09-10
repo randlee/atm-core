@@ -3,13 +3,11 @@
 use std::sync::Arc;
 
 use atm_storage::{
-    AssignmentAttempt, AsyncAttentionScheduleStore, AtmError, AttentionCursor,
-    AttentionFinalizeRequest, AttentionItem, AttentionLane, AttentionReservation,
-    AttentionReservationRequest, AttentionReservationStatus, AttentionScheduleStore,
-    IdleOpportunity, IdleOpportunityId, MemberKey, ReadDeadline, ReadLaneError,
-    RosterStateRevision,
+    AssignmentAttempt, AtmError, AttentionCursor, AttentionFinalizeRequest, AttentionItem,
+    AttentionLane, AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
+    AttentionScheduleStore, IdleOpportunity, IdleOpportunityId, MemberKey, RosterStateRevision,
 };
-use rusqlite::{OptionalExtension, Row, params};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::SqliteAttentionScheduleStore;
 use crate::shared_db::{SharedDb, SharedDbTarget, SqliteConnection, sqlite_error};
@@ -103,54 +101,7 @@ impl AttentionScheduleStore for SqliteAttentionScheduleStore {
     }
 }
 
-#[async_trait::async_trait]
-impl AsyncAttentionScheduleStore for SqliteAttentionScheduleStore {
-    async fn load_cursor(
-        &self,
-        member: MemberKey,
-        deadline: ReadDeadline,
-    ) -> Result<AttentionCursor, ReadLaneError> {
-        self.db
-            .read_with_deadline_async(deadline.remaining(), move |connection| {
-                load_cursor(connection, &member).map_err(|error| {
-                    AtmError::new(
-                        atm_storage::AtmErrorCode::InternalError,
-                        "failed to read attention cursor",
-                    )
-                    .with_cause(error)
-                })
-            })
-            .await
-            .map_err(read_lane_error)
-    }
-
-    async fn reserve(
-        &self,
-        request: AttentionReservationRequest,
-    ) -> Result<AttentionReservation, AtmError> {
-        self.db.submit_attention_reservation_async(request).await
-    }
-
-    async fn finalize(
-        &self,
-        request: AttentionFinalizeRequest,
-    ) -> Result<AttentionReservation, AtmError> {
-        self.db.submit_attention_finalize_async(request).await
-    }
-}
-
-fn read_lane_error(error: AtmError) -> ReadLaneError {
-    ReadLaneError::Storage {
-        code: error.code(),
-        message: error.message().to_owned(),
-        cause: error.cause().map(str::to_owned),
-    }
-}
-
-fn load_cursor(
-    connection: &rusqlite::Connection,
-    member: &MemberKey,
-) -> rusqlite::Result<AttentionCursor> {
+fn load_cursor(connection: &Connection, member: &MemberKey) -> rusqlite::Result<AttentionCursor> {
     let row = connection
         .query_row(
             "SELECT next_lane, revision FROM attention_lane_cursors WHERE team = ?1 AND agent = ?2",
@@ -171,7 +122,7 @@ fn load_cursor(
 }
 
 pub(crate) fn reserve_writer(
-    connection: &rusqlite::Connection,
+    connection: &Connection,
     request: AttentionReservationRequest,
 ) -> rusqlite::Result<AttentionReservation> {
     if let Some(existing) = load_reservation(
@@ -220,7 +171,7 @@ pub(crate) fn reserve_writer(
 }
 
 pub(crate) fn finalize_writer(
-    connection: &rusqlite::Connection,
+    connection: &Connection,
     request: AttentionFinalizeRequest,
 ) -> rusqlite::Result<AttentionReservation> {
     let existing = load_reservation(connection, &request.member, request.opportunity_id)?
@@ -244,7 +195,7 @@ pub(crate) fn finalize_writer(
 }
 
 fn load_reservation(
-    connection: &rusqlite::Connection,
+    connection: &Connection,
     member: &MemberKey,
     id: IdleOpportunityId,
 ) -> rusqlite::Result<Option<AttentionReservation>> {

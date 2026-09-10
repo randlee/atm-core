@@ -5,6 +5,7 @@ mod stmt_cache;
 mod task_legacy_ops;
 mod task_ops;
 mod task_projection;
+mod task_reminder;
 mod task_snapshot;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};

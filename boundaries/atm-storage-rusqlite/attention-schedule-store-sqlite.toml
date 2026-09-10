@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-AttentionScheduleStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteAttentionScheduleStore"
+
+[public]
+trait = "AttentionScheduleStore"
+
+[implementation]
+type = "SqliteAttentionScheduleStore"
+module = "atm_storage_rusqlite::attention_schedule_store"
+visibility = "private"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite", "attention_cursor", "attention_reservation"]
+io_forbidden = ["message_delivery", "process_spawn", "template_rendering"]
+
+[dependencies]
+allowed_dependents = ["atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteAttentionScheduleStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["AttentionReservationRequest", "AttentionFinalizeRequest"]
+response_types = ["AttentionCursor", "AttentionReservation"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+io_forbidden_source_modules = { message_delivery = ["atm_storage_rusqlite::attention_schedule_store"], process_spawn = ["atm_storage_rusqlite::attention_schedule_store"], template_rendering = ["atm_storage_rusqlite::attention_schedule_store"] }
+lint_rules = ["LINT-BOUNDARY-ATTENTION-SCHEDULE-STORE-SQLITE"]
+review_gates = ["private_sqlite_impl", "identifier_only_rows"]
+
+[status]
+state = "concrete_landed"

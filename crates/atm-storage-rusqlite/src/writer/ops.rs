@@ -15,7 +15,6 @@ use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    AttentionFinalizeRequest, AttentionReservation, AttentionReservationRequest,
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DiagnosticEvent,
     MessageWriteOrigin, TaskMutationDeadline, TaskMutationOutcome, TaskMutationRequest,
     TemplateMessageAdmission, TemplateRegistration, TemplateRegistrationOutcome,
@@ -39,8 +38,6 @@ type DecomposedWorkflowColumns<'a> = (
 
 #[derive(Clone)]
 pub(crate) enum WriteOp {
-    AttentionReserve(Box<AttentionReservationRequest>),
-    AttentionFinalize(Box<AttentionFinalizeRequest>),
     /// Canonical v2 logical-task mutation, executed by the sole writer queue.
     TaskMutation(Box<TaskMutationRequest>, Option<TaskMutationDeadline>),
     /// The sole mutation admitted from the asynchronous mailbox-read path.
@@ -74,8 +71,6 @@ pub(crate) enum WriteOp {
 impl std::fmt::Debug for WriteOp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::AttentionReserve(_) => formatter.write_str("AttentionReserve(..)"),
-            Self::AttentionFinalize(_) => formatter.write_str("AttentionFinalize(..)"),
             Self::TaskMutation(request, _) => formatter
                 .debug_tuple("TaskMutation")
                 .field(&request.task_id)
@@ -122,7 +117,6 @@ impl std::fmt::Debug for WriteOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
-    AttentionReservation(AttentionReservation),
     TaskMutation(TaskMutationOutcome),
     ReadDisplayStateApplied,
     UpsertMessage {
@@ -151,20 +145,6 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
-        WriteOp::AttentionReserve(request) => {
-            crate::attention_schedule_store::reserve_writer(connection, (**request).clone())
-                .map_err(|error| {
-                    sqlite_error(target, "failed to reserve attention opportunity", error)
-                })
-                .map(WriteOpResult::AttentionReservation)
-        }
-        WriteOp::AttentionFinalize(request) => {
-            crate::attention_schedule_store::finalize_writer(connection, (**request).clone())
-                .map_err(|error| {
-                    sqlite_error(target, "failed to finalize attention opportunity", error)
-                })
-                .map(WriteOpResult::AttentionReservation)
-        }
         WriteOp::TaskMutation(request, _) => {
             execute_task_mutation(request, connection, cache, target)
                 .map(WriteOpResult::TaskMutation)

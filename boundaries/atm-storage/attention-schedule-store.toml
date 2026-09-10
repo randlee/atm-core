@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-AttentionScheduleStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "AttentionScheduleStore"
+
+[public]
+trait = "AttentionScheduleStore"
+notes = "Identifier-only durable fairness cursor and idle-opportunity reservation contract; it never carries message or task text."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_runtime::composition::assemble_runtime"]
+
+[ownership]
+io_owns = ["attention_cursor", "attention_reservation"]
+io_forbidden = ["message_delivery", "process_spawn", "template_rendering"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["MemberKey", "IdleOpportunity", "AttentionReservationRequest", "AttentionFinalizeRequest"]
+response_types = ["AttentionCursor", "AttentionReservation"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-ATTENTION-SCHEDULE-STORE"]
+review_gates = ["identifier_only", "separate_message_and_task_lifecycle"]
+
+[status]
+state = "concrete_landed"

@@ -69,12 +69,11 @@ use atm_storage::contract::{
 };
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{
-    AsyncAttentionScheduleStore, AsyncTaskMutationStore, AtmError, AttentionScheduleStore,
-    EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
-    StorageHandleParts, StorageHandles,
-};
 use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TaskStore, TemplateCatalogStore};
+use atm_storage::{
+    AsyncTaskMutationStore, AtmError, AttentionScheduleStore, EffectiveReaderPool,
+    EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory, StorageHandleParts, StorageHandles,
+};
 pub use diagnostic_timeline::{
     DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
     DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_PRUNE_CHECK_EVERY, SqliteDiagnosticTimeline,
@@ -813,7 +812,6 @@ impl StorageFactory for SqliteStorageFactory {
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
             attention_schedule_store: backend.attention_schedule_store(),
-            async_attention_schedule_store: backend.async_attention_schedule_store(),
             task_store: backend.task_store(),
             async_task_mutation_store: backend.async_task_mutation_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
@@ -962,12 +960,6 @@ impl SqliteStorageBackend {
     }
 
     pub fn attention_schedule_store(&self) -> Arc<dyn AttentionScheduleStore + Send + Sync> {
-        self.attention_schedule_store.clone()
-    }
-
-    pub fn async_attention_schedule_store(
-        &self,
-    ) -> Arc<dyn AsyncAttentionScheduleStore + Send + Sync> {
         self.attention_schedule_store.clone()
     }
 
