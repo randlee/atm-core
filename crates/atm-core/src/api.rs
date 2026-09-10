@@ -781,6 +781,9 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 pub fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::ReloadRuntimeView
+        RequestEnvelope::Write(_)
+            | RequestEnvelope::Clear(_)
+            | RequestEnvelope::Task(_)
+            | RequestEnvelope::ReloadRuntimeView
     )
 }
