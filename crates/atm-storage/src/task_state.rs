@@ -313,7 +313,8 @@ pub struct TaskEventRow {
 #[cfg(test)]
 mod tests {
     use super::{
-        TaskEvent, TaskEventKind, TaskEventMarker, TaskRow, TaskState, Transition, admit,
+        AssignmentAttempt, TaskAbortReason, TaskEvent, TaskEventKind, TaskEventMarker,
+        TaskLifecycleState, TaskOutcome, TaskPriority, TaskRow, TaskState, Transition, admit,
         transition,
     };
     use crate::schema::AtmMessageId;
@@ -375,6 +376,27 @@ mod tests {
             );
             assert_eq!(value.as_str(), expected);
         }
+    }
+
+    #[test]
+    fn v2_lifecycle_keeps_terminal_metadata_inside_closed() {
+        let successor = "AZ.3".parse().expect("task id");
+        let state = TaskLifecycleState::Closed(TaskOutcome::Aborted(TaskAbortReason::Superseded {
+            successor_task_id: successor,
+        }));
+        assert_eq!(
+            serde_json::to_string(&state).expect("serialize lifecycle state"),
+            r#"{"closed":{"aborted":{"superseded":{"successor_task_id":"AZ.3"}}}}"#
+        );
+        assert_eq!(TaskPriority::High.rank(), 0);
+        assert_eq!(TaskPriority::Normal.rank(), 1);
+        assert_eq!(TaskPriority::Low.rank(), 2);
+    }
+
+    #[test]
+    fn assignment_attempt_is_one_based_and_checked() {
+        assert_eq!(AssignmentAttempt::FIRST.get(), 1);
+        assert_eq!(AssignmentAttempt::FIRST.next().expect("second").get(), 2);
     }
 
     fn row(task_id: &str, state: TaskState) -> TaskRow {
