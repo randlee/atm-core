@@ -583,3 +583,11 @@ Rules:
 - Endpoint values are already-sanitized symbolic display values. Raw homes,
   config roots, sockets, and named pipes never enter core, report JSON, or
   human output; the separate host-wide breaker report is not endpoint state.
+
+## Phase AZ message-received metadata boundary
+
+`MessageReceivedHookEmitter` receives a bounded `PostSendHookEvent`: message
+id, summary-backed title, optional task id, and routing metadata. The boundary
+forbids immutable message text, rendered templates, and task descriptions.
+Compatibility serialization emits `title` plus same-value deprecated
+`description`; deserialization accepts title, description, or both.

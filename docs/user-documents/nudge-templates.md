@@ -1,7 +1,7 @@
 ---
 title: Nudge Templates
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.5.15
 ---
 
 # Nudge Templates
@@ -48,7 +48,8 @@ Built-in template rendering supports exactly these placeholders:
 - `{{from}}`
 - `{{team}}`
 - `{{message_id}}`
-- `{{description}}`
+- `{{title}}` (canonical persisted message title)
+- `{{description}}` (deprecated title-only compatibility alias)
 - `{{task_id}}`
 
 There is no Jinja evaluation, no conditionals, and no template-side branching.
@@ -75,7 +76,7 @@ Empty-string template bodies are invalid. Use the explicit team-admin commands
 instead:
 
 ```bash
-atm teams set-nudge-template --team atm-dev --kind delivery_ack --template-body '<atm from="{{from}}" message-id="{{message_id}}"><action>atm read --message-id {{message_id}}</action><action>ack the message</action><description>{{description}}</description><action>execute the assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>'
+atm teams set-nudge-template --team atm-dev --kind delivery_ack --template-body '<atm from="{{from}}" message-id="{{message_id}}"><action>atm read --message-id {{message_id}}</action><action>ack the message</action><description>{{title}}</description><action>execute the assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>'
 atm teams disable-nudge-template --team atm-dev --kind delivery_ack
 atm teams clear-nudge-template --team atm-dev --kind delivery_ack
 ```
@@ -87,7 +88,7 @@ Delivery without required acknowledgement:
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
   <action>atm read --message-id {{message_id}}</action>
-  <description>{{description}}</description>
+  <description>{{title}}</description>
   <action>execute the assigned task</action>
   <when idle="immediate" busy="after-current-task"/>
   <console announce="concise" pause="false"/>
@@ -100,7 +101,7 @@ Delivery with required acknowledgement:
 <atm from="{{from}}" message-id="{{message_id}}">
   <action>atm read --message-id {{message_id}}</action>
   <action>ack the message</action>
-  <description>{{description}}</description>
+  <description>{{title}}</description>
   <action>execute the assigned task</action>
   <when idle="immediate" busy="after-current-task"/>
   <console announce="concise" pause="false"/>
@@ -112,7 +113,7 @@ Queue without required acknowledgement:
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
   <action>atm read --message-id {{message_id}}</action>
-  <description>{{description}}</description>
+  <description>{{title}}</description>
   <action>execute the assigned task</action>
   <console announce="concise" pause="false"/>
 </atm>
@@ -124,7 +125,7 @@ Queue with required acknowledgement:
 <atm from="{{from}}" message-id="{{message_id}}">
   <action>atm read --message-id {{message_id}}</action>
   <action>ack the message</action>
-  <description>{{description}}</description>
+  <description>{{title}}</description>
   <action>execute the assigned task</action>
   <console announce="concise" pause="false"/>
 </atm>
@@ -136,7 +137,7 @@ Task messages are always queued and require acknowledgement:
 <atm from="{{from}}" message-id="{{message_id}}">
   <action>atm read --message-id {{message_id}}</action>
   <action>ack the message</action>
-  <task id="{{task_id}}">{{description}}</task>
+  <task id="{{task_id}}">{{title}}</task>
   <action>execute the assigned task</action>
   <console announce="concise" pause="false"/>
 </atm>

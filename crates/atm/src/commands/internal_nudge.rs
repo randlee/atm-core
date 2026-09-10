@@ -89,7 +89,8 @@ impl InternalNudgeInput {
             ("from", qualified_nudge_sender_identity(&self.event)),
             ("team", self.event.recipient_team.to_string()),
             ("message_id", self.event.message_id.to_string()),
-            ("description", self.event.description.clone()),
+            ("title", self.event.title.clone()),
+            ("description", self.event.title.clone()),
             (
                 "task_id",
                 self.event
@@ -302,9 +303,9 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::boundary::{
-        BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, NudgeKind,
-        PostSendHookEvent, ResolvedBuiltInNudgeTemplate, TMUX_DOUBLE_ENTER_DELAY,
-        built_in_nudge_template_kind_from_post_send_event,
+        BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, ExternalPostSendHookPayload,
+        InternalNudgeEnvelope, NudgeKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
+        TMUX_DOUBLE_ENTER_DELAY, built_in_nudge_template_kind_from_post_send_event,
     };
     use atm_core::send::default_template;
     use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
@@ -329,7 +330,7 @@ mod tests {
             recipient: TEST_ARCH_CTM.parse().expect("recipient"),
             recipient_team: TEST_TEAM.parse().expect("team"),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
-            description: "review failing smoke lane".to_string(),
+            title: "review failing smoke lane".to_string(),
             requires_ack: false,
             is_ack: false,
             task_id: None,
@@ -446,6 +447,10 @@ mod tests {
             },
         })
         .expect("serialize envelope");
+        let payload_json: serde_json::Value =
+            serde_json::from_str(&payload).expect("serialized payload is JSON");
+        assert_eq!(payload_json["event"]["title"], base_event().title);
+        assert_eq!(payload_json["event"]["description"], base_event().title);
         let payload_value = payload.to_string();
         let _env = EnvGuard::set_many([(INTERNAL_NUDGE_ENV, Some(payload_value.as_str()))]);
 
@@ -458,6 +463,17 @@ mod tests {
             input.template.body.as_deref(),
             Some("<atm from=\"{{from}}\" message-id=\"{{message_id}}\"/>")
         );
+    }
+
+    #[test]
+    fn external_post_send_payload_dual_writes_title_without_a_summary_alias() {
+        let event = base_event();
+        let payload = serde_json::to_value(ExternalPostSendHookPayload::new(&event))
+            .expect("external hook payload serializes");
+
+        assert_eq!(payload["title"], event.title);
+        assert_eq!(payload["description"], event.title);
+        assert!(payload.get("summary").is_none());
     }
 
     #[test]

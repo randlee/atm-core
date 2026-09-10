@@ -1769,7 +1769,7 @@ sprint doc per row below and a maintained
 
 | Sprint | Status | Branch | Artifacts |
 | --- | --- | --- | --- |
-| `AZ.1` | `planned` | `feature/az1-task-nudge-contract` | bounded notification event/template repair, external hook compatibility, long-body/J2 regressions |
+| `AZ.1` | `complete` | `feature/az1-task-nudge-contract` | bounded notification event/template repair, external hook compatibility, long-body/J2 regressions |
 | `AZ.2` | `planned` | `feature/az2-task-domain-storage` | lifecycle types, immutable attempts/events, SQLite migration, atomic invariants and task-aware nudge cleanup |
 | `AZ.3` | `planned` | `feature/az3-task-command-handoff` | canonical task CLI/API, authorization, atomic handoffs/supersession, legacy adapters |
 | `AZ.4` | `planned` | `feature/az4-attention-scheduler` | one-item idle selector, durable fair interleaving, attempt-aware persistent reminders |

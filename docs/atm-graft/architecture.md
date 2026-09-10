@@ -363,3 +363,10 @@ not true:
   client surface rather than mirroring the full CLI
 - the concrete crate exports `GraftClient`, `GraftSession`,
   `HostNudgeInjector`, and `GraftObservability`
+
+## Phase AZ wire compatibility
+
+Graft serializes a metadata-only received-hook event using canonical `title`
+and a temporary equal-value `description` compatibility key. The host injection
+body is rendered from that title and must never contain the persisted message
+body, rendered J2 content, or `TaskRow.description`.

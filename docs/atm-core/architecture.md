@@ -726,3 +726,11 @@ Architectural rules:
 - warning diagnostics emitted by `atm-core` must also select a registry code
 - the source registry must stay aligned with
   [`../atm-error-codes.md`](../atm-error-codes.md)
+
+## 7. Phase AZ bounded post-send event
+
+The core event model has one canonical summary field, `title`. Explicit wire
+projection DTOs provide the temporary `description` compatibility key rather
+than restoring a duplicate model field. Queue reminders load only the
+assignment message metadata needed for title and provenance; immutable bodies
+remain behind the mailbox read boundary.

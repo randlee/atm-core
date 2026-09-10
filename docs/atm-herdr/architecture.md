@@ -659,6 +659,12 @@ transport enum and the raw endpoint type remain inside `atm-herdr`. Doctor
 receives only the active transport kind and a sanitized symbolic endpoint
 display, never a raw user path or a transport implementation value.
 
+### 12.4 Phase AZ nudge content boundary
+
+The Herdr adapter receives already-rendered, bounded title metadata from the
+runtime. It performs no body lookup, template rendering, or task-description
+fallback, preserving the same nudge contract as Tmux and Graft.
+
 The CLI alternative has no removal release or ownership-key cleanup planned.
 AY.9 records automated compatibility and lifecycle gates only; release
 readiness, not this sprint, owns live proof.

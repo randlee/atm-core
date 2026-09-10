@@ -3231,3 +3231,11 @@ This ordering is intentional:
 - daemon runtime arrives only after service boundaries are proven
 - lock retirement closes the phase after the daemon/runtime and store model are
   already in place
+
+### 21.10 Phase AZ bounded nudge projection
+
+The post-persistence nudge pipeline is a metadata projection, not a second
+message delivery channel. It carries the persisted `message_id`, summary-backed
+`title`, and optional `task_id`; a missing summary is an empty title. Rendered
+message bodies and task-row descriptions remain durable-read data available
+only through `atm read`.
