@@ -953,12 +953,193 @@ pub trait RosterStore: sealed::Sealed + Send + Sync {
     }
 }
 
+/// Runtime-owned live state for one known roster member.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeMemberState {
+    #[default]
+    Unknown,
+    IdentityConflict,
+    Offline,
+    Idle,
+    Active,
+    Blocked,
+}
+
+/// Provenance of one accepted runtime observation.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeObservationSource {
+    Heartbeat,
+    LocalCommand,
+    HerdrPoll,
+}
+
+/// Whether the source supplied a usable state in its most recent accepted
+/// mutation. An unavailable observation retains the last known state while
+/// making that staleness explicit to scheduling callers.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeObservationAvailability {
+    #[default]
+    Unobserved,
+    Fresh,
+    Unavailable,
+}
+
+/// Monotonic accepted-state-observation sequence for one roster member.
+/// Heartbeats and successful poll observations advance it, including
+/// same-state observations. Failed/incomplete polls update availability
+/// metadata without creating a new revision; an Idle revision is therefore a
+/// stable attention-opportunity seam for Phase AZ scheduling.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RosterStateRevision(u64);
+
+impl RosterStateRevision {
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    #[must_use]
+    pub fn next(self) -> Self {
+        Self(self.0.saturating_add(1))
+    }
+}
+
+/// Heartbeat-owned process/session metadata. Herdr mutations omit this value
+/// and therefore cannot erase identity learned from an authenticated hook.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RosterRuntimeIdentity {
+    pub pid: u32,
+    pub session_id: Option<crate::types::SessionId>,
+}
+
+/// The single ephemeral lifecycle record attached to a master-roster member.
+/// Source and timestamps describe accepted mutations; they do not grant one
+/// source precedence over another.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RosterRuntimeObservation {
+    pub revision: RosterStateRevision,
+    pub state: RuntimeMemberState,
+    pub availability: RuntimeObservationAvailability,
+    pub last_observation_attempt_by: Option<RuntimeObservationSource>,
+    pub last_observation_attempt_at: Option<IsoTimestamp>,
+    pub last_observed_by: Option<RuntimeObservationSource>,
+    pub last_observed_at: Option<IsoTimestamp>,
+    pub pid: Option<u32>,
+    pub session_id: Option<crate::types::SessionId>,
+    pub last_active_at: Option<IsoTimestamp>,
+    pub state_changed_by: Option<RuntimeObservationSource>,
+    pub state_changed_at: Option<IsoTimestamp>,
+    pub session_changed_by: Option<RuntimeObservationSource>,
+    pub session_changed_at: Option<IsoTimestamp>,
+}
+
+/// One accepted-order mutation of a roster member's canonical runtime state.
+/// `state: None` records source unavailability while retaining the last known
+/// state. `identity: None` preserves existing heartbeat identity metadata.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RosterRuntimeObservationUpdate {
+    agent: AgentName,
+    state: Option<RuntimeMemberState>,
+    availability: RuntimeObservationAvailability,
+    source: RuntimeObservationSource,
+    observed_at: IsoTimestamp,
+    identity: Option<RosterRuntimeIdentity>,
+}
+
+impl RosterRuntimeObservationUpdate {
+    /// Constructs one successful state observation. Successful observations
+    /// are always fresh and advance the member revision when accepted.
+    #[must_use]
+    pub fn observed(
+        agent: AgentName,
+        state: RuntimeMemberState,
+        source: RuntimeObservationSource,
+        observed_at: IsoTimestamp,
+        identity: Option<RosterRuntimeIdentity>,
+    ) -> Self {
+        Self {
+            agent,
+            state: Some(state),
+            availability: RuntimeObservationAvailability::Fresh,
+            source,
+            observed_at,
+            identity,
+        }
+    }
+
+    /// Constructs one unavailable-source observation. It preserves the last
+    /// successful state and identity and does not advance the member revision.
+    #[must_use]
+    pub fn unavailable(
+        agent: AgentName,
+        source: RuntimeObservationSource,
+        observed_at: IsoTimestamp,
+    ) -> Self {
+        Self {
+            agent,
+            state: None,
+            availability: RuntimeObservationAvailability::Unavailable,
+            source,
+            observed_at,
+            identity: None,
+        }
+    }
+
+    #[must_use]
+    pub fn agent(&self) -> &AgentName {
+        &self.agent
+    }
+
+    #[must_use]
+    pub fn state(&self) -> Option<RuntimeMemberState> {
+        self.state
+    }
+
+    #[must_use]
+    pub fn availability(&self) -> RuntimeObservationAvailability {
+        self.availability
+    }
+
+    #[must_use]
+    pub fn source(&self) -> RuntimeObservationSource {
+        self.source
+    }
+
+    #[must_use]
+    pub fn observed_at(&self) -> IsoTimestamp {
+        self.observed_at
+    }
+
+    #[must_use]
+    pub fn identity(&self) -> Option<&RosterRuntimeIdentity> {
+        self.identity.as_ref()
+    }
+}
+
+/// Result of applying one canonical state mutation. Missing roster members
+/// are omitted from a batch result, so consumers cannot schedule from an
+/// observation that raced with removal from the master roster.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RosterRuntimeMutationOutcome {
+    pub agent: AgentName,
+    pub previous_state: RuntimeMemberState,
+    pub current: RosterRuntimeObservation,
+    pub state_changed: bool,
+    pub pid_changed: bool,
+}
+
 /// Ephemeral per-member roster state that never round-trips through the
-/// durable roster store. Every field here is mutated in RAM only, on an
-/// observed state change; nothing here is ever read from or written to a
+/// durable roster store. Nothing here is ever read from or written to a
 /// durable backend.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RosterMemberEphemeralState {
+    /// The canonical lifecycle state used by runtime projections and
+    /// scheduling decisions.
+    pub runtime: RosterRuntimeObservation,
     /// Set/cleared by Herdr queue-wake bookkeeping when a member's steer
     /// target is pending a wake attempt.
     pub herdr_wake_pending: bool,
@@ -988,6 +1169,19 @@ pub trait RosterRuntimeMirror: Send + Sync {
         team: &TeamName,
         agent: &AgentName,
     ) -> Option<RosterMemberEphemeralState>;
+    /// Applies one accepted-order batch of runtime observations under the
+    /// team's roster lock. Missing members produce no outcome.
+    fn apply_runtime_observations(
+        &self,
+        team: &TeamName,
+        updates: &[RosterRuntimeObservationUpdate],
+    ) -> Vec<RosterRuntimeMutationOutcome>;
+    /// Reads one team's canonical runtime observations from RAM in roster
+    /// order. Never issues a durable read.
+    fn load_runtime_observations(
+        &self,
+        team: &TeamName,
+    ) -> Vec<(AgentName, RosterRuntimeObservation)>;
     /// Sets one member's Herdr wake-pending ephemeral flag in RAM only.
     /// Returns `false` without effect when the member is not present in the
     /// current roster snapshot.

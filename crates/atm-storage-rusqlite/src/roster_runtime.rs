@@ -7,9 +7,11 @@
 //!
 //! Design ruling: every roster durable write updates RAM in the same
 //! operation; ephemeral per-member state (e.g. Herdr wake-pending) lives
-//! only in RAM and mutates on observed state changes; every roster consumer
+//! only in RAM and mutates on accepted observations; every roster consumer
 //! reads RAM, never the durable store, outside of startup hydration or an
-//! explicit control-plane reload. A read racing a concurrent mutation is
+//! explicit control-plane reload. The ephemeral member record is also the
+//! sole owner of heartbeat/Herdr lifecycle state; RuntimeHealth only projects
+//! it. A read racing a concurrent mutation is
 //! intentionally not ordered beyond memory safety.
 //!
 //! This decorator is backend-agnostic (it wraps any `Arc<dyn RosterStore>`),
@@ -22,7 +24,10 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
-use atm_storage::contract::{RosterMember, RosterMemberEphemeralState, RosterRuntimeMirror};
+use atm_storage::contract::{
+    RosterMember, RosterMemberEphemeralState, RosterRuntimeMirror, RosterRuntimeMutationOutcome,
+    RosterRuntimeObservation, RosterRuntimeObservationUpdate, RuntimeMemberState,
+};
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AtmError, RosterSnapshot, RosterStore, WriteThroughRosterStore};
 
@@ -64,7 +69,7 @@ impl TeamRosterRecord {
                 let state = self
                     .ephemeral
                     .get(&member.agent_name)
-                    .copied()
+                    .cloned()
                     .unwrap_or_default();
                 (member.agent_name.clone(), state)
             })
@@ -182,7 +187,7 @@ impl RosterRuntimeState {
     ) -> Option<RosterMemberEphemeralState> {
         let lock = self.team_lock(team)?;
         let record = lock.read().unwrap_or_else(recover_poison);
-        record.ephemeral.get(agent).copied()
+        record.ephemeral.get(agent).cloned()
     }
 
     /// Mutates one member's ephemeral state in RAM only. Returns `false`
@@ -210,6 +215,124 @@ impl RosterRuntimeState {
         mutate(state);
         record.ephemeral = Arc::new(ephemeral);
         true
+    }
+
+    fn apply_runtime_observations(
+        &self,
+        team: &TeamName,
+        updates: &[RosterRuntimeObservationUpdate],
+    ) -> Vec<RosterRuntimeMutationOutcome> {
+        if updates.is_empty() {
+            return Vec::new();
+        }
+
+        // Retain the outer read guard through the per-team mutation. A
+        // concurrent roster removal must wait, so every returned outcome is
+        // attached to a member that was still in the master roster when the
+        // mutation was accepted.
+        let teams = self.teams.read().unwrap_or_else(recover_poison);
+        let Some(lock) = teams.get(team) else {
+            return Vec::new();
+        };
+        let mut record = lock.write().unwrap_or_else(recover_poison);
+        let members = record
+            .entries
+            .iter()
+            .map(|member| member.agent_name.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut ephemeral = (*record.ephemeral).clone();
+        let mut outcomes = Vec::with_capacity(updates.len());
+
+        for update in updates {
+            if !members.contains(update.agent()) {
+                continue;
+            }
+            let runtime = &mut ephemeral.entry(update.agent().clone()).or_default().runtime;
+            let previous_state = runtime.state;
+            let previous_pid = runtime.pid;
+            let previous_session = runtime.session_id.clone();
+            let state_changed = update.state().is_some_and(|next| next != runtime.state);
+
+            runtime.availability = update.availability();
+            runtime.last_observation_attempt_by = Some(update.source());
+            runtime.last_observation_attempt_at = Some(update.observed_at());
+            if let Some(next_state) = update.state() {
+                runtime.revision = runtime.revision.next();
+                runtime.last_observed_by = Some(update.source());
+                runtime.last_observed_at = Some(update.observed_at());
+                runtime.state = next_state;
+                if state_changed {
+                    runtime.state_changed_by = Some(update.source());
+                    runtime.state_changed_at = Some(update.observed_at());
+                }
+                if next_state == RuntimeMemberState::Active {
+                    runtime.last_active_at = Some(update.observed_at());
+                }
+            }
+            if let Some(identity) = update.identity() {
+                runtime.pid = Some(identity.pid);
+                if let Some(session_id) = &identity.session_id
+                    && runtime.session_id.as_ref() != Some(session_id)
+                {
+                    runtime.session_id = Some(session_id.clone());
+                    runtime.session_changed_by = Some(update.source());
+                    runtime.session_changed_at = Some(update.observed_at());
+                }
+            }
+
+            let pid_mutated = runtime.pid != previous_pid;
+            let session_mutated = runtime.session_id != previous_session;
+            if pid_mutated || session_mutated {
+                tracing::info!(
+                    event = "roster_runtime_identity_changed",
+                    team = %team,
+                    member = %update.agent(),
+                    source = ?update.source(),
+                    observed_at = %update.observed_at(),
+                    previous_pid = ?previous_pid,
+                    new_pid = ?runtime.pid,
+                    previous_session_id = ?previous_session,
+                    new_session_id = ?runtime.session_id,
+                    pid_mutated,
+                    session_mutated,
+                    "canonical roster runtime identity metadata changed"
+                );
+            }
+
+            outcomes.push(RosterRuntimeMutationOutcome {
+                agent: update.agent().clone(),
+                previous_state,
+                current: runtime.clone(),
+                state_changed,
+                pid_changed: previous_pid.is_some_and(|pid| runtime.pid != Some(pid)),
+            });
+        }
+
+        record.ephemeral = Arc::new(ephemeral);
+        outcomes
+    }
+
+    fn load_runtime_observations(
+        &self,
+        team: &TeamName,
+    ) -> Vec<(AgentName, RosterRuntimeObservation)> {
+        let teams = self.teams.read().unwrap_or_else(recover_poison);
+        let Some(lock) = teams.get(team) else {
+            return Vec::new();
+        };
+        let record = lock.read().unwrap_or_else(recover_poison);
+        record
+            .entries
+            .iter()
+            .map(|member| {
+                let observation = record
+                    .ephemeral
+                    .get(&member.agent_name)
+                    .map(|state| state.runtime.clone())
+                    .unwrap_or_default();
+                (member.agent_name.clone(), observation)
+            })
+            .collect()
     }
 }
 
@@ -286,6 +409,21 @@ impl RosterRuntimeMirror for WriteThroughRosterView {
         self.state.ephemeral_state(team, agent)
     }
 
+    fn apply_runtime_observations(
+        &self,
+        team: &TeamName,
+        updates: &[RosterRuntimeObservationUpdate],
+    ) -> Vec<RosterRuntimeMutationOutcome> {
+        self.state.apply_runtime_observations(team, updates)
+    }
+
+    fn load_runtime_observations(
+        &self,
+        team: &TeamName,
+    ) -> Vec<(AgentName, RosterRuntimeObservation)> {
+        self.state.load_runtime_observations(team)
+    }
+
     fn set_herdr_wake_pending(&self, team: &TeamName, agent: &AgentName, pending: bool) -> bool {
         self.state.set_ephemeral_state(team, agent, |ephemeral| {
             ephemeral.herdr_wake_pending = pending
@@ -334,7 +472,11 @@ pub fn build_write_through_roster(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use atm_storage::contract::{AgentType, RosterHarness, RosterMemberKind};
+    use atm_storage::contract::{
+        AgentType, RosterHarness, RosterMemberKind, RosterRuntimeIdentity,
+        RuntimeObservationAvailability, RuntimeObservationSource,
+    };
+    use atm_storage::types::{IsoTimestamp, SessionId};
     use std::sync::Mutex;
 
     /// Neutral fixture identifiers: the subject under test is the
@@ -491,8 +633,214 @@ mod tests {
         assert_eq!(
             mirror.ephemeral_state(&team, &agent),
             Some(RosterMemberEphemeralState {
-                herdr_wake_pending: true
+                herdr_wake_pending: true,
+                ..RosterMemberEphemeralState::default()
             })
+        );
+    }
+
+    #[test]
+    fn heartbeat_and_herdr_mutate_one_canonical_record_in_accepted_order() {
+        let durable = Arc::new(FakeDurableRoster::default());
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_AGENT);
+        durable
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
+                refreshed_at: None,
+            })
+            .unwrap();
+        let mirror = build_write_through_roster(durable).unwrap().mirror();
+        let heartbeat_at: IsoTimestamp = "2030-01-01T00:00:00Z".parse().unwrap();
+        let herdr_at: IsoTimestamp = "2030-01-01T00:00:01Z".parse().unwrap();
+        let session = SessionId::new("session-a").unwrap();
+
+        let first = mirror.apply_runtime_observations(
+            &team,
+            &[RosterRuntimeObservationUpdate::observed(
+                agent.clone(),
+                RuntimeMemberState::Active,
+                RuntimeObservationSource::Heartbeat,
+                heartbeat_at,
+                Some(RosterRuntimeIdentity {
+                    pid: 41,
+                    session_id: Some(session.clone()),
+                }),
+            )],
+        );
+        assert_eq!(first.len(), 1);
+        assert!(first[0].state_changed);
+        assert_eq!(first[0].current.revision.get(), 1);
+
+        let second = mirror.apply_runtime_observations(
+            &team,
+            &[RosterRuntimeObservationUpdate::observed(
+                agent.clone(),
+                RuntimeMemberState::Idle,
+                RuntimeObservationSource::HerdrPoll,
+                herdr_at,
+                None,
+            )],
+        );
+        let current = &second[0].current;
+        assert_eq!(second[0].previous_state, RuntimeMemberState::Active);
+        assert_eq!(current.state, RuntimeMemberState::Idle);
+        assert_eq!(current.revision.get(), 2);
+        assert_eq!(
+            current.last_observed_by,
+            Some(RuntimeObservationSource::HerdrPoll)
+        );
+        assert_eq!(current.last_observed_at, Some(herdr_at));
+        assert_eq!(current.state_changed_at, Some(herdr_at));
+        assert_eq!(
+            current.pid,
+            Some(41),
+            "Herdr cannot erase heartbeat identity"
+        );
+        assert_eq!(current.session_id, Some(session));
+        assert_eq!(current.last_active_at, Some(heartbeat_at));
+        let without_session_at: IsoTimestamp = "2030-01-01T00:00:02Z".parse().unwrap();
+        let third = mirror.apply_runtime_observations(
+            &team,
+            &[RosterRuntimeObservationUpdate::observed(
+                agent.clone(),
+                RuntimeMemberState::Idle,
+                RuntimeObservationSource::Heartbeat,
+                without_session_at,
+                Some(RosterRuntimeIdentity {
+                    pid: 42,
+                    session_id: None,
+                }),
+            )],
+        );
+        assert_eq!(third[0].current.revision.get(), 3);
+        assert_eq!(
+            third[0].current.session_id, current.session_id,
+            "absent heartbeat session metadata is a no-op"
+        );
+        assert_eq!(
+            mirror.load_runtime_observations(&team),
+            vec![(agent, third[0].current.clone())]
+        );
+    }
+
+    #[test]
+    fn same_state_refreshes_observation_metadata_and_failed_poll_preserves_state() {
+        let durable = Arc::new(FakeDurableRoster::default());
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_AGENT);
+        durable
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
+                refreshed_at: None,
+            })
+            .unwrap();
+        let mirror = build_write_through_roster(durable).unwrap().mirror();
+        let first_at: IsoTimestamp = "2030-01-01T00:00:00Z".parse().unwrap();
+        let refresh_at: IsoTimestamp = "2030-01-01T00:00:01Z".parse().unwrap();
+        let failed_at: IsoTimestamp = "2030-01-01T00:00:02Z".parse().unwrap();
+        let first = mirror.apply_runtime_observations(
+            &team,
+            &[RosterRuntimeObservationUpdate::observed(
+                agent.clone(),
+                RuntimeMemberState::Idle,
+                RuntimeObservationSource::HerdrPoll,
+                first_at,
+                None,
+            )],
+        );
+        let refreshed = mirror.apply_runtime_observations(
+            &team,
+            &[RosterRuntimeObservationUpdate::observed(
+                agent.clone(),
+                RuntimeMemberState::Idle,
+                RuntimeObservationSource::HerdrPoll,
+                refresh_at,
+                None,
+            )],
+        );
+        assert!(!refreshed[0].state_changed);
+        assert_eq!(refreshed[0].current.revision.get(), 2);
+        assert_eq!(refreshed[0].current.last_observed_at, Some(refresh_at));
+        assert_eq!(refreshed[0].current.state_changed_at, Some(first_at));
+        assert_eq!(first[0].current.state, refreshed[0].current.state);
+
+        let failed = mirror.apply_runtime_observations(
+            &team,
+            &[RosterRuntimeObservationUpdate::unavailable(
+                agent.clone(),
+                RuntimeObservationSource::HerdrPoll,
+                failed_at,
+            )],
+        );
+        assert_eq!(failed[0].current.state, RuntimeMemberState::Idle);
+        assert_eq!(
+            failed[0].current.revision.get(),
+            2,
+            "an unavailable poll does not create an attention opportunity"
+        );
+        assert_eq!(
+            failed[0].current.availability,
+            RuntimeObservationAvailability::Unavailable
+        );
+        assert_eq!(
+            failed[0].current.last_observed_at,
+            Some(refresh_at),
+            "failed polls preserve the last successful observation"
+        );
+        assert_eq!(
+            failed[0].current.last_observation_attempt_at,
+            Some(failed_at)
+        );
+        assert_eq!(failed[0].current.state_changed_at, Some(first_at));
+    }
+
+    #[test]
+    fn roster_removal_and_readdition_drop_all_ephemeral_runtime_state() {
+        let durable = Arc::new(FakeDurableRoster::default());
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_AGENT);
+        durable
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
+                refreshed_at: None,
+            })
+            .unwrap();
+        let write_through = build_write_through_roster(durable).unwrap();
+        let store = write_through.store();
+        let mirror = write_through.mirror();
+        let _ = mirror.apply_runtime_observations(
+            &team,
+            &[RosterRuntimeObservationUpdate::observed(
+                agent.clone(),
+                RuntimeMemberState::Active,
+                RuntimeObservationSource::Heartbeat,
+                IsoTimestamp::now(),
+                None,
+            )],
+        );
+
+        store
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: Vec::new(),
+                refreshed_at: None,
+            })
+            .unwrap();
+        store
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![member(TEST_TEAM, TEST_AGENT)],
+                refreshed_at: None,
+            })
+            .unwrap();
+
+        assert_eq!(
+            mirror.ephemeral_state(&team, &agent),
+            Some(RosterMemberEphemeralState::default())
         );
     }
 

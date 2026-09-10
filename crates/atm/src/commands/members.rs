@@ -40,8 +40,37 @@ impl MembersCommand {
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::list_members_with_roster_store(roster_store, query)
         })?;
-        let runtime = self.runtime_snapshot(&team, observability).await;
-        print_members_result(&outcome, runtime.as_ref(), json)
+        let mut runtime = match self.runtime_snapshot(&team, observability).await {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                tracing::warn!(
+                    event = "members_runtime_status_unavailable",
+                    team = %team,
+                    error = %error,
+                    "runtime status unavailable; emitting roster with explicit unavailable state"
+                );
+                unavailable_runtime_snapshot(&outcome)
+            }
+        };
+        let fallback = unavailable_runtime_snapshot(&outcome);
+        let mut missing = 0_usize;
+        for observation in fallback.members {
+            if !runtime.members.iter().any(|current| {
+                current.team == observation.team && current.member == observation.member
+            }) {
+                runtime.members.push(observation);
+                missing += 1;
+            }
+        }
+        if missing > 0 {
+            tracing::warn!(
+                event = "members_runtime_status_incomplete",
+                team = %team,
+                missing,
+                "runtime response omitted roster members; marking them unavailable"
+            );
+        }
+        print_members_result(&outcome, Some(&runtime), json)
     }
 
     fn build_query(&self) -> Result<MembersQuery> {
@@ -62,8 +91,8 @@ impl MembersCommand {
         &self,
         team: &TeamName,
         observability: &CliObservability,
-    ) -> Option<RuntimeStatusSnapshot> {
-        let (home_dir, current_dir) = resolve_command_runtime_context("members").ok()?;
+    ) -> Result<RuntimeStatusSnapshot> {
+        let (home_dir, current_dir) = resolve_command_runtime_context("members")?;
         let caller_team =
             atm_core::caller_context::read_cli_team_from_env_or_warn("atm::members::runtime");
         let caller_identity =
@@ -81,9 +110,60 @@ impl MembersCommand {
             observability,
             InvocationDir::new(&query.current_dir),
             AtmHomePath::new(&query.home_dir),
-        )
-        .ok()?;
-        composition.doctor(query).await.ok()?.runtime_status
+        )?;
+        composition
+            .doctor(query)
+            .await?
+            .runtime_status
+            .ok_or_else(|| anyhow::anyhow!("daemon doctor response omitted runtime status"))
+    }
+}
+
+fn unavailable_runtime_snapshot(
+    outcome: &atm_core::team_admin::MembersList,
+) -> RuntimeStatusSnapshot {
+    let members: Vec<_> = outcome
+        .members
+        .iter()
+        .map(|member| RuntimeMemberObservation {
+            team: outcome.team.clone(),
+            member: member.name.clone(),
+            state: RuntimeMemberState::Unknown,
+            revision: Default::default(),
+            availability: atm_core::protocol::RuntimeObservationAvailability::Unavailable,
+            last_observation_attempt_by: None,
+            last_observation_attempt_at: None,
+            last_observed_by: None,
+            last_observed_at: None,
+            session_id: None,
+            pid: None,
+            last_active_at: None,
+            state_changed_by: None,
+            state_changed_at: None,
+            session_changed_by: None,
+            session_changed_at: None,
+        })
+        .collect();
+    RuntimeStatusSnapshot {
+        liveness: atm_core::protocol::RuntimeLivenessState::Unavailable,
+        readiness: atm_core::protocol::RuntimeReadinessState::Unavailable,
+        detail: Some("runtime status unavailable".to_owned()),
+        singleton_owner_pid: None,
+        degraded_ingest: false,
+        member_counts: atm_core::protocol::RuntimeStatusCounts {
+            unknown_members: members.len(),
+            ..Default::default()
+        },
+        members,
+        graft_queue_handoff_failures_total: 0,
+        graft_queue_marker_clear_failures_total: 0,
+        bare_cli_queue_full_drops_total: 0,
+        queue_marker_set_failures_total: 0,
+        herdr_queue_last_tick_at: None,
+        queue_messages_drained_total: 0,
+        queue_drain_failures_total: 0,
+        blocking_core_bridge_stalls_total: 0,
+        write_source_preflight_stalls_total: 0,
     }
 }
 
@@ -112,11 +192,9 @@ fn print_members_result(
                 let Some(name) = member.get("name").and_then(serde_json::Value::as_str) else {
                     continue;
                 };
-                let Some(observation) = runtime
-                    .members
-                    .iter()
-                    .find(|observation| observation.member.as_str() == name)
-                else {
+                let Some(observation) = runtime.members.iter().find(|observation| {
+                    observation.team == outcome.team && observation.member.as_str() == name
+                }) else {
                     continue;
                 };
                 let observation_value = serde_json::to_value(observation)?;
@@ -141,10 +219,9 @@ fn print_members_result(
     for member in &outcome.members {
         let home_dir = member.home_dir.as_path().display().to_string();
         let observation = runtime.and_then(|snapshot| {
-            snapshot
-                .members
-                .iter()
-                .find(|observation| observation.member == member.name)
+            snapshot.members.iter().find(|observation| {
+                observation.team == outcome.team && observation.member == member.name
+            })
         });
         let runtime_text = render_runtime_observation(observation);
         println!(
@@ -165,6 +242,8 @@ fn print_members_result(
 fn render_runtime_observation(observation: Option<&RuntimeMemberObservation>) -> String {
     let Some(observation) = observation.filter(|value| {
         !(value.state == RuntimeMemberState::Unknown
+            && value.revision.get() == 0
+            && value.availability == atm_core::protocol::RuntimeObservationAvailability::Unobserved
             && value.session_id.is_none()
             && value.pid.is_none()
             && value.last_active_at.is_none()
@@ -180,8 +259,19 @@ fn render_runtime_observation(observation: Option<&RuntimeMemberObservation>) ->
         .and_then(|value| value.as_str().map(str::to_owned))
         .unwrap_or_else(|| "unknown".to_owned());
     let mut rendered = format!(" state={state}");
-    if let Some(changed_at) = observation.state_changed_at {
-        let age = (Utc::now() - changed_at.into_inner()).num_seconds().max(0);
+    let availability = serde_json::to_value(observation.availability)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "unobserved".to_owned());
+    rendered.push_str(&format!(
+        " availability={availability} revision={}",
+        observation.revision.get()
+    ));
+    if let Some(observed_at) = observation
+        .last_observation_attempt_at
+        .or(observation.last_observed_at)
+    {
+        let age = (Utc::now() - observed_at.into_inner()).num_seconds().max(0);
         let age = if age < 60 {
             format!("{age}s")
         } else if age < 3_600 {

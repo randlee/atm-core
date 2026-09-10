@@ -11,10 +11,14 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use crate::protocol::RuntimeMemberState;
+use crate::boundary::MemberKey;
+use crate::protocol::{
+    RosterStateRevision, RuntimeMemberObservation, RuntimeMemberState,
+    RuntimeObservationAvailability, RuntimeObservationSource,
+};
 use crate::send_to::PICKER_OUTPUT_SCHEMA_VERSION;
 use crate::team_admin::MemberSummary;
-use crate::types::{AgentName, HostName, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
 
 /// The picker projection's own schema version. Shares
 /// [`PICKER_OUTPUT_SCHEMA_VERSION`]'s value: the projection this command
@@ -33,7 +37,20 @@ pub struct PickerMember {
     pub host: Option<HostName>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
+    /// Compatibility status retained for picker-v1 consumers. Exact runtime
+    /// state and freshness are carried by the additive fields below.
     pub status: PickerMemberStatus,
+    pub runtime_state: RuntimeMemberState,
+    pub runtime_revision: RosterStateRevision,
+    pub runtime_availability: RuntimeObservationAvailability,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_last_observed_by: Option<RuntimeObservationSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_last_observed_at: Option<IsoTimestamp>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_last_attempt_by: Option<RuntimeObservationSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_last_attempt_at: Option<IsoTimestamp>,
 }
 
 /// A picker-consumable member liveness projection (PRD §4.2's normative
@@ -70,31 +87,51 @@ pub struct PickerMembersProjection {
 }
 
 /// Builds the picker projection from an already-loaded roster summary and an
-/// optional map of live runtime observations.
+/// map of live runtime observations. Exact lifecycle, revision, and
+/// availability fields are additive to the compatibility `status` field.
 ///
 /// A member absent from `runtime_states` (no observation yet, e.g. right
-/// after daemon startup) projects as `dead`, the same as an explicit
-/// `Offline`/`Unknown`/`IdentityConflict` observation -- never guessed as
-/// `active`/`idle`.
+/// after runtime startup) projects as exact `Unknown` + `Unobserved` and
+/// compatibility `dead` -- never guessed as `active`/`idle`. Callers that
+/// know a runtime read failed supply explicit `Unknown` + `Unavailable`
+/// observations instead.
 #[must_use]
 pub fn build_picker_members_projection(
     team: &TeamName,
     roster_members: &[MemberSummary],
-    runtime_states: &BTreeMap<AgentName, RuntimeMemberState>,
+    runtime_states: &BTreeMap<MemberKey, RuntimeMemberObservation>,
 ) -> PickerMembersProjection {
     let members = roster_members
         .iter()
         .map(|member| {
-            let state = runtime_states
-                .get(&member.name)
-                .copied()
-                .unwrap_or(RuntimeMemberState::Unknown);
+            let key = MemberKey::new(team.clone(), member.name.clone());
+            let observation = runtime_states.get(&key);
+            let state = observation.map_or(RuntimeMemberState::Unknown, |value| value.state);
+            let availability = observation
+                .map_or(RuntimeObservationAvailability::Unobserved, |value| {
+                    value.availability
+                });
+            let status = if availability == RuntimeObservationAvailability::Fresh {
+                PickerMemberStatus::from(state)
+            } else {
+                PickerMemberStatus::Dead
+            };
             PickerMember {
                 id: format!("{}@{team}", member.name),
                 name: member.name.clone(),
                 host: member.host.clone(),
                 cwd: member.live_cwd.clone(),
-                status: PickerMemberStatus::from(state),
+                status,
+                runtime_state: state,
+                runtime_revision: observation
+                    .map_or_else(RosterStateRevision::default, |value| value.revision),
+                runtime_availability: availability,
+                runtime_last_observed_by: observation.and_then(|value| value.last_observed_by),
+                runtime_last_observed_at: observation.and_then(|value| value.last_observed_at),
+                runtime_last_attempt_by: observation
+                    .and_then(|value| value.last_observation_attempt_by),
+                runtime_last_attempt_at: observation
+                    .and_then(|value| value.last_observation_attempt_at),
             }
         })
         .collect();
@@ -135,12 +172,33 @@ mod tests {
         "test-team".parse().expect("team")
     }
 
+    fn observation(state: RuntimeMemberState) -> RuntimeMemberObservation {
+        RuntimeMemberObservation {
+            team: team(),
+            member: "sender-a".parse().expect("agent"),
+            state,
+            revision: RosterStateRevision::default().next(),
+            availability: RuntimeObservationAvailability::Fresh,
+            last_observation_attempt_by: None,
+            last_observation_attempt_at: None,
+            last_observed_by: None,
+            last_observed_at: None,
+            session_id: None,
+            pid: None,
+            last_active_at: None,
+            state_changed_by: None,
+            state_changed_at: None,
+            session_changed_by: None,
+            session_changed_at: None,
+        }
+    }
+
     #[test]
     fn projects_id_host_cwd_and_active_status() {
         let mut states = BTreeMap::new();
         states.insert(
-            "sender-a".parse().expect("agent"),
-            RuntimeMemberState::Active,
+            MemberKey::new(team(), "sender-a".parse().expect("agent")),
+            observation(RuntimeMemberState::Active),
         );
         let projection = build_picker_members_projection(
             &team(),
@@ -159,6 +217,11 @@ mod tests {
         );
         assert_eq!(picked.cwd.as_deref(), Some("/repo"));
         assert_eq!(picked.status, PickerMemberStatus::Active);
+        assert_eq!(picked.runtime_state, RuntimeMemberState::Active);
+        assert_eq!(
+            picked.runtime_availability,
+            RuntimeObservationAvailability::Fresh
+        );
     }
 
     #[test]
@@ -184,6 +247,15 @@ mod tests {
             &BTreeMap::new(),
         );
         assert_eq!(projection.members[0].status, PickerMemberStatus::Dead);
+        assert_eq!(
+            projection.members[0].runtime_state,
+            RuntimeMemberState::Unknown
+        );
+        assert_eq!(projection.members[0].runtime_revision.get(), 0);
+        assert_eq!(
+            projection.members[0].runtime_availability,
+            RuntimeObservationAvailability::Unobserved
+        );
     }
 
     #[test]
@@ -194,6 +266,25 @@ mod tests {
             &BTreeMap::new(),
         );
         assert_eq!(projection.members[0].host, None);
+    }
+
+    #[test]
+    fn unavailable_active_state_is_preserved_but_compatibility_status_is_dead() {
+        let mut states = BTreeMap::new();
+        let mut runtime = observation(RuntimeMemberState::Active);
+        runtime.availability = RuntimeObservationAvailability::Unavailable;
+        states.insert(MemberKey::new(team(), runtime.member.clone()), runtime);
+        let projection =
+            build_picker_members_projection(&team(), &[member("sender-a", None, None)], &states);
+        assert_eq!(projection.members[0].status, PickerMemberStatus::Dead);
+        assert_eq!(
+            projection.members[0].runtime_state,
+            RuntimeMemberState::Active
+        );
+        assert_eq!(
+            projection.members[0].runtime_availability,
+            RuntimeObservationAvailability::Unavailable
+        );
     }
 
     #[test]

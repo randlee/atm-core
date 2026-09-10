@@ -1,26 +1,20 @@
-//! In-memory lifecycle and heartbeat projection for the replacement runtime.
+//! Process-health counters and canonical-roster projection for the replacement runtime.
 //!
 //! This is intentionally small: it retains no listener, storage, or harness
 //! implementation. Listener lifecycle drives readiness; authenticated local
 //! heartbeats enrich the existing doctor/status payload and make a best-effort
-//! idle-transition notification. Durable pending-nudge state and the recovery
-//! sweep remain the correctness backstop.
+//! status payloads project caller-supplied canonical roster observations;
+//! this module never owns member state. Durable pending-nudge state and the
+//! recovery sweep remain the correctness backstop.
 
-use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
-use atm_core::boundary::MemberKey;
 use atm_core::protocol::{
-    HeartbeatActivity, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
-    RuntimeObservationSource, RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
-    TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+    RosterRuntimeObservation, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
+    RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
 };
-use atm_core::team_admin::MembersList;
-use atm_core::types::{IsoTimestamp, SessionId};
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use tokio::sync::watch;
-
-/// The bounded runtime-member projection is observability, not durable state.
-pub const MAX_RUNTIME_STATUS_MEMBERS: usize = 4096;
 
 #[derive(Clone)]
 pub struct RuntimeHealth {
@@ -45,8 +39,9 @@ impl Default for RuntimeHealth {
 
 /// Best-effort notification of a genuine member lifecycle transition.
 ///
-/// The callback is invoked after the health mutex is released. Implementations
-/// must keep storage and process work off the heartbeat task.
+/// The callback is invoked after the canonical roster mutation lock is
+/// released. Implementations must keep storage and process work off the
+/// heartbeat task.
 pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send + Sync {
     fn on_transition(
         &self,
@@ -61,7 +56,6 @@ struct RuntimeHealthState {
     lifecycle: Lifecycle,
     detail: Option<String>,
     owner_pid: Option<u32>,
-    members: HashMap<MemberKey, MemberRecord>,
     graft_queue_handoff_failures_total: u64,
     graft_queue_marker_clear_failures_total: u64,
     queue_marker_set_failures_total: u64,
@@ -80,17 +74,6 @@ enum Lifecycle {
     Ready,
     Draining,
     Stopped,
-}
-
-#[derive(Clone)]
-struct MemberRecord {
-    pid: Option<u32>,
-    session_id: Option<SessionId>,
-    state: RuntimeMemberState,
-    last_active_at: Option<IsoTimestamp>,
-    state_changed_at: Option<IsoTimestamp>,
-    session_changed_at: Option<IsoTimestamp>,
-    state_source: RuntimeObservationSource,
 }
 
 impl RuntimeHealth {
@@ -235,149 +218,25 @@ impl RuntimeHealth {
             state.write_source_preflight_stalls_total.saturating_add(1);
     }
 
-    /// Record an already-authorized local heartbeat.
-    ///
-    /// The brief mutex protects only in-memory status fields; storage and
-    /// process work remain outside this critical section.
-    pub fn record_heartbeat(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-    ) -> (TeamMemberHeartbeatResponse, Option<RuntimeMemberState>) {
-        let mut state = self.lock();
-        let key = MemberKey {
-            team: request.team.clone(),
-            agent: request.member.clone(),
-        };
-        if !state.members.contains_key(&key) && state.members.len() == MAX_RUNTIME_STATUS_MEMBERS {
-            // Observability must never become an unbounded in-process cache.
-            // Prefer evicting an inactive observation; all entries are
-            // non-authoritative and can be restored by the next heartbeat.
-            if let Some(evicted) = state
-                .members
-                .iter()
-                .min_by_key(|(_, record)| record.last_active_at.or(record.state_changed_at))
-                .map(|(key, _)| key.clone())
-            {
-                state.members.remove(&evicted);
-            }
-        }
-        let record = state.members.entry(key).or_insert(MemberRecord {
-            pid: None,
-            session_id: None,
-            state: RuntimeMemberState::Unknown,
-            last_active_at: None,
-            state_changed_at: None,
-            session_changed_at: None,
-            state_source: RuntimeObservationSource::Heartbeat,
-        });
-        let next_state = match request.activity {
-            HeartbeatActivity::ActiveToolUse => RuntimeMemberState::Active,
-            HeartbeatActivity::Idle => RuntimeMemberState::Idle,
-            HeartbeatActivity::SessionEnded => RuntimeMemberState::Offline,
-        };
-        let previous_state = record.state;
-        let transitioned_to_idle = (previous_state != RuntimeMemberState::Idle
-            && next_state == RuntimeMemberState::Idle)
-            .then_some(previous_state);
-        if previous_state != next_state {
-            record.state = next_state;
-            record.state_changed_at = Some(request.observed_at);
-        }
-        record.state_source = RuntimeObservationSource::Heartbeat;
-        if next_state == RuntimeMemberState::Active {
-            record.last_active_at = Some(request.observed_at);
-        }
-        let previous_pid = record.pid;
-        record.pid = Some(request.pid);
-        if request.session_id.is_some() && record.session_id != request.session_id {
-            record.session_id = request.session_id.clone();
-            record.session_changed_at = Some(request.observed_at);
-        }
-        (
-            TeamMemberHeartbeatResponse {
-                team: request.team.clone(),
-                member: request.member.clone(),
-                pid: request.pid,
-                pid_changed: previous_pid.is_some_and(|pid| pid != request.pid),
-                state: next_state,
-                last_active_at: record.last_active_at,
-                session_id: record.session_id.clone(),
-            },
-            transitioned_to_idle,
-        )
-    }
-
-    /// Records a Herdr poll observation without changing heartbeat-owned
-    /// process or session identity fields.
-    pub fn record_observed_state(
-        &self,
-        member: &MemberKey,
-        next_state: RuntimeMemberState,
-        source: RuntimeObservationSource,
-    ) {
-        let mut state = self.lock();
-        if !state.members.contains_key(member)
-            && state.members.len() == MAX_RUNTIME_STATUS_MEMBERS
-            && let Some(evicted) = state
-                .members
-                .iter()
-                .min_by_key(|(_, record)| record.last_active_at.or(record.state_changed_at))
-                .map(|(key, _)| key.clone())
-        {
-            state.members.remove(&evicted);
-        }
-        let record = state.members.entry(member.clone()).or_insert(MemberRecord {
-            pid: None,
-            session_id: None,
-            state: RuntimeMemberState::Unknown,
-            last_active_at: None,
-            state_changed_at: None,
-            session_changed_at: None,
-            state_source: source,
-        });
-        let observed_at = IsoTimestamp::now();
-        if record.state != next_state {
-            record.state = next_state;
-            record.state_changed_at = Some(observed_at);
-        }
-        record.state_source = source;
-        if next_state == RuntimeMemberState::Active {
-            record.last_active_at = Some(observed_at);
-        }
-    }
-
-    pub fn record_herdr_poll_state(&self, member: &MemberKey, next_state: RuntimeMemberState) {
-        self.record_observed_state(member, next_state, RuntimeObservationSource::HerdrPoll);
-    }
-
     #[must_use]
     pub fn snapshot(&self) -> RuntimeStatusSnapshot {
-        self.snapshot_with_member_keys(&[])
+        self.snapshot_with_member_observations(&TeamName::from_validated("runtime"), &[])
     }
 
-    /// Return runtime observations merged with the durable roster. Members
-    /// without an observation are explicitly projected as unknown so an empty
-    /// observation set cannot look like an empty roster in doctor output.
+    /// Projects canonical master-roster state into the runtime status DTO.
+    /// This object owns process health counters only; it never retains or
+    /// mutates member lifecycle state.
     #[must_use]
-    pub fn snapshot_with_roster(&self, roster: &MembersList) -> RuntimeStatusSnapshot {
-        let roster = roster
-            .members
-            .iter()
-            .map(|member| MemberKey::new(roster.team.clone(), member.name.clone()))
-            .collect::<Vec<_>>();
-        self.snapshot_with_member_keys(&roster)
-    }
-
-    fn snapshot_with_member_keys(&self, roster: &[MemberKey]) -> RuntimeStatusSnapshot {
+    pub fn snapshot_with_member_observations(
+        &self,
+        team: &TeamName,
+        observations: &[(AgentName, RosterRuntimeObservation)],
+    ) -> RuntimeStatusSnapshot {
         let state = self.lock();
-        let mut members = observed_members(&state.members);
-        append_unobserved_roster_members(&mut members, &state.members, roster);
-        members.sort_by(|left, right| {
-            left.team
-                .as_str()
-                .cmp(right.team.as_str())
-                .then_with(|| left.member.as_str().cmp(right.member.as_str()))
-        });
+        let members = observations
+            .iter()
+            .map(|(agent, observation)| project_member(team, agent, observation))
+            .collect::<Vec<_>>();
         let mut counts = RuntimeStatusCounts::default();
         for member in &members {
             match member.state {
@@ -429,89 +288,48 @@ impl RuntimeHealth {
     }
 }
 
-fn observed_members(records: &HashMap<MemberKey, MemberRecord>) -> Vec<RuntimeMemberObservation> {
-    records
-        .iter()
-        .map(|(key, record)| RuntimeMemberObservation {
-            team: key.team.clone(),
-            member: key.agent.clone(),
-            state: record.state,
-            session_id: record.session_id.clone(),
-            pid: record.pid,
-            last_active_at: record.last_active_at,
-            state_changed_by: Some(record.state_source),
-            state_changed_at: record.state_changed_at,
-            session_changed_by: record
-                .session_changed_at
-                .map(|_| RuntimeObservationSource::Heartbeat),
-            session_changed_at: record.session_changed_at,
-        })
-        .collect()
-}
-
-fn append_unobserved_roster_members(
-    members: &mut Vec<RuntimeMemberObservation>,
-    records: &HashMap<MemberKey, MemberRecord>,
-    roster: &[MemberKey],
-) {
-    let mut known_members: HashSet<_> = records.keys().cloned().collect();
-    for key in roster {
-        if members.len() == MAX_RUNTIME_STATUS_MEMBERS || !known_members.insert(key.clone()) {
-            continue;
-        }
-        members.push(RuntimeMemberObservation {
-            team: key.team.clone(),
-            member: key.agent.clone(),
-            state: RuntimeMemberState::Unknown,
-            session_id: None,
-            pid: None,
-            last_active_at: None,
-            state_changed_by: None,
-            state_changed_at: None,
-            session_changed_by: None,
-            session_changed_at: None,
-        });
+fn project_member(
+    team: &TeamName,
+    agent: &AgentName,
+    record: &RosterRuntimeObservation,
+) -> RuntimeMemberObservation {
+    RuntimeMemberObservation {
+        team: team.clone(),
+        member: agent.clone(),
+        state: record.state,
+        revision: record.revision,
+        availability: record.availability,
+        last_observation_attempt_by: record.last_observation_attempt_by,
+        last_observation_attempt_at: record.last_observation_attempt_at,
+        last_observed_by: record.last_observed_by,
+        last_observed_at: record.last_observed_at,
+        session_id: record.session_id.clone(),
+        pid: record.pid,
+        last_active_at: record.last_active_at,
+        state_changed_by: record.state_changed_by,
+        state_changed_at: record.state_changed_at,
+        session_changed_by: record.session_changed_by,
+        session_changed_at: record.session_changed_at,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::RuntimeHealth;
-    use atm_core::boundary::MemberKey;
+    use atm_core::protocol::RosterRuntimeObservation;
     use atm_core::protocol::{
-        HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeObservationSource,
-        RuntimeReadinessState, TeamMemberHeartbeatRequest,
+        RuntimeLivenessState, RuntimeMemberState, RuntimeObservationSource, RuntimeReadinessState,
     };
-    use atm_core::types::{AgentName, IsoTimestamp, SessionId, TeamName};
-
-    fn heartbeat(pid: u32, activity: HeartbeatActivity) -> TeamMemberHeartbeatRequest {
-        TeamMemberHeartbeatRequest {
-            team: TeamName::from_validated("runtime-team"),
-            member: AgentName::from_validated("runtime-agent"),
-            pid,
-            observed_at: IsoTimestamp::now(),
-            activity,
-            session_id: None,
-        }
-    }
+    use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
     #[test]
-    fn readiness_tracks_listener_lifecycle_not_member_activity() {
+    fn readiness_tracks_listener_lifecycle() {
         let health = RuntimeHealth::with_owner(42);
         assert_eq!(
             health.snapshot().readiness,
             RuntimeReadinessState::Unavailable
         );
         health.mark_ready();
-        let (first, transition) =
-            health.record_heartbeat(&heartbeat(10, HeartbeatActivity::ActiveToolUse));
-        assert!(!first.pid_changed);
-        assert!(transition.is_none());
-        let (second, transition) =
-            health.record_heartbeat(&heartbeat(11, HeartbeatActivity::SessionEnded));
-        assert!(second.pid_changed);
-        assert_eq!(second.state, RuntimeMemberState::Offline);
-        assert!(transition.is_none());
         assert_eq!(health.snapshot().readiness, RuntimeReadinessState::Ready);
         health.begin_drain();
         assert_eq!(
@@ -536,60 +354,31 @@ mod tests {
     }
 
     #[test]
-    fn herdr_poll_preserves_heartbeat_identity_and_tags_provenance() {
+    fn canonical_roster_observations_are_projected_without_becoming_health_state() {
         let health = RuntimeHealth::default();
-        let request = TeamMemberHeartbeatRequest {
-            team: TeamName::from_validated("runtime-team"),
-            member: AgentName::from_validated("runtime-agent"),
-            pid: 42,
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-            session_id: Some(SessionId::new("session-a").expect("session")),
+        let team = TeamName::from_validated("runtime-team");
+        let agent = AgentName::from_validated("runtime-agent");
+        let changed_at = IsoTimestamp::now();
+        let observation = RosterRuntimeObservation {
+            state: RuntimeMemberState::Idle,
+            pid: Some(42),
+            state_changed_by: Some(RuntimeObservationSource::HerdrPoll),
+            state_changed_at: Some(changed_at),
+            ..RosterRuntimeObservation::default()
         };
-        health.record_heartbeat(&request);
-        health.record_observed_state(
-            &MemberKey::new(request.team.clone(), request.member.clone()),
-            RuntimeMemberState::Idle,
-            RuntimeObservationSource::HerdrPoll,
-        );
-        let member = &health.snapshot().members[0];
+
+        let snapshot =
+            health.snapshot_with_member_observations(&team, &[(agent.clone(), observation)]);
+        let member = &snapshot.members[0];
+        assert_eq!(member.team, team);
+        assert_eq!(member.member, agent);
         assert_eq!(member.pid, Some(42));
-        assert_eq!(member.session_id, request.session_id);
         assert_eq!(member.state, RuntimeMemberState::Idle);
         assert_eq!(
             member.state_changed_by,
             Some(RuntimeObservationSource::HerdrPoll)
         );
-        assert_eq!(
-            member.session_changed_by,
-            Some(RuntimeObservationSource::Heartbeat)
-        );
-    }
-
-    #[test]
-    fn rrg_doctor_members_zero_001_unobserved_roster_members_count_as_unknown() {
-        let health = RuntimeHealth::default();
-        let roster = vec![
-            MemberKey::new(
-                "runtime-team".parse().expect("team"),
-                "first-agent".parse().expect("agent"),
-            ),
-            MemberKey::new(
-                "runtime-team".parse().expect("team"),
-                "second-agent".parse().expect("agent"),
-            ),
-        ];
-
-        let snapshot = health.snapshot_with_member_keys(&roster);
-
-        assert_eq!(snapshot.members.len(), 2);
-        assert_eq!(snapshot.member_counts.unknown_members, 2);
-        assert!(
-            snapshot
-                .members
-                .iter()
-                .all(|member| member.state == RuntimeMemberState::Unknown)
-        );
+        assert!(health.snapshot().members.is_empty());
     }
 
     #[test]
@@ -614,22 +403,5 @@ mod tests {
             .await
             .expect("the sender stays alive for the health handle's lifetime");
         assert_eq!(*subscriber.borrow_and_update(), Some(tick));
-    }
-
-    #[test]
-    fn heartbeat_reports_only_genuine_transition_into_idle() {
-        let health = RuntimeHealth::default();
-        let (response, transition) =
-            health.record_heartbeat(&heartbeat(10, HeartbeatActivity::ActiveToolUse));
-        assert_eq!(response.state, RuntimeMemberState::Active);
-        assert_eq!(transition, None);
-
-        let (response, transition) =
-            health.record_heartbeat(&heartbeat(10, HeartbeatActivity::Idle));
-        assert_eq!(response.state, RuntimeMemberState::Idle);
-        assert_eq!(transition, Some(RuntimeMemberState::Active));
-
-        let (_, transition) = health.record_heartbeat(&heartbeat(10, HeartbeatActivity::Idle));
-        assert_eq!(transition, None);
     }
 }

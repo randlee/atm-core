@@ -13,8 +13,9 @@ use atm_storage::{
     AsyncGraftReceiverEndpointStore, AsyncMessageSearchStore,
     AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader, GraftReceiverLease,
     MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
-    RosterMemberEphemeralState, RosterRuntimeMirror, RosterStore as SharedRosterStore, TaskStore,
-    TemplateCatalogStore,
+    RosterMemberEphemeralState, RosterRuntimeMirror, RosterRuntimeMutationOutcome,
+    RosterRuntimeObservation, RosterRuntimeObservationUpdate, RosterStore as SharedRosterStore,
+    TaskStore, TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -676,6 +677,25 @@ impl LocalServiceRuntime {
         self.roster_runtime.ephemeral_state(team, agent)
     }
 
+    /// Applies a batch of accepted runtime observations to the canonical
+    /// ephemeral master-roster record. Missing members produce no outcome.
+    pub fn apply_roster_runtime_observations(
+        &self,
+        team: &TeamName,
+        updates: &[RosterRuntimeObservationUpdate],
+    ) -> Vec<RosterRuntimeMutationOutcome> {
+        self.roster_runtime
+            .apply_runtime_observations(team, updates)
+    }
+
+    /// Reads one team's canonical runtime observations in roster order.
+    pub fn roster_runtime_observations(
+        &self,
+        team: &TeamName,
+    ) -> Vec<(AgentName, RosterRuntimeObservation)> {
+        self.roster_runtime.load_runtime_observations(team)
+    }
+
     /// Sets one member's Herdr wake-pending ephemeral flag in RAM only.
     /// Returns `false` without effect when the member is not present in the
     /// current roster snapshot.
@@ -1125,6 +1145,21 @@ mod tests {
             _agent: &AgentName,
         ) -> Option<atm_storage::RosterMemberEphemeralState> {
             unreachable!("task-store absence test does not read ephemeral roster state")
+        }
+
+        fn apply_runtime_observations(
+            &self,
+            _team: &TeamName,
+            _updates: &[atm_storage::RosterRuntimeObservationUpdate],
+        ) -> Vec<atm_storage::RosterRuntimeMutationOutcome> {
+            unreachable!("task-store absence test does not mutate runtime roster state")
+        }
+
+        fn load_runtime_observations(
+            &self,
+            _team: &TeamName,
+        ) -> Vec<(AgentName, atm_storage::RosterRuntimeObservation)> {
+            unreachable!("task-store absence test does not read runtime roster state")
         }
 
         fn set_herdr_wake_pending(
