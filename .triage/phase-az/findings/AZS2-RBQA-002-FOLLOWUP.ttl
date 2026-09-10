@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS2-RBQA-002-FOLLOWUP>
+  a triage:Finding ;
+  triage:findingId "AZS2-RBQA-002-FOLLOWUP" ;
+  triage:title "stale [contracts].notes line self-contradicts new io_forbidden_source_modules enforcement" ;
+  triage:description "boundaries/atm-storage-rusqlite/task-store-sqlite.toml:39 and boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml:36 still carry a [contracts].notes line stating 'no named lint rule in this boundary file is mechanically dispatched today', left over from before the AZS2-RBQA-002 fix-4 round. This is now incomplete/self-contradictory: io_forbidden_source_modules in the same file is genuinely scanned as of fix-4 (61a839f6a03f3fe55433e0b89410650b1799e207). Flagged identically by both arch-qa and ruthless-boundary-qa at QA-4. Non-blocking doc-only cleanup: reword the notes line to state that lint_rules remains undispatched while io_forbidden_source_modules scanning is real and active. Source: QA-4 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5613899534)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "boundaries/atm-storage-rusqlite/task-store-sqlite.toml, boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T05:58:11Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T05:58:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-002-FOLLOWUP/AZ3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-002-FOLLOWUP/AZ3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-002-FOLLOWUP/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/task-store-sqlite.toml" ;
+  triage:line 39 ;
+  triage:snippet "[contracts].notes: 'no named lint rule in this boundary file is mechanically dispatched today' -- stale, self-contradicts new io_forbidden_source_modules enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "61a839f6a03f3fe55433e0b89410650b1799e207" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/61a839f6> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-002-FOLLOWUP/AZ3-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml" ;
+  triage:line 36 ;
+  triage:snippet "[contracts].notes: 'no named lint rule in this boundary file is mechanically dispatched today' -- stale, self-contradicts new io_forbidden_source_modules enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "61a839f6a03f3fe55433e0b89410650b1799e207" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/61a839f6> .
+
+<urn:atm:triage:worktree/AZ3/61a839f6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "61a839f6a03f3fe55433e0b89410650b1799e207" ;
+  triage:orderIndex 3 .
