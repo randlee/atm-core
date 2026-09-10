@@ -1,6 +1,9 @@
 use super::*;
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the writer loop receives independently owned runtime, queue, diagnostics, and batching dependencies"
+)]
 pub(crate) fn writer_loop(
     target: Arc<SharedDbTarget>,
     serial_queue: Arc<SerialWriterQueue>,

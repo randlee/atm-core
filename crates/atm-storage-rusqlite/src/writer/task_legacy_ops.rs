@@ -152,7 +152,6 @@ pub(super) fn apply_task_message(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn refresh_task_assignment(
     record: &Message,
     task_id: &str,
@@ -367,7 +366,6 @@ fn apply_task_completion(
 /// assignment message acknowledged in the same transaction so it does not
 /// remain pending-ack forever. Returns the `assignment_missing` audit marker
 /// when the assignment message row could not be found.
-#[allow(clippy::too_many_arguments)]
 fn acknowledge_completed_assignment(
     connection: &Connection,
     cache: &mut WriterStatementCache,
@@ -456,7 +454,10 @@ pub(super) fn apply_task_acknowledgement(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the legacy event helper mirrors independently persisted audit columns"
+)]
 fn append_task_event(
     connection: &Connection,
     target: &SharedDbTarget,

@@ -587,7 +587,10 @@ fn insert_assignment_attempt(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the atomic attempt insert keeps the durable task and assignment fields explicit at the SQL boundary"
+)]
 fn insert_assignment_attempt_for(
     connection: &Connection,
     target: &SharedDbTarget,
@@ -709,7 +712,10 @@ fn reassignment_context(
     Ok((revision, attempt))
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "supersession atomically carries distinct source, successor, assignment, and operation inputs"
+)]
 fn supersede_v2(
     connection: &Connection,
     cache: &mut WriterStatementCache,
@@ -962,7 +968,10 @@ fn append_v2_event(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the append helper mirrors the independently persisted lifecycle-event columns"
+)]
 fn append_v2_event_for(
     connection: &Connection,
     target: &SharedDbTarget,
