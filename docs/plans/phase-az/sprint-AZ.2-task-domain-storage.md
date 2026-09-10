@@ -227,7 +227,9 @@ retaining the v1 `tasks`/`task_events` compatibility projection and its
    and an active row wins over an assigned row. Every non-winning source row,
    including its assignee, state, timestamp, and deterministic source key, is
    recorded in the append-only `Migrated` event; no live row silently becomes
-   closed and no fully completed logical task reopens.
+   closed and no fully completed logical task reopens. An unrecognized legacy
+   state has the lowest precedence and safely projects to `Assigned`, while
+   the migration audit detail retains its original value.
 4. Remediate pre-existing `(team, assignee)` active conflicts deterministically.
    The active task with earliest `original_assigned_at`, then lexical `TaskId`,
    remains `Active`; every other conflicting active task becomes `Assigned`

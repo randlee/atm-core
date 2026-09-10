@@ -10,7 +10,7 @@ CREATE TABLE tasks (
     task_id TEXT NOT NULL,
     assignee TEXT NOT NULL,
     assigner TEXT NOT NULL,
-    state TEXT NOT NULL CHECK(state IN ('assigned', 'active', 'complete')),
+    state TEXT NOT NULL,
     assignment_message_id TEXT NOT NULL,
     description TEXT NOT NULL,
     assigned_at TEXT NOT NULL,
@@ -119,6 +119,49 @@ fn fresh_and_v1_projection_task_ledgers_converge_without_dropping_v1() {
         task_schema_objects(&fresh_sql),
         task_schema_objects(&upgraded_sql)
     );
+}
+
+#[test]
+fn malformed_legacy_state_migrates_to_safe_assigned_projection() {
+    let root = tempfile::tempdir().expect("temporary root");
+    let database_path = root.path().join("malformed-legacy.db");
+    let legacy = Connection::open(&database_path).expect("legacy connection");
+    legacy
+        .execute_batch(LEGACY_TASK_SCHEMA)
+        .expect("create permissive legacy task schema");
+    insert_legacy_task(
+        &legacy,
+        "malformed-legacy-state",
+        "alpha",
+        "unrecognized-state",
+        "2026-01-01T00:00:00Z",
+        "2026-01-02T00:00:00Z",
+    );
+    drop(legacy);
+
+    let migrated = SqliteStorageBackend::new(&database_path).expect("migrate malformed legacy row");
+    drop(migrated);
+
+    let connection = Connection::open(&database_path).expect("inspect migrated ledger");
+    let projection: (String, Option<String>) = connection
+        .query_row(
+            "SELECT state, outcome FROM tasks_v2
+             WHERE team = 'compat-team' AND task_id = 'malformed-legacy-state'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("malformed legacy projection");
+    assert_eq!(projection, ("assigned".to_owned(), None));
+    let audit_detail: String = connection
+        .query_row(
+            "SELECT detail FROM task_events_v2
+             WHERE team = 'compat-team' AND task_id = 'malformed-legacy-state'
+               AND event = 'migrated'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("malformed source audit event");
+    assert!(audit_detail.contains("unrecognized-state"));
 }
 
 fn insert_legacy_task(

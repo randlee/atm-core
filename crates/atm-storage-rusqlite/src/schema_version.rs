@@ -291,7 +291,11 @@ INSERT OR IGNORE INTO tasks_v2(
     reminder_ordinal, revision, updated_at
 )
 SELECT team, task_id, assignee,
-       CASE state WHEN 'complete' THEN 'closed' ELSE state END,
+       CASE state
+           WHEN 'active' THEN 'active'
+           WHEN 'complete' THEN 'closed'
+           ELSE 'assigned'
+       END,
        CASE state WHEN 'complete' THEN 'succeeded' ELSE NULL END,
        NULL, NULL, 'normal',
        (SELECT MIN(other.assigned_at) FROM tasks AS other
