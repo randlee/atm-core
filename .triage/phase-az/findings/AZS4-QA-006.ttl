@@ -1,0 +1,186 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZS4-QA-006>
+  a triage:Finding ;
+  triage:findingId "AZS4-QA-006" ;
+  triage:title "Lead-escalation path is #[cfg(test)]-gated production code with no real caller" ;
+  triage:description "herdr_escalation.rs (LeadNotified variant) and herdr_queue_wake_escalation.rs (maybe_escalate_task + helpers) are entirely #[cfg(test)]-gated (13 occurrences), meaning this lead-escalation path never actually runs in production, only in tests. Confirmed by quality-mgr directly via git show 7f5df3bfd:<path> for both files (pinned commit, not live worktree)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_escalation.rs, crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T15:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T15:29:16Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS4-QA-006/AZ4-13> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 8 ;
+  triage:snippet "#[cfg(test)] use std::cell::Cell;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 35 ;
+  triage:snippet "#[cfg(test)] LeadNotified," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 44 ;
+  triage:snippet "#[cfg(test)] Self::LeadNotified => \"lead_notified\"," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 53 ;
+  triage:snippet "#[cfg(test)] std::thread_local! {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 58 ;
+  triage:snippet "#[cfg(test)] pub(crate) fn fail_next_escalation_mail_" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 391 ;
+  triage:snippet "#[cfg(test)] if FAIL_NEXT_ESCALATION_MAIL_WRITE.with(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 8 ;
+  triage:snippet "#[cfg(test)] use atm_core::boundary::{ReminderOutcome" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 16 ;
+  triage:snippet "#[cfg(test)] use crate::herdr_queue_wake::run_blockin" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 24 ;
+  triage:snippet "#[cfg(test)] pub(crate) async fn maybe_escalate_task(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 73 ;
+  triage:snippet "#[cfg(test)] async fn reminder_events(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 91 ;
+  triage:snippet "#[cfg(test)] fn task_escalation_body(row: &TaskRow, n" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 119 ;
+  triage:snippet "#[cfg(test)] fn task_escalation_notification(row: &Ta" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:occurrence/AZS4-QA-006/AZ4-13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 135 ;
+  triage:snippet "#[cfg(test)] async fn record_lead_audit(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/7f5df3b> .
+
+<urn:atm:triage:worktree/AZ4/7f5df3b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ4" ;
+  triage:branch "feature/az4-attention-scheduler" ;
+  triage:headSha "7f5df3bfdb90d16dd4fbde2a6e563bac7bba084d" ;
+  triage:orderIndex 4 .
