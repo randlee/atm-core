@@ -16,7 +16,7 @@ use atm_core::task_command::{
 };
 use atm_core::types::{AgentName, TaskId};
 use atm_storage::{MemberKey, TaskOperationId, TaskPriority};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use clap::{Args, Subcommand, ValueEnum};
 
 use crate::commands::caller_context::{
@@ -531,24 +531,22 @@ fn page(limit: Option<usize>, all: bool) -> Result<TaskPage> {
 }
 
 fn print_response(response: TaskCommandResponse, json: bool) -> Result<()> {
+    print_response_at(response, json, Utc::now())
+}
+
+fn print_response_at(response: TaskCommandResponse, json: bool, now: DateTime<Utc>) -> Result<()> {
     if json || matches!(response, TaskCommandResponse::Mutation(_)) {
-        println!("{}", serde_json::to_string_pretty(&response)?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json_response_with_assignment_age(&response, now)?)?
+        );
         return Ok(());
     }
     match response {
         TaskCommandResponse::List(value) => {
             println!("TASK_ID\tSTATE\tASSIGNEE\tPRIORITY\tAGE");
             for row in value.rows {
-                let age = (Utc::now() - row.original_assigned_at.into_inner())
-                    .num_seconds()
-                    .max(0);
-                let age = if age < 60 {
-                    format!("{age}s")
-                } else if age < 3600 {
-                    format!("{}m", age / 60)
-                } else {
-                    format!("{}h", age / 3600)
-                };
+                let age = format_task_age(row.original_assigned_at.into_inner(), now);
                 println!(
                     "{}\t{:?}\t{}\t{:?}\t{age}",
                     row.task_id, row.state, row.current_assignee, row.priority
@@ -563,9 +561,72 @@ fn print_response(response: TaskCommandResponse, json: bool) -> Result<()> {
     Ok(())
 }
 
+fn json_response_with_assignment_age(
+    response: &TaskCommandResponse,
+    now: DateTime<Utc>,
+) -> Result<serde_json::Value> {
+    let mut value = serde_json::to_value(response)?;
+    let TaskCommandResponse::List(list) = response else {
+        return Ok(value);
+    };
+    let rows = value
+        .get_mut("list")
+        .and_then(|list| list.get_mut("rows"))
+        .and_then(serde_json::Value::as_array_mut)
+        .expect("TaskCommandResponse list serialization has rows");
+    for (row, logical_task) in rows.iter_mut().zip(&list.rows) {
+        row.as_object_mut()
+            .expect("logical task serialization is an object")
+            .insert(
+                "assigned_age_seconds".to_owned(),
+                serde_json::Value::from(assigned_age_seconds(
+                    logical_task.original_assigned_at.clone().into_inner(),
+                    now,
+                )),
+            );
+    }
+    Ok(value)
+}
+
+fn assigned_age_seconds(original_assigned_at: DateTime<Utc>, now: DateTime<Utc>) -> i64 {
+    (now - original_assigned_at).num_seconds().max(0)
+}
+
+fn format_task_age(original_assigned_at: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let age = assigned_age_seconds(original_assigned_at, now);
+    if age < 60 {
+        format!("{age}s")
+    } else if age < 3600 {
+        format!("{}m", age / 60)
+    } else {
+        format!("{}h", age / 3600)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use chrono::{TimeZone, Utc};
     use clap::Parser;
+
+    use super::format_task_age;
+
+    #[test]
+    fn task_list_age_uses_member_bucket_boundaries_and_clamps_future_values() {
+        let now = Utc.with_ymd_and_hms(2026, 9, 10, 3, 0, 0).unwrap();
+        for (seconds_ago, expected) in [
+            (0, "0s"),
+            (59, "59s"),
+            (60, "1m"),
+            (3_599, "59m"),
+            (3_600, "1h"),
+            (-1, "0s"),
+        ] {
+            assert_eq!(
+                format_task_age(now - chrono::Duration::seconds(seconds_ago), now),
+                expected
+            );
+        }
+    }
 
     #[test]
     fn parser_exposes_every_canonical_task_subcommand() {
