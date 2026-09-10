@@ -190,7 +190,7 @@ that owns the interface change.
 | --- | --- | --- | --- |
 | AZ.1 | No HTTP route/DTO change; patch classification. The separate internal-nudge/graft compatibility seam follows ADR-054's reader-first dual-key plan. | Prompt content becomes bounded title metadata but the Herdr request shape and `HERDR_MINIMUM_VERSION` are unchanged; patch classification. | No schema/version change. |
 | AZ.2 | No HTTP/version change. | No Herdr/version change. | **Major:** ATM `1.6.0` introduces persisted `STORAGE_SCHEMA_VERSION = 2.0.0` and canonical v2 task/attempt/event/operation tables with changed constraints/meaning. Retain the full v1 table/column projection and transactional bidirectional compatibility bridge throughout `1.6.x`; ATM `1.7.0` is the planned removal target and earliest permitted removal release, subject to a separate ADR-061 major approval. |
-| AZ.3 | **Minor:** additive task routes, request variants, and optional response fields; bump `HTTP_API_VERSION` 1.3.0 → 1.4.0, update both OpenAPI documents and surface baseline, append ADR-061 D5 record, and run retained 1.3.0 consumer tests. | No Herdr/version change. | No schema/version change beyond consuming AZ.2. |
+| AZ.3 | **Minor:** additive task routes, request variants, and optional response fields; bump `HTTP_API_VERSION` 1.4.0 → 1.5.0, update both OpenAPI documents and surface baseline, append ADR-061 D5 record, and run retained 1.4.0 consumer tests. | No Herdr/version change. | No schema/version change beyond consuming AZ.2. |
 | AZ.4 | No HTTP/version change. | Scheduler implementation changes behind the existing Herdr request shape; `HERDR_MINIMUM_VERSION` remains unchanged. | **Minor:** additive attention cursor/reservation tables; bump `STORAGE_SCHEMA_VERSION` 2.0.0 → 2.1.0 through a registered idempotent migration, update schema/ADR-061 records, and run fresh/upgraded plus older-consumer tests. |
 
 AZ.2's storage change cannot be expressed as merely optional columns: stable
@@ -248,7 +248,7 @@ Phase AZ is complete only when all four sprint acceptance lists pass and:
    cannot survive ineligible lifecycle transitions. The invalidation join
    covers every canonical message with the same `(team, task_id)`, not only
    assignment-attempt message ids.
-6. HTTP API 1.4.0 and storage schema 2.0.0/2.1.0 changes carry their ADR-061
+6. HTTP API 1.5.0 and storage schema 2.0.0/2.1.0 changes carry their ADR-061
    records, documentation, migration baselines, and older-consumer tests.
 7. ADR-063 is accepted and indexed, and the ADR-061 major storage approval plus
    coexistence duration is cited before plan approval or implementation begins.
