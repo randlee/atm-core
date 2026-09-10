@@ -76,6 +76,43 @@ CREATE INDEX IF NOT EXISTS task_list_order
     ON tasks_v2(team, current_assignee, state, priority, original_assigned_at, task_id);
 CREATE INDEX IF NOT EXISTS idx_mail_messages_task_id
     ON mail_messages(team, json_extract(envelope_json, '$.taskId'));
+
+CREATE TRIGGER IF NOT EXISTS task_v1_insert_bridge
+AFTER INSERT ON tasks
+BEGIN
+    INSERT INTO tasks_v2(
+        team, task_id, current_assignee, state, outcome, abort_reason,
+        superseded_by, priority, original_assigned_at, current_attempt,
+        reminder_ordinal, revision, updated_at
+    ) VALUES (
+        NEW.team, NEW.task_id, NEW.assignee,
+        CASE NEW.state WHEN 'complete' THEN 'closed' ELSE NEW.state END,
+        CASE NEW.state WHEN 'complete' THEN 'succeeded' ELSE NULL END,
+        NULL, NULL, 'normal', NEW.assigned_at, 1, NEW.reminder_count, 1, NEW.updated_at
+    ) ON CONFLICT(team, task_id) DO UPDATE SET
+        current_assignee = excluded.current_assignee,
+        state = excluded.state,
+        outcome = excluded.outcome,
+        reminder_ordinal = excluded.reminder_ordinal,
+        revision = tasks_v2.revision + 1,
+        updated_at = excluded.updated_at;
+    INSERT OR IGNORE INTO task_assignment_attempts(
+        team, task_id, attempt, assignee, assigner, assignment_message_id, template_sha, assigned_at
+    ) VALUES (NEW.team, NEW.task_id, 1, NEW.assignee, NEW.assigner, NEW.assignment_message_id, NULL, NEW.assigned_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_v1_update_bridge
+AFTER UPDATE OF state, assignment_message_id, updated_at, reminder_count ON tasks
+BEGIN
+    UPDATE tasks_v2 SET
+        current_assignee = NEW.assignee,
+        state = CASE NEW.state WHEN 'complete' THEN 'closed' ELSE NEW.state END,
+        outcome = CASE NEW.state WHEN 'complete' THEN 'succeeded' ELSE NULL END,
+        reminder_ordinal = NEW.reminder_count,
+        revision = revision + 1,
+        updated_at = NEW.updated_at
+     WHERE team = NEW.team AND task_id = NEW.task_id;
+END;
 "#;
 
 const MIGRATE_V1_TASKS: &str = r#"
