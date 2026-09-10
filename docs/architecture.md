@@ -3262,3 +3262,37 @@ closed event/projection. Task-linked acknowledgement remains a mail mutation;
 only explicit `TaskAction::Start` activates an assignment. The public HTTP
 task route is additive in API 1.4.0, while the retained legacy flags delegate
 through this boundary during their compatibility window.
+
+### 21.13 Phase AZ.4 fair idle attention scheduler
+
+The replacement HTTP runtime turns a committed canonical-roster `Idle` revision
+into one opaque `IdleOpportunity`. The opportunity carries a member identity and
+the exact roster revision; it is not a snapshot of Herdr output, a
+`RuntimeHealth` record, or a second member-state map. Failed observations do
+not mint an opportunity, and a changed, absent, or newer roster revision makes
+the opportunity stale before any prompt is emitted.
+
+`HerdrAttentionScheduler` derives two identifier-only candidates for that one
+opportunity: the FIFO ephemeral-message lane and the top runnable persistent
+task lane. `AttentionLane` selects between them. A durable per-member cursor
+starts with the ephemeral lane and alternates only when both lanes are due;
+when one lane is empty, the other proceeds without delay. Task priority orders
+items within the persistent lane and never overrides cross-lane alternation.
+
+Before dispatch, the scheduler atomically reserves exactly one candidate in
+the `attention_opportunities` table and advances the corresponding
+`attention_lane_cursors` cursor. Reservation rows contain only lane and item
+identifiers, assignment-attempt metadata, and terminal status—never message
+bodies, task descriptions, template data, a connection, or an emitter. A
+replay of the same `IdleOpportunity` returns the same reservation rather than
+selecting the other lane.
+
+The wake pump then claims and revalidates only that reserved lane against the
+same canonical `Idle` revision, projects AZ.1's bounded title-only nudge, and
+finalizes the reservation. A successful ephemeral nudge consumes its queue
+claim; a successful task nudge records attempt-aware reminder audit without
+consuming the task. Transient emission retries retain the same reservation and
+item. The fifth failed attempt terminalizes that reservation as
+`PermanentlyFailed`; it never closes the message or task. This replacement
+runtime path is the only fair-idle scheduler and does not alter the frozen
+legacy synchronous daemon.
