@@ -371,7 +371,7 @@ This is the sole authoritative deliverables list for AZ.2. Every item must land
 at a production-ready level; type-only, schema-only, or test-only completion is
 insufficient.
 
-- [ ] D1 — Amend `docs/requirements.md`, `docs/architecture.md`,
+- [x] D1 — Amend `docs/requirements.md`, `docs/architecture.md`,
   create the canonical `docs/task-lifecycle-schema.md`, amend
   `docs/atm-storage/boundaries.md`, amend ADR-061/ADR-062, maintain the accepted
   `ADR-063-phase-az-task-and-attention-capabilities.md`, and index it in
@@ -382,7 +382,7 @@ insufficient.
   from ADR-036's capability inventory and update its matching boundary TOMLs.
   Preserve Rand's explicit ADR-061 major-change approval and version-bounded
   coexistence record in ADR-061 D6, ADR-063 D6, and the phase plan.
-- [ ] D2 — Replace the pure task model in
+- [x] D2 — Replace the pure task model in
   `crates/atm-storage/src/task_state.rs` with the types and legal transitions
   above. Add typed rejections for illegal transition, stale revision,
   operation-id conflict, active-task conflict, and invalid terminal metadata.
@@ -392,12 +392,12 @@ insufficient.
   `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` for every assignment-bearing
   mutation whose recipient is not same-host. Register public codes and recovery
   text in the unified ADR-032 error catalog and machine-readable boundary.
-- [ ] D3 — Extend storage-neutral contracts in
+- [x] D3 — Extend storage-neutral contracts in
   `crates/atm-storage/src/task_store.rs`, `contract.rs`, and `factory.rs`
   with logical-task/attempt/event reads, the binding list/top-runnable ordering,
   and the bounded `AsyncTaskMutationStore`. Update the synchronous compatibility store only as
   a delegating test/legacy bridge; it must not become a second mutation policy.
-- [ ] D4 — Implement the transactional v2 migration and indexes in
+- [x] D4 — Implement the transactional v2 migration and indexes in
   `atm-storage-rusqlite`, introduce/persist `STORAGE_SCHEMA_VERSION = 2.0.0`,
   and retain the v1 tables/description compatibility projection for the
   approved coexistence window. Implement deterministic state precedence in the
@@ -409,13 +409,13 @@ insufficient.
   compatibility schema. Add `idx_mail_messages_task_id` through
   `mail_messages_index_ddl!()` and extend its migrated-versus-fresh
   index-identity test; Phase AZ deletes no v1 table or column.
-- [ ] D5 — Implement all mutation transactions in the existing SQLite writer
+- [x] D5 — Implement all mutation transactions in the existing SQLite writer
   lane, including idempotent results, compare-and-swap revision, active
   uniqueness, same-host prepared-assignment validation, message persistence,
   assignment acknowledgement normalization, supersession linkage, a dedicated
   idempotent operations table, and task-id-joined pending-nudge cleanup across
   all task-linked messages.
-- [ ] D6 — Update machine-readable task/read/mutation boundary records and add
+- [x] D6 — Update machine-readable task/read/mutation boundary records and add
   pure-state, migration, replay, malformed-legacy, retry, concurrent-start,
   concurrent-reassign, bridge-time multi-assignee/active-conflict reconciliation,
   atomic-rollback, no-body, and queue-cleanup tests using temporary SQLite
