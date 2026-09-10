@@ -13,8 +13,9 @@ use atm_storage::{
     AsyncGraftReceiverEndpointStore, AsyncMessageSearchStore,
     AsyncMessageStore as SharedAsyncMessageStore, AsyncTaskLedgerReader, GraftReceiverLease,
     MessageStore as SharedMessageStore, OwnerGeneration, PendingNudgeStore,
-    RosterMemberEphemeralState, RosterRuntimeMirror, RosterStore as SharedRosterStore, TaskStore,
-    TemplateCatalogStore,
+    RosterMemberEphemeralState, RosterRuntimeMirror, RosterRuntimeMutationOutcome,
+    RosterRuntimeObservation, RosterRuntimeObservationUpdate, RosterStore as SharedRosterStore,
+    TaskStore, TemplateCatalogStore, WriteThroughRosterStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -351,17 +352,13 @@ pub struct LocalServiceRuntime {
 
 impl LocalServiceRuntime {
     ///
-    /// `roster_store` and `roster_runtime` must be the paired handles
-    /// returned by the storage composition root's write-through roster
-    /// factory (e.g. `atm_storage_rusqlite::roster_runtime::build_write_through_roster`):
-    /// `roster_store` is the write-through `RosterStore` decorator and
-    /// `roster_runtime` is its RAM mirror. Hydration already happened,
-    /// fail-closed, before either handle was constructed; this constructor
-    /// performs no further durable roster I/O.
+    /// `roster` is the indivisible paired handle returned by the storage
+    /// composition root's write-through roster factory. Hydration already
+    /// happened, fail-closed, before this constructor receives it; callers
+    /// cannot pair an unrelated durable store and RAM mirror.
     pub fn new_with_delivery_boundaries(
         message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
-        roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
-        roster_runtime: Arc<dyn RosterRuntimeMirror + Send + Sync>,
+        roster: WriteThroughRosterStore,
         nudge_template_override_store: std::sync::Arc<
             dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync,
         >,
@@ -374,7 +371,7 @@ impl LocalServiceRuntime {
             async_task_ledger_reader: None,
             async_task_mutation_store: None,
             async_message_search_store: None,
-            roster_store,
+            roster_store: roster.store(),
             nudge_template_override_store,
             non_claude_outbound,
             pending_nudge_store: None,
@@ -382,7 +379,7 @@ impl LocalServiceRuntime {
             graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
-            roster_runtime,
+            roster_runtime: roster.mirror(),
             graft_receiver_lease_cache: Arc::new(GraftReceiverLeaseCache::default()),
             workspace_config_access: WorkspaceConfigAccess::Client,
         }
@@ -701,6 +698,25 @@ impl LocalServiceRuntime {
         agent: &AgentName,
     ) -> Option<RosterMemberEphemeralState> {
         self.roster_runtime.ephemeral_state(team, agent)
+    }
+
+    /// Applies a batch of accepted runtime observations to the canonical
+    /// ephemeral master-roster record. Missing members produce no outcome.
+    pub fn apply_roster_runtime_observations(
+        &self,
+        team: &TeamName,
+        updates: &[RosterRuntimeObservationUpdate],
+    ) -> Vec<RosterRuntimeMutationOutcome> {
+        self.roster_runtime
+            .apply_runtime_observations(team, updates)
+    }
+
+    /// Reads one team's canonical runtime observations in roster order.
+    pub fn roster_runtime_observations(
+        &self,
+        team: &TeamName,
+    ) -> Vec<(AgentName, RosterRuntimeObservation)> {
+        self.roster_runtime.load_runtime_observations(team)
     }
 
     /// Loads one canonical roster member from the runtime-owned RAM mirror.
@@ -1137,50 +1153,7 @@ mod tests {
         }
 
         fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
-            unreachable!("task-store absence test does not list teams")
-        }
-    }
-
-    #[allow(
-        deprecated,
-        reason = "the task-store absence test only constructs the retained runtime"
-    )]
-    impl atm_storage::RosterRuntimeMirror for UnusedRuntimeStore {
-        fn load_team_roster(&self, _team: &TeamName) -> Vec<atm_storage::RosterMember> {
-            unreachable!("task-store absence test does not read the roster mirror")
-        }
-
-        fn load_roster_member(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Option<atm_storage::RosterMember> {
-            unreachable!("task-store absence test does not read the roster mirror")
-        }
-
-        fn list_teams(&self) -> Vec<TeamName> {
-            unreachable!("task-store absence test does not list teams")
-        }
-
-        fn ephemeral_state(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Option<atm_storage::RosterMemberEphemeralState> {
-            unreachable!("task-store absence test does not read ephemeral roster state")
-        }
-
-        fn set_herdr_wake_pending(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _pending: bool,
-        ) -> bool {
-            unreachable!("task-store absence test does not mutate ephemeral roster state")
-        }
-
-        fn reload_from_durable(&self) -> Result<(), crate::error::AtmError> {
-            unreachable!("task-store absence test does not reload the roster mirror")
+            Ok(Vec::new())
         }
     }
 
@@ -1299,10 +1272,13 @@ mod tests {
 
     #[test]
     fn task_store_reports_the_not_installed_error() {
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+            UnusedRuntimeStore,
+        ))
+        .expect("empty write-through roster fixture");
         let runtime = super::LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedRuntimeStore),
-            Arc::new(UnusedRuntimeStore),
-            Arc::new(UnusedRuntimeStore),
+            roster,
             Arc::new(UnusedRuntimeStore),
             Arc::new(super::LocalFileNonClaudeOutbound::new()),
         );

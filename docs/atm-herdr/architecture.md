@@ -376,12 +376,14 @@ HerdrProcessInvoker::list(session, deadline)        (once per distinct session)
                                                   <---- Vec<AgentSnapshot> (exit 0),
                                                         or error.code (exit 1) ----
   <-------------------------------------------------|
-  | record_observed_state(member, state,
-  |   RuntimeObservationSource::HerdrPoll)  [atm-http-runtime,
-  |   RuntimeHealth] -- never record_heartbeat; never writes pid
+  | apply successful session-scoped state batch
+  |   [atm-http-runtime -> ephemeral master-roster record]
+  |   working=Active, idle/done=Idle, blocked=Blocked,
+  |   covered unknown/absent=Unknown; never writes pid/session
+  |   failed list preserves state and publishes no idle opportunity
   |
-  | for each pending member whose listed
-  |   status is Idle | Done:
+  | for each pending member whose committed canonical
+  |   state update is fresh Idle:
   |     claim_next_pending(member)  [atm-storage, oldest first: FIFO]
   |     rebuild_received_hook_dispatch(.., NudgeKind::Queue)  [atm-core]
   |     -> HerdrReceivedHook (atm-daemon-bootstrap, AQ2.6)
@@ -403,6 +405,12 @@ match list outcome
                                     (HR-SAFE-005); listed members this tick
                                     are skipped, not claimed
 ```
+
+Issue #1378 supersedes the historical `RuntimeHealth` write shown by the AQ2.7
+implementation plan. Herdr is still only the process adapter; the Tokio/Axum
+caller updates the same RAM roster state used by authenticated heartbeat POSTs.
+Source and time are metadata, and scheduling consumes the committed canonical
+update rather than the raw `AgentSnapshot`.
 
 ## 7. Error Mapping Table
 

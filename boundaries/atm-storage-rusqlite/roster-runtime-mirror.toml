@@ -4,20 +4,18 @@ owner_crate_path = "atm_storage_rusqlite"
 name = "RosterRuntimeMirror"
 
 [public]
-trait = "RosterStore"
-notes = "write-through RAM roster mirror decorator relocated here from atm-core (FTQ-AW finding 1 on PR #1240); wraps any atm-storage RosterStore (SqliteRosterStore in production) and keeps the paired atm_storage::contract::RosterRuntimeMirror synchronized with every durable roster write in the same operation"
+trait = "RosterRuntimeMirror"
+notes = "write-through RAM master-roster decorator relocated here from atm-core (FTQ-AW finding 1 on PR #1240); keeps durable roster columns synchronized and owns the one ephemeral per-member lifecycle record mutated in accepted order by authenticated heartbeats and Herdr polls"
 
 [implementation]
-type = "WriteThroughRosterView"
-module = "atm_storage_rusqlite::roster_runtime"
-visibility = "private"
-constructor = "private"
+visibility = "trait_only"
+constructor = "none"
 
 [composition]
 roots = ["atm_storage_rusqlite::roster_runtime::build_write_through_roster"]
 
 [ownership]
-io_owns = ["roster_runtime_ram_mirror"]
+io_owns = ["roster_runtime_ram_mirror", "canonical_ephemeral_member_state"]
 io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
@@ -44,8 +42,8 @@ forbidden = [
 ]
 
 [contracts]
-request_types = ["RosterStore method inputs", "RosterRuntimeMirror method inputs"]
-response_types = ["atm-storage roster DTOs"]
+request_types = ["RosterRuntimeMirror method inputs"]
+response_types = ["atm-storage roster DTOs", "RosterRuntimeMutationOutcome"]
 error_types = ["AtmError"]
 
 [testing]
@@ -72,4 +70,5 @@ notes = [
   "hydration is fail-closed: build_write_through_roster propagates a durable read failure instead of returning a partially-populated mirror",
   "AW-RAM-I4: the intra-crate bypass is now closed by type, not only by review. StorageHandleParts carries one atm_storage::WriteThroughRosterStore instead of separate roster_store/roster_runtime_mirror fields; its sole constructor (WriteThroughRosterStore::from_write_through_view) requires a value implementing both RosterStore and RosterRuntimeMirror, which only WriteThroughRosterView does, so passing backend.roster_store() at a composition site is a compile error",
   "crates/atm-storage-rusqlite/tests/roster_write_through_production_path.rs proves the property on the real production path: SqliteStorageFactory::open() on a temp database, then an out-of-band durable write through a second backend that the production roster read must not observe until an explicit reload_from_durable",
+  "Issue #1378: RuntimeHealth is projection-only. RosterRuntimeMirror applies team-batched heartbeat and Herdr observations to one non-durable member record; successful observations advance the typed revision, while failed polls only mark availability and last-attempt metadata.",
 ]

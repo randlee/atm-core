@@ -14,7 +14,8 @@
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
 Version 1.5.0 adds the canonical `POST /v1/atm/tasks` task command exchange;
-the existing 1.4.0 runtime-state and 1.3.0 Herdr doctor diagnostics remain additive. `herdr.breaker` reports
+the existing 1.4.0 runtime-state and 1.3.0 Herdr doctor diagnostics remain
+additive. `herdr.breaker` reports
 `last_error_code` and `last_error_detail` when an open breaker retains the
 failure that caused it. Each `herdr.endpoints[]` entry may also contain
 `findings`, the endpoint-wide target-resolution or named-session diagnostics;

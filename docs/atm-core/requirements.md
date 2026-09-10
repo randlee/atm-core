@@ -153,11 +153,12 @@ Initial crate requirement IDs:
 - `REQ-CORE-RUNTIME-001` `atm-core` owns the service-layer contracts for the
   durable store family and the command semantics above those stores.
   Refines the product-level store-ownership and lock-retirement requirements
-  in [`../requirements.md`](../requirements.md) Section 21.
-- `REQ-CORE-RUNTIME-002` `atm-core` owns the service-layer contract that keeps
-  durable roster truth separate from live daemon-status truth. Satisfies the
-  state-separation and reliability aspects of:
-  `REQ-P-RELIABILITY-001`.
+  in [`../requirements.md`](../requirements.md) Section 22.1.
+- `REQ-CORE-RUNTIME-002` `atm-core` owns the service-layer contracts that
+  implement the canonical roster/live-state separation defined by
+  `REQ-CORE-RUNTIME-002` and `REQ-CORE-RUNTIME-004` in
+  [`../requirements.md`](../requirements.md) Section 22.1. Satisfies the
+  state-separation and reliability aspects of `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-001` `atm-core` owns the SQLite schema contract, canonical
   `message_key` row-key model, the one-logical-message-identity rule
   (`AtmMessageId`), and required lookup/dedupe constraints for the retained

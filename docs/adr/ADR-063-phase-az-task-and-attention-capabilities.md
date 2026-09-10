@@ -53,6 +53,12 @@ per-member lane cursors and one-item idle-opportunity reservations. It does not
 own message lifecycle, task lifecycle, bodies, templates, emitters, or runtime
 presence.
 
+Runtime presence and lifecycle state belong to the one ephemeral member record
+in the write-through RAM master roster, as amended in ADR-045. Each accepted
+`Idle` state observation advances a typed `RosterStateRevision` and publishes
+one `IdleOpportunityId` that carries that revision. Herdr poll and authenticated
+heartbeat ingress update the record only; neither path selects or emits work.
+
 `AsyncAttentionScheduleStore` is the required Tokio-safe companion of the
 same semantic store, not a thirteenth capability. This follows ADR-036's rule
 for `AsyncMessageSearchStore`: an async companion carries the same semantic
@@ -62,8 +68,14 @@ cancellation without exposing a synchronous SQLite operation on a Tokio task.
 The pure selector receives at most one candidate from `PendingNudgeStore` and
 one from the task reader, then reserves zero or one `AttentionItem`. The stores
 remain independent. Assignment admission creates no immediate nudge and no
-ordinary message-key pending marker; only the Herdr attention selector may
-choose a task reminder when the assignee is idle.
+ordinary message-key pending marker; only the replacement runtime's shared
+attention selector may choose a task reminder when the assignee's canonical
+roster state is `Idle`.
+Before emission it must re-read that record and require the same state revision.
+It may not consume raw Herdr list results or a `RuntimeHealth` projection as an
+eligibility authority. Herdr poll and authenticated heartbeat/hook observations
+may both publish opportunities; delivery-channel eligibility is evaluated
+downstream, and ADR-054's bare-CLI pull contract remains unchanged.
 
 ### D3. Capability inventory after Phase AZ
 
@@ -202,5 +214,9 @@ and record reconciliation events such as `MigratedActiveConflictDemotion`.
   stale task-linked pending markers rather than a new nudge kind or scheduler.
 - Fair scheduler tests across restart with one reservation per idle opportunity
   and no merged message/task lifecycle state.
+- Convergence tests proving Herdr and authenticated heartbeat observations
+  update one master-roster state; `RuntimeHealth` only projects it; same-state
+  idle evidence creates distinct opportunities; failed polls create none; and
+  stale-revision revalidation suppresses emission.
 - ADR-061 version records and phase-end verification against the approval in
   D6, including the full-`1.6.x` bridge-retention boundary.

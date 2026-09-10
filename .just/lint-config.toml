@@ -57,12 +57,18 @@ tokens = ["ActivityObservation", "RuntimeMemberObservation", "RuntimeObservation
 allowed_paths = [
   "crates/atm-core/src/ack/mod.rs",
   "crates/atm-core/src/caller_context.rs",
+  "crates/atm-core/src/picker_projection.rs",
   "crates/atm-core/src/protocol.rs",
   "crates/atm-core/src/read/mod.rs",
   "crates/atm-core/src/read/request.rs",
   "crates/atm-core/src/send/mod.rs",
   "crates/atm-core/src/write/mod.rs",
+  "crates/atm-http-runtime/src/herdr_queue_wake.rs",
   "crates/atm-http-runtime/src/runtime_health.rs",
+  "crates/atm-http-runtime/src/storage_and_nudge_router.rs",
+  "crates/atm-storage-rusqlite/src/roster_runtime.rs",
+  "crates/atm-storage/src/contract.rs",
+  "crates/atm-storage/src/lib.rs",
   "crates/atm/src/commands/members.rs",
 ]
 
@@ -184,7 +190,7 @@ allowed_dependencies = ["async-trait", "atm-error", "base64", "chrono", "getrand
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
-allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "serde", "serde_json", "tempfile", "tokio", "tracing"]
+allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "serde", "serde_json", "tempfile", "tokio", "tracing", "tracing-subscriber"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/peer-tls/Cargo.toml"

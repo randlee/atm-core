@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZ3-CLI-BASELINE>
+  a triage:Finding ;
+  triage:findingId "AZ3-CLI-BASELINE" ;
+  triage:title "CLI surface baseline not regenerated for the new atm task subcommand -- CI red" ;
+  triage:description "crates/atm/tests/cli_surface_baseline.json was not regenerated after the new `atm task` subcommand (wired in crates/atm/src/commands/mod.rs / task.rs) was added. cli_surface_matches_committed_baseline fails CI red on both ubuntu-latest and macos-latest Test jobs at head b8900296c, confirmed via live CI job logs, and independently reproduced locally by rust-qa-agent with `cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface`. Fix: run `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs` in the same commit and commit the regenerated baseline plus derived docs/atm/cli-reference-*.md. Source: QA-2 on PR #1382 (https://github.com/randlee/atm-core/pull/1382)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-regression" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZ3-CLI-BASELINE/AZ3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZ3-CLI-BASELINE/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/cli_surface_baseline.json" ;
+  triage:line 1 ;
+  triage:snippet "cli_surface_matches_committed_baseline fails red on ubuntu-latest and macos-latest Test jobs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b8900296c> .
+
+<urn:atm:triage:worktree/AZ3/b8900296c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:orderIndex 3 .

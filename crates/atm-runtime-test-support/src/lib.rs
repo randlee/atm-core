@@ -286,9 +286,9 @@ pub fn open_isolated_sqlite_boundary(root: impl AsRef<Path>) -> Result<RuntimeAs
     open_sqlite_boundary(root.as_ref().join("runtime").join("mail.sqlite3"))
 }
 
-/// Builds the paired write-through roster handles (`RosterStore` decorator
-/// plus its RAM mirror) that `LocalServiceRuntime::new_with_delivery_boundaries`
-/// requires, for tests that construct a runtime directly instead of going
+/// Builds the indivisible paired write-through roster value that
+/// `LocalServiceRuntime::new_with_delivery_boundaries` requires, for tests
+/// that construct a runtime directly instead of going
 /// through [`assemble_runtime`]. This wraps
 /// `atm_storage_rusqlite::roster_runtime::build_write_through_roster`, which
 /// is the only authorized construction site (boundary
@@ -298,21 +298,10 @@ pub fn open_isolated_sqlite_boundary(root: impl AsRef<Path>) -> Result<RuntimeAs
 /// # Errors
 /// Fails closed: propagates a durable roster read failure encountered while
 /// hydrating the RAM mirror from `durable`.
-#[allow(
-    clippy::type_complexity,
-    reason = "test fixtures destructure the paired handles directly; the production seam uses the WriteThroughRosterStore newtype"
-)]
 pub fn build_write_through_roster_for_test(
     durable: Arc<dyn RosterStore + Send + Sync>,
-) -> Result<
-    (
-        Arc<dyn RosterStore + Send + Sync>,
-        Arc<dyn atm_storage::RosterRuntimeMirror + Send + Sync>,
-    ),
-    AtmError,
-> {
-    let roster = atm_storage_rusqlite::roster_runtime::build_write_through_roster(durable)?;
-    Ok((roster.store(), roster.mirror()))
+) -> Result<atm_storage::WriteThroughRosterStore, AtmError> {
+    atm_storage_rusqlite::roster_runtime::build_write_through_roster(durable)
 }
 
 /// Install the current test's isolated runtime path before composing a

@@ -8,30 +8,42 @@
   a triage:Finding ;
   triage:findingId "ATM-QA-103" ;
   triage:title "v1.3-consumer compatibility fixture materially thinner than AC9's own wording" ;
-  triage:description "crates/atm-http-runtime/tests/http_v1_3_compat.rs only asserts major-version equality and that one pre-AZ route still resolves. It does not test 'every pre-AZ route,' does not test that a 1.3.0 client ignores additive task response fields, and does not test the sprint's own explicitly required behavior: 'New task requests sent to a 1.3.0 daemon fail with the existing typed unsupported-route/version response before mutation.' Confirmed at head 6937c547f. Fix: expand http_v1_3_compat.rs to cover all three gaps per AC9's own wording. Source: QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494)." ;
+  triage:description "crates/atm-http-runtime/tests/http_v1_3_compat.rs only asserts major-version equality and that one pre-AZ route still resolves. It does not test 'every pre-AZ route,' does not test that a 1.3.0 client ignores additive task response fields, and does not test the sprint's own explicitly required behavior: 'New task requests sent to a 1.3.0 daemon fail with the existing typed unsupported-route/version response before mutation.' Confirmed at head 6937c547f. Fix: expand http_v1_3_compat.rs to cover all three gaps per AC9's own wording. Source: QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494). STILL OPEN at QA-2 (head b8900296c): the fix pass retargeted the fixture to the 1.4.0 baseline but its new test filters the *current* route list to remove /v1/atm/tasks and asserts the filtered list lacks it -- a tautology by construction, not a behavioral proof of an older-version router rejecting the route. No test proves a 1.4.0 consumer ignores additive task response fields. AC9 remains unsatisfied. Source: QA-2 on PR #1382." ;
   triage:phaseId "phase-az" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "test-coverage" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-09-10T03:50:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.3 ;
   triage:foundAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/AZ3-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/AZ3-2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-103/AZ3-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/tests/http_v1_3_compat.rs" ;
   triage:line 1 ;
   triage:snippet "fn v1_3_consumer_keeps_its_pre_task_route_and_same_major_compatibility()" ;
-  triage:status "open" ;
+  triage:status "superseded" ;
   triage:closed false ;
   triage:branch "feature/az3-task-command-handoff" ;
   triage:headSha "6937c547f2599ef548b98c52ae9d38456fd9f29c" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c> .
+
+<urn:atm:triage:occurrence/ATM-QA-103/AZ3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/http_v1_3_compat.rs" ;
+  triage:line 1 ;
+  triage:snippet "test filters the current route list to remove /v1/atm/tasks and asserts the filtered list lacks it -- tautological, not a real older-version router proof" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
   triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c> .
 
 <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c>

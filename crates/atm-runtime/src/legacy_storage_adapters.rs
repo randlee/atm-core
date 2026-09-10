@@ -20,24 +20,20 @@ use atm_storage::contract::{
 use atm_storage::{AckRequirementState, AgentName, TeamName, derive_ack_requirement};
 
 #[derive(Clone)]
-pub(crate) struct StorageBackends<M, R>
+pub(crate) struct StorageBackends<M>
 where
     M: Deref<Target = dyn SharedMessageStore + Send + Sync>,
-    R: Deref<Target = dyn SharedRosterStore + Send + Sync>,
 {
     pub(crate) messages: M,
-    pub(crate) rosters: R,
 }
 
-impl<M, R> std::fmt::Debug for StorageBackends<M, R>
+impl<M> std::fmt::Debug for StorageBackends<M>
 where
     M: Deref<Target = dyn SharedMessageStore + Send + Sync>,
-    R: Deref<Target = dyn SharedRosterStore + Send + Sync>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StorageBackends")
             .field("messages", &std::any::type_name::<M>())
-            .field("rosters", &std::any::type_name::<R>())
             .finish()
     }
 }

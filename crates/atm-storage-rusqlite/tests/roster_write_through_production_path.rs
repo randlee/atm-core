@@ -49,32 +49,28 @@ fn production_factory_open_serves_roster_reads_from_ram() {
     let handles = SqliteStorageFactory::host_scoped()
         .open(root.path())
         .expect("production storage open");
+    let roster = handles.roster();
     let team = TeamName::from_validated(TEST_TEAM.to_string());
 
     // A durable write through the production handle updates RAM in the same
     // operation: the mirror observes it with no reload.
-    handles
-        .roster_store()
+    roster
+        .store()
         .save_roster(&snapshot(&team, vec![member(TEST_TEAM, TEST_AGENT)]))
         .expect("durable roster write");
     assert_eq!(
-        handles.roster_runtime_mirror().load_team_roster(&team),
+        roster.mirror().load_team_roster(&team),
         vec![member(TEST_TEAM, TEST_AGENT)],
         "the RAM mirror must observe a durable write without a reload"
     );
-    assert_eq!(
-        handles.roster_runtime_mirror().list_teams(),
-        vec![team.clone()]
-    );
+    assert_eq!(roster.mirror().list_teams(), vec![team.clone()]);
 
     // Ephemeral (RAM-only) state exists for the member, which is only
     // possible if the production handle is the write-through decorator and
     // not the raw durable store.
     let agent = AgentName::from_validated(TEST_AGENT.to_string());
     assert!(
-        handles
-            .roster_runtime_mirror()
-            .set_herdr_wake_pending(&team, &agent, true),
+        roster.mirror().set_herdr_wake_pending(&team, &agent, true),
         "ephemeral RAM state must exist for a member written through the seam"
     );
 
@@ -98,8 +94,8 @@ fn production_factory_open_serves_roster_reads_from_ram() {
     );
 
     assert_eq!(
-        handles
-            .roster_store()
+        roster
+            .store()
             .load_roster(&team)
             .expect("roster read")
             .members,
@@ -107,21 +103,18 @@ fn production_factory_open_serves_roster_reads_from_ram() {
         "a production roster read must come from RAM, not from SQLite"
     );
     assert_eq!(
-        handles.roster_runtime_mirror().load_team_roster(&team),
+        roster.mirror().load_team_roster(&team),
         vec![member(TEST_TEAM, TEST_AGENT)]
     );
 
     // The explicit control-plane reload is the only thing that re-derives RAM
     // from durable state.
-    handles
-        .roster_runtime_mirror()
+    roster
+        .mirror()
         .reload_from_durable()
         .expect("control-plane reload");
     assert!(
-        handles
-            .roster_runtime_mirror()
-            .load_team_roster(&team)
-            .is_empty(),
+        roster.mirror().load_team_roster(&team).is_empty(),
         "an explicit reload must re-derive RAM from the durable store"
     );
 }
@@ -137,7 +130,8 @@ fn production_factory_open_hydrates_ram_from_durable_state() {
             .open(root.path())
             .expect("production storage open");
         handles
-            .roster_store()
+            .roster()
+            .store()
             .save_roster(&snapshot(&team, vec![member(TEST_TEAM, TEST_AGENT)]))
             .expect("durable roster write");
     }
@@ -146,7 +140,7 @@ fn production_factory_open_hydrates_ram_from_durable_state() {
         .open(root.path())
         .expect("production storage reopen");
     assert_eq!(
-        reopened.roster_runtime_mirror().load_team_roster(&team),
+        reopened.roster().mirror().load_team_roster(&team),
         vec![member(TEST_TEAM, TEST_AGENT)],
         "a fresh production open must hydrate RAM from the durable roster"
     );

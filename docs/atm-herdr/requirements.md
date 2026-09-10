@@ -81,8 +81,9 @@ document cites it by decision id (`D1`-`D10.1`).
   sealed `AsyncMessageReceivedHookEmitter` contract and decides *when* to
   call this crate's `prompt` — owned by `atm-daemon-bootstrap` (AQ2.6)
 - the queue-tick pump: its 5 s polling cadence, per-session `agent list`
-  grouping, per-tick prompt cap, FIFO claim ordering, and `RuntimeHealth`
-  recording — owned by `atm-http-runtime` (AQ2.7, `HerdrQueueWakePump`);
+  grouping, per-tick prompt cap, FIFO claim ordering, and canonical ephemeral
+  master-roster state update — owned by `atm-http-runtime` (AQ2.7,
+  `HerdrQueueWakePump`); `RuntimeHealth` only projects that state;
   `atm-herdr` supplies only `list` / `prompt` / `get` and the breaker
 - queue state: `PendingNudgeStore`, `MemberKey`, `NudgeClaim`,
   `claim_next_pending` / `requeue_pending` / `release_pending` /

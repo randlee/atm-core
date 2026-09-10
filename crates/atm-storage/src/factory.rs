@@ -110,11 +110,8 @@ pub struct StorageHandles {
     async_mailbox_reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     async_task_mutation_store: Arc<dyn AsyncTaskMutationStore + Send + Sync>,
-    roster_store: Arc<dyn RosterStore + Send + Sync>,
-    /// Runtime-owned, write-through RAM roster mirror paired with
-    /// `roster_store`. Every roster consumer reads through this handle
-    /// after startup hydration; see [`RosterRuntimeMirror`].
-    roster_runtime_mirror: Arc<dyn RosterRuntimeMirror + Send + Sync>,
+    /// The indivisible write-through roster pair selected by composition.
+    roster: WriteThroughRosterStore,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     task_store: Arc<dyn TaskStore + Send + Sync>,
@@ -167,8 +164,7 @@ impl fmt::Debug for StorageHandles {
             .field("async_message_store", &"dyn AsyncMessageStore")
             .field("async_task_ledger_reader", &"dyn AsyncTaskLedgerReader")
             .field("async_task_mutation_store", &"dyn AsyncTaskMutationStore")
-            .field("roster_store", &"dyn RosterStore")
-            .field("roster_runtime_mirror", &"dyn RosterRuntimeMirror")
+            .field("roster", &self.roster)
             .field(
                 "nudge_template_override_store",
                 &"dyn NudgeTemplateOverrideStore",
@@ -197,8 +193,7 @@ impl StorageHandles {
             async_mailbox_reader: parts.async_mailbox_reader,
             async_task_ledger_reader: parts.async_task_ledger_reader,
             async_task_mutation_store: parts.async_task_mutation_store,
-            roster_store: parts.roster.store(),
-            roster_runtime_mirror: parts.roster.mirror(),
+            roster: parts.roster,
             nudge_template_override_store: parts.nudge_template_override_store,
             pending_nudge_store: parts.pending_nudge_store,
             task_store: parts.task_store,
@@ -237,15 +232,12 @@ impl StorageHandles {
         Arc::clone(&self.async_task_mutation_store)
     }
 
-    pub fn roster_store(&self) -> Arc<dyn RosterStore + Send + Sync> {
-        Arc::clone(&self.roster_store)
-    }
-
-    /// Returns the write-through RAM roster mirror paired with
-    /// [`Self::roster_store`]. Every roster consumer reads through this
-    /// handle after startup hydration.
-    pub fn roster_runtime_mirror(&self) -> Arc<dyn RosterRuntimeMirror + Send + Sync> {
-        Arc::clone(&self.roster_runtime_mirror)
+    /// Returns the indivisible write-through roster pair selected by
+    /// composition. Callers may project its store or mirror handles, but
+    /// runtime constructors accept this paired value rather than two
+    /// independently substitutable trait objects.
+    pub fn roster(&self) -> WriteThroughRosterStore {
+        self.roster.clone()
     }
 
     pub fn nudge_template_override_store(

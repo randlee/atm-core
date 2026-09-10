@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AZ3-OPENAPI-STALE-BASELINE>
+  a triage:Finding ;
+  triage:findingId "AZ3-OPENAPI-STALE-BASELINE" ;
+  triage:title "openapi.yaml peer_http_api_version field description missed the 1.5.0 version-bump cascade" ;
+  triage:description "Both docs/atm-http-runtime/openapi.yaml:174 and crates/atm/openapi.yaml:174 still describe peer_http_api_version's current baseline as '1.4.0' after HTTP_API_VERSION moved to 1.5.0 in this round's SCHEMA-COLLISION fix -- the top-level version fields were updated but this inline field description was missed by the same cascade. Fix: update both field descriptions to 1.5.0. Source: QA-2 on PR #1382 (https://github.com/randlee/atm-core/pull/1382)." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/atm-http-runtime/openapi.yaml, crates/atm/openapi.yaml" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.3 ;
+  triage:foundAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZ3-OPENAPI-STALE-BASELINE/AZ3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZ3-OPENAPI-STALE-BASELINE/AZ3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AZ3-OPENAPI-STALE-BASELINE/AZ3-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-http-runtime/openapi.yaml" ;
+  triage:line 174 ;
+  triage:snippet "peer_http_api_version field description still says current baseline is 1.4.0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b8900296c> .
+
+<urn:atm:triage:occurrence/AZ3-OPENAPI-STALE-BASELINE/AZ3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/openapi.yaml" ;
+  triage:line 174 ;
+  triage:snippet "peer_http_api_version field description still says current baseline is 1.4.0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/b8900296c> .
+
+<urn:atm:triage:worktree/AZ3/b8900296c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ3" ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:orderIndex 3 .

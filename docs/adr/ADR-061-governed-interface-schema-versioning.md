@@ -97,6 +97,13 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-09 — issue #1378 canonical agent state:** `HTTP_API_VERSION` moves
+  from `1.3.0` to `1.4.0`. The runtime-status member projection adds
+  `revision`, `availability`, `last_observation_attempt_by`,
+  `last_observation_attempt_at`, `last_observed_by`, and `last_observed_at`.
+  Receivers default every added field when it is omitted, and older consumers
+  may ignore the additive fields. The retained pre-1.4 payload test proves the
+  same-major compatibility path. This is a minor, backward-compatible bump.
 - **2026-09-10 — AZ.3 task command service:** `HTTP_API_VERSION` moves from
   `1.4.0` to `1.5.0`. The canonical `/v1/atm/tasks` request/response exchange
   carries task queries and lifecycle mutations. Existing routes and payloads

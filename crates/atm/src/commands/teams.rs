@@ -288,28 +288,34 @@ impl TeamsCommand {
                 },
             )
         })?;
-        let runtime_states = self.runtime_member_states(&team, observability).await;
-        let projection =
-            atm_core::build_picker_members_projection(&team, &outcome.members, &runtime_states);
+        let runtime_status = match self.runtime_status(&team, observability).await {
+            Ok(status) => Some(status),
+            Err(error) => {
+                tracing::warn!(
+                    event = "picker_runtime_status_unavailable",
+                    team = %team,
+                    error = %error,
+                    "runtime status unavailable; emitting roster with explicit unavailable state"
+                );
+                None
+            }
+        };
+        let projection = atm_core::build_picker_members_projection_from_runtime_status(
+            &team,
+            &outcome.members,
+            runtime_status.as_ref(),
+        );
         output::print_picker_members_projection(&projection, json)
     }
 
-    /// Best-effort live runtime state per member, keyed by name. Returns an
-    /// empty map (every member projects as `dead`, never guessed
-    /// active/idle) when the daemon composition or doctor query itself
-    /// fails -- the picker projection must still return a usable, if
-    /// conservative, document rather than erroring the whole command.
-    async fn runtime_member_states(
+    /// Loads the daemon's runtime status snapshot. Failure is propagated: an
+    /// unavailable runtime must not be misreported as an all-dead team.
+    async fn runtime_status(
         &self,
         team: &atm_core::types::TeamName,
         observability: &CliObservability,
-    ) -> std::collections::BTreeMap<
-        atm_core::types::AgentName,
-        atm_core::protocol::RuntimeMemberState,
-    > {
-        let Ok((home_dir, current_dir)) = resolve_command_runtime_context("teams") else {
-            return std::collections::BTreeMap::new();
-        };
+    ) -> Result<atm_core::protocol::RuntimeStatusSnapshot> {
+        let (home_dir, current_dir) = resolve_command_runtime_context("teams")?;
         let query = atm_core::doctor::DoctorQuery {
             home_dir,
             current_dir,
@@ -322,27 +328,16 @@ impl TeamsCommand {
                 "atm::teams::members::runtime",
             ),
         };
-        let Ok(composition) = CliComposition::bootstrap(
+        let composition = CliComposition::bootstrap(
             "teams",
             observability,
             InvocationDir::new(&query.current_dir),
             AtmHomePath::new(&query.home_dir),
-        ) else {
-            return std::collections::BTreeMap::new();
-        };
-        let Ok(report) = composition.doctor(query).await else {
-            return std::collections::BTreeMap::new();
-        };
+        )?;
+        let report = composition.doctor(query).await?;
         report
             .runtime_status
-            .map(|snapshot| {
-                snapshot
-                    .members
-                    .into_iter()
-                    .map(|observation| (observation.member, observation.state))
-                    .collect()
-            })
-            .unwrap_or_default()
+            .ok_or_else(|| anyhow::anyhow!("daemon doctor response omitted runtime status"))
     }
 }
 
@@ -1256,8 +1251,9 @@ mod tests {
 
     /// ADR-055 decision (e)/PRD §4.2: `atm teams --json --members` runs end
     /// to end against a real (isolated, sqlite-backed) roster without a live
-    /// daemon -- the runtime-state lookup degrades to an empty map (every
-    /// member projects `dead`) rather than failing the whole command.
+    /// daemon -- runtime enrichment degrades to explicit
+    /// `Unknown` + `Unavailable` (and compatibility `dead`) rather than
+    /// failing the whole command or asserting an offline lifecycle state.
     #[test]
     #[serial_test::serial(env)]
     fn teams_members_projection_runs_without_daemon() {

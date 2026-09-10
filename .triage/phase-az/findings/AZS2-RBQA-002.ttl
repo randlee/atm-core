@@ -8,21 +8,24 @@
   a triage:Finding ;
   triage:findingId "AZS2-RBQA-002" ;
   triage:title "boundary TOML review_gates have no mechanical enforcement; task_legacy_ops.rs ungoverned" ;
-  triage:description "boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml:42, boundaries/atm-storage/task-store.toml -- the 2026-09-10 fix attempt asserted 'lint_rules, not review_gates, are the mechanically enforced controls' but this claim is FALSE. Independent re-verification at QA-1 on PR #1382 (2026-09-10T03:45:00Z) against head 6937c547f2599ef548b98c52ae9d38456fd9f29c: (1) .just/lint_boundaries.py validates syntax only (line 1518-1521 validates identifier strings), never executes any named lint rule; (2) grep -rn LINT-BOUNDARY-ASYNC-TASK-MUTATION-SQLITE .just/ returns zero hits outside the TOML declaration itself; (3) the attempted fix made enforcement worse by claiming false mechanical enforcement in the TOML notes field. STILL OPEN -- boundary governance is not mechanically enforced. Source: QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494)." ;
+  triage:description "boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml:42, boundaries/atm-storage/task-store.toml -- the 2026-09-10 fix attempt asserted 'lint_rules, not review_gates, are the mechanically enforced controls' but this claim is FALSE. Independent re-verification at QA-1 on PR #1382 (2026-09-10T03:45:00Z) against head 6937c547f2599ef548b98c52ae9d38456fd9f29c: (1) .just/lint_boundaries.py validates syntax only (line 1518-1521 validates identifier strings), never executes any named lint rule; (2) grep -rn LINT-BOUNDARY-ASYNC-TASK-MUTATION-SQLITE .just/ returns zero hits outside the TOML declaration itself; (3) the attempted fix made enforcement worse by claiming false mechanical enforcement in the TOML notes field. STILL OPEN -- boundary governance is not mechanically enforced. Source: QA-1 on PR #1382 (https://github.com/randlee/atm-core/pull/1382#issuecomment-5612459494). STILL OPEN at QA-2 (head b8900296c, independently confirmed by both arch-qa and ruthless-boundary-qa): the fix-3 pass corrected only 1 of 4 boundary TOMLs carrying the false claim -- boundaries/atm-storage/task-store.toml:41 now has honest wording, but the identical false claim remains verbatim in boundaries/atm-storage/async-task-mutation-store.toml:37 and boundaries/atm-storage-rusqlite/task-store-sqlite.toml:39, and boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml:48 was reworded to a differently-phrased but equally false claim. Source: QA-2 on PR #1382." ;
   triage:phaseId "phase-az" ;
   triage:triageMode "followup_pass" ;
   triage:category "boundary-governance" ;
   triage:severity "blocking" ;
-  triage:repeatable false ;
-  triage:sweepScope "boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml, boundaries/atm-storage/task-store.toml, .just/lint_boundaries.py" ;
+  triage:repeatable true ;
+  triage:sweepScope "boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml, boundaries/atm-storage/task-store.toml, boundaries/atm-storage/async-task-mutation-store.toml, boundaries/atm-storage-rusqlite/task-store-sqlite.toml, .just/lint_boundaries.py" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.2 ;
   triage:foundAt "2026-09-10T02:11:59Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-002/AZ2-governance-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-002/AZ3-governance-1> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-002/AZ3-governance-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-002/AZ3-governance-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AZS2-RBQA-002/AZ3-governance-4> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AZS2-RBQA-002/AZ2-governance-1>
   a triage:Occurrence ;
@@ -52,6 +55,39 @@
   triage:branch "feature/az2-task-domain-storage" ;
   triage:headSha "f04a9f25f397a67734beda5a414e2d4723eaef83" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-002/AZ3-governance-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/async-task-mutation-store.toml" ;
+  triage:line 37 ;
+  triage:snippet "still asserts lint_rules are mechanically enforced -- false, unchanged by fix-3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-002/AZ3-governance-3>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/task-store-sqlite.toml" ;
+  triage:line 39 ;
+  triage:snippet "still asserts lint_rules are mechanically enforced -- false, unchanged by fix-3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547> .
+
+<urn:atm:triage:occurrence/AZS2-RBQA-002/AZ3-governance-4>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/async-task-mutation-store-sqlite.toml" ;
+  triage:line 48 ;
+  triage:snippet "reworded by fix-3 to a differently-phrased but equally false mechanical-enforcement claim" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547> .
 
 <urn:atm:triage:worktree/AZ3/6937c547>
   a triage:WorktreeSnapshot ;
