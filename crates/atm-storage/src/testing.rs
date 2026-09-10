@@ -199,6 +199,11 @@ pub struct GateAfterTaskRead {
 }
 
 impl GateAfterTaskRead {
+    /// Creates a gate whose first logical-task read blocks until `resume_tx` is
+    /// signaled. Because the gate uses a synchronous receiver, callers must
+    /// drive it from a multi-thread Tokio runtime and arrange for the resume
+    /// signal to come from a task that is not the blocked worker; this test
+    /// double must not be used on a current-thread runtime.
     #[must_use]
     pub fn new(
         inner: std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
