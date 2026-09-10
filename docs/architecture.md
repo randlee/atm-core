@@ -3235,3 +3235,14 @@ and task-id-joined pending-marker invalidation commit together. The retained
 v1 `TaskStore` is a coexistence reader/audit bridge, not an alternate mutation
 owner. Logical task ordering is queried in the storage reader lane so command
 and idle consumers cannot recreate it differently.
+
+### 21.12 Phase AZ.3 task command service
+
+`TaskCommandService` is the sole task lifecycle policy boundary. The CLI and
+HTTP adapters carry typed request/response DTOs to it; neither opens SQLite or
+reconstructs lifecycle authorization. Terminal handoff mail is represented as
+prepared data and committed by the same task mutation transaction as the
+closed event/projection. Task-linked acknowledgement remains a mail mutation;
+only explicit `TaskAction::Start` activates an assignment. The public HTTP
+task route is additive in API 1.4.0, while the retained legacy flags delegate
+through this boundary during their compatibility window.

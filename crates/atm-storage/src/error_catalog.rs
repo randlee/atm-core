@@ -285,7 +285,7 @@ const fn warning_guidance(code: AtmErrorCode) -> Option<&'static str> {
             Some("rename the member: atm-daemon is reserved for daemon-originated messages")
         }
         AtmErrorCode::TaskStalled => Some(
-            "check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin",
+            "check the assignee or close the task with: atm task complete <task_id> --handoff <agent> <message-source>",
         ),
         AtmErrorCode::MemberBlocked => Some(
             "<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt",
