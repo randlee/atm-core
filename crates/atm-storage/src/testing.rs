@@ -15,7 +15,10 @@ use crate::contract::{
     GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery, ReadDeadline,
     ReadLaneError, sealed,
 };
-use crate::task_state::{TaskEventRow, TaskRow};
+use crate::task_state::{
+    AssignmentAttempt, LogicalTaskRow, TaskEventRow, TaskLifecycleState, TaskPriority, TaskRow,
+    TaskState,
+};
 use crate::types::{AgentName, IsoTimestamp, OwnerGeneration, TaskId, TeamName};
 
 /// A `GraftReceiverEndpointStore` that accepts every write and reports no
@@ -248,6 +251,54 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
                     })
                     .cloned()
                     .collect()
+            })
+    }
+
+    async fn top_runnable_task(
+        &self,
+        team: TeamName,
+        member: AgentName,
+        _deadline: ReadDeadline,
+    ) -> Result<Option<LogicalTaskRow>, ReadLaneError> {
+        self.tasks
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader task lock poisoned".to_owned(),
+            })
+            .map(|tasks| {
+                let mut rows: Vec<_> = tasks
+                    .iter()
+                    .filter(|task| {
+                        task.team == team
+                            && task.assignee == member
+                            && task.state != TaskState::Complete
+                    })
+                    .collect();
+                rows.sort_by(|left, right| {
+                    let left_rank = u8::from(left.state != TaskState::Active);
+                    let right_rank = u8::from(right.state != TaskState::Active);
+                    left_rank
+                        .cmp(&right_rank)
+                        .then_with(|| left.assigned_at.cmp(&right.assigned_at))
+                        .then_with(|| left.task_id.as_str().cmp(right.task_id.as_str()))
+                });
+                rows.into_iter().next().map(|row| LogicalTaskRow {
+                    team: row.team.clone(),
+                    task_id: row.task_id.clone(),
+                    current_assignee: row.assignee.clone(),
+                    state: match row.state {
+                        TaskState::Assigned => TaskLifecycleState::Assigned,
+                        TaskState::Active => TaskLifecycleState::Active,
+                        TaskState::Complete => unreachable!("closed tasks were filtered"),
+                    },
+                    priority: TaskPriority::Normal,
+                    original_assigned_at: row.assigned_at,
+                    current_attempt: AssignmentAttempt::FIRST,
+                    assignment_message_id: row.assignment_message_id,
+                    reminder_ordinal: u64::from(row.reminder_count),
+                    revision: 0,
+                    updated_at: row.updated_at,
+                })
             })
     }
 }

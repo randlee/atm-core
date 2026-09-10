@@ -197,6 +197,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let template_catalog_store = storage.template_catalog_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
     let pending_nudge_store = storage.pending_nudge_store();
+    let attention_schedule_store = storage.attention_schedule_store();
     let task_store = storage.task_store();
     let graft_receiver_endpoint_store = storage.graft_receiver_endpoint_store();
     let peer_config_store = storage.peer_config_store();
@@ -213,6 +214,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     .with_async_task_mutation_store(async_task_mutation_store)
     .with_async_message_search_store(async_message_search_store)
     .with_pending_nudge_store(pending_nudge_store)
+    .with_attention_schedule_store(attention_schedule_store)
     .with_task_store(task_store)
     .with_graft_receiver_endpoint_store(graft_receiver_endpoint_store)
     .with_template_rendering(template_catalog_store, template_composer.clone());

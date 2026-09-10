@@ -204,7 +204,10 @@ fn list_logical_tasks(
     let mut statement = connection
         .prepare(
             "SELECT team, task_id, current_assignee, state, outcome, abort_reason, superseded_by,
-                    priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at
+                    priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at,
+                    (SELECT assignment_message_id FROM task_assignment_attempts AS attempt
+                       WHERE attempt.team = tasks_v2.team AND attempt.task_id = tasks_v2.task_id
+                         AND attempt.attempt = tasks_v2.current_attempt)
              FROM tasks_v2
              WHERE team = ?1 AND (?2 IS NULL OR current_assignee = ?2)
                AND (?3 = 'all' OR (?3 = 'open' AND state != 'closed') OR (?3 = 'closed' AND state = 'closed'))
@@ -249,7 +252,10 @@ fn top_runnable_task(
     connection
         .query_row(
             "SELECT team, task_id, current_assignee, state, outcome, abort_reason, superseded_by,
-                    priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at
+                    priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at,
+                    (SELECT assignment_message_id FROM task_assignment_attempts AS attempt
+                       WHERE attempt.team = tasks_v2.team AND attempt.task_id = tasks_v2.task_id
+                         AND attempt.attempt = tasks_v2.current_attempt)
              FROM tasks_v2
              WHERE team = ?1 AND current_assignee = ?2 AND state IN ('active', 'assigned')
              ORDER BY CASE state WHEN 'active' THEN 0 ELSE 1 END,
@@ -272,7 +278,10 @@ fn load_logical_task(
     connection
         .query_row(
             "SELECT team, task_id, current_assignee, state, outcome, abort_reason, superseded_by,
-                    priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at
+                    priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at,
+                    (SELECT assignment_message_id FROM task_assignment_attempts AS attempt
+                       WHERE attempt.team = tasks_v2.team AND attempt.task_id = tasks_v2.task_id
+                         AND attempt.attempt = tasks_v2.current_attempt)
              FROM tasks_v2 WHERE team = ?1 AND task_id = ?2",
             params![team.as_str(), task_id.as_str()],
             decode_logical_task_row,
@@ -361,6 +370,10 @@ fn decode_logical_task_row(row: &Row<'_>) -> rusqlite::Result<LogicalTaskRow> {
                 Box::new(error.into_atm_error()),
             )
         })?,
+        assignment_message_id: parse_value(
+            &row.get::<_, String>(13)?,
+            "logical task assignment message id",
+        )?,
         reminder_ordinal: row.get(10)?,
         revision: row.get(11)?,
         updated_at: parse_value(&row.get::<_, String>(12)?, "logical task update time")?,

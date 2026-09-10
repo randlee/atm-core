@@ -206,6 +206,10 @@ pub struct LogicalTaskRow {
     pub priority: TaskPriority,
     pub original_assigned_at: IsoTimestamp,
     pub current_attempt: AssignmentAttempt,
+    /// Identifier of the canonical assignment message for the current attempt.
+    /// This is metadata only; consumers reload the bounded title projection
+    /// from the message store and never receive assignment text here.
+    pub assignment_message_id: AtmMessageId,
     pub reminder_ordinal: u64,
     pub revision: u64,
     pub updated_at: IsoTimestamp,

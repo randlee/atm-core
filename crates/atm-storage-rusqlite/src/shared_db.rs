@@ -323,6 +323,7 @@ impl SharedDb {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
             WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::TaskMutation(_)
+            | WriteOpResult::AttentionReservation(_)
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -394,6 +395,38 @@ impl SharedDb {
         }
     }
 
+    pub(crate) async fn submit_attention_reservation_async(
+        &self,
+        request: atm_storage::AttentionReservationRequest,
+    ) -> Result<atm_storage::AttentionReservation, AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::AttentionReserve(Box::new(request)))
+            .await?
+        {
+            WriteOpResult::AttentionReservation(reservation) => Ok(reservation),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for attention reservation: {other:?}"
+            ))),
+        }
+    }
+
+    pub(crate) async fn submit_attention_finalize_async(
+        &self,
+        request: atm_storage::AttentionFinalizeRequest,
+    ) -> Result<atm_storage::AttentionReservation, AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::AttentionFinalize(Box::new(request)))
+            .await?
+        {
+            WriteOpResult::AttentionReservation(reservation) => Ok(reservation),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for attention finalization: {other:?}"
+            ))),
+        }
+    }
+
     /// Submits a task mutation that becomes a no-op before execution if the
     /// caller's request budget expires while it waits behind the shared writer.
     pub(crate) async fn submit_task_mutation_async_before(
@@ -440,6 +473,7 @@ impl SharedDb {
             )),
             WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::TaskMutation(_)
+            | WriteOpResult::AttentionReservation(_)
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -516,6 +550,7 @@ impl SharedDb {
             WriteOpResult::UpsertMessages => Ok(()),
             WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::TaskMutation(_)
+            | WriteOpResult::AttentionReservation(_)
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -540,6 +575,7 @@ impl SharedDb {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::TaskMutation(_)
+            | WriteOpResult::AttentionReservation(_)
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -565,6 +601,7 @@ impl SharedDb {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::TaskMutation(_)
+            | WriteOpResult::AttentionReservation(_)
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -742,6 +779,7 @@ pub(crate) fn ensure_schema(
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
     crate::task_store::ensure_schema(connection, target)?;
+    crate::attention_schedule_store::ensure_schema(connection, target)?;
     ensure_column(
         connection,
         target,
