@@ -64,7 +64,8 @@ pub(crate) fn ensure_schema(
 ) -> Result<(), AtmError> {
     connection
         .execute_batch(TASK_SCHEMA_DDL)
-        .map_err(|error| sqlite_error(target, "failed to initialize task ledger schema", error))
+        .map_err(|error| sqlite_error(target, "failed to initialize task ledger schema", error))?;
+    crate::schema_version::ensure_task_v2_schema(connection, target)
 }
 
 impl SqliteTaskStore {
