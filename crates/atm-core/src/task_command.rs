@@ -11,9 +11,11 @@ use crate::error::AtmError;
 use crate::types::{TaskId, TeamName};
 use atm_storage::MemberKey;
 use atm_storage::{
-    AssignmentAttempt, LogicalTaskRow, TaskLifecycleEventRow, TaskLifecycleState, TaskOperationId,
-    TaskOutcome, TaskPriority, TemplateSha,
+    AssignmentAttempt, LogicalTaskRow, TaskLifecycleEventRow, TaskLifecycleState, TaskOutcome,
+    TaskPriority, TemplateSha,
 };
+
+pub use atm_storage::TaskOperationId;
 
 pub const DEFAULT_TASK_PAGE_LIMIT: usize = 200;
 pub const MAX_TASK_PAGE_LIMIT: usize = 10_000;
