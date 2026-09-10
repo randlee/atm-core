@@ -322,6 +322,7 @@ impl SharedDb {
         match result {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::TaskMutation(_)
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -374,6 +375,25 @@ impl SharedDb {
         .await
     }
 
+    /// Applies one canonical logical-task mutation through the sole ordered
+    /// writer.  The request is already validated at the storage boundary;
+    /// this method deliberately exposes neither the queue nor a connection.
+    pub(crate) async fn submit_task_mutation_async(
+        &self,
+        request: atm_storage::TaskMutationRequest,
+    ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::TaskMutation(Box::new(request)))
+            .await?
+        {
+            WriteOpResult::TaskMutation(outcome) => Ok(outcome),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for task mutation: {other:?}"
+            ))),
+        }
+    }
+
     pub(crate) async fn submit_upsert_message_with_provenance_async(
         &self,
         record: Message,
@@ -400,6 +420,7 @@ impl SharedDb {
                 "sqlite writer reported a duplicate without its retained record",
             )),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::TaskMutation(_)
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -475,6 +496,7 @@ impl SharedDb {
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::TaskMutation(_)
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -498,6 +520,7 @@ impl SharedDb {
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::TaskMutation(_)
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -522,6 +545,7 @@ impl SharedDb {
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::TaskMutation(_)
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
