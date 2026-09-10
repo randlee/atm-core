@@ -15,14 +15,17 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.3 ;
   triage:foundAt "2026-09-10T03:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/AZ3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/AZ3-2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/AZ3-3> ;
+  triage:closedAt "2026-09-10T05:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/ATM-QA-103/AZ3-1>
   a triage:Occurrence ;
@@ -44,6 +47,17 @@
   triage:closed false ;
   triage:branch "feature/az3-task-command-handoff" ;
   triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c> .
+
+<urn:atm:triage:occurrence/ATM-QA-103/AZ3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/http_v1_3_compat.rs" ;
+  triage:line 1 ;
+  triage:snippet "rewritten to a real behavioral test: full pre-task route list vs canonical route-spec table, additive-field tolerance proof, version-gate rejection proof" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/az3-task-command-handoff" ;
+  triage:headSha "05e35a69716f9ef85bd7379d9a6ffb84553cfadf" ;
   triage:occursIn <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c> .
 
 <urn:atm:triage:worktree/AZ3/6937c547f2599ef548b98c52ae9d38456fd9f29c>

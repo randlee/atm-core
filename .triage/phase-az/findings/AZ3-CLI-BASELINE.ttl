@@ -15,23 +15,25 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.3 ;
   triage:foundAt "2026-09-10T05:10:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AZ3-CLI-BASELINE/AZ3-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-09-10T05:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AZ3-CLI-BASELINE/AZ3-1>
   a triage:Occurrence ;
   triage:file "crates/atm/tests/cli_surface_baseline.json" ;
   triage:line 1 ;
   triage:snippet "cli_surface_matches_committed_baseline fails red on ubuntu-latest and macos-latest Test jobs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/az3-task-command-handoff" ;
-  triage:headSha "b8900296c41710e6e2eaf51fedfd9cc18c117e5d" ;
+  triage:headSha "05e35a69716f9ef85bd7379d9a6ffb84553cfadf" ;
   triage:occursIn <urn:atm:triage:worktree/AZ3/b8900296c> .
 
 <urn:atm:triage:worktree/AZ3/b8900296c>
