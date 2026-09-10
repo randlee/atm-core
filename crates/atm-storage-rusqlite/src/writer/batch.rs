@@ -432,7 +432,12 @@ pub(crate) fn process_queued_write(
     let result = match result {
         Ok(Err(error)) => {
             drop(savepoint);
-            match task_ops::append_rejected_task_event(&queued.op, transaction, target, &error) {
+            match task_legacy_ops::append_rejected_task_event(
+                &queued.op,
+                transaction,
+                target,
+                &error,
+            ) {
                 Ok(()) => Err(error),
                 Err(audit_error) => Err(audit_error),
             }

@@ -113,9 +113,9 @@ pub fn lifecycle_transition(
         }
         (
             Some(State::Assigned | State::Active | State::Blocked),
-            Action::Close(TaskOutcome::Aborted(reason)),
+            Action::Close(TaskOutcome::Aborted(TaskAbortReason::Cancelled)),
         ) => Ok(TaskLifecycleTransition::To(State::Closed(
-            TaskOutcome::Aborted(reason.clone()),
+            TaskOutcome::Aborted(TaskAbortReason::Cancelled),
         ))),
         (
             Some(State::Assigned | State::Active | State::Blocked),
@@ -235,6 +235,7 @@ pub enum TaskLifecycleEventKind {
     Migrated,
     MigratedActiveConflictDemotion,
     LegacyCloseSucceeded,
+    LegacyV1Updated,
 }
 
 impl TaskLifecycleEventKind {
@@ -255,6 +256,7 @@ impl TaskLifecycleEventKind {
             Self::Migrated => "migrated",
             Self::MigratedActiveConflictDemotion => "migrated_active_conflict_demotion",
             Self::LegacyCloseSucceeded => "legacy_close_succeeded",
+            Self::LegacyV1Updated => "legacy_v1_updated",
         }
     }
 }
@@ -297,6 +299,12 @@ impl TaskOperationId {
         Ulid::from_string(value)
             .map(Self)
             .map_err(|_| TaskRejected::new("task operation id is invalid"))
+    }
+}
+
+impl Default for TaskOperationId {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

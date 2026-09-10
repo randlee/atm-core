@@ -2,6 +2,18 @@
 
 This document records shared storage-neutral contracts owned by `atm-storage`.
 
+## AsyncTaskMutationStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/async-task-mutation-store.toml](../../boundaries/atm-storage/async-task-mutation-store.toml)
+
+`AsyncTaskMutationStore` owns exactly one idempotent logical-task lifecycle
+mutation. It accepts prepared canonical messages but no renderer, database
+connection, writer permit, or body-copy field. The concrete backend commits the
+message, logical task, immutable attempt/event records, operation replay row,
+and required pending-marker cleanup in one writer transaction. `TaskStore`
+remains the retained synchronous v1 read/audit compatibility surface.
+
 ## TaskStore
 
 Canonical machine-readable boundary source:

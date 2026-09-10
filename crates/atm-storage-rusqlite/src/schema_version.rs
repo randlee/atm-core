@@ -76,43 +76,192 @@ CREATE TABLE IF NOT EXISTS task_operations (
     PRIMARY KEY (team, operation_id)
 );
 
+-- A writer-transaction marker lets canonical v2 mutations refresh the
+-- retained v1 compatibility projection without invoking the v1->v2 trigger
+-- path. It is inserted and removed in the same transaction, so it is never a
+-- durable mode switch visible to another operation.
+CREATE TABLE IF NOT EXISTS task_v2_projection_context (
+    singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton = 1)
+);
+
 CREATE INDEX IF NOT EXISTS task_list_order
     ON tasks_v2(team, current_assignee, state, priority, original_assigned_at, task_id);
-CREATE TRIGGER IF NOT EXISTS task_v1_insert_bridge
+-- These are upgraded in place when an existing 1.6.x database is opened;
+-- CREATE TRIGGER IF NOT EXISTS would silently retain an obsolete bridge.
+DROP TRIGGER IF EXISTS task_v1_insert_bridge;
+DROP TRIGGER IF EXISTS task_v1_update_bridge;
+CREATE TRIGGER task_v1_insert_bridge
 AFTER INSERT ON tasks
+WHEN NOT EXISTS (SELECT 1 FROM task_v2_projection_context WHERE singleton = 1)
 BEGIN
+    INSERT OR IGNORE INTO task_assignment_attempts(
+        team, task_id, attempt, assignee, assigner, assignment_message_id, template_sha, assigned_at
+    ) VALUES (
+        NEW.team, NEW.task_id,
+        (SELECT COUNT(*) FROM tasks AS numbered
+          WHERE numbered.team = NEW.team AND numbered.task_id = NEW.task_id
+            AND (numbered.assigned_at < NEW.assigned_at
+                 OR (numbered.assigned_at = NEW.assigned_at AND numbered.assignee <= NEW.assignee))),
+        NEW.assignee, NEW.assigner, NEW.assignment_message_id, NULL, NEW.assigned_at
+    );
+    UPDATE tasks_v2
+       SET state = 'assigned', updated_at = NEW.updated_at
+     WHERE tasks_v2.team = NEW.team AND tasks_v2.state = 'active'
+       AND EXISTS (
+           SELECT 1 FROM tasks AS chosen
+            WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
+              AND chosen.state = 'active' AND chosen.assignee = tasks_v2.current_assignee
+              AND NOT EXISTS (
+                  SELECT 1 FROM tasks AS preferred
+                   WHERE preferred.team = chosen.team AND preferred.task_id = chosen.task_id
+                     AND (CASE preferred.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                          preferred.updated_at, preferred.assignee)
+                         < (CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                            chosen.updated_at, chosen.assignee)
+              )
+       )
+       AND (
+           (SELECT MIN(candidate.assigned_at) FROM tasks AS candidate
+             WHERE candidate.team = NEW.team AND candidate.task_id = NEW.task_id) < tasks_v2.original_assigned_at
+           OR ((SELECT MIN(candidate.assigned_at) FROM tasks AS candidate
+                 WHERE candidate.team = NEW.team AND candidate.task_id = NEW.task_id) = tasks_v2.original_assigned_at
+               AND NEW.task_id < tasks_v2.task_id)
+       );
     INSERT INTO tasks_v2(
         team, task_id, current_assignee, state, outcome, abort_reason,
         superseded_by, priority, original_assigned_at, current_attempt,
         reminder_ordinal, revision, updated_at
-    ) VALUES (
-        NEW.team, NEW.task_id, NEW.assignee,
-        CASE NEW.state WHEN 'complete' THEN 'closed' ELSE NEW.state END,
-        CASE NEW.state WHEN 'complete' THEN 'succeeded' ELSE NULL END,
-        NULL, NULL, 'normal', NEW.assigned_at, 1, NEW.reminder_count, 1, NEW.updated_at
-    ) ON CONFLICT(team, task_id) DO UPDATE SET
+    ) SELECT chosen.team, chosen.task_id, chosen.assignee,
+        CASE chosen.state
+            WHEN 'complete' THEN 'closed'
+            WHEN 'active' THEN CASE WHEN EXISTS (
+                SELECT 1 FROM tasks_v2 AS existing
+                 WHERE existing.team = chosen.team
+                   AND existing.current_assignee = chosen.assignee
+                   AND existing.state = 'active'
+                   AND existing.task_id <> chosen.task_id
+            ) THEN 'assigned' ELSE 'active' END
+            ELSE 'assigned'
+        END,
+        CASE chosen.state WHEN 'complete' THEN 'succeeded' ELSE NULL END,
+        NULL, NULL, 'normal',
+        (SELECT MIN(original.assigned_at) FROM tasks AS original
+          WHERE original.team = chosen.team AND original.task_id = chosen.task_id),
+        (SELECT attempt FROM task_assignment_attempts
+          WHERE team = chosen.team AND task_id = chosen.task_id AND assignee = chosen.assignee),
+        chosen.reminder_count, 1, chosen.updated_at
+      FROM tasks AS chosen
+     WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
+     ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+              chosen.updated_at DESC, chosen.assignee ASC
+     LIMIT 1
+    ON CONFLICT(team, task_id) DO UPDATE SET
         current_assignee = excluded.current_assignee,
         state = excluded.state,
         outcome = excluded.outcome,
         reminder_ordinal = excluded.reminder_ordinal,
         revision = tasks_v2.revision + 1,
         updated_at = excluded.updated_at;
-    INSERT OR IGNORE INTO task_assignment_attempts(
-        team, task_id, attempt, assignee, assigner, assignment_message_id, template_sha, assigned_at
-    ) VALUES (NEW.team, NEW.task_id, 1, NEW.assignee, NEW.assigner, NEW.assignment_message_id, NULL, NEW.assigned_at);
+    INSERT INTO task_events_v2(
+        team, task_id, seq, operation_id, attempt, at, actor, event,
+        outcome, related_task_id, detail
+    )
+    SELECT task.team, task.task_id,
+           COALESCE((SELECT MAX(event_row.seq) + 1 FROM task_events_v2 AS event_row
+                     WHERE event_row.team = task.team AND event_row.task_id = task.task_id), 1),
+           NULL, task.current_attempt, NEW.updated_at, NEW.assigner,
+           'legacy_v1_updated', task.outcome, NULL,
+           'retained v1 task row inserted'
+      FROM tasks_v2 AS task
+     WHERE task.team = NEW.team AND task.task_id = NEW.task_id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS task_v1_update_bridge
+CREATE TRIGGER task_v1_update_bridge
 AFTER UPDATE OF state, assignment_message_id, updated_at, reminder_count ON tasks
+WHEN NOT EXISTS (SELECT 1 FROM task_v2_projection_context WHERE singleton = 1)
 BEGIN
-    UPDATE tasks_v2 SET
-        current_assignee = NEW.assignee,
-        state = CASE NEW.state WHEN 'complete' THEN 'closed' ELSE NEW.state END,
-        outcome = CASE NEW.state WHEN 'complete' THEN 'succeeded' ELSE NULL END,
-        reminder_ordinal = NEW.reminder_count,
-        revision = revision + 1,
-        updated_at = NEW.updated_at
+    UPDATE tasks_v2
+       SET state = 'assigned', updated_at = NEW.updated_at
+     WHERE tasks_v2.team = NEW.team AND tasks_v2.state = 'active'
+       AND EXISTS (
+           SELECT 1 FROM tasks AS chosen
+            WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
+              AND chosen.state = 'active' AND chosen.assignee = tasks_v2.current_assignee
+              AND NOT EXISTS (
+                  SELECT 1 FROM tasks AS preferred
+                   WHERE preferred.team = chosen.team AND preferred.task_id = chosen.task_id
+                     AND (CASE preferred.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                          preferred.updated_at, preferred.assignee)
+                         < (CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                            chosen.updated_at, chosen.assignee)
+              )
+       )
+       AND (
+           (SELECT MIN(candidate.assigned_at) FROM tasks AS candidate
+             WHERE candidate.team = NEW.team AND candidate.task_id = NEW.task_id) < tasks_v2.original_assigned_at
+           OR ((SELECT MIN(candidate.assigned_at) FROM tasks AS candidate
+                 WHERE candidate.team = NEW.team AND candidate.task_id = NEW.task_id) = tasks_v2.original_assigned_at
+               AND NEW.task_id < tasks_v2.task_id)
+       );
+    UPDATE tasks_v2
+       SET current_assignee = (
+                SELECT chosen.assignee FROM tasks AS chosen
+                 WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
+                 ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                          chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
+           ),
+           state = CASE (
+                SELECT chosen.state FROM tasks AS chosen
+                 WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
+                 ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                          chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
+           )
+                WHEN 'complete' THEN 'closed'
+                WHEN 'active' THEN CASE WHEN EXISTS (
+                    SELECT 1 FROM tasks_v2 AS existing
+                     WHERE existing.team = NEW.team
+                       AND existing.current_assignee = (
+                            SELECT chosen.assignee FROM tasks AS chosen
+                             WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
+                             ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                                      chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
+                       )
+                       AND existing.state = 'active' AND existing.task_id <> NEW.task_id
+                ) THEN 'assigned' ELSE 'active' END
+                ELSE 'assigned'
+           END,
+           outcome = CASE (
+                SELECT chosen.state FROM tasks AS chosen
+                 WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
+                 ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                          chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
+           ) WHEN 'complete' THEN 'succeeded' ELSE NULL END,
+           current_attempt = (
+                SELECT attempts.attempt FROM task_assignment_attempts AS attempts
+                 WHERE attempts.team = NEW.team AND attempts.task_id = NEW.task_id
+                   AND attempts.assignee = (
+                       SELECT chosen.assignee FROM tasks AS chosen
+                        WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
+                        ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                                 chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
+                   )
+           ),
+           reminder_ordinal = NEW.reminder_count,
+           revision = revision + 1,
+           updated_at = NEW.updated_at
      WHERE team = NEW.team AND task_id = NEW.task_id;
+    INSERT INTO task_events_v2(
+        team, task_id, seq, operation_id, attempt, at, actor, event,
+        outcome, related_task_id, detail
+    )
+    SELECT task.team, task.task_id,
+           COALESCE((SELECT MAX(event_row.seq) + 1 FROM task_events_v2 AS event_row
+                     WHERE event_row.team = task.team AND event_row.task_id = task.task_id), 1),
+           NULL, task.current_attempt, NEW.updated_at, NEW.assigner,
+           'legacy_v1_updated', task.outcome, NULL,
+           'retained v1 task row updated'
+      FROM tasks_v2 AS task
+     WHERE task.team = NEW.team AND task.task_id = NEW.task_id;
 END;
 "#;
 
@@ -393,5 +542,123 @@ CREATE TABLE task_events (
             )
             .expect("schema version");
         assert_eq!(version, STORAGE_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn retained_v1_writes_refresh_the_v2_projection_without_last_write_wins() {
+        let mut connection = Connection::open_in_memory().expect("connection");
+        let target = SharedDbTarget::InMemory {
+            uri: "schema-version-v1-bridge-test".to_owned(),
+        };
+        ensure_schema(&mut connection, &target).expect("fresh schema");
+        insert_legacy_task(
+            &connection,
+            "bridge-task",
+            "alpha",
+            "assigned",
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00Z",
+        );
+        insert_legacy_task(
+            &connection,
+            "bridge-task",
+            "beta",
+            "active",
+            "2026-01-02T00:00:00Z",
+            "2026-01-02T00:00:00Z",
+        );
+
+        let current: (String, String) = connection
+            .query_row(
+                "SELECT current_assignee, state FROM tasks_v2 WHERE team = 'migration-team' AND task_id = 'bridge-task'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("bridge projection");
+        assert_eq!(current, ("beta".to_owned(), "active".to_owned()));
+        let attempts: u64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM task_assignment_attempts WHERE team = 'migration-team' AND task_id = 'bridge-task'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("attempt count");
+        assert_eq!(attempts, 2);
+        let bridge_events: u64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM task_events_v2
+                 WHERE team = 'migration-team' AND task_id = 'bridge-task'
+                   AND event = 'legacy_v1_updated'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("retained v1 bridge event count");
+        assert_eq!(bridge_events, 2, "each retained v1 insert is auditable");
+        connection
+            .execute(
+                "UPDATE tasks SET state = 'complete', updated_at = '2026-01-05T00:00:00Z'
+                 WHERE team = 'migration-team' AND task_id = 'bridge-task' AND assignee = 'beta'",
+                [],
+            )
+            .expect("legacy completion");
+        let after_completion: (String, String) = connection
+            .query_row(
+                "SELECT current_assignee, state FROM tasks_v2 WHERE team = 'migration-team' AND task_id = 'bridge-task'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("post-completion bridge projection");
+        assert_eq!(
+            after_completion,
+            ("alpha".to_owned(), "assigned".to_owned())
+        );
+        let bridge_events_after_update: u64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM task_events_v2
+                 WHERE team = 'migration-team' AND task_id = 'bridge-task'
+                   AND event = 'legacy_v1_updated'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("retained v1 update event count");
+        assert_eq!(
+            bridge_events_after_update, 3,
+            "retained v1 updates are auditable"
+        );
+
+        insert_legacy_task(
+            &connection,
+            "bridge-active-later",
+            "shared",
+            "active",
+            "2026-01-03T00:00:00Z",
+            "2026-01-03T00:00:00Z",
+        );
+        insert_legacy_task(
+            &connection,
+            "bridge-active-earlier",
+            "shared",
+            "active",
+            "2026-01-01T00:00:00Z",
+            "2026-01-04T00:00:00Z",
+        );
+        let bridged_active: Vec<(String, String)> = connection
+            .prepare(
+                "SELECT task_id, state FROM tasks_v2
+                 WHERE team = 'migration-team' AND current_assignee = 'shared' ORDER BY task_id",
+            )
+            .expect("query")
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .expect("map")
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(
+            bridged_active,
+            vec![
+                ("bridge-active-earlier".to_owned(), "active".to_owned()),
+                ("bridge-active-later".to_owned(), "assigned".to_owned()),
+            ],
+            "bridge reuses the migration active-conflict ordering"
+        );
     }
 }

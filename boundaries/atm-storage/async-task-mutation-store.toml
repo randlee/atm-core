@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-AsyncTaskMutationStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "AsyncTaskMutationStore"
+
+[public]
+trait = "AsyncTaskMutationStore"
+notes = "sealed Tokio-safe canonical logical-task lifecycle mutation boundary"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_storage::StorageHandles"]
+
+[ownership]
+io_owns = ["bounded_task_mutation_submission", "idempotent_task_result"]
+io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-storage-rusqlite", "atm-storage -> atm-core"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["TaskMutationRequest", "TaskOperationId", "PreparedAssignment", "PreparedMessage"]
+response_types = ["TaskMutationOutcome"]
+error_types = ["AtmError"]
+notes = ["storage never renders templates or stores a copied task body", "one request is one transaction and one idempotency key"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-ASYNC-TASK-MUTATION-REFERENCES"]
+review_gates = ["sealed_contract", "no_caller_owned_transaction", "no_sqlite_in_callers"]
+
+[status]
+state = "concrete_landed"
+notes = ["AZ.2"]

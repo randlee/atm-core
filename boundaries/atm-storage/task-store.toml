@@ -5,7 +5,7 @@ name = "TaskStore"
 
 [public]
 trait = "TaskStore"
-notes = "storage-neutral task ledger: read rows and events, append reminder and lead-notification audit rows; state transitions are applied only inside the backend's message-writer transaction, never through this trait"
+notes = "retained synchronous v1 compatibility reader/audit contract; canonical v2 lifecycle mutation belongs only to AsyncTaskMutationStore"
 
 [implementation]
 visibility = "trait_only"
@@ -32,7 +32,7 @@ request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "Mess
 response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<String>", "bool"]
 error_types = ["AtmError"]
 notes = [
-  "state change: only the message writer transaction applies Assigned/Acked/Completed; no TaskStore method changes tasks.state",
+  "state change: no TaskStore method changes canonical v2 state; AsyncTaskMutationStore owns one writer transaction per lifecycle request",
   "audit: task_events is append-only; every accepted transition, rejection, reminder, and lead notification is one row in the acting transaction",
   "replay: per (team, task_id, assignee) the Assigned/Acked/Completed rows replayed through transition reproduce tasks.state; latest Assigned.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at; count(LeadNotified) == lead_notified_count; description is not replayable",
   "provenance: transitions apply only to MessageWriteOrigin::Local inserts and to the acknowledgement op",
@@ -52,4 +52,4 @@ review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_task_store"
 
 [status]
 state = "concrete_landed"
-notes = ["AX.3 introduces the trait, the rusqlite implementation and the schema in one sprint", "AX.4 (atm list), AX.5 (record_reminder) and AX.6 (record_lead_notified, doctor) consume it"]
+notes = ["AX.3 introduced the retained compatibility surface", "AZ.2 adds canonical logical-task mutation separately; this trait never becomes a second mutation policy"]
