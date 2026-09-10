@@ -9,12 +9,12 @@ use atm_core::boundary::{
     AttentionCandidates, AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionReservation,
     AttentionReservationRequest, AttentionReservationStatus, EphemeralMessageCandidate,
     IdleOpportunity, LogicalTaskRow, MemberKey, PendingNudgeStore, PersistentTaskCandidate,
-    ReadDeadline, ReadLaneError, TaskLifecycleState, select_attention_item,
+    ReadDeadline, TaskLifecycleState, select_attention_item,
 };
 use atm_core::error::AtmError;
 use atm_core::types::IsoTimestamp;
 
-use crate::herdr_queue_wake::{HERDR_REQUEST_DEADLINE, run_blocking};
+use crate::herdr_queue_wake::{HERDR_REQUEST_DEADLINE, run_blocking, task_ledger_read_error};
 
 pub(crate) const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
 
@@ -115,10 +115,6 @@ async fn next_persistent_task(
         .await
         .map_err(task_ledger_read_error)
         .map(|row| row.and_then(|row| persistent_candidate(row, now)))
-}
-
-fn task_ledger_read_error(error: ReadLaneError) -> AtmError {
-    AtmError::from(error)
 }
 
 fn persistent_candidate(row: LogicalTaskRow, now: IsoTimestamp) -> Option<PersistentTaskCandidate> {

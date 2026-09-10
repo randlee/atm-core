@@ -53,7 +53,7 @@ pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 pub(crate) use super::herdr_attention_scheduler::TASK_REMINDER_INTERVAL_MS;
 pub(crate) const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 
-fn task_ledger_read_error(error: ReadLaneError) -> AtmError {
+pub(super) fn task_ledger_read_error(error: ReadLaneError) -> AtmError {
     AtmError::from(error)
 }
 
