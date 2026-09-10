@@ -475,7 +475,7 @@ impl LocalServiceRuntime {
     }
 
     /// Returns the runtime-selected Tokio task lifecycle mutation boundary.
-    pub fn async_task_mutation_store(
+    pub(crate) fn async_task_mutation_store(
         &self,
     ) -> Result<std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>, AtmError>
     {

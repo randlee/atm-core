@@ -506,33 +506,41 @@ fn task_mutation_cannot_restore_a_second_message_write_pipeline() {
 }
 
 #[test]
-fn attention_scheduler_has_only_the_task_audit_capability() {
+fn task_lifecycle_mutations_have_no_workspace_reexport_surface() {
     let root = workspace_root();
-    let scheduler =
-        read_source(&root.join("crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs"));
-    let runtime = read_source(&root.join("crates/atm-core/src/service_runtime.rs"));
-
-    assert!(
-        scheduler.contains("async_task_scheduler_audit_store")
-            && scheduler.contains("TaskReminderAuditRequest")
-            && scheduler.contains("TaskLeadNotificationAuditRequest"),
-        "the attention scheduler must use the narrow task-audit boundary"
-    );
-    for forbidden in [
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut files);
+    let forbidden = [
         "AsyncTaskMutationStore",
         "TaskMutationRequest",
-        "TaskOperation::",
-        "PreparedAssignment",
-        "PreparedMessage",
-    ] {
-        assert!(
-            !scheduler.contains(forbidden),
-            "the attention scheduler must not regain lifecycle capability `{forbidden}`"
-        );
+        "TaskOperation",
+    ];
+    let mut leaks = Vec::new();
+
+    for path in files {
+        let source = read_source(&path);
+        let mut public_use = String::new();
+        for line in source.lines() {
+            let trimmed = line.trim();
+            if public_use.is_empty() && !trimmed.starts_with("pub use") {
+                continue;
+            }
+            public_use.push_str(trimmed);
+            if !trimmed.ends_with(';') {
+                continue;
+            }
+            if (public_use.contains("atm_core::boundary") || public_use.contains("crate::boundary"))
+                && forbidden.iter().any(|symbol| public_use.contains(symbol))
+            {
+                leaks.push(path.strip_prefix(&root).unwrap().display().to_string());
+            }
+            public_use.clear();
+        }
     }
+
     assert!(
-        runtime.contains("async_task_scheduler_audit_store"),
-        "runtime composition must expose the scheduler's separate audit capability"
+        leaks.is_empty(),
+        "task lifecycle mutation capabilities must not be publicly re-exported: {leaks:?}"
     );
 }
 
