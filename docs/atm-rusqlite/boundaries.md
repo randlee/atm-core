@@ -16,14 +16,11 @@ Current design assumption:
 Canonical machine-readable boundary sources:
 - [`boundaries/atm-storage-rusqlite/message-search-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/message-search-store-sqlite.toml)
 - [`boundaries/atm-storage-rusqlite/analyst-query-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/analyst-query-store-sqlite.toml)
-- [`boundaries/atm-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-sqlite.toml)
-- [`boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml)
-- [`boundaries/atm-rusqlite/task-store-sqlite.toml`](../../boundaries/atm-rusqlite/task-store-sqlite.toml)
-- [`boundaries/atm-rusqlite/task-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/task-store-doctor-sqlite.toml)
-- [`boundaries/atm-rusqlite/roster-store-sqlite.toml`](../../boundaries/atm-rusqlite/roster-store-sqlite.toml)
-- [`boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml)
-- [`boundaries/atm-rusqlite/sqlite-boundary-assembly.toml`](../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml)
-- [`boundaries/atm-rusqlite/shared-db.toml`](../../boundaries/atm-rusqlite/shared-db.toml)
+- [`boundaries/atm-storage-rusqlite/async-message-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/async-message-store-sqlite.toml)
+- [`boundaries/atm-storage-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/mail-store-sqlite.toml)
+- [`boundaries/atm-storage-rusqlite/task-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/task-store-sqlite.toml)
+- [`boundaries/atm-storage-rusqlite/roster-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/roster-store-sqlite.toml)
+- [`boundaries/atm-storage-rusqlite/shared-db.toml`](../../boundaries/atm-storage-rusqlite/shared-db.toml)
 
 Important crate-private assembly/state-root structs that must stay visible in
 review:
@@ -56,26 +53,10 @@ The private analyst adapter is the only direct SQLite dependency of the local
 and query budgets. Daemon, HTTP runtime, CLI, and graft crates remain forbidden
 dependents; they use the typed runtime search port instead.
 
-## SqliteBoundaryAssembly
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml](../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml)
-
-Purpose:
-- Own the crate-private assembly seam that composes the SQLite-backed boundary
-  adapters over one shared host-scoped database root.
-
-Notes:
-- This record exists so the assembly seam remains review-visible even though it
-  is not a public cross-crate trait.
-- The production assembly path must resolve the host-scoped durable root via
-  one crate-owned default entry point rather than by leaking path ownership to
-  callers.
-
 ## SharedDbStateRoot
 
 Canonical machine-readable boundary source:
-- [../../boundaries/atm-rusqlite/shared-db.toml](../../boundaries/atm-rusqlite/shared-db.toml)
+- [../../boundaries/atm-storage-rusqlite/shared-db.toml](../../boundaries/atm-storage-rusqlite/shared-db.toml)
 
 Purpose:
 - Own the crate-private SQLite bootstrap, connection-open, and transaction
@@ -92,6 +73,9 @@ Notes:
 
 ## SqliteMailStoreAdapter
 
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage-rusqlite/mail-store-sqlite.toml](../../boundaries/atm-storage-rusqlite/mail-store-sqlite.toml)
+
 Purpose:
 - Own the SQLite-backed implementation of the `MailStore` contract.
 
@@ -99,35 +83,22 @@ Notes:
 - Caller crates should know only the `MailStore` trait, never this concrete
   type.
 
-## SqliteMailStoreDoctorAdapter
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml](../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml)
-
-Purpose:
-- Own the SQLite-backed implementation of the `MailStoreDoctor` diagnostics
-  contract.
-
 ## SqliteTaskStoreAdapter
 
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage-rusqlite/task-store-sqlite.toml](../../boundaries/atm-storage-rusqlite/task-store-sqlite.toml)
+
 Purpose:
-- Historical SQLite implementation surface for the `TaskStore` contract.
+- Own the concrete SQLite implementation of the approved `TaskStore` contract.
 
 Notes:
-- Task persistence is not an approved SQLite schema line today.
-- The trait may remain upstream as a contract placeholder, but this crate must
-  not grow or preserve an unapproved durable task schema.
-
-## SqliteTaskStoreDoctorAdapter
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-rusqlite/task-store-doctor-sqlite.toml](../../boundaries/atm-rusqlite/task-store-doctor-sqlite.toml)
-
-Purpose:
-- Own the SQLite-backed implementation of the `TaskStoreDoctor` diagnostics
-  contract.
+- AZ.2 approved and landed the v2 task domain and storage schema; this adapter
+  owns its concrete SQLite persistence behind the backend-neutral boundary.
 
 ## SqliteRosterStoreAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage-rusqlite/roster-store-sqlite.toml](../../boundaries/atm-storage-rusqlite/roster-store-sqlite.toml)
 
 Purpose:
 - Own the SQLite-backed implementation of the `RosterStore` contract.
@@ -142,12 +113,3 @@ Notes:
   - `model`
   - `metadata_json`
 - Durable roster truth must not carry daemon-owned `pid` continuity.
-
-## SqliteRosterStoreDoctorAdapter
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml](../../boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml)
-
-Purpose:
-- Own the SQLite-backed implementation of the `RosterStoreDoctor` diagnostics
-  contract.
