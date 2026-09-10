@@ -1170,16 +1170,16 @@ mod tests {
         let deadline = TaskMutationDeadline::already_expired();
         let (task_reply, task_receiver) = mpsc::sync_channel(1);
         let expired_task = QueuedWrite {
-            op: Box::new(WriteOp::TaskMutation {
-                request: Box::new(TaskMutationRequest {
+            op: Box::new(WriteOp::TaskMutation(
+                Box::new(TaskMutationRequest {
                     operation_id: TaskOperationId::new(),
                     actor,
                     task_id,
                     expected_revision: None,
                     operation: TaskOperation::Start,
                 }),
-                deadline: Some(deadline),
-            }),
+                Some(deadline),
+            )),
             reply: ReplyTx::Sync(task_reply),
         };
         let (message, message_receiver) = queued_upsert(message("atm:writer-after-expired-task"));
