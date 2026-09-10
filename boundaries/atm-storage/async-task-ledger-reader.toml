@@ -33,7 +33,7 @@ response_types = ["TaskRow", "TaskEventRow", "LogicalTaskRow", "TaskAssignmentAt
 error_types = ["ReadLaneError"]
 
 [testing]
-allowed_test_double_paths = ["crate::testing::InMemoryTaskLedgerReader"]
+allowed_test_double_paths = ["crate::testing::GateAfterTaskRead", "crate::testing::InMemoryTaskLedgerReader"]
 forbidden_test_bypasses = []
 
 [enforcement]
