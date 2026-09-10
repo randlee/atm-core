@@ -120,7 +120,7 @@ These are planning identifiers, not substitutes for repository issue numbers.
 | --- | --- | --- | --- | --- |
 | `AZ.1` | `planned` | `feature/az1-task-nudge-contract` | [`sprint-AZ.1-task-nudge-contract.md`](./sprint-AZ.1-task-nudge-contract.md) | bounded metadata-only nudge contract |
 | `AZ.2` | `complete` | `feature/az2-task-domain-storage` | [`sprint-AZ.2-task-domain-storage.md`](./sprint-AZ.2-task-domain-storage.md) | migrated durable domain, immutable attempts/events, atomic invariants and invalidation |
-| `AZ.3` | `planned` | `feature/az3-task-command-handoff` | [`sprint-AZ.3-task-command-handoff.md`](./sprint-AZ.3-task-command-handoff.md) | complete public task command/service, authorization, handoffs, compatibility adapters |
+| `AZ.3` | `complete` | `feature/az3-task-command-handoff` | [`sprint-AZ.3-task-command-handoff.md`](./sprint-AZ.3-task-command-handoff.md) | complete public task command/service, authorization, handoffs, compatibility adapters |
 | `AZ.4` | `planned` | `feature/az4-attention-scheduler` | [`sprint-AZ.4-attention-scheduler.md`](./sprint-AZ.4-attention-scheduler.md) | fair one-item idle selector and persistent reminder lifecycle |
 
 The split is intentionally sequential. AZ.2 changes the public task records and

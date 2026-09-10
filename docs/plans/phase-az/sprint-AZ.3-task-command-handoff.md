@@ -5,7 +5,7 @@ title: Task command service and durable handoffs
 branch: feature/az3-task-command-handoff
 integration_branch: feature/az2-task-domain-storage
 final_integration_branch: develop
-status: planned
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: stacked
@@ -283,17 +283,17 @@ This is the sole authoritative deliverables list for AZ.3. Every item must land
 at a production-ready level; parsing-only, route-only, or happy-path-only
 completion is insufficient.
 
-- [ ] D1 — Add the `TaskCommandRequest`, action/input/result DTOs, typed errors,
+- [x] D1 — Add the `TaskCommandRequest`, action/input/result DTOs, typed errors,
   authorization matrix, and `TaskCommandService` in `atm-core`; route
   prepared mutations only through AZ.2's storage-neutral async mutation
   boundary.
-- [ ] D2 — Add canonical HTTP request/response routing and replacement-runtime
+- [x] D2 — Add canonical HTTP request/response routing and replacement-runtime
   composition for task queries and mutations. Update the API schema/ICD and
   client mapping; preserve structured errors, deadlines, and retry operation
   ids. Bump `HTTP_API_VERSION` to 1.4.0, update both OpenAPI documents and the
   surface baseline, append the ADR-061 D5 record, and prove a 1.3.0 consumer's
   pre-AZ surface remains compatible.
-- [ ] D3 — Implement the complete clap surface, human tables, JSON responses,
+- [x] D3 — Implement the complete clap surface, human tables, JSON responses,
   command-specific validation, help text, and installed user documentation.
   `task list` defaults open, `--closed` selects terminal history, and event
   history follows stable task identity across attempts. Closed/event reads
@@ -303,14 +303,14 @@ completion is insufficient.
   `original_assigned_at`, `updated_at`, and derived `assigned_age_seconds`.
   Every task-linked message retains `requires_ack`, read visibility, and
   protection from `atm clear` until acknowledged.
-- [ ] D4 — Implement template-first assignment/handoff composition and every
+- [x] D4 — Implement template-first assignment/handoff composition and every
   authorization rule. Prove close/handoff and supersession/successor assignment
   use one durable transaction and exact idempotent response. Assignment,
   reassign, reopen, successor assignment, and canonical handoff resolution
   admit only same-host roster members (handoff additionally requires non-self);
   cross-host, missing-lead, and ambiguous-lead cases return their typed errors
   before mutation.
-- [ ] D5 — Convert all legacy task send/list flags and task-linked
+- [x] D5 — Convert all legacy task send/list flags and task-linked
   acknowledgement to delegating compatibility adapters with warnings. Preserve
   assigner-or-assignee `--task-complete` from Assigned/Active via typed legacy
   provenance. Land acknowledgement's mail-only behavior atomically with the
@@ -324,7 +324,7 @@ completion is insufficient.
   writer surfaces and fail if they acquire a second message writer/connection,
   issue direct message-insert SQL, or bypass the canonical `PreparedWrite`
   preparation and persistence primitives.
-- [ ] D6 — Amend product, CLI, core, runtime, API, error/recovery, team-protocol,
+- [x] D6 — Amend product, CLI, core, runtime, API, error/recovery, team-protocol,
   and user-facing documentation for the command grammar, output, authorization,
   explicit-start rule, handoff requirement, Beads-id boundary, and deprecation
   window. Add end-to-end tests through the real CLI-to-Tokio/Axum-to-SQLite
