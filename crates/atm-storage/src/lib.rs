@@ -74,7 +74,8 @@ pub use search::{
     StoredWorkflowMetadata, TimeRange,
 };
 pub use task_state::{
-    DAEMON_ACTOR_NAME, TaskActor, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
+    AssignmentAttempt, DAEMON_ACTOR_NAME, TaskAbortReason, TaskActor, TaskEvent, TaskEventKind,
+    TaskEventMarker, TaskEventRow, TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority,
     TaskRejected, TaskRow, TaskState, Transition, admit, transition,
 };
 pub use task_store::{
