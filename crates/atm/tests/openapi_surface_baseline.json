@@ -283,7 +283,8 @@
     },
     "DoctorResponse": {
       "properties": [
-        "herdr"
+        "herdr",
+        "runtime_status"
       ],
       "required": []
     },
@@ -464,6 +465,77 @@
     "ReadQuery": {
       "properties": [],
       "required": []
+    },
+    "RuntimeMemberObservation": {
+      "properties": [
+        "availability",
+        "last_active_at",
+        "last_observation_attempt_at",
+        "last_observation_attempt_by",
+        "last_observed_at",
+        "last_observed_by",
+        "member",
+        "pid",
+        "revision",
+        "session_changed_at",
+        "session_changed_by",
+        "session_id",
+        "state",
+        "state_changed_at",
+        "state_changed_by",
+        "team"
+      ],
+      "required": [
+        "member",
+        "state",
+        "team"
+      ]
+    },
+    "RuntimeObservationAvailability": {
+      "properties": [],
+      "required": []
+    },
+    "RuntimeObservationSource": {
+      "properties": [],
+      "required": []
+    },
+    "RuntimeStatusCounts": {
+      "properties": [
+        "active_members",
+        "idle_members",
+        "offline_members",
+        "unknown_members"
+      ],
+      "required": [
+        "active_members",
+        "idle_members",
+        "offline_members",
+        "unknown_members"
+      ]
+    },
+    "RuntimeStatusSnapshot": {
+      "properties": [
+        "bare_cli_queue_full_drops_total",
+        "blocking_core_bridge_stalls_total",
+        "degraded_ingest",
+        "detail",
+        "graft_queue_handoff_failures_total",
+        "graft_queue_marker_clear_failures_total",
+        "herdr_queue_last_tick_at",
+        "liveness",
+        "member_counts",
+        "members",
+        "queue_drain_failures_total",
+        "queue_marker_set_failures_total",
+        "queue_messages_drained_total",
+        "readiness",
+        "singleton_owner_pid",
+        "write_source_preflight_stalls_total"
+      ],
+      "required": [
+        "liveness",
+        "readiness"
+      ]
     },
     "SearchHit": {
       "properties": [
