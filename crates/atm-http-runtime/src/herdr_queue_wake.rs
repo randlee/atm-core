@@ -38,7 +38,7 @@ use tokio::task::JoinHandle;
 use crate::herdr_breaker_escalation::HerdrBreakerEscalationGate;
 use crate::herdr_escalation::EscalationState;
 use crate::herdr_queue_wake_escalation::TaskReminderEmission;
-use crate::runtime_health::RuntimeHealth;
+use crate::runtime_health::{IdleOpportunitySink, RuntimeHealth};
 use claim::ReleasePendingOnDrop;
 use support::{log_herdr_list_failure, member_order, runtime_state};
 
@@ -620,66 +620,72 @@ impl HerdrQueueWakePump {
             if stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
                 break;
             }
-            let member = opportunity.member.clone();
-            match super::herdr_attention_scheduler::reserve_next_attention(
-                &self.service_runtime,
-                opportunity,
-                now,
-            )
-            .await
-            {
-                Ok(Some(reservation)) => {
-                    if reservation.status
-                        != atm_core::boundary::AttentionReservationStatus::Reserved
-                    {
-                        continue;
-                    }
-                    match self
-                        .dispatch_reserved_attention(&reservation, now, stats)
+            self.run_idle_opportunity(opportunity, now, stats).await;
+        }
+    }
+
+    async fn run_idle_opportunity(
+        &self,
+        opportunity: atm_core::boundary::IdleOpportunity,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        let member = opportunity.member.clone();
+        match super::herdr_attention_scheduler::reserve_next_attention(
+            &self.service_runtime,
+            opportunity,
+            now,
+        )
+        .await
+        {
+            Ok(Some(reservation)) => {
+                if reservation.status != atm_core::boundary::AttentionReservationStatus::Reserved {
+                    return;
+                }
+                match self
+                    .dispatch_reserved_attention(&reservation, now, stats)
+                    .await
+                {
+                    Ok(status) => {
+                        if let Err(error) = super::herdr_attention_scheduler::finalize_attention(
+                            &self.service_runtime,
+                            &reservation,
+                            status,
+                        )
                         .await
-                    {
-                        Ok(status) => {
-                            if let Err(error) =
-                                super::herdr_attention_scheduler::finalize_attention(
-                                    &self.service_runtime,
-                                    &reservation,
-                                    status,
-                                )
-                                .await
-                            {
-                                tracing::warn!(
-                                    subsystem = "herdr_queue_wake",
-                                    action = "finalize_attention",
-                                    outcome = "failed",
-                                    member = %member,
-                                    error = %error,
-                                    "attention reservation finalization failed"
-                                );
-                            }
-                        }
-                        Err(error) => {
+                        {
                             tracing::warn!(
                                 subsystem = "herdr_queue_wake",
-                                action = "dispatch_reserved_attention",
+                                action = "finalize_attention",
                                 outcome = "failed",
                                 member = %member,
                                 error = %error,
-                                "attention reservation dispatch failed"
+                                "attention reservation finalization failed"
                             );
                         }
                     }
+                    Err(error) => {
+                        tracing::warn!(
+                            subsystem = "herdr_queue_wake",
+                            action = "dispatch_reserved_attention",
+                            outcome = "failed",
+                            member = %member,
+                            error = %error,
+                            "attention reservation dispatch failed"
+                        );
+                    }
                 }
-                Ok(None) => {}
-                Err(error) => {
-                    tracing::warn!(
-                        subsystem = "herdr_queue_wake",
-                        action = "reserve_next_attention",
-                        outcome = "failed",
-                        member = %member,
-                        error = %error,
-                        "attention reservation failed"
-                    );
-                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "reserve_next_attention",
+                    outcome = "failed",
+                    member = %member,
+                    error = %error,
+                    "attention reservation failed"
+                );
             }
         }
     }
@@ -992,6 +998,17 @@ impl HerdrQueueWakePump {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(member);
+    }
+}
+
+impl IdleOpportunitySink for HerdrQueueWakePump {
+    fn on_idle_opportunity(&self, opportunity: atm_core::boundary::IdleOpportunity) {
+        let pump = self.clone();
+        tokio::spawn(async move {
+            let mut stats = HerdrQueueWakeStats::default();
+            pump.run_idle_opportunity(opportunity, (pump.clock)(), &mut stats)
+                .await;
+        });
     }
 }
 

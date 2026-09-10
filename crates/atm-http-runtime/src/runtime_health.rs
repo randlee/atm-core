@@ -9,6 +9,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use atm_core::boundary::IdleOpportunity;
 use atm_core::protocol::{
     RosterRuntimeObservation, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
     RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
@@ -49,6 +50,14 @@ pub trait MemberStateTransitionSink: atm_core::boundary::sealed::Sealed + Send +
         from: RuntimeMemberState,
         to: RuntimeMemberState,
     );
+}
+
+/// Receives an accepted canonical roster revision that is eligible for
+/// attention scheduling. The source (heartbeat or Herdr poll) is deliberately
+/// absent: the receiver gets only the post-commit member identity and revision
+/// it must revalidate before dispatch.
+pub trait IdleOpportunitySink: Send + Sync {
+    fn on_idle_opportunity(&self, opportunity: IdleOpportunity);
 }
 
 #[derive(Default)]

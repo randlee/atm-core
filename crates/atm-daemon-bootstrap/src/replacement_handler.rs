@@ -280,6 +280,8 @@ fn compose_storage_router(
         .clone()
         .with_state_handoff(HandoffConfig::default())?;
     let doctor_projection = build_doctor_projection(&assembly, Arc::clone(&observability))?;
+    let idle_opportunity_sink: Arc<dyn atm_http_runtime::IdleOpportunitySink> =
+        queue_wake_pump.clone();
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -288,6 +290,7 @@ fn compose_storage_router(
     )
     .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
     .with_doctor_projection(Arc::new(doctor_projection))
+    .with_idle_opportunity_sink(idle_opportunity_sink)
     .with_maintenance(queue_wake_pump)
     .with_runtime_health(runtime_health, assembly.doctor_ports)
     .with_diagnostic_counters_option(diagnostic_counters)

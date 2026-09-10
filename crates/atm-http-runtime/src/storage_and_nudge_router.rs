@@ -72,6 +72,7 @@ pub struct StorageAndNudgeRouter {
     bare_cli_fifo: BareCliFifo,
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
     member_state_transition_sink: Option<Arc<dyn crate::MemberStateTransitionSink>>,
+    idle_opportunity_sink: Option<Arc<dyn crate::IdleOpportunitySink>>,
     detached_received_hooks: DetachedReceivedHooks,
 }
 
@@ -131,6 +132,7 @@ impl StorageAndNudgeRouter {
             bare_cli_fifo: Default::default(),
             bare_cli_queue_full_drops: Default::default(),
             member_state_transition_sink: None,
+            idle_opportunity_sink: None,
             detached_received_hooks: DetachedReceivedHooks::default(),
         }
     }
@@ -226,6 +228,16 @@ impl StorageAndNudgeRouter {
         sink: Arc<dyn crate::MemberStateTransitionSink>,
     ) -> Self {
         self.member_state_transition_sink = Some(sink);
+        self
+    }
+
+    /// Installs the shared attention scheduler notification. Every accepted
+    /// `Idle` roster revision reaches this sink after the roster lock has been
+    /// released, regardless of whether it came from a heartbeat or a Herdr
+    /// poll.
+    #[must_use]
+    pub fn with_idle_opportunity_sink(mut self, sink: Arc<dyn crate::IdleOpportunitySink>) -> Self {
+        self.idle_opportunity_sink = Some(sink);
         self
     }
 
@@ -659,6 +671,7 @@ impl StorageAndNudgeRouter {
         }
         let runtime = self.service_runtime.clone();
         let sink = self.member_state_transition_sink.clone();
+        let idle_opportunity_sink = self.idle_opportunity_sink.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
                 let next_state = match request.activity {
@@ -701,16 +714,31 @@ impl StorageAndNudgeRouter {
                     last_active_at: outcome.current.last_active_at,
                     session_id: outcome.current.session_id,
                 };
-                Ok((response, transition))
+                let opportunity = (outcome.current.state
+                    == atm_core::protocol::RuntimeMemberState::Idle)
+                    .then(|| atm_core::boundary::IdleOpportunity {
+                        id: Default::default(),
+                        member: atm_core::boundary::MemberKey::new(
+                            response.team.clone(),
+                            response.member.clone(),
+                        ),
+                        roster_state_revision: outcome.current.revision,
+                    });
+                Ok((response, transition, opportunity))
             })
             .await
-            .map(|(response, transition)| {
+            .map(|(response, transition, opportunity)| {
                 let member = atm_core::boundary::MemberKey::new(
                     response.team.clone(),
                     response.member.clone(),
                 );
                 if let (Some(from), Some(sink)) = (transition, sink.as_ref()) {
                     sink.on_transition(&member, from, atm_core::protocol::RuntimeMemberState::Idle);
+                }
+                if let (Some(opportunity), Some(sink)) =
+                    (opportunity, idle_opportunity_sink.as_ref())
+                {
+                    sink.on_idle_opportunity(opportunity);
                 }
                 ApiResponse::new(ResponseEnvelope::Heartbeat(response))
             })
@@ -1068,9 +1096,10 @@ mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeClaim,
-        NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath,
-        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        IdleOpportunity, LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey,
+        MessageReceivedHookSelector, NudgeClaim, NudgeKind, PendingNudgeStore,
+        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness,
+        RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::observability_counters::{
@@ -1115,8 +1144,8 @@ mod tests {
     };
     use crate::{
         AuthenticatedConnector, BareCliFifo, BareCliQueueFullDrops, CanonicalWriteHandler,
-        NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, append_bare_cli_message,
-        canonical_api_router, canonical_message_router,
+        IdleOpportunitySink, NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
+        append_bare_cli_message, canonical_api_router, canonical_message_router,
     };
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
@@ -1135,6 +1164,20 @@ mod tests {
     impl DiagnosticCountersSource for CounterFixture {
         fn snapshot(&self) -> DiagnosticCounters {
             self.0
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingIdleOpportunitySink {
+        opportunities: Mutex<Vec<IdleOpportunity>>,
+    }
+
+    impl IdleOpportunitySink for RecordingIdleOpportunitySink {
+        fn on_idle_opportunity(&self, opportunity: IdleOpportunity) {
+            self.opportunities
+                .lock()
+                .expect("record idle opportunity")
+                .push(opportunity);
         }
     }
 
@@ -2244,6 +2287,56 @@ mod tests {
             idle_state,
             atm_core::protocol::RuntimeMemberState::Idle,
             "an idle heartbeat transitions the projected member state to Idle"
+        );
+    }
+
+    #[tokio::test]
+    async fn heartbeat_idle_revisions_reach_the_shared_attention_sink() {
+        let mut fixture = fixture(true, None, None);
+        let sink = Arc::new(RecordingIdleOpportunitySink::default());
+        fixture.router = fixture.router.with_idle_opportunity_sink(sink.clone());
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "recipient".parse().expect("agent");
+
+        for (activity, observed_at) in [
+            (HeartbeatActivity::ActiveToolUse, "2026-01-01T00:00:00Z"),
+            (HeartbeatActivity::Idle, "2026-01-01T00:00:01Z"),
+            (HeartbeatActivity::Idle, "2026-01-01T00:00:02Z"),
+        ] {
+            fixture
+                .router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                        team: team.clone(),
+                        member: member.clone(),
+                        pid: 7,
+                        observed_at: observed_at.parse().expect("timestamp"),
+                        activity,
+                        session_id: None,
+                    })),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("authenticated heartbeat");
+        }
+
+        let opportunities = sink
+            .opportunities
+            .lock()
+            .expect("read idle opportunities")
+            .clone();
+        assert_eq!(
+            opportunities.len(),
+            2,
+            "both accepted Idle revisions schedule"
+        );
+        assert!(opportunities.iter().all(|opportunity| {
+            opportunity.member == MemberKey::new(team.clone(), member.clone())
+        }));
+        assert_ne!(
+            opportunities[0].roster_state_revision, opportunities[1].roster_state_revision,
+            "an Idle heartbeat refreshes the canonical revision and must not be filtered as a transition-only event"
         );
     }
 
