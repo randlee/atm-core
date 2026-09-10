@@ -1409,21 +1409,24 @@ Architectural rules:
 The retained `members` surface is a local roster inspection service.
 
 Architectural rules:
-- it must succeed without daemon or hook-only state; live runtime enrichment is
-  best-effort and the command falls back to the durable local roster when the
-  daemon is unavailable
+- it must succeed without runtime or hook-only state; when the replacement
+  runtime is reachable it projects the canonical ephemeral master-roster state,
+  and when unavailable it falls back to durable roster identity with explicit
+  `Unknown`/unavailable enrichment rather than manufacturing `Dead`
 - it must load the roster from local team config
 - it should order members deterministically, with `team-lead` first when
   present
 - it may surface persisted member metadata already present in config
-- daemon-sourced session, pid, state, and timestamp enrichment may be layered
+- runtime-sourced session, pid, state, availability, and timestamp enrichment may be layered
   on without changing the base local verification purpose of the command; the
-  enrichment is diagnostic telemetry and is never required for roster
-  inspection to succeed
+  metadata is diagnostic and is never required for roster inspection to
+  succeed; only the canonical state owner—not this display projection—may
+  publish Phase AZ idle opportunities
 - this daemon-free fallback is the CLI-side half of the runtime-health
   observation boundary described in Section 21.6.3: `MembersCommand::run`
   renders the retained roster even when `runtime_snapshot` cannot obtain a
-  daemon response, while any returned observation remains telemetry only
+  runtime response, while any returned observation remains a projection of the
+  master-roster record
 
 ## 7. Read Pipeline
 
@@ -2547,21 +2550,23 @@ surface only.
 
 ### 21.1 Authoritative State
 
-ATM moves to a split state model:
+ATM uses one logical master-roster record with split persistence domains:
 
 - SQLite is the authoritative durable store for:
   - messages
   - ack/task state
   - read/clear/delete message state
   - team roster
-- daemon memory is the authoritative live runtime view for:
-  - current agent status
-  - `pid`: transient daemon-owned process identity cached as the primary
-    liveness field
+- the write-through RAM master roster is the authoritative live runtime view
+  for each durable member's:
+  - one current `RuntimeMemberState`
+  - typed observation revision, source, and freshness/edge timestamps
+  - `pid`: transient process identity cached as diagnostic metadata, never a
+    second liveness state or policy input
   - `last_active_at`: daemon-memory-only runtime state used for live overlays
 
-SQLite may persist last-observed status for diagnostics, but that snapshot is
-not the live truth.
+SQLite must not persist live state or its observation metadata. `RuntimeHealth`
+and command output project the RAM roster; they do not own another member map.
 
 ### 21.1.1 SQLite Schema Contract
 
@@ -2815,10 +2820,10 @@ Hard invariant:
 - it must be impossible for two active ATM daemons to run on one host at the
   same time
 
-Daemon responsibilities:
+Replacement-runtime responsibilities:
 - transport listeners
 - route selection
-- live status cache
+- canonical ephemeral member state in the write-through RAM master roster
 - daemon-facing diagnostics and health queries used by `atm doctor`
 - direct post-send emission routing
 
@@ -3085,8 +3090,9 @@ Architectural rules:
 - CLI doctor code may answer direct local config/store checks without daemon
   routing, but daemon-owned runtime state still crosses one explicit request /
   response boundary
-- the daemon owns collection of runtime-only health such as:
-  - heartbeat-driven runtime member state
+- the runtime-health projection reads runtime-only signals such as:
+  - canonical ephemeral master-roster member state, updated by authenticated
+    heartbeat POST and successful Herdr poll ingress
   - singleton ownership state
   - live status-cache health
   - ingest backlog / degraded-ingest state
@@ -3098,10 +3104,19 @@ Architectural rules:
   - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
-- Runtime observation (state, pid, session, and timestamps) is daemon-memory
-  telemetry. Only heartbeat and successful environment-attested local CLI or
-  graft ingress update it; it never selects routing, nudge, retry, admission,
-  delivery, notification, or policy behavior.
+- Runtime member state and its pid/session/timestamp metadata live only in the
+  RAM master roster. Authenticated heartbeat POST, successful Herdr poll, and
+  successful environment-attested local CLI/graft activity converge there.
+  `RuntimeHealth` projects it and must not merge or retain a second member map.
+- Session, pid, source, and timestamps never select routing, retry, admission,
+  delivery, or notification behavior. Under ADR-045's Phase AZ amendment, an
+  accepted `Idle` state revision may publish one attention opportunity; the
+  attention selector revalidates the same canonical state/revision before
+  emitting zero or one item.
+- A failed Herdr poll preserves prior state and creates no opportunity. A
+  successful covered unknown/absent result becomes `Unknown`; only explicit
+  heartbeat `SessionEnded` becomes `Offline`. Projection gaps never render
+  `Dead`.
 - Changed trusted pid/session replaces the current observation and emits
   retained diagnostic evidence. It does not reject ingress, create an
   `IdentityConflict` lifecycle state, degrade readiness, or alter cache policy.

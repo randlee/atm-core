@@ -59,3 +59,18 @@ but it must not infer or reconstruct liveness by:
   the contract
 - any attempt to add compensating recovery logic to `runtime_health` is a
   design regression and must be rejected in review
+
+## Issue #1378 application: member-state projection
+
+The same projection-only rule applies to agent/member state. The write-through
+RAM master roster owns the one canonical `RuntimeMemberState` and its ephemeral
+source, freshness, and revision metadata. `RuntimeHealth` may project scoped
+member observations and aggregate counts from that owner, but it must not own a
+second `HashMap<MemberKey, MemberRecord>`, merge Herdr observations itself, or
+append out-of-roster observations to a team snapshot.
+
+Doctor and CLI roster/status surfaces consume that same projection. A member
+with no accepted observation renders `Unknown`/`Unobserved`; a failed refresh
+preserves its last exact state while rendering `Unavailable` freshness. Neither
+case invents `Dead` or `Offline`. This application does not move live state
+into SQLite and does not add recovery behavior to `runtime_health`.

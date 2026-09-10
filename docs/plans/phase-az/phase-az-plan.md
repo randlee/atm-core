@@ -82,8 +82,16 @@ the same bounded title metadata, never a body source.
 
 ### One derived idle-work selector
 
-The replacement Tokio/Axum runtime derives one `AttentionItem` per eligible idle
-opportunity:
+The replacement Tokio/Axum runtime consumes one canonical ephemeral agent state
+from the write-through RAM master roster. Authenticated local heartbeat POSTs
+(including hook events) and successful Herdr polls both update that same record.
+`RuntimeHealth`, doctor, and CLI status are projections only; raw poll output and
+a second health-owned state map are not scheduling authorities.
+
+Every accepted `Idle` observation advances the member's typed
+`RosterStateRevision` and publishes one opaque `IdleOpportunityId` paired with
+that revision. A failed/incomplete poll publishes nothing and preserves prior
+state. The runtime derives one `AttentionItem` per eligible idle opportunity:
 
 - `EphemeralMessage { message_id }` comes from the existing pending queue and is
   consumed after one nudge, or suppressed if read and acknowledged first.
@@ -95,11 +103,15 @@ The two lanes keep separate lifecycle storage and never copy message bodies.
 When both are due for one agent, the selector emits the FIFO ephemeral item on
 the first opportunity, the active task (otherwise top runnable assigned task)
 on the next, and continues alternating. Exactly one item is emitted per idle
-opportunity. Task priority orders only the persistent lane; it never jumps a
-task ahead of the ephemeral lane.
+opportunity, after revalidating that the canonical roster record remains
+`Idle` at that opportunity's revision. Task priority orders only the persistent
+lane; it never jumps a task ahead of the ephemeral lane. State-ingress handlers
+never query work or emit directly.
 
-This selector is specifically the Herdr idle-attention pump. It does not alter
-ADR-054's bare-CLI pull behavior.
+This selector is the replacement runtime's source-agnostic idle-attention path.
+Herdr poll and authenticated heartbeat/hook state updates can both publish an
+opportunity; delivery-channel eligibility remains downstream of the state
+owner. It does not alter ADR-054's bare-CLI pull behavior.
 
 ## Issue inventory
 
@@ -111,6 +123,7 @@ ADR-054's bare-CLI pull behavior.
 | `AZ-TASK-COMPLETE-PENDING` | In scope | AZ.2 atomically joins canonical messages by `(team, task_id)` and invalidates every task-linked pending marker—not only assignment-attempt ids—when a task blocks, closes, reassigns, reopens, or is superseded. |
 | `AZ-GOVERNED-INTERFACES` | In scope | AZ.2/AZ.3/AZ.4 implement the ADR-061 version, migration, record, and older-consumer matrix; ADR-061 D6 and ADR-063 D6 record Rand's approval of the major storage change and its version-bounded coexistence window. |
 | `AZ-IDLE-INTERLEAVING` | In scope | AZ.4 replaces drain-first reminder scheduling with the one-item fair selector. |
+| `GH-1378-CANONICAL-AGENT-STATE` | Prerequisite / consumed by AZ.4 | Issue #1378 removes duplicate `RuntimeHealth` member-state ownership, makes Herdr poll and authenticated heartbeat POST converge on the ephemeral master-roster record, and exposes revision-checked idle opportunities before AZ.4 scheduler work begins. |
 
 These are planning identifiers, not substitutes for repository issue numbers.
 
@@ -141,6 +154,10 @@ is repeated across sprint checklists.
 - `AZ.4 must_follow AZ.3`: AZ.3 development must be pushed before AZ.4 begins;
   merge AZ.3 parent into AZ.4 before every development/fix round, and AZ.3 PR
   must merge before AZ.4 PR completes.
+- `AZ.4 must_follow issue #1378`: the canonical ephemeral master-roster state
+  fix must merge to `develop`, and AZ.4 must merge that `develop` tip forward,
+  before scheduler integration begins. AZ.4 consumes this state boundary; it
+  must not recreate a scheduler-private or `RuntimeHealth`-owned state map.
 
 The trigger is parent development push, not QA completion. None of these
 relations is `parallel_safe`: they intersect on task contracts, SQLite schema,
@@ -155,7 +172,9 @@ runtime composition, or scheduler-visible state.
 - AZ.3 amends CLI/core/API requirements, architecture, help/user documents, HTTP
   API schema, and task command examples.
 - AZ.4 amends runtime/Herdr requirements and architecture, pending-nudge and task
-  reader boundaries, and the idle-selector runtime contract.
+  reader boundaries, canonical-state/revision revalidation, and the
+  idle-selector runtime contract. Issue #1378 owns the prerequisite state
+  convergence itself.
 - Each sprint updates this phase plan, `docs/project-plan.md`, and the Phase AZ
   issue inventory only for its own status/evidence. Historical Phase AX plans
   remain historical and are not rewritten.
@@ -219,8 +238,11 @@ Phase AZ is complete only when all four sprint acceptance lists pass and:
    history rules under retries and concurrent transitions.
 3. Operators can perform every lifecycle transition through `atm task`, every
    terminal transition durably hands off, and legacy flags use that same path.
-4. Each idle opportunity selects zero or one item, alternates fairly when both
-   lanes remain due, and never reminds blocked or closed tasks.
+4. Each accepted canonical `Idle` roster-state revision creates one
+   idempotent opportunity that selects zero or one item, alternates fairly when
+   both lanes remain due, revalidates the same revision before emission, and
+   never reminds blocked or closed tasks. Failed polls and stale revisions emit
+   nothing.
 5. No task or attempt row stores a rendered message body or duplicate
    description in canonical v2 storage, and task-related pending queue markers
    cannot survive ineligible lifecycle transitions. The invalidation join
