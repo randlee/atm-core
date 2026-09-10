@@ -3603,6 +3603,71 @@ mod tests {
         drop(prompt_gate);
     }
 
+    #[derive(Clone, Default)]
+    struct WarningOutcomeRecorder(Arc<Mutex<Vec<String>>>);
+
+    impl<S> tracing_subscriber::Layer<S> for WarningOutcomeRecorder
+    where
+        S: tracing::Subscriber,
+    {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _context: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() != tracing::Level::WARN {
+                return;
+            }
+            let mut visitor = WarningOutcomeVisitor::default();
+            event.record(&mut visitor);
+            if let Some(outcome) = visitor.outcome {
+                self.0.lock().expect("warning outcomes").push(outcome);
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct WarningOutcomeVisitor {
+        outcome: Option<String>,
+    }
+
+    impl tracing::field::Visit for WarningOutcomeVisitor {
+        fn record_debug(&mut self, field: &tracing::field::Field, _value: &dyn std::fmt::Debug) {
+            if field.name() == "outcome" {
+                self.outcome = Some("timed_out".to_owned());
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn ac11_claim_drop_guard_release_timeout_does_not_block_pump_shutdown() {
+        let (_root, _runtime, _fake, pump, _health, _key) = build_test_pump();
+        pump.release_handles
+            .lock()
+            .expect("release handles lock")
+            .push(tokio::spawn(std::future::pending::<()>()));
+
+        let outcomes = Arc::new(Mutex::new(Vec::new()));
+        let subscriber =
+            tracing_subscriber::registry().with(WarningOutcomeRecorder(Arc::clone(&outcomes)));
+        let _default = tracing::subscriber::set_default(subscriber);
+        tokio::time::timeout(Duration::from_secs(10), pump.await_release_handles())
+            .await
+            .expect("timed-out release join must return");
+        assert_eq!(
+            outcomes.lock().expect("warning outcomes").as_slice(),
+            ["timed_out"],
+            "the bounded join must emit its WaitTimeout warning"
+        );
+        assert!(
+            pump.release_handles
+                .lock()
+                .expect("release handles lock")
+                .is_empty(),
+            "timed-out release handle must be removed after the WaitTimeout path"
+        );
+    }
+
     #[test]
     fn release_pending_on_drop_without_runtime_releases_synchronously() {
         let (_root, runtime, _fake, _pump, _health, key) = build_test_pump();
