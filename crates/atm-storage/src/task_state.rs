@@ -210,6 +210,11 @@ pub struct LogicalTaskRow {
     /// This is metadata only; consumers reload the bounded title projection
     /// from the message store and never receive assignment text here.
     pub assignment_message_id: AtmMessageId,
+    /// Most recent successful reminder for the current assignment attempt.
+    /// Derived from the append-only v2 audit rather than duplicated mutable
+    /// scheduler state, so a reassignment cannot inherit its predecessor's
+    /// cadence.
+    pub last_reminded_at: Option<IsoTimestamp>,
     pub reminder_ordinal: u64,
     pub revision: u64,
     pub updated_at: IsoTimestamp,

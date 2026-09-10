@@ -295,6 +295,7 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
                     original_assigned_at: row.assigned_at,
                     current_attempt: AssignmentAttempt::FIRST,
                     assignment_message_id: row.assignment_message_id,
+                    last_reminded_at: row.last_reminded_at,
                     reminder_ordinal: u64::from(row.reminder_count),
                     revision: 0,
                     updated_at: row.updated_at,

@@ -205,6 +205,9 @@ fn list_logical_tasks(
         .prepare(
             "SELECT team, task_id, current_assignee, state, outcome, abort_reason, superseded_by,
                     priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at,
+                    (SELECT MAX(reminder.at) FROM task_events_v2 AS reminder
+                       WHERE reminder.team = tasks_v2.team AND reminder.task_id = tasks_v2.task_id
+                         AND reminder.attempt = tasks_v2.current_attempt AND reminder.event = 'reminded'),
                     (SELECT assignment_message_id FROM task_assignment_attempts AS attempt
                        WHERE attempt.team = tasks_v2.team AND attempt.task_id = tasks_v2.task_id
                          AND attempt.attempt = tasks_v2.current_attempt)
@@ -253,6 +256,9 @@ fn top_runnable_task(
         .query_row(
             "SELECT team, task_id, current_assignee, state, outcome, abort_reason, superseded_by,
                     priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at,
+                    (SELECT MAX(reminder.at) FROM task_events_v2 AS reminder
+                       WHERE reminder.team = tasks_v2.team AND reminder.task_id = tasks_v2.task_id
+                         AND reminder.attempt = tasks_v2.current_attempt AND reminder.event = 'reminded'),
                     (SELECT assignment_message_id FROM task_assignment_attempts AS attempt
                        WHERE attempt.team = tasks_v2.team AND attempt.task_id = tasks_v2.task_id
                          AND attempt.attempt = tasks_v2.current_attempt)
@@ -279,6 +285,9 @@ fn load_logical_task(
         .query_row(
             "SELECT team, task_id, current_assignee, state, outcome, abort_reason, superseded_by,
                     priority, original_assigned_at, current_attempt, reminder_ordinal, revision, updated_at,
+                    (SELECT MAX(reminder.at) FROM task_events_v2 AS reminder
+                       WHERE reminder.team = tasks_v2.team AND reminder.task_id = tasks_v2.task_id
+                         AND reminder.attempt = tasks_v2.current_attempt AND reminder.event = 'reminded'),
                     (SELECT assignment_message_id FROM task_assignment_attempts AS attempt
                        WHERE attempt.team = tasks_v2.team AND attempt.task_id = tasks_v2.task_id
                          AND attempt.attempt = tasks_v2.current_attempt)
@@ -371,9 +380,13 @@ fn decode_logical_task_row(row: &Row<'_>) -> rusqlite::Result<LogicalTaskRow> {
             )
         })?,
         assignment_message_id: parse_value(
-            &row.get::<_, String>(13)?,
+            &row.get::<_, String>(14)?,
             "logical task assignment message id",
         )?,
+        last_reminded_at: row
+            .get::<_, Option<String>>(13)?
+            .map(|value| parse_value(&value, "logical task reminder time"))
+            .transpose()?,
         reminder_ordinal: row.get(10)?,
         revision: row.get(11)?,
         updated_at: parse_value(&row.get::<_, String>(12)?, "logical task update time")?,
