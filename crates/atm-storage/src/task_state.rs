@@ -1,6 +1,7 @@
 //! Backend-neutral task ledger types and the pure task state machine.
 
 use serde::{Deserialize, Serialize};
+use ulid::Ulid;
 
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
@@ -29,6 +30,99 @@ impl TaskState {
             Self::Active => "active",
             Self::Complete => "complete",
         }
+    }
+}
+
+/// Canonical v2 state for a logical task. `TaskState` above remains the
+/// narrow v1 compatibility projection until the approved coexistence window
+/// ends; new task-domain code must use this richer state.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskLifecycleState {
+    Assigned,
+    Active,
+    Blocked,
+    Closed(TaskOutcome),
+}
+
+/// A durable terminal result is carried only by `Closed`, making an open
+/// lifecycle state with terminal metadata unrepresentable in Rust.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskOutcome {
+    Succeeded,
+    Failed,
+    Aborted(TaskAbortReason),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskAbortReason {
+    Cancelled,
+    Superseded { successor_task_id: TaskId },
+}
+
+/// Explicit durable sort key for open task lists.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskPriority {
+    High,
+    Normal,
+    Low,
+}
+
+impl TaskPriority {
+    #[must_use]
+    pub const fn rank(self) -> u8 {
+        match self {
+            Self::High => 0,
+            Self::Normal => 1,
+            Self::Low => 2,
+        }
+    }
+}
+
+/// One-based immutable assignment-attempt ordinal.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AssignmentAttempt(u32);
+
+impl AssignmentAttempt {
+    pub const FIRST: Self = Self(1);
+
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+
+    pub fn next(self) -> Result<Self, TaskRejected> {
+        self.0
+            .checked_add(1)
+            .map(Self)
+            .ok_or_else(|| TaskRejected::new("task assignment attempt overflow"))
+    }
+}
+
+/// Client-generated idempotency identity for a task operation. It is
+/// purposefully distinct from `AtmMessageId`: one operation can produce
+/// messages, but it never borrows a message identity.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct TaskOperationId(Ulid);
+
+impl TaskOperationId {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Ulid::new())
+    }
+
+    #[must_use]
+    pub const fn as_ulid(self) -> Ulid {
+        self.0
+    }
+}
+
+impl std::fmt::Display for TaskOperationId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
     }
 }
 
