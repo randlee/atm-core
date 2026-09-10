@@ -3630,7 +3630,7 @@ mod tests {
     }
 
     #[test]
-    fn task_ack_guard_rolls_back_the_reply_and_keeps_the_second_task_pending() {
+    fn task_acknowledgement_settles_mail_without_starting_the_task() {
         struct ReplyBuilder {
             actor: AgentName,
         }
@@ -3698,23 +3698,15 @@ mod tests {
                 .expect("first task")
                 .expect("first row")
                 .state,
-            TaskState::Active
+            TaskState::Assigned
         );
         let first_events = tasks
             .list_task_events(&team(), &first_id, Some(&agent()))
             .expect("first events");
-        assert_eq!(
-            first_events
-                .iter()
-                .map(|event| event.seq)
-                .collect::<Vec<_>>(),
-            vec![1, 2],
-            "task event sequences are gapless per task key"
-        );
-        assert_eq!(first_events[1].event, TaskEventKind::Acked);
+        assert_eq!(first_events.len(), 1, "acknowledgement is not a task event");
 
         let second_message_id = second.envelope.message_id.expect("second id");
-        let error = store
+        store
             .acknowledge_message_atomically(
                 &AcknowledgementSource {
                     team: second.team.clone(),
@@ -3723,8 +3715,7 @@ mod tests {
                 },
                 Arc::new(ReplyBuilder { actor: agent() }),
             )
-            .expect_err("second acknowledgement must respect G1");
-        assert!(error.message().contains(first_id.as_str()));
+            .expect("second acknowledgement");
         assert_eq!(
             tasks
                 .load_task(&member, &second_id)
@@ -3739,9 +3730,9 @@ mod tests {
                 .expect("second source")
                 .expect("second source row")
                 .envelope
-                .pending_ack_at
+                .acknowledged_at
                 .is_some(),
-            "a rejected acknowledgement rolls back its source mutation"
+            "acknowledgement remains durable even though task state is unchanged"
         );
         let second_events = tasks
             .list_task_events(&team(), &second_id, Some(&agent()))
