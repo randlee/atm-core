@@ -190,7 +190,7 @@ allowed_dependencies = ["async-trait", "atm-error", "base64", "chrono", "getrand
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
-allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "serde", "serde_json", "tempfile", "tokio", "tracing"]
+allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "serde", "serde_json", "tempfile", "tokio", "tracing", "tracing-subscriber"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/peer-tls/Cargo.toml"
