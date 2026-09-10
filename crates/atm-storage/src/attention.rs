@@ -317,4 +317,61 @@ mod tests {
         );
         assert_eq!(selection.next_lane, AttentionLane::PersistentTask);
     }
+
+    #[test]
+    fn cursor_breaks_a_cross_lane_tie_in_favor_of_the_requested_lane() {
+        let member = member();
+        let task = task();
+        let task_id = task.task_id.clone();
+        let selection = select_attention_item(
+            member,
+            AttentionLane::PersistentTask,
+            AttentionCandidates {
+                ephemeral: Some(EphemeralMessageCandidate {
+                    message_id: AtmMessageId::new(),
+                }),
+                persistent_task: Some(task),
+            },
+        );
+
+        assert!(matches!(
+            selection.item,
+            Some(AttentionItem::PersistentTaskReminder { task_id: selected, .. })
+                if selected == task_id
+        ));
+        assert_eq!(selection.next_lane, AttentionLane::Ephemeral);
+    }
+
+    #[test]
+    fn empty_candidates_emit_nothing_and_preserve_the_cursor() {
+        let selection = select_attention_item(
+            member(),
+            AttentionLane::PersistentTask,
+            AttentionCandidates::default(),
+        );
+
+        assert_eq!(selection.item, None);
+        assert_eq!(selection.next_lane, AttentionLane::PersistentTask);
+    }
+
+    #[test]
+    fn persistent_lane_progresses_when_ephemeral_lane_is_empty() {
+        let task = task();
+        let task_id = task.task_id.clone();
+        let selection = select_attention_item(
+            member(),
+            AttentionLane::Ephemeral,
+            AttentionCandidates {
+                ephemeral: None,
+                persistent_task: Some(task),
+            },
+        );
+
+        assert!(matches!(
+            selection.item,
+            Some(AttentionItem::PersistentTaskReminder { task_id: selected, .. })
+                if selected == task_id
+        ));
+        assert_eq!(selection.next_lane, AttentionLane::Ephemeral);
+    }
 }
