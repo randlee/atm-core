@@ -23,7 +23,23 @@
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-014/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# v2, team-lead judgment call (documented override of quality-mgr's stated
+# 0-blocking/0-important/0-minor merge gate for this one finding only):
+# upheld as deferred against quality-mgr's QA-2 FAIL verdict on PR #1395
+# (head 3b8a43fd3), which did not independently raise this item. Rationale:
+# fenix, the independent critical design reviewer, already issued a
+# non-blocking PASS classifying this as a narrow, shutdown-only,
+# self-healing race (the pre-existing reservation retry mechanism recovers
+# any dropped dispatch); a full fix requires either moving the draining
+# check inside the registry lock or having observe_task report back whether
+# its push was accepted -- a concurrency-design decision, not a mechanical
+# cleanup fit for a last-minute consolidated minor pass. The doc-comment half
+# of fenix's recommendation (describe both entry points accurately) IS being
+# fixed in the same consolidated cleanup dispatch as FNX-011/012/013/015 and
+# quality-mgr's QA-2 items FNX-016..019; only the lock-restructuring stays
+# deferred.
 
 <urn:atm:triage:occurrence/FNX-014/AZ4-001>
   a triage:Occurrence ;

@@ -15,15 +15,17 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "boundaries/atm-storage/async-task-scheduler-audit-store.toml" ;
-  triage:status "deferred" ;
-  triage:closedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
-  triage:closedBy "team-lead" ;
-  triage:dispatchReady false ;
-  triage:triagedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-012/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# v2: reopened for dispatch as part of a consolidated minor cleanup pass
+# (quality-mgr's QA-2 FAIL under her own 0/0/0 gate; team-lead elects to
+# close all cheap doc/manifest-only minors rather than override the gate).
 
 <urn:atm:triage:occurrence/FNX-012/AZ4-001>
   a triage:Occurrence ;

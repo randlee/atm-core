@@ -15,15 +15,19 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
-  triage:status "deferred" ;
-  triage:closedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
-  triage:closedBy "team-lead" ;
-  triage:dispatchReady false ;
-  triage:triagedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-015/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# v2: reopened for dispatch via fenix's documentation-only resolution path
+# ("...or state in the ensure-step comment that the 2.1 upgrade drops
+# pre-existing terminal opportunity rows on first prune") -- no backfill
+# migration, comment only; fenix's phrasing treats this as a full alternative
+# resolution, not a partial one.
 
 <urn:atm:triage:occurrence/FNX-015/AZ4-001>
   a triage:Occurrence ;

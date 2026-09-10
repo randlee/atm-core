@@ -15,15 +15,25 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "boundaries/atm-http-runtime/idle-opportunity-sink.toml" ;
-  triage:status "deferred" ;
-  triage:closedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
-  triage:closedBy "team-lead" ;
-  triage:dispatchReady false ;
-  triage:triagedAt "2026-09-10T20:40:00Z"^^xsd:dateTime ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T21:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AZ.4 ;
   triage:foundAt "2026-09-10T20:36:42Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FNX-011/AZ4-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# v2: quality-mgr's independent QA-2 pass (head 3b8a43fd3) flagged the same
+# defect independently (her finding #1), verified across arch-qa/req-qa/
+# ruthless-boundary-qa disagreement in favor of arch-qa: the pump path should
+# read crate::herdr_queue_wake::HerdrQueueWakePump (HerdrQueueWakePump is
+# declared in herdr_queue_wake.rs; herdr_queue_wake_idle is a #[path]
+# submodule, not a top-level crate path, confirmed by team-lead via direct
+# source read). Reconciled with fenix's alternate ("drop the pump entry"):
+# team-lead elects to correct both paths to resolve rather than drop the
+# pump entry, since quality-mgr's own gate requires this finding closed, not
+# deferred. Reopened for dispatch as part of a consolidated minor cleanup
+# alongside FNX-012/013/015 and quality-mgr's QA-2 items (FNX-016..019).
 
 <urn:atm:triage:occurrence/FNX-011/AZ4-001>
   a triage:Occurrence ;
