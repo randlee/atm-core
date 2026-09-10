@@ -18,6 +18,10 @@ use atm_storage::{
 pub const DEFAULT_TASK_PAGE_LIMIT: usize = 200;
 pub const MAX_TASK_PAGE_LIMIT: usize = 10_000;
 
+mod service;
+
+pub use service::CoreTaskCommandService;
+
 /// One command accepted by the canonical task service.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
