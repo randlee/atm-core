@@ -324,38 +324,46 @@ impl AsyncTaskSchedulerAuditStore for SqliteTaskMutationStore {
     async fn record_reminder(
         &self,
         request: atm_storage::TaskReminderAuditRequest,
+        deadline: atm_storage::TaskMutationDeadline,
     ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
         self.db
-            .submit_task_mutation_async(atm_storage::TaskMutationRequest {
-                operation_id: request.operation_id,
-                actor: request.actor,
-                task_id: request.task_id,
-                expected_revision: Some(request.expected_revision),
-                operation: atm_storage::TaskOperation::RecordReminder {
-                    attempt: request.attempt,
-                    at: request.at,
+            .submit_task_mutation_async_before(
+                atm_storage::TaskMutationRequest {
+                    operation_id: request.operation_id,
+                    actor: request.actor,
+                    task_id: request.task_id,
+                    expected_revision: Some(request.expected_revision),
+                    operation: atm_storage::TaskOperation::RecordReminder {
+                        attempt: request.attempt,
+                        at: request.at,
+                    },
                 },
-            })
+                deadline,
+            )
             .await
     }
 
     async fn record_lead_notification(
         &self,
         request: atm_storage::TaskLeadNotificationAuditRequest,
+        deadline: atm_storage::TaskMutationDeadline,
     ) -> Result<atm_storage::TaskMutationOutcome, AtmError> {
         self.db
-            .submit_task_mutation_async(atm_storage::TaskMutationRequest {
-                operation_id: request.operation_id,
-                actor: request.actor,
-                task_id: request.task_id,
-                expected_revision: Some(request.expected_revision),
-                operation: atm_storage::TaskOperation::RecordLeadNotified {
-                    attempt: request.attempt,
-                    at: request.at,
-                    lead: request.lead,
-                    message_id: request.message_id,
+            .submit_task_mutation_async_before(
+                atm_storage::TaskMutationRequest {
+                    operation_id: request.operation_id,
+                    actor: request.actor,
+                    task_id: request.task_id,
+                    expected_revision: Some(request.expected_revision),
+                    operation: atm_storage::TaskOperation::RecordLeadNotified {
+                        attempt: request.attempt,
+                        at: request.at,
+                        lead: request.lead,
+                        message_id: request.message_id,
+                    },
                 },
-            })
+                deadline,
+            )
             .await
     }
 }

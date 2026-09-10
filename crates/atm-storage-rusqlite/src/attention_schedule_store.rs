@@ -4,11 +4,12 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use atm_storage::{
-    AssignmentAttempt, AsyncAttentionScheduleStore, AtmError, AtmErrorCode, AttentionCursor,
-    AttentionFinalizeOutcome, AttentionFinalizeRequest, AttentionItem, AttentionLane,
-    AttentionReservation, AttentionReservationRequest, AttentionReservationStatus,
-    AttentionScheduleStore, IdleOpportunity, IdleOpportunityId, MAX_NUDGE_ATTEMPTS, MemberKey,
-    ReadDeadline, ReadLaneError, RosterStateRevision,
+    ATTENTION_RESERVATION_LEASE, AssignmentAttempt, AsyncAttentionScheduleStore, AtmError,
+    AtmErrorCode, AttentionClaimDisposition, AttentionCursor, AttentionFinalizeOutcome,
+    AttentionFinalizeRequest, AttentionItem, AttentionLane, AttentionReservation,
+    AttentionReservationRequest, AttentionReservationStatus, AttentionScheduleStore,
+    IdleOpportunity, IdleOpportunityId, MAX_NUDGE_ATTEMPTS, MemberKey, ReadDeadline, ReadLaneError,
+    RosterStateRevision,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -52,6 +53,8 @@ CREATE TABLE IF NOT EXISTS attention_opportunities (
     status TEXT NOT NULL CHECK(status IN ('reserved', 'delivered', 'stale', 'permanently_failed')),
     failed_attempts INTEGER NOT NULL DEFAULT 0 CHECK(failed_attempts >= 0),
     created_at INTEGER NOT NULL DEFAULT 0,
+    reserved_until INTEGER NOT NULL DEFAULT 0,
+    lease_generation INTEGER NOT NULL DEFAULT 1 CHECK(lease_generation >= 1),
     PRIMARY KEY (team, agent, opportunity_id),
     CHECK((lane = 'ephemeral' AND message_id IS NOT NULL AND task_id IS NULL
            AND assignment_attempt IS NULL AND assignment_message_id IS NULL)
@@ -65,6 +68,7 @@ CREATE INDEX IF NOT EXISTS attention_opportunities_member_revision
 
 const ATTENTION_MAX_AGE_DAYS: i64 = 30;
 const ATTENTION_MAX_TERMINAL_ROWS: i64 = 10_000;
+const ATTENTION_RESERVATION_LEASE_MS: i64 = ATTENTION_RESERVATION_LEASE.as_millis() as i64;
 
 pub(crate) fn ensure_schema(
     connection: &mut SqliteConnection,
@@ -99,6 +103,26 @@ pub(crate) fn ensure_schema(
         .map_err(|error| {
             sqlite_error(target, "failed to add attention creation timestamp", error)
         })?;
+    connection
+        .execute_batch(
+            "ALTER TABLE attention_opportunities ADD COLUMN reserved_until INTEGER NOT NULL DEFAULT 0;",
+        )
+        .or_else(|error| {
+            if error.to_string().contains("duplicate column name") {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        })
+        .map_err(|error| sqlite_error(target, "failed to add attention ownership expiry", error))?;
+    connection
+        .execute_batch(
+            "ALTER TABLE attention_opportunities ADD COLUMN lease_generation INTEGER NOT NULL DEFAULT 1 CHECK(lease_generation >= 1);",
+        )
+        .or_else(|error| {
+            if error.to_string().contains("duplicate column name") { Ok(()) } else { Err(error) }
+        })
+        .map_err(|error| sqlite_error(target, "failed to add attention lease generation", error))?;
     // The 2.1 upgrade drops all pre-existing terminal opportunity rows on the first prune; reserved rows are exempt.
     connection
         .execute_batch(
@@ -260,29 +284,12 @@ pub(crate) fn reserve_writer(
     )? {
         return Ok(existing);
     }
-    if let Some(mut existing) = load_unfinished_reservation_for_item(
+    if let Some((mut existing, reserved_until)) = load_unfinished_reservation_for_item(
         connection,
         &request.opportunity.member,
         &request.item,
     )? {
-        // A retry consumes a later idle observation, but retains the durable
-        // reservation identity and failure counter.  Refreshing only the
-        // observed roster revision lets dispatch revalidate against the
-        // current idle state without minting a second attempt chain.
-        if existing.status == AttentionReservationStatus::Reserved {
-            connection.execute(
-                "UPDATE attention_opportunities SET roster_state_revision = ?4
-                 WHERE team = ?1 AND agent = ?2 AND opportunity_id = ?3",
-                params![
-                    request.opportunity.member.team().as_str(),
-                    request.opportunity.member.agent().as_str(),
-                    existing.opportunity.id.to_string(),
-                    request.opportunity.roster_state_revision.get(),
-                ],
-            )?;
-            existing.opportunity.roster_state_revision = request.opportunity.roster_state_revision;
-        }
-        return Ok(existing);
+        return refresh_existing_reservation(connection, request, &mut existing, reserved_until);
     }
     let cursor = load_cursor(connection, &request.opportunity.member)?;
     if cursor.revision != request.expected_cursor_revision {
@@ -296,11 +303,13 @@ pub(crate) fn reserve_writer(
         ));
     }
     let columns = item_columns(&request.item);
+    let now = now_unix_ms();
     connection.execute(
         "INSERT INTO attention_opportunities(
             team, agent, opportunity_id, roster_state_revision, lane, message_id, task_id,
-            assignment_attempt, assignment_message_id, status, failed_attempts, created_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'reserved', 0, ?10)",
+            assignment_attempt, assignment_message_id, status, failed_attempts, created_at,
+            reserved_until, lease_generation
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'reserved', 0, ?10, ?11, 1)",
         params![
             request.opportunity.member.team().as_str(),
             request.opportunity.member.agent().as_str(),
@@ -311,7 +320,8 @@ pub(crate) fn reserve_writer(
             columns.task_id,
             columns.attempt,
             columns.assignment_message_id,
-            now_unix_ms(),
+            now,
+            now.saturating_add(ATTENTION_RESERVATION_LEASE_MS),
         ],
     )?;
     let next_lane = request.item.lane().other();
@@ -325,7 +335,83 @@ pub(crate) fn reserve_writer(
         item: request.item,
         status: AttentionReservationStatus::Reserved,
         failed_attempts: 0,
+        lease_generation: 1,
+        disposition: AttentionClaimDisposition::Acquired,
     })
+}
+
+fn refresh_existing_reservation(
+    connection: &Connection,
+    request: AttentionReservationRequest,
+    existing: &mut AttentionReservation,
+    reserved_until: i64,
+) -> rusqlite::Result<AttentionReservation> {
+    // A retry consumes a later idle observation, but retains the durable
+    // reservation identity and failure counter.  Refreshing only the
+    // observed roster revision lets dispatch revalidate against the
+    // current idle state without minting a second attempt chain.
+    if existing.status == AttentionReservationStatus::Reserved && reserved_until <= now_unix_ms() {
+        // A process crash can happen after an external sink accepts a
+        // prompt and before finalize commits. The AZ.4 plan therefore
+        // specifies bounded at-least-once recovery, not exactly-once.
+        let failed_attempts = existing.failed_attempts.saturating_add(1);
+        let status = if failed_attempts >= MAX_NUDGE_ATTEMPTS {
+            AttentionReservationStatus::PermanentlyFailed
+        } else {
+            AttentionReservationStatus::Reserved
+        };
+        let lease_generation = existing.lease_generation.saturating_add(1);
+        let now = now_unix_ms();
+        connection.execute(
+            "UPDATE attention_opportunities SET roster_state_revision = ?4,
+                    status = ?5, failed_attempts = ?6, reserved_until = ?7,
+                    lease_generation = ?8
+                 WHERE team = ?1 AND agent = ?2 AND opportunity_id = ?3
+                   AND status = 'reserved' AND reserved_until <= ?9",
+            params![
+                request.opportunity.member.team().as_str(),
+                request.opportunity.member.agent().as_str(),
+                existing.opportunity.id.to_string(),
+                request.opportunity.roster_state_revision.get(),
+                status_name(status),
+                failed_attempts,
+                if status == AttentionReservationStatus::Reserved {
+                    now_unix_ms().saturating_add(ATTENTION_RESERVATION_LEASE_MS)
+                } else {
+                    0
+                },
+                lease_generation,
+                now,
+            ],
+        )?;
+        if connection.changes() == 0 {
+            return load_reservation(
+                connection,
+                &request.opportunity.member,
+                existing.opportunity.id,
+            )?
+            .ok_or(rusqlite::Error::QueryReturnedNoRows);
+        }
+        existing.opportunity.roster_state_revision = request.opportunity.roster_state_revision;
+        existing.failed_attempts = failed_attempts;
+        existing.status = status;
+        existing.lease_generation = lease_generation;
+        existing.disposition = AttentionClaimDisposition::Acquired;
+    } else if existing.status == AttentionReservationStatus::Reserved {
+        connection.execute(
+            "UPDATE attention_opportunities SET roster_state_revision = ?4
+                 WHERE team = ?1 AND agent = ?2 AND opportunity_id = ?3",
+            params![
+                request.opportunity.member.team().as_str(),
+                request.opportunity.member.agent().as_str(),
+                existing.opportunity.id.to_string(),
+                request.opportunity.roster_state_revision.get(),
+            ],
+        )?;
+        existing.opportunity.roster_state_revision = request.opportunity.roster_state_revision;
+        existing.disposition = AttentionClaimDisposition::Observed;
+    }
+    Ok(existing.clone())
 }
 
 fn now_unix_ms() -> i64 {
@@ -362,7 +448,7 @@ fn load_unfinished_reservation_for_item(
     connection: &Connection,
     member: &MemberKey,
     item: &AttentionItem,
-) -> rusqlite::Result<Option<AttentionReservation>> {
+) -> rusqlite::Result<Option<(AttentionReservation, i64)>> {
     let filter = match item {
         AttentionItem::EphemeralMessage { message_id, .. } => UnfinishedReservationFilter {
             lane: AttentionLane::Ephemeral,
@@ -391,10 +477,12 @@ fn load_unfinished_reservation_for_item(
     connection
         .query_row(
             "SELECT opportunity_id, roster_state_revision, lane, message_id, task_id,
-                    assignment_attempt, assignment_message_id, status, failed_attempts
+                    assignment_attempt, assignment_message_id, status, failed_attempts,
+                    reserved_until, lease_generation
              FROM attention_opportunities
              WHERE team = ?1 AND agent = ?2 AND lane = ?3
-               AND status = 'reserved'
+               AND (status = 'reserved' OR
+                    (status = 'permanently_failed' AND failed_attempts >= ?8))
                AND message_id IS ?4 AND task_id IS ?5 AND assignment_attempt IS ?6
                AND assignment_message_id IS ?7
              ORDER BY rowid DESC LIMIT 1",
@@ -406,17 +494,19 @@ fn load_unfinished_reservation_for_item(
                 filter.columns.task_id,
                 filter.columns.attempt,
                 filter.columns.assignment_message_id,
+                MAX_NUDGE_ATTEMPTS,
             ],
             |row| {
                 let id: String = row.get(0)?;
-                decode_reservation_with_offset(
+                let reservation = decode_reservation_with_offset(
                     row,
                     member.clone(),
                     IdleOpportunityId::parse(&id).map_err(|_| {
                         attention_schedule_invariant("invalid stored attention opportunity id")
                     })?,
                     1,
-                )
+                )?;
+                Ok((reservation, row.get(9)?))
             },
         )
         .optional()
@@ -454,16 +544,32 @@ pub(crate) fn finalize_writer(
         }
     };
     connection.execute(
-        "UPDATE attention_opportunities SET status = ?4, failed_attempts = ?5
-         WHERE team = ?1 AND agent = ?2 AND opportunity_id = ?3 AND status = 'reserved'",
+        "UPDATE attention_opportunities SET status = ?4, failed_attempts = ?5,
+            reserved_until = ?6
+         WHERE team = ?1 AND agent = ?2 AND opportunity_id = ?3
+           AND lease_generation = ?7 AND status = 'reserved'",
         params![
             request.member.team().as_str(),
             request.member.agent().as_str(),
             request.opportunity_id.to_string(),
             status_name(status),
             failed_attempts,
+            if status == AttentionReservationStatus::Reserved {
+                // A retryable finalize relinquishes ownership immediately;
+                // the next idle opportunity must reacquire through the
+                // fenced reclaim path rather than observe a live claim.
+                0
+            } else {
+                0
+            },
+            request.lease_generation,
         ],
     )?;
+    if connection.changes() != 1 {
+        return Err(attention_schedule_invariant(
+            "attention reservation lease generation is stale",
+        ));
+    }
     load_reservation(connection, &request.member, request.opportunity_id)?
         .ok_or(rusqlite::Error::QueryReturnedNoRows)
 }
@@ -476,7 +582,8 @@ fn load_reservation(
     connection
         .query_row(
             "SELECT roster_state_revision, lane, message_id, task_id, assignment_attempt,
-                assignment_message_id, status, failed_attempts
+                assignment_message_id, status, failed_attempts, reserved_until,
+                lease_generation
          FROM attention_opportunities
          WHERE team = ?1 AND agent = ?2 AND opportunity_id = ?3",
             params![
@@ -563,6 +670,7 @@ fn decode_reservation_with_offset(
     let lane: String = row.get(offset + 1)?;
     let status: String = row.get(offset + 6)?;
     let failed_attempts: u32 = row.get(offset + 7)?;
+    let lease_generation: u64 = row.get(offset + 9)?;
     let item = match lane.as_str() {
         "ephemeral" => AttentionItem::EphemeralMessage {
             member: member.clone(),
@@ -609,6 +717,8 @@ fn decode_reservation_with_offset(
         item,
         status,
         failed_attempts,
+        lease_generation,
+        disposition: AttentionClaimDisposition::Observed,
     })
 }
 
@@ -628,7 +738,7 @@ mod tests {
     }
 
     #[test]
-    fn reservation_replay_is_idempotent_and_persists_the_fair_cursor() {
+    fn live_reservation_reads_reserved_until_and_is_not_reclaimed() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.attention_schedule_store();
         let opportunity = IdleOpportunity {
@@ -646,8 +756,13 @@ mod tests {
             item: item.clone(),
         };
         let first = store.reserve(request.clone()).expect("reserve");
+        // Regression guard for the SELECT column offset: reading
+        // failed_attempts (index 8) would make this look expired and return
+        // Acquired instead of the non-dispatchable Observed outcome.
         let replay = store.reserve(request).expect("replay");
-        assert_eq!(first, replay);
+        assert_eq!(first.opportunity, replay.opportunity);
+        assert_eq!(first.item, replay.item);
+        assert_eq!(replay.disposition, AttentionClaimDisposition::Observed);
         assert_eq!(
             store.load_cursor(&member()).expect("cursor"),
             AttentionCursor {
@@ -661,6 +776,7 @@ mod tests {
                     member: member(),
                     opportunity_id: opportunity.id,
                     outcome: AttentionFinalizeOutcome::Delivered,
+                    lease_generation: first.lease_generation,
                 })
                 .expect("finalize")
                 .status,
@@ -669,7 +785,7 @@ mod tests {
     }
 
     #[test]
-    fn fifth_failed_reservation_allows_a_later_idle_opportunity() {
+    fn fifth_failed_reservation_suppresses_later_dispatch() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.attention_schedule_store();
         let opportunity = IdleOpportunity {
@@ -693,6 +809,7 @@ mod tests {
                     member: member(),
                     opportunity_id: opportunity.id,
                     outcome: AttentionFinalizeOutcome::RetryableFailure,
+                    lease_generation: reservation.lease_generation,
                 })
                 .expect("record retryable failure");
             assert_eq!(updated.item, reservation.item);
@@ -719,10 +836,10 @@ mod tests {
                 item: reservation.item.clone(),
             })
             .expect("later opportunity reserves the still-eligible item");
-        assert_eq!(retry.status, AttentionReservationStatus::Reserved);
-        assert_eq!(retry.failed_attempts, 0);
-        assert_eq!(retry.opportunity, later_opportunity);
-        assert_ne!(retry.opportunity.id, opportunity.id);
+        assert_eq!(retry.status, AttentionReservationStatus::PermanentlyFailed);
+        assert_eq!(retry.failed_attempts, MAX_NUDGE_ATTEMPTS);
+        assert_eq!(retry.opportunity.id, opportunity.id);
+        assert_eq!(retry.disposition, AttentionClaimDisposition::Observed);
         assert_eq!(
             store
                 .reserve(AttentionReservationRequest {
@@ -761,6 +878,7 @@ mod tests {
                 member: member(),
                 opportunity_id: first.opportunity.id,
                 outcome: AttentionFinalizeOutcome::Delivered,
+                lease_generation: first.lease_generation,
             })
             .expect("terminalize first");
         backend
@@ -917,6 +1035,325 @@ mod tests {
             .expect("inspect capped terminal rows");
     }
 
+    #[test]
+    fn expired_reservation_reclaims_with_bounded_at_least_once_budget() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        let item = AttentionItem::EphemeralMessage {
+            member: member(),
+            message_id: AtmMessageId::new(),
+        };
+        let first = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(1),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: item.clone(),
+            })
+            .expect("reserve");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE attention_opportunities SET reserved_until = 0 WHERE opportunity_id = ?1",
+                        params![first.opportunity.id.to_string()],
+                    )
+                    .expect("expire reservation");
+                Ok(())
+            })
+            .expect("expire reservation");
+        let reclaimed = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(2),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                item,
+            })
+            .expect("reclaim");
+        assert_eq!(reclaimed.status, AttentionReservationStatus::Reserved);
+        assert_eq!(reclaimed.failed_attempts, 1);
+        assert_eq!(reclaimed.opportunity.id, first.opportunity.id);
+    }
+
+    #[test]
+    fn expired_reservation_budget_exhaustion_terminalizes_without_dispatch() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        assert_eq!(MAX_NUDGE_ATTEMPTS, 5);
+        let item = AttentionItem::EphemeralMessage {
+            member: member(),
+            message_id: AtmMessageId::new(),
+        };
+        let first = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(1),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: item.clone(),
+            })
+            .expect("reserve");
+        for attempt in 1..=MAX_NUDGE_ATTEMPTS {
+            backend
+                .shared_db_for_test()
+                .with_connection(|connection| {
+                    connection
+                        .execute(
+                            "UPDATE attention_opportunities SET reserved_until = 0 WHERE opportunity_id = ?1",
+                            params![first.opportunity.id.to_string()],
+                        )
+                        .expect("expire reservation");
+                    Ok(())
+                })
+                .expect("expire reservation");
+            let reclaimed = store
+                .reserve(AttentionReservationRequest {
+                    opportunity: IdleOpportunity {
+                        id: IdleOpportunityId::new(),
+                        member: member(),
+                        roster_state_revision: RosterStateRevision::from_raw(
+                            u64::from(attempt) + 1,
+                        ),
+                    },
+                    expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                    item: item.clone(),
+                })
+                .expect("bounded reclaim");
+            assert_eq!(reclaimed.failed_attempts, attempt);
+            assert_eq!(
+                reclaimed.status,
+                if attempt == MAX_NUDGE_ATTEMPTS {
+                    AttentionReservationStatus::PermanentlyFailed
+                } else {
+                    AttentionReservationStatus::Reserved
+                }
+            );
+        }
+        let after_exhaustion = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(99),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                item,
+            })
+            .expect("a new opportunity may observe the terminal row as complete");
+        assert_eq!(
+            after_exhaustion.status,
+            AttentionReservationStatus::PermanentlyFailed
+        );
+        assert_eq!(after_exhaustion.failed_attempts, MAX_NUDGE_ATTEMPTS);
+        assert_eq!(after_exhaustion.opportunity.id, first.opportunity.id);
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let status: String = connection
+                    .query_row(
+                        "SELECT status FROM attention_opportunities WHERE opportunity_id = ?1",
+                        params![first.opportunity.id.to_string()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| {
+                        atm_storage::AtmError::daemon_unavailable(error.to_string())
+                    })?;
+                assert_eq!(status, "permanently_failed");
+                Ok(())
+            })
+            .expect("inspect terminal reservation");
+    }
+
+    #[test]
+    fn stale_owner_finalize_is_rejected_after_reclaim() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        let item = AttentionItem::EphemeralMessage {
+            member: member(),
+            message_id: AtmMessageId::new(),
+        };
+        let first = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(1),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: item.clone(),
+            })
+            .expect("reserve");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE attention_opportunities SET reserved_until = 0 WHERE opportunity_id = ?1",
+                        params![first.opportunity.id.to_string()],
+                    )
+                    .expect("expire reservation");
+                Ok(())
+            })
+            .expect("expire reservation");
+        let reclaimed = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(2),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                item,
+            })
+            .expect("reclaim");
+        assert_eq!(reclaimed.lease_generation, first.lease_generation + 1);
+        let stale = store.finalize(AttentionFinalizeRequest {
+            member: member(),
+            opportunity_id: first.opportunity.id,
+            outcome: AttentionFinalizeOutcome::Delivered,
+            lease_generation: first.lease_generation,
+        });
+        assert!(
+            stale.is_err(),
+            "stale owner must not finalize reclaimed work"
+        );
+        assert_eq!(
+            store
+                .finalize(AttentionFinalizeRequest {
+                    member: member(),
+                    opportunity_id: reclaimed.opportunity.id,
+                    outcome: AttentionFinalizeOutcome::Delivered,
+                    lease_generation: reclaimed.lease_generation,
+                })
+                .expect("current owner finalize")
+                .status,
+            AttentionReservationStatus::Delivered
+        );
+    }
+
+    #[test]
+    fn concurrent_expired_claims_bump_generation_once() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        let item = AttentionItem::EphemeralMessage {
+            member: member(),
+            message_id: AtmMessageId::new(),
+        };
+        let first = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(1),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: item.clone(),
+            })
+            .expect("reserve");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE attention_opportunities SET reserved_until = 0 WHERE opportunity_id = ?1",
+                        params![first.opportunity.id.to_string()],
+                    )
+                    .expect("expire reservation");
+                Ok(())
+            })
+            .expect("expire reservation");
+        let store = std::sync::Arc::new(store);
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let results = std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for revision in [2_u64, 3_u64] {
+                let store = std::sync::Arc::clone(&store);
+                let barrier = std::sync::Arc::clone(&barrier);
+                let item = item.clone();
+                handles.push(scope.spawn(move || {
+                    barrier.wait();
+                    store.reserve(AttentionReservationRequest {
+                        opportunity: IdleOpportunity {
+                            id: IdleOpportunityId::new(),
+                            member: member(),
+                            roster_state_revision: RosterStateRevision::from_raw(revision),
+                        },
+                        expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                        item,
+                    })
+                }));
+            }
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("claim thread"))
+                .collect::<Vec<_>>()
+        });
+        let first_claim = results[0].as_ref().expect("first claim");
+        let second_claim = results[1].as_ref().expect("second claim");
+        assert_eq!(first_claim.opportunity.id, second_claim.opportunity.id);
+        assert_eq!(first_claim.lease_generation, 2);
+        assert_eq!(second_claim.lease_generation, 2);
+        assert_eq!(first_claim.failed_attempts, 1);
+    }
+
+    #[test]
+    fn expired_refresh_path_consumes_budget_before_returning_a_reservation() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.attention_schedule_store();
+        let item = AttentionItem::PersistentTaskReminder {
+            member: member(),
+            task_id: "refresh-budget".parse().expect("task id"),
+            attempt: AssignmentAttempt::new(1).expect("attempt"),
+            assignment_message_id: AtmMessageId::new(),
+        };
+        let first = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(1),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(0),
+                item: item.clone(),
+            })
+            .expect("reserve");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE attention_opportunities SET reserved_until = 0 WHERE opportunity_id = ?1",
+                        params![first.opportunity.id.to_string()],
+                    )
+                    .expect("expire reservation");
+                Ok(())
+            })
+            .expect("expire reservation");
+        let refreshed = store
+            .reserve(AttentionReservationRequest {
+                opportunity: IdleOpportunity {
+                    id: IdleOpportunityId::new(),
+                    member: member(),
+                    roster_state_revision: RosterStateRevision::from_raw(2),
+                },
+                expected_cursor_revision: AttentionCursorRevision::from_raw(1),
+                item,
+            })
+            .expect("refresh reservation");
+        assert_eq!(refreshed.failed_attempts, 1);
+        assert_eq!(refreshed.status, AttentionReservationStatus::Reserved);
+        assert_eq!(refreshed.opportunity.id, first.opportunity.id);
+    }
+
     #[tokio::test]
     async fn async_store_uses_bounded_read_and_off_executor_write_paths() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
@@ -960,6 +1397,7 @@ mod tests {
                         member: member(),
                         opportunity_id: opportunity.id,
                         outcome: AttentionFinalizeOutcome::Delivered,
+                        lease_generation: reservation.lease_generation,
                     },
                     deadline()
                 )

@@ -1,10 +1,11 @@
+use atm_core::api::RequestDeadline;
 use atm_core::boundary::{AssignmentAttempt, LogicalTaskRow, ReadDeadline, TaskAssignmentAttempt};
 use atm_core::error::AtmError;
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{IsoTimestamp, TaskId};
 
 use crate::herdr_attention_scheduler;
-use crate::herdr_queue_wake::{HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, task_ledger_read_error};
+use crate::herdr_queue_wake::{HerdrQueueWakePump, task_ledger_read_error};
 
 pub(super) async fn load_current_task_reminder(
     pump: &HerdrQueueWakePump,
@@ -13,9 +14,12 @@ pub(super) async fn load_current_task_reminder(
     attempt: AssignmentAttempt,
     assignment_message_id: AtmMessageId,
     now: IsoTimestamp,
+    absolute_deadline: RequestDeadline,
 ) -> Result<Option<(LogicalTaskRow, TaskAssignmentAttempt)>, AtmError> {
     let reader = pump.service_runtime.async_task_ledger_reader()?;
-    let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
+    let deadline = ReadDeadline::new(absolute_deadline.remaining().ok_or_else(|| {
+        AtmError::validation("attention dispatch deadline expired before task revalidation")
+    })?)?;
     let Some(row) = reader
         .top_runnable_task(member.team().clone(), member.agent().clone(), deadline)
         .await
@@ -29,7 +33,9 @@ pub(super) async fn load_current_task_reminder(
     else {
         return Ok(None);
     };
-    let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
+    let deadline = ReadDeadline::new(absolute_deadline.remaining().ok_or_else(|| {
+        AtmError::validation("attention dispatch deadline expired before assignment revalidation")
+    })?)?;
     let assignment = reader
         .list_task_assignment_attempts(member.team().clone(), task_id.clone(), deadline)
         .await

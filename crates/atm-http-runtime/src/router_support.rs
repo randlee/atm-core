@@ -323,8 +323,8 @@ impl DetachedReceivedHooks {
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        let task = tokio::spawn(task);
         let mut tasks = self.lock();
+        let task = tokio::spawn(task);
         tasks.retain(|task| !task.is_finished());
         tasks.push(task);
     }
@@ -333,6 +333,7 @@ impl DetachedReceivedHooks {
     where
         F: Future<Output = Vec<WarningEntry>> + Send + 'static,
     {
+        let mut tasks = self.lock();
         let task = tokio::spawn(async move {
             for warning in hook.await {
                 runtime_health.record_detached_received_hook_warning();
@@ -347,7 +348,6 @@ impl DetachedReceivedHooks {
                 );
             }
         });
-        let mut tasks = self.lock();
         tasks.retain(|task| !task.is_finished());
         tasks.push(task);
     }

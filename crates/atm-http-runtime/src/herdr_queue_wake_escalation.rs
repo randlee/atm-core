@@ -8,8 +8,8 @@ use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AssignmentAttempt, AsyncMessageReceivedHookEmitter, AsyncTaskLedgerReader,
     AttentionReservationStatus, BuiltInPostSendDispatch, LogicalTaskRow, MemberKey, ReadDeadline,
-    TaskLeadNotificationAuditRequest, TaskOperationId, TaskReminderAuditRequest, TaskRevision,
-    TaskRow, TaskState,
+    TaskLeadNotificationAuditRequest, TaskMutationDeadline, TaskOperationId,
+    TaskReminderAuditRequest, TaskRevision, TaskRow, TaskState,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::{IsoTimestamp, TaskId};
@@ -46,13 +46,11 @@ pub(crate) async fn emit_task_reminder(
     emission: TaskReminderEmission,
     emitter: &dyn AsyncMessageReceivedHookEmitter,
     now: IsoTimestamp,
+    deadline: RequestDeadline,
     stats: &mut HerdrQueueWakeStats,
 ) -> Result<AttentionReservationStatus, AtmError> {
     if let Err(error) = emitter
-        .emit_received_message(
-            emission.dispatch,
-            RequestDeadline::after(HERDR_REQUEST_DEADLINE),
-        )
+        .emit_received_message(emission.dispatch, deadline)
         .await
     {
         if error.code() == AtmErrorCode::HerdrUnavailable {
@@ -66,14 +64,18 @@ pub(crate) async fn emit_task_reminder(
         .parse()
         .map_err(|_| AtmError::validation("invalid daemon task actor"))?;
     match audit_store
-        .record_reminder(TaskReminderAuditRequest {
-            operation_id: TaskOperationId::new(),
-            actor: MemberKey::new(emission.member.team().clone(), daemon_actor),
-            task_id: emission.task_id,
-            expected_revision: emission.row.revision,
-            attempt: emission.attempt,
-            at: now,
-        })
+        .record_reminder(
+            TaskReminderAuditRequest {
+                operation_id: TaskOperationId::new(),
+                actor: MemberKey::new(emission.member.team().clone(), daemon_actor),
+                task_id: emission.task_id,
+                expected_revision: emission.row.revision,
+                attempt: emission.attempt,
+                at: now,
+            },
+            TaskMutationDeadline::after(deadline.remaining().unwrap_or_default())
+                .unwrap_or_else(|_| TaskMutationDeadline::already_expired()),
+        )
         .await
     {
         Ok(outcome) => {
@@ -206,16 +208,20 @@ async fn record_lead_audit(
     let daemon_actor =
         atm_core::types::AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME);
     if let Err(error) = audit_store
-        .record_lead_notification(TaskLeadNotificationAuditRequest {
-            operation_id: TaskOperationId::new(),
-            actor: MemberKey::new(audit.member.team().clone(), daemon_actor),
-            task_id: audit.row.task_id.clone(),
-            expected_revision: audit.reminder_revision,
-            attempt: audit.row.current_attempt,
-            at: audit.at,
-            lead: audit.lead,
-            message_id: audit.message_id,
-        })
+        .record_lead_notification(
+            TaskLeadNotificationAuditRequest {
+                operation_id: TaskOperationId::new(),
+                actor: MemberKey::new(audit.member.team().clone(), daemon_actor),
+                task_id: audit.row.task_id.clone(),
+                expected_revision: audit.reminder_revision,
+                attempt: audit.row.current_attempt,
+                at: audit.at,
+                lead: audit.lead,
+                message_id: audit.message_id,
+            },
+            TaskMutationDeadline::after(HERDR_REQUEST_DEADLINE)
+                .unwrap_or_else(|_| TaskMutationDeadline::already_expired()),
+        )
         .await
     {
         tracing::warn!(

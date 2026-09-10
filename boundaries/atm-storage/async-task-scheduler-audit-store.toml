@@ -29,12 +29,13 @@ scope = "outside_owner_crate"
 forbidden = ["rusqlite::Connection"]
 
 [contracts]
-request_types = ["TaskReminderAuditRequest", "TaskLeadNotificationAuditRequest", "TaskOperationId"]
+request_types = ["TaskReminderAuditRequest", "TaskLeadNotificationAuditRequest", "TaskOperationId", "TaskMutationDeadline"]
 response_types = ["TaskMutationOutcome"]
 error_types = ["AtmError"]
 notes = [
   "the request types intentionally omit lifecycle operations, assignment mail, and prepared messages",
   "the SQLite adapter may translate the two audit requests through its private writer implementation",
+  "both audit writes reject expired queued operations",
 ]
 
 [testing]

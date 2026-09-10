@@ -13,6 +13,17 @@ use crate::schema::AtmMessageId;
 use crate::task_state::{AssignmentAttempt, TaskPriority};
 use crate::types::{MemberKey, TaskId};
 
+/// The maximum lifetime of the external emitter request on the attention path.
+pub const ATTENTION_EMISSION_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Margin for the durable finalize write after an emitter request returns.
+pub const ATTENTION_FINALIZE_WRITE_MARGIN: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Ownership must outlive the request and its finalize write, but not by an
+/// unbounded retry interval.  This is the crash-recovery horizon.
+pub const ATTENTION_RESERVATION_LEASE: std::time::Duration =
+    ATTENTION_EMISSION_DEADLINE.saturating_add(ATTENTION_FINALIZE_WRITE_MARGIN);
+
 /// The two independently-owned sources of attention for one idle member.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -217,6 +228,13 @@ pub enum AttentionReservationStatus {
     PermanentlyFailed,
 }
 
+/// Whether this call acquired dispatch ownership or only observed a live row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttentionClaimDisposition {
+    Acquired,
+    Observed,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttentionFinalizeOutcome {
     Delivered,
@@ -231,6 +249,8 @@ pub struct AttentionReservation {
     pub item: AttentionItem,
     pub status: AttentionReservationStatus,
     pub failed_attempts: u32,
+    pub lease_generation: u64,
+    pub disposition: AttentionClaimDisposition,
 }
 
 /// One optimistic reservation request. `expected_cursor_revision` prevents a
@@ -248,6 +268,7 @@ pub struct AttentionFinalizeRequest {
     pub member: MemberKey,
     pub opportunity_id: IdleOpportunityId,
     pub outcome: AttentionFinalizeOutcome,
+    pub lease_generation: u64,
 }
 
 /// Storage-neutral synchronous scheduler metadata capability.

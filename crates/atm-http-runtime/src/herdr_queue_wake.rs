@@ -654,8 +654,14 @@ impl HerdrQueueWakePump {
                 if reservation.status != atm_core::boundary::AttentionReservationStatus::Reserved {
                     return;
                 }
+                if reservation.disposition
+                    != atm_core::boundary::AttentionClaimDisposition::Acquired
+                {
+                    return;
+                }
+                let dispatch_deadline = RequestDeadline::after(HERDR_REQUEST_DEADLINE);
                 match self
-                    .dispatch_reserved_attention(&reservation, now, stats)
+                    .dispatch_reserved_attention(&reservation, now, dispatch_deadline, stats)
                     .await
                 {
                     Ok(status) => {
@@ -663,6 +669,7 @@ impl HerdrQueueWakePump {
                             &self.service_runtime,
                             &reservation,
                             status,
+                            dispatch_deadline,
                         )
                         .await
                         {
@@ -717,6 +724,7 @@ impl HerdrQueueWakePump {
         &self,
         reservation: &AttentionReservation,
         now: IsoTimestamp,
+        deadline: RequestDeadline,
         stats: &mut HerdrQueueWakeStats,
     ) -> Result<AttentionReservationStatus, AtmError> {
         let member = match &reservation.item {
@@ -735,7 +743,7 @@ impl HerdrQueueWakePump {
         }
         match &reservation.item {
             AttentionItem::EphemeralMessage { member, message_id } => {
-                self.dispatch_ephemeral_attention(member.clone(), *message_id, stats)
+                self.dispatch_ephemeral_attention(member.clone(), *message_id, deadline, stats)
                     .await
             }
             AttentionItem::PersistentTaskReminder {
@@ -750,6 +758,7 @@ impl HerdrQueueWakePump {
                     *attempt,
                     *assignment_message_id,
                     now,
+                    deadline,
                     stats,
                 )
                 .await
@@ -761,6 +770,7 @@ impl HerdrQueueWakePump {
         &self,
         member: MemberKey,
         message_id: atm_core::schema::AtmMessageId,
+        deadline: RequestDeadline,
         stats: &mut HerdrQueueWakeStats,
     ) -> Result<AttentionReservationStatus, AtmError> {
         let pending_store = self.service_runtime.pending_nudge_store()?;
@@ -788,10 +798,7 @@ impl HerdrQueueWakePump {
         };
         #[cfg(test)]
         self.notify_prompt_started_test_gate();
-        match emitter
-            .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
-            .await
-        {
+        match emitter.emit_received_message(dispatch, deadline).await {
             Ok(_) => {
                 self.complete_successful_claim(&member, &claim, &mut guard, stats)
                     .await;
@@ -812,6 +819,7 @@ impl HerdrQueueWakePump {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn dispatch_task_reminder_attention(
         &self,
         member: &MemberKey,
@@ -819,6 +827,7 @@ impl HerdrQueueWakePump {
         attempt: AssignmentAttempt,
         assignment_message_id: atm_core::schema::AtmMessageId,
         now: IsoTimestamp,
+        deadline: RequestDeadline,
         stats: &mut HerdrQueueWakeStats,
     ) -> Result<AttentionReservationStatus, AtmError> {
         let Some((row, assignment)) = task::load_current_task_reminder(
@@ -828,6 +837,7 @@ impl HerdrQueueWakePump {
             attempt,
             assignment_message_id,
             now,
+            deadline,
         )
         .await?
         else {
@@ -836,7 +846,7 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let dispatch_member = member.clone();
         let dispatch_task_id = task_id.clone();
-        let dispatch = run_blocking(move || {
+        let dispatch = run_blocking_before(deadline, move || {
             atm_core::nudge_dispatch::build_logical_task_reminder_dispatch(
                 &runtime,
                 &dispatch_member,
@@ -862,6 +872,7 @@ impl HerdrQueueWakePump {
             },
             emitter,
             now,
+            deadline,
             stats,
         )
         .await
@@ -1061,14 +1072,43 @@ where
     }
 }
 
+async fn run_blocking_before<T, F>(deadline: RequestDeadline, job: F) -> Result<T, AtmError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, AtmError> + Send + 'static,
+{
+    let remaining = deadline.remaining().ok_or_else(|| {
+        AtmError::new(
+            AtmErrorCode::WaitTimeout,
+            "attention dispatch deadline expired before blocking preparation",
+        )
+    })?;
+    tokio::time::timeout(remaining, tokio::task::spawn_blocking(job))
+        .await
+        .map_err(|_| {
+            AtmError::new(
+                AtmErrorCode::WaitTimeout,
+                "attention dispatch deadline exceeded during blocking preparation",
+            )
+        })?
+        .map_err(|source| {
+            AtmError::new(
+                AtmErrorCode::InternalError,
+                "Herdr queue wake blocking operation ended unexpectedly",
+            )
+            .with_cause(source)
+        })?
+}
+
 #[cfg(test)]
 mod tests {
     use super::claim::ReleasePendingOnDrop;
     use super::support::{log_herdr_list_failure, runtime_state};
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, TASK_REMINDER_INTERVAL_MS,
+        HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats, TASK_REMINDER_INTERVAL_MS,
     };
+    use crate::RuntimeHealth;
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
     use atm_core::api::RequestDeadline;
@@ -1079,7 +1119,10 @@ mod tests {
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::NullObservability;
-    use atm_core::protocol::{RuntimeMemberState, RuntimeObservationAvailability};
+    use atm_core::protocol::{
+        RosterRuntimeObservationUpdate, RuntimeMemberState, RuntimeObservationAvailability,
+        RuntimeObservationSource,
+    };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
     use atm_core::task_command::{
@@ -1087,7 +1130,7 @@ mod tests {
         TaskCommandRequest, TaskCommandService, TaskMutationCommand, TaskOperationId,
     };
     use atm_core::test_support as atm_storage;
-    use atm_core::types::{IsoTimestamp, ModelName, TaskId, TeamName};
+    use atm_core::types::{AgentName, IsoTimestamp, ModelName, TaskId, TeamName};
     use atm_herdr::{
         AgentSnapshot, HerdrAgentStatus, HerdrListOutcome, HerdrProcessAdapter, HerdrPromptOutcome,
     };
@@ -1102,6 +1145,7 @@ mod tests {
     use std::future::Future;
     use std::pin::Pin;
     use std::str::FromStr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
@@ -1291,6 +1335,107 @@ mod tests {
         assert_eq!(error.code(), AtmErrorCode::TaskRevisionStale);
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_idle_opportunities_emit_one_persistent_task_reminder() {
+        let root = tempfile::tempdir().expect("temporary root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+        let team: TeamName = "cdr-followup".parse().expect("team");
+        let agent: AgentName = "recipient".parse().expect("agent");
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![herdr_member(&team, agent.as_str())],
+                refreshed_at: None,
+            })
+            .expect("roster");
+        let task_id: TaskId = "SOLAR-CDR-009-RACE".parse().expect("task id");
+        let assignment_message = queue_task_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team,
+            agent.as_str(),
+            task_id,
+        )
+        .await;
+        assert!(!assignment_message.to_string().is_empty());
+
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        let emissions = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let emitter_entered = Arc::new(tokio::sync::Barrier::new(2));
+        let selector = Arc::new(GatedAttentionSelector {
+            emitter: GatedAttentionEmitter {
+                emissions: Arc::clone(&emissions),
+                started: Arc::clone(&started),
+                release: Arc::clone(&release),
+                entered: Arc::clone(&emitter_entered),
+            },
+        });
+        let pump = HerdrQueueWakePump::new(
+            assembly.service_runtime.clone(),
+            selector,
+            RuntimeHealth::default(),
+            fake,
+        );
+        let member = MemberKey::new(team, agent);
+        assembly.service_runtime.apply_roster_runtime_observations(
+            member.team(),
+            &[RosterRuntimeObservationUpdate::observed(
+                member.agent().clone(),
+                RuntimeMemberState::Idle,
+                RuntimeObservationSource::HerdrPoll,
+                IsoTimestamp::now(),
+                None,
+            )],
+        );
+        let revision = assembly
+            .service_runtime
+            .roster_ephemeral_state(member.team(), member.agent())
+            .expect("roster state")
+            .runtime
+            .revision;
+        let first_opportunity = atm_core::boundary::IdleOpportunity {
+            id: Default::default(),
+            member: member.clone(),
+            roster_state_revision: revision,
+        };
+        let second_opportunity = first_opportunity.clone();
+
+        let first = tokio::spawn({
+            let pump = pump.clone();
+            async move {
+                let mut stats = HerdrQueueWakeStats::default();
+                pump.run_idle_opportunity(first_opportunity, IsoTimestamp::now(), &mut stats)
+                    .await;
+            }
+        });
+        let second = tokio::spawn({
+            let pump = pump.clone();
+            async move {
+                let mut stats = HerdrQueueWakeStats::default();
+                pump.run_idle_opportunity(second_opportunity, IsoTimestamp::now(), &mut stats)
+                    .await;
+            }
+        });
+        tokio::time::timeout(Duration::from_secs(3), started.notified())
+            .await
+            .expect("a reminder reaches the emitter");
+        // A real barrier makes the pre-fix duplicate observable: both
+        // claimants must enter the emitter before either is released.
+        assert_eq!(emissions.load(Ordering::SeqCst), 1);
+        release.notify_waiters();
+        first.await.expect("first dispatch join");
+        second.await.expect("second dispatch join");
+        assert_eq!(
+            emissions.load(Ordering::SeqCst),
+            1,
+            "the serialized owner finalizes the reservation before the next owner can emit"
+        );
+    }
+
     struct FakeSelector {
         emitter: FakeEmitter,
     }
@@ -1353,6 +1498,50 @@ mod tests {
                     .await
                     .map(|HerdrPromptOutcome::Accepted(_)| PostSendEmissionPath::LocalHerdr)
                     .map_err(Into::into)
+            })
+        }
+    }
+
+    struct GatedAttentionEmitter {
+        emissions: Arc<AtomicUsize>,
+        started: Arc<tokio::sync::Notify>,
+        release: Arc<tokio::sync::Notify>,
+        entered: Arc<tokio::sync::Barrier>,
+    }
+
+    struct GatedAttentionSelector {
+        emitter: GatedAttentionEmitter,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for GatedAttentionSelector {}
+    impl atm_core::boundary::sealed::Sealed for GatedAttentionEmitter {}
+
+    impl MessageReceivedHookSelector for GatedAttentionSelector {
+        fn select_emitter(
+            &self,
+            _dispatch: &BuiltInPostSendDispatch,
+        ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+            Some(&self.emitter)
+        }
+    }
+
+    impl AsyncMessageReceivedHookEmitter for GatedAttentionEmitter {
+        fn emit_received_message(
+            &self,
+            _dispatch: BuiltInPostSendDispatch,
+            _deadline: RequestDeadline,
+        ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>>
+        {
+            let emissions = Arc::clone(&self.emissions);
+            let started = Arc::clone(&self.started);
+            let release = Arc::clone(&self.release);
+            let entered = Arc::clone(&self.entered);
+            Box::pin(async move {
+                let _ = tokio::time::timeout(Duration::from_secs(2), entered.wait()).await;
+                emissions.fetch_add(1, Ordering::SeqCst);
+                started.notify_one();
+                release.notified().await;
+                Ok(PostSendEmissionPath::LocalHerdr)
             })
         }
     }

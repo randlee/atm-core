@@ -22,11 +22,13 @@ pub(super) async fn finalize_attention(
     runtime: &LocalServiceRuntime,
     reservation: &AttentionReservation,
     status: AttentionReservationStatus,
+    deadline: atm_core::api::RequestDeadline,
 ) -> Result<AttentionReservation, AtmError> {
     let schedule_store = runtime.async_attention_schedule_store()?;
     let request = AttentionFinalizeRequest {
         member: reservation.opportunity.member.clone(),
         opportunity_id: reservation.opportunity.id,
+        lease_generation: reservation.lease_generation,
         outcome: match status {
             AttentionReservationStatus::Delivered => AttentionFinalizeOutcome::Delivered,
             AttentionReservationStatus::Stale => AttentionFinalizeOutcome::Stale,
@@ -40,7 +42,9 @@ pub(super) async fn finalize_attention(
             }
         },
     };
-    let deadline = ReadDeadline::new(HERDR_REQUEST_DEADLINE)?;
+    let deadline = ReadDeadline::new(deadline.remaining().ok_or_else(|| {
+        AtmError::validation("attention dispatch deadline expired before finalization")
+    })?)?;
     schedule_store.finalize(request, deadline).await
 }
 

@@ -190,10 +190,12 @@ pub trait AsyncTaskSchedulerAuditStore: sealed::Sealed + Send + Sync {
     async fn record_reminder(
         &self,
         request: TaskReminderAuditRequest,
+        deadline: TaskMutationDeadline,
     ) -> Result<TaskMutationOutcome, AtmError>;
 
     async fn record_lead_notification(
         &self,
         request: TaskLeadNotificationAuditRequest,
+        deadline: TaskMutationDeadline,
     ) -> Result<TaskMutationOutcome, AtmError>;
 }
