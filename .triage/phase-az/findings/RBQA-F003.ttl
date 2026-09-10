@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003" ;
+  triage:title "dead RuntimeObservationSource::LocalCommand enum variant" ;
+  triage:description "crates/atm-storage/src/contract.rs:974 -- the LocalCommand variant of RuntimeObservationSource has zero production constructors anywhere in the workspace (confirmed via grep for 'RuntimeObservationSource::LocalCommand' -- only the declaration site itself matches). Dead enum variant, no test or production code path constructs it. Discovered during PR #1381 QA but deferred to phase-az as dead-code cleanup debt for a future sprint." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-09T20:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.2 ;
+  triage:foundAt "2026-09-09T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/PR1381-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F003/PR1381-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 974 ;
+  triage:snippet "LocalCommand," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/1378-canonical-agent-state" ;
+  triage:headSha "PR#1381" ;
+  triage:occursIn <urn:atm:triage:worktree/PR1381/main> .
+
+<urn:atm:triage:worktree/PR1381/main>
+  a triage:WorktreeSnapshot ;
+  triage:path ".git/develop" ;
+  triage:branch "fix/1378-canonical-agent-state" ;
+  triage:headSha "PR#1381" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AZ2/latest>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ2" ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "latest" ;
+  triage:orderIndex 2 .

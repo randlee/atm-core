@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-004>
+  a triage:Finding ;
+  triage:findingId "ARCH-004" ;
+  triage:title "stale MemberKey doc comment references removed private path" ;
+  triage:description "crates/atm-storage/src/types.rs:1118-1119 -- doc comment on MemberKey references a 'private atm_http_runtime::runtime_health::MemberKey' that no longer exists anywhere in the workspace (confirmed via full-workspace grep: exactly one MemberKey definition exists). The comment describes a migration from a type that has already been fully removed. Discovered during PR #1381 QA but deferred to phase-az as documentation-consistency debt for a future sprint." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-09T20:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.2 ;
+  triage:foundAt "2026-09-09T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/PR1381-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-004/PR1381-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/types.rs" ;
+  triage:line 1118 ;
+  triage:snippet "/// This inner enum is the MemberKey backing for storage. The \"private atm_http_runtime::runtime_health::MemberKey\" migration is complete." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/1378-canonical-agent-state" ;
+  triage:headSha "PR#1381" ;
+  triage:occursIn <urn:atm:triage:worktree/PR1381/main> .
+
+<urn:atm:triage:worktree/PR1381/main>
+  a triage:WorktreeSnapshot ;
+  triage:path ".git/develop" ;
+  triage:branch "fix/1378-canonical-agent-state" ;
+  triage:headSha "PR#1381" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AZ2/latest>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AZ2" ;
+  triage:branch "feature/az2-task-domain-storage" ;
+  triage:headSha "latest" ;
+  triage:orderIndex 2 .
