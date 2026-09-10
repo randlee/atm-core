@@ -289,26 +289,30 @@ fn load_unfinished_reservation_for_item(
     member: &MemberKey,
     item: &AttentionItem,
 ) -> rusqlite::Result<Option<AttentionReservation>> {
-    let (lane, message_id, task_id, attempt, assignment_message_id) = match item {
-        AttentionItem::EphemeralMessage { message_id, .. } => (
-            AttentionLane::Ephemeral,
-            Some(message_id.to_string()),
-            None,
-            None,
-            None,
-        ),
+    let filter = match item {
+        AttentionItem::EphemeralMessage { message_id, .. } => UnfinishedReservationFilter {
+            lane: AttentionLane::Ephemeral,
+            columns: ItemColumns {
+                message_id: Some(message_id.to_string()),
+                task_id: None,
+                attempt: None,
+                assignment_message_id: None,
+            },
+        },
         AttentionItem::PersistentTaskReminder {
             task_id,
             attempt,
             assignment_message_id,
             ..
-        } => (
-            AttentionLane::PersistentTask,
-            None,
-            Some(task_id.to_string()),
-            Some(attempt.get()),
-            Some(assignment_message_id.to_string()),
-        ),
+        } => UnfinishedReservationFilter {
+            lane: AttentionLane::PersistentTask,
+            columns: ItemColumns {
+                message_id: None,
+                task_id: Some(task_id.to_string()),
+                attempt: Some(attempt.get()),
+                assignment_message_id: Some(assignment_message_id.to_string()),
+            },
+        },
     };
     connection
         .query_row(
@@ -323,11 +327,11 @@ fn load_unfinished_reservation_for_item(
             params![
                 member.team().as_str(),
                 member.agent().as_str(),
-                lane.as_str(),
-                message_id,
-                task_id,
-                attempt,
-                assignment_message_id,
+                filter.lane.as_str(),
+                filter.columns.message_id,
+                filter.columns.task_id,
+                filter.columns.attempt,
+                filter.columns.assignment_message_id,
             ],
             |row| {
                 let id: String = row.get(0)?;
@@ -423,6 +427,11 @@ struct ItemColumns {
     task_id: Option<String>,
     attempt: Option<u32>,
     assignment_message_id: Option<String>,
+}
+
+struct UnfinishedReservationFilter {
+    lane: AttentionLane,
+    columns: ItemColumns,
 }
 
 fn item_columns(item: &AttentionItem) -> ItemColumns {
