@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SOLAR-CDR-009>
+  a triage:Finding ;
+  triage:findingId "SOLAR-CDR-009" ;
+  triage:title "Concurrent Idle opportunities can emit the same persistent-task reminder twice" ;
+  triage:description "solar's final sign-off review of PR #1395 (head e20f2d0f5) confirmed CDR-001..008 are all genuinely resolved, but found a new blocking architectural race: herdr_queue_wake_idle.rs:8-18 sends every accepted heartbeat Idle opportunity to DetachedReceivedHooks::observe_task independently; router_support.rs:322-330 implements that as an unconstrained tokio::spawn with no per-member serialization; attention_schedule_store.rs:263-285 intentionally returns the same unfinished Reserved reservation for a later opportunity and refreshes its roster revision; herdr_queue_wake.rs:651-665 dispatches any returned Reserved row before finalization. Only the ephemeral lane acquires an owning claim (herdr_queue_wake.rs:758-810) -- the persistent-task path at 813-859 revalidates, emits, and records audit afterward with no reservation dispatch claim/lease. Concrete interleaving: opportunity A reserves a task and passes roster revalidation, then waits in the external emitter; a second Idle observation B starts concurrently, receives the same Reserved task row with the newer roster revision, passes revalidation, and enters the emitter too -- both prompts are accepted; the first finalizes Delivered, the second finalization fails as already-finalized, but only after duplicate external emission. Same-opportunity concurrent replay has the equivalent race. Contradicts sprint-AZ.4 lines 137-139 and the runtime flow at 167-172, and defeats the concurrent-attempts acceptance claim at lines 436-440 -- this is exactly the persistent-nudge duplication class Phase AZ exists to eliminate. Required closure per solar: establish one dispatch owner before external emission for a reservation/member (atomic reservation claim/lease, or source-neutral serialization consistent with the single-runtime ownership model), and add a deterministic composed-runtime race test that blocks the first persistent-task emission, injects a second Idle opportunity, and proves only one emitter entry -- the existing heartbeat test is sequential and does not cover this." ;
+  triage:phaseId "phase-az" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "concurrency-correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_idle.rs, crates/atm-http-runtime/src/router_support.rs, crates/atm-http-runtime/src/herdr_queue_wake.rs, crates/atm-storage-rusqlite/src/attention_schedule_store.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-10T21:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AZ.4 ;
+  triage:foundAt "2026-09-10T21:17:35Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SOLAR-CDR-009/AZ4-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SOLAR-CDR-009/AZ4-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 813 ;
+  triage:snippet "persistent-task path revalidates/emits/records audit with no reservation dispatch claim/lease; concurrent Idle opportunities can double-emit the same reminder. Fix dispatched to arch-ctm on stacked branch fix/az-cdr-followup-1 (base fix/az-critical-design-review-findings), per Rand's explicit instruction to keep PR #1395's branch frozen and land further findings on a stacked layer." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/az-cdr-followup-1" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:occursIn <urn:atm:triage:worktree/AZ4/e20f2d0f5> .
+
+<urn:atm:triage:worktree/AZ4/e20f2d0f5>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/az-cdr-followup-1" ;
+  triage:branch "fix/az-cdr-followup-1" ;
+  triage:headSha "e20f2d0f5" ;
+  triage:orderIndex 5 .
