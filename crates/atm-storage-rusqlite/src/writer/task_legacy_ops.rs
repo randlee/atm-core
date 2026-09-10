@@ -9,6 +9,7 @@ use super::ops::{
     mark_source_acknowledged,
 };
 use super::stmt_cache::WriterStatementCache;
+use super::task_ops::task_rejected;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use crate::task_sql;
 use atm_storage::contract::Message;
@@ -18,15 +19,6 @@ use atm_storage::task_state::{TaskEvent, TaskRow, TaskState, Transition, admit, 
 use atm_storage::types::{AgentName, TaskId, TeamName};
 use atm_storage::{AtmErrorCode, MessageWriteOrigin};
 use rusqlite::{Connection, OptionalExtension, params};
-
-const TASK_RECOVERY: &str = "Run: atm list --task-events <task_id> --member <assignee>";
-
-fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
-    AtmError::new(
-        AtmErrorCode::TaskTransitionInvalid,
-        format!("{detail}; {TASK_RECOVERY}"),
-    )
-}
 
 fn load_task_row(
     connection: &Connection,
@@ -152,7 +144,6 @@ pub(super) fn apply_task_message(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn refresh_task_assignment(
     record: &Message,
     task_id: &str,
@@ -367,7 +358,6 @@ fn apply_task_completion(
 /// assignment message acknowledged in the same transaction so it does not
 /// remain pending-ack forever. Returns the `assignment_missing` audit marker
 /// when the assignment message row could not be found.
-#[allow(clippy::too_many_arguments)]
 fn acknowledge_completed_assignment(
     connection: &Connection,
     cache: &mut WriterStatementCache,
@@ -415,48 +405,10 @@ fn acknowledge_completed_assignment(
     Ok(None)
 }
 
-pub(super) fn apply_task_acknowledgement(
-    source: &Message,
-    actor: &AgentName,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let Some(task_id) = source.envelope.task_id.as_ref() else {
-        return Ok(());
-    };
-    let row = load_task_row(connection, target, &source.team, task_id, &source.agent)?;
-    let Some(row) = row else {
-        return Ok(());
-    };
-    let open = load_open_task_rows(connection, target, &source.team, &source.agent)?;
-    let next = transition_for(Some(&row), &open, TaskEvent::Acked, task_id, actor)?;
-    let Transition::To(next_state) = next else {
-        return Ok(());
-    };
-    let at = atm_storage::types::IsoTimestamp::now().to_string();
-    connection.execute(
-        "UPDATE tasks SET state = ?4, updated_at = ?5 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-        params![source.team.as_str(), task_id.as_str(), source.agent.as_str(), state_name(next_state), at],
-    ).map_err(|error| sqlite_error(target, "failed to activate acknowledged task", error))?;
-    append_task_event(
-        connection,
-        target,
-        source.team.as_str(),
-        task_id.as_str(),
-        source.agent.as_str(),
-        &at,
-        "acked",
-        Some(state_name(row.state)),
-        Some(state_name(next_state)),
-        actor.as_str(),
-        source.envelope.message_id,
-        None,
-        None,
-        None,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the legacy event helper mirrors independently persisted audit columns"
+)]
 fn append_task_event(
     connection: &Connection,
     target: &SharedDbTarget,

@@ -139,7 +139,7 @@ fn cli_task_ledger_surfaces_cover_ac1_on_a_real_rusqlite_runtime() {
     fixture.acknowledge(first_message);
     let second_message = fixture.assign("t-43");
 
-    let rejected_ack = ack_mail_with_runtime(
+    ack_mail_with_runtime(
         AckRequest {
             home_dir: fixture.root.path().to_path_buf(),
             current_dir: fixture.root.path().to_path_buf(),
@@ -152,11 +152,8 @@ fn cli_task_ledger_surfaces_cover_ac1_on_a_real_rusqlite_runtime() {
         },
         &NullObservability,
         &fixture.runtime,
-    );
-    assert!(
-        rejected_ack.is_err(),
-        "a second task cannot activate while one is active"
-    );
+    )
+    .expect("task acknowledgement stays a mail-only operation");
 
     let tasks = list_task_ledger_with_runtime(
         fixture.list_query(TaskLedgerQuery::Tasks { member: None }),
@@ -164,7 +161,7 @@ fn cli_task_ledger_surfaces_cover_ac1_on_a_real_rusqlite_runtime() {
     )
     .expect("atm list --tasks");
     let states: Vec<_> = tasks.task_rows.iter().map(|row| row.state).collect();
-    assert_eq!(states, vec![TaskState::Assigned, TaskState::Active]);
+    assert_eq!(states, vec![TaskState::Assigned, TaskState::Assigned]);
     assert!(
         serde_json::to_value(&tasks.task_rows)
             .expect("task rows JSON")
@@ -185,7 +182,7 @@ fn cli_task_ledger_surfaces_cover_ac1_on_a_real_rusqlite_runtime() {
             .iter()
             .map(|row| row.event)
             .collect::<Vec<_>>(),
-        vec![TaskEventKind::Assigned, TaskEventKind::Acked]
+        vec![TaskEventKind::Assigned]
     );
 
     let second_events = list_task_ledger_with_runtime(
@@ -195,16 +192,14 @@ fn cli_task_ledger_surfaces_cover_ac1_on_a_real_rusqlite_runtime() {
         }),
         &fixture.runtime,
     )
-    .expect("rejected task events");
+    .expect("mail-only task acknowledgement events");
     assert_eq!(
-        second_events.task_event_rows[1].event,
-        TaskEventKind::Rejected
-    );
-    assert!(
-        second_events.task_event_rows[1]
-            .detail
-            .as_deref()
-            .is_some_and(|detail| detail.contains("t-42"))
+        second_events
+            .task_event_rows
+            .iter()
+            .map(|row| row.event)
+            .collect::<Vec<_>>(),
+        vec![TaskEventKind::Assigned]
     );
 }
 

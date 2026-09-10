@@ -86,6 +86,22 @@ pub(super) fn verify_template_send(
     })
 }
 
+/// Render an already captured template source for a task mutation.
+///
+/// Task actions persist only rendered content, but legacy send adapters still
+/// accept the canonical `TemplateSendSource`. Keeping this bridge beside the
+/// ordinary verification path prevents the adapter from inventing a second
+/// merge or required-variable policy.
+#[doc(hidden)]
+pub fn render_template_source_for_task(
+    composer: &dyn TemplateComposer,
+    request: &TemplateSendSource,
+    max_message_bytes: usize,
+) -> Result<(String, atm_storage::TemplateSha), AtmError> {
+    let verified = verify_template_send(composer, request, max_message_bytes)?;
+    Ok((verified.rendered.text, verified.inspection.sha))
+}
+
 /// Applies the documented immutable precedence at the core composition seam.
 pub fn resolve_merged_vars(
     frontmatter: &atm_storage::TemplateFrontmatter,

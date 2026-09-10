@@ -102,6 +102,8 @@ pub mod send_to;
 pub(crate) mod service_runtime;
 /// Transitional legacy store adapters used by the retained service runtime.
 pub(crate) mod service_runtime_store;
+/// Transport-neutral task query and lifecycle command contracts.
+pub mod task_command;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
 /// Pure resolution of template-declared workflow snapshots.

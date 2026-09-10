@@ -81,6 +81,7 @@ impl AsRef<str> for MessageKey {
 }
 
 pub use crate::peer_contract::*;
+pub use crate::task_ledger::AsyncTaskLedgerReader;
 pub use crate::task_mutation::*;
 pub use crate::task_state::{TaskEventRow, TaskRow};
 pub use crate::task_store::*;
@@ -908,98 +909,18 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
     ) -> Result<Option<IsoTimestamp>, ReadLaneError>;
 }
 
-/// Tokio-safe, read-only task-ledger capability.
-///
-/// Task rows and their append-only audit events are a separate durable
-/// projection from mailbox messages. Implementations must use a bounded
-/// storage-owned reader lane and must not enter the ordered writer lane.
-#[async_trait::async_trait]
-pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
-    async fn list_tasks(
-        &self,
-        team: TeamName,
-        member: Option<AgentName>,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskRow>, ReadLaneError>;
-
-    async fn list_task_events(
-        &self,
-        team: TeamName,
-        task_id: TaskId,
-        member: Option<AgentName>,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
-
-    /// Returns current v2 logical-task projections in the binding task-list
-    /// order.  Implementations must keep this ordering storage-owned so CLI
-    /// and idle consumers cannot diverge.
-    async fn list_logical_tasks(
-        &self,
-        _team: TeamName,
-        _member: Option<AgentName>,
-        _deadline: ReadDeadline,
-    ) -> Result<Vec<crate::LogicalTaskRow>, ReadLaneError> {
-        Err(ReadLaneError::Unavailable {
-            message: "logical task projections are unavailable in this storage adapter".to_owned(),
-        })
-    }
-
-    /// Returns the active task, otherwise the first assigned task, and never
-    /// returns blocked or closed work.
-    async fn top_runnable_task(
-        &self,
-        _team: TeamName,
-        _member: AgentName,
-        _deadline: ReadDeadline,
-    ) -> Result<Option<crate::LogicalTaskRow>, ReadLaneError> {
-        Err(ReadLaneError::Unavailable {
-            message: "logical task projections are unavailable in this storage adapter".to_owned(),
-        })
-    }
-
-    /// Lists immutable assignment attempts for a logical task.
-    async fn list_task_assignment_attempts(
-        &self,
-        _team: TeamName,
-        _task_id: TaskId,
-        _deadline: ReadDeadline,
-    ) -> Result<Vec<crate::TaskAssignmentAttempt>, ReadLaneError> {
-        Err(ReadLaneError::Unavailable {
-            message: "logical task projections are unavailable in this storage adapter".to_owned(),
-        })
-    }
-
-    /// Lists append-only v2 lifecycle events for a logical task.
-    async fn list_task_lifecycle_events(
-        &self,
-        _team: TeamName,
-        _task_id: TaskId,
-        _deadline: ReadDeadline,
-    ) -> Result<Vec<crate::TaskLifecycleEventRow>, ReadLaneError> {
-        Err(ReadLaneError::Unavailable {
-            message: "logical task projections are unavailable in this storage adapter".to_owned(),
-        })
-    }
-}
-
 pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
 
-    /// Lists every effective roster name across the durable database.
-    ///
-    /// Backends with a native projection should override this with one query.
-    /// The fallback preserves the contract for narrow test doubles.
+    /// Lists every effective roster name; native backends should override the fallback query.
     fn unique_names(&self) -> Result<Vec<RosterUniqueName>, AtmError> {
         let mut names = Vec::new();
         for team in self.list_teams()? {
-            names.extend(
-                self.load_roster(&team)?
-                    .members
-                    .iter()
-                    .map(RosterUniqueName::from_member),
-            );
+            for member in &self.load_roster(&team)?.members {
+                names.push(RosterUniqueName::from_member(member));
+            }
         }
         Ok(names)
     }

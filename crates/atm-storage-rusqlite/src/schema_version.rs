@@ -86,6 +86,11 @@ CREATE TABLE IF NOT EXISTS task_v2_projection_context (
 
 CREATE INDEX IF NOT EXISTS task_list_order
     ON tasks_v2(team, current_assignee, state, priority, original_assigned_at, task_id);
+-- The v1 bridge and initial migration share this one precedence authority.
+CREATE VIEW IF NOT EXISTS task_legacy_state_precedence AS
+    SELECT 'active' AS state, 0 AS precedence
+    UNION ALL SELECT 'assigned', 1
+    UNION ALL SELECT 'complete', 2;
 -- These are upgraded in place when an existing 1.6.x database is opened;
 -- CREATE TRIGGER IF NOT EXISTS would silently retain an obsolete bridge.
 DROP TRIGGER IF EXISTS task_v1_insert_bridge;
@@ -114,9 +119,11 @@ BEGIN
               AND NOT EXISTS (
                   SELECT 1 FROM tasks AS preferred
                    WHERE preferred.team = chosen.team AND preferred.task_id = chosen.task_id
-                     AND (CASE preferred.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                     AND (COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                      WHERE state = preferred.state), 2),
                           preferred.updated_at, preferred.assignee)
-                         < (CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                         < (COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                       WHERE state = chosen.state), 2),
                             chosen.updated_at, chosen.assignee)
               )
        )
@@ -152,7 +159,8 @@ BEGIN
         chosen.reminder_count, 1, chosen.updated_at
       FROM tasks AS chosen
      WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
-     ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+     ORDER BY COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                         WHERE state = chosen.state), 2),
               chosen.updated_at DESC, chosen.assignee ASC
      LIMIT 1
     ON CONFLICT(team, task_id) DO UPDATE SET
@@ -190,9 +198,11 @@ BEGIN
               AND NOT EXISTS (
                   SELECT 1 FROM tasks AS preferred
                    WHERE preferred.team = chosen.team AND preferred.task_id = chosen.task_id
-                     AND (CASE preferred.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                     AND (COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                      WHERE state = preferred.state), 2),
                           preferred.updated_at, preferred.assignee)
-                         < (CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                         < (COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                       WHERE state = chosen.state), 2),
                             chosen.updated_at, chosen.assignee)
               )
        )
@@ -207,13 +217,15 @@ BEGIN
        SET current_assignee = (
                 SELECT chosen.assignee FROM tasks AS chosen
                  WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
-                 ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                 ORDER BY COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                     WHERE state = chosen.state), 2),
                           chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
            ),
            state = CASE (
                 SELECT chosen.state FROM tasks AS chosen
                  WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
-                 ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                 ORDER BY COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                     WHERE state = chosen.state), 2),
                           chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
            )
                 WHEN 'complete' THEN 'closed'
@@ -223,7 +235,8 @@ BEGIN
                        AND existing.current_assignee = (
                             SELECT chosen.assignee FROM tasks AS chosen
                              WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
-                             ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                             ORDER BY COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                                 WHERE state = chosen.state), 2),
                                       chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
                        )
                        AND existing.state = 'active' AND existing.task_id <> NEW.task_id
@@ -233,7 +246,8 @@ BEGIN
            outcome = CASE (
                 SELECT chosen.state FROM tasks AS chosen
                  WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
-                 ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                 ORDER BY COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                     WHERE state = chosen.state), 2),
                           chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
            ) WHEN 'complete' THEN 'succeeded' ELSE NULL END,
            current_attempt = (
@@ -242,7 +256,8 @@ BEGIN
                    AND attempts.assignee = (
                        SELECT chosen.assignee FROM tasks AS chosen
                         WHERE chosen.team = NEW.team AND chosen.task_id = NEW.task_id
-                        ORDER BY CASE chosen.state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+                        ORDER BY COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                            WHERE state = chosen.state), 2),
                                  chosen.updated_at DESC, chosen.assignee ASC LIMIT 1
                    )
            ),
@@ -276,7 +291,8 @@ WITH ranked AS (
            assigned_at, updated_at, reminder_count,
            ROW_NUMBER() OVER (
                PARTITION BY team, task_id
-               ORDER BY CASE state WHEN 'active' THEN 0 WHEN 'assigned' THEN 1 ELSE 2 END,
+               ORDER BY COALESCE((SELECT precedence FROM task_legacy_state_precedence
+                                   WHERE state = tasks.state), 2),
                         updated_at DESC, assignee ASC
            ) AS winner,
            ROW_NUMBER() OVER (
@@ -291,7 +307,11 @@ INSERT OR IGNORE INTO tasks_v2(
     reminder_ordinal, revision, updated_at
 )
 SELECT team, task_id, assignee,
-       CASE state WHEN 'complete' THEN 'closed' ELSE state END,
+       CASE state
+           WHEN 'active' THEN 'active'
+           WHEN 'complete' THEN 'closed'
+           ELSE 'assigned'
+       END,
        CASE state WHEN 'complete' THEN 'succeeded' ELSE NULL END,
        NULL, NULL, 'normal',
        (SELECT MIN(other.assigned_at) FROM tasks AS other

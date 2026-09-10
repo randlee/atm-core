@@ -1,11 +1,19 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: 1.4.0
+  version: 1.5.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
 paths:
+  /tasks:
+    post:
+      operationId: taskCommand
+      description: Canonical bounded task query and lifecycle mutation exchange.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaskCommandRequest' } } } }
+      responses:
+        '200': { description: Task query or mutation response, content: { application/json: { schema: { $ref: '#/components/schemas/TaskCommandResponse' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
   /messages/search:
     get:
       operationId: searchMessages
@@ -137,6 +145,12 @@ components:
       description: ATM error
       content: { application/json: { schema: { $ref: '#/components/schemas/AtmError' } } }
   schemas:
+    TaskCommandRequest:
+      type: object
+      description: Tagged canonical task list, event, or mutation request.
+    TaskCommandResponse:
+      type: object
+      description: Tagged canonical task list, event, or mutation response.
     AgentAddress:
       type: object
       required: [agent, team]
@@ -157,7 +171,7 @@ components:
         acknowledges_message_id: { type: string }
         peer_http_api_version:
           type: string
-          description: Optional cross-host wire API version. The current baseline is 1.4.0; receivers reject only a major-version mismatch.
+          description: Optional cross-host wire API version. The current baseline is 1.5.0; receivers reject only a major-version mismatch.
     PeekQuery:
       type: object
       description: Canonical inspect query; fields are validated by the daemon.

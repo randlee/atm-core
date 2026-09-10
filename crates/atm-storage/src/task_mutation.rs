@@ -4,13 +4,16 @@
 //! not receive a SQLite connection, writer permit, or permission to render
 //! assignment text inside storage.
 
+use std::time::{Duration, Instant};
+
 use serde::{Deserialize, Serialize};
 
 use crate::contract::{Message, sealed};
 use crate::error::AtmError;
+use crate::schema::AtmMessageId;
 use crate::task_state::{TaskLifecycleState, TaskOperationId, TaskOutcome, TaskPriority};
 use crate::task_store::MessageWriteOrigin;
-use crate::types::{MemberKey, TaskId};
+use crate::types::{AgentName, MemberKey, TaskId};
 
 /// A validated, admitted message committed by the same task transaction.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -78,11 +81,60 @@ pub struct TaskMutationOutcome {
     pub task_id: TaskId,
     pub state: TaskLifecycleState,
     pub revision: u64,
+    /// Assignment or terminal-handoff message committed with this operation.
+    /// The field is optional for state-only mutations and defaults while old
+    /// persisted operation results remain readable during the interface bump.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<AtmMessageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub successor_task_id: Option<TaskId>,
+    /// The immutable current projection snapshot committed by the operation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_assignee: Option<AgentName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_attempt: Option<crate::task_state::AssignmentAttempt>,
     pub replayed: bool,
+}
+
+/// A caller-owned deadline for admission to the ordered task-mutation writer.
+///
+/// The deadline is transport metadata, not part of the idempotent mutation
+/// request: retry identity must never vary with elapsed time.
+#[derive(Debug, Clone, Copy)]
+pub struct TaskMutationDeadline(Instant);
+
+impl TaskMutationDeadline {
+    pub fn after(remaining: Duration) -> Result<Self, AtmError> {
+        if remaining.is_zero() {
+            return Err(AtmError::validation(
+                "task mutation deadline must be non-zero",
+            ));
+        }
+        Ok(Self(Instant::now() + remaining))
+    }
+
+    #[must_use]
+    pub fn is_expired(self) -> bool {
+        Instant::now() >= self.0
+    }
+
+    #[must_use]
+    pub fn already_expired() -> Self {
+        Self(Instant::now())
+    }
 }
 
 /// Tokio-safe, sealed mutation boundary implemented by the storage adapter.
 #[async_trait::async_trait]
 pub trait AsyncTaskMutationStore: sealed::Sealed + Send + Sync {
     async fn apply(&self, request: TaskMutationRequest) -> Result<TaskMutationOutcome, AtmError>;
+
+    /// Applies a task mutation only while its caller's writer-admission budget
+    /// remains. Implementations must reject an expired queued operation before
+    /// it executes on the shared SQLite writer lane.
+    async fn apply_before(
+        &self,
+        request: TaskMutationRequest,
+        deadline: TaskMutationDeadline,
+    ) -> Result<TaskMutationOutcome, AtmError>;
 }

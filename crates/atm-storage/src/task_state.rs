@@ -145,6 +145,15 @@ pub enum TaskPriority {
     Low,
 }
 
+/// Storage-owned selection for logical task projections.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskLedgerScope {
+    Open,
+    Closed,
+    All,
+}
+
 impl TaskPriority {
     #[must_use]
     pub const fn rank(self) -> u8 {

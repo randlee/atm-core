@@ -1,6 +1,6 @@
 use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
-use super::task_legacy_ops::{apply_task_acknowledgement, apply_task_message};
+use super::task_legacy_ops::apply_task_message;
 use super::task_ops::execute_task_mutation;
 use crate::search_schema::{
     InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
@@ -16,8 +16,8 @@ use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DiagnosticEvent,
-    MessageWriteOrigin, TaskMutationOutcome, TaskMutationRequest, TemplateMessageAdmission,
-    TemplateRegistration, TemplateRegistrationOutcome,
+    MessageWriteOrigin, TaskMutationDeadline, TaskMutationOutcome, TaskMutationRequest,
+    TemplateMessageAdmission, TemplateRegistration, TemplateRegistrationOutcome,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
@@ -39,7 +39,7 @@ type DecomposedWorkflowColumns<'a> = (
 #[derive(Clone)]
 pub(crate) enum WriteOp {
     /// Canonical v2 logical-task mutation, executed by the sole writer queue.
-    TaskMutation(Box<TaskMutationRequest>),
+    TaskMutation(Box<TaskMutationRequest>, Option<TaskMutationDeadline>),
     /// The sole mutation admitted from the asynchronous mailbox-read path.
     /// It never carries immutable message contents or performs selection.
     ApplyReadDisplayState {
@@ -51,9 +51,7 @@ pub(crate) enum WriteOp {
         record: Box<Message>,
         provenance: MessageWriteOrigin,
     },
-    /// A related group of immutable records that must either all become
-    /// visible or none do.  AI.31 uses this for the ACK reply and the
-    /// acknowledged source record.
+    /// Immutable records committed atomically (AI.31 ACK reply + source).
     UpsertMessages(Vec<Message>),
     Acknowledge {
         source: AcknowledgementSource,
@@ -73,7 +71,7 @@ pub(crate) enum WriteOp {
 impl std::fmt::Debug for WriteOp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::TaskMutation(request) => formatter
+            Self::TaskMutation(request, _) => formatter
                 .debug_tuple("TaskMutation")
                 .field(&request.task_id)
                 .finish(),
@@ -147,8 +145,10 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
-        WriteOp::TaskMutation(request) => execute_task_mutation(request, connection, cache, target)
-            .map(WriteOpResult::TaskMutation),
+        WriteOp::TaskMutation(request, _) => {
+            execute_task_mutation(request, connection, cache, target)
+                .map(WriteOpResult::TaskMutation)
+        }
         WriteOp::ApplyReadDisplayState {
             mailbox,
             message_ids,
@@ -523,7 +523,6 @@ fn execute_acknowledgement(
         cache,
         target,
     )?;
-    apply_task_acknowledgement(&source, &reply.envelope.from, connection, target)?;
     Ok(WriteOpResult::Acknowledged(Box::new(
         AcknowledgementCommit {
             reply,

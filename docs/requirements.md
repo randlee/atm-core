@@ -2463,7 +2463,7 @@ Phase AX.6 doctor findings must use these warning codes and actionable guidance:
 - `ATM_ROSTER_NO_LEAD` — `assign one lead: atm teams update-member <team> <member> --agent-type lead`
 - `ATM_ROSTER_MULTIPLE_LEADS` — `keep one lead: atm teams update-member <team> <member> --agent-type <other type>`
 - `ATM_ROSTER_RESERVED_NAME` — `rename the member: atm-daemon is reserved for daemon-originated messages`
-- `ATM_TASK_STALLED` — `check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin`
+- `ATM_TASK_STALLED` — `check the assignee or close the task with: atm task complete <task_id> --handoff <agent> <message-source>`
 - `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt`
 
 Critical findings must cause a non-zero exit status.
@@ -2959,12 +2959,17 @@ Required rules:
 - a task-linked message remains actionable until acknowledged
 - a task-linked message must continue to appear in `atm read` until acknowledged
 - a task-linked message must never be removed by `atm clear` before acknowledgement
-- task state is `assigned`, `active`, then `complete`; acknowledgement moves
-  an assigned task to active only when the assignee has no other active task
-- the assigner or assignee completes an open task with
-  `atm send <assignee> --task-complete <id> --stdin`; completion from assigned
-  acknowledges the assignment in the same transaction so it cannot remain
-  pending acknowledgement
+- task state is `assigned`, `active`, `blocked`, or terminal `closed` with a
+  typed succeeded, failed, cancelled, or superseded outcome; only explicit
+  `atm task start <id>` moves an assigned task to active
+- acknowledgement is mail-only and never changes task lifecycle state
+- an active assignee completes or fails through `atm task complete|fail <id>
+  --handoff <agent> <message-source>`; terminal handoff mail and closure are
+  one durable transaction
+- the temporary `atm send <recipient> --task-complete <id> <source>` adapter
+  retains its narrower assigner-or-assignee compatibility provenance from
+  Assigned or Active and emits a migration warning; it does not make an
+  assignment acknowledgement implicit
 - every transition, rejection, resend, and reminder is append-only audit data;
   the durable tables and replay contract are defined by ADR-062
 - the Tokio Herdr queue wake pump checks open tasks after draining deferred

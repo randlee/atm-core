@@ -312,6 +312,8 @@ pub struct LocalServiceRuntime {
     async_message_store: Option<std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>>,
     async_mailbox_reader: Option<std::sync::Arc<dyn atm_storage::AsyncMailboxReader + Send + Sync>>,
     async_task_ledger_reader: Option<std::sync::Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
+    async_task_mutation_store:
+        Option<std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>>,
     async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) nudge_template_override_store:
@@ -367,6 +369,7 @@ impl LocalServiceRuntime {
             async_message_store: None,
             async_mailbox_reader: None,
             async_task_ledger_reader: None,
+            async_task_mutation_store: None,
             async_message_search_store: None,
             roster_store: roster.store(),
             nudge_template_override_store,
@@ -447,6 +450,30 @@ impl LocalServiceRuntime {
         self.async_task_ledger_reader.clone().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "Tokio task-ledger reader was not installed in this runtime",
+            )
+        })
+    }
+
+    /// Attaches the Tokio-safe task lifecycle mutation capability selected by
+    /// the storage composition root. Task commands use this one typed writer
+    /// boundary; they never open a SQLite connection themselves.
+    #[must_use]
+    pub fn with_async_task_mutation_store(
+        mut self,
+        store: std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>,
+    ) -> Self {
+        self.async_task_mutation_store = Some(store);
+        self
+    }
+
+    /// Returns the runtime-selected Tokio task lifecycle mutation boundary.
+    pub fn async_task_mutation_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn atm_storage::AsyncTaskMutationStore + Send + Sync>, AtmError>
+    {
+        self.async_task_mutation_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio task mutation store was not installed in this runtime",
             )
         })
     }
@@ -690,6 +717,22 @@ impl LocalServiceRuntime {
         team: &TeamName,
     ) -> Vec<(AgentName, RosterRuntimeObservation)> {
         self.roster_runtime.load_runtime_observations(team)
+    }
+
+    /// Loads one canonical roster member from the runtime-owned RAM mirror.
+    /// Task command authorization uses this rather than issuing a durable
+    /// roster read while handling an HTTP request.
+    pub fn roster_member(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Option<crate::boundary::RosterEntry> {
+        self.roster_runtime.load_roster_member(team, agent)
+    }
+
+    /// Returns a team's canonical members from the runtime-owned RAM mirror.
+    pub fn team_roster(&self, team: &TeamName) -> Vec<crate::boundary::RosterEntry> {
+        self.roster_runtime.load_team_roster(team)
     }
 
     /// Sets one member's Herdr wake-pending ephemeral flag in RAM only.

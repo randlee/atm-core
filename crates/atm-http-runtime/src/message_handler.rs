@@ -24,6 +24,7 @@ use atm_core::protocol::{
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::search::SearchRequest;
 use atm_core::send::WriteRequest;
+use atm_core::task_command::TaskCommandRequest;
 use atm_core::types::HostName;
 use axum::body::{Body, Bytes};
 use axum::error_handling::HandleErrorLayer;
@@ -501,6 +502,10 @@ fn decode_framework_request(
         Some(HttpRouteKind::Search) => decode_search_query(&request.path)
             .map(Box::new)
             .map(ApiRequest::Search),
+        Some(HttpRouteKind::Task) => serde_json::from_slice::<TaskCommandRequest>(body)
+            .map(Box::new)
+            .map(ApiRequest::Task)
+            .map_err(|source| invalid_framework_body("task", source)),
         Some(HttpRouteKind::Compatibility) => {
             serde_json::from_slice::<CompatibilityPreflight>(body)
                 .map(ApiRequest::CompatibilityPreflight)
@@ -727,6 +732,7 @@ fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
         ResponseEnvelope::Clear(value) => clear_response(&value),
         ResponseEnvelope::Doctor(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::Search(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::Task(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::RuntimeViewReloaded => json_response(StatusCode::OK, &(), None),
         ResponseEnvelope::Error(error) => Ok(error_response(error)),
     }

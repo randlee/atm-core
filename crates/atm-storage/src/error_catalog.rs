@@ -62,6 +62,9 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
         AtmErrorCode::TaskTransitionInvalid | AtmErrorCode::TaskTerminalMetadataInvalid => {
             "Reload the task lifecycle and choose a legal transition before retrying."
         }
+        AtmErrorCode::TaskAuthorizationDenied => {
+            "Use an actor authorized for this task operation before retrying."
+        }
         AtmErrorCode::TaskRevisionStale => {
             "Reload the task and retry with its current revision and a new operation id."
         }
@@ -71,11 +74,14 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
         AtmErrorCode::TaskActiveConflict => {
             "Complete, block, or reassign the member's active task before starting another."
         }
-        AtmErrorCode::TaskCompatibilityFailed => {
-            "Preserve the retained task projection and inspect migration diagnostics before retrying."
-        }
         AtmErrorCode::TaskHandoffCrossHostUnsupported => {
             "Use a same-host assignee; cross-host task handoff is not transactionally supported."
+        }
+        AtmErrorCode::TaskLeadMissing => {
+            "Designate exactly one team lead before retrying the lead-authorized task mutation."
+        }
+        AtmErrorCode::TaskLeadAmbiguous => {
+            "Resolve the team roster to exactly one lead before retrying the task mutation."
         }
         AtmErrorCode::TestFakeTransportInjectionFailed => {
             "Repair the test transport fixture before retrying."
@@ -279,7 +285,7 @@ const fn warning_guidance(code: AtmErrorCode) -> Option<&'static str> {
             Some("rename the member: atm-daemon is reserved for daemon-originated messages")
         }
         AtmErrorCode::TaskStalled => Some(
-            "check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin",
+            "check the assignee or close the task with: atm task complete <task_id> --handoff <agent> <message-source>",
         ),
         AtmErrorCode::MemberBlocked => Some(
             "<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt",

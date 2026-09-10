@@ -9,6 +9,7 @@
 use super::ops::execute_task_mutation_message_upsert;
 use super::stmt_cache::WriterStatementCache;
 use super::task_projection::sync_v1_compat_projection;
+use super::task_snapshot::current_projection_snapshot;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::error::AtmError;
 use atm_storage::types::{AgentName, TaskId, TeamName};
@@ -80,9 +81,33 @@ pub(super) fn execute_task_mutation(
     }
     let current_revision = load_current_revision(request, connection, target)?;
     validate_expected_revision(request, current_revision)?;
+    let message_id = operation_message_id(&request.operation);
     let now = atm_storage::IsoTimestamp::now().to_string();
     let transition = apply_operation(request, current_revision, connection, cache, target, &now)?;
-    finalize_mutation(request, connection, target, &fingerprint, transition, &now)
+    finalize_mutation(
+        request,
+        connection,
+        target,
+        &fingerprint,
+        transition,
+        message_id,
+        &now,
+    )
+}
+
+fn operation_message_id(operation: &TaskOperation) -> Option<atm_storage::AtmMessageId> {
+    let message = match operation {
+        TaskOperation::Assign(assignment)
+        | TaskOperation::Reassign(assignment)
+        | TaskOperation::Reopen(assignment) => Some(&assignment.message),
+        TaskOperation::Close { handoff, .. }
+        | TaskOperation::LegacyCloseSucceeded {
+            completion_notice: handoff,
+        }
+        | TaskOperation::Supersede { handoff, .. } => Some(handoff),
+        TaskOperation::Start | TaskOperation::Block { .. } | TaskOperation::Unblock { .. } => None,
+    };
+    message.and_then(|prepared| prepared.message.envelope.message_id)
 }
 
 fn mutation_fingerprint(request: &TaskMutationRequest) -> Result<String, AtmError> {
@@ -282,12 +307,19 @@ fn finalize_mutation(
     target: &SharedDbTarget,
     fingerprint: &str,
     transition: TransitionResult,
+    message_id: Option<atm_storage::AtmMessageId>,
     now: &str,
 ) -> Result<TaskMutationOutcome, AtmError> {
+    let (current_assignee, current_attempt) =
+        current_projection_snapshot(request, connection, target)?;
     let result = TaskMutationOutcome {
         task_id: request.task_id.clone(),
         state: transition.state.clone(),
         revision: transition.revision,
+        message_id,
+        successor_task_id: transition.related_task_id.clone(),
+        current_assignee: Some(current_assignee),
+        current_attempt: Some(current_attempt),
         replayed: false,
     };
     let result_json = serde_json::to_string(&result).map_err(|error| {
@@ -555,7 +587,10 @@ fn insert_assignment_attempt(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the atomic attempt insert keeps the durable task and assignment fields explicit at the SQL boundary"
+)]
 fn insert_assignment_attempt_for(
     connection: &Connection,
     target: &SharedDbTarget,
@@ -677,7 +712,10 @@ fn reassignment_context(
     Ok((revision, attempt))
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "supersession atomically carries distinct source, successor, assignment, and operation inputs"
+)]
 fn supersede_v2(
     connection: &Connection,
     cache: &mut WriterStatementCache,
@@ -930,7 +968,10 @@ fn append_v2_event(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the append helper mirrors the independently persisted lifecycle-event columns"
+)]
 fn append_v2_event_for(
     connection: &Connection,
     target: &SharedDbTarget,
@@ -990,7 +1031,7 @@ fn abort_reason_name(value: &TaskOutcome) -> Result<Option<&'static str>, AtmErr
     }
 }
 
-fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
+pub(super) fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
     task_error(AtmErrorCode::TaskTransitionInvalid, detail)
 }
 

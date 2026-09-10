@@ -13,6 +13,7 @@ mod peer_contract;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
+mod task_ledger;
 pub mod task_mutation;
 pub mod task_state;
 pub mod task_store;
@@ -75,15 +76,15 @@ pub use search::{
     StoredWorkflowMetadata, TimeRange,
 };
 pub use task_mutation::{
-    AsyncTaskMutationStore, PreparedAssignment, PreparedMessage, TaskMutationOutcome,
-    TaskMutationRequest, TaskOperation,
+    AsyncTaskMutationStore, PreparedAssignment, PreparedMessage, TaskMutationDeadline,
+    TaskMutationOutcome, TaskMutationRequest, TaskOperation,
 };
 pub use task_state::{
     AssignmentAttempt, DAEMON_ACTOR_NAME, LogicalTaskRow, TaskAbortReason, TaskActor,
     TaskAssignmentAttempt, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
-    TaskLifecycleAction, TaskLifecycleEventKind, TaskLifecycleEventRow, TaskLifecycleState,
-    TaskLifecycleTransition, TaskOperationId, TaskOutcome, TaskPriority, TaskRejected, TaskRow,
-    TaskState, Transition, admit, lifecycle_transition, transition,
+    TaskLedgerScope, TaskLifecycleAction, TaskLifecycleEventKind, TaskLifecycleEventRow,
+    TaskLifecycleState, TaskLifecycleTransition, TaskOperationId, TaskOutcome, TaskPriority,
+    TaskRejected, TaskRow, TaskState, Transition, admit, lifecycle_transition, transition,
 };
 pub use task_store::{
     DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,

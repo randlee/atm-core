@@ -170,8 +170,8 @@ Error codes should describe the failure class, not a specific prose message.
   <member> --agent-type <other type>`
 - `ATM_ROSTER_RESERVED_NAME` — rename the member: `atm-daemon is reserved for
   daemon-originated messages`
-- `ATM_TASK_STALLED` — check the assignee or close the task: `atm send <assignee>
-  --task-complete <task_id> --stdin`
+- `ATM_TASK_STALLED` — check the assignee or close the task: `atm task complete
+  <task_id> --handoff <agent> <message-source>`
 - `ATM_TASK_TRANSITION_INVALID` — reload the task lifecycle and choose a legal
   transition before retrying.
 - `ATM_TASK_REVISION_STALE` — reload the task and retry with its current
@@ -182,10 +182,12 @@ Error codes should describe the failure class, not a specific prose message.
   task before starting another.
 - `ATM_TASK_TERMINAL_METADATA_INVALID` — provide a terminal outcome compatible
   with the current task state.
-- `ATM_TASK_COMPATIBILITY_FAILED` — inspect retained v1/v2 migration
-  diagnostics before retrying.
 - `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` — choose a same-host assignee;
   cross-host task handoff is not transactionally supported.
+- `ATM_TASK_LEAD_MISSING` — designate exactly one team lead before retrying a
+  lead-authorized task mutation.
+- `ATM_TASK_LEAD_AMBIGUOUS` — resolve the team roster to exactly one lead
+  before retrying a lead-authorized task mutation.
 - `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to
   its Herdr agent and answer the prompt`
 - `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` — Herdr exposes an unnamed agent;

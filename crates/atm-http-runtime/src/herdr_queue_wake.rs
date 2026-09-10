@@ -1118,6 +1118,10 @@ mod tests {
     use atm_core::protocol::{RuntimeMemberState, RuntimeObservationAvailability};
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+    use atm_core::task_command::{
+        CoreTaskCommandService, TaskAction, TaskCommandRequest, TaskCommandService,
+        TaskMutationCommand, TaskOperationId,
+    };
     use atm_core::test_support as atm_storage;
     use atm_core::types::{IsoTimestamp, ModelName, TaskId, TeamName};
     use atm_herdr::{
@@ -1447,6 +1451,26 @@ mod tests {
             runtime,
         )
         .expect("task acknowledgement");
+    }
+
+    async fn start_task(
+        runtime: &LocalServiceRuntime,
+        key: &atm_core::boundary::MemberKey,
+        task_id: TaskId,
+    ) {
+        CoreTaskCommandService::new(runtime.clone())
+            .execute(
+                TaskCommandRequest::Mutate(Box::new(TaskMutationCommand {
+                    operation_id: TaskOperationId::new(),
+                    actor: key.clone(),
+                    task_id,
+                    expected_revision: None,
+                    action: TaskAction::Start,
+                })),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("explicit task start");
     }
 
     fn complete_task(
@@ -2357,7 +2381,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
+    async fn ac01_explicit_start_and_completion_advance_to_the_next_task_reminder() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let first: TaskId = "AX5-AC1-FIRST".parse().expect("task id");
         let second: TaskId = "AX5-AC1-SECOND".parse().expect("task id");
@@ -2412,6 +2436,18 @@ mod tests {
         assert!(prompt_texts(&fake)[1].contains("AX5-AC1-FIRST"));
 
         ack_task_assignment(root.path(), &runtime, key.team(), first_message);
+        assert_eq!(
+            runtime
+                .task_store()
+                .expect("task store")
+                .load_task(&key, &first)
+                .expect("load first task")
+                .expect("first task")
+                .state,
+            TaskState::Assigned,
+            "acknowledgement settles mail without changing task lifecycle"
+        );
+        start_task(&runtime, &key, first.clone()).await;
         assert_eq!(
             runtime
                 .task_store()

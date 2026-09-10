@@ -23,6 +23,7 @@ use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::search::{SearchRequest, SearchResponse};
 use atm_core::send::{SendOutcome, SendRequest};
+use atm_core::task_command::{TaskCommandRequest, TaskCommandResponse};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
 #[cfg(test)]
@@ -273,6 +274,21 @@ impl<'a> CliComposition<'a> {
                 Ok(outcome)
             }
             other => Err(unexpected_response("send", other)),
+        }
+    }
+
+    /// Execute one canonical task request through the maintained local HTTP
+    /// client boundary. Task command adapters never open a local store.
+    pub(crate) async fn task(
+        &self,
+        request: TaskCommandRequest,
+    ) -> Result<TaskCommandResponse, AtmError> {
+        match self
+            .execute_request(RequestEnvelope::Task(Box::new(request)))
+            .await?
+        {
+            ResponseEnvelope::Task(outcome) => Ok(outcome),
+            other => Err(unexpected_response("task", other)),
         }
     }
 

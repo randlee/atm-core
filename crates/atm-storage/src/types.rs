@@ -1113,8 +1113,8 @@ impl fmt::Display for PaneId {
 /// The canonical team-scoped member key for roster, nudge, and queue surfaces.
 ///
 /// One team-scoped agent identity. This is the key every pending-nudge,
-/// drain, sweep, pump, and runtime projection uses; features must not define
-/// a private per-surface member key.
+/// drain, sweep, pump, and runtime projection surface uses; features must not
+/// define a private per-surface member key.
 ///
 /// # Examples
 ///

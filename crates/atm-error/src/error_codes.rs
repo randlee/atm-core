@@ -116,6 +116,8 @@ pub enum AtmErrorCode {
     /// A requested logical-task state transition is not legal from its
     /// current durable lifecycle state.
     TaskTransitionInvalid,
+    /// A caller is not authorized for the requested logical-task operation.
+    TaskAuthorizationDenied,
     /// A task mutation's optimistic revision does not match the durable row.
     TaskRevisionStale,
     /// A task operation id was replayed with different request bytes.
@@ -124,10 +126,12 @@ pub enum AtmErrorCode {
     TaskActiveConflict,
     /// A terminal outcome/reason combination cannot be represented durably.
     TaskTerminalMetadataInvalid,
-    /// A retained v1 task write could not be reconciled into the v2 ledger.
-    TaskCompatibilityFailed,
     /// The v2 writer cannot atomically assign a task across hosts.
     TaskHandoffCrossHostUnsupported,
+    /// A lead-authorized task mutation found no team lead.
+    TaskLeadMissing,
+    /// A lead-authorized task mutation found more than one team lead.
+    TaskLeadAmbiguous,
     ObservabilityEmitFailed,
     ObservabilityQueryFailed,
     ObservabilityFollowFailed,
@@ -302,12 +306,14 @@ impl AtmErrorCode {
             Self::AckInvalidState => "ATM_ACK_INVALID_STATE",
             Self::ClearInvalidState => "ATM_CLEAR_INVALID_STATE",
             Self::TaskTransitionInvalid => "ATM_TASK_TRANSITION_INVALID",
+            Self::TaskAuthorizationDenied => "ATM_TASK_AUTHORIZATION_DENIED",
             Self::TaskRevisionStale => "ATM_TASK_REVISION_STALE",
             Self::TaskOperationConflict => "ATM_TASK_OPERATION_CONFLICT",
             Self::TaskActiveConflict => "ATM_TASK_ACTIVE_CONFLICT",
             Self::TaskTerminalMetadataInvalid => "ATM_TASK_TERMINAL_METADATA_INVALID",
-            Self::TaskCompatibilityFailed => "ATM_TASK_COMPATIBILITY_FAILED",
             Self::TaskHandoffCrossHostUnsupported => "ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED",
+            Self::TaskLeadMissing => "ATM_TASK_LEAD_MISSING",
+            Self::TaskLeadAmbiguous => "ATM_TASK_LEAD_AMBIGUOUS",
             _ => return None,
         })
     }
@@ -492,12 +498,14 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_ACK_INVALID_STATE" => AtmErrorCode::AckInvalidState,
         "ATM_CLEAR_INVALID_STATE" => AtmErrorCode::ClearInvalidState,
         "ATM_TASK_TRANSITION_INVALID" => AtmErrorCode::TaskTransitionInvalid,
+        "ATM_TASK_AUTHORIZATION_DENIED" => AtmErrorCode::TaskAuthorizationDenied,
         "ATM_TASK_REVISION_STALE" => AtmErrorCode::TaskRevisionStale,
         "ATM_TASK_OPERATION_CONFLICT" => AtmErrorCode::TaskOperationConflict,
         "ATM_TASK_ACTIVE_CONFLICT" => AtmErrorCode::TaskActiveConflict,
         "ATM_TASK_TERMINAL_METADATA_INVALID" => AtmErrorCode::TaskTerminalMetadataInvalid,
-        "ATM_TASK_COMPATIBILITY_FAILED" => AtmErrorCode::TaskCompatibilityFailed,
         "ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED" => AtmErrorCode::TaskHandoffCrossHostUnsupported,
+        "ATM_TASK_LEAD_MISSING" => AtmErrorCode::TaskLeadMissing,
+        "ATM_TASK_LEAD_AMBIGUOUS" => AtmErrorCode::TaskLeadAmbiguous,
         _ => return None,
     })
 }

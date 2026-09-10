@@ -5,71 +5,57 @@ audience: end-user
 
 # Tasks
 
-ATM task mail tracks one durable task for an assignee through three states:
-`assigned`, `active`, and `complete`. Sending mail with `--task-id` creates or
-updates an assigned task and requires acknowledgement. A successful
-acknowledgement makes it active; an assignee cannot activate a second task
-while another task is active.
+`atm task` is the canonical lifecycle interface for durable ATM work. A task
+has a stable task id (including an external Beads-shaped id), ordered
+assignment attempts, and one of `assigned`, `active`, `blocked`, or a terminal
+`closed` outcome. A task projection never stores a duplicate description or
+message body: use its assignment message id with `atm read` for the rendered
+instructions.
 
-The assignee or the assigner closes an open task by sending its completion to
-the assignee:
-
-```sh
-atm send cipher --task-complete t-42 --stdin
-```
-
-Completion is valid from either `assigned` or `active`. Completing an assigned
-task also acknowledges its assignment, so the assignment is not left in the
-pending-ack queue.
-
-Inspect the durable task ledger with either of these surfaces:
+Assignment is template-first. Preview a template with `atm compose`, then use
+the same source for the durable assignment:
 
 ```sh
-atm list --tasks
-atm list --tasks --member cipher --json
-atm list --task-events t-42
-atm list --task-events t-42 --member cipher --json
+atm task assign cipher t-42 --template task.xml.j2 --vars task-vars.json
+atm task start t-42
+atm task block t-42 --reason "waiting for API credentials"
+atm task unblock t-42 --resolution "credentials received"
 ```
 
-`--tasks --json` returns an array of task rows. `--task-events <id> --json`
-returns that task's append-only events in sequence order. An unknown task id
-prints the event header only (or `[]` as JSON) and succeeds. See ADR-062 for
-the task tables and audit/replay contract.
+Plain text, `--file`, and `--stdin` are also supported message sources. Each
+assignment mail requires acknowledgement and stays readable until acknowledged,
+but acknowledgement is mail-only: it never starts a task. Only `atm task
+start <task-id>` moves an assigned task to active.
 
-For a Herdr-backed assignee, ATM re-sends the Task reminder body while an open
-task remains unattended: at most once per minute, after ordinary queued mail
-has had its turn. A blocked assignee is not prompted, but the task event log
-records the blocked reminder. Reminders stop as soon as the task is completed.
-
-Task attention has three layers: the task reminder mail, the lead escalation
-at every tenth reminder, and optional configured escalation recipients. Manage
-the latter with:
+An active assignee closes through a durable handoff to another same-host team
+member. Closure and handoff mail are one atomic operation:
 
 ```sh
-atm escalation add oncall@atm-dev
-atm escalation add --team atm-dev oncall@ops.example
-atm escalation list --team atm-dev
-atm escalation remove --team atm-dev oncall@ops.example
+atm task complete t-42 --handoff team-lead --template completion.xml.j2 --vars result.json
+atm task fail t-42 --handoff team-lead "validation failed: see the linked report"
+atm task abort t-42 --handoff team-lead --reason cancelled "work withdrawn"
 ```
 
-Team recipients replace the daemon default for that team; otherwise the daemon
-list is inherited. `atm doctor` shows the effective list and its source.
+Cross-host task assignment and canonical handoff are rejected because Phase AZ
+does not split a local task transaction across hosts. Reassigning or reopening
+creates a new attempt; it never edits the previous assignment in place.
 
-Human task rows use this stable layout:
+Inspect current work or terminal history with bounded queries:
 
-```
-TASK_ID     STATE     ASSIGNEE  ASSIGNER   ASSIGNED_AT               REMINDERS
-t-42        active    cipher    fenix      2026-09-05T10:12:03Z      3
-t-43        assigned  cipher    fenix      2026-09-05T10:12:04Z      0
+```sh
+atm task list
+atm task list cipher
+atm task list --as cipher --closed --limit 100 --json
+atm task events t-42 --all --json
 ```
 
-Human task-event rows use this stable layout:
+Open lists show active work first, then assigned tasks by priority and original
+assignment time, then blocked tasks. `age` is elapsed time since the original
+assignment. Closed history and event history are bounded to 200 rows unless
+you select `--limit` (at most 10,000) or explicit `--all`.
 
-```
-SEQ  AT                        EVENT      FROM      TO        ACTOR    DETAIL
-1    2026-09-05T10:12:03Z      assigned   -         assigned  fenix    -
-2    2026-09-05T10:12:40Z      acked      assigned  active    cipher   -
-3    2026-09-05T10:13:40Z      reminded   active    active    atm-daemon emitted
-```
+`atm send --task-id`, `atm send --task-complete`, `atm list --tasks`, and
+`atm list --task-events` remain temporary compatibility adapters. Prefer the
+canonical commands above; their migration warnings identify the replacement.
 
 Return to the [ATM User Guide](./README.md).

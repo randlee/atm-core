@@ -5,6 +5,7 @@ mod stmt_cache;
 mod task_legacy_ops;
 mod task_ops;
 mod task_projection;
+mod task_snapshot;
 
 pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use shutdown_support::{
@@ -566,7 +567,8 @@ mod tests {
     use crate::shared_db::{SharedDbTarget, ensure_schema, open_writer_connection_for_target};
     use atm_storage::contract::{Message, MessageKey, MessageWriteOrigin};
     use atm_storage::schema::MessageEnvelope;
-    use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
+    use atm_storage::types::{AgentName, IsoTimestamp, MemberKey, TaskId, TeamName};
+    use atm_storage::{TaskMutationDeadline, TaskMutationRequest, TaskOperation, TaskOperationId};
     use chrono::Utc;
     use rusqlite::params;
     use serde_json::Map;
@@ -1149,5 +1151,57 @@ mod tests {
             persisted, 2,
             "both valid members survive the fallback replay"
         );
+    }
+
+    #[test]
+    fn expired_task_mutation_is_skipped_before_a_following_message_write() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:writer-expired-task-{}?mode=memory&cache=shared",
+                NEXT_TEST_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_writer_connection_for_target(&target).expect("writer connection");
+        ensure_schema(&mut connection, &target).expect("schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+        let team: TeamName = "writer-deadline".parse().expect("team");
+        let actor = MemberKey::new(team, "lead".parse().expect("agent"));
+        let task_id: TaskId = "expired-writer-task".parse().expect("task");
+        let deadline = TaskMutationDeadline::already_expired();
+        let (task_reply, task_receiver) = mpsc::sync_channel(1);
+        let expired_task = QueuedWrite {
+            op: Box::new(WriteOp::TaskMutation(
+                Box::new(TaskMutationRequest {
+                    operation_id: TaskOperationId::new(),
+                    actor,
+                    task_id,
+                    expected_revision: None,
+                    operation: TaskOperation::Start,
+                }),
+                Some(deadline),
+            )),
+            reply: ReplyTx::Sync(task_reply),
+        };
+        let (message, message_receiver) = queued_upsert(message("atm:writer-after-expired-task"));
+
+        process_batch(
+            &target,
+            &mut connection,
+            &mut cache,
+            vec![expired_task, message],
+        );
+
+        assert_eq!(
+            task_receiver
+                .recv()
+                .expect("expired task reply")
+                .expect_err("expired task must not enter the writer")
+                .code(),
+            AtmErrorCode::DaemonUnavailable
+        );
+        assert!(matches!(
+            message_receiver.recv().expect("message reply"),
+            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+        ));
     }
 }

@@ -18,6 +18,7 @@ They are not developer architecture notes.
 - [Quickstart](./quickstart.md)
 - [Identity And Team](./identity-and-team.md)
 - [Mailbox Workflows](./mailbox-workflows.md)
+- [Tasks](./tasks.md)
 - [Doctor And Log](./doctor-and-log.md)
 - [Hooks](./hooks.md)
 - [Hermes Gateway Integration](./hermes-atm.md)

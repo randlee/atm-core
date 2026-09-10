@@ -1,6 +1,9 @@
 use super::*;
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the writer loop receives independently owned runtime, queue, diagnostics, and batching dependencies"
+)]
 pub(crate) fn writer_loop(
     target: Arc<SharedDbTarget>,
     serial_queue: Arc<SerialWriterQueue>,
@@ -261,7 +264,7 @@ pub(crate) fn process_batch(
     let mut queued_writes = batch.into_iter().peekable();
     while let Some(queued) = queued_writes.next() {
         if !is_batchable_message_admission(&queued) {
-            replies.push(process_queued_write(
+            replies.push(process_or_reject_queued_write(
                 target,
                 &mut transaction,
                 cache,
@@ -445,6 +448,30 @@ pub(crate) fn process_queued_write(
         result => finalize_queued_write(target, savepoint, result),
     };
     (reply, result)
+}
+
+fn process_or_reject_queued_write(
+    target: &SharedDbTarget,
+    transaction: &mut rusqlite::Transaction<'_>,
+    cache: &mut stmt_cache::WriterStatementCache,
+    queued: QueuedWrite,
+) -> (ReplyTx, Result<WriteOpResult, AtmError>) {
+    if let Some(error) = expired_task_mutation_error(&queued.op) {
+        (queued.reply, Err(error))
+    } else {
+        process_queued_write(target, transaction, cache, queued)
+    }
+}
+
+fn expired_task_mutation_error(operation: &WriteOp) -> Option<AtmError> {
+    match operation {
+        WriteOp::TaskMutation(_, Some(deadline)) if deadline.is_expired() => {
+            Some(AtmError::daemon_unavailable(
+                "task mutation deadline expired before sqlite writer execution",
+            ))
+        }
+        _ => None,
+    }
 }
 
 fn finalize_queued_write(

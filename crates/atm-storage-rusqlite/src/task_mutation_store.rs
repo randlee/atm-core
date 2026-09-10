@@ -7,8 +7,9 @@ mod tests {
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, IsoTimestamp, MemberKey, TaskId, TeamName};
     use atm_storage::{
-        MessageWriteOrigin, PreparedAssignment, PreparedMessage, ReadDeadline, TaskLifecycleState,
-        TaskMutationRequest, TaskOperation, TaskOperationId, TaskOutcome, TaskPriority,
+        MessageWriteOrigin, PreparedAssignment, PreparedMessage, ReadDeadline, TaskLedgerScope,
+        TaskLifecycleState, TaskMutationRequest, TaskOperation, TaskOperationId, TaskOutcome,
+        TaskPriority,
     };
     use serde_json::Map;
     use std::time::Duration;
@@ -137,6 +138,10 @@ mod tests {
         assert!(!first.replayed);
         assert_eq!(replay.state, TaskLifecycleState::Assigned);
         assert!(replay.replayed);
+        assert!(first.message_id.is_some());
+        assert_eq!(replay.message_id, first.message_id);
+        assert_eq!(replay.current_assignee, first.current_assignee);
+        assert_eq!(replay.current_attempt, first.current_attempt);
         backend
             .shared_db_for_test()
             .with_connection(|connection| {
@@ -332,7 +337,7 @@ mod tests {
             .expect("cancel");
         let deadline = ReadDeadline::new(Duration::from_secs(1)).expect("deadline");
         let events = reader
-            .list_task_lifecycle_events(team(), task_id, deadline)
+            .list_task_lifecycle_events(team(), task_id, None, deadline)
             .await
             .expect("events");
         assert_eq!(
@@ -605,7 +610,13 @@ mod tests {
         }
         let deadline = || ReadDeadline::new(Duration::from_secs(1)).expect("deadline");
         let list = reader
-            .list_logical_tasks(team(), Some(worker.agent().clone()), deadline())
+            .list_logical_tasks(
+                team(),
+                Some(worker.agent().clone()),
+                TaskLedgerScope::All,
+                None,
+                deadline(),
+            )
             .await
             .expect("logical list");
         assert_eq!(
@@ -721,7 +732,7 @@ mod tests {
             ))
         );
         let rows = reader
-            .list_logical_tasks(team(), None, deadline())
+            .list_logical_tasks(team(), None, TaskLedgerScope::All, None, deadline())
             .await
             .expect("logical rows");
         assert!(rows.iter().any(|row| {

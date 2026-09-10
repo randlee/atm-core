@@ -5,7 +5,7 @@ title: Task command service and durable handoffs
 branch: feature/az3-task-command-handoff
 integration_branch: feature/az2-task-domain-storage
 final_integration_branch: develop
-status: planned
+status: complete
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_track: stacked
@@ -166,29 +166,31 @@ conflicts retain machine-readable error codes and recovery guidance.
 
 ## Authorization
 
+- Phase AZ exposes only team-scoped `MemberKey` and bare `AgentName` task
+  recipients. It therefore has no production-reachable host-qualified task
+  recipient grammar. The retained storage-level
+  `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` guard is defense in depth for a
+  future cross-host transport adapter; it is not an end-to-end AZ.3 contract.
 - Every operation that creates an assignment attempt—initial `assign`,
   `reassign`, `reopen`, and the successor side of `abort(superseded)`—must
-  resolve its recipient to a same-host roster member. A host-qualified
-  other-host recipient rejects before mutation with
-  `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED`; Phase AZ cannot atomically join
-  an ADR-035 remote delivery to the local task transaction.
+  resolve its recipient to a local roster member in the same team.
 - Initial `assign`: an authenticated roster member may assign a distinct
-  resolvable same-host member in the same team, using the existing canonical
+  resolvable local member in the same team, using the existing canonical
   address and self-send rules.
 - `start`, `block`, and `unblock`: current assignee only.
 - `reassign`: current assigner, current assignee, or the team's unique lead;
-  the target must be a resolvable same-host team member. Reassign always creates
+  the target must be a resolvable local team member. Reassign always creates
   a new attempt and leaves the task `Assigned`. It is legal from `Assigned`,
   `Blocked`, or `Closed` (where it has reopen semantics), never from
   `Active`.
 - `reopen`: prior assigner, prior assignee, or unique team lead. It creates a
-  new attempt for a same-host assignee from `Closed` and never enters
+  new attempt for a local assignee from `Closed` and never enters
   `Active` directly.
 - `complete` and `fail`: current assignee only, and only from `Active`.
 - `abort(cancelled)`: current assignee, current assigner, or unique team lead.
   It is legal from every open state: `Assigned`, `Active`, or `Blocked`.
 - `abort(superseded)`: current assigner or unique team lead; successor id must
-  differ and be unused, and successor assignee must resolve as same-host before
+  differ and be unused, and successor assignee must resolve as local before
   admission. It is likewise legal from every open state, including `Blocked`;
   aborting a blocked task never requires a meaningless unblock first.
 - Any operation relying on lead authority resolves exactly one roster member
@@ -196,24 +198,22 @@ conflicts retain machine-readable error codes and recovery guidance.
   `ATM_TASK_LEAD_MISSING`; two or more reject with
   `ATM_TASK_LEAD_AMBIGUOUS`. Neither condition guesses an actor or suppresses
   an otherwise unauthorized mutation.
-- The canonical terminal handoff recipient must be a resolvable **same-host**
-  roster member other than the actor. A host-qualified other-host recipient
-  rejects before mutation with `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` and
-  guidance to choose a same-host member; Phase AZ does not pull ADR-035 remote
-  post-commit semantics into task closure. All authorization is evaluated
+- The canonical terminal handoff recipient must be a resolvable local roster
+  member other than the actor. Cross-host delivery is not part of the AZ.3
+  command grammar or authorization contract; the retained storage guard is
+  reserved for a future host-qualified transport adapter. All authorization is evaluated
   before entering the writer transaction and rechecked against the current
   revision inside it.
 
 ## Closure and handoff semantics
 
 Every canonical terminal command—`complete`, `fail`, or either `abort`
-form—requires a durable same-host handoff message. The message is addressed to
+form—requires a durable local handoff message. The message is addressed to
 another local roster member, contains the closed `TaskId` and terminal outcome
 as typed envelope metadata, and is persisted in the same SQLite transaction as
-the task event and projection. A cross-host target, or a failure to compose,
-authorize, resolve, or persist the local handoff, leaves the task open and emits
-no partial message. A retry with the same operation id returns the original
-response and message id.
+the task event and projection. A failure to compose, authorize, resolve, or
+persist the local handoff leaves the task open and emits no partial message. A
+retry with the same operation id returns the original response and message id.
 
 Supersession is one operation: it closes the old task as
 `Aborted(Superseded)`, links the new `TaskId`, creates the successor's first
@@ -240,7 +240,7 @@ acknowledgement, or clear protection.
   compatibility window, emits a deprecation warning, and translates to
   `TaskAction::Assign`. Existing open ids translate to reassign only when the
   actor is authorized; they are never silent resends that overwrite an attempt.
-  Like canonical assignment, this adapter requires a same-host assignee,
+  Like canonical assignment, this adapter requires a local assignee,
   persists assignment mail/task metadata, and creates no immediate post-send
   nudge or ordinary message-key pending-queue entry.
 - `atm send <recipient> --task-complete <id> <source>` emits a deprecation
@@ -252,7 +252,7 @@ acknowledgement, or clear protection.
   notice and closure still persist atomically, and every other actor/state
   rejects. This intentionally widens the shared service policy only for typed
   legacy provenance; canonical `atm task complete` remains assignee-only,
-  Active-only, same-host, and non-self.
+  Active-only, local, and non-self.
 - `atm list --tasks` and `atm list --task-events` remain deprecated query
   adapters to `atm task list/events` and return the same rows/order. Their
   existing `--member` option maps to canonical agent scoping; `--member` is a
@@ -283,17 +283,17 @@ This is the sole authoritative deliverables list for AZ.3. Every item must land
 at a production-ready level; parsing-only, route-only, or happy-path-only
 completion is insufficient.
 
-- [ ] D1 — Add the `TaskCommandRequest`, action/input/result DTOs, typed errors,
+- [x] D1 — Add the `TaskCommandRequest`, action/input/result DTOs, typed errors,
   authorization matrix, and `TaskCommandService` in `atm-core`; route
   prepared mutations only through AZ.2's storage-neutral async mutation
   boundary.
-- [ ] D2 — Add canonical HTTP request/response routing and replacement-runtime
+- [x] D2 — Add canonical HTTP request/response routing and replacement-runtime
   composition for task queries and mutations. Update the API schema/ICD and
   client mapping; preserve structured errors, deadlines, and retry operation
   ids. Bump `HTTP_API_VERSION` to 1.5.0, update both OpenAPI documents and the
   surface baseline, append the ADR-061 D5 record, and prove a 1.4.0 consumer's
   pre-AZ surface remains compatible.
-- [ ] D3 — Implement the complete clap surface, human tables, JSON responses,
+- [x] D3 — Implement the complete clap surface, human tables, JSON responses,
   command-specific validation, help text, and installed user documentation.
   `task list` defaults open, `--closed` selects terminal history, and event
   history follows stable task identity across attempts. Closed/event reads
@@ -303,14 +303,14 @@ completion is insufficient.
   `original_assigned_at`, `updated_at`, and derived `assigned_age_seconds`.
   Every task-linked message retains `requires_ack`, read visibility, and
   protection from `atm clear` until acknowledged.
-- [ ] D4 — Implement template-first assignment/handoff composition and every
+- [x] D4 — Implement template-first assignment/handoff composition and every
   authorization rule. Prove close/handoff and supersession/successor assignment
   use one durable transaction and exact idempotent response. Assignment,
   reassign, reopen, successor assignment, and canonical handoff resolution
-  admit only same-host roster members (handoff additionally requires non-self);
-  cross-host, missing-lead, and ambiguous-lead cases return their typed errors
+  admit only local roster members (handoff additionally requires non-self);
+  missing-lead and ambiguous-lead cases return their typed errors
   before mutation.
-- [ ] D5 — Convert all legacy task send/list flags and task-linked
+- [x] D5 — Convert all legacy task send/list flags and task-linked
   acknowledgement to delegating compatibility adapters with warnings. Preserve
   assigner-or-assignee `--task-complete` from Assigned/Active via typed legacy
   provenance. Land acknowledgement's mail-only behavior atomically with the
@@ -324,13 +324,13 @@ completion is insufficient.
   writer surfaces and fail if they acquire a second message writer/connection,
   issue direct message-insert SQL, or bypass the canonical `PreparedWrite`
   preparation and persistence primitives.
-- [ ] D6 — Amend product, CLI, core, runtime, API, error/recovery, team-protocol,
+- [x] D6 — Amend product, CLI, core, runtime, API, error/recovery, team-protocol,
   and user-facing documentation for the command grammar, output, authorization,
   explicit-start rule, handoff requirement, Beads-id boundary, and deprecation
   window. Add end-to-end tests through the real CLI-to-Tokio/Axum-to-SQLite
   route using in-process transport and temporary storage. Update the
   `ATM_TASK_STALLED` recovery hint to canonical `atm task` syntax and test the
-  legacy completion, same-host handoff, task-linked read/clear, and bounded
+  legacy completion, local handoff, task-linked read/clear, and bounded
   history contracts.
 
 ## Affected paths
@@ -418,16 +418,15 @@ This is the sole authoritative acceptance list for AZ.3.
    a new attempt, all terminal outcomes, linked supersession, and legacy
    assigner/assignee completion from Assigned or Active.
 3. Unauthorized actors, self-handoffs, unknown members/tasks, illegal states,
-   cross-host assignment/reassignment/reopen/supersession/handoff recipients,
    missing/ambiguous lead authority, stale revisions, malformed operation ids,
    and conflicting retries fail without any message, task, attempt, event, or
-   queue mutation. Every cross-host case uses
-   `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED`.
+   queue mutation. Cross-host task addressing is not production-reachable in
+   AZ.3; `ATM_TASK_HANDOFF_CROSS_HOST_UNSUPPORTED` remains a storage-level
+   defense-in-depth guard for a future host-qualified transport adapter.
 4. Every canonical terminal command persists exactly one handoff to another
-   same-host member in the same SQLite transaction as closure. Template and
-   plain-text variants pass; injected message failure rolls back closure, exact
-   retry returns the same message/response, and cross-host targets receive the
-   typed unsupported error. The legacy completion-notice exemption is tested
+   local member in the same SQLite transaction as closure. Template and
+   plain-text variants pass; injected message failure rolls back closure, and exact
+   retry returns the same message/response. The legacy completion-notice exemption is tested
    separately and cannot authorize canonical self-handoff.
 5. Open list ordering and closed history are correct, bounded at the query, and
    body-free; `--all` is the explicit opt-out. Events show all attempts under

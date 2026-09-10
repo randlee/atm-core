@@ -10,7 +10,7 @@ CREATE TABLE tasks (
     task_id TEXT NOT NULL,
     assignee TEXT NOT NULL,
     assigner TEXT NOT NULL,
-    state TEXT NOT NULL CHECK(state IN ('assigned', 'active', 'complete')),
+    state TEXT NOT NULL,
     assignment_message_id TEXT NOT NULL,
     description TEXT NOT NULL,
     assigned_at TEXT NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE task_events (
 "#;
 
 #[test]
-fn fresh_and_previous_binary_task_ledgers_converge_without_dropping_v1() {
+fn fresh_and_v1_projection_task_ledgers_converge_without_dropping_v1() {
     let root = tempfile::tempdir().expect("temporary root");
     let fresh_path = root.path().join("fresh.db");
     let upgraded_path = root.path().join("upgraded.db");
@@ -50,7 +50,7 @@ fn fresh_and_previous_binary_task_ledgers_converge_without_dropping_v1() {
     let legacy = Connection::open(&upgraded_path).expect("legacy connection");
     legacy
         .execute_batch(LEGACY_TASK_SCHEMA)
-        .expect("create previous-binary task schema");
+        .expect("create retained v1 projection schema");
     insert_legacy_task(
         &legacy,
         "compat-task",
@@ -64,26 +64,26 @@ fn fresh_and_previous_binary_task_ledgers_converge_without_dropping_v1() {
     let upgraded = SqliteStorageBackend::new(&upgraded_path).expect("upgrade previous binary");
     drop(upgraded);
 
-    // Model the retained 1.5.14 binary continuing to assign, acknowledge,
-    // and complete after migration. These are direct v1 table writes because
-    // the test intentionally does not link a second binary into this crate.
-    let previous_binary = Connection::open(&upgraded_path).expect("previous binary connection");
+    // Exercise supported v1 projection writes after migration. This crate-level
+    // fixture deliberately uses direct v1 table writes; cross-binary executable
+    // proof belongs to the Colima integration testbed.
+    let v1_projection = Connection::open(&upgraded_path).expect("v1 projection connection");
     insert_legacy_task(
-        &previous_binary,
+        &v1_projection,
         "compat-task",
         "beta",
         "active",
         "2026-01-02T00:00:00Z",
         "2026-01-02T00:00:00Z",
     );
-    previous_binary
+    v1_projection
         .execute(
             "UPDATE tasks SET state = 'complete', updated_at = '2026-01-03T00:00:00Z'
              WHERE team = 'compat-team' AND task_id = 'compat-task' AND assignee = 'beta'",
             [],
         )
-        .expect("previous binary completion");
-    drop(previous_binary);
+        .expect("v1 projection completion");
+    drop(v1_projection);
 
     let reopened = SqliteStorageBackend::new(&upgraded_path).expect("reopen upgraded ledger");
     drop(reopened);
@@ -121,6 +121,49 @@ fn fresh_and_previous_binary_task_ledgers_converge_without_dropping_v1() {
     );
 }
 
+#[test]
+fn malformed_legacy_state_migrates_to_safe_assigned_projection() {
+    let root = tempfile::tempdir().expect("temporary root");
+    let database_path = root.path().join("malformed-legacy.db");
+    let legacy = Connection::open(&database_path).expect("legacy connection");
+    legacy
+        .execute_batch(LEGACY_TASK_SCHEMA)
+        .expect("create permissive legacy task schema");
+    insert_legacy_task(
+        &legacy,
+        "malformed-legacy-state",
+        "alpha",
+        "unrecognized-state",
+        "2026-01-01T00:00:00Z",
+        "2026-01-02T00:00:00Z",
+    );
+    drop(legacy);
+
+    let migrated = SqliteStorageBackend::new(&database_path).expect("migrate malformed legacy row");
+    drop(migrated);
+
+    let connection = Connection::open(&database_path).expect("inspect migrated ledger");
+    let projection: (String, Option<String>) = connection
+        .query_row(
+            "SELECT state, outcome FROM tasks_v2
+             WHERE team = 'compat-team' AND task_id = 'malformed-legacy-state'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("malformed legacy projection");
+    assert_eq!(projection, ("assigned".to_owned(), None));
+    let audit_detail: String = connection
+        .query_row(
+            "SELECT detail FROM task_events_v2
+             WHERE team = 'compat-team' AND task_id = 'malformed-legacy-state'
+               AND event = 'migrated'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("malformed source audit event");
+    assert!(audit_detail.contains("unrecognized-state"));
+}
+
 fn insert_legacy_task(
     connection: &Connection,
     task_id: &str,
@@ -140,7 +183,7 @@ fn insert_legacy_task(
              )",
             params![task_id, assignee, state, assigned_at, updated_at],
         )
-        .expect("previous binary task write");
+        .expect("v1 projection task write");
 }
 
 fn task_schema_objects(connection: &Connection) -> Vec<(String, String, String)> {
@@ -150,6 +193,7 @@ fn task_schema_objects(connection: &Connection) -> Vec<(String, String, String)>
              WHERE name IN (
                  'tasks_v2', 'task_assignment_attempts', 'task_events_v2',
                  'task_operations', 'task_v2_projection_context',
+                 'task_legacy_state_precedence',
                  'one_active_task_per_agent', 'task_list_order',
                  'task_v1_insert_bridge', 'task_v1_update_bridge',
                  'idx_mail_messages_task_id'

@@ -30,6 +30,7 @@ use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
     NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_preflight_async_runtime,
 };
+use atm_core::task_command::{CoreTaskCommandService, TaskCommandService};
 use atm_runtime::{AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext};
 
 use crate::CanonicalWriteHandler;
@@ -494,6 +495,26 @@ impl StorageAndNudgeRouter {
         }
         match request {
             ApiRequest::Write(_) => unreachable!("writes use the canonical write path"),
+            ApiRequest::Task(request) => {
+                let remaining = deadline.remaining().ok_or_else(|| {
+                    AtmError::daemon_unavailable(
+                        "task command request deadline expired before service dispatch",
+                    )
+                })?;
+                tokio::time::timeout(
+                    remaining,
+                    CoreTaskCommandService::new(self.service_runtime.clone())
+                        .execute(*request, deadline),
+                )
+                .await
+                .map_err(|_| {
+                    AtmError::daemon_unavailable(
+                        "task command request deadline expired during service dispatch",
+                    )
+                })?
+                .map(ResponseEnvelope::Task)
+                .map(ApiResponse::new)
+            }
             ApiRequest::Messages(request) => match *request {
                 atm_core::api::MessageCollectionRequest::List(query) => {
                     self.list_messages(query, deadline).await

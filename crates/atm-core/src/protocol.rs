@@ -24,6 +24,7 @@ use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::schema::AtmMessageId;
 use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
+use crate::task_command::{TaskCommandRequest, TaskCommandResponse};
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
 pub use atm_storage::{
@@ -70,6 +71,8 @@ pub enum RequestEnvelope {
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     Search(Box<SearchRequest>),
+    /// Canonical durable task query or mutation.
+    Task(Box<TaskCommandRequest>),
     /// Authenticated local control request that reloads the daemon's durable runtime view.
     ReloadRuntimeView,
 }
@@ -91,12 +94,13 @@ pub enum ResponseEnvelope {
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
     Search(Box<SearchResponse>),
+    Task(TaskCommandResponse),
     RuntimeViewReloaded,
     Error(AtmError),
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.4.0";
+pub const HTTP_API_VERSION: &str = "1.5.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
@@ -133,6 +137,12 @@ impl HttpApiVersion {
 
     pub const fn major(&self) -> u64 {
         self.0.major
+    }
+
+    /// Whether this API version can use a route introduced at `minimum`.
+    #[must_use]
+    pub fn supports_at_least(&self, minimum: &Self) -> bool {
+        self.0 >= minimum.0
     }
 }
 
@@ -172,9 +182,9 @@ mod compatibility_version_tests {
 
     #[test]
     fn http_api_version_exposes_independent_major() {
-        let version = HttpApiVersion::parse("1.4.0").expect("HTTP API version");
+        let version = HttpApiVersion::parse("1.5.0").expect("HTTP API version");
         assert_eq!(version.major(), 1);
-        assert_eq!(version.to_string(), "1.4.0");
+        assert_eq!(version.to_string(), "1.5.0");
         assert!(HttpApiVersion::parse("1.4").is_err());
     }
 

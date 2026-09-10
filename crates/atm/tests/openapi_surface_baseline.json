@@ -235,6 +235,22 @@
           }
         }
       }
+    },
+    "/tasks": {
+      "post": {
+        "operation_id": "taskCommand",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/TaskCommandResponse"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
     }
   },
   "schemas": {
@@ -574,6 +590,14 @@
       "required": [
         "hits"
       ]
+    },
+    "TaskCommandRequest": {
+      "properties": [],
+      "required": []
+    },
+    "TaskCommandResponse": {
+      "properties": [],
+      "required": []
     },
     "WorkflowProjectionRequest": {
       "properties": [
