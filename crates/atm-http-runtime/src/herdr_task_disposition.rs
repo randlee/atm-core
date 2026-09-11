@@ -47,10 +47,20 @@ pub(crate) fn dispose(
 
     match (mail_pending, state, head) {
         (_, S::Active, _) => D::Hold("active"),
-        (_, S::Blocked, _) if new_episode => D::EscalateEpisode(EpisodeKind::Blocked),
-        (_, S::Blocked, _) => D::Hold("episode reported"),
-        (_, S::Offline, _) if new_episode => D::EscalateEpisode(EpisodeKind::Offline),
-        (_, S::Offline, _) => D::Hold("episode reported"),
+        (_, S::Blocked, _) => {
+            if new_episode {
+                D::EscalateEpisode(EpisodeKind::Blocked)
+            } else {
+                D::Hold("episode reported")
+            }
+        }
+        (_, S::Offline, _) => {
+            if new_episode {
+                D::EscalateEpisode(EpisodeKind::Offline)
+            } else {
+                D::Hold("episode reported")
+            }
+        }
         (_, S::Unknown, _) => D::Hold("unobserved"),
         (_, S::IdentityConflict, _) => D::Hold("identity conflict"),
         (true, S::Idle, _) => D::Hold("mail pending"),
