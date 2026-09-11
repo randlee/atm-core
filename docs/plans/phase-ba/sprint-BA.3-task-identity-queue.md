@@ -5,7 +5,7 @@
 | Wave | 2 |
 | Branch | `feature/ba3-task-identity-queue` |
 | Base | `feature/ba1-ack-task-separation` (stack layer 2) |
-| Dependency | `must_follow` BA.1 (sole owner of `task_state.rs` ack semantics), **`must_follow` BA.4** — both edit `herdr_queue_wake.rs` selection code (PLAN-CRIT-020). Merge-forward trigger: BA.1 and BA.4 development pushed. |
+| Dependency | `must_follow` BA.1 (sole owner of `task_state.rs` ack semantics), **`must_follow` BA.4** — both edit `herdr_queue_wake.rs` selection code (PLAN-CRIT-002; an earlier revision mis-cited PLAN-CRIT-020, which is BA.5's protocol-path finding — PLAN-SCOPE-010). Merge-forward trigger: BA.1 and BA.4 development pushed. |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
 | Governed interface | yes — **ADR-061 MAJOR** (R0). Needs Rand's recorded approval + schema-reviewer sign-off before this sprint opens. |
@@ -136,10 +136,18 @@ claim failing.
 
 ### D4. Typed close outcome — a distinct type, not the reminder outcome
 
-`completed | refused | cancelled | reassigned`. Required because reassignment
-is close-and-create, so the outcome is the only thing in the ledger
-distinguishing a finished task from an abandoned one. Free text cannot be
-counted by oversight.
+`completed | refused | cancelled`. Required because the outcome is the only
+thing in the ledger distinguishing a finished task from an abandoned one, and
+free text cannot be counted by oversight.
+
+**There is no `reassigned` variant (PLAN-SCOPE-014).** An earlier revision
+shipped one, justified by "reassignment is close-and-create" — a premise R2(a)
+deleted. Under R2(a) reassignment never sets `state = 'complete'` and never
+writes `close_outcome`, so no code path the plan describes could ever write
+the value. Shipping an unreachable enum variant and an unreachable `CHECK`
+member violates the phase's own no-unused-code rule. If reassignment is ever
+re-specified as close-in-favour-of-a-different-id, the variant comes back
+*with* the code path that writes it.
 
 `refused` is the **task** outcome. `blocked` is an **agent** state and must
 not appear in this enum.
@@ -164,13 +172,12 @@ pub enum TaskCloseOutcome {
     Completed,
     Refused,
     Cancelled,
-    Reassigned,
 }
 ```
 
 ```sql
 close_outcome TEXT NULL CHECK(close_outcome IN
-    ('completed', 'refused', 'cancelled', 'reassigned'))
+    ('completed', 'refused', 'cancelled'))
 ```
 
 `NULL` while the task is open.

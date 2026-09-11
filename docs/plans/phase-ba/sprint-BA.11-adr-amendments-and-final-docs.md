@@ -90,9 +90,16 @@ A new ADR, in the shape of ADR-063 D6, recording:
 ### D4. Final task-surface documentation
 
 Replace BA.7's "as planned" wording with the shipped surface: the six verbs
-(`assign`, `start`, `close`, `reassign`, `list`, `show` — names taken from
-what BA.5 and BA.9 actually shipped), the three-stage close, the authority
-matrix, the mandatory report, and the deferred-delivery default. Touches
+`assign`, `start`, `close`, `move`, `list`, `events` (BA.5's five plus BA.9's
+`start`), reassignment as `assign` onto an existing open task id, the
+three-stage close, the R3 authority matrix, the mandatory report, and the
+deferred-delivery default.
+
+*An earlier revision of this deliverable listed `reassign` and `show` as
+verbs. Neither exists: reassignment adds no verb (BA.9 D2) and `show` was
+never in BA.5's closed set, which has `list` and `events`. PLAN-SCOPE-013.
+Verify the list against `atm task --help` on the merged binary, not against
+this paragraph.* Touches
 `CLAUDE.md`, `docs/agent-conventions.md`, `docs/team-protocol.md`.
 
 Also carries the **verb-count amendment's downstream text** if BA.9's own
@@ -113,8 +120,9 @@ amendment left any document still asserting five verbs.
 5. ADR-064 exists, is `Accepted`, and quotes Rand's approval with its date.
 6. ADR-064 states the no-downgrade consequence in its Consequences section.
 7. No agent-facing document describes the `atm task` surface in the future
-   tense, and the verb list matches the shipped CLI. Gate: reviewer runs
-   `atm task --help` against the merged binary and compares.
+   tense, and the verb list matches the shipped CLI exactly — six verbs, no
+   `reassign`, no `show`. Gate: reviewer runs `atm task --help` against the
+   merged binary and diffs against `cli_surface_baseline.json`.
 8. `docs/adr/INDEX.md` lists ADR-064 and marks ADR-062 and ADR-054 amended.
 9. No code, test, schema or boundary-manifest file is in the diff.
 

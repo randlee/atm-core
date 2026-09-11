@@ -167,6 +167,7 @@ it must serialize with BA.5's mutations and test BA.5's receipts.
 | BA.4 | `parallel_safe` with BA.1, BA.7; **`must_follow` BA.2** | both edit `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — BA.2's cherry-picks touch it and BA.4 D5a adds the fence at `:644-692`. PLAN-SCOPE-002; they are not parallel-safe. BA.2 first: its hunks are mechanical, BA.4's fence should sit on top. Merge-forward trigger: BA.2 development pushed. |
 | BA.7 | `parallel_safe` with all of wave 1 | documentation only; no code, no tests, no boundary manifests |
 | BA.3 | `must_follow` BA.1 | BA.1 is the sole owner of `task_state.rs` ack semantics; BA.3 then changes identity in the same file. Merge-forward trigger: BA.1 development pushed, not QA. |
+| BA.3 | **`must_follow` BA.4** | both edit the selection code in `crates/atm-http-runtime/src/herdr_queue_wake.rs`: BA.4 replaces edge detection with continuous evaluation there, BA.3 changes what selection reads (`position`, logical identity). BA.4 first — BA.3 should land on the new evaluation shape, not be rewritten by it. PLAN-CRIT-002. This row was missing while BA.3's header asserted the dependency (PLAN-SCOPE-010); the table is authoritative, so the table is where it has to be. |
 | BA.5 | `must_follow` BA.3 | the command set writes the `outcome` and `position` columns that BA.3 creates |
 | BA.8 | `must_follow` BA.3, BA.4, **BA.5**, **BA.6** | BA.3 gives the logical `(team, task_id)` identity and the typed outcome the refusal streak reads; BA.4 owns the reminder path it extends; **BA.5** because BA.8 serializes with BA.5's mutations and its AC tests BA.5's receipts (PLAN-CRIT-015); **BA.6** because AC11's read-without-ack remindability is BA.6's deliverable (PLAN-CRIT-012) |
 | BA.5 / BA.8 | ~~`parallel_safe`~~ **withdrawn** | file ownership is still disjoint (BA.5 `crates/atm/src/commands/*`, BA.8 `crates/atm-http-runtime/src/herdr_*` and `atm-core/src/send/mod.rs`), but disjoint files are not sufficient when one sprint's acceptance criteria assert the other's behaviour. PLAN-CRIT-015 |
@@ -174,6 +175,8 @@ it must serialize with BA.5's mutations and test BA.5's receipts.
 | BA.10 | `parallel_safe` with BA.5, BA.8 | owns the migration path in `schema_version.rs` and the migration fixtures; BA.3 has already landed the schema definitions it migrates onto |
 | BA.9 | `must_follow` BA.5, `must_follow` BA.3 | adds the start and reassign operations to the command surface BA.5 creates. Split from BA.5 (PLAN-SCOPE-004) so seven unrelated deliverables stop waiting on two human rulings. **Gated per half**: the start half on R1, the reassign half on R2. |
 | BA.6 | `must_follow` BA.5, `must_follow` BA.4 (PR-completion) | needs BA.5's close semantics and BA.4's invariant evaluation. **The former dependency on BA.8 is reversed** (PLAN-CRIT-012): the non-starvation rule is now normative in BA.6 D4 and needs nothing from BA.8, while BA.8 does need BA.6 |
+| BA.6 / BA.9 | `parallel_safe` with each other | both in wave 4, both downstream of BA.5, and disjoint: BA.9 owns the `atm task` clap enum and `crates/atm/src/commands/task*`, BA.6 owns `mail_message_states` and the scheduling pass in `crates/atm-http-runtime/`. Neither's acceptance criteria assert the other's behaviour — the test PLAN-CRIT-015 established. BA.9 is a stack layer, BA.6 is an independent branch (PLAN-SCOPE-011) |
+| BA.8 | **`must_follow` BA.9** | AC9 exercises the **start** receipt, which BA.9 introduces; BA.5 D6/D7 moved `start` out of BA.5. Wave order already sequences them, but an undocumented dependency is what produced the BA.6/BA.8 cycle once already. PLAN-SCOPE-016 |
 | BA.11 | `must_follow` every other sprint (PR-completion) | it records what shipped. An amendment written ahead of the code is a prediction; phase AZ produced several that then disagreed with the merge. Doc-only, so it costs one short wave |
 
 `parallel_safe` claims above are made on non-intersecting crates, files,
@@ -181,7 +184,7 @@ public contracts, and boundary manifests. `plan-scope-reviewer` verifies them.
 
 ## Rulings
 
-Three questions the design did not answer. Rand's standing instruction is that
+Four questions the design did not answer. Rand's standing instruction is that
 he is not in iteration loops — *make the call, record it, report the outcome* —
 and his 2026-09-11 direction was to fix all reviewer findings and iterate to
 clean. All three are therefore **decided here by fenix and reversible by Rand**,
@@ -247,7 +250,11 @@ redundant the moment ack left the task domain.
 
 ### R2 — reassignment identity (SOLAR-BA-009)
 
-**Decision: option (a), same-id reassignment**, with the event semantics fixed below (PLAN-CRIT-025).
+**Decision: option (a), same-id reassignment**, with the event semantics fixed
+below during round-1 hardening. *(An earlier revision cited PLAN-CRIT-025 here;
+that id belongs to the `schema-reviewer` precondition finding. Same
+mis-citation class as PLAN-SCOPE-010 — corrected rather than re-pointed at a
+guess.)*
 
 Reassignment as close-and-create, ids never reused, and unique
 `(team, task_id)` cannot all hold at once. Reusing the id collides with the
@@ -265,7 +272,7 @@ Rand's *"if that means close one and create a new one, that is acceptable"*
 was permission, not a requirement, and it predates the single-row identity
 ruling.
 
-**The event semantics, fixed (PLAN-CRIT-025).** "Atomic close/reopen" was not
+**The event semantics, fixed.** "Atomic close/reopen" was not
 a specification and two implementations could both claim to satisfy it with
 different audit truth. Reassignment is **one** transition, not a close
 followed by an assign:
@@ -279,10 +286,36 @@ followed by an assign:
     assignee's queue, and reminder counters reset in the same transaction
   - `close_outcome` stays `NULL` — the task is still open. `Reassigned` as a
     *close outcome* applies only when a task is closed in favour of a
-    different task id, which R2(a) makes unnecessary.
+    different task id, which R2(a) makes unnecessary — so **`Reassigned` is
+    not a `TaskCloseOutcome` variant at all**. BA.3 D4 originally shipped one;
+    under this ruling no code path could ever write it (PLAN-SCOPE-014), and
+    the complexity budget forbids shipping an unreachable value. It is
+    removed from the enum and from the SQL `CHECK`.
 
 Silently changing `current_assignee` without the event is explicitly
 forbidden: it loses the actor and the handover history.
+
+### R3 — team-lead authority over another member's task (PLAN-SCOPE-015)
+
+BA.5 D2a shipped an authority matrix and then left one row open in prose:
+whether the team lead is *additionally* authorized for `cancel` / `reassign` /
+`move` on a task assigned to someone else. That is a gating question of the
+same kind as R0–R2, and leaving it as an assumption buried in a sprint
+deliverable meant a reader of this section would believe nothing was
+outstanding.
+
+**Decision: yes.** The team lead is authorized for `cancel`, `reassign` and
+`move` on any task within their team, in addition to the assigner. Rand named
+this shape directly — *"team-lead can assign to another agent if he KNOWS"* —
+and the escape path is worthless if the lead cannot take a task away from an
+agent that has stalled. The assignee's authority is unchanged: `start`,
+`close completed`, `close refused`.
+
+The narrow cost, stated so Rand can reverse it: a lead can cancel work they
+did not assign, and the ledger records the lead as actor. That is auditable,
+not silent. If Rand wants lead authority limited to `reassign` only — taking
+work away but never destroying it — this ruling is wrong and BA.5 D2a's
+matrix changes before the sprint opens.
 
 ## Complexity budget — the hard ceiling
 
@@ -411,6 +444,37 @@ before it was folded in; none were rebutted. The dispositions:
 Three of these (003, 004, 021) had the same shape as PLAN-SCOPE-001: a real
 deliverable with no owning sprint. That is what BA.11 exists to close.
 
+## Plan-scope review, round 2 — 2026-09-11
+
+`plan-scope-reviewer` re-ran against `d9a8c1f42` and returned eight findings,
+six blocking. Every one was verified against the documents and against
+`origin/develop` before it was applied; none were rebutted. Five of the eight
+are **defects the round-1 fixes introduced**, which is the value of running
+the pass twice.
+
+| id | disposition |
+| --- | --- |
+| PLAN-SCOPE-009 | the "ADR-061 governed interfaces" section still said **minor**, the one place R0 did not reach. Rewritten; R0 is now the single classification statement |
+| PLAN-SCOPE-010 | BA.3's `must_follow` BA.4 existed only in its own header and the non-authoritative wave diagram, and cited the wrong finding id. Row added to the authoritative table; citation corrected to PLAN-CRIT-002 |
+| PLAN-SCOPE-011 | three sources described three different BA.6/BA.9 stack topologies, and a linear stack cannot hold two siblings. **BA.6 leaves the stack**; it is `integrate/phase-ba`-based with a PR-completion trigger. BA.6/BA.9 `parallel_safe` row added |
+| PLAN-SCOPE-012 | BA.6 AC6a demanded column names the sprint never supplied. `delivery_mode` and `handed_off_at` are now specified with type, default, write site and migration backfill, and the selection predicate stops reading `nudge_pending_at` |
+| PLAN-SCOPE-013 | three docs described three mutually exclusive verb surfaces. Resolved: **six verbs** (`assign`, `start`, `close`, `move`, `list`, `events`); reassignment is `assign` onto an existing open id and adds no verb; BA.11's invented `reassign` and `show` are deleted |
+| PLAN-SCOPE-014 | `TaskCloseOutcome::Reassigned` and its `CHECK` member became unreachable the moment R2(a) was adopted. Both removed — shipping an unwritable value fails the phase's own no-unused-code rule |
+| PLAN-SCOPE-015 | **R3** added: the team lead is authorized for `cancel`, `reassign` and `move` on any task in their team. It was a real gating question hidden in a BA.5 deliverable while the Rulings section claimed all questions were decided |
+| PLAN-SCOPE-016 | BA.8's AC9 tests BA.9's start receipt; the dependency was undocumented. Added |
+
+Two further inconsistencies were found while verifying these and fixed in the
+same pass: R2 mis-cited PLAN-CRIT-025 (the `schema-reviewer` precondition
+finding), and BA.9 still carried "RULING REQUIRED BEFORE THIS HALF OPENS"
+blocks for R1 and R2 while its own header said both were decided.
+
+The reviewer also recorded that it was invoked without the Step-1
+`plan-hardening-guidelines` handoff its contract expects. That is true and
+deliberate — there is no hardening pass to hand it and I will not fabricate
+one — so its `ready_for_next_step: false` reflects the contract, not the
+findings. The findings themselves are independent of that gap and all eight
+are applied.
+
 ## Worktrees and the gh stack
 
 One integration branch, created first, off `develop`:
@@ -444,29 +508,40 @@ would have left three accepted ADRs describing behaviour this phase deletes
 
 ### The `must_follow` chain is one gh stack
 
-BA.1 → BA.3 → BA.5 → BA.6 form a dependency chain, so they are linked as a
-single stack rooted on the integration branch rather than four independent PRs:
+BA.1 → BA.3 → BA.5 → BA.9 form a **branch-ancestry** chain, so they are linked
+as a single stack rooted on the integration branch:
 
 ```bash
 gh stack init --base integrate/phase-ba \
   feature/ba1-ack-task-separation \
   feature/ba3-task-identity-queue \
   feature/ba5-atm-task-commands \
-  feature/ba6-ephemeral-queued-messages \
   feature/ba9-lifecycle-operations
 gh stack submit --auto
 ```
 
-BA.9 joins the stack above BA.5 because it extends BA.5's command surface in
-the same files. If R1 and R2 have both been answered by the time BA.5 opens,
-consider merging BA.9 back into BA.5 rather than carrying a fifth layer —
-the split exists to stop the rulings blocking BA.5, not to create work.
+BA.9 is in the stack because it edits **BA.5's own files** — it adds `start`
+to the same clap enum and the same command module. That is ancestry, not
+sequencing.
+
+**BA.6 is not in the stack (PLAN-SCOPE-011).** An earlier revision listed it
+as a layer *and* described BA.9 as sitting above BA.5, while both sprint
+headers claimed the same base — three sources describing three topologies,
+and a linear stack cannot hold two siblings anyway. BA.6's files are disjoint
+from BA.5's command surface; what it needs is BA.5's *merged close semantics*,
+which a PR-completion trigger delivers. Stacking it would force a rebase of
+BA.6 every time BA.9 moved, for ancestry it does not require — the same
+argument that keeps BA.8 out.
+
+If R1 and R2 have both been answered by the time BA.5 opens, consider merging
+BA.9 back into BA.5 rather than carrying a fourth layer — the split exists to
+stop the rulings blocking BA.5, not to create work.
 
 Layers are added to the stack **when their PR opens**, not held for CI.
 
 ### The parallel sprints are not stacked
 
-BA.2, BA.4, BA.7, BA.8, BA.10 and BA.11 are independent branches with
+BA.2, BA.4, BA.6, BA.7, BA.8, BA.10 and BA.11 are independent branches with
 ordinary PRs targeting `integrate/phase-ba`. Stacking them would impose an order the
 dependency analysis says does not exist, and would force a rebase of unrelated
 work every time a lower layer moves.
@@ -571,16 +646,24 @@ they implement the blocked-agent escalation this phase requires.
 
 ## ADR-061 governed interfaces
 
-BA.3 is the only governed-interface change: additive columns plus a
-primary-key narrowing on a table whose v2 form has never shipped. It is
-classified **minor with a migration**, not the major classification AZ carried.
+BA.3 is the only governed-interface change, and it is **MAJOR** under
+ADR-061:64 — the primary-key narrowing renames/removes a field and the
+previous binary cannot operate against the migrated database. See **R0**,
+which is the single authoritative classification statement; this section
+carries only what R0 does not.
 
-Retiring AZ withdraws the 2.0.0 major classification, the full-1.6.x bridge
-obligation, the retained 1.5.14 rollback fixture, and the 1.7.0 removal ADR —
-none of which shipped.
+*This section previously said "minor with a migration" and was left stale when
+R0 was decided (PLAN-SCOPE-009). It is corrected, not reinterpreted: MINOR was
+wrong, and one document must not state a classification two ways.*
 
-`schema-reviewer` must confirm this classification in plan review, before BA.3
-opens.
+What retiring AZ withdraws — and what BA does **not** inherit from it: the
+full-`1.6.x` bidirectional bridge obligation, the compatibility triggers, the
+retained 1.5.14 rollback fixture, and the 1.7.0 bridge-removal ADR. None of
+those shipped, and BA's one-way shape needs none of them. The MAJOR label is
+inherited; AZ's coexistence *strategy* is not.
+
+`schema-reviewer` sign-off and Rand's recorded approval are **preconditions
+for opening BA.3 and BA.10**, not plan-review checkboxes.
 
 ## Architecture boundary
 

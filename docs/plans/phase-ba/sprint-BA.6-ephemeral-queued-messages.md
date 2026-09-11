@@ -4,7 +4,7 @@
 | --- | --- |
 | Wave | 4 |
 | Branch | `feature/ba6-ephemeral-queued-messages` |
-| Base | `feature/ba5-atm-task-commands` (stack layer 4) |
+| Base | `integrate/phase-ba` — **not a stack layer** (PLAN-SCOPE-011). Its files are disjoint from BA.5's command surface; it needs BA.5's merged close semantics, which the PR-completion trigger delivers. |
 | Dependency | `must_follow` BA.5, `must_follow` BA.4 (PR-completion). **BA.8 now follows THIS sprint**, not the reverse (PLAN-CRIT-012). |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
@@ -51,13 +51,48 @@ columns or state **on the existing message row** — that constraint holds — b
 the current unread / pending-ack fields alone are insufficient and the sprint
 must add what is missing rather than assert the view already works.
 
-**Name the columns in the sprint doc before coding (PLAN-CRIT-004).** ADR-054
-says downstream sprints *implement* its marker/`read = 0` contract rather than
+**The columns, named (PLAN-CRIT-004, PLAN-SCOPE-012).** ADR-054 says
+downstream sprints *implement* its marker/`read = 0` contract rather than
 redefine it, and this deliverable changes what stays claimable after handoff.
-Unspecified "state on the message row" is not reviewable. The sprint must
-state, in the doc, each added column with its name, type, default, and the
-transitions that write it — and BA.11 carries the matching ADR-054 amendment.
-A design that cannot be written down that way is not ready to build.
+"State on the message row" is not a reviewable specification, and an earlier
+revision demanded the names in an acceptance criterion without supplying
+them. Two columns are added to `mail_message_states`
+(`shared_db.rs:38-55`, via the existing `ALTER TABLE ... ADD COLUMN` pattern
+at `shared_db.rs:817`; timestamps in that table are `TEXT`):
+
+| column | type | default | written by | cleared by |
+| --- | --- | --- | --- | --- |
+| `delivery_mode` | `TEXT NOT NULL CHECK(delivery_mode IN ('immediate','deferred'))` | `'immediate'` | message admission only, once, from the send's `NudgeMode` | never — it is the message's origin, not its progress |
+| `handed_off_at` | `TEXT NULL` | `NULL` | the queue-handoff writer, in the **same transaction** that clears `nudge_pending_at` (`herdr_queue_wake.rs:739-758`, `nudge_dispatch.rs:23-72`) | never — handoff is a fact, not a claim |
+
+Both are backfilled by the migration as `'immediate'` / `NULL`, which is
+exactly the behaviour of every message written before this sprint.
+
+What the two columns buy, one defect each from SOLAR-BA-007:
+
+- `delivery_mode` survives handoff, so a deferred item stays distinguishable
+  from an ordinary unread immediate message after `nudge_pending_at` is
+  cleared. Today `nudge_pending_at` is the only discriminator and it is
+  destroyed by the very transition that needs to be remembered.
+- `handed_off_at` makes "handed off but not discharged" representable, so the
+  item stays **selectable** and the post-handoff cadence below has something
+  to key off. Today an agent that takes the hook and dies loses the item
+  silently.
+
+**The selection predicate stops reading `nudge_pending_at`.** An item is
+selectable when it is open by D2's close rule (`read = 0`, or
+`pending_ack_at IS NOT NULL AND acknowledged_at IS NULL` when
+`requires_ack`) and `delivery_mode = 'deferred'` and `deleted_at IS NULL` —
+independent of `nudge_pending_at` and of `handed_off_at`. That is the whole
+of SOLAR-BA-007's first half: durability is defined by the actual close
+condition, not by the nudge marker.
+
+`nudge_pending_at` and `nudge_attempts` keep their current meaning — an
+in-flight nudge claim and its retry count — and are not repurposed. No third
+column, no new table, no new state machine.
+
+BA.11 carries the matching ADR-054 amendment and copies these names from the
+**shipped** schema, not from this table.
 
 Also required: a **post-handoff reminder cadence**. Handoff is not discharge,
 so an item that was handed off and never read must come back.
@@ -155,8 +190,14 @@ assignment, and no exemption is needed.
    tick, at most one discharge precedes each task selection; (d) a
    read-but-unacked `requires_ack` message never blocks task selection while
    remaining remindable.
-6a. Each added message-row column is named in the sprint doc with type,
-   default and writing transitions, and matches what shipped.
+6a. The shipped schema adds exactly `delivery_mode` and `handed_off_at` to
+   `mail_message_states`, with the types, defaults and write sites named in
+   D1, and the migration backfills existing rows to `'immediate'` / `NULL`.
+   Gate: reviewer diffs the merged DDL against D1's table.
+6b. The selection predicate reads neither `nudge_pending_at` nor
+   `handed_off_at`. Gate: a test in which a deferred item is handed off,
+   `nudge_pending_at` is cleared, the agent dies without reading, and the
+   item is still selected on the next pass. Must fail against today's code.
 7. An undischarged message never prevents a task assignment and never occupies
    the one-active slot.
 8. No new table and no new state machine is introduced. Gate: the diff adds no

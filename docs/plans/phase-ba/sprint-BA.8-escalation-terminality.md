@@ -5,7 +5,7 @@
 | Wave | 5 |
 | Branch | `feature/ba8-escalation-terminality` |
 | Base | `integrate/phase-ba` (independent PR, not stacked) |
-| Dependency | `must_follow` BA.3, BA.4, **BA.5** (serializes with its mutations and tests its receipts — PLAN-CRIT-015) and **BA.6** (AC11 needs BA.6's remindability — PLAN-CRIT-012). PR-completion trigger. |
+| Dependency | `must_follow` BA.3, BA.4, **BA.5** (serializes with its mutations and tests its receipts — PLAN-CRIT-015) **BA.6** (AC11 needs BA.6's remindability — PLAN-CRIT-012) and **BA.9** (AC9 exercises the `start` receipt BA.9 introduces — PLAN-SCOPE-016). PR-completion trigger. |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
 

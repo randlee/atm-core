@@ -162,13 +162,18 @@ preflight of D2 stage 1, **before** any mutation:
 | `assign` | the existing authorized sender path, unchanged |
 | `start` | the current assignee only |
 | `close` with `completed` / `refused` | the current assignee |
-| `close` with `cancelled` / `reassigned` | the assigner |
-| `move` | the assigner |
+| `close` with `cancelled` | the assigner, or the team lead (R3) |
+| `move` | the assigner, or the team lead (R3) |
+| reassign (`assign` onto an existing task id, BA.9) | the assigner, or the team lead (R3) |
 
-Whether the team lead is additionally authorized for `cancel` / `reassign` /
-`move` on any member's task is **Rand's call** — it is the natural shape given
-"team-lead can assign to another agent if he KNOWS", and the plan assumes yes
-unless Rand says otherwise. Record the answer before the sprint opens.
+`reassigned` is **not** a close outcome and does not appear in this matrix as
+one (PLAN-SCOPE-014): under R2(a) reassignment is a single `Reassigned` event
+on an open row, never a close.
+
+Team-lead authority is **decided in R3**, not left open: the lead is
+authorized for `cancel`, `reassign` and `move` on any task within their team,
+in addition to the assigner. The assignee's authority is unchanged. R3 states
+the cost and the one way Rand might reverse it.
 
 An actor/outcome mismatch is a stable, distinct error (RBP-001) raised before
 mutation and before message persistence. This is authorization on existing

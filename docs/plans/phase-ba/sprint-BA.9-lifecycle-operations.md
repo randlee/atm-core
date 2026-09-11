@@ -59,7 +59,7 @@ creates the assigner receipt. It adds no state, table, or state machine — but
 it **is** a sixth verb or an equivalent explicit API call, which crosses
 Rand's closed-set ruling.
 
-> **RULING REQUIRED BEFORE THIS HALF OPENS.** Three shapes:
+> **DECIDED: (a)** — R1 in the phase plan. The three shapes considered:
 >
 > a. `atm task start <task-id>` — a sixth verb. Most explicit; smallest
 >    surprise; contradicts the five-verb ruling in letter only.
@@ -69,10 +69,13 @@ Rand's closed-set ruling.
 > c. `atm task assign` self-targeted as an implicit start — overloads assign
 >    with two meanings; rejected on RBP grounds unless Rand prefers it.
 >
-> **Recommendation: (a).** The closed set was closed to delete *redundant*
-> verbs; start stopped being redundant the moment ack left the task domain.
+> The closed set was closed to delete *redundant* verbs; start stopped being
+> redundant the moment ack left the task domain. (b) and (c) are not built.
 
-Acceptance once ruled: concurrency (two starts racing), duplicate-start
+The syntax is exactly `atm task start <task-id>`. No flags: the actor is the
+caller, and the authority rule (D2a) is "the current assignee only".
+
+Acceptance: concurrency (two starts racing), duplicate-start
 idempotency, receipt-write failure and retry, and the crash boundary either
 side of the receipt.
 
@@ -92,7 +95,8 @@ Those three cannot all hold:
 This sits directly on the escape path Rand named: *"team-lead can assign to
 another agent if he KNOWS."* It must not be an implementation guess.
 
-> **RULING REQUIRED BEFORE THIS HALF OPENS.** Two shapes:
+> **DECIDED: (a)** — R2 in the phase plan, with its event semantics fixed
+> there. The two shapes considered:
 >
 > a. **Same-id reassignment** — an atomic close/reopen that updates
 >    `current_assignee`, resets queue position and reminder counters, and
@@ -100,13 +104,38 @@ another agent if he KNOWS."* It must not be an implementation guess.
 > b. **Old-id close + new-id assign**, with a mandatory successor task id
 >    recorded in the close event.
 >
-> **Recommendation: (a).** It matches "one logical task, one id", keeps one
-> event history, and needs no successor link — whereas (b) reintroduces
-> exactly the supersession linkage this phase deletes. Rand's *"if that means
-> close one and create a new one, that is acceptable"* was permission, not a
-> requirement, and it predates the single-row identity ruling.
+> (a) matches "one logical task, one id", keeps one event history, and needs
+> no successor link — whereas (b) reintroduces exactly the supersession
+> linkage this phase deletes. Rand's *"if that means close one and create a
+> new one, that is acceptable"* was permission, not a requirement, and it
+> predates the single-row identity ruling. (b) is not built.
 
-Acceptance once ruled: legality from both `assigned` and `active`, concurrent
+**The command syntax (PLAN-SCOPE-013).** Reassignment adds **no verb**. It is
+`assign` applied to a task id that already exists:
+
+```
+atm task assign <new-agent> --task-id <existing-task-id> [--reason <text>]
+```
+
+- `--task-id` naming an **unknown** id → ordinary assignment, unchanged.
+- `--task-id` naming an **open** task → reassignment: one `Reassigned` event
+  carrying actor / `from_assignee` / `to_assignee` / reason, `current_assignee`
+  updated, position recomputed in the new assignee's queue, reminder counters
+  reset, all in one transaction. `state` never reaches `complete` and
+  `close_outcome` stays `NULL`.
+- `--task-id` naming a **closed** task → the existing stable error. Reopening
+  is not in this phase.
+- Omitting `--reason` on a reassignment is rejected. A handover with no
+  recorded reason is the audit gap this deliverable exists to close; on a
+  first assignment the flag is not accepted at all.
+
+This is why AC13 says **six** subcommands and not seven: `assign`, `start`,
+`close`, `move`, `list`, `events`. Reassignment is a second meaning for
+`assign` that is unambiguous because it is selected by whether the id exists,
+not by a mode flag. An earlier revision of BA.11 listed a seventh `reassign`
+verb and a `show` verb that appears nowhere in BA.5 — both were wrong.
+
+Acceptance: legality from both `assigned` and `active`, concurrent
 reassignment, the receipt to the new assignee, queue position of the moved
 task, and reminder-counter reset.
 
@@ -152,8 +181,12 @@ Reassign half:
 12. Reassignment never writes `state = 'complete'` and never sets
     `close_outcome`; a terminally suppressed task that is reassigned resumes
     reminders (the BA.8 D1 reset predicate).
-13. `atm task` exposes exactly six subcommands and the regenerated CLI surface
-    baseline says so.
+13. `atm task` exposes exactly six subcommands — `assign`, `start`, `close`,
+    `move`, `list`, `events` — and the regenerated CLI surface baseline says
+    so. Reassignment adds no verb.
+14. `atm task assign --task-id <open-id>` reassigns rather than erroring, and
+    `atm task assign --task-id <unknown-id>` still assigns. Both asserted.
+15. A reassignment with no `--reason` is rejected before any write.
 
 ## Required validation
 
