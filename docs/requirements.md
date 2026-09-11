@@ -81,9 +81,10 @@ of eight.
 Phase-BA amendment (2026-09-11): escalation is one ordinary message to the
 roster lead and to every configured escalation recipient, resolved
 independently. An open task escalates once when its reminder count reaches 10
-and nudging then stops until the assignee's state changes or the task is
-closed; a `Blocked` or `Offline` assignee escalates once per episode and
-receives zero nudges. See Section 15.4.
+and nudging then stops until the task changes state (start or close) or is
+reassigned or reopened — a change in the assignee's
+runtime state alone does not resume it; a `Blocked` or `Offline` assignee
+escalates once per episode and receives zero nudges. See Section 15.4.
 
 The retained product surface is:
 - `atm send`
@@ -3036,8 +3037,8 @@ Nudge invariant (Phase BA):
     one) and to every configured escalation recipient, resolved
     independently; when a task's reminder count reaches 10 it MUST escalate
     once and nudging MUST stop until the task changes state (start or close) or
-    is reassigned or reopened; a change in the assignee's runtime state alone
-    does not resume nudging.
+    is reassigned or reopened; a change in the assignee's
+    runtime state alone does not resume nudging.
 
 ## 16. Observability Requirements
 

@@ -364,12 +364,14 @@ struct TaskEventRowWire {
 }
 // TryFrom/From: `close_outcome` is the row's one outcome key. `to_state =
 // Complete` pairs with it (None from a 1.4.0 producer → `Completed`), exactly
-// as `TaskRowWire`. `from_state = Complete` occurs only on state-neutral events
+// as `TaskRowWire`.
+// `from_state = Complete` decodes in two cases only: (1) state-neutral rows
 // written against a completed task (`rejected`, `reminded`, a `migrated`
-// source row), where `from_state == to_state`; both decode from the same
-// `close_outcome` (FNX-BA-CRIT-022; `append_rejected_task_event`, `task_ops.rs:112-129`,
-// already writes both states equal to the current row). `from_state = Complete`
-// with `to_state ≠ Complete` is a validation error — terminal-to-assigned is valid only for reopened.
+// source row) where `from_state == to_state`, both from the same
+// `close_outcome` (FNX-BA-CRIT-022; `append_rejected_task_event`, `task_ops.rs:112-129`);
+// (2) `event = reopened` with `to_state = Assigned`, where `close_outcome`
+// carries the prior outcome being cleared. Every other `from_state = Complete`
+// with `to_state != Complete` is a validation error.
 // Row decode from SQLite uses the same helpers with the `close_outcome` column.
 ```
 
