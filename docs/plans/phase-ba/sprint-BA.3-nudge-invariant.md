@@ -267,7 +267,7 @@ pub(crate) async fn escalate_mail(
 | before (develop) | after |
 | --- | --- |
 | `herdr_candidates` (`herdr_queue_wake.rs:868-900`) `continue`s every member whose channel is not `DeliveryChannel::HerdrSteer` (`:876-884`) and every `Tmux` backend (`:890`) — non-Herdr members never reach state evaluation | every roster member is a candidate; the backend is resolved **after** disposition by the existing `rebuild_received_hook_dispatch` (`:669-677`, per-backend `BuiltInPostSendDispatch`) and emitted through the existing `AsyncMessageReceivedHookEmitter`; a member whose backend yields no dispatch is `Hold(NoDeliveryChannel)` (FNX-BA-CRIT-007). Escalation needs no channel — it is mail. |
-| `collect_idle_members(…, task_candidates: &mut Vec<TaskCandidate>)` pushes `Idle | Blocked` only (`herdr_queue_wake.rs:444-518`) | pushes every member with an accepted observation as `MemberObservation { member: MemberKey, state: RuntimeMemberState, state_changed_at: Option<IsoTimestamp> }` — roster identity only; no `HerdrCandidate`, no Herdr agent name or session (those are resolved per backend after disposition, FNX-BA-CRIT-024); `TaskCandidate { blocked: bool }` deleted |
+| `collect_idle_members(…, task_candidates: &mut Vec<TaskCandidate>)` pushes `Idle | Blocked` only (`herdr_queue_wake.rs:444-518`) | pushes every member with an accepted observation as `MemberObservation { member: MemberKey, state: RuntimeMemberState, state_changed_at: Option<IsoTimestamp> }` — roster identity only; state comes from `runtime_state(snapshots.get(name).map(\|s\| s.status))` (the `map_or(RuntimeMemberState::Unknown, …)` fallback at `:459-463` is folded into `runtime_state`, ARCH-BA3-001); no `HerdrCandidate`, no Herdr agent name or session (those are resolved per backend after disposition, FNX-BA-CRIT-024); `TaskCandidate { blocked: bool }` deleted |
 | `read_due_task` — one `list_tasks(team, Some(member))` per candidate (`_reminders.rs:81-113`) | one `open_tasks_for_team(team, deadline)` per team per tick; grouped in memory `HashMap<AgentName, Vec<TaskRow>>` (already `position`-ordered); head = `.first()` |
 | `select_open_task` (`herdr_queue_wake.rs:855-866`, Active-first then `assigned_at`) | deleted — the queue order is the storage order |
 | `emit_task_reminder` → `record_task_outcome` → `maybe_escalate_task` with multiplicative threshold (`_escalation.rs:37-43`) | `emit_task_reminder` runs only on `Nudge`; `EscalateStalled` calls `escalate_stalled_task` (renamed `maybe_escalate_task`, threshold test removed — `dispose` decided): `escalate_mail(…, summary = escalation_summary(EscalationKind::TaskStalled, member, Some(&head.task_id)), …, suppress_since = Some(head.assigned_at))`, then `record_lead_notified` **only when every target was written or skipped-as-reported**; a failed target leaves `lead_notified_count = 0`, so `dispose` returns `EscalateStalled` again next tick and only the missing target is written (same verify-and-retry pattern as episodes — RSH-001) |
@@ -303,7 +303,35 @@ member with several reminded `assigned` rows starts exactly its head.
 **Re-check before emit:** immediately before handing a nudge to the
 emitter, the pump re-reads the member's roster record (`service_runtime`
 in-RAM, no I/O) and drops the nudge unless it is still `Idle`. A check, not
-state.
+state. It is one named single-expression function so its shape can be
+asserted (RBQA-F006):
+
+```rust
+// herdr_queue_wake.rs (new); the only inspection of RuntimeMemberState
+// outside `dispose`.
+fn still_idle(runtime: &LocalServiceRuntime, member: &MemberKey) -> bool {
+    runtime.roster_ephemeral_state(member.team(), member.agent()) // service_runtime.rs:668
+        .map(|record| record.state)
+        == Some(RuntimeMemberState::Idle)
+}
+```
+
+The observation constructor likewise absorbs the `map_or(Unknown, …)`
+fallback at `herdr_queue_wake.rs:459-463` so it is the only place a
+`RuntimeMemberState` value is built from Herdr data (ARCH-BA3-001):
+
+```rust
+// herdr_queue_wake.rs:934 — signature widened; body is exactly one `match`.
+fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
+    match status {
+        None | Some(HerdrAgentStatus::Unknown) => RuntimeMemberState::Unknown,
+        Some(HerdrAgentStatus::Idle | HerdrAgentStatus::Done) => RuntimeMemberState::Idle,
+        Some(HerdrAgentStatus::Working) => RuntimeMemberState::Active,
+        Some(HerdrAgentStatus::Blocked) => RuntimeMemberState::Blocked,
+    }
+}
+// call site: runtime_state(snapshots.get(member.herdr_agent.as_str()).map(|s| s.status))
+```
 
 ## Consecutive-refusal escalation (design §4.2, plan §4 R5)
 
@@ -517,12 +545,27 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
   `herdr_queue_wake.rs:505-514` is `matches!` and `==`, not `match`;
   RBQA-F003) — and asserts each occurrence lies inside exactly one of three
   functions: `dispose` (`herdr_task_disposition.rs`), the observation
-  constructor `runtime_state` (`herdr_queue_wake.rs:934`, builds the value,
-  inspects nothing), or the pre-emit re-check (§"Re-check before emit").
-  Macro bodies are scanned as token streams (`syn::Macro::tokens`), so
-  `matches!` cannot evade it. Same visitor pattern as
-  `boundary_enforcement.rs:587-620`; no boundary TOML edit, so no
-  §10-style ruling is needed (RBQA-F001).
+  constructor `runtime_state(Option<HerdrAgentStatus>)`
+  (`herdr_queue_wake.rs:934`), or the pre-emit re-check `still_idle`.
+  The develop fallback `map_or(RuntimeMemberState::Unknown, …)` at
+  `herdr_queue_wake.rs:459-463` is folded into `runtime_state`, so no
+  fourth site exists (ARCH-BA3-001). Macro bodies are scanned as token
+  streams (`syn::Macro::tokens`), so `matches!` cannot evade it. Same
+  visitor pattern as `boundary_enforcement.rs:587-620`; no boundary TOML
+  edit, so no §10-style ruling is needed (RBQA-F001).
+  The two non-`dispose` exemptions are **shape-bound**, not name-bound
+  (RBQA-F006), by two further assertions in the same file:
+  - `runtime_state_only_constructs` — `runtime_state`'s body is exactly one
+    `syn::Expr::Match` whose scrutinee is the `status` parameter; every
+    `RuntimeMemberState` path in the function is an arm **body**
+    (expression position); none appears in a pattern, guard, or scrutinee;
+    the function has no other statements. Any inspection of a
+    `RuntimeMemberState` there fails the test.
+  - `still_idle_is_a_single_comparison` — `still_idle` returns `bool`, its
+    body is exactly one `syn::Expr::Binary` with `BinOp::Eq`, the right
+    operand is `Some(RuntimeMemberState::Idle)`, and that is the only
+    `RuntimeMemberState` path in the function. A second branch, a `match`,
+    or a second variant fails the test.
 - `breaker_open_produces_no_escalation_mail` — trip the Herdr breaker → 0
   mail with kind `breaker_opened` (the kind no longer exists — compile-time
   proof is the enum, this test pins the runtime behaviour).
@@ -531,10 +574,13 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
 
 ## Acceptance criteria
 
-1. `dispose` is the only place that decides nudge/escalate/hold:
-   `escalation_ownership_architecture_test` passes in CI (every
+1. Exactly one function, `dispose`, turns a member's `RuntimeMemberState`
+   into a nudge / escalate / hold decision. Proof is
+   `escalation_ownership_architecture_test` in CI: every
    `RuntimeMemberState` reference in `herdr_*` production code is inside
-   `dispose`, `runtime_state`, or the pre-emit re-check — RBQA-F003).
+   `dispose`, the constructor `runtime_state` (asserted to only construct)
+   or the re-check `still_idle` (asserted to be one `== Idle` comparison)
+   (RBQA-F003, ARCH-BA3-001, RBQA-F006, BA-QA3-001).
 2. All tests above pass; the 72-row table is present.
 3. `grep -rn "BLOCKED_RENOTIFY_MS\|select_open_task\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation" crates/` returns nothing (PLAN-SCOPE-002 grep gate).
 4. `grep -n "DeliveryChannel::HerdrSteer" crates/atm-http-runtime/src/herdr_queue_wake.rs` returns nothing — the candidate sweep is backend-neutral.
