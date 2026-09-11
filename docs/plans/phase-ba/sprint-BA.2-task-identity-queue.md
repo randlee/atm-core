@@ -782,11 +782,10 @@ and now returns rows ordered by `position`.
 ## Boundary manifests (ruling: phase plan §10)
 
 `boundaries/atm-storage/task-store.toml`, `…-rusqlite/task-store-sqlite.toml`:
-`[contracts].notes` "state change" → `only TaskOp arms in writer/task_ops.rs
-change tasks.state; events Assigned/Started/Completed`; "replay" → `per (team,
+`[contracts].notes` "state change" → `tasks.state is written by writer/task_ops.rs (apply_task_assignment, apply_task_start, apply_task_close) and, at schema-ensure time only, by task_migration.rs::migrate_task_identity; no other module; state-changing audit kinds are assigned, reassigned, reopened, started, completed, refused, cancelled, migrated; moved is state-neutral`; "replay" → `per (team,
 task_id)`; `[ownership].io_forbidden` += `"task_body_dereference"`;
 `[enforcement].review_gates` += `"no_task_state_write_outside_task_ops"`,
-`"assigned_at_immutable"`. `async-task-ledger-reader*.toml`: add
+`"assigned_at_updated_only_by_reassign_and_reopen"`. `async-task-ledger-reader*.toml`: add
 `open_tasks_for_team` to the read surface. No new manifest.
 
 ## Paths to delete
@@ -971,18 +970,5 @@ CLI verbs and aliases (BA.4); runtime disposition (BA.3); `move` without a
 message (`WriteOp::TaskMove`, BA.4 — this sprint exposes `apply_task_move`
 as `pub(super)` for it).
 
-R11 addendum contract tests: reassigned_task_reminder_renders_current_assignment; reassigned_task_start_receipt_goes_to_current_assigner; reopened_task_close_report_goes_to_current_assigner; refusal_run_order_is_writer_application_order_not_timestamp.
 
-The same storage query is pinned by `ORDER BY rowid DESC LIMIT 1` for cross-task application order.
-
-Boundary clarification (FNX-BA-DRIFT-031): only `writer/task_ops.rs` writes
-`tasks.state`: `apply_task_assignment` handles initial/reassign/reopen,
-`apply_task_start` and `apply_task_close` handle their transitions;
-`apply_task_move` and `renumber_queue` never touch it. State-changing audit
-kinds are `assigned`, `reassigned`, `reopened`, `started`, `completed`,
-`refused`, `cancelled`, and `migrated`; `moved` is state-neutral.
-
-Boundary authority: `apply_task_close` enforces `StaleCounterparty`; `TaskRejected::stale_counterparty` is an atomic rejection.
-The `TaskRejected::stale_counterparty` kind is sixth and is atomic: no message, close, or non-rejected event is written.
-
-`StaleCounterparty` is a six-variant close rejection; `TaskRejected::stale_counterparty` emits only a rejected event.
+Tests include `state_write_from_other_module_fails_boundary_gate`.

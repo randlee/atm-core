@@ -329,3 +329,5 @@ The state-write boundary is module-owned: `writer/task_ops.rs` alone writes
 `tasks.state` through assignment, start, and close; move and renumber are
 state-neutral. The review gate is `no_task_state_write_outside_task_ops`.
 14. Reassignment and reopen preserve one task id and record their event kinds; close outcomes remain completed, refused, or cancelled.
+
+Boundary test: `state_write_from_other_module_fails_boundary_gate`.
