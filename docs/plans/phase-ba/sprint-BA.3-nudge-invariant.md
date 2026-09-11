@@ -208,9 +208,7 @@ pub(crate) async fn episode_already_reported(
 (RBQA-F005). Targets are exactly
 the existing `EscalationTargets { lead: Option<AgentName>, recipients:
 Vec<String> }` (`herdr_escalation.rs:204-207`): the lead when unique, and
-every configured recipient. `write_escalation_mail` writes each target
-through the local write path, so the local store holds the row under the
-recipient's `(team, agent)` scope whatever host it forwards to; a recipient
+every configured recipient. `write_escalation_mail` writes each target through the local write path. A local target (lead, or a recipient whose address resolves to this host) leaves its row under that `(team, agent)` scope, so `episode_already_reported` finds it across restarts. A host-qualified recipient (`agent@team.host`) is forwarded by `storage_and_nudge_router.rs:338-342` without local admission, so the local reader cannot see it: for such a target the in-RAM `Episode` is the only suppression, giving at most one escalation write once per episode per process lifetime, and one duplicate after a daemon restart during a still-open episode. This bound is accepted (no durable receipt is added; design §6.1 excludes new state); a recipient
 address that does not parse into a mailbox scope is written unconditionally
 (existing behaviour). Each target is checked and written **independently**
 (design §6.2): a target with no report since `since` is written this tick,
@@ -417,6 +415,7 @@ Pure — `herdr_task_disposition.rs`:
 - `episode_since_prefers_roster_state_changed_at`.
 - `escalation_summary_is_stable` — same `(kind, member, task)` → byte-equal
   string, `<agent>@<team>` order, no timestamp.
+- `cross_host_recipient_is_written_once_per_process_and_again_after_restart` — configured recipient `x@other.host`: two ticks in one process write once; a fresh `EscalationState` (simulated restart) with the same open episode writes once more; a local lead target is not rewritten after the restart.
 
 Runtime — `crates/atm-http-runtime/tests/herdr_nudge_invariant.rs` (new;
 fixture daemons loopback only; roster shapes: lead+1, lead+3, two leads,
