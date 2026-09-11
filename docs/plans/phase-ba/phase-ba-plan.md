@@ -333,3 +333,5 @@ state-neutral. The review gate is `no_task_state_write_outside_task_ops`.
 Boundary test: `state_write_from_other_module_fails_boundary_gate`.
 
 The writer matrix includes `StaleCounterparty` and recomposes the counterparty once before retry.
+
+| **R7** | Stalled hold reset | task change or reassign/reopen; runtime state alone does not resume nudging |

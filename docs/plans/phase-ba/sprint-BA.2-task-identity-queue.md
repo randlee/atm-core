@@ -954,3 +954,5 @@ Tests: `reassign_from_stalled_row_starts_fresh_episode`; `prior_assignment_remin
 Canonicalization: after merge, fold history and append exactly one `canonicalized by BA.2 migration` event when the winner state differs; enforce replay mismatch as a rollback error, never debug-only.
 
 Branch c resets `reminder_count = 0, lead_notified_count = 0, last_reminded_at = NULL`; branch d uses the identical clause.
+
+Branch d resets `reminder_count = 0, lead_notified_count = 0, last_reminded_at = NULL`.
