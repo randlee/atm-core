@@ -70,6 +70,7 @@ impl TaskState {
 #[serde(rename_all = "snake_case")]
 pub enum TaskEvent {
     Assigned,
+    Started,
     Completed,
 }
 
@@ -126,14 +127,16 @@ pub fn transition(
 ) -> Result<Transition, TaskRejected> {
     match (state, event) {
         (None, TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
-        (None, TaskEvent::Completed) => Err(TaskRejected::new(format!(
+        (None, TaskEvent::Started | TaskEvent::Completed) => Err(TaskRejected::new(format!(
             "no open task {task_id} for {actor}"
         ))),
         (Some(TaskState::Assigned), TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
+        (Some(TaskState::Assigned), TaskEvent::Started) => Ok(Transition(TaskState::Active)),
         (Some(TaskState::Assigned), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
         (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition(TaskState::Active)),
+        (Some(TaskState::Active), TaskEvent::Started) => Ok(Transition(TaskState::Active)),
         (Some(TaskState::Active), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
-        (Some(TaskState::Complete), TaskEvent::Assigned | TaskEvent::Completed) => Err(
+        (Some(TaskState::Complete), TaskEvent::Assigned | TaskEvent::Started | TaskEvent::Completed) => Err(
             TaskRejected::new(format!("task {task_id} is already complete")),
         ),
     }
