@@ -1581,6 +1581,8 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                placement: None,
+                task_op: None,
                 task_complete: None,
                 extra: Map::new(),
             },
@@ -1769,6 +1771,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("AD.99".parse().expect("task")),
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };

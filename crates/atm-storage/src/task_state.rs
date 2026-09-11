@@ -227,7 +227,7 @@ pub struct TaskEventRow {
 
 #[cfg(test)]
 mod tests {
-    use super::{TaskEvent, TaskEventKind, TaskEventMarker, TaskRow, TaskState, admit, transition};
+    use super::{QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskEventMarker, TaskRow, TaskState, admit, transition};
     use crate::schema::AtmMessageId;
     use crate::task_store::ReminderOutcome;
     use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
@@ -237,6 +237,20 @@ mod tests {
             "AX.3".parse::<TaskId>().expect("task"),
             "assignee".parse::<AgentName>().expect("assignee"),
         )
+    }
+
+    #[test]
+    fn queue_position_bounds() {
+        assert!(QueuePosition::new(0).is_none());
+        assert_eq!(QueuePosition::HEAD.get(), 1);
+        assert_eq!(QueuePosition::HEAD.next().get(), 2);
+    }
+
+    #[test]
+    fn close_outcome_names_are_stable() {
+        assert_eq!(TaskCloseOutcome::Completed.as_str(), "completed");
+        assert_eq!(TaskCloseOutcome::Refused.as_str(), "refused");
+        assert_eq!(TaskCloseOutcome::Cancelled.as_str(), "cancelled");
     }
 
     #[test]
@@ -296,6 +310,7 @@ mod tests {
             assignee: "assignee".parse::<AgentName>().expect("assignee"),
             assigner: "assigner".parse::<AgentName>().expect("assigner"),
             state,
+            position: None,
             assignment_message_id: AtmMessageId::new(),
             description: "task".to_owned(),
             assigned_at: "2026-09-04T00:00:00Z"
