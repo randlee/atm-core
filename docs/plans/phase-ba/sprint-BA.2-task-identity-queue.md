@@ -724,7 +724,7 @@ Consecutive refusals (design §4.2): `atm-storage-rusqlite/src/task_sql.rs`
 owns `trailing_refusal_run(conn, team, assignee) -> RefusalRun`:
 `SELECT event, at FROM task_events WHERE team = ?1 AND assignee = ?2 AND
 event IN ('assigned','reassigned','reopened','completed','refused','cancelled') ORDER BY
-at DESC, seq DESC`. Rust counts leading refused rows; `started_at` is the
+rowid DESC`. Rust counts leading refused rows; `started_at` is the
 oldest refused timestamp. Started/assigned/moved/migrated do not reset it;
 completed and cancelled end it; assigned, reassigned, and reopened also end it; started, moved, and migrated neither count nor reset. `apply_task_close` with
 `outcome = Refused` computes, in the same transaction, the assignee's
@@ -974,3 +974,5 @@ message (`WriteOp::TaskMove`, BA.4 — this sprint exposes `apply_task_move`
 as `pub(super)` for it).
 
 R11 addendum contract tests: reassigned_task_reminder_renders_current_assignment; reassigned_task_start_receipt_goes_to_current_assigner; reopened_task_close_report_goes_to_current_assigner; refusal_run_order_is_writer_application_order_not_timestamp.
+
+The same storage query is pinned by `ORDER BY rowid DESC LIMIT 1` for cross-task application order.
