@@ -457,3 +457,5 @@ A second `StaleCounterparty` after recomposition exits 1 and sends no stale repo
 
 Placement conversion: `fn placement(&self) -> Option<MoveTarget> { match (&self.before, self.head) { (Some(id), false) => Some(MoveTarget::Before(id.clone())), (None, true) => Some(MoveTarget::Head), (None, false) => None, (Some(_), true) => unreachable!("clap ArgGroup") } }`.
 `StaleCounterparty` is handled before plain delivery; a second occurrence exits 1.
+
+Tests: `close_refused_with_stdin_and_no_reason_is_accepted`, `close_cancelled_with_template_and_no_reason_is_accepted`, `close_without_reason_or_report_source_is_rejected`.

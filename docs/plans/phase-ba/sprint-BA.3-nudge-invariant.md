@@ -271,7 +271,7 @@ pub(crate) async fn escalate_mail(
 | before (develop) | after |
 | --- | --- |
 | `herdr_candidates` (`herdr_queue_wake.rs:868-900`) `continue`s every member whose channel is not `DeliveryChannel::HerdrSteer` (`:876-884`) and every `Tmux` backend (`:890`) — non-Herdr members never reach state evaluation | every roster member is a candidate; the backend is resolved **after** disposition by the existing `rebuild_received_hook_dispatch` (`:669-677`, per-backend `BuiltInPostSendDispatch`) and emitted through the existing `AsyncMessageReceivedHookEmitter`; a member whose backend yields no dispatch is `Hold(NoDeliveryChannel)` (FNX-BA-CRIT-007). Escalation needs no channel — it is mail. |
-| `collect_idle_members(…, task_candidates: &mut Vec<TaskCandidate>)` pushes `Idle | Blocked` only (`herdr_queue_wake.rs:444-518`) | pushes every member with an accepted observation as `MemberObservation { member: MemberKey, state: RuntimeMemberState, state_changed_at: Option<IsoTimestamp> }` — roster identity only; state comes from `runtime_state(snapshots.get(name).map(\|s\| s.status))` (the `map_or(RuntimeMemberState::Unknown, …)` fallback at `:459-463` is folded into `runtime_state`, ARCH-BA3-001); no `HerdrCandidate`, no Herdr agent name or session (those are resolved per backend after disposition, FNX-BA-CRIT-024); `TaskCandidate { blocked: bool }` deleted |
+| `collect_idle_members(…, task_candidates: &mut Vec<TaskCandidate>)` pushes `Idle | Blocked` only (`herdr_queue_wake.rs:444-518`) | pushes every member with an accepted observation as `MemberObservation { member: MemberKey, state: RuntimeMemberState, state_changed_at: Option<IsoTimestamp> }` — roster identity only; state comes from `runtime_state(proposed snapshot.get(name).map(\|s\| s.status))` (the `map_or(RuntimeMemberState::Unknown, …)` fallback at `:459-463` is folded into `runtime_state`, ARCH-BA3-001); no `HerdrCandidate`, no Herdr agent name or session (those are resolved per backend after disposition, FNX-BA-CRIT-024); `TaskCandidate { blocked: bool }` deleted |
 | `read_due_task` — one `list_tasks(team, Some(member))` per candidate (`_reminders.rs:81-113`) | one `open_tasks_for_team(team, deadline)` per team per tick; grouped in memory `HashMap<AgentName, Vec<TaskRow>>` (already `position`-ordered); head = `.first()` |
 | `select_open_task` (`herdr_queue_wake.rs:855-866`, Active-first then `assigned_at`) | deleted — the queue order is the storage order |
 | `emit_task_reminder` → `record_task_outcome` → `maybe_escalate_task` with multiplicative threshold (`_escalation.rs:37-43`) | `emit_task_reminder` runs only on `Nudge`; `EscalateStalled` calls `escalate_stalled_task` (renamed `maybe_escalate_task`, threshold test removed — `dispose` decided): `escalate_mail(…, summary = escalation_summary(EscalationKind::TaskStalled, member, Some(&head.task_id)), …, suppress_since = Some(head.assigned_at))`, then `record_lead_notified` **only when every target was written or skipped-as-reported**; a failed target leaves `lead_notified_count = 0`, so `dispose` returns `EscalateStalled` again next tick and only the missing target is written (same verify-and-retry pattern as episodes — RSH-001) |
@@ -338,7 +338,7 @@ fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
         Some(HerdrAgentStatus::Blocked) => RuntimeMemberState::Blocked,
     }
 }
-// call site: runtime_state(snapshots.get(member.herdr_agent.as_str()).map(|s| s.status))
+// call site: runtime_state(proposed snapshot.get(member.herdr_agent.as_str()).map(|s| s.status))
 ```
 
 ## Consecutive-refusal escalation (design §4.2, plan §4 R5)
@@ -594,3 +594,6 @@ Writer gate: latest reminded event query uses ORDER BY rowid DESC LIMIT 1 and pe
 Refusal escalation is tick-driven only: the next tick reads refusal_run, holds the member, and sends at most one escalation mail per run; no write result seam is used.
 
 Tests: `reassign_from_stalled_row_starts_fresh_episode`, `prior_assignment_reminder_never_makes_new_assignment_start_owed`, `close_after_reassignment_between_preflight_and_write_is_rejected_then_recomposed`.
+
+MemberObservation is built from apply_roster_runtime_observations(..) → outcome.current, never from the snapshot; test `disposition_follows_master_record_when_raw_herdr_status_differs`. `outcome.current` is authoritative.
+Stalled hold reset paths: start, close, reassign, reopen; runtime state alone does not resume nudging. Test `stalled_hold_survives_assignee_active_then_idle`.

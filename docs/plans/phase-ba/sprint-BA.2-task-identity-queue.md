@@ -590,7 +590,7 @@ SELECT team, task_id, assignee, assigner, state,
    assigned_at=<t>'`, actor `atm-daemon`, `from_state = to_state = <winner
    state>` — state-neutral). No information leaves the database (design §3.2).
 6. Canonical history (FNX-BA-CRIT-002): for every winner whose legacy
-   history lacks the event that produced its state, append it, actor
+   history event is absent that produced its state, append it, actor
    `atm-daemon`, `at = winner.updated_at`, `detail = 'synthesized by BA.2
    migration'`: a winner in `active` with no `started` event gets one
    (`from_state = assigned, to_state = active`); a winner in `complete`
@@ -975,3 +975,5 @@ as `pub(super)` for it).
 Tests include `state_write_from_other_module_fails_boundary_gate`.
 
 Tests: `reassign_from_stalled_row_starts_fresh_episode`; `prior_assignment_reminder_never_makes_new_assignment_start_owed`; `close_after_reassignment_between_preflight_and_write_is_rejected_then_recomposed`.
+
+Canonicalization: after merge, fold history and append exactly one `canonicalized by BA.2 migration` event when the winner state differs; enforce replay mismatch as a rollback error, never debug-only.
