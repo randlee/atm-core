@@ -11,14 +11,18 @@ use std::cell::Cell;
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::TaskStore;
-use atm_core::boundary::{MAX_ESCALATION_RECIPIENTS, MemberKey};
+use atm_core::boundary::{
+    AsyncMailboxReader, MAX_ESCALATION_RECIPIENTS, MailboxScope, MemberKey, MessageQuery,
+    ReadDeadline, ReadLaneError,
+};
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
-use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_herdr::HerdrProcessAdapter;
 
 use crate::herdr_queue_wake::run_blocking;
+use crate::herdr_task_disposition::EpisodeKind;
 
 pub(crate) const HERDR_NOTIFY_DEADLINE: Duration = Duration::from_secs(5);
 pub(crate) const ESCALATION_RECIPIENT_CAP: usize = MAX_ESCALATION_RECIPIENTS;
@@ -34,6 +38,9 @@ pub(crate) enum EscalationKind {
     BreakerOpened,
     LeadNotified,
     BlockedEscalated,
+    OfflineEscalated,
+    #[expect(dead_code, reason = "the runtime refusal path lands in task 7")]
+    RefusalsEscalated,
 }
 
 impl EscalationKind {
@@ -42,6 +49,17 @@ impl EscalationKind {
             Self::BreakerOpened => "breaker_opened",
             Self::LeadNotified => "lead_notified",
             Self::BlockedEscalated => "blocked_escalated",
+            Self::OfflineEscalated => "offline_escalated",
+            Self::RefusalsEscalated => "refusals_escalated",
+        }
+    }
+}
+
+impl From<EpisodeKind> for EscalationKind {
+    fn from(kind: EpisodeKind) -> Self {
+        match kind {
+            EpisodeKind::Blocked => Self::BlockedEscalated,
+            EpisodeKind::Offline => Self::OfflineEscalated,
         }
     }
 }
@@ -62,12 +80,41 @@ pub(crate) fn fail_next_escalation_mail_write() {
 /// policy prevents the queue-wake file from becoming the owner of D6 data.
 #[derive(Clone, Default)]
 pub(crate) struct EscalationState {
+    /// The process-local view of currently-open Blocked/Offline episodes.
+    /// Durable duplicate suppression lives in each escalation target's mailbox.
+    episodes: Arc<Mutex<HashMap<MemberKey, EpisodeKind>>>,
+    // Retained until the old blocked escalation path is replaced in task 5.
     pub(crate) blocked_since: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
     pub(crate) last_blocked_notice: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
     blocked_cursor: Arc<Mutex<usize>>,
 }
 
 impl EscalationState {
+    /// Records an episode transition. Recovery clears the local episode entry.
+    #[expect(dead_code, reason = "the runtime disposition path lands in task 4")]
+    pub(crate) fn observe(
+        &self,
+        member: &MemberKey,
+        state: atm_core::protocol::RuntimeMemberState,
+    ) -> bool {
+        let episode = match state {
+            atm_core::protocol::RuntimeMemberState::Blocked => EpisodeKind::Blocked,
+            atm_core::protocol::RuntimeMemberState::Offline => EpisodeKind::Offline,
+            _ => {
+                self.episodes
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .remove(member);
+                return false;
+            }
+        };
+        let mut episodes = self
+            .episodes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        episodes.insert(member.clone(), episode) != Some(episode)
+    }
+
     pub(crate) fn prune_blocked(&self, members: &HashSet<MemberKey>) {
         self.blocked_since
             .lock()
@@ -117,6 +164,138 @@ impl EscalationState {
             .collect();
         *cursor = (start + count) % members.len();
         batch
+    }
+}
+
+/// The durable key shared by all escalation writers and mailbox suppression.
+#[expect(dead_code, reason = "the runtime escalation path lands in task 5")]
+pub(crate) fn escalation_summary(
+    kind: EscalationKind,
+    member: &MemberKey,
+    task: Option<&TaskId>,
+) -> String {
+    match task {
+        Some(task_id) => format!("escalation:{}:{}:{}", kind.as_str(), member, task_id),
+        None => format!("escalation:{}:{}", kind.as_str(), member),
+    }
+}
+
+/// Returns whether this target already holds this episode's escalation mail.
+pub(crate) async fn episode_already_reported(
+    reader: &dyn AsyncMailboxReader,
+    target: &MailboxScope,
+    summary: &str,
+    since: IsoTimestamp,
+    deadline: ReadDeadline,
+) -> Result<bool, ReadLaneError> {
+    let query = MessageQuery {
+        team: target.team.clone(),
+        agent: target.agent.clone(),
+        sender: Some(DAEMON_ACTOR.clone()),
+        task_id: None,
+        limit: None,
+    };
+    let messages = reader
+        .list_messages(target.clone(), query, deadline)
+        .await?;
+    Ok(messages.iter().any(|message| {
+        message.envelope.summary.as_deref() == Some(summary) && message.envelope.timestamp >= since
+    }))
+}
+
+/// Writes escalation mail to the lead and configured recipients. When an
+/// episode timestamp is supplied, local mailboxes suppress duplicate writes.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the escalation boundary keeps routing and durable-suppression context explicit"
+)]
+#[expect(dead_code, reason = "the runtime escalation path lands in task 5")]
+pub(crate) async fn escalate_mail(
+    runtime: &LocalServiceRuntime,
+    task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
+    daemon_home: &Path,
+    team: &TeamName,
+    summary: &str,
+    mail_body: &str,
+    kind: EscalationKind,
+    suppress_since: Option<IsoTimestamp>,
+) -> EscalationOutcome {
+    let Ok(targets) = load_escalation_targets(runtime, task_store, team).await else {
+        return EscalationOutcome::default();
+    };
+    let mut outcome = EscalationOutcome {
+        lead: targets.lead.clone(),
+        ..Default::default()
+    };
+    let reader = suppress_since.and_then(|_| runtime.async_mailbox_reader().ok());
+    let mut recipients = targets.recipients;
+    if let Some(lead) = targets.lead {
+        recipients.insert(0, format!("{lead}@{team}"));
+    }
+    for recipient in recipients {
+        if should_suppress(reader.as_deref(), &recipient, team, summary, suppress_since).await {
+            continue;
+        }
+        match write_escalation_mail_with_summary(
+            runtime,
+            daemon_home,
+            team,
+            &recipient,
+            mail_body,
+            summary,
+        )
+        .await
+        {
+            Ok(message_id)
+                if outcome.lead_write.is_none()
+                    && recipient
+                        == outcome
+                            .lead
+                            .as_ref()
+                            .map(|lead| format!("{lead}@{team}"))
+                            .unwrap_or_default() =>
+            {
+                outcome.lead_write = Some(message_id)
+            }
+            Ok(_) => outcome.recipients_written = outcome.recipients_written.saturating_add(1),
+            Err(error) => {
+                outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_write", outcome = "failed", kind = kind.as_str(), recipient, error = %error, "Escalation mail write failed");
+            }
+        }
+    }
+    outcome
+}
+
+async fn should_suppress(
+    reader: Option<&(dyn AsyncMailboxReader + Send + Sync)>,
+    recipient: &str,
+    team: &TeamName,
+    summary: &str,
+    since: Option<IsoTimestamp>,
+) -> bool {
+    let (Some(reader), Some(since)) = (reader, since) else {
+        return false;
+    };
+    let Ok(address) = recipient.parse::<atm_core::address::AgentAddress>() else {
+        return false;
+    };
+    if address.host().is_some() {
+        return false;
+    }
+    let scope = MailboxScope::new(
+        address.team().cloned().unwrap_or_else(|| team.clone()),
+        address.agent().clone(),
+    );
+    let Ok(deadline) = ReadDeadline::new(HERDR_NOTIFY_DEADLINE) else {
+        return false;
+    };
+    match episode_already_reported(reader, &scope, summary, since, deadline).await {
+        Ok(reported) => reported,
+        Err(error) => {
+            tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_read", outcome = "failed", recipient, error = %error, "Escalation mailbox suppression read failed");
+            false
+        }
     }
 }
 
@@ -386,6 +565,17 @@ async fn write_escalation_mail(
     recipient: &str,
     body: &str,
 ) -> Result<atm_core::schema::AtmMessageId, AtmError> {
+    write_escalation_mail_with_summary(runtime, daemon_home, team, recipient, body, body).await
+}
+
+async fn write_escalation_mail_with_summary(
+    runtime: &LocalServiceRuntime,
+    daemon_home: &Path,
+    team: &TeamName,
+    recipient: &str,
+    body: &str,
+    summary: &str,
+) -> Result<atm_core::schema::AtmMessageId, AtmError> {
     #[cfg(test)]
     if FAIL_NEXT_ESCALATION_MAIL_WRITE.with(|fail| fail.replace(false)) {
         return Err(AtmError::new(
@@ -398,6 +588,7 @@ async fn write_escalation_mail(
     let daemon_home = daemon_home.to_path_buf();
     let recipient = recipient.to_owned();
     let team = team.clone();
+    let summary = summary.to_owned();
     run_blocking(move || {
         let request = WriteRequest::new(
             daemon_home.clone(),
@@ -406,7 +597,7 @@ async fn write_escalation_mail(
             &recipient,
             team,
             SendMessageSource::Inline(body),
-            None,
+            Some(summary),
             false,
             None,
             false,
