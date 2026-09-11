@@ -14,6 +14,7 @@ pub mod request_budget;
 pub mod schema;
 pub mod search;
 pub mod task_state;
+pub mod task_op;
 pub mod task_store;
 pub mod template_catalog;
 pub mod template_workflow;

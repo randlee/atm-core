@@ -1,12 +1,40 @@
 //! Backend-neutral task ledger types and the pure task state machine.
 
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU32;
 
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 use crate::task_store::ReminderOutcome;
+
+/// One-based queue position; zero is not representable.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(transparent)]
+pub struct QueuePosition(NonZeroU32);
+
+impl QueuePosition {
+    pub const HEAD: Self = Self(NonZeroU32::MIN);
+    #[must_use]
+    pub const fn get(self) -> u32 { self.0.get() }
+    pub fn new(value: u32) -> Option<Self> { NonZeroU32::new(value).map(Self) }
+    #[must_use]
+    pub fn next(self) -> Self { Self(NonZeroU32::new(self.0.get().saturating_add(1)).unwrap_or(self.0)) }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskCloseOutcome { Completed, Refused, Cancelled }
+
+impl TaskCloseOutcome {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str { match self { Self::Completed => "completed", Self::Refused => "refused", Self::Cancelled => "cancelled" } }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskStateTag { Assigned, Active, Complete }
 
 /// The reserved sender identity used by daemon-originated task events.
 pub const DAEMON_ACTOR_NAME: &str = "atm-daemon";
