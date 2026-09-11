@@ -432,6 +432,8 @@ pub(crate) fn canonical_ack_write_request(
     source: &boundary::Message,
 ) -> Result<SendRequest, AtmError> {
     Ok(SendRequest {
+        placement: None,
+        task_op: None,
         home_dir: request.home_dir.clone(),
         current_dir: request.current_dir.clone(),
         caller_identity: actor.clone(),
