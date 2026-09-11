@@ -181,6 +181,7 @@ enum OutcomeArg { Completed, Refused, Cancelled }
 
 The `ArgGroup` makes zero targets and two targets both parse errors
 (FNX-BA-CRIT-016). `atm task` has no reassign or reopen verb: `assign <agent> --task-id <id>` is a same-agent no-op, reassigns an open row in place, or reopens a closed row in place. It preserves one row and appends `reassigned` or `reopened`; placement uses `MoveTarget` (`--before`/`--head`, default END).
+Reassign/reopen/resend of an existing id is accepted only from the row's assigner or the unique lead; the CLI does not pre-check this — the writer's `NotAuthorized` is printed and exit is 1 (nothing sent).
 
 **Generated task id:** `ulid::Ulid::new().to_string()` (the `ulid` crate
 already backs `AtmMessageId`, `inbox_message.rs:22`) parsed through

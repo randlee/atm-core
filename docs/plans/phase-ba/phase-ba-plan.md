@@ -66,8 +66,10 @@ Queue contiguity is a transaction invariant verified by test and `doctor`,
 because SQLite cannot express it.
 
 Who may cause each event (design 23:01, 00:42): `Assigned` — any authorized
-sender (unchanged); `Started` — the daemon (**§4 R1**); `Completed` — the
-assignee, the assigner, or the team lead.
+sender (unchanged); `Reassigned` / `Reopened` — the row's current assigner or
+the unique team lead (never the assignee; a third party is `NotAuthorized`);
+`Started` — the daemon (**§4 R1**); `Completed` — the assignee, the assigner,
+or the team lead.
 
 ### 3.2 Agent disposition — `atm-http-runtime/src/herdr_queue_wake*.rs`
 

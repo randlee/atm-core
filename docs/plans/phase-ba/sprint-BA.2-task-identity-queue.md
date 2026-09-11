@@ -30,7 +30,7 @@ legacy `task_complete` key (see "Wire" below).
 | D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
 | D5 | `TASK_SCHEMA_DDL` rebuilt (two tables, three indexes) | `crates/atm-storage-rusqlite/src/task_store.rs:15-58` |
 | D6 | `migrate_task_identity` + `TaskMigrationReport` | `crates/atm-storage-rusqlite/src/task_migration.rs` (new) |
-| D7 | writer: `apply_task_message` dispatch, `apply_task_start`, `apply_task_close`, `apply_task_move`, `renumber_queue`, authority rules | `crates/atm-storage-rusqlite/src/writer/task_ops.rs` |
+| D7 | writer: `apply_task_message` dispatch, `apply_task_start`, `apply_task_close`, `apply_task_move`, `renumber_queue`, authority rules — Start (daemon), Close (assignee/assigner/unique lead), Move (assignee), Assign-on-existing-row (assigner/unique lead) | `crates/atm-storage-rusqlite/src/writer/task_ops.rs` |
 | D8 | `AsyncTaskLedgerReader::open_tasks_for_team`, `TaskStore::load_task(team, task_id)`, `DoctorFinding::TaskQueueGap` | `crates/atm-storage/src/contract.rs:916`, `task_store.rs:66`, `crates/atm-core/src/doctor/` |
 | D9 | boundary manifest edits per plan §10 | `boundaries/atm-storage/task-store.toml`, `…-rusqlite/task-store-sqlite.toml`, `async-task-ledger-reader*.toml` |
 | D10 | tests named below; ADR-061 D6 approval entry cited on the PR | `tests/task_identity.rs`, `tests/task_migration.rs` |
@@ -702,6 +702,8 @@ sets `close_outcome`, `position = NULL`, renumbers the remainder, and keeps
 `acknowledge_completed_assignment`. `Move` renumbers only; `assigned_at`
 appears in an `UPDATE … SET` list only in the reassign and reopen branches of `apply_task_assignment` (never Start, Close, Move, or renumber).
 `commit_write` with `task_op.is_some()` and a `to` whose team differs from the writer's caller team or whose host is set returns the same local-only validation error (`task commands are local-team only; <addr> resolves to another team or host — send a plain message or assign the local alias`) before opening the transaction (plan §4 R8); test `writer_rejects_task_op_on_foreign_team_or_host_recipient`.
+`Assign` on an existing row (branches b, c, d of `apply_task_assignment`) requires `caller == row.assigner || caller == unique_lead`; the assignee and any third party are `NotAuthorized` (detail `"<actor> is neither assigner nor the unique lead of <team>"`). Branch a (no row) has no task-level authority check beyond send authority. The check runs before `transition()` inside the same transaction, exactly as for `Close`.
+The authorized caller becomes `assigner` in branches c and d (and the message link in b), so receipts and reports route to the sender of the current assignment message.
 
 `apply_task_move` — the active task holds position 1 by invariant and is
 never repositioned or preempted (design §4.3). Exact arm, before any
@@ -836,6 +838,7 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
 - `close_by_third_party_is_not_authorized`, `close_by_unique_lead_succeeds`,
   `close_by_lead_when_two_leads_is_not_authorized_with_count_in_detail`,
   `close_by_lead_when_no_lead_is_not_authorized`, `move_by_assignee_is_not_authorized`.
+- `reassign_by_third_party_is_not_authorized`, `reassign_by_assignee_is_not_authorized` (hand-back is `close refused`), `reassign_by_assigner_succeeds_and_assigner_unchanged`, `reassign_by_unique_lead_succeeds_and_lead_becomes_assigner`, `reassign_on_team_with_two_leads_by_lead_is_not_authorized`, `reopen_by_third_party_is_not_authorized`, `reopen_by_assigner_succeeds`, `same_agent_resend_by_third_party_is_not_authorized` — each rejection appends one `rejected` event and changes no row.
 - `move_of_active_task_returns_current_position_and_renumbers_nothing` —
   assert every other row's `position` and `updated_at` byte-equal.
 - `legacy_task_complete_request_closes_the_task` — a `WriteRequest` decoded
