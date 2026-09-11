@@ -205,6 +205,7 @@ pub enum TaskRejectionKind {
     NotAuthorized,   // wrong actor, or "lead" authority claimed on a team with 0 or 2+ leads (detail names the count)
     ActiveElsewhere, // one-active index hit on Started
     UnknownTarget,   // Move Before(id) names no open task of the same member
+    AlreadyComplete, // close repeated after completion; informational rejection
 }
 ```
 
@@ -571,7 +572,7 @@ SELECT team, task_id, assignee, assigner, state,
        CASE state WHEN 'complete' THEN 'completed' END,
        NULL,   -- positions assigned in step 7
        assignment_message_id, description,
-       (SELECT MIN(o.assigned_at) FROM tasks_legacy o WHERE o.team = ranked.team AND o.task_id = ranked.task_id),
+       winner.assigned_at,
        updated_at, last_reminded_at, reminder_count, lead_notified_count
   FROM ranked WHERE winner = 1;
 ```
@@ -654,7 +655,7 @@ envelope:
 | `task_id` | `task_op` | applies |
 | --- | --- | --- |
 | `None` | any | nothing (a `task_op` without `task_id` is rejected at the CLI and at `WriteRequest` validation) |
-| `Some` | `None` | `apply_task_assignment` — insert at `position = n+1`, or idempotent resend (`marker = resend`) |
+| `Some` | `None` | `apply_task_assignment`: (a) no row inserts `assigned`; (b) same agent is a no-op; (c) other agent renumbers both queues, updates assignee/state/assigned_at/position per `placement`, and emits `reassigned`; (d) closed row resets outcome/counters, assigns position per `placement`, and emits `reopened`. `placement: Option<MoveTarget>` is consumed only here; None means END. |
 | (legacy `task_complete = Some`) | — | never reaches the writer: `WriteRequest::task_op_normalized()` has already turned it into `task_id = Some, task_op = Some(Close{Completed})` |
 | `Some` | `Some(Start)` | `apply_task_start` |
 | `Some` | `Some(Close{..})` | `apply_task_close` |
@@ -691,7 +692,7 @@ tick (FNX-BA-CRIT-029), and `state = assigned AND position = 1 AND
 last_reminded_at IS NOT NULL` is the "start owed" predicate BA.3 retries on. `Close`
 sets `close_outcome`, `position = NULL`, renumbers the remainder, and keeps
 `acknowledge_completed_assignment`. `Move` renumbers only; `assigned_at`
-is never in any `UPDATE … SET` list in this file (grep gate).
+appears in an `UPDATE … SET` list only in the reassign and reopen branches of `apply_task_assignment` (never Start, Close, Move, or renumber).
 
 `apply_task_move` — the active task holds position 1 by invariant and is
 never repositioned or preempted (design §4.3). Exact arm, before any
@@ -718,10 +719,10 @@ renumber:
 Consecutive refusals (design §4.2): `atm-storage-rusqlite/src/task_sql.rs`
 owns `trailing_refusal_run(conn, team, assignee) -> RefusalRun`:
 `SELECT event, at FROM task_events WHERE team = ?1 AND assignee = ?2 AND
-event IN ('completed','refused','cancelled','reopened','reassigned') ORDER BY
+event IN ('assigned','reassigned','reopened','completed','refused','cancelled') ORDER BY
 at DESC, seq DESC`. Rust counts leading refused rows; `started_at` is the
 oldest refused timestamp. Started/assigned/moved/migrated do not reset it;
-completed/cancelled/reopened/reassigned end it. `apply_task_close` with
+completed and cancelled end it; assigned, reassigned, and reopened also end it; started, moved, and migrated neither count nor reset. `apply_task_close` with
 `outcome = Refused` computes, in the same transaction, the assignee's
 trailing run of `refused` closes (`SELECT close_outcome FROM tasks WHERE team
 = ?1 AND assignee = ?2 AND state = 'complete' ORDER BY updated_at DESC,
@@ -815,7 +816,7 @@ Pure — `task_state.rs`:
   `position = None` (FNX-BA-CRIT-019).
 - `task_row_json_rejects_position_on_complete_row` — `state:"complete"` with
   `position: 1` → validation error.
-- `task_event_row_json_rejected_after_complete_round_trips` — a `rejected`
+- `task_event_row_json_reopened_round_trips_and_other_kinds_reject_complete_to_assigned` — a `reopened`
   event with `from_state = to_state = Complete(Refused)` serialises with one
   `close_outcome: "refused"` key and round-trips; `from_state: "complete",
   to_state: "assigned"` → validation error (FNX-BA-CRIT-022).
@@ -891,7 +892,7 @@ string, never from production code):
 - `duplicate_group_active_beats_assigned` — mirror pattern (assignee row
   `active`, assigner mirror row `assigned`) → one `active` row, assignee =
   winner's; one `migrated` event naming the loser.
-- `duplicate_group_min_assigned_at_is_kept`.
+- `duplicate_group_winner_keeps_its_own_assigned_at_and_losers_are_in_events`.
 - `two_active_tasks_same_member_demotes_later_one` — winner by
   `(assigned_at, task_id)`; loser `assigned`, `migrated` event with the AZ
   detail text; positions 1 (active) and 2.
@@ -929,6 +930,8 @@ Reader:
 
 - `open_tasks_for_team_orders_by_assignee_position` and excludes complete rows.
 - `doctor_reports_task_queue_gap` — hand-write positions 1,3 → finding.
+
+Required tests: `assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues`, `assign_closed_id_reopens_in_place_clearing_outcome_and_counters`, `reassign_releases_old_active_slot_in_same_transaction`, `assign_same_agent_open_id_emits_no_event`, `trailing_refusal_run_counts_raw_stored_event_values`, `replay_active_to_assigned_via_reassigned`, `replay_complete_to_assigned_via_reopened`, `task_event_row_json_reopened_round_trips_and_other_kinds_reject_complete_to_assigned`, `write_request_placement_round_trips_through_envelope`, `assign_with_before_survives_to_transaction`, `duplicate_group_winner_keeps_its_own_assigned_at_and_losers_are_in_events`, `placement_rejected_on_start_and_close`, `assign_before_active_target_is_unknown_target`, and `assign_before_foreign_member_target_is_unknown_target`.
 
 ## Acceptance criteria
 
