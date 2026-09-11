@@ -90,7 +90,6 @@ struct TaskAssignCommand {
     #[arg(long, value_name = "OTHER_TASK_ID", group = "placement")] before: Option<TaskId>,
     #[arg(long, group = "placement")] head: bool,
     #[command(flatten)] message: MessageSourceArgs,  // AZ MessageSource, verbatim
-    #[arg(long = "requires-ack")] requires_ack: bool,
     #[arg(long)] json: bool,
     #[command(flatten)] caller: CallerArgs,
 }
@@ -143,6 +142,10 @@ enum OutcomeArg { Completed, Refused, Cancelled }
 /// assign/close/list/events and the aliases: min = 1.5.0; move: min = 1.6.0.
 fn require_daemon_api(verdict: &CompatibilityVerdict, min: HttpApiVersion, verb: &str) -> Result<(), AtmError>;
 ```
+
+An assignment message always requires an ack: the shared builder sets it
+from `task_id`, as `atm send --task-id` does today, so there is no
+`--requires-ack` flag.
 
 `atm task assign` on an existing id is the same writer operation whatever
 the row's state: same-agent resend, in-place reassign, or reopen (design

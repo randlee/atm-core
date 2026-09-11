@@ -189,7 +189,7 @@ ADR-063 is marked superseded in this PR.
 3. One agent holds at most one `active` task — rejected by the database.
 4. One task id is one row — rejected by the database. The 14 live duplicate
    groups are resolved by BA.2's migration or its abort report.
-5. No operation changes `assigned_at` after the first assign.
+5. No operation other than assign, reassign, and reopen changes `assigned_at` (design §4.3).
 6. A close whose transition fails never loses its report.
 7. Acking any message never reads or writes `tasks` / `task_events`.
 8. `atm task` has exactly five subcommands; `atm send --task-id` and

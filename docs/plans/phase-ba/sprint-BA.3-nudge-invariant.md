@@ -331,7 +331,7 @@ lead; backends Herdr steer, tmux, bare-CLI FIFO):
 1. `escalation_ownership_architecture_test` passes in CI: `dispose` is the
    one function that turns a `RuntimeMemberState` into a decision.
 2. Every test above exists by name and passes under `just test`; the
-   disposition table has exactly the 13 arms quoted above.
+   disposition table has exactly the 12 arms quoted above.
 3. `grep -rn "BLOCKED_RENOTIFY_MS\|select_open_task\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation\|HoldReason" crates/` returns nothing.
 4. `grep -n "DeliveryChannel::HerdrSteer" crates/atm-http-runtime/src/herdr_queue_wake.rs` returns nothing.
 5. `grep -rn "TaskOp::Start" crates/atm-http-runtime/src` → `herdr_task_start.rs` only.
