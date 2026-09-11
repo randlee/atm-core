@@ -85,7 +85,7 @@ pub fn admit(
   variant; `Transition` becomes `pub struct Transition(pub TaskState)` **or**
   keep the enum with one variant — choose the struct; update the two
   `let Transition::To(next_state) = next else { … }` sites in `task_ops.rs`
-  (`:319`, `:433`) to plain bindings.
+  (`:331`, `:433`) to plain bindings.
 - [ ] D5 — boundary manifests (ruling: phase plan §10):
   `boundaries/atm-storage/task-store.toml` and
   `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` `[contracts].notes`:
