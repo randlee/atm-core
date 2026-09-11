@@ -236,17 +236,19 @@ pub enum ClosePreflight {
     NotAuthorized { row: TaskRow },
     /// Row open: deliver report and close in one write.
     Proceed { row: TaskRow },
-    /// Row already closed: deliver the report as a plain message, then inform.
+    /// Row read as closed: still sent as the guarded task write; the writer's `AlreadyComplete` rejection (not this read) decides plain delivery.
     AlreadyClosed { row: TaskRow },
     /// No such task id on this team: block before anything is sent.
     Unknown,
 }
 
-pub async fn preflight_close(reader: &dyn AsyncTaskLedgerReader, team: TeamName, task_id: &TaskId, caller: &AgentName, lead_count: usize, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
+pub async fn preflight_close(reader: &dyn AsyncTaskLedger, team: TeamName, task_id: &TaskId, caller: &AgentName, unique_lead: Option<&AgentName>, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
 
-Authority is the assignee, assigner, or unique lead (`n == 1`), identical to
-BA.2's writer rule; the writer's `TaskRejectionKind::NotAuthorized` remains the
-authoritative check.
+`unique_lead` is `Some(lead)` only when the roster the CLI already loads has
+exactly one `agent_type = Lead` member (the same filter
+`herdr_escalation.rs:214-243` uses), else `None`. Authority is
+`caller == &row.assignee || caller == &row.assigner || unique_lead == Some(caller)`;
+a count is never an authority proof.
 
 /// Who receives the mandatory report. A self-addressed send is invalid
 /// (`send/recipient.rs:13-31`, enforced in `write_context.rs:129`), so the
@@ -262,19 +264,22 @@ pub fn report_recipient(row: &TaskRow, caller: &AgentName) -> AgentName {
 | stage | `Proceed` | `AlreadyClosed` | `NotAuthorized` | `Unknown` |
 | --- | --- | --- | --- | --- |
 | 1 preflight (reader lane, `list_tasks(team, None)` filtered — no new read method) | continue | continue | exit 1: `task <id>: <caller> may not close (not assignee, assigner, or unique lead)`; nothing sent | exit 1: `task <id> does not exist on team <t>`; nothing sent |
-| 2 deliver | one `WriteRequest { to: report_recipient(row, caller), task_id, task_op: Some(Close{outcome, reason}) }` — report and close are **one transaction**; dispatch writer rejection by `TaskRejectionKind`: `AlreadyComplete` → 2b plain delivery + informational line, exit 0; `StaleCounterparty` → one re-preflight/recompose; `NotAuthorized`, `NoOpenTask`, `ActiveElsewhere`, `UnknownTarget` → writer rolled back, CLI prints the rejection, exit 1, NO plain message | `WriteRequest` with `task_id: None` to `report_recipient` — plain delivery | — | — |
+| 2 deliver | one `WriteRequest { to: report_recipient(row, caller), task_id, task_op: Some(Close{outcome, reason}) }` — report and close are **one transaction**; dispatch writer rejection by `TaskRejectionKind`: `AlreadyComplete` → 2b plain delivery + informational line, exit 0; `StaleCounterparty` → one re-preflight/recompose; `NotAuthorized`, `NoOpenTask`, `ActiveElsewhere`, `UnknownTarget` → writer rolled back, CLI prints the rejection, exit 1, NO plain message | same guarded `WriteRequest` as `Proceed` (task_id + `Close` op); never a plain message directly from preflight | — | — |
 | 3 result | `closed <id> (<outcome>)`; exit 0 | `task <id> was already closed (<outcome>) on <at>; report delivered`; exit 0 | — | — |
 
 Stage 2's single transaction is what design §5.2 means by "deliver first":
-the authorized report is never lost. `AlreadyClosed` is informational only when the race
-(closed between stage 1 and 2) occurs: the writer makes no task transition,
-the CLI runs 2b and prints the stage-3 informational line. The
-report body is the message source when given, else the `reason` text.
+the authorized report is never lost. Both `Proceed` and `AlreadyClosed` submit
+the same guarded write, so a same-id reopen or reassignment between preflight and
+write is seen by the writer: it either applies the close (authorized, counterparty
+current), or returns `StaleCounterparty`/`NotAuthorized`/`AlreadyComplete`; only
+`AlreadyComplete` leads to 2b plain delivery and the informational line. No plain
+report is ever sent from the preflight read alone. The report body is the message
+source when given, else the `reason` text.
 
 ## Consecutive-refusal escalation (design §4.2)
 
 Not in this sprint. The refused close is an ordinary stage-2 write; the
-writer returns `` (BA.2) and the Tokio runtime's
+writer returns no refusal state (BA.2 has no close-result seam) and the Tokio runtime's
 `reader tick` seam emits the escalation (BA.3 "Consecutive-refusal
 escalation") — `atm-core` cannot call the escalation path (dependency
 direction; FNX-BA-CRIT-014). The refused task's close has already released
@@ -390,8 +395,11 @@ Close — `crates/atm/tests/task_close.rs` (fixture daemon, loopback):
 - `close_already_closed_delivers_report_without_task_event`.
 - `close_raced_by_other_closer_writes_zero_new_events` — close from
   two processes; second gets the informational line; two reports delivered.
+- `already_closed_preflight_then_reopen_before_write_closes_or_recomposes_not_stale_report` — preflight reads Complete; the id is reopened/reassigned by another process; the guarded write returns `StaleCounterparty` (recompose once) or closes the now-open row; zero plain reports to the old counterparty.
 - `close_by_third_party_sends_nothing_and_exits_one` — open row and already-closed
-  row; `tasks`, `task_events`, `mail_messages` counts unchanged; exit 1.
+  row; `tasks`, `task_events`, `mail_messages` counts unchanged; exit 1, including
+  a one-lead roster where the caller is not that lead.
+- `close_by_unique_lead_passes_preflight_on_open_and_closed_rows`.
 - `close_each_outcome_roundtrips` — 3 outcomes visible in `atm task events --json`.
 - `assign_existing_open_id_to_other_agent_reassigns_in_place`.
 - `refusal_releases_next_queued_task` — A has T1, T2; refuse T1 → T2 is
@@ -455,7 +463,7 @@ no ATM read is role-gated today and this phase adds no authority to reads).
 
 Additional CLI validation test: `assign_before_rejects_with_start_flag`.
 
-`AlreadyClosed` is the preflight state; repeated close creates no task transition or event.
+`AlreadyClosed` is a preflight hint; the writer's `AlreadyComplete` is the decision, and a repeated close creates no task transition or event.
 
 Placement syntax: `atm task assign <agent> --template <j2> --vars <json> [--task-id <id>] [--before <other-task-id> | --head]`.
 

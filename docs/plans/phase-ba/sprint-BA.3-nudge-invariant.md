@@ -5,7 +5,7 @@
 | Design | [`nudge-task-design.md`](./nudge-task-design.md) §1, §2, §4.2, §6, §6.1, §6.2, §8 (commit `18db5acc3`) |
 | Outcomes | B1, B2, B11, B12 |
 | Recommended | arch-ctm / deep-reasoning — replaces the reminder/escalation loop in a 4k-line runtime module |
-| Depends on | `must_follow` BA.2 (dev push) — `open_tasks_for_team`, `TaskOp::Start`, `position`, `` |
+| Depends on | `must_follow` BA.2 (dev push) — `open_tasks_for_team`, `TaskOp::Start`, `position`, `AsyncTaskLedgerReader::refusal_run` |
 | `parallel_safe` | none — BA.4 and BA.5 both `must_follow` this sprint (BA.4's `TaskMove` router arm and BA.5's handoff re-arm land in files this sprint rewrites: `storage_and_nudge_router.rs`, `herdr_queue_wake.rs`). This sprint owns every file under `crates/atm-http-runtime/src/` it touches: `herdr_*`, `herdr_breaker_escalation.rs` (deleted), `storage_and_nudge_router.rs::reader tick`. |
 | Worktree | `feature/ba3-nudge-invariant` off `integrate/phase-ba` (merge BA.2 forward) |
 | Governed interfaces | none (Herdr IPC unchanged) |

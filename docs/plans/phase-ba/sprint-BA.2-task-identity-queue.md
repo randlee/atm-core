@@ -27,7 +27,7 @@ legacy `task_complete` key (see "Wire" below).
 | D1 | `QueuePosition`, `TaskCloseOutcome` (completed, refused, cancelled); `TaskState::Complete(outcome)`, `TaskStateTag`, `TaskEvent::{Assigned,Started,Completed(outcome)}`, `transition()`, `TaskRejected`/`TaskRejectionKind` | `crates/atm-storage/src/task_state.rs` |
 | D2 | `TaskRow` + `TaskRowWire`, `TaskEventRow` + `TaskEventRowWire`, `TaskEventKind::{Assigned,Started,Reassigned,Reopened,Completed,Refused,Cancelled,Moved,Migrated}` | `crates/atm-storage/src/task_state.rs` |
 | D3 | `TaskOp`, `MoveTarget`, `RefusalRun`, `TASK_CONSECUTIVE_REFUSAL_THRESHOLD`; re-exported from `atm_core::boundary` beside `TASK_STALLED_REMINDER_THRESHOLD` | `crates/atm-storage/src/task_op.rs` (new), `task_store.rs` |
-| D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, ``, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
+| D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
 | D5 | `TASK_SCHEMA_DDL` rebuilt (two tables, three indexes) | `crates/atm-storage-rusqlite/src/task_store.rs:15-58` |
 | D6 | `migrate_task_identity` + `TaskMigrationReport` | `crates/atm-storage-rusqlite/src/task_migration.rs` (new) |
 | D7 | writer: `apply_task_message` dispatch, `apply_task_start`, `apply_task_close`, `apply_task_move`, `renumber_queue`, authority rules | `crates/atm-storage-rusqlite/src/writer/task_ops.rs` |
@@ -332,8 +332,9 @@ pub struct TaskEventRow {
     pub from_state: Option<TaskState>,
     /// Carries the outcome when `Some(Complete(_))`. The `task_events.close_outcome`
     /// column and the wire key of the same name are this value's projection
-    /// (`to_state.and_then(TaskState::close_outcome)`); there is no second
-    /// Rust field (PLAN-SCOPE-004).
+    /// (the outcome of whichever side is `Complete`: `to_state` for `completed`/`refused`/`cancelled`
+    /// and state-neutral rows, `from_state` for `reopened`; a row with two different
+    /// outcomes is a validation error); there is no second Rust field (PLAN-SCOPE-004).
     pub to_state: Option<TaskState>,
     pub actor: TaskActor,
     pub message_id: Option<AtmMessageId>,
@@ -728,18 +729,15 @@ owns `trailing_refusal_run(conn, team, assignee) -> RefusalRun`:
 `SELECT event, at FROM task_events WHERE team = ?1 AND assignee = ?2 AND
 event IN ('assigned','reassigned','reopened','completed','refused','cancelled') ORDER BY
 rowid DESC`. Rust counts leading refused rows; `started_at` is the
-oldest refused timestamp. Started/assigned/moved/migrated do not reset it;
-completed and cancelled end it; assigned, reassigned, and reopened also end it; started, moved, and migrated neither count nor reset. `apply_task_close` with
-`outcome = Refused` computes, in the same transaction, the assignee's
-trailing run of `refused` closes (`SELECT close_outcome FROM tasks WHERE team
-= ?1 AND assignee = ?2 AND state = 'complete' ORDER BY updated_at DESC,
-task_id DESC` read until the first non-`refused`) and returns it:
+oldest refused timestamp. completed and cancelled end it; assigned, reassigned,
+and reopened also end it; started, moved, and migrated neither count nor reset.
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RefusalRun { pub count: u32, pub started_at: Option<IsoTimestamp> }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+```
+
 `one_active_task_per_agent` violation on `Start` maps to
 `TaskRejectionKind::ActiveElsewhere`, not to a generic SQLite error.
 
@@ -844,8 +842,9 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
   `completed`; a request with `task_id = "T1"` and `task_complete = "T2"`
   fails validation; `task_op` present + `task_complete` present → `task_op`
   wins.
-- `refusal_run_is_tick_driven` — `` is
-  `Some(RefusalRun{Refused, 1})` after one refused close.
+- `refusal_run_is_tick_driven` — no write-path result carries the run;
+  `AsyncTaskLedgerReader::refusal_run(team, assignee)` returns
+  `Some(RefusalRun { count: 1, started_at: Some(<close at>) })` after one refused close.
 - `start_by_member_actor_is_not_authorized`.
 - `trailing_refusal_run_counts_raw_stored_event_values` — closes: refused, refused,
   completed, refused, refused, refused → the last returns 3; a following
