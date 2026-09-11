@@ -118,10 +118,10 @@ impl SqliteTaskStore {
     }
 
     pub(crate) fn decode_event_row(row: &Row<'_>) -> rusqlite::Result<TaskEventRow> {
-        let actor: String = row.get(8)?;
-        let message_id: Option<String> = row.get(9)?;
-        let outcome: Option<String> = row.get(10)?;
-        let marker: Option<String> = row.get(11)?;
+        let actor: String = row.get(9)?;
+        let message_id: Option<String> = row.get(10)?;
+        let outcome: Option<String> = row.get(11)?;
+        let marker: Option<String> = row.get(12)?;
         Ok(TaskEventRow {
             team: parse(&row.get::<_, String>(0)?, "event team")?,
             task_id: parse(&row.get::<_, String>(1)?, "event task id")?,
@@ -150,7 +150,7 @@ impl SqliteTaskStore {
                 .transpose()?,
             outcome: outcome.as_deref().map(parse_outcome).transpose()?,
             marker: marker.as_deref().map(parse_marker).transpose()?,
-            detail: row.get(12)?,
+            detail: row.get(13)?,
         })
     }
 

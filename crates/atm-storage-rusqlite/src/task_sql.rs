@@ -7,7 +7,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::SqliteTaskStore;
 
 pub(crate) const TASK_COLUMNS: &str = "team, task_id, assignee, assigner, state, close_outcome, position, assignment_message_id, description, assigned_at, updated_at, last_reminded_at, reminder_count, lead_notified_count";
-pub(crate) const TASK_EVENT_COLUMNS: &str = "team, task_id, assignee, seq, at, event, from_state, to_state, actor, message_id, outcome, marker, detail";
+pub(crate) const TASK_EVENT_COLUMNS: &str = "team, task_id, assignee, seq, at, event, from_state, to_state, close_outcome, actor, message_id, outcome, marker, detail";
 
 pub(crate) fn select_tasks_for_team_sql() -> String {
     format!(
@@ -25,7 +25,7 @@ pub(crate) fn select_task_row(
     connection: &Connection,
     team: &TeamName,
     task_id: &TaskId,
-    assignee: &AgentName,
+    _assignee: &AgentName,
 ) -> rusqlite::Result<Option<TaskRow>> {
     connection
         .query_row(
