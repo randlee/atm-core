@@ -318,8 +318,6 @@ mod tests {
             summary: None,
             message_id: None,
             requires_ack: false,
-            placement: None,
-            task_op: None,
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
