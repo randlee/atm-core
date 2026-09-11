@@ -217,6 +217,12 @@ address that does not parse into a mailbox scope is written unconditionally
 whatever happened to the others, so a lead-success/recipient-failure tick is
 completed on the next tick rather than suppressed forever.
 
+If `episode_already_reported` returns `Err(ReadLaneError)` for a target, that
+target is **incomplete**: log one `warn`, do not write that target, and do not
+call `mark_notified`, `record_lead_notified`, or stamp the episode or task.
+The error is neither "reported" nor "missing"; the existing next-tick retry
+path for episodes, stalled tasks, and held refusal runs retries that target.
+
 Restart behaviour (R4): `since` is the roster's `state_changed_at`. A member
 Herdr still lists as Blocked keeps its original `state_changed_at` across a
 daemon restart, so the existing report suppresses. A heartbeat-only member
@@ -272,6 +278,10 @@ pub(crate) async fn escalate_mail(
 | `escalate_blocked` / `escalate_one_blocked` with `BLOCKED_NOTIFY_MS`, `blocked_cooldown`, `next_blocked_batch` (`_escalation.rs:176-235`) | `escalate_episode(member, episode, open_tasks)` on `EscalateEpisode`: `escalate_mail(…, summary = escalation_summary(episode.kind.into(), member, None), body = existing `blocked_body` (`_escalation.rs:279`) generalised with the kind word and `since`, kind, suppress_since = Some(episode.since))` — per target: already reported since `since` → skip; else write. `mark_notified` when every target is either skipped or written; a failed target leaves `notified = false` so the next tick retries **that target only** (the others are then skipped by their own report) |
 | `maybe_escalate_breaker` / `escalate_breaker_cycle` on breaker open (`herdr_queue_wake.rs:301-379`, `herdr_breaker_escalation.rs`) | deleted (design §8). A Herdr list failure changes **no** roster state: the observation is recorded unavailable (`herdr_queue_wake.rs:424-435`, unchanged), no member enters an episode, no mail is written (requirements.md:4196-4203: a failed poll preserves state and triggers nothing). `Offline` is only ever an explicit observation (FNX-BA-CRIT-025). |
 | `HERDR_MAX_PROMPTS_PER_TICK` guard applies to reminders | unchanged; escalation messages do not count against it (they are mail, not prompts) |
+
+Mailbox verification errors are per-target incomplete results: the target is
+not written or stamped, one warning is logged, and the next tick retries it;
+successful targets remain suppressed by their own mailbox records.
 
 Tick order per team: (1) roster observations applied, (2) queue drain
 (unchanged; BA.5 reorders), (3) `open_tasks_for_team`, (4) for each observed
@@ -366,9 +376,9 @@ cycle — FNX-BA-CRIT-014 / PLAN-SCOPE-001). Exact addition, after `:297`:
                     let body = refusals_body(applied); // assignee, count, task id
                     let task_store = self.service_runtime.task_store().ok();
                     // `>=` plus suppression bounded to the run start: the 3rd
-                    // refusal writes the mail; if that write failed, the 4th
-                    // refusal finds no report since `run_started_at` and writes
-                    // it; the 5th finds it and is silent (RSH-001).
+                    // the threshold refusal writes the mail; if a target write
+                    // fails, the held task run retries only that target on the
+                    // next tick (RSH-001).
                     let _ = crate::herdr_escalation::escalate_mail(
                         &self.service_runtime, task_store.as_ref(), &self.daemon_home,
                         &team, &summary, &body, EscalationKind::RefusalsEscalated,
@@ -487,6 +497,11 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
   failing recipient write on the first tick: lead written, recipient failed,
   `notified = false`; next tick → recipient written, lead **not** re-written;
   then `notified = true`.
+- `mailbox_read_error_leaves_target_incomplete_no_duplicate_no_stamp` — for
+  episode, stalled, and refusal-hold paths, inject `ReadLaneError` while
+  checking the lead mailbox: no lead mail is written or marked, other targets
+  are written normally, and the next healthy tick writes exactly one lead mail;
+  the notification stamp remains unchanged until all targets complete.
 - `poll_failure_produces_no_episode` — Herdr list error for 20 ticks →
   roster states unchanged, 0 mail, 0 prompts (FNX-BA-CRIT-025).
 - `failed_start_write_then_active_member_still_starts_once` — handoff

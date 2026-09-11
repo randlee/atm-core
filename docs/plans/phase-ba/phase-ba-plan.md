@@ -224,6 +224,7 @@ error code is added.
 | member has no dispatchable backend | `Hold(NoDeliveryChannel)`, one `warn` per tick, no error | BA.3 runtime |
 | escalation mail write fails | logged `warn`; repaired by the verify-and-retry path on the next tick / refusal | BA.3 runtime |
 | consecutive refusal run reaches 3 | `Hold(RefusalsEscalated)`; the tick sends no task prompt and retries only missing refusal escalation mail | BA.3 runtime |
+| escalation mailbox verification read fails | logged `warn`; target remains incomplete with no duplicate or notification stamp, and is retried on the next tick | BA.3 runtime |
 
 ## 10. Task-subsystem boundary tightening (BA.2, with a written ruling)
 
