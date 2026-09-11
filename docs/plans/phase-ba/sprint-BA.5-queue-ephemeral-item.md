@@ -107,6 +107,18 @@ updated to the new names and keeps both assertions.
 | bare-CLI `queue_get_next` (`storage_and_nudge_router.rs:698`) and graft receivers | unchanged code; the pull reads the message, the read closes the item |
 | `atm queue` = `NudgeMode::Deferred` (`commands/queue.rs`) | unchanged |
 
+After clearing the queue marker, `complete_successful_claim` calls BA.3's
+`complete_task_handoff` when the claimed envelope has a `task_id` equal to the
+member's current head (`position = 1`, `state = assigned`). The assignment
+message is the task's first nudge: the helper records the emitted reminder,
+applies idempotent `TaskOp::Start`, and sends one `task_started` receipt. Claims
+without a task id or for a non-head task do not activate anything. A failed
+Start remains owed for BA.3's next-tick retry.
+
+Tests include `deferred_assignment_handoff_starts_head_task_once`,
+`deferred_assignment_handoff_for_non_head_task_does_not_start`, and
+`failed_start_after_queue_handoff_is_retried_without_prompt`.
+
 Nothing marks a queue message `active`; nothing creates a task row for it;
 no `list_messages` call is added anywhere (the open predicate is SQL on
 `mail_message_states` — FNX-BA-CRIT-018 does not arise).

@@ -34,7 +34,7 @@ in design §8 is deleted.
 | D3 | `EscalationKind::RefusalsEscalated`; `escalate_mail()` factored out of `escalate()`; `write_escalation_mail` gains `summary` | `herdr_escalation.rs` |
 | D4 | roster-wide candidate sweep (`herdr_candidates` filter removed), `MemberObservation`, one `open_tasks_for_team` per team per tick, `dispose` → act, pre-emit re-check | `herdr_queue_wake.rs`, `herdr_queue_wake_reminders.rs` |
 | D5 | `escalate_stalled_task`, `escalate_episode` | `herdr_queue_wake_escalation.rs` |
-| D6 | Start handoff write + `task_started` template | `herdr_queue_wake_reminders.rs`, `crates/atm-core/templates/` (reminder template class) |
+| D6 | `complete_task_handoff(runtime, member, head, now)` owns the successful task handoff: reminder audit, idempotent `TaskOp::Start` write, and `task_started` receipt | `herdr_task_start.rs` (new), `crates/atm-core/templates/` (reminder template class) |
 | D7 | refusal escalation in `reader tick` | `storage_and_nudge_router.rs:273-337` |
 | D8 | deletions listed under "Paths to delete", incl. `herdr_breaker_escalation.rs` | — |
 | D9 | tests named below | `herdr_task_disposition.rs`, `tests/herdr_nudge_invariant.rs` |
@@ -288,6 +288,17 @@ Tick order per team: (1) roster observations applied, (2) queue drain
 member `dispose(...)` → act. A member prompted by the drain in this tick is
 `Hold`-equivalent for tasks (existing `prompted_by_drain` skip, kept).
 
+**Successful handoff helper:** `complete_task_handoff(runtime, member, head,
+now)` is the single helper for a successful task handoff. It records
+`ReminderOutcome::Emitted`, submits the idempotent `TaskOp::Start` write, and
+sends the existing `task_started` receipt. The task-reminder path calls it
+after an emitted reminder; BA.5 calls it after a claimed assignment message
+only when its envelope `task_id` equals the current head (`position = 1`,
+`state = assigned`). Thus deferred assignment mail is the task's first nudge;
+non-task and non-head claims do not activate a task. A failed Start remains
+start-owed for the next tick, without another prompt. It is the only Start
+write submission path.
+
 **Start (R1):** when the task nudge for `head` is handed off successfully
 (`ReminderOutcome::Emitted`), the pump submits one `WriteRequest` from
 `caller_identity = atm-daemon` to the **assigner** with `task_id =
@@ -480,6 +491,8 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
   the assigner's mailbox; second emitted nudge (agent still idle) → **no**
   second receipt, no second event.
 - `head_already_active_handoff_sends_no_receipt`.
+- `failed_start_after_queue_handoff_is_retried_without_prompt` — deferred
+  assignment handoff retries a failed Start without another prompt.
 - `member_turning_active_between_dispose_and_emit_is_not_prompted` — flip
   the in-RAM roster record inside the test hook between `dispose` and the
   emit → 0 prompts.
