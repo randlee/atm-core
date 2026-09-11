@@ -71,7 +71,7 @@
 
 1. `grep -rn "atm list --tasks\|--task-complete <\|task close .* --outcome" CLAUDE.md docs/*.md` → nothing.
 2. The `cli_surface_docs.rs` test above passes.
-3. Every "decided:" line in plan §2 has a URL.
+3. `grep -c '^| \*\*R[0-9]\*\* ' docs/plans/phase-ba/phase-ba-plan.md` → 7, and `grep -n 'ab44564bc' docs/plans/phase-ba/phase-ba-plan.md` finds the R0 row.
 4. `quality-mgr` Final Quality Report posted on the phase PR.
 
 ## Required validation

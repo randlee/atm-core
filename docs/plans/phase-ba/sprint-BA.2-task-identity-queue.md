@@ -157,7 +157,7 @@ pub struct TaskRow {
     pub position: Option<QueuePosition>, // Some iff open
     pub assignment_message_id: AtmMessageId,
     pub description: String,
-    pub assigned_at: IsoTimestamp,       // written once, never updated
+    pub assigned_at: IsoTimestamp,       // set by assign/reassign/reopen; never by move or start
     pub updated_at: IsoTimestamp,
     pub last_reminded_at: Option<IsoTimestamp>,
     pub reminder_count: u32,
@@ -425,7 +425,7 @@ envelope:
 | `task_id` | `task_op` | applies |
 | --- | --- | --- |
 | `None` | any | nothing (a `task_op` without `task_id` is rejected at `WriteRequest` validation) |
-| `Some` | `None` | `apply_task_assignment` — (a) no row: insert `assigned` at `placement` (None = END); (b) same agent, open row: acknowledge the prior assignment message, `UPDATE tasks SET assignment_message_id, description, updated_at`, nothing else, no event; (c) other agent, open row: acknowledge the prior assignment message, renumber both queues, set `assignee`, `assigner`, `state = assigned`, `position` per `placement`, reset counters, emit `reassigned`; (d) closed row: clear `close_outcome`, reset counters, set `assignee`, `assigner`, `position`, emit `reopened` |
+| `Some` | `None` | `apply_task_assignment` — (a) no row: insert `assigned` at `placement` (None = END); (b) same agent, open row: acknowledge the prior assignment message, `UPDATE tasks SET assignment_message_id, description, updated_at`, nothing else, no event; (c) other agent, open row: acknowledge the prior assignment message, renumber both queues, set `assignee`, `assigner`, `state = assigned`, `position` per `placement`, `assigned_at = now`, `reminder_count = 0`, `lead_notified_count = 0`, `last_reminded_at = NULL`, emit `reassigned`; (d) closed row: clear `close_outcome`, set `assignee`, `assigner`, `position`, `assigned_at = now`, `reminder_count = 0`, `lead_notified_count = 0`, `last_reminded_at = NULL`, emit `reopened` |
 | `Some` | `Some(Start)` | `apply_task_start` |
 | `Some` | `Some(Close{..})` | `apply_task_close` |
 | — | — | `apply_task_move` is not message-carried: only `WriteOp::TaskMove` (BA.4) reaches it |
@@ -470,8 +470,11 @@ Rules:
 - `commit_write` with `task_op.is_some()` or `task_id.is_some()` and a `to`
   whose team differs from the caller's or whose host is set returns the plan
   §2 R8 validation error before opening the transaction.
-- `assigned_at` is written by branch a only; it never appears in any
-  `UPDATE … SET` list.
+- `assigned_at` is set by branches a, c, d (each is an assignment, design
+  §3.1a) and by nothing else; `apply_task_move` and `apply_task_start` never
+  touch it (design §4.3).
+- BA.1's `admit()` keeps its role; its arms are rewritten to match
+  `TaskEvent::Completed(_)`, and BA.1's tests keep their names.
 - `apply_task_move`: no row or not open → rejection; a move of the active
   task is accepted, renumbers nothing, and appends `moved` with `detail =
   "1→1"`; otherwise resolve the order (`Head` → after the active task if any;
@@ -556,8 +559,9 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
   other row byte-equal.
 - `renumber_swap_of_positions_one_and_two_never_violates_unique_index` —
   swap T2 over T1; move T4 `--head` over T1..T3; no `SQLITE_CONSTRAINT`.
-- `assigned_at_is_never_updated` — assign, start, reassign, close, reopen,
-  move: `assigned_at` byte-equal throughout.
+- `assigned_at_set_only_by_assignment` — start, move, close leave
+  `assigned_at` byte-equal; reassign and reopen set it to the event's `at`
+  and `last_reminded_at` to `NULL`.
 - `writer_rejects_task_op_on_foreign_team_or_host_recipient`.
 - `trailing_refusal_run_counts_raw_stored_event_values` — refused, refused,
   completed, refused, refused, refused → 3; then `completed` → 0; then
@@ -605,7 +609,7 @@ Reader:
 1. Code quoted in this document matches the source byte-for-byte (QA diffs it).
 2. Every test above exists by name and passes under `just test`.
 3. `sqlite3 <fixture> "SELECT sql FROM sqlite_master WHERE name IN ('tasks','task_events','one_active_task_per_agent','tasks_position_per_member')"` matches the DDL section.
-4. `grep -n "assigned_at" crates/atm-storage-rusqlite/src/writer/task_ops.rs` shows it in no `UPDATE … SET` list.
+4. `grep -n "assigned_at" crates/atm-storage-rusqlite/src/writer/task_ops.rs` shows it only in `apply_task_assignment` (insert, reassign, reopen); never in `apply_task_move` or `apply_task_start`.
 5. `grep -rn "TaskRejectionKind\|TaskQueueGap" crates/` → nothing.
 6. `schema-reviewer` sign-off recorded on the PR citing the ADR-061 D6 Phase BA entry.
 7. `just lint-boundaries` passes with the manifest edits.

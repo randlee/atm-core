@@ -27,8 +27,8 @@ Row invariants enforced by the database (BA.2): one row per `(team, task_id)`;
 at most one `active` row per `(team, assignee)`; `position` unique per open
 `(team, assignee)` and `>= 1`; `close_outcome` non-null iff `complete`.
 Queue contiguity is a transaction invariant verified by test, because SQLite
-cannot express it. `assigned_at` is written once, at the first assign, and
-never again (design §4.3).
+cannot express it. `assigned_at` is the time of the current assignment: set by
+assign, reassign, and reopen, never by move or start (design §3.1a, §4.3).
 
 Who may cause each event: `Assigned` — any sender (unchanged); `Started` —
 the daemon (§2 R1); `Completed` — the assignee or the assigner (develop's
@@ -126,9 +126,9 @@ state machines beyond §1. Everything this phase adds:
 | BA.2 | columns `tasks.position`, `tasks.close_outcome`, `task_events.close_outcome`; PK `(team, task_id)` ×2; indexes `one_active_task_per_agent`, `tasks_position_per_member`; two `CHECK`s; `task_migration.rs` (`migrate_task_identity`, `TaskMigrationReport`, crate-private) |
 | BA.2 | `QueuePosition(NonZeroU32)`; `TaskCloseOutcome`; `TaskState::Complete(TaskCloseOutcome)`; `TaskStateTag`; `TaskEvent::{Assigned, Started, Completed(outcome)}`; `TaskEventKind::{Started, Reassigned, Reopened, Refused, Cancelled, Moved, Migrated}`; `TaskRejected { detail }`; `Transition(pub TaskState)`; `TaskRow.position`; `TaskRowWire`, `TaskEventRowWire` |
 | BA.2 | `TaskOp { Start, Close }`, `MoveTarget { Head, End, Before }`; `WriteRequest.task_op`, `.placement`; `SendOutcome.already_closed`; `RefusalRun`; `AsyncTaskLedgerReader::{open_tasks_for_team, refusal_run}`; `TaskStore::load_task(team, task_id)`; `TASK_CONSECUTIVE_REFUSAL_THRESHOLD`; `HTTP_API_VERSION` 1.5.0 |
-| BA.3 | `herdr_task_disposition.rs`: `TaskDisposition { Nudge, EscalateStalled, EscalateEpisode(EpisodeKind), Hold(&'static str) }`, `EpisodeKind`, `dispose`, `reminder_due`; `TASK_REMINDER_INTERVAL_MS` moved to `atm-storage/src/task_store.rs` (`i64`); `EscalationState { episodes: HashMap<MemberKey, EpisodeKind> }` with `observe`; `escalation_summary`, `episode_already_reported`, `escalate_mail(…, suppress_since)`; `EscalationKind::{OfflineEscalated, RefusalsEscalated}` (`BreakerOpened` deleted); `MemberObservation`; `runtime_state(Option<HerdrAgentStatus>)`; `still_idle`; `herdr_task_start.rs::complete_task_handoff`; `task_started` template (existing class); `crates/atm-architecture/tests/escalation_ownership.rs` |
+| BA.3 | `herdr_task_disposition.rs`: `TaskDisposition { Nudge, EscalateStalled, EscalateEpisode(EpisodeKind), Hold(&'static str) }`, `EpisodeKind`, `dispose` (including the `Hold("mail pending")` arm), `reminder_due`; `TASK_REMINDER_INTERVAL_MS` moved to `atm-storage/src/task_store.rs` (`i64`); `EscalationState { episodes: HashMap<MemberKey, EpisodeKind> }` with `observe`; `escalation_summary`, `episode_already_reported`, `escalate_mail(…, suppress_since)`; `EscalationKind::{OfflineEscalated, RefusalsEscalated}` (`BreakerOpened` deleted); `MemberObservation`; `runtime_state(Option<HerdrAgentStatus>)`; `still_idle`; `herdr_task_start.rs::complete_task_handoff`; `task_started` template (existing class); `crates/atm-architecture/tests/escalation_ownership.rs` |
 | BA.4 | clap `Task(TaskCommand)` with five subcommands; `OutcomeArg`; `task_query.rs` (`TaskListQuery`, `TaskEventQuery`, `TaskPage`); `task_close.rs` (`ClosePreflight { Proceed, Unknown }`, `preflight_close`, `report_recipient`); `require_daemon_api`; ULID minting for an omitted `--task-id`; `RequestEnvelope::TaskMove`, `ResponseEnvelope::TaskMove`, `TaskMoveRequest`, `TaskMoveOutcome`; `WriteOp::TaskMove`, `WriteOpResult::TaskMoved`; `HTTP_API_VERSION` 1.6.0 |
-| BA.5 | `OPEN_ITEM_SQL`; `PendingNudgeStore::rearm_pending_after_handoff` (rename of `clear_pending_on_handoff`); `clear_pending_on_read` deleted; `mark_message_read` close-or-rearm `CASE`; `requeue_pending` interval back-off at `MAX_NUDGE_ATTEMPTS`; `nudge_dispatch::rearm_queue_marker_after_handoff` (rename); claim predicate `nudge_pending_at <= now`; `Hold("mail pending")` |
+| BA.5 | `OPEN_ITEM_SQL`; `PendingNudgeStore::rearm_pending_after_handoff` (rename of `clear_pending_on_handoff`); `clear_pending_on_read` deleted; `mark_message_read` close-or-rearm `CASE`; `requeue_pending` interval back-off at `MAX_NUDGE_ATTEMPTS`; `nudge_dispatch::rearm_queue_marker_after_handoff` (rename); claim predicate `nudge_pending_at <= now` |
 | BA.6 | nothing |
 
 A sprint that needs an entry not on this list stops and amends this table

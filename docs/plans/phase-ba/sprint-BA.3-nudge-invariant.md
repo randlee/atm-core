@@ -256,7 +256,10 @@ observation with no debounce.
 
 - `TaskCandidate`, `select_open_task`, `read_due_task` (`herdr_queue_wake.rs`, `_reminders.rs`)
 - `EscalationState.{blocked_since, last_blocked_notice, blocked_cursor}` and
-  their methods, `BLOCKED_NOTIFY_MS`, `BLOCKED_RENOTIFY_MS` (`herdr_escalation.rs:48-49,61-110`)
+  their methods, `BLOCKED_NOTIFY_MS`, `BLOCKED_RENOTIFY_MS` (`herdr_escalation.rs:48-49,61-110`).
+  Design §8: `blocked_since` tracks the episode — that role moves to `episodes`
+  (generalised to Offline; `since` is the roster `state_changed_at`);
+  `last_blocked_notice` is the cooldown §8 replaces with the mailbox model
 - `escalate_blocked`, `escalate_one_blocked`, `blocked_tasks` (`_escalation.rs:176-270`)
 - multiplicative threshold block (`_escalation.rs:37-43`)
 - the `DeliveryChannel::HerdrSteer` filter and the `Tmux => continue` arm (`herdr_queue_wake.rs:876-890`)
