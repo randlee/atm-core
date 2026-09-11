@@ -1,0 +1,73 @@
+# BA.6 — Documentation, CLAUDE.md, ADR index
+
+| Field | Value |
+| --- | --- |
+| Design | whole document (commit `9b5c7d876`) |
+| Outcomes | B14 (queryability documented); phase acceptance 11, 12 |
+| Recommended | Cipher-311d / fast |
+| Depends on | `must_follow` BA.1–BA.5 (PR completion) |
+| Worktree | `docs/ba6-task-nudge-documentation` off `integrate/phase-ba` |
+| Governed interfaces | none |
+
+## Scope
+
+Make the shipped surface the documented surface. The ADR/requirements
+alignment that precedes the code (ADR-062/054 amendments, ADR-063
+superseded, requirements §6.5/§15.4/§22.1 MUST lists) already landed in the
+plan PR; this sprint reconciles those texts with what BA.1–BA.5 actually
+shipped and updates the operator-facing docs.
+
+## Deliverables
+
+- [ ] D1 — `CLAUDE.md:227` (resend assignment via `atm send`) and the ATM
+  quick-reference table: add `atm task assign|close|move|list|events`; state
+  the aliases; state "use `atm queue` for anything that must not interrupt
+  the current task".
+- [ ] D2 — `docs/team-protocol.md:11`: closing = `atm task close <id>
+  --outcome completed --stdin` (or the alias `atm send <assigner> --task-id
+  <id> --task-complete --stdin`); add the refused/cancelled/reassigned
+  paragraph; add "an ack never changes task state".
+- [ ] D3 — `docs/requirements.md:2482` doctor remediation literal → the
+  string the shipped code emits; add `TaskQueueGap` to the doctor table.
+- [ ] D4 — `docs/atm-daemon/http-api.md`: `1.5.0`, `TaskMove` request/response,
+  `task_op` on write requests, peer-ingress rejection of task ops.
+- [ ] D5 — ADR-062 Phase-BA amendment: replace "R1 pending" wording with the
+  recorded decision; mark the blocked-episode cooldown paragraph superseded
+  (BA.3 deleted `BLOCKED_RENOTIFY_MS`); ADR-061 version records: SQLite
+  MAJOR row (R0 approval comment URL), HTTP 1.5.0 row.
+- [ ] D6 — `docs/project-plan.md`: Phase BA section (six sprints, status),
+  AZ section already marked retired.
+- [ ] D7 — `docs/plans/phase-ba/phase-ba-plan.md` §4: each R-row gets its
+  "decided: … (comment URL)" line; §9 additions table reconciled against
+  `git diff develop...integrate/phase-ba --stat` (phase acceptance 10).
+- [ ] D8 — `docs/architecture.md` Task Storage: one paragraph per state
+  machine (task, disposition, ephemeral item), each a copy of the plan §3
+  table — no prose restatement.
+
+## Paths to delete
+
+- `docs/plans/phase-ax/*` references to `atm list --tasks` → pointer to
+  `atm task list` (one-line edit each; history otherwise untouched)
+
+## Tests
+
+- `just lint-docs` (doc-lint path) passes.
+- `crates/atm/tests/cli_surface_docs.rs` (existing surface-dump test, if
+  present; else add): every `atm task` subcommand and both aliases appear in
+  `CLAUDE.md` and `docs/team-protocol.md`.
+- Link check on the three amended ADRs.
+
+## Acceptance criteria
+
+1. `grep -rn "atm list --tasks\|--task-complete <" CLAUDE.md docs/*.md` → nothing.
+2. Every "decided:" line in plan §4 has a URL.
+3. `quality-mgr` Final Quality Report posted on the phase PR.
+
+## Required validation
+
+`just lint-docs`; the phase-ending critical review (five reviewers on the
+integrate head) runs after this sprint merges.
+
+## Out of scope
+
+Any code change. Findings against code go back to the owning sprint.
