@@ -346,7 +346,7 @@ fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
 The runtime obtains one `RefusalRun` per member per tick through the existing
 task read surface's `refusal_run(team, assignee)` method. Storage implements
 the single `trailing_refusal_run` query over `task_events`, ordered by
-`at DESC, seq DESC`, and returns the leading refused count plus the oldest
+`rowid DESC`, and returns the leading refused count plus the oldest
 refused timestamp. It is carried beside `head` on the existing per-member
 task input; no new table or state is introduced. The pure `dispose` function
 receives only the count.
@@ -633,4 +633,6 @@ target ≤ 3,700 lines after deletions), `just lint-boundaries`.
 Mail-before-task ordering and the queue-item reminder (BA.5); CLI (BA.4);
 any new nudge template kind (ADR-054 inventory unchanged).
 
-- Handoff gate: `unrenderable_reminder_never_becomes_start_owed` keeps the head assigned across two ticks with zero started events; the writer checks the latest reminded event outcome is `emitted` before Start. Exact query: `SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' ORDER BY at DESC, seq DESC LIMIT 1`.
+- Handoff gate: `unrenderable_reminder_never_becomes_start_owed` keeps the head assigned across two ticks with zero started events; the writer checks the latest reminded event outcome is `emitted` before Start. Exact query: `SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' ORDER BY rowid DESC LIMIT 1`.
+
+Writer gate: latest reminded event query uses ORDER BY rowid DESC LIMIT 1 and permits Start only when outcome = 'emitted'; otherwise silent no-op.

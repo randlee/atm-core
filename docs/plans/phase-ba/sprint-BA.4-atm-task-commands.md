@@ -447,3 +447,7 @@ verb; read authorisation on `list --all` (design §7: oversight is a view;
 no ATM read is role-gated today and this phase adds no authority to reads).
 
 Additional CLI validation test: `assign_before_rejects_with_start_flag`.
+
+`AlreadyClosed` is the preflight state; repeated close creates no task transition or event.
+
+Placement syntax: `atm task assign <agent> --template <j2> --vars <json> [--task-id <id>] [--before <other-task-id> | --head]`.

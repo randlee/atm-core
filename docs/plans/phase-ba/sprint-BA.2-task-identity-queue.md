@@ -235,7 +235,7 @@ pub struct TaskRow {
     pub position: Option<QueuePosition>,
     pub assignment_message_id: AtmMessageId,
     pub description: String,
-    /// Immutable after insert; `move` never touches it.
+    /// reset by reassign/reopen; never by move; `move` never touches it.
     pub assigned_at: IsoTimestamp,
     pub updated_at: IsoTimestamp,
     pub last_reminded_at: Option<IsoTimestamp>,
@@ -767,7 +767,7 @@ outcome returns `consecutive_refusals = 0`.
 `TaskRejectionKind::ActiveElsewhere`, not to a generic SQLite error.
 
 The writer's Start gate uses the latest reminder audit:
-`SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' ORDER BY at DESC, seq DESC LIMIT 1`.
+`SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' ORDER BY rowid DESC LIMIT 1`.
 It starts only for `outcome = 'emitted'`; otherwise Start is a silent no-op.
 
 Every accepted op appends one `task_events` row (`started` / `completed` +
@@ -972,3 +972,5 @@ require SQLite ≥ 3.25 — assert `sqlite_version()` in the test and fail loudl
 CLI verbs and aliases (BA.4); runtime disposition (BA.3); `move` without a
 message (`WriteOp::TaskMove`, BA.4 — this sprint exposes `apply_task_move`
 as `pub(super)` for it).
+
+R11 addendum contract tests: reassigned_task_reminder_renders_current_assignment; reassigned_task_start_receipt_goes_to_current_assigner; reopened_task_close_report_goes_to_current_assigner; refusal_run_order_is_writer_application_order_not_timestamp.

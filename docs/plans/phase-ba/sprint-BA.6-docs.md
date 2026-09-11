@@ -86,3 +86,5 @@ integrate head) runs after this sprint merges.
 ## Out of scope
 
 Any code change. Findings against code go back to the owning sprint.
+
+The close-outcome examples must not include a `reassigned` close outcome; reassignment is an existing-id assign.
