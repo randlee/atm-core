@@ -31,7 +31,7 @@ One line each; the design section is the full statement.
 | B2 | Agent state SSOT is the ephemeral roster record; the nudge path consumes exact `RuntimeMemberState`, never `PickerMemberStatus` | §2 |
 | B3 | One task id is one row; at most one `active` task per agent, enforced by the database; `assigned` rows are the queue | §3.1 |
 | B4 | ATM resolves nothing but a task id; no provider, no body dereference | §3 |
-| B5 | Queue order is `(position, assigned_at, task_id)`; `position` is its own column; `assigned_at` is immutable; `--head` = position 2 when a task is active | §4.3 |
+| B5 | Queue order is `(position, assigned_at, task_id)`; `position` is its own column; `assigned_at` is reset only by reassign/reopen; `--head` = position 2 when a task is active | §4.3 |
 | B6 | Close outcome is typed: `completed \| refused \| cancelled`; reassignment and reopen are explicit `assign` transitions on the same id | §3.1a, §4 |
 | B7 | `blocked` is an agent state; `refused` is a task outcome; the words never cross | §4.1 |
 | B8 | `atm task` is a closed set `{assign, close, move, list, events}`; `atm send --task-id` / `--task-complete` are aliases | §5 |

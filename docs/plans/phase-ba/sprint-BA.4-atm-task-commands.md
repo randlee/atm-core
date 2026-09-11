@@ -446,3 +446,5 @@ on the fixture after the close tests shows no `TaskQueueGap`.
 Runtime disposition and every escalation (BA.3); docs (BA.6); any sixth
 verb; read authorisation on `list --all` (design §7: oversight is a view;
 no ATM read is role-gated today and this phase adds no authority to reads).
+
+Additional CLI validation test: `assign_before_rejects_with_start_flag`.
