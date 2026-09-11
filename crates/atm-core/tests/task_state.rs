@@ -209,7 +209,10 @@ fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_sto
     write_mail_with_runtime(completion, &NullObservability, &runtime).expect("task completion");
 
     let row = task_row(&runtime, &team, &task_id);
-    assert_eq!(row.state, TaskState::Complete);
+    assert_eq!(
+        row.state,
+        TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+    );
     let events = runtime
         .task_store()
         .expect("installed task store")

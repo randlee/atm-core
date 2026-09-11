@@ -2438,7 +2438,7 @@ mod tests {
                 .expect("load completed task")
                 .expect("completed task")
                 .state,
-            TaskState::Complete
+            TaskState::Complete(atm_core::test_support::TaskCloseOutcome::Completed)
         );
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:03:15Z").expect("test timestamp");
