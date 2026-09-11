@@ -5,7 +5,7 @@
 | Design | [`nudge-task-design.md`](./nudge-task-design.md) §4, §5, §5.1, §5.2, §7, §7.1, §9 (commit `18db5acc3`) |
 | Outcomes | B8, B10, B14 |
 | Recommended | arch-ctm / deep-reasoning — three-stage close and a new envelope variant |
-| Depends on | `must_follow` BA.3 (dev push) — BA.3 owns `storage_and_nudge_router.rs`; this sprint adds the `TaskMove` arm to `dispatch_non_write` in that file after BA.3 has landed its `commit_write` change (PLAN-SCOPE-001) |
+| Depends on | `must_follow` BA.3 (dev push) — BA.3 owns `storage_and_nudge_router.rs`; this sprint adds the `TaskMove` arm to `dispatch_non_write` in that file after BA.3 has landed its `reader tick` change (PLAN-SCOPE-001) |
 | `parallel_safe` | BA.5 — this sprint owns `crates/atm/src/commands/*`, `crates/atm-core/src/protocol.rs`, `crates/atm-core/src/task_close.rs` (new), `crates/atm-core/src/task_query.rs` (new), `crates/atm-core/src/send/*`, `crates/atm-storage-rusqlite/src/writer/ops.rs` (`WriteOp::TaskMove` arm only), `crates/atm-http-runtime/src/storage_and_nudge_router.rs::dispatch_non_write` (`TaskMove` arm only, `:484`). **Shared file with BA.5:** `storage_and_nudge_router.rs` — BA.5 edits only the `PendingNudgeStore` test-fixture adapter inside `mod tests` (`:1240-1245`, method rename); the regions are disjoint and neither sprint's acceptance criteria assert the other's behaviour (PLAN-SCOPE-008). Every other file above is BA.4-only. |
 | Worktree | `feature/ba4-atm-task-commands` off `integrate/phase-ba` (merge BA.3 forward) |
 | Governed interfaces | HTTP/peer API **MINOR**: `RequestEnvelope::TaskMove`, `ResponseEnvelope::TaskMove`; `HTTP_API_VERSION` `1.5.0` (BA.2) → `1.6.0` |
@@ -270,8 +270,8 @@ report body is the message source when given, else the `reason` text.
 ## Consecutive-refusal escalation (design §4.2)
 
 Not in this sprint. The refused close is an ordinary stage-2 write; the
-writer returns `WriteOutcome.task_close` (BA.2) and the Tokio runtime's
-`commit_write` seam emits the escalation (BA.3 "Consecutive-refusal
+writer returns `` (BA.2) and the Tokio runtime's
+`reader tick` seam emits the escalation (BA.3 "Consecutive-refusal
 escalation") — `atm-core` cannot call the escalation path (dependency
 direction; FNX-BA-CRIT-014). The refused task's close has already released
 the next queued task by renumbering; nothing else is needed for "release"

@@ -26,8 +26,8 @@ legacy `task_complete` key (see "Wire" below).
 | --- | --- | --- |
 | D1 | `QueuePosition`, `TaskCloseOutcome` (completed, refused, cancelled); `TaskState::Complete(outcome)`, `TaskStateTag`, `TaskEvent::{Assigned,Started,Completed(outcome)}`, `transition()`, `TaskRejected`/`TaskRejectionKind` | `crates/atm-storage/src/task_state.rs` |
 | D2 | `TaskRow` + `TaskRowWire`, `TaskEventRow` + `TaskEventRowWire`, `TaskEventKind::{Assigned,Started,Reassigned,Reopened,Completed,Refused,Cancelled,Moved,Migrated}` | `crates/atm-storage/src/task_state.rs` |
-| D3 | `TaskOp`, `MoveTarget`, `TaskCloseApplied`, `TASK_CONSECUTIVE_REFUSAL_THRESHOLD` | `crates/atm-storage/src/task_op.rs` (new), `task_store.rs` |
-| D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, `WriteOutcome.task_close`, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
+| D3 | `TaskOp`, `MoveTarget`, `RefusalRun`, `TASK_CONSECUTIVE_REFUSAL_THRESHOLD` | `crates/atm-storage/src/task_op.rs` (new), `task_store.rs` |
+| D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, ``, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
 | D5 | `TASK_SCHEMA_DDL` rebuilt (two tables, three indexes) | `crates/atm-storage-rusqlite/src/task_store.rs:15-58` |
 | D6 | `migrate_task_identity` + `TaskMigrationReport` | `crates/atm-storage-rusqlite/src/task_migration.rs` (new) |
 | D7 | writer: `apply_task_message` dispatch, `apply_task_start`, `apply_task_close`, `apply_task_move`, `renumber_queue`, authority rules | `crates/atm-storage-rusqlite/src/writer/task_ops.rs` |
@@ -737,7 +737,7 @@ task_id DESC` read until the first non-`refused`) and returns it:
 pub struct RefusalRun { pub count: u32, pub started_at: Option<IsoTimestamp> }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TaskCloseApplied {
+pub struct RefusalRun {
     pub task_id: TaskId,
     /// The refusing member — the run is theirs even when the assigner or the
     /// unique lead submitted the close (FNX-BA-CRIT-027).
@@ -749,16 +749,15 @@ pub struct TaskCloseApplied {
     /// suppression check to it (RSH-001).
     pub run_started_at: IsoTimestamp,
 }
-// carried on WriteOpResult / SendOutcome as `task_close: Option<TaskCloseApplied>`
 pub const TASK_CONSECUTIVE_REFUSAL_THRESHOLD: u32 = 3; // atm-storage/src/task_store.rs, next to TASK_STALLED_REMINDER_THRESHOLD (plan §4 R5)
 ```
 
 The writer calls the shared storage function after inserting the close event
-and places its result in `TaskCloseApplied`. `TaskCloseApplied` travels `WriteOpResult` →
-`SendOutcome.task_close: Option<TaskCloseApplied>` (atm-core
+and places its result in `RefusalRun`. `RefusalRun` travels `WriteOpResult` →
+`RefusalRun: Option<RefusalRun>` (atm-core
 `send/outcome.rs:15-35`, new field, `#[serde(default, skip_serializing_if =
 "Option::is_none")]`) → `WriteOutcome::Sent(SendOutcome)` (`write/pipeline.rs:13-16`
-— `WriteOutcome` is an enum; there is no `WriteOutcome.task_close` field,
+— `WriteOutcome` is an enum; there is no `` field,
 FNX-BA-CRIT-026); **BA.3** matches `WriteOutcome::Sent` in the Tokio runtime's
 post-write seam and sends the escalation (BA.3 "Consecutive-refusal
 escalation"; FNX-BA-CRIT-014 / PLAN-SCOPE-001). A close with any other
@@ -796,7 +795,6 @@ task_id)`; `[ownership].io_forbidden` += `"task_body_dereference"`;
 - `load_open_task_rows` if still present after BA.1
 - every *read* of `task_complete` except `task_op_normalized()` (the field
   itself stays, decode-only — see "Wire"); the `task_complete` field on
-  `send/outcome.rs` (replaced by `task_close: Option<TaskCloseApplied>`);
   `--task-complete` **parsing stays** (BA.4 re-wires it to a bool) — from
   this sprint `atm send --task-complete X` builds `task_id = X, task_op =
   Close{Completed}` in `crates/atm/src/commands/send.rs` and runs the
@@ -873,8 +871,8 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
   `completed`; a request with `task_id = "T1"` and `task_complete = "T2"`
   fails validation; `task_op` present + `task_complete` present → `task_op`
   wins.
-- `write_outcome_carries_task_close` — `WriteOutcome.task_close` is
-  `Some(TaskCloseApplied{Refused, 1})` after one refused close.
+- `refusal_run_is_tick_driven` — `` is
+  `Some(RefusalRun{Refused, 1})` after one refused close.
 - `start_by_member_actor_is_not_authorized`.
 - `trailing_refusal_run_counts_raw_stored_event_values` — closes: refused, refused,
   completed, refused, refused, refused → the last returns 3; a following

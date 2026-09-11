@@ -5,8 +5,8 @@
 | Design | [`nudge-task-design.md`](./nudge-task-design.md) §1, §2, §4.2, §6, §6.1, §6.2, §8 (commit `18db5acc3`) |
 | Outcomes | B1, B2, B11, B12 |
 | Recommended | arch-ctm / deep-reasoning — replaces the reminder/escalation loop in a 4k-line runtime module |
-| Depends on | `must_follow` BA.2 (dev push) — `open_tasks_for_team`, `TaskOp::Start`, `position`, `WriteOutcome.task_close` |
-| `parallel_safe` | none — BA.4 and BA.5 both `must_follow` this sprint (BA.4's `TaskMove` router arm and BA.5's handoff re-arm land in files this sprint rewrites: `storage_and_nudge_router.rs`, `herdr_queue_wake.rs`). This sprint owns every file under `crates/atm-http-runtime/src/` it touches: `herdr_*`, `herdr_breaker_escalation.rs` (deleted), `storage_and_nudge_router.rs::commit_write`. |
+| Depends on | `must_follow` BA.2 (dev push) — `open_tasks_for_team`, `TaskOp::Start`, `position`, `` |
+| `parallel_safe` | none — BA.4 and BA.5 both `must_follow` this sprint (BA.4's `TaskMove` router arm and BA.5's handoff re-arm land in files this sprint rewrites: `storage_and_nudge_router.rs`, `herdr_queue_wake.rs`). This sprint owns every file under `crates/atm-http-runtime/src/` it touches: `herdr_*`, `herdr_breaker_escalation.rs` (deleted), `storage_and_nudge_router.rs::reader tick`. |
 | Worktree | `feature/ba3-nudge-invariant` off `integrate/phase-ba` (merge BA.2 forward) |
 | Governed interfaces | none (Herdr IPC unchanged) |
 | Decisions | plan §4 R1 (start = handoff), R4 (episode suppression from the mailbox), R5 (refusal threshold — emitted here) |
@@ -35,7 +35,7 @@ in design §8 is deleted.
 | D4 | roster-wide candidate sweep (`herdr_candidates` filter removed), `MemberObservation`, one `open_tasks_for_team` per team per tick, `dispose` → act, pre-emit re-check | `herdr_queue_wake.rs`, `herdr_queue_wake_reminders.rs` |
 | D5 | `escalate_stalled_task`, `escalate_episode` | `herdr_queue_wake_escalation.rs` |
 | D6 | Start handoff write + `task_started` template | `herdr_queue_wake_reminders.rs`, `crates/atm-core/templates/` (reminder template class) |
-| D7 | refusal escalation in `commit_write` | `storage_and_nudge_router.rs:273-337` |
+| D7 | refusal escalation in `reader tick` | `storage_and_nudge_router.rs:273-337` |
 | D8 | deletions listed under "Paths to delete", incl. `herdr_breaker_escalation.rs` | — |
 | D9 | tests named below | `herdr_task_disposition.rs`, `tests/herdr_nudge_invariant.rs` |
 
@@ -351,7 +351,7 @@ refused timestamp. It is carried beside `head` on the existing per-member
 task input; no new table or state is introduced. The pure `dispose` function
 receives only the count.
 
-Seam: `StorageAndNudgeRouter::commit_write` (`storage_and_nudge_router.rs:273-337`)
+Seam: `StorageAndNudgeRouter::reader tick` (`storage_and_nudge_router.rs:273-337`)
 already holds the `WriteOutcome` after `prepared.finish(...)` (`:297`).
 This crate depends on `atm-core`, owns `EscalationTargets`, and is the only
 place that may call the escalation path (`escalate` is `pub(crate)` at
@@ -394,7 +394,7 @@ cycle — FNX-BA-CRIT-014 / PLAN-SCOPE-001). Exact addition, after `:297`:
 
 A compile-pinning test (`refusal_seam_compiles_against_write_outcome`, in
 the router's test module) constructs a `WriteOutcome::Sent` with
-`task_close = Some(TaskCloseApplied { consecutive_refusals: 3, .. })` and
+`task_close = Some(RefusalRun { consecutive_refusals: 3, .. })` and
 asserts one `escalate_mail` call; the seam is code, not pseudocode.
 
 The threshold refusal closes the run and holds the member: from the third
@@ -537,7 +537,7 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
 - `escalation_mail_does_not_consume_prompt_budget` — 16 idle members with
   due tasks + 1 blocked → 16 prompts and 1 mail in one tick.
 - `third_refusal_escalates_then_member_is_held` — through the real
-  `commit_write`: 3 refused closes by A → 1 mail to lead + recipients with
+  `reader tick`: 3 refused closes by A → 1 mail to lead + recipients with
   `summary == "escalation:refusals_escalated:A@<team>"`, kind `refusals_escalated`; a 4th
   refused close → no second mail; subsequent ticks produce 0 task prompts.
   The closes themselves succeed whether or not the mail write succeeds.
@@ -636,3 +636,5 @@ any new nudge template kind (ADR-054 inventory unchanged).
 - Handoff gate: `unrenderable_reminder_never_becomes_start_owed` keeps the head assigned across two ticks with zero started events; the writer checks the latest reminded event outcome is `emitted` before Start. Exact query: `SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' ORDER BY rowid DESC LIMIT 1`.
 
 Writer gate: latest reminded event query uses ORDER BY rowid DESC LIMIT 1 and permits Start only when outcome = 'emitted'; otherwise silent no-op.
+
+Refusal escalation is tick-driven only: the next tick reads refusal_run, holds the member, and sends at most one escalation mail per run; no write result seam is used.
