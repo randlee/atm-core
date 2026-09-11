@@ -29,7 +29,7 @@ in design §8 is deleted.
 
 | id | deliverable | where |
 | --- | --- | --- |
-| D1 | `TaskDisposition`, `EpisodeKind`, `HoldReason`, `dispose()`, `reminder_due()`, `TASK_REMINDER_INTERVAL_MS` | `crates/atm-http-runtime/src/herdr_task_disposition.rs` (new, pure) |
+| D1 | `TaskDisposition`, `EpisodeKind`, `HoldReason` (including `RefusalsEscalated`), `dispose(state, head, now, episode_notified, consecutive_refusals)`, `reminder_due()`, `TASK_REMINDER_INTERVAL_MS` | `crates/atm-http-runtime/src/herdr_task_disposition.rs` (new, pure) |
 | D2 | `EscalationState` re-shaped to `{episodes}`, `Episode`, `escalation_summary()`, `episode_already_reported(target, summary, since)` — per-target, episode-bounded | `crates/atm-http-runtime/src/herdr_escalation.rs` |
 | D3 | `EscalationKind::RefusalsEscalated`; `escalate_mail()` factored out of `escalate()`; `write_escalation_mail` gains `summary` | `herdr_escalation.rs` |
 | D4 | roster-wide candidate sweep (`herdr_candidates` filter removed), `MemberObservation`, one `open_tasks_for_team` per team per tick, `dispose` → act, pre-emit re-check | `herdr_queue_wake.rs`, `herdr_queue_wake_reminders.rs` |
@@ -90,6 +90,7 @@ pub(crate) enum HoldReason {
     IdentityConflict,
     RateLimited,       // idle, < TASK_REMINDER_INTERVAL_MS since last reminder
     Stalled,           // idle, already escalated once; wait for a state change
+    RefusalsEscalated, // refusal run reached the threshold; hold task prompts
     EpisodeNotified,   // blocked/offline, message already sent this episode
     NoDeliveryChannel, // Nudge decided, but the member's backend has no built-in dispatch (logged once per tick)
 }
@@ -101,6 +102,7 @@ pub(crate) fn dispose(
     head: Option<&TaskRow>,
     now: IsoTimestamp,
     episode_notified: bool,
+    consecutive_refusals: u32,
 ) -> TaskDisposition {
     use RuntimeMemberState as S;
     match (state, head) {
@@ -112,6 +114,8 @@ pub(crate) fn dispose(
         (S::Unknown, _) => TaskDisposition::Hold(HoldReason::Unobserved),
         (S::IdentityConflict, _) => TaskDisposition::Hold(HoldReason::IdentityConflict),
         (S::Idle, None) => TaskDisposition::Hold(HoldReason::NoOpenTask),
+        (S::Idle, Some(_)) if consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD =>
+            TaskDisposition::Hold(HoldReason::RefusalsEscalated),
         (S::Idle, Some(task)) if task.lead_notified_count > 0 => TaskDisposition::Hold(HoldReason::Stalled),
         (S::Idle, Some(task)) if task.reminder_count >= TASK_STALLED_REMINDER_THRESHOLD => TaskDisposition::EscalateStalled,
         (S::Idle, Some(task)) if !reminder_due(task, now) => TaskDisposition::Hold(HoldReason::RateLimited),
@@ -329,6 +333,11 @@ fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
 
 ## Consecutive-refusal escalation (design §4.2, plan §4 R5)
 
+The runtime derives `consecutive_refusals` each tick with one SQL query over
+closed task rows for the assignee, ordered by `updated_at DESC`, counting the
+leading `close_outcome = 'refused'` run. It is carried beside `head` on the
+existing per-member task input; no new table or state is introduced.
+
 Seam: `StorageAndNudgeRouter::commit_write` (`storage_and_nudge_router.rs:273-337`)
 already holds the `WriteOutcome` after `prepared.finish(...)` (`:297`).
 This crate depends on `atm-core`, owns `EscalationTargets`, and is the only
@@ -375,12 +384,12 @@ the router's test module) constructs a `WriteOutcome::Sent` with
 `task_close = Some(TaskCloseApplied { consecutive_refusals: 3, .. })` and
 asserts one `escalate_mail` call; the seam is code, not pseudocode.
 
-One message per run: from the third refusal on, every refused close checks
-each target's mailbox for this summary since `run_started_at` and writes
-only what is missing; a non-refused close resets the run (BA.2 counts), so
-the next run of three is reported again. The close has already committed —
-a failed escalation write is logged, never surfaced to the closing caller,
-and repaired by the next refusal in the run.
+The threshold refusal closes the run and holds the member: from the third
+refusal onward, the normal tick emits no task prompts and retries only missing
+per-target refusal escalation mail via `escalate_mail(...,
+suppress_since = run_started_at)`. A non-refused close or a reassign/reopen
+event resets the derived run. The close has already committed; a failed write
+is logged and repaired on the next tick.
 
 ## Constants
 
@@ -422,7 +431,8 @@ Pure — `herdr_task_disposition.rs`:
 
 - `dispose_table_is_exhaustive` — all 6 states × {no task, assigned fresh,
   assigned rate-limited, assigned at threshold, assigned escalated, active}
-  × episode_notified {false,true} → expected disposition; **72 rows**
+  × episode_notified {false,true} × refusal hold {false,true} → expected
+  disposition; **refusal-hold rows are included in the exhaustive table**
   written out, no wildcard.
 - `blocked_without_task_still_escalates_once`.
 - `active_member_with_stalled_task_holds` — reminder_count 10, state Active → `Hold(Active)`.
@@ -508,20 +518,21 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
   idle members → 1 per tick.
 - `escalation_mail_does_not_consume_prompt_budget` — 16 idle members with
   due tasks + 1 blocked → 16 prompts and 1 mail in one tick.
-- `third_consecutive_refusal_escalates_once` — through the real
+- `third_refusal_escalates_then_member_is_held` — through the real
   `commit_write`: 3 refused closes by A → 1 mail to lead + recipients with
   `summary == "escalation:refusals_escalated:A@<team>"`, kind `refusals_escalated`; a 4th
-  refused close → no second mail; a `completed` then 3 more refused → one
-  more mail. The closes themselves succeed whether or not the mail write
-  succeeds (inject a failing lead write → close still committed, `warn`).
+  refused close → no second mail; subsequent ticks produce 0 task prompts.
+  The closes themselves succeed whether or not the mail write succeeds.
 - `refusal_escalation_is_mail_only` — no Herdr notification is sent for
   `RefusalsEscalated` (design §6.1).
 - `refusal_run_is_keyed_to_assignee_not_closer` — three refused closes of
   A's tasks submitted by the assigner, then by the unique lead → one mail
   naming A (FNX-BA-CRIT-027).
-- `failed_refusal_mail_is_written_on_the_next_refusal` — inject a failing
-  lead write on the 3rd refusal → 0 mail; 4th refusal → 1 mail; 5th → still
-  1 (RSH-001).
+- `held_refusal_member_gets_missing_target_mail_on_next_tick` — inject a
+  failing lead write on the 3rd refusal → the next tick writes lead only and
+  still produces 0 task prompts (RSH-001).
+- `non_refused_close_releases_refusal_hold` — a non-refused close resets the
+  derived refusal run and permits a later due task nudge.
 - `stalled_escalation_partial_failure_completes_next_tick_then_records` —
   recipient write fails on the stalled tick: lead written,
   `lead_notified_count` stays 0; next tick writes the recipient only, then
