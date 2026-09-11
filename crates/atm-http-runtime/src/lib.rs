@@ -61,6 +61,7 @@ mod herdr_queue_wake;
 mod herdr_queue_wake_escalation;
 #[cfg(test)]
 mod herdr_queue_wake_test_gates;
+mod herdr_task_disposition;
 mod http1_server;
 mod loopback_read;
 mod loopback_tcp;

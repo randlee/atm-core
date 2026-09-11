@@ -82,7 +82,8 @@ pub use task_state::{
 };
 pub use task_store::{
     DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,
-    ReminderOutcome, TASK_STALLED_REMINDER_THRESHOLD, TaskStore,
+    ReminderOutcome, TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS,
+    TASK_STALLED_REMINDER_THRESHOLD, TaskStore,
 };
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,

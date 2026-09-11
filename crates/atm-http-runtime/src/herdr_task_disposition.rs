@@ -1,0 +1,135 @@
+//! Pure task-nudge policy for one accepted roster observation.
+
+use atm_core::boundary::{
+    TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS, TASK_STALLED_REMINDER_THRESHOLD,
+    TaskRow,
+};
+use atm_core::protocol::RuntimeMemberState;
+use atm_core::types::IsoTimestamp;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) enum TaskDisposition {
+    Nudge,
+    EscalateStalled,
+    EscalateEpisode(EpisodeKind),
+    Hold(&'static str),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) enum EpisodeKind {
+    Blocked,
+    Offline,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+impl EpisodeKind {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Blocked => "blocked",
+            Self::Offline => "offline",
+        }
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn dispose(
+    mail_pending: bool,
+    state: RuntimeMemberState,
+    head: Option<&TaskRow>,
+    now: IsoTimestamp,
+    new_episode: bool,
+    consecutive_refusals: u32,
+) -> TaskDisposition {
+    use RuntimeMemberState as S;
+    use TaskDisposition as D;
+
+    match (mail_pending, state, head) {
+        (_, S::Active, _) => D::Hold("active"),
+        (_, S::Blocked, _) if new_episode => D::EscalateEpisode(EpisodeKind::Blocked),
+        (_, S::Blocked, _) => D::Hold("episode reported"),
+        (_, S::Offline, _) if new_episode => D::EscalateEpisode(EpisodeKind::Offline),
+        (_, S::Offline, _) => D::Hold("episode reported"),
+        (_, S::Unknown, _) => D::Hold("unobserved"),
+        (_, S::IdentityConflict, _) => D::Hold("identity conflict"),
+        (true, S::Idle, _) => D::Hold("mail pending"),
+        (false, S::Idle, None) => D::Hold("no open task"),
+        (false, S::Idle, Some(_)) if consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD => {
+            D::Hold("refusals escalated")
+        }
+        (false, S::Idle, Some(task)) if task.lead_notified_count > 0 => D::Hold("stalled"),
+        (false, S::Idle, Some(task)) if task.reminder_count >= TASK_STALLED_REMINDER_THRESHOLD => {
+            D::EscalateStalled
+        }
+        (false, S::Idle, Some(task)) if !reminder_due(task, now) => D::Hold("rate limited"),
+        (false, S::Idle, Some(_)) => D::Nudge,
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn reminder_due(task: &TaskRow, now: IsoTimestamp) -> bool {
+    task.last_reminded_at.is_none_or(|last| {
+        (now.into_inner() - last.into_inner()).num_milliseconds() >= TASK_REMINDER_INTERVAL_MS
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EpisodeKind, TaskDisposition, dispose};
+    use atm_core::boundary::{TaskRow, TaskState};
+    use atm_core::protocol::RuntimeMemberState;
+    use atm_core::schema::AtmMessageId;
+    use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+
+    fn now() -> IsoTimestamp {
+        "2026-09-11T00:00:00Z".parse().expect("timestamp")
+    }
+
+    fn row() -> TaskRow {
+        TaskRow {
+            team: "team".parse::<TeamName>().expect("team"),
+            task_id: "task".parse::<TaskId>().expect("task"),
+            assignee: "agent".parse::<AgentName>().expect("assignee"),
+            assigner: "assigner".parse::<AgentName>().expect("assigner"),
+            state: TaskState::Assigned,
+            position: None,
+            assignment_message_id: AtmMessageId::new(),
+            description: "task".to_owned(),
+            assigned_at: now(),
+            updated_at: now(),
+            last_reminded_at: None,
+            reminder_count: 0,
+            lead_notified_count: 0,
+        }
+    }
+
+    #[test]
+    fn idle_member_with_open_mail_holds_mail_pending() {
+        assert_eq!(
+            dispose(
+                true,
+                RuntimeMemberState::Idle,
+                Some(&row()),
+                now(),
+                false,
+                0
+            ),
+            TaskDisposition::Hold("mail pending")
+        );
+    }
+
+    #[test]
+    fn blocked_without_task_still_escalates_once() {
+        assert_eq!(
+            dispose(false, RuntimeMemberState::Blocked, None, now(), true, 0),
+            TaskDisposition::EscalateEpisode(EpisodeKind::Blocked)
+        );
+    }
+
+    #[test]
+    fn episode_kind_has_stable_name() {
+        assert_eq!(EpisodeKind::Blocked.as_str(), "blocked");
+        assert_eq!(EpisodeKind::Offline.as_str(), "offline");
+    }
+}
