@@ -597,18 +597,28 @@ WITH ranked AS (
                PARTITION BY team, task_id
                ORDER BY CASE state WHEN 'complete' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,
                         updated_at DESC, assignee ASC) AS winner
-      FROM tasks_legacy)
+      FROM tasks_legacy),
+     winners AS (SELECT * FROM ranked WHERE winner = 1)
 INSERT INTO tasks(team, task_id, assignee, assigner, state, close_outcome, position,
                   assignment_message_id, description, assigned_at, updated_at,
                   last_reminded_at, reminder_count, lead_notified_count)
 SELECT team, task_id, assignee, assigner, state,
        CASE state WHEN 'complete' THEN 'completed' END,
-       NULL,   -- positions assigned in step 7
+       CASE WHEN state = 'complete' THEN NULL
+            ELSE ROW_NUMBER() OVER (
+                   PARTITION BY team, assignee, (state = 'complete')
+                   ORDER BY CASE state WHEN 'active' THEN 0 ELSE 1 END,
+                            assigned_at ASC, task_id ASC) END,   -- position: active first, then FIFO
        assignment_message_id, description,
        assigned_at,
        updated_at, last_reminded_at, reminder_count, lead_notified_count
-  FROM ranked WHERE winner = 1;
+  FROM winners;
 ```
+
+Positions are computed in the INSERT because the `position` CHECK is evaluated
+per row at insert time; open winners get 1..n per `(team, assignee)` (an
+`active` row, if any, is 1), complete rows NULL. The three indexes are created
+after the inserts (step 9), so no partial-index collision can occur mid-copy.
 
 5. Events: copy `task_events_legacy` renumbering `seq` per `(team, task_id)`
    by `ORDER BY at ASC, assignee ASC, seq ASC`; set `close_outcome =
@@ -630,8 +640,10 @@ SELECT team, task_id, assignee, assigner, state,
    `migrated` event with `from_state = active, to_state = assigned` and
    detail `'demoted because another active task for this member wins by
    original assignment time and task id'`.
-8. Positions: per `(team, assignee)`, open rows ordered `active` first then
-   `(assigned_at, task_id)` receive `position = 1..=n`.
+8. Verify positions: for every `(team, assignee)` the open rows' positions are
+   exactly 1..n (`SELECT team, assignee, COUNT(*), MAX(position) FROM tasks
+   WHERE state <> 'complete' GROUP BY 1,2 HAVING COUNT(*) <> MAX(position)`
+   returns no rows); a hit is an `AtmError` and rolls back.
 9. `DROP TABLE tasks_legacy; DROP TABLE task_events_legacy;` create the
    three indexes; commit. Any error → rollback; the legacy tables are
    untouched and the daemon fails to start with the error and the backup
@@ -932,6 +944,11 @@ string, never from production code):
 - `winner_query_executes_against_duplicate_group_fixture` — runs this exact
   statement on a fixture with two legacy rows for one id and asserts one
   canonical row carrying the winner's own `assigned_at`.
+- `migration_inserts_open_winners_with_contiguous_positions` — legacy fixture
+  with two agents: A has one `active` and two `assigned` rows (distinct task
+  ids), B has one `assigned`; after migration A's positions are active=1 then
+  FIFO 2,3; B's is 1; complete rows NULL; the literal migration SQL executes
+  (no CHECK failure).
 - `two_active_tasks_same_member_demotes_later_one` — winner by
   `(assigned_at, task_id)`; loser `assigned`, `migrated` event with the AZ
   detail text; positions 1 (active) and 2.
