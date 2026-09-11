@@ -4049,9 +4049,10 @@ Task ledger shape (Phase BA):
 2. `tasks` MUST carry a unique index on `(team, assignee)` restricted to
    `state = 'active'`.
 3. `tasks` MUST carry a queue `position` column separate from `assigned_at`;
-   `assigned_at` MUST never be rewritten.
-4. Close MUST record a typed outcome
-   (`completed | refused | cancelled | reassigned`).
+   `assigned_at` records the current assignment and is reset by reassign/reopen,
+   never by move.
+4. Close MUST record a typed outcome (`completed | refused | cancelled`).
+   `reassigned` and `reopened` are same-id event kinds produced by `assign`.
 5. `tasks` and `task_events` rows MUST NOT be deleted; a task id that ever
    existed MUST always resolve.
 

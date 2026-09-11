@@ -102,22 +102,22 @@ event, is never gated on task state, and never transitions a task.
 | --- | --- |
 | One row per task | `PRIMARY KEY (team, task_id)`; `assignee` is a column, not identity |
 | At most one active task per agent | `CREATE UNIQUE INDEX one_active_task_per_agent ON tasks(team, assignee) WHERE state = 'active'`; any number of `assigned` rows per agent |
-| Queue order | `ORDER BY position, assigned_at, task_id`; `position` is a separate column, default end of queue; `assigned_at` is immutable |
-| Close outcome | typed `completed \| refused \| cancelled|completed \| refused \| cancelled|completed \| refused \| cancelled|completed \| refused \| cancelled`; free text is a human-facing reason only |
-| Reassignment | close with outcome `reassigned`, then create a new task id; no in-place reassign |
+| Queue order | `ORDER BY position, assigned_at, task_id`; `position` is a separate column, default end of queue; `assigned_at` records the current assignment and is reset by reassign/reopen, never by move |
+| Close outcome | typed `completed \| refused \| cancelled`; free text is a human-facing reason only |
+| Reassignment | `assign` on an existing open id updates assignee/state/placement in place and appends `reassigned`; a closed id is reopened in place with `reopened` |
 | Replay | per `(team, task_id)`: the fold of `to_state` over the row's events in ascending `seq` (the `PRIMARY KEY (team, task_id, seq)` order — `at` is never an ordering key), taking the last non-NULL value, equals the row's `state` (with `close_outcome` when `complete`). `Moved`, `rejected`, `reminded`, `lead_notified` and `acked` events carry `to_state = from_state`; `migrated` is the only migration-written state-changing event |
 
 ### States and events
 
 States: `assigned`, `active`, `complete`. Events: `Assigned`, `Started`,
-`Completed(outcome)`.
+`Reassigned`, `Reopened`, `Completed(outcome)`.
 
 | Current | Assigned | Started | Completed(outcome) |
 | --- | --- | --- | --- |
 | ∅ | assigned | reject | reject |
 | assigned | assigned (resend) | active; reject when another task is active for the assignee | complete |
 | active | active (resend) | active | complete |
-| complete | assign reopens the same id | reject | assigned transition; preserve the task id and append a reopened event |
+| complete | assign reopens the same id | reject | no transition; deliver and inform already complete |
 
 `Started` notifies the assigner. `Completed(outcome)` dequeues the task (no
 further reminders) and appends one timestamped event carrying the outcome;
