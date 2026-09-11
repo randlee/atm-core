@@ -5,8 +5,8 @@
 //! remain owned by the ordered writer transaction in `task_store`.
 
 use atm_storage::{
-    AgentName, AsyncTaskLedgerReader, AtmError, ReadDeadline, ReadLaneError, TaskEventRow, TaskId,
-    TaskRow, TeamName,
+    AgentName, AsyncTaskLedgerReader, AtmError, ReadDeadline, ReadLaneError, RefusalRun,
+    TaskEventRow, TaskId, TaskRow, TeamName,
 };
 use rusqlite::{Connection, params};
 use std::sync::Arc;
@@ -44,6 +44,35 @@ impl std::fmt::Debug for TaskLedgerReader {
 
 #[async_trait::async_trait]
 impl AsyncTaskLedgerReader for TaskLedgerReader {
+    async fn open_tasks_for_team(
+        &self,
+        team: TeamName,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                task_sql::select_open_tasks_for_team(connection, &team)
+                    .map_err(|error| sqlite_error(target, "failed to list open team tasks", error))
+                    .map_err(read_lane_error)
+            })
+            .await
+    }
+
+    async fn refusal_run(
+        &self,
+        team: TeamName,
+        assignee: AgentName,
+        deadline: ReadDeadline,
+    ) -> Result<RefusalRun, ReadLaneError> {
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                task_sql::trailing_refusal_run(connection, &team, &assignee)
+                    .map_err(|error| sqlite_error(target, "failed to read refusal run", error))
+                    .map_err(read_lane_error)
+            })
+            .await
+    }
+
     async fn list_tasks(
         &self,
         team: TeamName,

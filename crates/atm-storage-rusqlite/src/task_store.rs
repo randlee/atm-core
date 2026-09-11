@@ -247,9 +247,11 @@ impl SqliteTaskStore {
 impl atm_storage::contract::sealed::Sealed for SqliteTaskStore {}
 
 impl TaskStore for SqliteTaskStore {
-    fn load_task(&self, member: &MemberKey, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
-        self.db
-            .with_connection(|connection| self.load_row(connection, member, task_id))
+    fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
+        self.db.with_connection(|connection| {
+            task_sql::select_task_row(connection, team, task_id)
+                .map_err(|error| self.db.error("failed to load task row", error))
+        })
     }
 
     fn open_tasks(&self, member: &MemberKey) -> Result<Vec<TaskRow>, AtmError> {

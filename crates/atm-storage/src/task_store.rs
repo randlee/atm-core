@@ -64,7 +64,7 @@ pub enum MessageWriteOrigin {
 /// Read and audit capability for the task ledger. Message-state transitions
 /// are intentionally applied only in a backend writer transaction.
 pub trait TaskStore: sealed::Sealed + Send + Sync {
-    fn load_task(&self, member: &MemberKey, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError>;
+    fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError>;
     fn open_tasks(&self, member: &MemberKey) -> Result<Vec<TaskRow>, AtmError>;
     fn list_tasks(
         &self,
@@ -122,7 +122,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
 /// Minimal in-memory implementation for composition and contract tests.
 #[derive(Debug, Default)]
 pub struct DummyTaskStore {
-    rows: Mutex<HashMap<(MemberKey, TaskId), TaskRow>>,
+    rows: Mutex<HashMap<(TeamName, TaskId), TaskRow>>,
     escalation_recipients: Mutex<HashMap<String, Vec<String>>>,
     fail_reminders: bool,
 }
@@ -132,15 +132,7 @@ impl DummyTaskStore {
     pub fn with_rows(rows: Vec<TaskRow>, fail_reminders: bool) -> Self {
         let rows = rows
             .into_iter()
-            .map(|row| {
-                (
-                    (
-                        MemberKey::new(row.team.clone(), row.assignee.clone()),
-                        row.task_id.clone(),
-                    ),
-                    row,
-                )
-            })
+            .map(|row| ((row.team.clone(), row.task_id.clone()), row))
             .collect();
         Self {
             rows: Mutex::new(rows),
@@ -153,7 +145,7 @@ impl DummyTaskStore {
         self.rows
             .lock()
             .expect("dummy task rows lock")
-            .get(&(member.clone(), task_id.clone()))
+            .get(&(member.team().clone(), task_id.clone()))
             .expect("dummy task row")
             .clone()
     }
@@ -162,12 +154,12 @@ impl DummyTaskStore {
 impl sealed::Sealed for DummyTaskStore {}
 
 impl TaskStore for DummyTaskStore {
-    fn load_task(&self, member: &MemberKey, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
+    fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
         Ok(self
             .rows
             .lock()
             .expect("dummy task rows lock")
-            .get(&(member.clone(), task_id.clone()))
+            .get(&(team.clone(), task_id.clone()))
             .cloned())
     }
 
@@ -177,7 +169,7 @@ impl TaskStore for DummyTaskStore {
             .lock()
             .expect("dummy task rows lock")
             .iter()
-            .filter(|((row_member, _), _)| row_member == member)
+            .filter(|((team, _), row)| team == member.team() && &row.assignee == member.agent())
             .map(|(_, row)| row.clone())
             .collect())
     }
@@ -221,7 +213,7 @@ impl TaskStore for DummyTaskStore {
         }
         let mut rows = self.rows.lock().expect("dummy task rows lock");
         let row = rows
-            .get_mut(&(member.clone(), task_id.clone()))
+            .get_mut(&(member.team().clone(), task_id.clone()))
             .ok_or_else(|| {
                 AtmError::new(crate::AtmErrorCode::InternalError, "dummy task row missing")
             })?;

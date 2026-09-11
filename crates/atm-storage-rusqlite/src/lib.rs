@@ -3544,7 +3544,7 @@ mod tests {
         store.save_message(&assignment).expect("assign task");
 
         let assigned = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load assigned task")
             .expect("task row");
         assert_eq!(assigned.state, TaskState::Assigned);
@@ -3557,7 +3557,7 @@ mod tests {
         resend.envelope.task_id = Some(task_id.clone());
         store.save_message(&resend).expect("resend task");
         let refreshed = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load refreshed task")
             .expect("task row");
         assert_eq!(refreshed.state, TaskState::Assigned);
@@ -3571,7 +3571,7 @@ mod tests {
             .save_message(&completion)
             .expect("complete task as assigner");
         let completed = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load completed task")
             .expect("task row");
         assert_eq!(
@@ -3601,7 +3601,7 @@ mod tests {
             .expect("persist peer receipt");
         assert!(
             tasks
-                .load_task(&member, &peer_task)
+                .load_task(member.team(), &peer_task)
                 .expect("load peer task")
                 .is_none()
         );
@@ -3660,7 +3660,7 @@ mod tests {
         store.save_message(&assignment).expect("save assignment");
         let member = MemberKey::new(team(), agent());
         let before = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load task")
             .expect("task row");
         let before_events = tasks
@@ -3679,7 +3679,7 @@ mod tests {
             .expect("acknowledge assignment");
 
         let after = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load task after acknowledgement")
             .expect("task row after acknowledgement");
         assert_eq!(after, before);
@@ -3730,7 +3730,7 @@ mod tests {
         let member = MemberKey::new(team(), agent());
         assert_eq!(
             tasks
-                .load_task(&member, &task_id)
+                .load_task(member.team(), &task_id)
                 .expect("load completed task")
                 .expect("task row")
                 .state,
@@ -3784,7 +3784,7 @@ mod tests {
         let member = MemberKey::new(team(), agent());
         assert_eq!(
             tasks
-                .load_task(&member, &task_id)
+                .load_task(member.team(), &task_id)
                 .expect("load completed task")
                 .expect("task row")
                 .state,
@@ -3879,7 +3879,7 @@ mod tests {
             .expect("first acknowledgement");
         assert_eq!(
             tasks
-                .load_task(&member, &first_id)
+                .load_task(member.team(), &first_id)
                 .expect("first task")
                 .expect("first row")
                 .state,
@@ -3911,7 +3911,7 @@ mod tests {
             .expect("second acknowledgement succeeds while another task is active");
         assert_eq!(
             tasks
-                .load_task(&member, &second_id)
+                .load_task(member.team(), &second_id)
                 .expect("second task")
                 .expect("second row")
                 .state,
@@ -4018,7 +4018,7 @@ mod tests {
         assert!(
             backend
                 .task_store()
-                .load_task(&MemberKey::new(team(), agent()), &task_id)
+                .load_task(&team(), &task_id)
                 .expect("load missing task row")
                 .is_none()
         );
@@ -4069,7 +4069,7 @@ mod tests {
             .expect("persist peer receipt");
         assert!(
             tasks
-                .load_task(&MemberKey::new(team(), agent()), &task_id)
+                .load_task(&team(), &task_id)
                 .expect("load peer task")
                 .is_none()
         );

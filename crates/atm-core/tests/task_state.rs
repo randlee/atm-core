@@ -173,7 +173,7 @@ fn task_row(
     runtime
         .task_store()
         .expect("installed task store")
-        .load_task(&member, task_id)
+        .load_task(member.team(), task_id)
         .expect("load task")
         .expect("task row")
 }

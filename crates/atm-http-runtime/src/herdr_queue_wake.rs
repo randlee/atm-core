@@ -1932,7 +1932,7 @@ mod tests {
         let mut stats = HerdrQueueWakeStats::default();
 
         let mut tenth = task_store
-            .load_task(&keys[0], &task_id)
+            .load_task(keys[0].team(), &task_id)
             .expect("task")
             .expect("row");
         tenth.reminder_count = 10;
@@ -2004,7 +2004,7 @@ mod tests {
         let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
         let timestamp = *now.lock().expect("clock");
         let mut tenth = task_store
-            .load_task(&keys[0], &task_id)
+            .load_task(keys[0].team(), &task_id)
             .expect("task")
             .expect("row");
         tenth.reminder_count = 10;
@@ -2342,7 +2342,7 @@ mod tests {
             runtime
                 .task_store()
                 .expect("task store")
-                .load_task(&key, &task_id)
+                .load_task(key.team(), &task_id)
                 .expect("load task")
                 .expect("task row")
                 .state,
@@ -2417,7 +2417,7 @@ mod tests {
             runtime
                 .task_store()
                 .expect("task store")
-                .load_task(&key, &first)
+                .load_task(key.team(), &first)
                 .expect("load first task")
                 .expect("first task")
                 .state,
@@ -2434,7 +2434,7 @@ mod tests {
             runtime
                 .task_store()
                 .expect("task store")
-                .load_task(&key, &"AX5-AC1-FIRST".parse().expect("task id"))
+                .load_task(key.team(), &"AX5-AC1-FIRST".parse().expect("task id"))
                 .expect("load completed task")
                 .expect("completed task")
                 .state,
@@ -2450,7 +2450,7 @@ mod tests {
             runtime
                 .task_store()
                 .expect("task store")
-                .load_task(&key, &second)
+                .load_task(key.team(), &second)
                 .expect("load second task")
                 .expect("second task")
                 .state,
@@ -2700,7 +2700,7 @@ mod tests {
             runtime
                 .task_store()
                 .expect("task store")
-                .load_task(&key, &second)
+                .load_task(key.team(), &second)
                 .expect("load task")
                 .expect("second task")
                 .state,
@@ -2739,7 +2739,7 @@ mod tests {
             runtime
                 .task_store()
                 .expect("task store")
-                .load_task(&key, &task_id)
+                .load_task(key.team(), &task_id)
                 .expect("load task")
                 .expect("task row")
                 .reminder_count,
@@ -2835,7 +2835,7 @@ mod tests {
         let row = runtime
             .task_store()
             .expect("task store")
-            .load_task(&key, &task_id)
+            .load_task(key.team(), &task_id)
             .expect("load task")
             .expect("task row");
         let events = runtime
@@ -2914,7 +2914,7 @@ mod tests {
         let row = runtime
             .task_store()
             .expect("task store")
-            .load_task(&key, &task_id)
+            .load_task(key.team(), &task_id)
             .expect("load task")
             .expect("task row");
         assert_eq!(row.reminder_count, 1);
@@ -2961,7 +2961,7 @@ mod tests {
         let row = runtime
             .task_store()
             .expect("task store")
-            .load_task(&key, &task_id)
+            .load_task(key.team(), &task_id)
             .expect("load task")
             .expect("task row");
         assert_eq!(row.reminder_count, 1);
@@ -2997,7 +2997,7 @@ mod tests {
         let row = runtime
             .task_store()
             .expect("task store")
-            .load_task(&key, &task_id)
+            .load_task(key.team(), &task_id)
             .expect("load task")
             .expect("task row");
         assert_eq!(
