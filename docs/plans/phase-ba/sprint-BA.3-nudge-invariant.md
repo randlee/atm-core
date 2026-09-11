@@ -97,6 +97,8 @@ pub(crate) enum HoldReason {
 
 /// The whole invariant. `head` is the member's lowest-position open task.
 /// `episode_notified` is whether this Blocked/Offline episode already produced its message.
+/// `mail_pending` (= `open_mail.contains(member)`) holds only the Idle prompt
+/// path: episode escalation is a message to the lead, not a prompt to the member.
 pub(crate) fn dispose(
     mail_pending: bool,
     state: RuntimeMemberState,
@@ -107,14 +109,14 @@ pub(crate) fn dispose(
 ) -> TaskDisposition {
     use RuntimeMemberState as S;
     match (mail_pending, state, head) {
-        (true, _, _) => TaskDisposition::Hold(HoldReason::MailPending),
-        (false, S::Active, _) => TaskDisposition::Hold(HoldReason::Active),
-        (false, S::Blocked, _) if episode_notified => TaskDisposition::Hold(HoldReason::EpisodeNotified),
-        (false, S::Blocked, _) => TaskDisposition::EscalateEpisode(EpisodeKind::Blocked),
-        (false, S::Offline, _) if episode_notified => TaskDisposition::Hold(HoldReason::EpisodeNotified),
-        (false, S::Offline, _) => TaskDisposition::EscalateEpisode(EpisodeKind::Offline),
-        (false, S::Unknown, _) => TaskDisposition::Hold(HoldReason::Unobserved),
-        (false, S::IdentityConflict, _) => TaskDisposition::Hold(HoldReason::IdentityConflict),
+        (_, S::Active, _) => TaskDisposition::Hold(HoldReason::Active),
+        (_, S::Blocked, _) if episode_notified => TaskDisposition::Hold(HoldReason::EpisodeNotified),
+        (_, S::Blocked, _) => TaskDisposition::EscalateEpisode(EpisodeKind::Blocked),
+        (_, S::Offline, _) if episode_notified => TaskDisposition::Hold(HoldReason::EpisodeNotified),
+        (_, S::Offline, _) => TaskDisposition::EscalateEpisode(EpisodeKind::Offline),
+        (_, S::Unknown, _) => TaskDisposition::Hold(HoldReason::Unobserved),
+        (_, S::IdentityConflict, _) => TaskDisposition::Hold(HoldReason::IdentityConflict),
+        (true, S::Idle, _) => TaskDisposition::Hold(HoldReason::MailPending),
         (false, S::Idle, None) => TaskDisposition::Hold(HoldReason::NoOpenTask),
         (false, S::Idle, Some(_)) if consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD =>
             TaskDisposition::Hold(HoldReason::RefusalsEscalated),
@@ -124,6 +126,9 @@ pub(crate) fn dispose(
         (false, S::Idle, Some(_)) => TaskDisposition::Nudge,
     }
 }
+
+Disposition order is Active → Blocked/Offline → Unknown/IdentityConflict →
+MailPending (Idle only) → refusals → stalled → Nudge.
 
 /// Due when no reminder was ever sent, or at least the interval has elapsed.
 /// `IsoTimestamp` exposes only `into_inner()` (`atm-storage/src/types.rs:359-371`);
@@ -452,7 +457,7 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
   with `state_changed_at = t1 > t0` → the old report (timestamp < t1) does
   not suppress; 1 new mail (FNX-BA-CRIT-028).
 - `recipients_only_episode_is_not_duplicated_after_restart` — team with two
-  leads (no unique lead) and one configured recipient: 1 mail to the
+  leads (no single lead) and one configured recipient: 1 mail to the
   recipient; restart; 50 ticks → 0 further mail (the recipient's own mailbox
   is the record).
 - `partial_target_failure_completes_missing_target_next_tick` — inject a
@@ -490,6 +495,11 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
 - `member_turning_active_between_dispose_and_emit_is_not_prompted` — flip
   the in-RAM roster record inside the test hook between `dispose` and the
   emit → 0 prompts.
+- `offline_member_with_open_mail_still_escalates_once` — an Offline member
+  with open queue mail still gets the episode escalation once, not an Idle
+  mail-pending hold.
+- `idle_member_with_open_mail_holds_mail_pending` — an Idle member with open
+  queue mail is held by `MailPending` and is not nudged.
 - `two_leads_escalation_goes_to_recipients_only` and
   `no_lead_no_recipients_escalation_is_logged_not_sent` (existing
   `EscalationTargets` behaviour, re-asserted under the new path).
@@ -505,7 +515,7 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
 - `refusal_escalation_is_mail_only` — no Herdr notification is sent for
   `RefusalsEscalated` (design §6.1).
 - `refusal_run_is_keyed_to_assignee_not_closer` — three refused closes of
-  A's tasks submitted by the assigner, then by the unique lead → one mail
+  A's tasks submitted by the assigner, then by another sender → one mail
   naming A (FNX-BA-CRIT-027).
 - `held_refusal_member_gets_missing_target_mail_on_next_tick` — inject a
   failing lead write on the 3rd refusal → the next tick writes lead only and
@@ -600,7 +610,7 @@ Writer gate: latest reminded event query uses ORDER BY rowid DESC LIMIT 1 and pe
 
 Refusal escalation is tick-driven only: the next tick reads refusal_run, holds the member, and sends at most one escalation mail per run; no write result seam is used.
 
-Tests: `reassign_from_stalled_row_starts_fresh_episode`, `prior_assignment_reminder_never_makes_new_assignment_start_owed`, `close_after_reassignment_between_preflight_and_write_is_rejected_then_recomposed`.
+Tests: `reassign_from_stalled_row_starts_fresh_episode`, `prior_assignment_reminder_never_makes_new_assignment_start_owed`, `close_after_reassignment_between_preflight_and_write_is_rejected_without_retry`.
 
 MemberObservation is built from apply_roster_runtime_observations(..) → outcome.current, never from the snapshot; test `disposition_follows_master_record_when_raw_herdr_status_differs`. `outcome.current` is authoritative.
 Stalled hold reset paths: start, close, reassign, reopen; runtime state alone does not resume nudging. Test `stalled_hold_survives_assignee_active_then_idle`.

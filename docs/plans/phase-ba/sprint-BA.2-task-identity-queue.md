@@ -30,7 +30,7 @@ legacy `task_complete` key (see "Wire" below).
 | D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, `SendOutcome.already_closed: Option<TaskCloseOutcome>`, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
 | D5 | `TASK_SCHEMA_DDL` rebuilt (two tables, three indexes) | `crates/atm-storage-rusqlite/src/task_store.rs:15-58` |
 | D6 | `migrate_task_identity` + `TaskMigrationReport` | `crates/atm-storage-rusqlite/src/task_migration.rs` (new) |
-| D7 | writer: `apply_task_message` dispatch, `apply_task_start`, `apply_task_close`, `apply_task_move`, `renumber_queue`, `append_rejected_task_event`, authority rules — Start (daemon), Close (assignee/assigner/unique lead), Move (assigner/unique lead), Assign-on-existing-row (assigner/unique lead) | `crates/atm-storage-rusqlite/src/writer/task_ops.rs` |
+| D7 | writer: `apply_task_message` dispatch, `apply_task_start`, `apply_task_close`, `apply_task_move`, `renumber_queue`, `append_rejected_task_event`, caller check unchanged from develop: Close accepted from assignee or assigner only; no other op checks the caller | `crates/atm-storage-rusqlite/src/writer/task_ops.rs` |
 | D8 | `AsyncTaskLedgerReader::open_tasks_for_team`, `TaskStore::load_task(team, task_id)`, `DoctorFinding::TaskQueueGap` | `crates/atm-storage/src/contract.rs:916`, `task_store.rs:66`, `crates/atm-core/src/doctor/` |
 | D9 | boundary manifest edits per plan §10 | `boundaries/atm-storage/task-store.toml`, `…-rusqlite/task-store-sqlite.toml`, `async-task-ledger-reader*.toml` |
 | D10 | tests named below; ADR-061 D6 approval entry cited on the PR | `tests/task_identity.rs`, `tests/task_migration.rs` |
@@ -82,7 +82,6 @@ them in that order.
 | `crates/atm-storage-rusqlite/src/schema_version.rs:284-286` `CREATE UNIQUE INDEX one_active_task_per_agent … WHERE state = 'active'` | **copied verbatim** (column `assignee`, not `current_assignee`) — DDL below |
 | `schema_version.rs:288-321` winner ranking (`ROW_NUMBER() OVER (PARTITION BY team, task_id ORDER BY precedence …, updated_at DESC, assignee ASC)`) and `:339-380` deterministic active-conflict demotion + audit event | **copied and adapted** to the in-place rebuild — migration SQL below; the audit-row text is kept. **Precedence inverted:** AZ ranked `active > assigned > complete`; BA ranks `complete > active > assigned` because design §3.1's live incident is a *completed* row beside a 587-reminder open twin — the completed twin is the terminal truth and the open twin is the phantom (FNX-BA-CRIT-001) |
 | `schema_version.rs:383-414` `ensure_task_v2_schema`: IMMEDIATE transaction → DDL → migrate → post-DDL → commit | **shape reused** as `migrate_task_identity` |
-| `crates/atm-core/src/task_command/service.rs:698-750` `require_assignee_assigner_or_lead`, `require_assigner_or_lead`, `require_unique_lead` | **copied** into the writer-side authority check (D6), minus `TaskMutationCommand`/attempt parameters |
 
 Not used: `tasks_v2`, `task_assignment_attempts`, `task_operations`,
 `storage_schema_versions`, triggers, `TaskOperationId`, `TaskPriority`,
@@ -233,7 +232,7 @@ pub struct TaskRejected {
 #[serde(rename_all = "snake_case")]
 pub enum TaskRejectionKind {
     NoOpenTask,
-    NotAuthorized,   // wrong actor, or "lead" authority claimed on a team with 0 or 2+ leads (detail names the count)
+    NotAuthorized,   // close authored by neither assignee nor assigner (develop rule, unchanged)
     ActiveElsewhere, // one-active index hit on Started
     UnknownTarget,   // Move/assign placement target invalid
     StaleCounterparty, // close recipient is not the current counterparty
@@ -244,14 +243,10 @@ write that returns `already_closed`; assign-on-complete uses the separate
 reopen branch.
 ```
 
-Authority failures are rejections, not error codes: a caller who is neither
-assignee nor assigner is `NotAuthorized` with detail
-`"<actor> is neither assignee, assigner nor the unique lead of <team>"`; a
-lead on a team with `n != 1` leads is `NotAuthorized` with detail
-`"team <team> has <n> leads; lead authority requires exactly one"`. No new
-`AtmErrorCode` (FNX-BA-CRIT-006 / PLAN-SCOPE-005; the doctor codes
-`RosterNoLead` / `RosterMultipleLeads` at `atm-error/src/error_codes.rs:141-142`
-stay doctor-only).
+The existing close check is the only caller check: a close authored by neither
+the row's assignee nor assigner is `NotAuthorized`. No new `AtmErrorCode` is
+added (FNX-BA-CRIT-006 / PLAN-SCOPE-005); the doctor roster codes remain
+doctor-only.
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -719,11 +714,9 @@ fn renumber_queue(team: &TeamName, assignee: &AgentName, order: &[TaskId], conne
 
 Rules (D6): row lookup is by `(team, task_id)` only — the sender-first /
 recipient fallback in `apply_task_completion` (`:305-320`) is deleted.
-Authority: `Start` requires `actor == Daemon`; `Close` requires assignee,
-assigner or the team's unique lead; `Move` requires assigner or unique lead
-(AZ `require_unique_lead` copied; a team with `n != 1` leads rejects with
-`NotAuthorized` and the count in `detail` — no error code exists or is added,
-see the `TaskRejectionKind` note above). `Start` sets `reminder_count = 0, lead_notified_count = 0` and moves the row
+Authority: `Start` requires `actor == Daemon`; `Close` is accepted from the
+assignee or assigner and rejected otherwise, as on develop. Assign and Move
+check nothing about the caller. `Start` sets `reminder_count = 0, lead_notified_count = 0` and moves the row
 to position 1 (renumber); it leaves `last_reminded_at` exactly as the handoff
 audit wrote it — a `NULL` here would make the task due again on the next
 tick (FNX-BA-CRIT-029), and `state = assigned AND position = 1 AND
@@ -732,8 +725,9 @@ sets `close_outcome`, `position = NULL`, renumbers the remainder, and keeps
 `acknowledge_completed_assignment`. Close hygiene runs for both `assigned` and `active` rows (BA.1; DRIFT-063) and acknowledges the row's current `assignment_message_id`. `Move` renumbers only; `assigned_at`
 appears in an `UPDATE … SET` list only in the reassign and reopen branches of `apply_task_assignment` (never Start, Close, Move, or renumber).
 `commit_write` with `task_op.is_some()` and a `to` whose team differs from the writer's caller team or whose host is set returns the same local-only validation error (`task commands are local-team only; <addr> resolves to another team or host — send a plain message or assign the local alias`) before opening the transaction (plan §4 R8); test `writer_rejects_task_op_on_foreign_team_or_host_recipient`.
-`Assign` on an existing row (branches b, c, d of `apply_task_assignment`) requires `caller == row.assigner || caller == unique_lead`; the assignee and any third party are `NotAuthorized` (detail `"<actor> is neither assigner nor the unique lead of <team>"`). Branch a (no row) has no task-level authority check beyond send authority. The check runs before `transition()` inside the same transaction, exactly as for `Close`.
-The authorized caller becomes `assigner` in branches c and d (and the message link in b), so receipts and reports route to the sender of the current assignment message.
+Assign and Move do not check the caller. The sender of the assign message is
+written as `assigner` in branches a, c and d (branch b keeps it); receipts and
+reports route to the sender of the current assignment message.
 
 Branch c (other-agent reassign) runs `acknowledge_superseded_assignment(row.assignment_message_id, now)` (reusing `mark_source_acknowledged`) before repointing the task; the prior assignment is closed before the new message becomes current.
 
@@ -752,7 +746,7 @@ renumber:
     let row = load_task_row(team, task_id, connection, target)?
         .ok_or_else(|| task_rejected(TaskRejectionKind::NoOpenTask, format!("no task {task_id} on {team}")))?;
     let Some(current) = row.position else {
-        return Err(task_rejected(TaskRejectionKind::NotAuthorized, format!("task {task_id} requires explicit assign to reopen")));
+        return Err(task_rejected(TaskRejectionKind::NoOpenTask, format!("task {task_id} is not open; use explicit assign to reopen")));
     };
     if row.state == TaskState::Active {
         append_task_event(team, task_id, &row.assignee, TaskEventKind::Moved, Some(row.state), Some(row.state),
@@ -795,6 +789,14 @@ appends one `rejected` row with the `TaskRejectionKind` in `detail`
 state/outcome from row; requested recipient only when no row; it also matches
 `WriteOp::TaskMove` (actor = move caller). Design: event assignee is whoever
 holds task after event.
+
+`TaskRejected` and `TaskRejectionKind` are in-process types (writer control
+flow, `rejected` audit `detail`, tests); they do not cross the HTTP boundary —
+the daemon returns `ResponseEnvelope::Error(AtmError)` with code
+`MessageValidationFailed` and the writer's message.
+
+`StaleCounterparty` carries exactly `task <id>: <recipient> is no longer the
+counterparty — re-run the command`.
 
 `TaskStore` (`crates/atm-storage/src/task_store.rs:66`) is unchanged except
 `load_task(&self, team: &TeamName, task_id: &TaskId)` — the `MemberKey`
@@ -882,23 +884,16 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
   swap) and move T4 `--head` over T1..T3; no `SQLITE_CONSTRAINT`, final
   positions contiguous (FNX-BA-CRIT-021).
 - `assigned_at_updated_only_by_reassign_and_reopen` — Start, Close, Move and renumber leave `assigned_at` unchanged; reassign and reopen set it to `now`.
-- `close_by_third_party_is_not_authorized`, `close_by_unique_lead_succeeds`,
-  `close_by_lead_when_two_leads_is_not_authorized_with_count_in_detail`,
-  `close_by_lead_when_no_lead_is_not_authorized`.
-- `move_by_assignee_is_not_authorized` and
-  `move_before_target_of_other_member_is_unknown_target` — each appends one
-  rejected event for the canonical holder and leaves the row state unchanged.
-- `move_by_assigner_succeeds`, `move_by_unique_lead_succeeds`.
-- `reopen_by_unique_lead_succeeds_and_lead_becomes_assigner`, `reopen_on_two_lead_team_by_claimed_lead_is_not_authorized`, `same_agent_resend_by_unique_lead_succeeds_and_lead_becomes_assigner`, `same_agent_resend_on_two_lead_team_by_claimed_lead_is_not_authorized`.
-- `reassign_by_third_party_is_not_authorized`, `reassign_by_assignee_is_not_authorized` (hand-back is `close refused`), `reassign_by_assigner_succeeds_and_assigner_unchanged`, `reassign_by_unique_lead_succeeds_and_lead_becomes_assigner`, `reassign_on_team_with_two_leads_by_lead_is_not_authorized`, `reopen_by_third_party_is_not_authorized`, `reopen_by_assigner_succeeds`, `same_agent_resend_by_third_party_is_not_authorized` — each rejection appends one `rejected` event and changes no row.
+- `close_by_third_party_is_not_authorized` — the unchanged develop close rule;
+  a third-party close is rejected.
+- `move_before_target_of_other_member_is_unknown_target` appends one rejected
+  event for the canonical holder and leaves the row state unchanged.
 - `reassign_acknowledges_prior_assignment_message` — other-agent reassign
   acknowledges the superseded assignment before the new assignment becomes
   current.
-- `rejected_reassign_audits_canonical_holder_not_target`,
-  `rejected_reopen_audits_canonical_holder`,
-  `rejected_resend_audits_canonical_holder` — each rejected event records the
-  canonical holder and unchanged state/outcome; move-by-assignee and invalid
-  target make the same canonical-holder assertion.
+- `rejected_close_by_third_party_audits_canonical_holder` and
+  `rejected_move_with_invalid_target_audits_one_event_and_changes_nothing` —
+  each rejected event records the canonical holder and unchanged state/outcome.
 - `same_agent_resend_with_unacked_prior_supersedes_it` — assign M1 (unread, unacked); same-agent resend M2; M1 `acknowledged_at` set and `nudge_pending_at IS NULL`, M2 is the only open task-linked item; close → M2 acknowledged; no `task_events` row for the resend.
 - `move_of_active_task_returns_current_position_and_renumbers_nothing` —
   assert every other row's `position` and `updated_at` byte-equal.
@@ -1017,7 +1012,7 @@ as `pub(super)` for it).
 
 Tests include `state_write_from_other_module_fails_boundary_gate`.
 
-Tests: `reassign_from_stalled_row_starts_fresh_episode`; `prior_assignment_reminder_never_makes_new_assignment_start_owed`; `close_after_reassignment_between_preflight_and_write_is_rejected_then_recomposed`.
+Tests: `reassign_from_stalled_row_starts_fresh_episode`; `prior_assignment_reminder_never_makes_new_assignment_start_owed`; `close_after_reassignment_between_preflight_and_write_is_rejected_without_retry`.
 
 Canonicalization: after merge, fold history and append exactly one `canonicalized by BA.2 migration` event when the winner state differs; enforce replay mismatch as a rollback error, never debug-only.
 

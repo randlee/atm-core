@@ -181,7 +181,9 @@ enum OutcomeArg { Completed, Refused, Cancelled }
 
 The `ArgGroup` makes zero targets and two targets both parse errors
 (FNX-BA-CRIT-016). `atm task` has no reassign or reopen verb: `assign <agent> --task-id <id>` is a same-agent no-op, reassigns an open row in place, or reopens a closed row in place. It preserves one row and appends `reassigned` or `reopened`; placement uses `MoveTarget` (`--before`/`--head`, default END).
-Reassign/reopen/resend of an existing id is accepted only from the row's assigner or the unique lead; the CLI does not pre-check this — the writer's `NotAuthorized` is printed and exit is 1 (nothing sent).
+Reassign, reopen, and resend of an existing id perform the same writer
+operation without a caller check; only close retains the develop assignee-or-
+assigner check.
 
 **Generated task id:** `ulid::Ulid::new().to_string()` (the `ulid` crate
 already backs `AtmMessageId`, `inbox_message.rs:22`) parsed through
@@ -279,8 +281,8 @@ pub async fn preflight_close(reader: &dyn AsyncTaskLedger, team: TeamName, task_
 /// Who receives the mandatory report. A self-addressed send is invalid
 /// (`send/recipient.rs:13-31`, enforced in `write_context.rs:129`), so the
 /// report always goes to the *other* party: the assignee reports to the
-/// assigner; an assigner or a lead closing someone else's task informs the
-/// assignee (FNX-BA-CRIT-015). `assigner == assignee` cannot exist — the
+/// assigner; the assigner closing someone else's task informs the assignee
+/// (FNX-BA-CRIT-015). `assigner == assignee` cannot exist — the
 /// assignment itself was a send.
 pub fn report_recipient(row: &TaskRow, caller: &AgentName) -> AgentName {
     if caller == &row.assignee { row.assigner.clone() } else { row.assignee.clone() }
@@ -290,7 +292,7 @@ pub fn report_recipient(row: &TaskRow, caller: &AgentName) -> AgentName {
 | stage | `Proceed` | `AlreadyClosed` | `Unknown` |
 | --- | --- | --- | --- |
 | 1 preflight (reader lane, `list_tasks(team, None)` filtered — no new read method) | continue | continue | exit 1: `task <id> does not exist on team <t>`; nothing sent |
-| 2 deliver | same guarded write; writer decides: applies close, or (row complete) delivers plain and returns `already_closed`, or rejects | same guarded write; writer decides: applies close, or (row complete) delivers plain and returns `already_closed`, or rejects | — |
+| 2 deliver | same guarded write; the writer applies the close, or (row complete) delivers plain and returns `already_closed`, or rejects; for an unauthorized close the CLI prints the `AtmError` message, exit 1, nothing delivered | same guarded write; the writer applies the close, or (row complete) delivers plain and returns `already_closed`, or rejects; for an unauthorized close the CLI prints the `AtmError` message, exit 1, nothing delivered | — |
 | 3 result | `closed <id> (<outcome>)`; exit 0 | `task <id> was already closed (<outcome>); report delivered`; exit 0, with the text sourced from `SendOutcome.already_closed` and no `on <at>` | — |
 
 Stage 2's single transaction is what design §5.2 means by "deliver first":
@@ -300,6 +302,8 @@ write is seen by the writer: it either applies the close, returns
 `StaleCounterparty`/`NotAuthorized`, or, for a complete row, delivers plain and
 returns `already_closed`. No plain report is ever sent from the preflight read
 alone. The report body is the message source when given, else the `reason` text.
+Every writer rejection prints the `AtmError` message, exits 1, delivers
+nothing, and is never dispatched by kind or retried.
 
 ## Consecutive-refusal escalation (design §4.2)
 
@@ -414,24 +418,23 @@ Close — `crates/atm/tests/task_close.rs` (fixture daemon, loopback):
 - `close_by_assigner_reports_to_assignee` — assigner cancels: report in the
   assignee's mailbox, none in the assigner's, row `complete(cancelled)`
   (FNX-BA-CRIT-015).
-- `close_by_unique_lead_reports_to_assignee` — lead who is neither party.
-- `close_by_lead_who_is_assigner_reports_to_assignee`.
 - `close_unknown_task_sends_nothing_and_exits_one` — mailbox count unchanged.
 - `close_already_closed_delivers_report_without_task_event` — the writer returns
   `SendOutcome.already_closed` after delivering the ordinary report.
 - `close_after_reopen_race_never_sends_stale_plain_report` — a close preflight
-  racing an explicit reopen either closes the current row or recomposes once;
+  racing an explicit reopen either sends before the reopen or closes the
+  current row;
   it never sends a stale plain report to the old counterparty.
+- `stale_counterparty_rejection_exits_one_without_retry` — the atomic writer
+  rejection prints its message, exits 1, sends nothing, and is not retried.
 - `close_raced_by_other_closer_writes_zero_new_events` — close from
   two processes; second gets the informational line; two reports delivered.
-- `already_closed_preflight_then_reopen_before_write_closes_or_recomposes_not_stale_report` — preflight reads Complete; the id is reopened/reassigned by another process; the guarded write returns `StaleCounterparty` (recompose once) or closes the now-open row; zero plain reports to the old counterparty.
 - `close_by_third_party_is_rejected_by_writer` — preflight proceeds for an open
   row, but the writer rejects the third-party close, records the rejected event
   against the canonical holder, and sends no report.
 - `close_by_third_party_sends_nothing_and_exits_one` — open row and already-closed
   row; `tasks`, `task_events`, `mail_messages` counts unchanged; exit 1, including
   a one-lead roster where the caller is not that lead.
-- `close_by_unique_lead_passes_preflight_on_open_and_closed_rows`.
 - `assign_host_qualified_target_is_rejected_before_send` — `x@other.host`: exit 1, no message row, no task row, no peer dispatch.
 - `send_task_id_to_host_qualified_recipient_is_rejected_before_send` — same via `atm send --task-id`; `--task-complete` likewise.
 - `assign_other_team_target_is_rejected_before_send` — `x@other-team` (host `None`): exit 1, no message row, no task row.
@@ -453,7 +456,7 @@ Assign — `crates/atm/tests/task_assign.rs`:
 Move — `crates/atm/tests/task_move.rs`:
 
 - `move_head_with_active_task_lands_at_two`, `move_end`, `move_before`,
-  `move_by_assignee_is_rejected`, `move_leaves_assigned_at_unchanged_in_list_json`.
+  `move_leaves_assigned_at_unchanged_in_list_json`.
 - `task_move_to_pre_1_6_0_daemon_is_refused_before_send` (stub verdict).
 - `peer_ingress_rejects_task_move_explicitly` — authenticated peer sends
   `TaskMove` → typed rejection, no writer call.
@@ -505,10 +508,11 @@ creates no task transition or event.
 
 Placement syntax: `atm task assign <agent> --template <j2> --vars <json> [--task-id <id>] [--before <other-task-id> | --head]`.
 
-BA.4 recomposes the recipient once after StaleCounterparty, then exits 1 if ownership changes twice.
-A second `StaleCounterparty` after recomposition exits 1 and sends no stale report.
+An atomic `StaleCounterparty` rejection prints the writer's `AtmError` message,
+exits 1, delivers nothing, and tells the user to re-run the command.
 
 Placement conversion: `fn placement(&self) -> Option<MoveTarget> { match (&self.before, self.head) { (Some(id), false) => Some(MoveTarget::Before(id.clone())), (None, true) => Some(MoveTarget::Head), (None, false) => None, (Some(_), true) => unreachable!("clap ArgGroup") } }`.
-`StaleCounterparty` is handled before plain delivery; a second occurrence exits 1.
+`StaleCounterparty` is handled before plain delivery and is never retried by
+the CLI.
 
 Tests: `close_refused_with_stdin_and_no_reason_is_accepted`, `close_cancelled_with_template_and_no_reason_is_accepted`, `close_without_reason_or_report_source_is_rejected`.
