@@ -1230,6 +1230,34 @@ mod tests {
         }
     }
 
+    struct TestReplyBuilder {
+        actor: AgentName,
+    }
+
+    impl AcknowledgementReplyBuilder for TestReplyBuilder {
+        fn build_reply(&self, source: &Message) -> Result<Message, atm_storage::AtmError> {
+            let source_id = source
+                .envelope
+                .message_id
+                .ok_or_else(|| atm_storage::AtmError::validation("test source has no id"))?;
+            let mut reply = source.clone();
+            let reply_id = AtmMessageId::new();
+            reply.message_key = MessageKey::new(format!("atm:{reply_id}"))?;
+            reply.envelope.message_id = Some(reply_id);
+            reply.envelope.from = self.actor.clone();
+            reply.envelope.text = "acknowledged".to_owned();
+            reply.envelope.read = false;
+            reply.envelope.requires_ack = false;
+            reply.envelope.pending_ack_at = None;
+            reply.envelope.acknowledged_at = None;
+            reply.envelope.acknowledges_message_id = Some(source_id);
+            reply.envelope.parent_message_id = Some(source_id);
+            reply.envelope.task_id = None;
+            reply.envelope.task_complete = None;
+            Ok(reply)
+        }
+    }
+
     fn template_registration(sha_seed: char) -> TemplateRegistration {
         let content_bytes = b"---\nmetadata:\n  type: task\n---\nhello {{ name }}\n".to_vec();
         TemplateRegistration {
@@ -3580,26 +3608,180 @@ mod tests {
             .iter()
             .filter_map(|event| match event.event {
                 TaskEventKind::Assigned => Some(TaskEvent::Assigned),
-                TaskEventKind::Acked => Some(TaskEvent::Acked),
                 TaskEventKind::Completed => Some(TaskEvent::Completed),
-                TaskEventKind::Rejected | TaskEventKind::Reminded | TaskEventKind::LeadNotified => {
-                    None
-                }
+                TaskEventKind::Acked
+                | TaskEventKind::Rejected
+                | TaskEventKind::Reminded
+                | TaskEventKind::LeadNotified => None,
             })
             .try_fold(None, |state, event| {
-                atm_storage::transition(state, event, &task_id, &agent()).map(|transition| {
-                    match transition {
-                        atm_storage::Transition::To(state) => Some(state),
-                        atm_storage::Transition::NoOp => state,
-                    }
-                })
+                atm_storage::transition(state, event, &task_id, &agent())
+                    .map(|transition| Some(transition.0))
             })
             .expect("task event replay");
         assert_eq!(replayed, Some(completed.state), "AC5 event replay");
     }
 
     #[test]
-    fn task_ack_guard_rolls_back_the_reply_and_keeps_the_second_task_pending() {
+    fn ack_of_assignment_message_leaves_task_row_and_events_untouched() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3-untouched".parse().expect("task id");
+        let assignment_id = AtmMessageId::new();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "task assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = "lead".parse().expect("assigner");
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        assignment.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store.save_message(&assignment).expect("save assignment");
+        let member = MemberKey::new(team(), agent());
+        let before = tasks
+            .load_task(&member, &task_id)
+            .expect("load task")
+            .expect("task row");
+        let before_events = tasks
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("load events");
+
+        store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: team(),
+                    agent: agent(),
+                    message_id: assignment_id,
+                },
+                Arc::new(TestReplyBuilder { actor: agent() }),
+            )
+            .expect("acknowledge assignment");
+
+        let after = tasks
+            .load_task(&member, &task_id)
+            .expect("load task after acknowledgement")
+            .expect("task row after acknowledgement");
+        assert_eq!(after, before);
+        assert_eq!(
+            tasks
+                .list_task_events(&team(), &task_id, Some(&agent()))
+                .expect("load events after acknowledgement"),
+            before_events
+        );
+    }
+
+    #[test]
+    fn close_of_active_row_keeps_original_acknowledged_at() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3-active-close".parse().expect("task id");
+        let assignment_id = AtmMessageId::new();
+        let acknowledged_at = IsoTimestamp::now();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "active assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = "lead".parse().expect("assigner");
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        assignment.envelope.acknowledged_at = Some(acknowledged_at);
+        store.save_message(&assignment).expect("save assignment");
+
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+                        params![team().as_str(), task_id.as_str(), agent().as_str()],
+                    )
+                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                Ok(())
+            })
+            .expect("seed active task");
+
+        let mut completion = message("atm:active-close", "completed");
+        completion.envelope.from = "lead".parse().expect("assigner");
+        completion.envelope.task_complete = Some(task_id.clone());
+        store
+            .save_message(&completion)
+            .expect("complete active task");
+
+        let member = MemberKey::new(team(), agent());
+        assert_eq!(
+            tasks
+                .load_task(&member, &task_id)
+                .expect("load completed task")
+                .expect("task row")
+                .state,
+            TaskState::Complete
+        );
+        assert_eq!(
+            store
+                .load_message(&assignment.message_key)
+                .expect("load assignment")
+                .expect("assignment row")
+                .envelope
+                .acknowledged_at,
+            Some(acknowledged_at)
+        );
+    }
+
+    #[test]
+    fn close_of_never_acked_active_row_sets_acknowledged_at() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3-active-close-unacked".parse().expect("task id");
+        let assignment_id = AtmMessageId::new();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "active assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = "lead".parse().expect("assigner");
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        store.save_message(&assignment).expect("save assignment");
+
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+                        params![team().as_str(), task_id.as_str(), agent().as_str()],
+                    )
+                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                Ok(())
+            })
+            .expect("seed active task");
+
+        let mut completion = message("atm:active-close-unacked", "completed");
+        completion.envelope.from = "lead".parse().expect("assigner");
+        completion.envelope.task_complete = Some(task_id.clone());
+        store
+            .save_message(&completion)
+            .expect("complete active task");
+
+        let member = MemberKey::new(team(), agent());
+        assert_eq!(
+            tasks
+                .load_task(&member, &task_id)
+                .expect("load completed task")
+                .expect("task row")
+                .state,
+            TaskState::Complete
+        );
+        assert!(
+            store
+                .load_message(&assignment.message_key)
+                .expect("load assignment")
+                .expect("assignment row")
+                .envelope
+                .acknowledged_at
+                .is_some(),
+            "closing an active task acknowledges its assignment"
+        );
+    }
+
+    #[test]
+    fn ack_of_assignment_when_another_task_is_active_succeeds() {
         struct ReplyBuilder {
             actor: AgentName,
         }
@@ -3649,6 +3831,18 @@ mod tests {
         let second = assignment(&second_id);
         store.save_message(&first).expect("first assignment");
         store.save_message(&second).expect("second assignment");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+                        params![team().as_str(), first_id.as_str(), agent().as_str()],
+                    )
+                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                Ok(())
+            })
+            .expect("seed active task");
 
         let first_message_id = first.envelope.message_id.expect("first id");
         store
@@ -3677,13 +3871,13 @@ mod tests {
                 .iter()
                 .map(|event| event.seq)
                 .collect::<Vec<_>>(),
-            vec![1, 2],
+            vec![1],
             "task event sequences are gapless per task key"
         );
-        assert_eq!(first_events[1].event, TaskEventKind::Acked);
+        assert_eq!(first_events.len(), 1);
 
         let second_message_id = second.envelope.message_id.expect("second id");
-        let error = store
+        store
             .acknowledge_message_atomically(
                 &AcknowledgementSource {
                     team: second.team.clone(),
@@ -3692,8 +3886,7 @@ mod tests {
                 },
                 Arc::new(ReplyBuilder { actor: agent() }),
             )
-            .expect_err("second acknowledgement must respect G1");
-        assert!(error.message().contains(first_id.as_str()));
+            .expect("second acknowledgement succeeds while another task is active");
         assert_eq!(
             tasks
                 .load_task(&member, &second_id)
@@ -3709,21 +3902,13 @@ mod tests {
                 .expect("second source row")
                 .envelope
                 .pending_ack_at
-                .is_some(),
-            "a rejected acknowledgement rolls back its source mutation"
+                .is_none(),
+            "the successful acknowledgement clears the source pending state"
         );
         let second_events = tasks
             .list_task_events(&team(), &second_id, Some(&agent()))
             .expect("second events");
-        assert_eq!(second_events.len(), 2);
-        assert_eq!(second_events[1].event, TaskEventKind::Rejected);
-        assert!(
-            second_events[1]
-                .detail
-                .as_deref()
-                .is_some_and(|detail| detail.contains(first_id.as_str())),
-            "the rejection audit retains the user-facing guard detail"
-        );
+        assert_eq!(second_events.len(), 1);
 
         let mut third_party_completion = message("atm:third-party-completion", "not allowed");
         third_party_completion.envelope.from = "intruder".parse().expect("intruder");
@@ -3782,6 +3967,71 @@ mod tests {
             2,
             "a task fan-out creates one row per recipient"
         );
+    }
+
+    #[test]
+    fn ack_with_no_task_row_succeeds() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let task_id: atm_storage::TaskId = "AX.3-missing-row".parse().expect("task id");
+        let message_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{message_id}"), "peer assignment");
+        source.envelope.message_id = Some(message_id);
+        source.envelope.task_id = Some(task_id.clone());
+        source.envelope.requires_ack = true;
+        source.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store
+            .save_message_if_absent_with_provenance(&source, MessageWriteOrigin::Peer)
+            .expect("save peer assignment");
+
+        store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: team(),
+                    agent: agent(),
+                    message_id,
+                },
+                Arc::new(TestReplyBuilder { actor: agent() }),
+            )
+            .expect("acknowledge peer assignment");
+
+        assert!(
+            backend
+                .task_store()
+                .load_task(&MemberKey::new(team(), agent()), &task_id)
+                .expect("load missing task row")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn historic_acked_event_rows_still_decode() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let task_id: atm_storage::TaskId = "AX.3-historic-acked".parse().expect("task id");
+        let at = IsoTimestamp::now().to_string();
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "INSERT INTO task_events
+                         (team, task_id, assignee, seq, at, event, from_state, to_state, actor,
+                          message_id, outcome, marker, detail)
+                         VALUES (?1, ?2, ?3, 1, ?4, 'acked', 'assigned', 'active', ?3,
+                                 NULL, NULL, NULL, NULL)",
+                        params![team().as_str(), task_id.as_str(), agent().as_str(), at],
+                    )
+                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                Ok(())
+            })
+            .expect("insert historic acked event");
+
+        let events = backend
+            .task_store()
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("decode historic event");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event, TaskEventKind::Acked);
     }
 
     #[tokio::test]

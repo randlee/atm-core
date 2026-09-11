@@ -36,7 +36,6 @@ impl TaskState {
 #[serde(rename_all = "snake_case")]
 pub enum TaskEvent {
     Assigned,
-    Acked,
     Completed,
 }
 
@@ -81,10 +80,7 @@ impl TaskRejected {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Transition {
-    To(TaskState),
-    NoOp,
-}
+pub struct Transition(pub TaskState);
 
 /// Applies the row-local task transition table without touching storage.
 pub fn transition(
@@ -94,67 +90,40 @@ pub fn transition(
     actor: &AgentName,
 ) -> Result<Transition, TaskRejected> {
     match (state, event) {
-        (None, TaskEvent::Assigned) => Ok(Transition::To(TaskState::Assigned)),
-        (None, TaskEvent::Acked) => Ok(Transition::NoOp),
+        (None, TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
         (None, TaskEvent::Completed) => Err(TaskRejected::new(format!(
             "no open task {task_id} for {actor}"
         ))),
-        (Some(TaskState::Assigned), TaskEvent::Assigned) => Ok(Transition::To(TaskState::Assigned)),
-        (Some(TaskState::Assigned), TaskEvent::Acked) => Ok(Transition::To(TaskState::Active)),
-        (Some(TaskState::Assigned), TaskEvent::Completed) => {
-            Ok(Transition::To(TaskState::Complete))
-        }
-        (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition::To(TaskState::Active)),
-        (Some(TaskState::Active), TaskEvent::Acked) => Ok(Transition::To(TaskState::Active)),
-        (Some(TaskState::Active), TaskEvent::Completed) => Ok(Transition::To(TaskState::Complete)),
-        (Some(TaskState::Complete), TaskEvent::Assigned) => Err(TaskRejected::new(format!(
-            "task {task_id} already complete; use a new id"
-        ))),
-        (Some(TaskState::Complete), TaskEvent::Acked)
-        | (Some(TaskState::Complete), TaskEvent::Completed) => Err(TaskRejected::new(format!(
-            "task {task_id} already complete"
-        ))),
+        (Some(TaskState::Assigned), TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
+        (Some(TaskState::Assigned), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
+        (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition(TaskState::Active)),
+        (Some(TaskState::Active), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
+        (Some(TaskState::Complete), TaskEvent::Assigned | TaskEvent::Completed) => Err(
+            TaskRejected::new(format!("task {task_id} is already complete")),
+        ),
     }
 }
 
 /// Checks the cross-row task admission guards without touching storage.
 pub fn admit(
     row: Option<&TaskRow>,
-    open: &[TaskRow],
     event: TaskEvent,
     task_id: &TaskId,
     actor: &AgentName,
 ) -> Result<(), TaskRejected> {
-    let Some(row) = row else {
-        return if event == TaskEvent::Completed {
+    match (row, event) {
+        (None, TaskEvent::Completed) => Err(TaskRejected::new(format!(
+            "no open task {task_id} for {actor}"
+        ))),
+        (None, TaskEvent::Assigned) => Ok(()),
+        (Some(row), TaskEvent::Completed) if actor != &row.assignee && actor != &row.assigner => {
             Err(TaskRejected::new(format!(
-                "no open task {task_id} for {actor}"
+                "task {} is not assigned to or by {actor}",
+                row.task_id
             )))
-        } else {
-            Ok(())
-        };
-    };
-
-    if event == TaskEvent::Acked
-        && row.state == TaskState::Assigned
-        && let Some(other) = open.iter().find(|candidate| {
-            candidate.state == TaskState::Active && candidate.task_id != row.task_id
-        })
-    {
-        return Err(TaskRejected::new(format!(
-            "task {} is active; complete it first",
-            other.task_id
-        )));
+        }
+        (Some(_), _) => Ok(()),
     }
-
-    if event == TaskEvent::Completed && actor != &row.assignee && actor != &row.assigner {
-        return Err(TaskRejected::new(format!(
-            "task {} is not assigned to or by {actor}",
-            row.task_id
-        )));
-    }
-
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -218,10 +187,7 @@ pub struct TaskEventRow {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        TaskEvent, TaskEventKind, TaskEventMarker, TaskRow, TaskState, Transition, admit,
-        transition,
-    };
+    use super::{TaskEvent, TaskEventKind, TaskEventMarker, TaskRow, TaskState, admit, transition};
     use crate::schema::AtmMessageId;
     use crate::task_store::ReminderOutcome;
     use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
@@ -305,78 +271,75 @@ mod tests {
     }
 
     #[test]
-    fn transition_table_is_complete() {
+    fn transition_table_is_exhaustive_over_two_events() {
         let (task_id, actor) = context();
         let cases = [
-            (
-                None,
-                TaskEvent::Assigned,
-                Some(Transition::To(TaskState::Assigned)),
-            ),
-            (None, TaskEvent::Acked, Some(Transition::NoOp)),
+            (None, TaskEvent::Assigned, Some(TaskState::Assigned)),
             (None, TaskEvent::Completed, None),
             (
                 Some(TaskState::Assigned),
                 TaskEvent::Assigned,
-                Some(Transition::To(TaskState::Assigned)),
-            ),
-            (
                 Some(TaskState::Assigned),
-                TaskEvent::Acked,
-                Some(Transition::To(TaskState::Active)),
             ),
             (
                 Some(TaskState::Assigned),
                 TaskEvent::Completed,
-                Some(Transition::To(TaskState::Complete)),
+                Some(TaskState::Complete),
             ),
             (
                 Some(TaskState::Active),
                 TaskEvent::Assigned,
-                Some(Transition::To(TaskState::Active)),
-            ),
-            (
                 Some(TaskState::Active),
-                TaskEvent::Acked,
-                Some(Transition::To(TaskState::Active)),
             ),
             (
                 Some(TaskState::Active),
                 TaskEvent::Completed,
-                Some(Transition::To(TaskState::Complete)),
+                Some(TaskState::Complete),
             ),
             (Some(TaskState::Complete), TaskEvent::Assigned, None),
-            (Some(TaskState::Complete), TaskEvent::Acked, None),
             (Some(TaskState::Complete), TaskEvent::Completed, None),
         ];
 
         for (state, event, expected) in cases {
-            assert_eq!(transition(state, event, &task_id, &actor).ok(), expected);
+            assert_eq!(
+                transition(state, event, &task_id, &actor)
+                    .ok()
+                    .map(|value| value.0),
+                expected
+            );
         }
     }
 
     #[test]
-    fn admission_guards_reject_missing_completion_and_second_active_task() {
+    fn admit_has_no_cross_row_input() {
         let assignee: AgentName = "assignee".parse().expect("assignee");
         let task_id: TaskId = "AX.3".parse().expect("task");
-        let missing =
-            admit(None, &[], TaskEvent::Completed, &task_id, &assignee).expect_err("missing task");
-        assert!(missing.detail.contains("no open task AX.3 for assignee"));
+        let _: fn(
+            Option<&TaskRow>,
+            TaskEvent,
+            &TaskId,
+            &AgentName,
+        ) -> Result<(), super::TaskRejected> = admit;
+        admit(None, TaskEvent::Assigned, &task_id, &assignee).expect("assignment is admitted");
+    }
 
-        let assigned = row("AX.3", TaskState::Assigned);
-        let active = row("AX.2", TaskState::Active);
-        let rejected = admit(
-            Some(&assigned),
-            &[assigned.clone(), active],
-            TaskEvent::Acked,
-            &task_id,
-            &assignee,
-        )
-        .expect_err("one active task guard");
-        assert!(
-            rejected
-                .detail
-                .contains("task AX.2 is active; complete it first")
-        );
+    #[test]
+    fn admit_rejects_completion_by_third_party() {
+        let task_id: TaskId = "AX.3".parse().expect("task");
+        let row = row("AX.3", TaskState::Assigned);
+        let intruder: AgentName = "intruder".parse().expect("intruder");
+        let rejected = admit(Some(&row), TaskEvent::Completed, &task_id, &intruder)
+            .expect_err("third-party completion");
+        assert!(rejected.detail.contains("not assigned to or by intruder"));
+    }
+
+    #[test]
+    fn admit_accepts_completion_by_assigner_and_by_assignee() {
+        let task_id: TaskId = "AX.3".parse().expect("task");
+        let row = row("AX.3", TaskState::Assigned);
+        let assigner: AgentName = "assigner".parse().expect("assigner");
+        let assignee: AgentName = "assignee".parse().expect("assignee");
+        admit(Some(&row), TaskEvent::Completed, &task_id, &assigner).expect("assigner completion");
+        admit(Some(&row), TaskEvent::Completed, &task_id, &assignee).expect("assignee completion");
     }
 }

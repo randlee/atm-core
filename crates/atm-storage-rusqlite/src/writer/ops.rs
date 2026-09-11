@@ -1,6 +1,6 @@
 use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
-use super::task_ops::{apply_task_acknowledgement, apply_task_message};
+use super::task_ops::apply_task_message;
 use crate::search_schema::{
     InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
     sync_template_projection,
@@ -513,7 +513,6 @@ fn execute_acknowledgement(
         cache,
         target,
     )?;
-    apply_task_acknowledgement(&source, &reply.envelope.from, connection, target)?;
     Ok(WriteOpResult::Acknowledged(Box::new(
         AcknowledgementCommit {
             reply,

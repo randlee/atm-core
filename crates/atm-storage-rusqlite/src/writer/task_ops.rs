@@ -1,7 +1,7 @@
 //! The rusqlite writer's sole task-ledger application site (AX.3, C6).
 //!
 //! `tasks.state` and `task_events` are mutated only here, inside the writer's
-//! transaction connection, so a message insert or acknowledgement, its task
+//! transaction connection, so a message insert, its task
 //! row, and its audit event either commit together or roll back together.
 //! `atm_storage::task_state` defines the pure, backend-neutral transition
 //! table this module's SQL mirrors; nothing here changes that table's rules.
@@ -39,24 +39,13 @@ fn load_task_row(
         .map_err(|error| sqlite_error(target, "failed to load task row", error))
 }
 
-fn load_open_task_rows(
-    connection: &Connection,
-    target: &SharedDbTarget,
-    team: &TeamName,
-    assignee: &AgentName,
-) -> Result<Vec<TaskRow>, AtmError> {
-    task_sql::select_open_tasks_for_member(connection, team, assignee)
-        .map_err(|error| sqlite_error(target, "failed to load open tasks", error))
-}
-
 fn transition_for(
     row: Option<&TaskRow>,
-    open: &[TaskRow],
     event: TaskEvent,
     task_id: &TaskId,
     actor: &AgentName,
 ) -> Result<Transition, AtmError> {
-    admit(row, open, event, task_id, actor).map_err(|error| error.into_atm_error())?;
+    admit(row, event, task_id, actor).map_err(|error| error.into_atm_error())?;
     transition(row.map(|task| task.state), event, task_id, actor)
         .map_err(|error| error.into_atm_error())
 }
@@ -252,10 +241,8 @@ fn apply_task_assignment(
         &typed_task_id,
         &record.agent,
     )?;
-    let open = load_open_task_rows(connection, target, &record.team, &record.agent)?;
     let next = transition_for(
         row.as_ref(),
-        &open,
         TaskEvent::Assigned,
         &typed_task_id,
         &record.envelope.from,
@@ -266,7 +253,7 @@ fn apply_task_assignment(
         .message_id
         .ok_or_else(|| task_rejected("task assignment is missing message id"))?;
     match (row, next) {
-        (Some(row), Transition::To(_)) => refresh_task_assignment(
+        (Some(row), Transition(_)) => refresh_task_assignment(
             record,
             task_id,
             connection,
@@ -275,12 +262,10 @@ fn apply_task_assignment(
             &at,
             message_id,
         ),
-        (None, Transition::To(TaskState::Assigned)) => {
+        (None, Transition(TaskState::Assigned)) => {
             insert_task_assignment(record, task_id, connection, target, &at, message_id)
         }
-        (_, Transition::NoOp) | (None, Transition::To(_)) => Err(task_rejected(
-            "task assignment did not produce an assigned state",
-        )),
+        (_, Transition(_)) => unreachable!("task assignment did not produce an assigned state"),
     }
 }
 
@@ -321,16 +306,14 @@ fn apply_task_completion(
     };
     let next = transition_for(
         row.as_ref(),
-        &[],
         TaskEvent::Completed,
         &typed_task_id,
         &record.envelope.from,
     )?;
-    let row =
-        row.ok_or_else(|| task_rejected("task completion admission found no existing task row"))?;
-    let Transition::To(next_state) = next else {
-        return Err(task_rejected("task completion did not produce a state"));
+    let Some(row) = row else {
+        unreachable!("task completion admission found no existing task row");
     };
+    let Transition(next_state) = next;
     let at = record.envelope.timestamp.to_string();
     connection.execute(
         "UPDATE tasks SET state = ?4, updated_at = ?5 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
@@ -377,7 +360,7 @@ fn acknowledge_completed_assignment(
     assignee: &str,
     state: TaskState,
 ) -> Result<Option<&'static str>, AtmError> {
-    if state != TaskState::Assigned {
+    if state == TaskState::Complete {
         return Ok(None);
     }
     let message_key: Option<String> = connection
@@ -404,6 +387,9 @@ fn acknowledge_completed_assignment(
         envelope: record.envelope.clone(),
     };
     let mut assignment = load_existing_message(&requested, connection, target)?;
+    if assignment.envelope.acknowledged_at.is_some() {
+        return Ok(None);
+    }
     mark_source_acknowledged(&mut assignment, record.envelope.timestamp);
     let _ = execute_upsert_message(
         &assignment,
@@ -413,47 +399,6 @@ fn acknowledge_completed_assignment(
         target,
     )?;
     Ok(None)
-}
-
-pub(super) fn apply_task_acknowledgement(
-    source: &Message,
-    actor: &AgentName,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let Some(task_id) = source.envelope.task_id.as_ref() else {
-        return Ok(());
-    };
-    let row = load_task_row(connection, target, &source.team, task_id, &source.agent)?;
-    let Some(row) = row else {
-        return Ok(());
-    };
-    let open = load_open_task_rows(connection, target, &source.team, &source.agent)?;
-    let next = transition_for(Some(&row), &open, TaskEvent::Acked, task_id, actor)?;
-    let Transition::To(next_state) = next else {
-        return Ok(());
-    };
-    let at = atm_storage::types::IsoTimestamp::now().to_string();
-    connection.execute(
-        "UPDATE tasks SET state = ?4, updated_at = ?5 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-        params![source.team.as_str(), task_id.as_str(), source.agent.as_str(), state_name(next_state), at],
-    ).map_err(|error| sqlite_error(target, "failed to activate acknowledged task", error))?;
-    append_task_event(
-        connection,
-        target,
-        source.team.as_str(),
-        task_id.as_str(),
-        source.agent.as_str(),
-        &at,
-        "acked",
-        Some(state_name(row.state)),
-        Some(state_name(next_state)),
-        actor.as_str(),
-        source.envelope.message_id,
-        None,
-        None,
-        None,
-    )
 }
 
 #[allow(clippy::too_many_arguments)]
