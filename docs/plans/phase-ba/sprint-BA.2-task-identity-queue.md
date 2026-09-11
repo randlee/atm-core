@@ -1,100 +1,44 @@
-# BA.2 — Task identity, queue position, typed outcome, mutation boundary, migration
+# BA.2 — Task identity, queue position, typed outcome, migration
 
 | Field | Value |
 | --- | --- |
-| Design | [`nudge-task-design.md`](./nudge-task-design.md) §3.1, §3.2, §4, §4.1, §4.3 (commit `18db5acc3`) |
-| Outcomes | B3, B5, B6, B7 |
+| Design | [`nudge-task-design.md`](./nudge-task-design.md) §3.1, §3.1a, §3.2, §4, §4.1, §4.2, §4.3 (commit `18db5acc3`) |
 | Recommended | arch-ctm / deep-reasoning — schema rebuild with live data and a transactional queue renumber |
 | Depends on | `must_follow` BA.1 (branch ancestry — same files) |
 | Worktree | `feature/ba2-task-identity-queue` off `feature/ba1-ack-task-separation` |
-| Governed interfaces | SQLite **MAJOR** (plan §4 R0); HTTP **MINOR** `1.4.0 → 1.5.0` (additive `task_op` on `WriteRequest`; additive `close_outcome`/`position` keys on `TaskRow` JSON — plan §8); `AsyncTaskLedgerReader` +1 method |
-| Blocked until | R0 recorded as a comment on PR #1398 **and** ADR-061 D6 carries the Phase BA approval entry with the D3 exception (landed in this docs PR before BA.2 opens — FNX-BA-CRIT-003) |
+| Governed interfaces | SQLite **MAJOR** (plan §2 R0, approved); HTTP **MINOR** `1.4.0 → 1.5.0` (additive `task_op`, `placement` on `WriteRequest`; additive `close_outcome`/`position` on `TaskRow` JSON — plan §6); `AsyncTaskLedgerReader` +2 methods |
 
-## Scope
+## Tasks
 
-One row per `(team, task_id)`. At most one `active` task per agent, enforced
-by SQLite. Queue order `(position, assigned_at, task_id)`. Typed close
-outcome. Every task mutation flows through one `TaskOp` carried on the
-write request and applied in the message writer transaction. One-way
-migration of live databases. No CLI verb and no runtime disposition change
-(BA.3/BA.4); the wire gains `task_op` additively and keeps decoding the
-legacy `task_complete` key (see "Wire" below).
-
-## Deliverables
-
-| id | deliverable | where |
-| --- | --- | --- |
-| D1 | `QueuePosition`, `TaskCloseOutcome` (completed, refused, cancelled); `TaskState::Complete(outcome)`, `TaskStateTag`, `TaskEvent::{Assigned,Started,Completed(outcome)}`, `transition()`, `TaskRejected`/`TaskRejectionKind` | `crates/atm-storage/src/task_state.rs` |
-| D2 | `TaskRow` + `TaskRowWire`, `TaskEventRow` + `TaskEventRowWire`, `TaskEventKind::{Assigned,Started,Reassigned,Reopened,Completed,Refused,Cancelled,Moved,Migrated}` | `crates/atm-storage/src/task_state.rs` |
-| D3 | `TaskOp`, `MoveTarget`, `RefusalRun`, `TASK_CONSECUTIVE_REFUSAL_THRESHOLD`; re-exported from `atm_core::boundary` beside `TASK_STALLED_REMINDER_THRESHOLD` | `crates/atm-storage/src/task_op.rs` (new), `task_store.rs` |
-| D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, `SendOutcome.already_closed: Option<TaskCloseOutcome>`, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
-| D5 | `TASK_SCHEMA_DDL` rebuilt (two tables, three indexes) | `crates/atm-storage-rusqlite/src/task_store.rs:15-58` |
-| D6 | `migrate_task_identity` + `TaskMigrationReport` | `crates/atm-storage-rusqlite/src/task_migration.rs` (new) |
-| D7 | writer: `apply_task_message` dispatch, `apply_task_start`, `apply_task_close`, `apply_task_move`, `renumber_queue`, `append_rejected_task_event`, caller check unchanged from develop: Close accepted from assignee or assigner only; no other op checks the caller | `crates/atm-storage-rusqlite/src/writer/task_ops.rs` |
-| D8 | `AsyncTaskLedgerReader::open_tasks_for_team`, `TaskStore::load_task(team, task_id)`, `DoctorFinding::TaskQueueGap` | `crates/atm-storage/src/contract.rs:916`, `task_store.rs:66`, `crates/atm-core/src/doctor/` |
-| D9 | boundary manifest edits per plan §10 | `boundaries/atm-storage/task-store.toml`, `…-rusqlite/task-store-sqlite.toml`, `async-task-ledger-reader*.toml` |
-| D10 | tests named below; ADR-061 D6 approval entry cited on the PR | `tests/task_identity.rs`, `tests/task_migration.rs` |
-
-`SendOutcome` in `crates/atm-core/src/send/outcome.rs` retains the current
-develop fields and adds one optional result for a repeated close:
-
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SendOutcome {
-    pub action: CommandAction,
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub sender: AgentName,
-    pub outcome: SendCommandOutcome,
-    pub message_id: AtmMessageId,
-    pub requires_ack: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<TaskId>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_complete: Option<TaskId>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub warnings: Vec<WarningEntry>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub dry_run: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub already_closed: Option<TaskCloseOutcome>,
-}
-```
-
-**Why one sprint (plan-scope PLAN-SCOPE-006):** D1–D2 change the type of
-`tasks.state`, `TaskRow` and `TaskEventRow`; every existing reader and
-writer of those types (`task_ops.rs`, `task_sql.rs`, `task_store.rs`,
-`ledger reader`, `doctor`) stops compiling until D5–D8 land. A schema-only
-sprint would therefore have to carry a temporary second `TaskRow` or a
-compile-only stub writer — code the phase would then delete (no unused
-code). The one seam that *can* stand alone is `apply_task_move` without a
-message, and it is already in BA.4. D1→D10 is the build order; QA may check
-them in that order.
+1. Land the types below — `crates/atm-storage/src/task_state.rs`, `task_op.rs` (new) (see "Types").
+2. Add `task_op`, `placement`, `task_op_normalized()` to `WriteRequest` and the envelope — `crates/atm-core/src/send/mod.rs:127`, `inbox_message.rs:187-193` (see "Wire").
+3. Add `SendOutcome.already_closed`; `HTTP_API_VERSION = "1.5.0"` — `crates/atm-core/src/send/outcome.rs`, `protocol.rs:99`.
+4. Add `open_tasks_for_team`, `refusal_run`; rekey `load_task(team, task_id)` — `crates/atm-storage/src/contract.rs:916`, `task_store.rs:66`.
+5. Rebuild `TASK_SCHEMA_DDL` — `crates/atm-storage-rusqlite/src/task_store.rs:15-58` (see "Schema").
+6. Write `migrate_task_identity` — `crates/atm-storage-rusqlite/src/task_migration.rs` (new) (see "Migration").
+7. Rewrite the writer ops — `crates/atm-storage-rusqlite/src/writer/task_ops.rs` (see "Writer").
+8. Add `trailing_refusal_run` — `crates/atm-storage-rusqlite/src/task_sql.rs` (see "Writer").
+9. Re-map `--task-complete X` to `task_id = X, task_op = Close{Completed}` behind the `>= 1.5.0` guard — `crates/atm/src/commands/send.rs`.
+10. Edit the three boundary manifests — plan §8.
+11. Delete the paths under "Paths to delete"; write the tests under "Tests".
 
 ## Phase AZ code used
 
 | AZ artifact (`origin/integrate/phase-az`) | how |
 | --- | --- |
-| `crates/atm-storage-rusqlite/src/schema_version.rs:284-286` `CREATE UNIQUE INDEX one_active_task_per_agent … WHERE state = 'active'` | **copied verbatim** (column `assignee`, not `current_assignee`) — DDL below |
-| `schema_version.rs:288-321` winner ranking (`ROW_NUMBER() OVER (PARTITION BY team, task_id ORDER BY precedence …, updated_at DESC, assignee ASC)`) and `:339-380` deterministic active-conflict demotion + audit event | **copied and adapted** to the in-place rebuild — migration SQL below; the audit-row text is kept. **Precedence inverted:** AZ ranked `active > assigned > complete`; BA ranks `complete > active > assigned` because design §3.1's live incident is a *completed* row beside a 587-reminder open twin — the completed twin is the terminal truth and the open twin is the phantom (FNX-BA-CRIT-001) |
-| `schema_version.rs:383-414` `ensure_task_v2_schema`: IMMEDIATE transaction → DDL → migrate → post-DDL → commit | **shape reused** as `migrate_task_identity` |
+| `crates/atm-storage-rusqlite/src/schema_version.rs:284-286` `one_active_task_per_agent` index | **copied verbatim** — DDL below |
+| `schema_version.rs:288-321` winner ranking; `:339-380` active-conflict demotion + audit event | **copied and adapted**; precedence inverted to `complete > active > assigned` (design §3.1's incident: the completed twin is the truth) |
+| `schema_version.rs:383-414` IMMEDIATE transaction → DDL → migrate → commit | **shape reused** as `migrate_task_identity` |
 
-Not used: `tasks_v2`, `task_assignment_attempts`, `task_operations`,
-`storage_schema_versions`, triggers, `TaskOperationId`, `TaskPriority`,
-`AssignmentAttempt`, supersession — design §8.
+Not used: `tasks_v2`, `task_operations`, `storage_schema_versions`, triggers,
+`TaskOperationId`, `TaskPriority`, supersession — design §8.
 
 ## Types — exactly as they land
 
 ```rust
 // crates/atm-storage/src/task_state.rs
 
-/// 1-based place in one member's open-task queue. Position 1 is the task
-/// the member works next (or is working); the active task, when one exists,
-/// always holds position 1.
+/// 1-based queue place; the active task, when one exists, holds 1.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
 pub struct QueuePosition(NonZeroU32);
@@ -108,63 +52,35 @@ impl QueuePosition {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskCloseOutcome {
-    Completed,
-    Refused,
-    Cancelled,
-}
+pub enum TaskCloseOutcome { Completed, Refused, Cancelled }
 
 impl TaskCloseOutcome {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Completed => "completed",
-            Self::Refused => "refused",
-            Self::Cancelled => "cancelled",
-        }
+        match self { Self::Completed => "completed", Self::Refused => "refused", Self::Cancelled => "cancelled" }
     }
 }
 
-/// Open state and a terminal outcome are unrepresentable together.
-/// Not `Serialize`/`Deserialize` on its own: the JSON shape of a task is
-/// `TaskRowWire` / `TaskEventRowWire` (below), which keep the pre-BA scalar
-/// `state` string and add `close_outcome` as a sibling key (ADR-061 D2:
-/// additive, older readers ignore it — FNX-BA-CRIT-005).
+/// Open state and a terminal outcome are unrepresentable together. JSON goes
+/// through `TaskRowWire` / `TaskEventRowWire` (scalar `state` + `close_outcome`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TaskState {
-    Assigned,
-    Active,
-    Complete(TaskCloseOutcome),
-}
+pub enum TaskState { Assigned, Active, Complete(TaskCloseOutcome) }
 
-/// The scalar `state` value as it has always appeared in JSON and in the
-/// `tasks.state` / `task_events.*_state` columns.
+/// The scalar `state` value as it appears in JSON and in the columns.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskStateTag {
-    Assigned,
-    Active,
-    Complete,
-}
+pub enum TaskStateTag { Assigned, Active, Complete }
 
 impl TaskState {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Assigned => "assigned",
-            Self::Active => "active",
-            Self::Complete(_) => "complete",
-        }
+        match self { Self::Assigned => "assigned", Self::Active => "active", Self::Complete(_) => "complete" }
     }
     #[must_use]
     pub const fn is_open(self) -> bool { !matches!(self, Self::Complete(_)) }
     #[must_use]
     pub const fn tag(self) -> TaskStateTag {
-        match self {
-            Self::Assigned => TaskStateTag::Assigned,
-            Self::Active => TaskStateTag::Active,
-            Self::Complete(_) => TaskStateTag::Complete,
-        }
+        match self { Self::Assigned => TaskStateTag::Assigned, Self::Active => TaskStateTag::Active, Self::Complete(_) => TaskStateTag::Complete }
     }
     #[must_use]
     pub const fn close_outcome(self) -> Option<TaskCloseOutcome> {
@@ -184,11 +100,7 @@ impl TaskState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TaskEvent {
-    Assigned,
-    Started,
-    Completed(TaskCloseOutcome),
-}
+pub enum TaskEvent { Assigned, Started, Completed(TaskCloseOutcome) }
 
 pub struct Transition(pub TaskState);
 
@@ -212,41 +124,26 @@ pub fn transition(
         (Some(S::Assigned | S::Active), E::Started) => Ok(Transition(S::Active)), // idempotent when Active
         (Some(S::Assigned | S::Active), E::Completed(outcome)) => Ok(Transition(S::Complete(outcome))),
         (Some(S::Complete(_)), E::Started | E::Completed(_)) => {
-            unreachable!("complete-row close is handled by apply_task_close")
+            unreachable!("complete-row start/close is handled by the writer before transition()")
         }
     }
 }
+
+/// Writer control flow and the `rejected` audit `detail`. Never crosses HTTP:
+/// the daemon returns `ResponseEnvelope::Error(AtmError)` with the message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskRejected { pub detail: String }
 ```
 
-Complete-row close is handled by `apply_task_close` before `transition()`;
-the writer returns `already_closed` after its ordinary mail write.
+The five rejection messages, exactly:
 
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskRejected {
-    pub kind: TaskRejectionKind,
-    pub detail: String,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum TaskRejectionKind {
-    NoOpenTask,
-    NotAuthorized,   // close authored by neither assignee nor assigner (develop rule, unchanged)
-    ActiveElsewhere, // one-active index hit on Started
-    UnknownTarget,   // Move/assign placement target invalid
-    StaleCounterparty, // close recipient is not the current counterparty
-}
-
-There is no already-complete rejection: a repeated close is an ordinary mail
-write that returns `already_closed`; assign-on-complete uses the separate
-reopen branch.
-```
-
-The existing close check is the only caller check: a close authored by neither
-the row's assignee nor assigner is `NotAuthorized`. No new `AtmErrorCode` is
-added (FNX-BA-CRIT-006 / PLAN-SCOPE-005); the doctor roster codes remain
-doctor-only.
+| cause | `detail` |
+| --- | --- |
+| no row / row not open for Start, Close, Move | `no open task <id> for <actor>` |
+| close by neither assignee nor assigner (develop rule, unchanged) | `task <id> is not assigned to or by <actor>` |
+| `one_active_task_per_agent` hit on Start | `task <id>: <assignee> already has an active task` |
+| `--before` target unknown, not open, active, or another member's | `task <id>: placement target <other> is not an open queued task of <assignee>` |
+| close recipient is no longer the current counterparty | `task <id>: <recipient> is no longer the counterparty — re-run the command` |
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -257,92 +154,22 @@ pub struct TaskRow {
     pub assignee: AgentName,
     pub assigner: AgentName,
     pub state: TaskState,
-    /// `Some` iff `state.is_open()`.
-    pub position: Option<QueuePosition>,
+    pub position: Option<QueuePosition>, // Some iff open
     pub assignment_message_id: AtmMessageId,
     pub description: String,
-    /// reset by reassign/reopen; never by move; `move` never touches it.
-    pub assigned_at: IsoTimestamp,
+    pub assigned_at: IsoTimestamp,       // written once, never updated
     pub updated_at: IsoTimestamp,
     pub last_reminded_at: Option<IsoTimestamp>,
     pub reminder_count: u32,
     pub lead_notified_count: u32,
 }
 
-/// JSON shape of `TaskRow` (`ListOutcome`, `atm task list --json`). `state`
-/// keeps its 1.4.0 values; `close_outcome` and `position` are new optional
-/// keys. A `complete` row without `close_outcome` (a 1.4.0 producer) decodes
-/// as `Completed`, the only outcome 1.4.0 could record (ADR-061 D2:
-/// receivers default omitted fields).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct TaskRowWire {
-    team: TeamName,
-    task_id: TaskId,
-    assignee: AgentName,
-    assigner: AgentName,
-    state: TaskStateTag,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    close_outcome: Option<TaskCloseOutcome>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    position: Option<QueuePosition>,
-    assignment_message_id: AtmMessageId,
-    description: String,
-    assigned_at: IsoTimestamp,
-    updated_at: IsoTimestamp,
-    last_reminded_at: Option<IsoTimestamp>,
-    reminder_count: u32,
-    lead_notified_count: u32,
-}
-
-impl TryFrom<TaskRowWire> for TaskRow {
-    type Error = AtmError;
-    fn try_from(wire: TaskRowWire) -> Result<Self, AtmError> {
-        let close_outcome = match (wire.state, wire.close_outcome) {
-            (TaskStateTag::Complete, None) => Some(TaskCloseOutcome::Completed), // 1.4.0 producer
-            (_, other) => other,
-        };
-        let state = TaskState::from_parts(wire.state, close_outcome)?;
-        // A complete row never carries a position. An open row from a 1.5.0
-        // producer carries one; an open row from a 1.4.0 producer has none and
-        // decodes with `position = None` (FNX-BA-CRIT-019: verbatim 1.4.0
-        // payloads decode). The wire is a projection; the DDL is the invariant.
-        if !state.is_open() && wire.position.is_some() {
-            return Err(AtmError::validation("a complete task has no queue position"));
-        }
-        Ok(Self { team: wire.team, task_id: wire.task_id, assignee: wire.assignee, assigner: wire.assigner,
-            state, position: wire.position, assignment_message_id: wire.assignment_message_id,
-            description: wire.description, assigned_at: wire.assigned_at, updated_at: wire.updated_at,
-            last_reminded_at: wire.last_reminded_at, reminder_count: wire.reminder_count,
-            lead_notified_count: wire.lead_notified_count })
-    }
-}
-
-impl From<TaskRow> for TaskRowWire {
-    fn from(row: TaskRow) -> Self {
-        Self { team: row.team, task_id: row.task_id, assignee: row.assignee, assigner: row.assigner,
-            state: row.state.tag(), close_outcome: row.state.close_outcome(), position: row.position,
-            assignment_message_id: row.assignment_message_id, description: row.description,
-            assigned_at: row.assigned_at, updated_at: row.updated_at, last_reminded_at: row.last_reminded_at,
-            reminder_count: row.reminder_count, lead_notified_count: row.lead_notified_count }
-    }
-}
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskEventKind {
-    Assigned,
-    Acked,      // history only; never written after BA.1
-    Started,
-    Completed,
-    Refused,
-    Cancelled,
-    Reassigned,
-    Reopened,
-    Rejected,
-    Reminded,
-    LeadNotified,
-    Moved,
-    Migrated,   // written only by the BA.2 migration
+    Assigned, Acked /* history only */, Started, Completed, Refused, Cancelled,
+    Reassigned, Reopened, Rejected, Reminded, LeadNotified, Moved,
+    Migrated /* written only by the BA.2 migration */,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -355,11 +182,6 @@ pub struct TaskEventRow {
     pub at: IsoTimestamp,
     pub event: TaskEventKind,
     pub from_state: Option<TaskState>,
-    /// Carries the outcome when `Some(Complete(_))`. The `task_events.close_outcome`
-    /// column and the wire key of the same name are this value's projection
-    /// (the outcome of whichever side is `Complete`: `to_state` for `completed`/`refused`/`cancelled`
-    /// and state-neutral rows, `from_state` for `reopened`; a row with two different
-    /// outcomes is a validation error); there is no second Rust field (PLAN-SCOPE-004).
     pub to_state: Option<TaskState>,
     pub actor: TaskActor,
     pub message_id: Option<AtmMessageId>,
@@ -367,55 +189,29 @@ pub struct TaskEventRow {
     pub marker: Option<TaskEventMarker>,
     pub detail: Option<String>,
 }
-
-/// JSON shape of `TaskEventRow` (`atm task events --json`); same rule as
-/// `TaskRowWire`: 1.4.0 keys unchanged, `close_outcome` added.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct TaskEventRowWire {
-    team: TeamName,
-    task_id: TaskId,
-    assignee: AgentName,
-    seq: u64,
-    at: IsoTimestamp,
-    event: TaskEventKind,
-    from_state: Option<TaskStateTag>,
-    to_state: Option<TaskStateTag>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    close_outcome: Option<TaskCloseOutcome>,
-    actor: TaskActor,
-    message_id: Option<AtmMessageId>,
-    outcome: Option<ReminderOutcome>,
-    marker: Option<TaskEventMarker>,
-    detail: Option<String>,
-}
-// TryFrom/From: `close_outcome` is the row's one outcome key. `to_state =
-// Complete` pairs with it (None from a 1.4.0 producer → `Completed`), exactly
-// as `TaskRowWire`.
-// `from_state = Complete` decodes in two cases only: (1) state-neutral rows
-// written against a completed task (`rejected`, `reminded`, a `migrated`
-// source row) where `from_state == to_state`, both from the same
-// `close_outcome` (FNX-BA-CRIT-022; `append_rejected_task_event`, `task_ops.rs:112-129`);
-// (2) `event = reopened` with `to_state = Assigned`, where `close_outcome`
-// carries the prior outcome being cleared. Every other `from_state = Complete`
-// with `to_state != Complete` is a validation error.
-// Row decode from SQLite uses the same helpers with the `close_outcome` column.
 ```
 
+`TaskRowWire` / `TaskEventRowWire` (private): the same fields with
+`TaskStateTag` states plus optional `close_outcome` (and `position` on the row
+wire), `#[serde(default, skip_serializing_if = "Option::is_none")]`. `TryFrom`
+uses `from_parts`; a `complete` tag with no `close_outcome` (1.4.0 producer)
+decodes as `Completed`; a complete row carrying `position` is rejected. On an
+event row `close_outcome` is the outcome of whichever side is `Complete`
+(`from_state` for `reopened`). SQLite decode uses the same helpers.
+
 ```rust
-// crates/atm-storage/src/task_op.rs  (new file, re-exported from lib.rs and atm_core::boundary)
+// crates/atm-storage/src/task_op.rs  (new; re-exported from lib.rs and atm_core::boundary)
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", tag = "op")]
 pub enum TaskOp {
-    /// Daemon-only (plan §4 R1). Resets reminder counters.
+    /// Daemon-only (plan §2 R1). Resets reminder counters.
     Start,
     Close { outcome: TaskCloseOutcome, #[serde(default, skip_serializing_if = "Option::is_none")] reason: Option<String> },
-    // No `Move`: design §5 makes move message-less; the only move boundary is
-    // `WriteOp::TaskMove` / `RequestEnvelope::TaskMove` (BA.4) — FNX-BA-CRIT-023.
+    // No `Move`: move is message-less; its only boundary is `WriteOp::TaskMove` (BA.4).
 }
 
-/// Target of a message-less move (`TaskMoveRequest`, BA.4). Lives here so the
-/// writer (`apply_task_move`) and the envelope share one type.
+/// Placement for assign (`WriteRequest.placement`) and target for move (BA.4).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", tag = "to")]
 pub enum MoveTarget {
@@ -424,44 +220,38 @@ pub enum MoveTarget {
     End,
     Before { task_id: TaskId },
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefusalRun { pub count: u32, pub started_at: Option<IsoTimestamp> }
 ```
 
-### Wire — `WriteRequest` (`crates/atm-core/src/send/mod.rs:127`) and the persisted envelope (`crates/atm-storage/src/schema/inbox_message.rs:187-193`)
+### Wire — `WriteRequest` (`crates/atm-core/src/send/mod.rs:127`) and the persisted envelope (`inbox_message.rs:187-193`)
 
-The CLI talks to the daemon over local HTTP with this struct, so it is an
-ADR-061 governed surface. `task_op` is **added**; `task_complete` is **kept
-as a decode-only legacy key** (removing it would be MAJOR under D2 — FNX-BA-CRIT-004).
-`HTTP_API_VERSION` moves `1.4.0 → 1.5.0` in this sprint (MINOR, additive),
-recorded in `docs/http-api.md` and ADR-061's version table; BA.4 later moves
-it to `1.6.0` for `TaskMove`.
+`task_op` and `placement` are added; `task_complete` stays decode-only
+(removing it would be MAJOR under ADR-061 D2).
 
 ```rust
     pub task_id: Option<TaskId>,
-    /// Assignment placement; absent in 1.4.0 payloads and therefore None,
-    /// which means END. BA.2 carries the existing MoveTarget type.
+    /// Assignment placement; absent in 1.4.0 payloads, None means END.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placement: Option<MoveTarget>,
     /// Mutation applied to `task_id` in the same writer transaction as this
     /// message. `None` with `task_id` set means assign.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_op: Option<TaskOp>,
-    /// 1.4.0 senders' close. Decode-only: a 1.5.0 sender never sets it, the
-    /// writer never reads it — `task_op_normalized()` is the only consumer.
+    /// 1.4.0 senders' close. Decode-only; `task_op_normalized()` is the only consumer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_complete: Option<TaskId>,
-```
 
-```rust
 impl WriteRequest {
-    /// The single place the legacy key is interpreted. Precedence: an
-    /// explicit `task_op` wins; otherwise `task_complete = Some(id)` means
-    /// `task_id = id, task_op = Close { Completed, reason: None }`; a
-    /// request carrying both keys with different ids is invalid.
+    /// Precedence: an explicit `task_op` wins; otherwise `task_complete = Some(id)`
+    /// means `task_id = id, task_op = Close { Completed, reason: None }`; both keys
+    /// with different ids is invalid.
     pub fn task_op_normalized(&self) -> Result<(Option<TaskId>, Option<TaskOp>), AtmError> {
         match (&self.task_id, &self.task_op, &self.task_complete) {
             (_, Some(op), _) => Ok((self.task_id.clone(), Some(op.clone()))),
             (Some(id), None, Some(legacy)) if id != legacy =>
-                Err(AtmError::validation_with_recovery("task_id and task_complete name different tasks", "pass one task: `--task-id <id> --task-complete`, or the legacy `--task-complete <id>` alone")), // error.rs:377-382 (RBP-F001)
+                Err(AtmError::validation_with_recovery("task_id and task_complete name different tasks", "pass one task: `--task-id <id> --task-complete`, or the legacy `--task-complete <id>` alone")),
             (_, None, Some(legacy)) => Ok((Some(legacy.clone()),
                 Some(TaskOp::Close { outcome: TaskCloseOutcome::Completed, reason: None }))),
             (id, None, None) => Ok((id.clone(), None)),
@@ -470,27 +260,19 @@ impl WriteRequest {
 }
 ```
 
-`prepare_write` calls `task_op_normalized()` once and stores the result on
-the envelope as `task_id` / `task_op`; the persisted envelope therefore
-never carries `task_complete` after this sprint (old rows still do, and the
-same helper decodes them). Direction matrix, both tested in this sprint:
+`prepare_write` calls `task_op_normalized()` once and stores `task_id` /
+`task_op` / `placement` on the envelope; old envelopes still decode through the
+same helper. A CLI that sets `task_op` requires daemon `>= 1.5.0`
+(`CompatibilityPreflight`, `protocol.rs:190`) and otherwise refuses before the
+write, naming both versions.
 
-| sender | daemon | `--task-complete X` becomes |
-| --- | --- | --- |
-| 1.4.0 CLI (`task_complete: X`) | 1.5.0 | `task_id = X, task_op = Close{Completed}` — a close, never an assignment |
-| 1.5.0 CLI (`task_id: X, task_op: Close`) | 1.5.0 | a close |
-| 1.5.0 CLI | 1.4.0 (not yet restarted) | **refused by the CLI** before the write: the CLI already runs `CompatibilityPreflight` (`protocol.rs:190`) and receives `daemon_http_api_version`; any command that sets `task_op` requires daemon `>= 1.5.0` and otherwise fails with `AtmErrorCode::DaemonIncompatible`-class error naming both versions. Without this guard the old daemon would ignore the unknown `task_op` key and read `task_id` as an assignment — BA.4 wires the guard for its verbs; this sprint wires it for the `--task-complete` alias path it re-maps (`crates/atm/src/commands/send.rs`). |
-
-`AsyncTaskLedgerReader` (`crates/atm-storage/src/contract.rs:916`) gains the
-one bounded read BA.3 needs — a team-wide open-task list in queue order:
+`AsyncTaskLedgerReader` (`crates/atm-storage/src/contract.rs:916`) gains:
 
 ```rust
     /// Every open task on the team, ordered `(assignee, position, assigned_at, task_id)`.
-    async fn open_tasks_for_team(
-        &self,
-        team: TeamName,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskRow>, ReadLaneError>;
+    async fn open_tasks_for_team(&self, team: TeamName, deadline: ReadDeadline) -> Result<Vec<TaskRow>, ReadLaneError>;
+    /// Trailing consecutive-refusal run for one assignee (design §4.2).
+    async fn refusal_run(&self, team: TeamName, assignee: AgentName, deadline: ReadDeadline) -> Result<RefusalRun, ReadLaneError>;
 ```
 
 ## Schema — exactly as it lands (`crates/atm-storage-rusqlite/src/task_store.rs::TASK_SCHEMA_DDL`)
@@ -546,24 +328,17 @@ CREATE TABLE IF NOT EXISTS task_events (
 );
 ```
 
-Queue contiguity (positions of a member's open tasks are exactly `1..=n`) is
-not expressible in SQLite; it is a transaction invariant, asserted by
-checked error after every renumber, by the tests, and reported by
-`atm doctor` as `TaskQueueGap` (new `DoctorFinding` variant — the only doctor
-addition).
+Queue contiguity (`1..=n` per member) is a transaction invariant asserted by
+checked error after every renumber and by the tests.
 
 ## Migration — `crates/atm-storage-rusqlite/src/task_migration.rs` (new, ≤ 300 lines)
 
 Trigger: `SELECT pk FROM pragma_table_info('tasks') WHERE name = 'assignee'`
-returns `3` (legacy key) → migrate; `0` → already migrated; table absent →
-fresh DDL only. Runs inside `shared_db::ensure_schema` before
-`TASK_SCHEMA_DDL`.
+= `3` → migrate; `0` → done; table absent → fresh DDL. Runs inside
+`shared_db::ensure_schema` before `TASK_SCHEMA_DDL`.
 
 ```rust
-pub(crate) fn migrate_task_identity(
-    connection: &mut SqliteConnection,
-    target: &SharedDbTarget,
-) -> Result<TaskMigrationReport, AtmError>;
+pub(crate) fn migrate_task_identity(connection: &mut SqliteConnection, target: &SharedDbTarget) -> Result<TaskMigrationReport, AtmError>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct TaskMigrationReport {
@@ -575,21 +350,14 @@ pub(crate) struct TaskMigrationReport {
 }
 ```
 
-Steps, one `TransactionBehavior::Immediate` transaction (AZ
-`ensure_task_v2_schema` shape):
+Steps, one `TransactionBehavior::Immediate` transaction:
 
-1. `VACUUM INTO '<db>.pre-ba2.<utc>.sqlite'` **before** the transaction
-   (VACUUM cannot run inside one). This is the R0 rollback artifact; its
-   path is logged at `info` and returned in the report.
+1. `VACUUM INTO '<db>.pre-ba2.<utc>.sqlite'` **before** the transaction. This
+   is the R0 rollback artifact; its path is logged at `info` and returned.
 2. `ALTER TABLE tasks RENAME TO tasks_legacy; ALTER TABLE task_events RENAME TO task_events_legacy;`
 3. Create the new `tasks` / `task_events` per the DDL above (without `IF NOT EXISTS`).
-4. Winner selection — AZ `schema_version.rs:288-321`, adapted with the
-   precedence **`complete > active > assigned`**: if any legacy row for
-   `(team, task_id)` is complete, the task is complete — the design §3.1
-   incident (one completed row, one open row with 587 reminders under one
-   id) must migrate to a *closed* task, or the persistent-nudge defect
-   survives the migration that claims to end it (FNX-BA-CRIT-001). Among
-   open rows, `active` beats `assigned` (AZ rule):
+4. Winner selection with precedence `complete > active > assigned`; among
+   open rows `active` beats `assigned`:
 
 ```sql
 WITH ranked AS (
@@ -615,82 +383,39 @@ SELECT team, task_id, assignee, assigner, state,
   FROM winners;
 ```
 
-Positions are computed in the INSERT because the `position` CHECK is evaluated
-per row at insert time; open winners get 1..n per `(team, assignee)` (an
-`active` row, if any, is 1), complete rows NULL. The three indexes are created
-after the inserts (step 9), so no partial-index collision can occur mid-copy.
-
 5. Events: copy `task_events_legacy` renumbering `seq` per `(team, task_id)`
-   by `ORDER BY at ASC, assignee ASC, seq ASC`; set `close_outcome =
-   'completed'` wherever `to_state = 'complete'` (the only outcome legacy
-   could record). Then one `migrated` event per **non-winning** legacy row
-   (AZ text: `'migrated source row: assignee=<a>, state=<s>,
-   assigned_at=<t>'`, actor `atm-daemon`, `from_state = to_state = <winner
-   state>` — state-neutral). No information leaves the database (design §3.2).
-6. Canonical history (FNX-BA-CRIT-002): for every winner whose legacy
-   history event is absent that produced its state, append it, actor
-   `atm-daemon`, `at = winner.updated_at`, `detail = 'synthesized by BA.2
-   migration'`: a winner in `active` with no `started` event gets one
-   (`from_state = assigned, to_state = active`); a winner in `complete`
-   with no `completed` event gets one (`to_state = complete, close_outcome
-   = completed`). Legacy `acked` events are kept and are state-neutral.
-7. Active-conflict demotion — AZ `:339-380`, adapted: for each `(team,
-   assignee)` with more than one `active` row, the winner is the lowest
-   `(assigned_at, task_id)`; the others become `assigned` and receive one
-   `migrated` event with `from_state = active, to_state = assigned` and
-   detail `'demoted because another active task for this member wins by
-   original assignment time and task id'`.
-8. Verify positions: for every `(team, assignee)` the open rows' positions are
-   exactly 1..n (`SELECT team, assignee, COUNT(*), MAX(position) FROM tasks
+   by `ORDER BY at ASC, assignee ASC, seq ASC`; `close_outcome = 'completed'`
+   wherever `to_state = 'complete'`. One `migrated` event per non-winning row
+   (`'migrated source row: assignee=<a>, state=<s>, assigned_at=<t>'`, actor
+   `atm-daemon`, `from_state = to_state = <winner state>`).
+6. Canonical history: a winner in `active` with no `started` event, or in
+   `complete` with no `completed` event, gets one (actor `atm-daemon`, `at =
+   winner.updated_at`, `detail = 'synthesized by BA.2 migration'`). Legacy
+   `acked` events are kept, state-neutral.
+7. Active-conflict demotion (AZ `:339-380`): per `(team, assignee)` with more
+   than one `active` row, the lowest `(assigned_at, task_id)` wins; the others
+   become `assigned` with a `migrated` event `active → assigned`, detail
+   `'demoted because another active task for this member wins by original
+   assignment time and task id'`.
+8. Verify positions: `SELECT team, assignee, COUNT(*), MAX(position) FROM tasks
    WHERE state <> 'complete' GROUP BY 1,2 HAVING COUNT(*) <> MAX(position)`
-   returns no rows); a hit is an `AtmError` and rolls back.
-9. `DROP TABLE tasks_legacy; DROP TABLE task_events_legacy;` create the
-   three indexes; commit. Any error → rollback; the legacy tables are
-   untouched and the daemon fails to start with the error and the backup
-   path in the message.
+   returns no rows; a hit is an `AtmError` and rolls back.
+9. Verify replay: the state of `(team, task_id)` is the `to_state` (and
+   `close_outcome`) of its highest-`seq` event whose `to_state IS NOT NULL`;
+   it must equal `tasks.state` / `close_outcome` for every row, else
+   `AtmError` and rollback. Steps 5, 6, 7 append in that order, each new event
+   taking `max(seq) + 1`.
+10. `DROP TABLE tasks_legacy; DROP TABLE task_events_legacy;` create the
+    three indexes; commit. Any error → rollback; the legacy tables are
+    untouched and the daemon fails to start with the error and the backup
+    path in the message.
 
-**Rollback and the pre-BA binary (SCHEMA-SQLITE-ROLLBACK).** There is no
-`STORAGE_SCHEMA_VERSION` on `develop` (ADR-061 D1), so a pre-BA binary
-cannot refuse the migrated database; its exact behaviour is specified so a
-rollback is diagnosable rather than surprising:
-
-- open and every read succeed — `TASK_SCHEMA_DDL` is `CREATE TABLE IF NOT
-  EXISTS`, and every task query names its columns (`task_ops.rs`,
-  `task_store.rs`), so the new columns are ignored;
-- plain sends and reads are unaffected; a task-bearing ack still executes the
-  legacy `assigned → active` transition and may succeed or be refused;
-- assignment inserts fail inside the writer transaction with the new
-  `CHECK constraint failed: tasks` (no `position`), and a second-assignee
-  row fails with `UNIQUE constraint failed: tasks.team, tasks.task_id`;
-  these are surfaced as the existing storage write error; nothing is
-  half-written;
-- the supported rollback is: stop the daemon, restore
-  `<db>.pre-ba2.<utc>.sqlite` (step 1), start the pre-BA binary. Both task
-  and mail writes made after the point-in-time snapshot are lost
-  with the restore; the operator is told this in the startup log line that
-  names the backup.
-
-This is the one-way, no-bridge default of plan §4 R0; the R0 approval and
-ADR-061 D3 exception record it. Test:
-`pre_ba_task_insert_against_migrated_schema_fails_with_check_constraint`
-(execute the exact `INSERT INTO tasks (...)` statement text from develop's
-`apply_task_assignment` against a migrated fixture; assert the constraint
-error; assert `mail_messages` untouched).
-
-**Replay rule** (ADR-062 "Replay" row, made exact; FNX-BA-CRIT-020): the
-one total order is `seq` under the new `PRIMARY KEY (team, task_id, seq)` —
-`at` is never used for ordering and ties in `at` are irrelevant. The state of
-`(team, task_id)` is the `to_state` of its highest-`seq` event whose
-`to_state IS NOT NULL`. Migration steps 5, 6 and 7 append in that order, each
-new event taking `max(seq) + 1` for its task, so a demoted row folds to
-`assigned` and a synthesized `completed` folds to `complete`; `rejected`, `reminded`, `lead_notified`, `acked` and `moved`
-events carry `to_state = from_state` (or NULL for pre-BA rows) and never
-change it; `started`, `completed`, `refused`, `cancelled`, `reassigned`, and
-`reopened` change state. The first `assigned` event establishes initial state;
-`moved` is state-neutral.
-The migration asserts, before commit, that this fold equals `tasks.state`
-/ `close_outcome` for every row (checked error + the
-`replay_of_migrated_history_reproduces_row_state` test).
+**Rollback.** A pre-BA binary cannot refuse the migrated database (no
+`STORAGE_SCHEMA_VERSION` on `develop`): reads and plain sends work, assignment
+inserts fail with `CHECK constraint failed: tasks` as the existing storage
+write error. The supported rollback is: stop the daemon, restore
+`<db>.pre-ba2.<utc>.sqlite`, start the pre-BA binary; writes after the
+snapshot are lost, and the startup log line that names the backup says so.
 
 ## Writer — `crates/atm-storage-rusqlite/src/writer/task_ops.rs`
 
@@ -699,344 +424,196 @@ envelope:
 
 | `task_id` | `task_op` | applies |
 | --- | --- | --- |
-| `None` | any | nothing (a `task_op` without `task_id` is rejected at the CLI and at `WriteRequest` validation) |
-| `Some` | `None` | `apply_task_assignment`: (a) no row inserts `assigned`; (b) same agent: in one transaction, mark the prior current assignment message acknowledged (superseded; `mark_source_acknowledged`, same hygiene as close) if it is still open, then one UPDATE of `assignment_message_id, description, updated_at` from the new message; no state/queue/timestamp/counter change and no event; (c) other agent renumbers both queues, acknowledges the superseded assignment message via `acknowledge_superseded_assignment`, then updates assignee/state/assigned_at/position per `placement` and emits `reassigned`; (d) closed row resets outcome/counters, assigns position per `placement`, and emits `reopened`. `placement: Option<MoveTarget>` is consumed only here; None means END. |
-| (legacy `task_complete = Some`) | — | never reaches the writer: `WriteRequest::task_op_normalized()` has already turned it into `task_id = Some, task_op = Some(Close{Completed})` |
+| `None` | any | nothing (a `task_op` without `task_id` is rejected at `WriteRequest` validation) |
+| `Some` | `None` | `apply_task_assignment` — (a) no row: insert `assigned` at `placement` (None = END); (b) same agent, open row: acknowledge the prior assignment message, `UPDATE tasks SET assignment_message_id, description, updated_at`, nothing else, no event; (c) other agent, open row: acknowledge the prior assignment message, renumber both queues, set `assignee`, `assigner`, `state = assigned`, `position` per `placement`, reset counters, emit `reassigned`; (d) closed row: clear `close_outcome`, reset counters, set `assignee`, `assigner`, `position`, emit `reopened` |
 | `Some` | `Some(Start)` | `apply_task_start` |
 | `Some` | `Some(Close{..})` | `apply_task_close` |
-| — | — | `apply_task_move` is **not** message-carried: only `WriteOp::TaskMove` (BA.4, message-less `RequestEnvelope::TaskMove`) reaches it (design §5; FNX-BA-CRIT-023) |
-
-Signatures:
+| — | — | `apply_task_move` is not message-carried: only `WriteOp::TaskMove` (BA.4) reaches it |
 
 ```rust
 pub(super) fn apply_task_message(record: &Message, connection: &Connection, cache: &mut WriterStatementCache, target: &SharedDbTarget) -> Result<(), AtmError>;
-fn apply_task_assignment(record: &Message, task_id: &TaskId, connection: &Connection, target: &SharedDbTarget) -> Result<(), AtmError>;
+fn apply_task_assignment(record: &Message, task_id: &TaskId, placement: Option<&MoveTarget>, connection: &Connection, target: &SharedDbTarget) -> Result<(), AtmError>;
 fn apply_task_start(record: &Message, task_id: &TaskId, connection: &Connection, target: &SharedDbTarget) -> Result<(), AtmError>;
-fn apply_task_close(record: &Message, task_id: &TaskId, outcome: TaskCloseOutcome, reason: Option<&str>, connection: &Connection, cache: &mut WriterStatementCache, target: &SharedDbTarget) -> Result<(), AtmError>;
+fn apply_task_close(record: &Message, task_id: &TaskId, outcome: TaskCloseOutcome, reason: Option<&str>, connection: &Connection, cache: &mut WriterStatementCache, target: &SharedDbTarget) -> Result<Option<TaskCloseOutcome>, AtmError>;
 pub(super) fn apply_task_move(team: &TeamName, task_id: &TaskId, actor: &AgentName, target_pos: &MoveTarget, at: IsoTimestamp, connection: &Connection, target: &SharedDbTarget) -> Result<QueuePosition, AtmError>;
-/// Renumbers one member's open queue to 1..=n in `order`, inside the caller's transaction, in two
-/// phases so `tasks_position_per_member` (immediate; SQLite has no deferrable UNIQUE) never sees a
-/// transient duplicate (FNX-BA-CRIT-021):
-///   1. `UPDATE tasks SET position = position + ?3 WHERE team = ?1 AND assignee = ?2 AND state <> 'complete'`
-///      with ?3 = order.len() — parks every open row above the old range (positions stay >= 1);
+/// Renumbers one member's open queue to 1..=n in `order`, in two phases so the
+/// immediate `tasks_position_per_member` index never sees a transient duplicate:
+///   1. `UPDATE tasks SET position = position + ?3 WHERE team = ?1 AND assignee = ?2 AND state <> 'complete'` with ?3 = order.len();
 ///   2. one `UPDATE tasks SET position = ?3 WHERE team = ?1 AND task_id = ?2` per entry of `order`, ?3 = 1..=n.
-/// A swap of positions 1 and 2 therefore goes 1,2 → 3,4 → 2,1 with no collision.
 fn renumber_queue(team: &TeamName, assignee: &AgentName, order: &[TaskId], connection: &Connection, target: &SharedDbTarget) -> Result<(), AtmError>;
 ```
 
-Rules (D6): row lookup is by `(team, task_id)` only — the sender-first /
-recipient fallback in `apply_task_completion` (`:305-320`) is deleted.
-Authority: `Start` requires `actor == Daemon`; `Close` is accepted from the
-assignee or assigner and rejected otherwise, as on develop. Assign and Move
-check nothing about the caller. `Start` sets `reminder_count = 0, lead_notified_count = 0` and moves the row
-to position 1 (renumber); it leaves `last_reminded_at` exactly as the handoff
-audit wrote it — a `NULL` here would make the task due again on the next
-tick (FNX-BA-CRIT-029), and `state = assigned AND position = 1 AND
-last_reminded_at IS NOT NULL` is the "start owed" predicate BA.3 retries on. `Close`
-sets `close_outcome`, `position = NULL`, renumbers the remainder, and keeps
-`acknowledge_completed_assignment`. Close hygiene runs for both `assigned` and `active` rows (BA.1; DRIFT-063) and acknowledges the row's current `assignment_message_id`. `Move` renumbers only; `assigned_at`
-appears in an `UPDATE … SET` list only in the reassign and reopen branches of `apply_task_assignment` (never Start, Close, Move, or renumber).
-`commit_write` with `task_op.is_some()` and a `to` whose team differs from the writer's caller team or whose host is set returns the same local-only validation error (`task commands are local-team only; <addr> resolves to another team or host — send a plain message or assign the local alias`) before opening the transaction (plan §4 R8); test `writer_rejects_task_op_on_foreign_team_or_host_recipient`.
-Assign and Move do not check the caller. The sender of the assign message is
-written as `assigner` in branches a, c and d (branch b keeps it); receipts and
-reports route to the sender of the current assignment message.
+Rules:
 
-Branch c (other-agent reassign) runs `acknowledge_superseded_assignment(row.assignment_message_id, now)` (reusing `mark_source_acknowledged`) before repointing the task; the prior assignment is closed before the new message becomes current.
+- Row lookup is by `(team, task_id)` only; the recipient fallback in
+  `apply_task_completion` (`:305-320`) is deleted.
+- `Start` requires actor `atm-daemon` and the latest `reminded` event since the
+  last `assigned`/`reassigned`/`reopened` to have `outcome = 'emitted'`
+  (`SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team = ?1 AND task_id = ?2 AND event IN ('assigned','reassigned','reopened')) ORDER BY rowid DESC LIMIT 1`);
+  otherwise it is a silent no-op. On `active` it is idempotent (no event).
+- `Start` sets `reminder_count = 0, lead_notified_count = 0`, moves the row to
+  position 1 (renumber), and leaves `last_reminded_at` as the handoff audit
+  wrote it. The `one_active_task_per_agent` violation maps to the "already
+  has an active task" rejection, not a generic SQLite error.
+- `Close` is accepted from the assignee or assigner only (develop rule). It
+  sets `close_outcome`, `position = NULL`, renumbers the remainder, and
+  acknowledges the current `assignment_message_id` for both `assigned` and
+  `active` rows (BA.1).
+- `Close` on a row that is already `complete`: the report is written as
+  ordinary mail in the same transaction with the `task_id` link dropped, no
+  event, row unchanged, and `Some(outcome)` is returned as
+  `SendOutcome.already_closed`.
+- `Close` whose recipient is not the row's other party (reassigned between
+  preflight and write) is the stale-counterparty rejection; nothing written.
+- Assign and Move check nothing about the caller. The sender of an assign
+  message is written as `assigner` in branches a, c and d.
+- `commit_write` with `task_op.is_some()` or `task_id.is_some()` and a `to`
+  whose team differs from the caller's or whose host is set returns the plan
+  §2 R8 validation error before opening the transaction.
+- `assigned_at` is written by branch a only; it never appears in any
+  `UPDATE … SET` list.
+- `apply_task_move`: no row or not open → rejection; a move of the active
+  task is accepted, renumbers nothing, and appends `moved` with `detail =
+  "1→1"`; otherwise resolve the order (`Head` → after the active task if any;
+  `Before` must name an open queued task of the same member), then
+  `renumber_queue`; `detail = "<from>→<to>"`.
+- Every accepted op appends one event; every rejection appends one
+  `rejected` row with the message in `detail`. `append_rejected_task_event`
+  (`task_ops.rs:68-110`) is rewritten for the one-id key: after the savepoint
+  rollback it loads the row by `(team, task_id)`, audits `assignee =
+  row.assignee` and the row's state (the requested recipient only when no row
+  exists), and also matches `WriteOp::TaskMove`.
+- `trailing_refusal_run(conn, team, assignee) -> RefusalRun` in `task_sql.rs`:
+  `SELECT event, at FROM task_events WHERE team = ?1 AND assignee = ?2 AND event IN ('assigned','reassigned','reopened','completed','refused','cancelled') ORDER BY rowid DESC`;
+  Rust counts leading `refused` rows, `started_at` is the oldest of them; any
+  other listed event ends the run.
 
-Branch b: `UPDATE tasks SET assignment_message_id = ?msg, description = ?desc, updated_at = ?now WHERE team = ?team AND task_id = ?id` — nothing else, no `task_events` row (design §3.1a: no transition, no event; DRIFT-062: close hygiene acks the current `assignment_message_id`).
+## Boundary manifests
 
-Branch b (same-agent resend) runs `acknowledge_superseded_assignment(prior_message_id, now)` (reuses `mark_source_acknowledged`) then one `UPDATE tasks SET assignment_message_id, description, updated_at` from the new message; it changes no state, queue, timestamp, counter, or event.
-
-`apply_task_close`: when the canonical row is already `complete`, the writer
-stores the report as ordinary mail in the same transaction with the `task_id`
-link dropped, appends no task event, leaves the row unchanged, and returns
-`already_closed: Some(outcome)`.
-
-`apply_task_move` — the active task holds position 1 by invariant and is
-never repositioned or preempted (design §4.3). Exact arm, before any
-renumber:
-
-```rust
-    let row = load_task_row(team, task_id, connection, target)?
-        .ok_or_else(|| task_rejected(TaskRejectionKind::NoOpenTask, format!("no task {task_id} on {team}")))?;
-    let Some(current) = row.position else {
-        return Err(task_rejected(TaskRejectionKind::NoOpenTask, format!("task {task_id} is not open; use explicit assign to reopen")));
-    };
-    if row.state == TaskState::Active {
-        append_task_event(team, task_id, &row.assignee, TaskEventKind::Moved, Some(row.state), Some(row.state),
-            actor, None, None, None, Some(format!("{current}→{current}")), at, connection, target)?;
-        return Ok(current); // accepted, nothing renumbered
-    }
-    let order = resolve_move_order(&open_rows, task_id, target_pos)?; // Head → after the active task if any
-    renumber_queue(team, &row.assignee, &order, connection, target)?;
-```
-
-`detail` for every other move is `"<from>→<to>"` with the 1-based positions
-(e.g. `"3→1"`).
-
-Consecutive refusals (design §4.2): `atm-storage-rusqlite/src/task_sql.rs`
-owns `trailing_refusal_run(conn, team, assignee) -> RefusalRun`:
-`SELECT event, at FROM task_events WHERE team = ?1 AND assignee = ?2 AND
-event IN ('assigned','reassigned','reopened','completed','refused','cancelled') ORDER BY
-rowid DESC`. Rust counts leading refused rows; `started_at` is the
-oldest refused timestamp. completed and cancelled end it; assigned, reassigned,
-and reopened also end it; started, moved, and migrated neither count nor reset.
-
-```rust
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RefusalRun { pub count: u32, pub started_at: Option<IsoTimestamp> }
-
-```
-
-`one_active_task_per_agent` violation on `Start` maps to
-`TaskRejectionKind::ActiveElsewhere`, not to a generic SQLite error.
-
-The writer's Start gate uses the latest reminder audit:
-`SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team = ?1 AND task_id = ?2 AND event IN ('assigned','reassigned','reopened')) ORDER BY rowid DESC LIMIT 1`.
-It starts only for `outcome = 'emitted'`; otherwise Start is a silent no-op.
-
-Every accepted op appends one `task_events` row (`started` / `completed` +
-`close_outcome` / `moved` with `detail = "<from>→<to>"`); every rejection
-appends one `rejected` row with the `TaskRejectionKind` in `detail`
-`append_rejected_task_event` (`writer/task_ops.rs:68-110`) is REWRITTEN for the one-id key: after the savepoint rollback it loads the canonical row by
-(team, task_id) and audits assignee = row.assignee (unchanged holder),
-state/outcome from row; requested recipient only when no row; it also matches
-`WriteOp::TaskMove` (actor = move caller). Design: event assignee is whoever
-holds task after event.
-
-`TaskRejected` and `TaskRejectionKind` are in-process types (writer control
-flow, `rejected` audit `detail`, tests); they do not cross the HTTP boundary —
-the daemon returns `ResponseEnvelope::Error(AtmError)` with code
-`MessageValidationFailed` and the writer's message.
-
-`StaleCounterparty` carries exactly `task <id>: <recipient> is no longer the
-counterparty — re-run the command`.
-
-`TaskStore` (`crates/atm-storage/src/task_store.rs:66`) is unchanged except
-`load_task(&self, team: &TeamName, task_id: &TaskId)` — the `MemberKey`
-parameter goes away with the key. `open_tasks(&MemberKey)` keeps its shape
-and now returns rows ordered by `position`.
-
-For an unknown task id, the writer reports "no task exists to audit" and
-returns `NoOpenTask`; the close command sends nothing.
-
-## Boundary manifests (ruling: phase plan §10)
-
-`boundaries/atm-storage/task-store.toml`, `…-rusqlite/task-store-sqlite.toml`:
-`[contracts].notes` "state change" → `tasks.state is written by writer/task_ops.rs (apply_task_assignment, apply_task_start, apply_task_close) and, at schema-ensure time only, by task_migration.rs::migrate_task_identity; no other module; state-changing audit kinds are assigned, reassigned, reopened, started, completed, refused, cancelled, migrated; moved is state-neutral`; "replay" → `per (team,
-task_id)`; `[ownership].io_forbidden` += `"task_body_dereference"`;
-`[enforcement].review_gates` += `"no_task_state_write_outside_task_ops"`,
-`"assigned_at_updated_only_by_reassign_and_reopen"`. `async-task-ledger-reader*.toml`: add
-`open_tasks_for_team` to the read surface. No new manifest.
+Exactly the edits ruled in plan §8; no new manifest.
 
 ## Paths to delete
 
 - `apply_task_completion` (`task_ops.rs:295-364`) — replaced by `apply_task_close`
 - `load_open_task_rows` if still present after BA.1
-- every *read* of `task_complete` except `task_op_normalized()` (the field
-  itself stays, decode-only — see "Wire"); the `task_complete` field on
-  `--task-complete` **parsing stays** (BA.4 re-wires it to a bool) — from
-  this sprint `atm send --task-complete X` builds `task_id = X, task_op =
-  Close{Completed}` in `crates/atm/src/commands/send.rs` and runs the
-  `>= 1.5.0` daemon guard, so the close path never regresses
+- every read of `task_complete` except `task_op_normalized()`
 - `select_task_row(…, assignee)` in `task_sql.rs` → keyed by `(team, task_id)`
 
 ## Tests
 
 Pure — `task_state.rs`:
 
-- `transition_table_is_exhaustive_over_three_events` — all
-  `(Option<TaskState> incl. every Complete(outcome), TaskEvent incl. every
-  Completed(outcome))` pairs → the table above; 3 outcomes × … enumerated,
-  no wildcard in the test.
-- `started_on_active_is_idempotent`, `assigned_on_complete_reopens_same_id`,
-  `completed_on_complete_returns_already_closed_result` — the writer delivers
-  ordinary mail and returns `SendOutcome.already_closed` without a task event.
-- `same_agent_resend_refreshes_message_link_without_event` — assign M1, ack M1,
-  same-agent resend M2 (new description), close → M2 is acknowledged by close
-  hygiene, description on the row is M2's, zero `assigned`/`reassigned` events
-  after the first, position/assigned_at/counters byte-equal to before the resend.
-- `task_row_json_keeps_scalar_state_and_adds_close_outcome` — a
-  `Complete(Refused)` row serialises to `"state":"complete","close_outcome":"refused"`
-  and no `position` key; an `Assigned` row to `"state":"assigned","position":2`
-  and no `close_outcome` key; both round-trip.
-- `task_row_json_from_1_4_0_producer_decodes` — the exact `TaskRow` JSON a
-  1.4.0 daemon emits (fixture string, `state:"complete"`, no new keys) →
-  `Complete(Completed)`; the exact `state:"active"` and `state:"assigned"`
-  rows a 1.4.0 daemon emits (no `position` key) → `Active` / `Assigned` with
-  `position = None` (FNX-BA-CRIT-019).
-- `task_row_json_rejects_position_on_complete_row` — `state:"complete"` with
-  `position: 1` → validation error.
-- `task_event_row_json_reopened_round_trips_and_other_kinds_reject_complete_to_assigned` — a `reopened` row `from_state: "complete", close_outcome: "<o>", to_state: "assigned"` round-trips for each of the three prior outcomes; the same `from_state`/`to_state` pair with any other `event` is rejected.
-- `task_state_from_parts_rejects_mismatched_outcome` — 5 arms of
-  `from_parts`.
-- `task_event_row_json_projects_close_outcome_from_to_state`.
-- `queue_position_rejects_zero`, `queue_position_head_is_one`.
+- `transition_table_is_exhaustive_over_three_events` — every
+  `(Option<TaskState>, TaskEvent)` pair including every outcome, no wildcard;
+  covers idempotent Start on `active` and reopen on `complete`.
+- `task_state_from_parts_rejects_mismatched_outcome` — 5 arms.
+- `queue_position_bounds` — `new(0)` is `None`; `HEAD.get() == 1`.
+- `task_row_json_keeps_scalar_state_and_adds_close_outcome` —
+  `Complete(Refused)` → `"state":"complete","close_outcome":"refused"`, no
+  `position`; `Assigned` → `"state":"assigned","position":2`, no
+  `close_outcome`; both round-trip; `complete` with `position` is rejected.
+- `task_row_json_from_1_4_0_producer_decodes` — verbatim 1.4.0 fixtures:
+  `complete` → `Complete(Completed)`; `active`/`assigned` → `position = None`.
+- `task_event_row_json_reopened_round_trips_and_other_kinds_reject_complete_to_assigned`.
+- `legacy_task_complete_request_closes_the_task` — verbatim 1.4.0 JSON
+  (`"task_complete":"T1"`) → `Close{Completed}` on T1; `task_id = T1` with
+  `task_complete = T2` fails validation; both keys present → `task_op` wins.
 
 Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
 
-- `assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues` — one id, both queues renumbered.
+- `assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues`
+  — one id; the superseded assignment message is acknowledged; `reassigned`
+  event; counters reset.
 - `assign_closed_id_reopens_in_place_clearing_outcome_and_counters`.
 - `reassign_releases_old_active_slot_in_same_transaction`.
-- `assign_same_agent_open_id_emits_no_event`.
-- `start_when_another_task_active_is_rejected_active_elsewhere` — the index;
-  row stays `assigned`; one `rejected` event.
-- `start_moves_task_to_position_one_and_resets_counters_preserving_last_reminded_at` — A has T1(pos1, reminder_count 7), T2(pos2, `last_reminded_at = t_h` written by the emitted handoff audit); start T2 → T2 pos1 active, T1 pos2; T2 `reminder_count = 0`, `lead_notified_count = 0`, `last_reminded_at` byte-equal to `t_h` (never NULL — :695-699); T1's counters untouched.
+- `same_agent_resend_refreshes_message_link_without_event` — assign M1, resend
+  M2; M1 acknowledged, row description is M2's, zero new events,
+  position/assigned_at/counters byte-equal; close acknowledges M2.
+- `assign_with_before_survives_to_transaction` — `placement` round-trips
+  through the persisted envelope and lands the row before the target.
+- `assign_before_invalid_target_is_rejected` — target active, closed, or
+  another member's → rejection, one `rejected` event, no row change.
+- `start_when_another_task_active_is_rejected_active_elsewhere` — row stays
+  `assigned`; one `rejected` event.
+- `start_moves_task_to_position_one_and_resets_counters_preserving_last_reminded_at`.
+- `start_gate_rejects_member_actor_and_unrenderable_reminder` — actor not
+  `atm-daemon` → rejected; latest `reminded` outcome `unrenderable` → no-op,
+  zero `started` events.
 - `close_renumbers_remaining_queue_contiguously` — T1..T4; close T2 →
-  positions 1,2,3 for T1,T3,T4; T2 `position IS NULL`, `close_outcome` set.
+  T1,T3,T4 at 1,2,3; T2 `position IS NULL`, `close_outcome` set.
 - `close_each_outcome_persists_column_and_event` — 3 cases.
-- `move_head_with_active_task_lands_at_position_two`; `move_head_without_active_lands_at_one`;
-  `move_end`; `move_before_target_of_other_member_is_unknown_target`;
-  `move_before_self_is_noop_with_moved_event`; `move_never_changes_assigned_at`
-  (assert every row's `assigned_at` byte-equal before/after).
-- `move_of_active_task_is_a_noop_with_moved_event` — the active task holds
-  position 1 by invariant; `Move` on it is accepted, changes nothing, and
-  appends one `moved` event with `detail = "1→1"`.
-- `renumber_is_atomic_under_failure` — inject a failing statement mid-renumber
-  (test hook on `renumber_queue`); assert the queue is unchanged and
-  contiguous.
+- `close_of_complete_row_delivers_mail_and_returns_already_closed` — no event,
+  row unchanged, mail row has no `task_id`.
+- `close_by_third_party_is_not_authorized` — rejected event audits the
+  canonical holder.
+- `close_by_stale_counterparty_is_rejected_atomically` — reassign between
+  preflight and write → rejection, nothing written.
+- `move_head_end_before_land_at_expected_positions` — head with an active
+  task → 2; head without → 1; end; before.
+- `move_before_target_of_other_member_is_rejected` — one rejected event,
+  state unchanged.
+- `move_of_active_task_is_a_noop_with_moved_event` — `detail = "1→1"`, every
+  other row byte-equal.
 - `renumber_swap_of_positions_one_and_two_never_violates_unique_index` —
-  with `tasks_position_per_member` in place, move T2 `--head` over T1 (a pure
-  swap) and move T4 `--head` over T1..T3; no `SQLITE_CONSTRAINT`, final
-  positions contiguous (FNX-BA-CRIT-021).
-- `assigned_at_updated_only_by_reassign_and_reopen` — Start, Close, Move and renumber leave `assigned_at` unchanged; reassign and reopen set it to `now`.
-- `close_by_third_party_is_not_authorized` — the unchanged develop close rule;
-  a third-party close is rejected.
-- `move_before_target_of_other_member_is_unknown_target` appends one rejected
-  event for the canonical holder and leaves the row state unchanged.
-- `reassign_acknowledges_prior_assignment_message` — other-agent reassign
-  acknowledges the superseded assignment before the new assignment becomes
-  current.
-- `rejected_close_by_third_party_audits_canonical_holder` and
-  `rejected_move_with_invalid_target_audits_one_event_and_changes_nothing` —
-  each rejected event records the canonical holder and unchanged state/outcome.
-- `same_agent_resend_with_unacked_prior_supersedes_it` — assign M1 (unread, unacked); same-agent resend M2; M1 `acknowledged_at` set and `nudge_pending_at IS NULL`, M2 is the only open task-linked item; close → M2 acknowledged; no `task_events` row for the resend.
-- `move_of_active_task_returns_current_position_and_renumbers_nothing` —
-  assert every other row's `position` and `updated_at` byte-equal.
-- `legacy_task_complete_request_closes_the_task` — a `WriteRequest` decoded
-  from the exact 1.4.0 JSON (`"task_complete":"T1"`, no `task_op`) closes T1
-  `completed`; a request with `task_id = "T1"` and `task_complete = "T2"`
-  fails validation; `task_op` present + `task_complete` present → `task_op`
-  wins.
-- `refusal_run_is_tick_driven` — no write-path result carries the run;
-  `AsyncTaskLedgerReader::refusal_run(team, assignee)` returns
-  `Some(RefusalRun { count: 1, started_at: Some(<close at>) })` after one refused close.
-- `start_by_member_actor_is_not_authorized`.
-- `trailing_refusal_run_counts_raw_stored_event_values` — closes: refused, refused,
-  completed, refused, refused, refused → the last returns 3; a following
-  `completed` returns 0; a following `refused` returns 1 (run restarted).
+  swap T2 over T1; move T4 `--head` over T1..T3; no `SQLITE_CONSTRAINT`.
+- `assigned_at_is_never_updated` — assign, start, reassign, close, reopen,
+  move: `assigned_at` byte-equal throughout.
+- `writer_rejects_task_op_on_foreign_team_or_host_recipient`.
+- `trailing_refusal_run_counts_raw_stored_event_values` — refused, refused,
+  completed, refused, refused, refused → 3; then `completed` → 0; then
+  `refused` → 1.
 
-Migration — `crates/atm-storage-rusqlite/tests/task_migration.rs` (new),
-each fixture built from the **legacy** DDL (copied into the test as a
-string, never from production code):
+Migration — `crates/atm-storage-rusqlite/tests/task_migration.rs` (new), each
+fixture built from the **legacy** DDL copied into the test as a string:
 
-- `fresh_database_gets_new_ddl_without_migration` — report all zero, no backup.
-- `already_migrated_database_is_a_noop` — second `ensure_schema` returns
-  `rows_before == tasks_after`, no backup file.
-- `single_row_tasks_migrate_with_positions_by_assigned_at` — 3 assigned
-  rows for one member → positions 1..3 in `assigned_at` order; ties broken
-  by `task_id`.
-- `duplicate_group_complete_twin_closes_the_task` — the design §3.1 shape:
-  row A `complete`, row B `active` with `reminder_count = 587` and
-  `last_reminded_at` recent, same `(team, task_id)` → one row, `state =
-  complete`, `close_outcome = completed`, `position IS NULL`, assignee = A's;
-  one `migrated` event naming B; `open_tasks(B's member)` is empty and
-  `open_tasks_for_team` does not contain the id. Corner: B's `updated_at`
-  is *newer* than A's (it was being reminded) and still loses.
-- `duplicate_group_active_beats_assigned` — mirror pattern (assignee row
-  `active`, assigner mirror row `assigned`) → one `active` row, assignee =
-  winner's; one `migrated` event naming the loser.
-- `duplicate_group_winner_keeps_its_own_assigned_at_and_losers_are_in_events`.
-- `winner_query_executes_against_duplicate_group_fixture` — runs this exact
-  statement on a fixture with two legacy rows for one id and asserts one
-  canonical row carrying the winner's own `assigned_at`.
-- `migration_inserts_open_winners_with_contiguous_positions` — legacy fixture
-  with two agents: A has one `active` and two `assigned` rows (distinct task
-  ids), B has one `assigned`; after migration A's positions are active=1 then
-  FIFO 2,3; B's is 1; complete rows NULL; the literal migration SQL executes
-  (no CHECK failure).
-- `two_active_tasks_same_member_demotes_later_one` — winner by
-  `(assigned_at, task_id)`; loser `assigned`, `migrated` event with the AZ
-  detail text; positions 1 (active) and 2.
-- `legacy_events_renumbered_by_time_then_assignee_then_seq` and
-  `legacy_complete_to_state_gets_close_outcome_completed`.
-- `historic_acked_events_survive_migration` — and are state-neutral in replay.
-- `migrated_active_row_without_started_event_gets_one` and
-  `migrated_complete_row_without_completed_event_gets_one` — synthesized
-  `started` / `completed`, actor `atm-daemon`, `detail` as specified; a row
-  that already has the event gets nothing.
-- `replay_of_migrated_history_reproduces_row_state`
-- `replay_uses_seq_not_at_when_timestamps_tie` — two events with identical
-  `at` and opposite `to_state`; the fold follows `seq` (FNX-BA-CRIT-020).
-- `replay_after_active_conflict_demotion_yields_assigned` — a demoted row's
-  synthesized `started` (step 6) then `migrated active→assigned` (step 7)
-  fold to `assigned`. — for each of the five
-  fixtures (migrated `assigned`, migrated `active`, migrated `complete`,
-  duplicate loser folded, active-conflict demotion) fold the `task_events`
-  rows by the replay rule and assert equality with `tasks.state` /
-  `close_outcome`; the demotion fixture's fold ends on the `migrated`
-  event's `to_state = assigned`.
-- `migration_replay_mismatch_rolls_back_whole_transaction` — a fixture whose
-  re-fold cannot equal the row (corrupted event) → migrate returns AtmError,
-  no table changed, schema version unchanged.
-- `migration_failure_leaves_legacy_tables_and_backup` — inject failure after
-  step 4; assert `tasks_legacy` absent (renamed back by rollback → original
-  `tasks` present with original PK), backup file exists.
-- `backup_is_written_before_transaction` — backup contents equal the
-  pre-migration database (row counts + PK shape).
-- `live_fixture_snapshot_migrates` — a committed **anonymised** copy of the
-  14-duplicate-group shape from the dev host (team/agent names replaced,
-  descriptions emptied; no message bodies) migrates with
-  `merged_duplicate_rows == 14`. If the anonymised fixture cannot be
-  produced without message content, this test is replaced by a synthetic
-  14-group fixture and the sprint says so.
+- `fresh_and_already_migrated_databases_skip_migration` — report all zero, no
+  backup; second `ensure_schema` is a no-op.
+- `single_row_tasks_migrate_with_positions_by_assigned_at` — ties by `task_id`.
+- `duplicate_group_winner_precedence` — (1) row A `complete`, row B `active`
+  with `reminder_count = 587` and newer `updated_at` → one
+  `complete(completed)` row, assignee A's, one `migrated` event naming B,
+  `open_tasks_for_team` excludes the id; (2) `active` beside `assigned` → one
+  `active` row.
+- `migration_inserts_open_winners_with_contiguous_positions` — A: active=1,
+  FIFO 2,3; B: 1; complete rows NULL.
+- `two_active_tasks_same_member_demotes_later_one` — AZ detail text;
+  positions 1 (active) and 2.
+- `legacy_events_renumbered_and_acked_rows_survive` — `seq` order by time,
+  assignee, seq; `acked` rows kept and state-neutral in replay.
+- `migrated_rows_without_history_events_get_synthesized_ones` — `started` /
+  `completed` per step 6; a row that already has the event gets nothing.
+- `replay_of_migrated_history_reproduces_row_state` — five fixtures
+  (migrated assigned/active/complete, duplicate loser, demotion).
+- `migration_failure_rolls_back_and_leaves_backup` — replay mismatch and an
+  injected failure after step 4: original `tasks` present with original PK,
+  no table changed, backup exists.
+- `pre_ba_task_insert_against_migrated_schema_fails_with_check_constraint` —
+  develop's exact `apply_task_assignment` INSERT text → constraint error;
+  `mail_messages` untouched.
+- `live_fixture_snapshot_migrates` — anonymised 14-duplicate-group fixture →
+  `merged_duplicate_rows == 14` (synthetic if an anonymised copy needs message
+  content; the PR says so).
 
 Reader:
 
-- `open_tasks_for_team_orders_by_assignee_position` and excludes complete rows.
-- `doctor_reports_task_queue_gap` — hand-write positions 1,3 → finding.
-
-Required tests: `assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues`, `assign_closed_id_reopens_in_place_clearing_outcome_and_counters`, `reassign_releases_old_active_slot_in_same_transaction`, `assign_same_agent_open_id_emits_no_event`, `trailing_refusal_run_counts_raw_stored_event_values`, `replay_active_to_assigned_via_reassigned`, `replay_complete_to_assigned_via_reopened`, `task_event_row_json_reopened_round_trips_and_other_kinds_reject_complete_to_assigned`, `write_request_placement_round_trips_through_envelope`, `assign_with_before_survives_to_transaction`, `duplicate_group_winner_keeps_its_own_assigned_at_and_losers_are_in_events`, `placement_rejected_on_start_and_close`, `assign_before_active_target_is_unknown_target`, and `assign_before_foreign_member_target_is_unknown_target`.
+- `open_tasks_for_team_orders_by_assignee_position` — excludes complete rows.
+- `refusal_run_reads_the_trailing_run` — one refused close →
+  `RefusalRun { count: 1, started_at: Some(<close at>) }`.
 
 ## Acceptance criteria
 
-1. Types, DDL and signatures in this document match the source byte-for-byte
-   where quoted as code (QA diffs them).
-2. Every test above exists by name and passes.
+1. Code quoted in this document matches the source byte-for-byte (QA diffs it).
+2. Every test above exists by name and passes under `just test`.
 3. `sqlite3 <fixture> "SELECT sql FROM sqlite_master WHERE name IN ('tasks','task_events','one_active_task_per_agent','tasks_position_per_member')"` matches the DDL section.
-4. `grep -n "assigned_at" crates/atm-storage-rusqlite/src/writer/task_ops.rs` shows it in `UPDATE … SET` only inside the reassign and reopen branches of `apply_task_assignment`.
-5. `schema-reviewer` sign-off recorded on the PR with R0's approval comment
-   linked **and** ADR-061 D6 showing the Phase BA approval + D3 exception
-   entry (a PR comment alone does not satisfy this — FNX-BA-CRIT-003).
-6. `just lint-boundaries` passes with the manifest edits.
-7. `HTTP_API_VERSION == "1.5.0"`; `docs/http-api.md` and the ADR-061 version
-   table record the `task_op` / `TaskRow` additions; the
-   `legacy_task_complete_request_closes_the_task` and
-   `task_row_json_from_1_4_0_producer_decodes` fixtures use verbatim 1.4.0
-   JSON captured from `origin/develop` (committed as test strings).
-8. The `>= 1.5.0` daemon guard exists and is exercised by
-   `send_task_complete_refuses_daemon_below_1_5_0` (CLI test with a stub
-   preflight verdict).
+4. `grep -n "assigned_at" crates/atm-storage-rusqlite/src/writer/task_ops.rs` shows it in no `UPDATE … SET` list.
+5. `grep -rn "TaskRejectionKind\|TaskQueueGap" crates/` → nothing.
+6. `schema-reviewer` sign-off recorded on the PR citing the ADR-061 D6 Phase BA entry.
+7. `just lint-boundaries` passes with the manifest edits.
+8. `HTTP_API_VERSION == "1.5.0"`; the ADR-061 version table records the bump.
+9. `send_task_complete_refuses_daemon_below_1_5_0` (CLI test, stub verdict) passes.
 
 ## Required validation
 
 `just lint`, `just test`, `just lint-boundaries`, RULE-003; migration tests run
 under both `--features bundled` and the system SQLite (window functions
 require SQLite ≥ 3.25 — assert `sqlite_version()` in the test and fail loudly).
-
-## Out of scope
-
-CLI verbs and aliases (BA.4); runtime disposition (BA.3); `move` without a
-message (`WriteOp::TaskMove`, BA.4 — this sprint exposes `apply_task_move`
-as `pub(super)` for it).
-
-
-Tests include `state_write_from_other_module_fails_boundary_gate`.
-
-Tests: `reassign_from_stalled_row_starts_fresh_episode`; `prior_assignment_reminder_never_makes_new_assignment_start_owed`; `close_after_reassignment_between_preflight_and_write_is_rejected_without_retry`.
-
-Canonicalization: after merge, fold history and append exactly one `canonicalized by BA.2 migration` event when the winner state differs; enforce replay mismatch as a rollback error, never debug-only.
-
-Branch c resets `reminder_count = 0, lead_notified_count = 0, last_reminded_at = NULL`; branch d uses the identical clause.
-
-Branch d resets `reminder_count = 0, lead_notified_count = 0, last_reminded_at = NULL`.

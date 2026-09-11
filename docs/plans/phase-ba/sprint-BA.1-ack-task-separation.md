@@ -3,13 +3,20 @@
 | Field | Value |
 | --- | --- |
 | Design | [`nudge-task-design.md`](./nudge-task-design.md) §5.1, §5.2 (commit `18db5acc3`) |
-| Outcomes | B9 |
 | Recommended | Cipher-311d / fast — bounded deletion with an exact AZ precedent |
 | Depends on | none (stack bottom) |
 | Worktree | `feature/ba1-ack-task-separation` off `integrate/phase-ba` |
 | Governed interfaces | none |
 
-## Scope
+## Tasks
+
+1. Delete `apply_task_acknowledgement` and its call — `crates/atm-storage-rusqlite/src/writer/task_ops.rs:418-457`, `writer/ops.rs:516` (see D1).
+2. Delete the ack-refusal branch of `admit()` and the `Acked` arms of `transition()` — `crates/atm-storage/src/task_state.rs:139-148`, `:88-117` (see D2).
+3. Remove `TaskEvent::Acked`; keep `TaskEventKind::Acked` — `task_state.rs:36-41` (see D3).
+4. Replace `Transition` enum with `pub struct Transition(pub TaskState)` — `task_state.rs`, `task_ops.rs:331,433` (see D4).
+5. Widen the close-hygiene guard so a close from `active` also acknowledges its assignment message — `task_ops.rs:380-382` (see "Unchanged, deliberately").
+6. Edit the two task-store boundary manifests — `boundaries/atm-storage/task-store.toml`, `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` (see D5).
+7. Write the eight tests named under "Tests".
 
 Acknowledging a message never reads or writes `tasks` / `task_events`, and
 task state never gates an ack. After this sprint nothing on the branch moves
@@ -23,8 +30,6 @@ lives only on `integrate/phase-ba`.
 | `c99664acc` `fix(az3): keep task acknowledgements mail-only` (`ops.rs` −1, `task_legacy_ops.rs` −41) | **apply by hand** — AZ had renamed `task_ops.rs` → `task_legacy_ops.rs`, so the cherry-pick does not apply; the deletion is identical in content (D1, D2 below) |
 
 ## Deliverables
-
-Same-id reassign/reopen lands in BA.2; BA.1 remains ack-only.
 
 - [ ] D1 — delete `apply_task_acknowledgement`
   (`crates/atm-storage-rusqlite/src/writer/task_ops.rs:418-457`) and its
@@ -46,7 +51,7 @@ pub enum TaskEvent {
 }
 
 // Shape after D4 in this same sprint: `Transition` is the tuple struct
-// `pub struct Transition(pub TaskState)`; `Transition::To` no longer exists (QA2-002).
+// `pub struct Transition(pub TaskState)`; `Transition::To` no longer exists.
 pub fn transition(
     state: Option<TaskState>,
     event: TaskEvent,
@@ -85,11 +90,10 @@ pub fn admit(
   callers for that purpose — delete `load_open_task_rows` if nothing else
   uses it after D1/D2.
 - [ ] D4 — `Transition::NoOp` was produced only by `(None, Acked)`. Remove the
-  variant; `Transition` becomes `pub struct Transition(pub TaskState)` **or**
-  keep the enum with one variant — choose the struct; update the two
-  `let Transition::To(next_state) = next else { … }` sites in `task_ops.rs`
-  (`:331`, `:433`) to plain bindings.
-- [ ] D5 — boundary manifests (ruling: phase plan §10):
+  variant; `Transition` becomes `pub struct Transition(pub TaskState)`; update
+  the two `let Transition::To(next_state) = next else { … }` sites in
+  `task_ops.rs` (`:331`, `:433`) to plain bindings.
+- [ ] D5 — boundary manifests (ruling: phase plan §8):
   `boundaries/atm-storage/task-store.toml` and
   `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` `[contracts].notes`:
   "applies Assigned/Acked/Completed" → "applies Assigned/Completed";
@@ -98,10 +102,14 @@ pub fn admit(
 
 ## Unchanged, deliberately
 
-`acknowledge_completed_assignment` (`task_ops.rs:371-418`) stays, with one change: the `if state != TaskState::Assigned { return Ok(None) }` guard (`:380-382`) becomes `if state == TaskState::Complete { return Ok(None) }` so a close from `active` — the normal path once BA.3 starts tasks on handoff — also acknowledges the current `assignment_message_id` inside the close transaction (FNX-BA-DRIFT-063):
-**close** marking its own assignment message acknowledged is task → mail
-hygiene inside the close transaction (AX.3 C7), not ack → task coupling.
-The `--task-complete` CLI flag and `apply_task_message` are BA.4's.
+`acknowledge_completed_assignment` (`task_ops.rs:371-418`) stays, with one
+change: the `if state != TaskState::Assigned { return Ok(None) }` guard
+(`:380-382`) becomes `if state == TaskState::Complete { return Ok(None) }` so a
+close from `active` — the normal path once BA.3 starts tasks on handoff — also
+acknowledges the current `assignment_message_id` inside the close transaction.
+Close marking its own assignment message acknowledged is task → mail hygiene
+inside the close transaction, not ack → task coupling. The `--task-complete`
+CLI flag and `apply_task_message` are BA.4's.
 
 ## Paths to delete
 
@@ -112,7 +120,7 @@ The `--task-complete` CLI flag and `apply_task_message` are BA.4's.
   `writer` tests naming `acknowledgement_activates` (grep `Acked` /
   `acked` under `crates/atm-storage*/src` and `crates/atm-storage-rusqlite/tests`)
 
-## Tests (names are the acceptance evidence)
+## Tests
 
 Unit — `crates/atm-storage/src/task_state.rs`:
 
@@ -151,8 +159,3 @@ existing file that houses ack tests):
 
 `just lint`, `just test`, `just lint-boundaries`; RULE-003 via
 `.just/check_line_counts.py`.
-
-## Out of scope
-
-`Started`, `--task-complete` requires `--task-id`, one-active enforcement
-(BA.2/BA.4).
