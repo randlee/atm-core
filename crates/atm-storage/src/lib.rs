@@ -13,8 +13,8 @@ mod peer_contract;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
-pub mod task_state;
 pub mod task_op;
+pub mod task_state;
 pub mod task_store;
 pub mod template_catalog;
 pub mod template_workflow;
@@ -74,12 +74,12 @@ pub use search::{
     SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
     StoredWorkflowMetadata, TimeRange,
 };
+pub use task_op::{MoveTarget, TaskOp};
 pub use task_state::{
     DAEMON_ACTOR_NAME, QueuePosition, RefusalRun, TaskActor, TaskCloseOutcome, TaskEvent,
     TaskEventKind, TaskEventMarker, TaskEventRow, TaskRejected, TaskRow, TaskState, TaskStateTag,
     Transition, admit, transition,
 };
-pub use task_op::{MoveTarget, TaskOp};
 pub use task_store::{
     DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,
     ReminderOutcome, TASK_STALLED_REMINDER_THRESHOLD, TaskStore,

@@ -49,7 +49,9 @@ mod tests {
 
     #[test]
     fn placement_targets_round_trip() {
-        let target = MoveTarget::Before { task_id: "BA.2".parse().unwrap() };
+        let target = MoveTarget::Before {
+            task_id: "BA.2".parse().unwrap(),
+        };
         let encoded = serde_json::to_string(&target).unwrap();
         let decoded: MoveTarget = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, target);

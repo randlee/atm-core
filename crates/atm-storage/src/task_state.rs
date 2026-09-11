@@ -17,24 +17,44 @@ pub struct QueuePosition(NonZeroU32);
 impl QueuePosition {
     pub const HEAD: Self = Self(NonZeroU32::MIN);
     #[must_use]
-    pub const fn get(self) -> u32 { self.0.get() }
-    pub fn new(value: u32) -> Option<Self> { NonZeroU32::new(value).map(Self) }
+    pub const fn get(self) -> u32 {
+        self.0.get()
+    }
+    pub fn new(value: u32) -> Option<Self> {
+        NonZeroU32::new(value).map(Self)
+    }
     #[must_use]
-    pub fn next(self) -> Self { Self(NonZeroU32::new(self.0.get().saturating_add(1)).unwrap_or(self.0)) }
+    pub fn next(self) -> Self {
+        Self(NonZeroU32::new(self.0.get().saturating_add(1)).unwrap_or(self.0))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskCloseOutcome { Completed, Refused, Cancelled }
+pub enum TaskCloseOutcome {
+    Completed,
+    Refused,
+    Cancelled,
+}
 
 impl TaskCloseOutcome {
     #[must_use]
-    pub const fn as_str(self) -> &'static str { match self { Self::Completed => "completed", Self::Refused => "refused", Self::Cancelled => "cancelled" } }
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Refused => "refused",
+            Self::Cancelled => "cancelled",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskStateTag { Assigned, Active, Complete }
+pub enum TaskStateTag {
+    Assigned,
+    Active,
+    Complete,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct RefusalRun {
@@ -136,9 +156,12 @@ pub fn transition(
         (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition(TaskState::Active)),
         (Some(TaskState::Active), TaskEvent::Started) => Ok(Transition(TaskState::Active)),
         (Some(TaskState::Active), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
-        (Some(TaskState::Complete), TaskEvent::Assigned | TaskEvent::Started | TaskEvent::Completed) => Err(
-            TaskRejected::new(format!("task {task_id} is already complete")),
-        ),
+        (
+            Some(TaskState::Complete),
+            TaskEvent::Assigned | TaskEvent::Started | TaskEvent::Completed,
+        ) => Err(TaskRejected::new(format!(
+            "task {task_id} is already complete"
+        ))),
     }
 }
 
@@ -230,7 +253,10 @@ pub struct TaskEventRow {
 
 #[cfg(test)]
 mod tests {
-    use super::{QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskEventMarker, TaskRow, TaskState, admit, transition};
+    use super::{
+        QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskEventMarker, TaskRow,
+        TaskState, admit, transition,
+    };
     use crate::schema::AtmMessageId;
     use crate::task_store::ReminderOutcome;
     use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
