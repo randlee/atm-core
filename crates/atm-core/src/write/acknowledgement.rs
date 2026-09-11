@@ -321,8 +321,6 @@ pub(crate) fn build_atomic_acknowledgement(
         .unwrap_or_else(IsoTimestamp::now);
     let summary = crate::send::summary::build_summary(&reply_text, None);
     let mut envelope = InboxMessage {
-        placement: None,
-        task_op: None,
         from: actor.clone(),
         source_chat_id: canonical_request.caller_chat_id.clone(),
         text: reply_text.clone(),
@@ -434,8 +432,6 @@ pub(crate) fn canonical_ack_write_request(
     source: &boundary::Message,
 ) -> Result<SendRequest, AtmError> {
     Ok(SendRequest {
-        placement: None,
-        task_op: None,
         home_dir: request.home_dir.clone(),
         current_dir: request.current_dir.clone(),
         caller_identity: actor.clone(),

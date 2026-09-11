@@ -37,8 +37,6 @@ fn metadata_candidate(row: &boundary::MailStoreMailboxMetadataRow) -> MailboxSel
     MailboxSelectionCandidate {
         message_key: row.message_key.to_string(),
         envelope: InboxMessage {
-            placement: None,
-            task_op: None,
             from: row.from_agent.clone(),
             source_chat_id: row.source_chat_id.clone(),
             // Metadata rows deliberately carry no durable body. The retained
