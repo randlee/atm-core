@@ -597,3 +597,5 @@ Tests: `reassign_from_stalled_row_starts_fresh_episode`, `prior_assignment_remin
 
 MemberObservation is built from apply_roster_runtime_observations(..) → outcome.current, never from the snapshot; test `disposition_follows_master_record_when_raw_herdr_status_differs`. `outcome.current` is authoritative.
 Stalled hold reset paths: start, close, reassign, reopen; runtime state alone does not resume nudging. Test `stalled_hold_survives_assignee_active_then_idle`.
+
+Start gate exact pin: SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team = ?1 AND task_id = ?2 AND event IN ('assigned', 'reassigned', 'reopened')) ORDER BY rowid DESC LIMIT 1.

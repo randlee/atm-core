@@ -738,31 +738,6 @@ task_id DESC` read until the first non-`refused`) and returns it:
 pub struct RefusalRun { pub count: u32, pub started_at: Option<IsoTimestamp> }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RefusalRun {
-    pub task_id: TaskId,
-    /// The refusing member — the run is theirs even when the assigner or the
-    /// unique lead submitted the close (FNX-BA-CRIT-027).
-    pub assignee: AgentName,
-    pub outcome: TaskCloseOutcome,
-    pub consecutive_refusals: u32,
-    /// `updated_at` of the oldest close in the trailing refused run (this
-    /// close's own `updated_at` when the run is 1). BA.3 bounds its mailbox
-    /// suppression check to it (RSH-001).
-    pub run_started_at: IsoTimestamp,
-}
-pub const TASK_CONSECUTIVE_REFUSAL_THRESHOLD: u32 = 3; // atm-storage/src/task_store.rs, next to TASK_STALLED_REMINDER_THRESHOLD (plan §4 R5)
-```
-
-The writer calls the shared storage function after inserting the close event
-and places its result in `RefusalRun`. `RefusalRun` travels `WriteOpResult` →
-`RefusalRun: Option<RefusalRun>` (atm-core
-`send/outcome.rs:15-35`, new field, `#[serde(default, skip_serializing_if =
-"Option::is_none")]`) → `WriteOutcome::Sent(SendOutcome)` (`write/pipeline.rs:13-16`
-— `WriteOutcome` is an enum; there is no `` field,
-FNX-BA-CRIT-026); **BA.3** matches `WriteOutcome::Sent` in the Tokio runtime's
-post-write seam and sends the escalation (BA.3 "Consecutive-refusal
-escalation"; FNX-BA-CRIT-014 / PLAN-SCOPE-001). A close with any other
-outcome returns `consecutive_refusals = 0`.
 `one_active_task_per_agent` violation on `Start` maps to
 `TaskRejectionKind::ActiveElsewhere`, not to a generic SQLite error.
 
@@ -977,3 +952,5 @@ Tests include `state_write_from_other_module_fails_boundary_gate`.
 Tests: `reassign_from_stalled_row_starts_fresh_episode`; `prior_assignment_reminder_never_makes_new_assignment_start_owed`; `close_after_reassignment_between_preflight_and_write_is_rejected_then_recomposed`.
 
 Canonicalization: after merge, fold history and append exactly one `canonicalized by BA.2 migration` event when the winner state differs; enforce replay mismatch as a rollback error, never debug-only.
+
+Branch c resets `reminder_count = 0, lead_notified_count = 0, last_reminded_at = NULL`; branch d uses the identical clause.
