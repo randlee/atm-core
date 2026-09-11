@@ -663,7 +663,7 @@ envelope:
 | `task_id` | `task_op` | applies |
 | --- | --- | --- |
 | `None` | any | nothing (a `task_op` without `task_id` is rejected at the CLI and at `WriteRequest` validation) |
-| `Some` | `None` | `apply_task_assignment`: (a) no row inserts `assigned`; (b) same agent is a no-op; (c) other agent renumbers both queues, updates assignee/state/assigned_at/position per `placement`, and emits `reassigned`; (d) closed row resets outcome/counters, assigns position per `placement`, and emits `reopened`. `placement: Option<MoveTarget>` is consumed only here; None means END. |
+| `Some` | `None` | `apply_task_assignment`: (a) no row inserts `assigned`; (b) same agent: in one transaction, mark the prior current assignment message acknowledged (superseded; `mark_source_acknowledged`, same hygiene as close) if it is still open, then one UPDATE of `assignment_message_id, description, updated_at` from the new message; no state/queue/timestamp/counter change and no event; (c) other agent renumbers both queues, updates assignee/state/assigned_at/position per `placement`, and emits `reassigned`; (d) closed row resets outcome/counters, assigns position per `placement`, and emits `reopened`. `placement: Option<MoveTarget>` is consumed only here; None means END. |
 | (legacy `task_complete = Some`) | — | never reaches the writer: `WriteRequest::task_op_normalized()` has already turned it into `task_id = Some, task_op = Some(Close{Completed})` |
 | `Some` | `Some(Start)` | `apply_task_start` |
 | `Some` | `Some(Close{..})` | `apply_task_close` |
@@ -699,11 +699,13 @@ audit wrote it — a `NULL` here would make the task due again on the next
 tick (FNX-BA-CRIT-029), and `state = assigned AND position = 1 AND
 last_reminded_at IS NOT NULL` is the "start owed" predicate BA.3 retries on. `Close`
 sets `close_outcome`, `position = NULL`, renumbers the remainder, and keeps
-`acknowledge_completed_assignment`. `Move` renumbers only; `assigned_at`
+`acknowledge_completed_assignment`. Close hygiene runs for both `assigned` and `active` rows (BA.1; DRIFT-063) and acknowledges the row's current `assignment_message_id`. `Move` renumbers only; `assigned_at`
 appears in an `UPDATE … SET` list only in the reassign and reopen branches of `apply_task_assignment` (never Start, Close, Move, or renumber).
 `commit_write` with `task_op.is_some()` and a `to` whose team differs from the writer's caller team or whose host is set returns the same local-only validation error (`task commands are local-team only; <addr> resolves to another team or host — send a plain message or assign the local alias`) before opening the transaction (plan §4 R8); test `writer_rejects_task_op_on_foreign_team_or_host_recipient`.
 `Assign` on an existing row (branches b, c, d of `apply_task_assignment`) requires `caller == row.assigner || caller == unique_lead`; the assignee and any third party are `NotAuthorized` (detail `"<actor> is neither assigner nor the unique lead of <team>"`). Branch a (no row) has no task-level authority check beyond send authority. The check runs before `transition()` inside the same transaction, exactly as for `Close`.
 The authorized caller becomes `assigner` in branches c and d (and the message link in b), so receipts and reports route to the sender of the current assignment message.
+
+Branch b (same-agent resend) runs `acknowledge_superseded_assignment(prior_message_id, now)` (reuses `mark_source_acknowledged`) then one `UPDATE tasks SET assignment_message_id, description, updated_at` from the new message; it changes no state, queue, timestamp, counter, or event.
 
 `apply_task_move` — the active task holds position 1 by invariant and is
 never repositioned or preempted (design §4.3). Exact arm, before any
@@ -839,6 +841,7 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
   `close_by_lead_when_two_leads_is_not_authorized_with_count_in_detail`,
   `close_by_lead_when_no_lead_is_not_authorized`, `move_by_assignee_is_not_authorized`.
 - `reassign_by_third_party_is_not_authorized`, `reassign_by_assignee_is_not_authorized` (hand-back is `close refused`), `reassign_by_assigner_succeeds_and_assigner_unchanged`, `reassign_by_unique_lead_succeeds_and_lead_becomes_assigner`, `reassign_on_team_with_two_leads_by_lead_is_not_authorized`, `reopen_by_third_party_is_not_authorized`, `reopen_by_assigner_succeeds`, `same_agent_resend_by_third_party_is_not_authorized` — each rejection appends one `rejected` event and changes no row.
+- `same_agent_resend_with_unacked_prior_supersedes_it` — assign M1 (unread, unacked); same-agent resend M2; M1 `acknowledged_at` set and `nudge_pending_at IS NULL`, M2 is the only open task-linked item; close → M2 acknowledged; no `task_events` row for the resend.
 - `move_of_active_task_returns_current_position_and_renumbers_nothing` —
   assert every other row's `position` and `updated_at` byte-equal.
 - `legacy_task_complete_request_closes_the_task` — a `WriteRequest` decoded

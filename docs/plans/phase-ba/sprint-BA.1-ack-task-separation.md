@@ -98,7 +98,7 @@ pub fn admit(
 
 ## Unchanged, deliberately
 
-`acknowledge_completed_assignment` (`task_ops.rs:371-418`) stays: a
+`acknowledge_completed_assignment` (`task_ops.rs:371-418`) stays, with one change: the `if state != TaskState::Assigned { return Ok(None) }` guard (`:380-382`) becomes `if state == TaskState::Complete { return Ok(None) }` so a close from `active` — the normal path once BA.3 starts tasks on handoff — also acknowledges the current `assignment_message_id` inside the close transaction (FNX-BA-DRIFT-063):
 **close** marking its own assignment message acknowledged is task → mail
 hygiene inside the close transaction (AX.3 C7), not ack → task coupling.
 The `--task-complete` CLI flag and `apply_task_message` are BA.4's.

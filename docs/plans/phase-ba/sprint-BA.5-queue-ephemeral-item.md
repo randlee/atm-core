@@ -177,6 +177,7 @@ Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
   a **fresh** tick with an empty in-memory candidate set → the pump
   rediscovers the member and reminds at the interval; ack → marker NULL,
   no further prompt.
+- `handoff_started_task_closed_without_read_acknowledges_assignment` — deferred assignment handoff → task `active`; agent closes via `atm task close` without any `atm read`/`atm ack`; task `complete`, assignment message `acknowledged_at` set, `nudge_pending_at IS NULL`, zero mail nudges on later ticks.
 - `immediate_send_is_never_reminded` — plain `atm send` to an Idle member,
   never read → 0 queue prompts over 200 ticks (only the one immediate
   nudge at send time). **This is the R3 boundary.**
