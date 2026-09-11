@@ -29,7 +29,7 @@ in design §8 is deleted.
 
 | id | deliverable | where |
 | --- | --- | --- |
-| D1 | `TaskDisposition`, `EpisodeKind`, `HoldReason` (including `RefusalsEscalated`), `dispose(state, head, now, episode_notified, consecutive_refusals)`, `reminder_due()`, `TASK_REMINDER_INTERVAL_MS` | `crates/atm-http-runtime/src/herdr_task_disposition.rs` (new, pure) |
+| D1 | `TaskDisposition`, `EpisodeKind`, `HoldReason` (including `RefusalsEscalated`), `dispose(mail_pending, state, head, now, episode_notified, consecutive_refusals)`, `reminder_due()`, `TASK_REMINDER_INTERVAL_MS` | `crates/atm-http-runtime/src/herdr_task_disposition.rs` (new, pure) |
 | D2 | `EscalationState` re-shaped to `{episodes}`, `Episode`, `escalation_summary()`, `episode_already_reported(target, summary, since)` — per-target, episode-bounded | `crates/atm-http-runtime/src/herdr_escalation.rs` |
 | D3 | `EscalationKind::RefusalsEscalated`; `escalate_mail()` factored out of `escalate()`; `write_escalation_mail` gains `summary` | `herdr_escalation.rs` |
 | D4 | roster-wide candidate sweep (`herdr_candidates` filter removed), `MemberObservation`, one `open_tasks_for_team` per team per tick, `dispose` → act, pre-emit re-check | `herdr_queue_wake.rs`, `herdr_queue_wake_reminders.rs` |
@@ -98,6 +98,7 @@ pub(crate) enum HoldReason {
 /// The whole invariant. `head` is the member's lowest-position open task.
 /// `episode_notified` is whether this Blocked/Offline episode already produced its message.
 pub(crate) fn dispose(
+    mail_pending: bool,
     state: RuntimeMemberState,
     head: Option<&TaskRow>,
     now: IsoTimestamp,
@@ -105,21 +106,22 @@ pub(crate) fn dispose(
     consecutive_refusals: u32,
 ) -> TaskDisposition {
     use RuntimeMemberState as S;
-    match (state, head) {
-        (S::Blocked, _) if episode_notified => TaskDisposition::Hold(HoldReason::EpisodeNotified),
-        (S::Blocked, _) => TaskDisposition::EscalateEpisode(EpisodeKind::Blocked),
-        (S::Offline, _) if episode_notified => TaskDisposition::Hold(HoldReason::EpisodeNotified),
-        (S::Offline, _) => TaskDisposition::EscalateEpisode(EpisodeKind::Offline),
-        (S::Active, _) => TaskDisposition::Hold(HoldReason::Active),
-        (S::Unknown, _) => TaskDisposition::Hold(HoldReason::Unobserved),
-        (S::IdentityConflict, _) => TaskDisposition::Hold(HoldReason::IdentityConflict),
-        (S::Idle, None) => TaskDisposition::Hold(HoldReason::NoOpenTask),
-        (S::Idle, Some(_)) if consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD =>
+    match (mail_pending, state, head) {
+        (true, _, _) => TaskDisposition::Hold(HoldReason::MailPending),
+        (false, S::Active, _) => TaskDisposition::Hold(HoldReason::Active),
+        (false, S::Blocked, _) if episode_notified => TaskDisposition::Hold(HoldReason::EpisodeNotified),
+        (false, S::Blocked, _) => TaskDisposition::EscalateEpisode(EpisodeKind::Blocked),
+        (false, S::Offline, _) if episode_notified => TaskDisposition::Hold(HoldReason::EpisodeNotified),
+        (false, S::Offline, _) => TaskDisposition::EscalateEpisode(EpisodeKind::Offline),
+        (false, S::Unknown, _) => TaskDisposition::Hold(HoldReason::Unobserved),
+        (false, S::IdentityConflict, _) => TaskDisposition::Hold(HoldReason::IdentityConflict),
+        (false, S::Idle, None) => TaskDisposition::Hold(HoldReason::NoOpenTask),
+        (false, S::Idle, Some(_)) if consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD =>
             TaskDisposition::Hold(HoldReason::RefusalsEscalated),
-        (S::Idle, Some(task)) if task.lead_notified_count > 0 => TaskDisposition::Hold(HoldReason::Stalled),
-        (S::Idle, Some(task)) if task.reminder_count >= TASK_STALLED_REMINDER_THRESHOLD => TaskDisposition::EscalateStalled,
-        (S::Idle, Some(task)) if !reminder_due(task, now) => TaskDisposition::Hold(HoldReason::RateLimited),
-        (S::Idle, Some(_)) => TaskDisposition::Nudge,
+        (false, S::Idle, Some(task)) if task.lead_notified_count > 0 => TaskDisposition::Hold(HoldReason::Stalled),
+        (false, S::Idle, Some(task)) if task.reminder_count >= TASK_STALLED_REMINDER_THRESHOLD => TaskDisposition::EscalateStalled,
+        (false, S::Idle, Some(task)) if !reminder_due(task, now) => TaskDisposition::Hold(HoldReason::RateLimited),
+        (false, S::Idle, Some(_)) => TaskDisposition::Nudge,
     }
 }
 
@@ -282,9 +284,11 @@ not written or stamped, one warning is logged, and the next tick retries it;
 successful targets remain suppressed by their own mailbox records.
 
 Tick order per team: (1) roster observations applied, (2) queue drain
-(unchanged; BA.5 reorders), (3) `open_tasks_for_team`, (4) for each observed
-member `dispose(...)` → act. A member prompted by the drain in this tick is
-`Hold`-equivalent for tasks (existing `prompted_by_drain` skip, kept).
+(unchanged; BA.5 reorders), (3) `list_pending_members` produces
+`open_mail: &HashSet<MemberKey>`, (4) `open_tasks_for_team`, (5) for each
+observed member `dispose(open_mail.contains(member), ...)` → act. A member in
+`open_mail` is `Hold(MailPending)` for tasks until its last queue item closes
+(read, or ack when `requires_ack`).
 
 One helper owns a successful task handoff: `pub(crate) async fn complete_task_handoff(runtime: &LocalServiceRuntime, member: &MemberKey, head: &TaskRow, now: IsoTimestamp)` in `crates/atm-http-runtime/src/herdr_task_start.rs` (new): (1) `record_task_reminder(member, head.task_id, now, ReminderOutcome::Emitted)`; (2) the idempotent `Start` write and `task_started` receipt. The task-reminder path calls it after `Emitted`; BA.5 calls it from `complete_successful_claim` when the claimed message carries `task_id` equal to the member's head (`position = 1`, `state = assigned`). It is the only call site that submits `TaskOp::Start` (architecture grep gate: `grep -rn "TaskOp::Start" crates/atm-http-runtime/src` → herdr_task_start.rs only).
 

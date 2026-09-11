@@ -37,7 +37,7 @@ reminded (FNX-BA-CRIT-017: no widening to "any open message"). A claimed-but-unc
 | D1a | `mark_message_read` — the production read transition — closes or re-arms the marker | `crates/atm-storage-rusqlite/src/writer/stmt_cache.rs:44-53` |
 | D2 | `PendingNudgeStore` trait: `clear_pending_on_handoff` → `rearm_pending_after_handoff(member, msg, next_due)`; `clear_pending_on_read` removed (no production caller on develop: only `contract.rs:1674`, router `:1237` and `received_hook_selector.rs:978`, all `#[cfg(test)]`); doc comments state the due-at semantics | `crates/atm-storage/src/contract.rs:1290-1320` |
 | D3 | `nudge_dispatch::rearm_queue_marker_after_handoff` (renamed) computes `next_due = now + TASK_REMINDER_INTERVAL_MS`; every caller and the name-pinning boundary test renamed | `crates/atm-core/src/nudge_dispatch.rs:30`; callers `herdr_queue_wake.rs:754`, `queue_drain.rs:417`, `received_hook_selector.rs:617`; adapter `storage_and_nudge_router.rs:1240`; tests `boundary_enforcement.rs:566-623`, `nudge_mode.rs:132`, bootstrap `lib.rs:1385` |
-| D4 | `complete_successful_claim` calls D3; `HoldReason::MailPending` for a member the drain prompted this tick | `herdr_queue_wake.rs:739-770`, `herdr_task_disposition.rs` |
+| D4 | `complete_successful_claim` calls D3; `HoldReason::MailPending` for every member in this tick's `list_pending_members` result (any open queue item, prompted or leased), not only members prompted this tick | `herdr_queue_wake.rs:739-770`, `herdr_task_disposition.rs` |
 | D4a | calls `complete_task_handoff` for head-task assignment messages; no other task activation | `herdr_queue_wake.rs::complete_successful_claim` |
 | D5 | Verify the committed ADR-054 Phase-BA amendment (`docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md:292-303`, already rewritten in this docs PR to the due-at lifecycle) still matches the shipped statements; edit only on drift (ATM-QA-002) | `docs/adr/ADR-054-…md` Phase-BA amendment |
 | D6 | tests named below | `pending_nudge_store.rs` tests, `tests/herdr_queue_ephemeral.rs` |
@@ -103,7 +103,7 @@ updated to the new names and keeps both assertions.
 
 | before (BA.3 head) | after |
 | --- | --- |
-| tick: drain pending claims (messages) → `dispose` per member for tasks | unchanged order — messages are discharged before tasks (design §9); a member the drain prompted this tick is `Hold(MailPending)` for tasks |
+| tick: drain pending claims (messages) → `dispose` per member for tasks | unchanged order — messages are discharged before tasks (design §9); the drain's `list_pending_members` result is passed to the task pass as `open_mail: &HashSet<MemberKey>`; a member in it is `Hold(MailPending)` for tasks until its last queue item closes (read, or ack when `requires_ack`) |
 | `complete_successful_claim` → `clear_queue_marker_after_handoff` (`herdr_queue_wake.rs:754`, `nudge_dispatch.rs:30`) | → `rearm_queue_marker_after_handoff(runtime, member, msg, next_due)` |
 | bare-CLI `queue_get_next` (`storage_and_nudge_router.rs:698`) and graft receivers | unchanged code; the pull reads the message, the read closes the item |
 | `atm queue` = `NudgeMode::Deferred` (`commands/queue.rs`) | unchanged |
@@ -131,7 +131,7 @@ no `list_messages` call is added anywhere (the open predicate is SQL on
 - `clear_pending_on_read` (trait `contract.rs`, impl `pending_nudge_store.rs:135-140`,
   test adapters) — deleted; no production caller on develop
 - `nudge_dispatch::clear_queue_marker_after_handoff` — renamed
-- the untyped `prompted_by_drain` skip in the task pass → `Hold(MailPending)`
+- the untyped `prompted_by_drain` skip in the task pass → `Hold(MailPending)` driven by `open_mail` (all open queue items), replacing the prompted-this-tick set
 - the `clear_pending_on_handoff` arm of the boundary test's forbidden-call visitor (`boundary_enforcement.rs:622`) → renamed, not duplicated
 
 ## Tests
@@ -168,9 +168,12 @@ Storage — `pending_nudge_store.rs` tests (existing module):
 
 Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
 
-- `queued_message_is_prompted_before_task_for_idle_member` — assign task,
-  `atm queue` a message; ticks → first prompt is the mail, task prompt only
-  after the message is read (`Hold(MailPending)` observed in the log).
+- `task_prompt_waits_while_queue_item_open_across_ticks` — queue item prompted
+  at t0 (lease t0+60 s); ticks at t0+5 s, +10 s, +55 s: zero task prompts,
+  `Hold(MailPending)` logged each tick; read at t0+58 s; tick at t0+60 s: task
+  prompt emitted.
+- `open_mail_set_is_read_each_tick_not_cached` — item read between ticks
+  releases the hold on the very next tick.
 - `unread_queue_item_is_reprompted_every_interval` — prompts at t, t+60,
   t+120; `atm read` at t+130 → silence for 100 more ticks.
 - `read_message_is_never_reminded` — `atm read` before the first interval
