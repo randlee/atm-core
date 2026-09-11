@@ -204,7 +204,8 @@ pub enum TaskRejectionKind {
     NoOpenTask,
     NotAuthorized,   // wrong actor, or "lead" authority claimed on a team with 0 or 2+ leads (detail names the count)
     ActiveElsewhere, // one-active index hit on Started
-    UnknownTarget,   // Move Before(id) names no open task of the same member
+    UnknownTarget,   // Move/assign placement target invalid
+    StaleCounterparty, // close recipient is not the current counterparty
     AlreadyComplete, // close repeated after completion; informational rejection
 }
 
@@ -519,7 +520,7 @@ CREATE TABLE IF NOT EXISTS task_events (
 
 Queue contiguity (positions of a member's open tasks are exactly `1..=n`) is
 not expressible in SQLite; it is a transaction invariant, asserted by
-`debug_assert!` after every renumber, by the tests, and reported by
+checked error after every renumber, by the tests, and reported by
 `atm doctor` as `TaskQueueGap` (new `DoctorFinding` variant — the only doctor
 addition).
 
@@ -648,7 +649,7 @@ change it; `started`, `completed`, `refused`, `cancelled`, `reassigned`, and
 `reopened` change state. The first `assigned` event establishes initial state;
 `moved` is state-neutral.
 The migration asserts, before commit, that this fold equals `tasks.state`
-/ `close_outcome` for every row (`debug_assert!` + the
+/ `close_outcome` for every row (checked error + the
 `replay_of_migrated_history_reproduces_row_state` test).
 
 ## Writer — `crates/atm-storage-rusqlite/src/writer/task_ops.rs`
@@ -972,3 +973,5 @@ as `pub(super)` for it).
 
 
 Tests include `state_write_from_other_module_fails_boundary_gate`.
+
+Tests: `reassign_from_stalled_row_starts_fresh_episode`; `prior_assignment_reminder_never_makes_new_assignment_start_owed`; `close_after_reassignment_between_preflight_and_write_is_rejected_then_recomposed`.

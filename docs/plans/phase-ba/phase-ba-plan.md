@@ -331,3 +331,5 @@ state-neutral. The review gate is `no_task_state_write_outside_task_ops`.
 14. Reassignment and reopen preserve one task id and record their event kinds; close outcomes remain completed, refused, or cancelled.
 
 Boundary test: `state_write_from_other_module_fails_boundary_gate`.
+
+The writer matrix includes `StaleCounterparty` and recomposes the counterparty once before retry.

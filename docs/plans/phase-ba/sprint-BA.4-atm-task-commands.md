@@ -130,7 +130,7 @@ struct TaskCloseCommand {
     #[arg(value_enum)]
     outcome: OutcomeArg,
     /// Free text recorded on the close event; also the report body when no
-    /// --template/--stdin/--file is given. Required for refused/cancelled.
+    /// --template/--stdin/--file is given. Optional for every outcome.
     reason: Option<String>,
     /// Optional richer report (template/vars, stdin, file). Delivered to the
     /// counterparty before the close is applied.
@@ -143,13 +143,13 @@ struct TaskCloseCommand {
 }
 
 impl TaskCloseCommand {
-    /// clap cannot express "reason required for two of three enum values" on
+    /// clap cannot express "reason is optional for all three outcomes" on
     /// a positional; this runs first in `execute`.
     fn validate(&self) -> Result<(), AtmError> {
         let has_report = self.report.is_present() || self.reason.is_some();
         match self.outcome {
-            OutcomeArg::Refused | OutcomeArg::Cancelled if self.reason.is_none() =>
-                Err(AtmError::validation(format!("{} requires a reason", self.outcome.as_str()))),
+            _ if !has_report =>
+                Err(AtmError::validation("a close <id> <outcome> needs a reason or a report source")),
             _ if !has_report =>
                 Err(AtmError::validation("a close carries a report: give a reason or a message source")),
             _ => Ok(()),
