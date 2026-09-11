@@ -105,7 +105,7 @@ event, is never gated on task state, and never transitions a task.
 | Queue order | `ORDER BY position, assigned_at, task_id`; `position` is a separate column, default end of queue; `assigned_at` is immutable |
 | Close outcome | typed `completed \| refused \| cancelled \| reassigned`; free text is a human-facing reason only |
 | Reassignment | close with outcome `reassigned`, then create a new task id; no in-place reassign |
-| Replay | per `(team, task_id)`: replaying `Assigned`/`Started`/`Completed(outcome)` reproduces state |
+| Replay | per `(team, task_id)`: the fold of `to_state` over the row's events in `(at, id)` order, taking the last non-NULL value, equals the row's `state` (with `close_outcome` when `complete`). `Moved` events carry `to_state = from_state`; `migrated` is the only migration-written state-changing event |
 
 ### States and events
 

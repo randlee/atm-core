@@ -86,16 +86,20 @@ transition tracking.
 | `IdentityConflict` | any | nothing; `doctor` already reports it |
 
 Episode = the span from first observation of the state to the first
-observation of a different state (`EscalationState.blocked_since`, retained;
-the `BLOCKED_RENOTIFY_MS` cooldown is deleted). Restart behaviour: **§4 R4**.
+observation of a different state. `EscalationState` is retained (design §8
+correction) and reshaped to `{episodes, cleared_at}`; `Episode.since` comes
+from the roster's `state_changed_at`; the `BLOCKED_RENOTIFY_MS` cooldown and
+the breaker gate are deleted. Restart behaviour: **§4 R4**.
 
 ### 3.3 Ephemeral message item — a view, not a machine
 
 An `atm queue` message is *open* while `read = 0`, or while
 `acknowledged_at IS NULL` when the message `requires_ack`. It is *closed*
-otherwise. There is no row, no state column, no event. For an `Idle` member the
-selector emits open messages before the open task (B13). Eligibility
-predicate: **§4 R3**.
+otherwise. There is no row, no state column, no event. The existing deferred
+marker `mail_message_states.nudge_pending_at` is the item, read as "next
+prompt due at" and kept until the item closes. For an `Idle` member the
+existing pending drain discharges open messages before the task pass (B13).
+Marker lifecycle: **§4 R3**.
 
 ## 4. Decisions required from Rand before plan approval
 
@@ -104,12 +108,15 @@ changes the named sprint before it opens; nothing else moves.
 
 | id | question | default written into the sprints | alternative |
 | --- | --- | --- | --- |
-| **R0** | **ADR-061 classification of BA.2's schema change.** Narrowing `PRIMARY KEY (team, task_id, assignee)` → `(team, task_id)` and `task_events` likewise is MAJOR under ADR-061 D2 ("changing a constraint"). ADR-061 D3 says *"No change may require every host to upgrade together."* `STORAGE_SCHEMA_VERSION` does not exist on `develop` (ADR-061 D1), so a pre-migration binary cannot be made to refuse the database. | **MAJOR, one-way, no bridge.** Every host upgrades daemon and CLI together (they are one install); rollback is restore from the backup the migration writes. Requires Rand's recorded approval **and** a recorded ADR-061 D3 exception, both as a comment on this PR, cited in ADR-062's amendment. | Additive: keep both PKs, enforce one-row and one-active in the writer + `doctor`. MINOR, no exception; B3's "enforced by the database" becomes "enforced by the writer". |
+| **R0** | **ADR-061 classification of BA.2's schema change.** Narrowing `PRIMARY KEY (team, task_id, assignee)` → `(team, task_id)` and `task_events` likewise is MAJOR under ADR-061 D2 ("changing a constraint"). ADR-061 D3 says *"No change may require every host to upgrade together."* `STORAGE_SCHEMA_VERSION` does not exist on `develop` (ADR-061 D1), so a pre-migration binary cannot be made to refuse the database. | **MAJOR, one-way, no bridge.** Every host upgrades daemon and CLI together (they are one install); rollback is restore from the backup the migration writes. Requires Rand's recorded approval **and** a recorded ADR-061 D3 exception: a comment on this PR **and** an ADR-061 D6 approval entry for Phase BA committed in this docs PR (FNX-BA-CRIT-003 — a PR comment alone is not the durable record D6 requires). BA.2 is blocked until the entry exists. | Additive: keep both PKs, enforce one-row and one-active in the writer + `doctor`. MINOR, no exception; B3's "enforced by the database" becomes "enforced by the writer". |
 | **R1** | **What is `start`?** Design §5: no `start` verb; "start is implicit in beginning work and produces the receipt". Once ack is decoupled (BA.1) nothing on `develop` moves `assigned` → `active`. | **Start = the queue-nudge handoff for that task.** When the runtime successfully hands the task's nudge to an `Idle` member, it applies `Started` (actor `Daemon`) and sends the receipt to the assigner in the same write. Observable, ATM-owned, needs no agent action, gives `--head` = position 2 its meaning. | An `atm task start` verb (sixth verb); or the assignee's first `atm send --task-id <id>`. |
-| **R3** | **Which undischarged messages does the invariant remind?** Design §9 says the message's own state is the state, but `deferred` origin is not persisted; after handoff `nudge_pending_at` is cleared and an unread `atm queue` item is indistinguishable from any unread message. | **Any open message** (per §3.3) for an `Idle` member is remindable, regardless of origin, under the same rate limit. No new column; "idle with unread mail" is the invariant applied to messages. | One `delivery_mode` column on `mail_message_states`; only `deferred` items are remindable. |
-| **R4** | **Escalation across a daemon restart.** `EscalationState` is in-RAM; after a restart a still-blocked agent looks like a new episode. | **At-least-once per daemon process.** A restart may re-report; the message body carries `blocked_since` so a reader can tell a duplicate from a new episode. Design §6.1 already accepts the mirror-image residual risk. | Persist episode start on the roster record (new state — outside the budget). |
+| **R3** | **How does an undischarged `atm queue` item stay remindable?** Design §9 says the message's own state is the state and that `PendingNudgeStore` already holds the item; but on `develop` the marker (`nudge_pending_at`) is cleared on the first successful handoff, after which an unread queue item is indistinguishable from an immediately-sent message. | **The marker lives until the item closes.** `nudge_pending_at` is read as "next prompt due at": admission → now; successful handoff → now + `TASK_REMINDER_INTERVAL_MS`; read (or ack when `requires_ack`) → `NULL`. Claim eligibility adds `nudge_pending_at <= now`. Only messages that carried the marker are ever reminded — an immediate `atm send` never is (design §9: "Interrupts happen today because atm send defaults to `NudgeMode::Immediate`"). No new column. | One `delivery_mode` column on `mail_message_states` (design-excluded new state). |
+| **R4** | **Escalation across a daemon restart.** `EscalationState` is in-RAM; after a restart a still-blocked agent looks like a new episode. | **The lead's mailbox is the record (design §6.1).** Before emitting, the runtime reads the lead's mailbox once per episode start for a daemon-sent message whose `summary` equals `escalation:<kind>:<team>/<agent>` and whose timestamp is after the episode's last clearing (`cleared_at`; `None` after restart). An existing report suppresses the emit; a cleared episode followed by a new one is reported again. `Episode.since` is the roster's `state_changed_at`, so the body is stable across restarts. | Persist episode start on the roster record (new state — design-excluded). |
 
 | **R5** | **Consecutive-refusal threshold.** Design §4.2 says consecutive refusals by one agent escalate but names no number. | `TASK_CONSECUTIVE_REFUSAL_THRESHOLD = 3`, escalate once when the trailing run reaches exactly 3; a non-refused close resets the run. | 2, or make it a per-team setting (outside the budget). |
+
+R2 is intentionally unused: the question it named (a `start` verb) is settled
+by design §5 and folded into R1.
 
 Reassignment is **not** a question: design §4 and Rand (23:01) say
 close-and-create with outcome `reassigned`. No `reassign` verb.
@@ -121,15 +128,15 @@ close-and-create with outcome `reassigned`. No `reassign` verb.
 | BA.1 | [Ack/task separation](./sprint-BA.1-ack-task-separation.md) | 1 | Cipher-311d / fast |
 | BA.2 | [Task identity, queue position, typed outcome, mutation boundary, migration](./sprint-BA.2-task-identity-queue.md) | 2 | arch-ctm / deep-reasoning |
 | BA.3 | [Nudge invariant and terminal escalation](./sprint-BA.3-nudge-invariant.md) | 3 | arch-ctm / deep-reasoning |
-| BA.4 | [`atm task` closed command set](./sprint-BA.4-atm-task-commands.md) | 3 | arch-ctm / deep-reasoning |
+| BA.4 | [`atm task` closed command set](./sprint-BA.4-atm-task-commands.md) | 4 | arch-ctm / deep-reasoning |
 | BA.5 | [`atm queue` as an ephemeral item](./sprint-BA.5-queue-ephemeral-item.md) | 4 | arch-ctm / deep-reasoning |
 | BA.6 | [Documentation, CLAUDE.md, ADR index](./sprint-BA.6-docs.md) | 5 | Cipher-311d / fast |
 
 ```
 wave 1   BA.1
 wave 2   BA.2            (must_follow BA.1)
-wave 3   BA.3 ∥ BA.4     (both must_follow BA.2)
-wave 4   BA.5            (must_follow BA.3)
+wave 3   BA.3            (must_follow BA.2)
+wave 4   BA.4 ∥ BA.5     (both must_follow BA.3)
 wave 5   BA.6            (must_follow all, PR completion)
 ```
 
@@ -139,10 +146,9 @@ wave 5   BA.6            (must_follow all, PR completion)
 | --- | --- | --- |
 | BA.2 | `must_follow` BA.1 (dev push; branch ancestry) | both edit `atm-storage/src/task_state.rs` and `atm-storage-rusqlite/src/writer/task_ops.rs`; BA.1 removes the `Acked` coupling, BA.2 then changes identity in the same files |
 | BA.3 | `must_follow` BA.2 (dev push) | reads `position` and applies `TaskOp::Start` through the boundary BA.2 ships |
-| BA.4 | `must_follow` BA.2 (dev push) | writes `position` / `close_outcome` and `TaskOp::{Close, Move}` through the same boundary |
-| BA.3 / BA.4 | `parallel_safe` | BA.3 owns `crates/atm-http-runtime/src/herdr_*`; BA.4 owns `crates/atm/src/commands/*`, `crates/atm-core/src/protocol.rs`, `crates/atm-core/src/send/*`. No shared file, no acceptance criterion asserting the other's behaviour. `plan-scope-reviewer` verifies. |
-| BA.5 | `must_follow` BA.3 (dev push) | edits the selection pass in `herdr_queue_wake.rs` that BA.3 rewrites |
-| BA.5 / BA.4 | `parallel_safe` | disjoint files as above |
+| BA.4 | `must_follow` BA.3 (dev push) | BA.4's `TaskMove` router arm lands in `storage_and_nudge_router.rs::dispatch_non_write`, the file whose `commit_write` BA.3 changes for refusal escalation (PLAN-SCOPE-001); BA.4 also consumes `WriteOutcome.task_close` and the `escalate_mail` seam BA.3 ships |
+| BA.5 | `must_follow` BA.3 (dev push) | edits `complete_successful_claim` in `herdr_queue_wake.rs`, which BA.3 rewrites |
+| BA.4 / BA.5 | `parallel_safe` | BA.4 owns `crates/atm/src/commands/*`, `crates/atm-core/src/{protocol.rs,task_close.rs,task_query.rs,send/*}`, the `TaskMove` arm of `writer/ops.rs` and of `storage_and_nudge_router.rs::dispatch_non_write`. BA.5 owns `pending_nudge_store.rs`, the `PendingNudgeStore` trait block in `contract.rs`, `nudge_dispatch.rs`, `writer/acknowledgement.rs`, `herdr_queue_wake.rs::complete_successful_claim`. No shared file; no acceptance criterion asserts the other's behaviour. `plan-scope-reviewer` verifies. |
 | BA.6 | `must_follow` every other sprint (PR completion) | documents the shipped surface |
 
 Merge-forward trigger for every `must_follow`: parent development pushed, not QA.
@@ -160,10 +166,11 @@ Merge parent → child before every dev/fix round.
 /sc-git-worktree --create docs/ba6-task-nudge-documentation integrate/phase-ba
 ```
 
-BA.1 → BA.2 is one gh stack (branch ancestry). BA.3, BA.4 and BA.5 are
-independent branches that merge `integrate/phase-ba` forward once their parent
-has merged; they are not stacked because none edits a parent's files. Layers
-join the stack when their PR opens. Merge commits only; never squash. Stack
+BA.1 → BA.2 is one gh stack (branch ancestry). BA.3 branches off
+`integrate/phase-ba` once BA.2 has merged; BA.4 and BA.5 branch off it once
+BA.3 has merged and merge it forward before every dev/fix round. They are not
+stacked because none edits a parent's files after the parent has merged.
+Layers join the stack when their PR opens. Merge commits only; never squash. Stack
 discipline per `/gh-stack-view`.
 
 ## 8. ADR-061 governed interfaces
@@ -171,10 +178,13 @@ discipline per `/gh-stack-view`.
 | sprint | interface | change | class |
 | --- | --- | --- | --- |
 | BA.2 | SQLite | PK narrowing ×2, two partial unique indexes, `position`, `close_outcome` ×2, two `CHECK`s; table rebuild migration with `VACUUM INTO` backup | **MAJOR — R0** |
-| BA.4 | HTTP/peer API | `WriteRequest.task_op: Option<TaskOp>` (additive; replaces `task_complete`, which no released peer sends — verify in the older-consumer test) and `RequestEnvelope::TaskMove` / `ResponseEnvelope::TaskMove` (additive variants, local-only); `HTTP_API_VERSION` 1.4.0 → 1.5.0 | MINOR |
+| BA.2 | HTTP/peer API | `WriteRequest.task_op: Option<TaskOp>` added; `task_complete` retained decode-only (a 1.4.0 CLI's `task_complete` still closes the task via `task_op_normalized`); `TaskRow`/`TaskEventRow` wire shape keeps scalar `state`, adds optional `close_outcome` and `position`; `WriteOutcome.task_close` optional. `HTTP_API_VERSION` 1.4.0 → 1.5.0. Compatibility contract: additive decode (no `deny_unknown_fields`), CLI refuses a daemon below the verb's minimum version (`require_daemon_api`), and a newer request reaching an older daemon fails explicitly on the unknown variant — never silently. Fixtures: verbatim 1.4.0 payloads decode on 1.5.0. | MINOR |
+| BA.4 | HTTP/peer API | `RequestEnvelope::TaskMove` / `ResponseEnvelope::TaskMove` (additive variants, local-only; peer ingress rejects explicitly); `HTTP_API_VERSION` 1.5.0 → 1.6.0; `atm task move` requires 1.6.0. Fixtures: verbatim 1.5.0 payloads decode on 1.6.0. | MINOR |
 | BA.3, BA.5 | Herdr IPC | none; request shape and `HERDR_MINIMUM_VERSION` unchanged | none |
 
-`schema-reviewer` reviews BA.2 and BA.4 at plan review and phase end.
+`schema-reviewer` reviews BA.2 and BA.4 at plan review and phase end. BA.2's
+SQLite change additionally needs the ADR-061 D6 Phase BA entry (R0) before it
+opens.
 
 ## 9. Complexity budget — exhaustive additions list
 
@@ -186,11 +196,11 @@ state machines beyond the three in §3. Everything this phase adds, by sprint:
 | BA.1 | nothing — deletions only |
 | BA.2 | columns `tasks.position`, `tasks.close_outcome`, `task_events.close_outcome`; PK `(team, task_id)` ×2; indexes `one_active_task_per_agent`, `tasks_position_per_member`; two `CHECK` constraints |
 | BA.2 | `QueuePosition(NonZeroU32)` newtype; `TaskCloseOutcome`; `TaskState::Complete(TaskCloseOutcome)`; `TaskEvent::Started`, `TaskEvent::Completed(outcome)`; `TaskEventKind::{Started, Moved, Migrated}`; `TaskRejected { kind }` + `TaskRejectionKind` (5); `TaskRow.position`; `Transition(pub TaskState)` struct |
-| BA.2 | `TaskOp { Start, Close, Move }`, `MoveTarget { Head, End, Before }`; `WriteRequest.task_op`, envelope `task_op` (replacing `task_complete`); `TaskCloseApplied`; `TASK_CONSECUTIVE_REFUSAL_THRESHOLD` |
+| BA.2 | `TaskStateTag` (scalar wire tag); `TaskRowWire`, `TaskEventRowWire` (serde `try_from`/`into` shapes; `TaskState::from_parts`, `tag()`, `close_outcome()`); `TaskOp { Start, Close, Move }`, `MoveTarget { Head, End, Before }`; `WriteRequest.task_op` (additive; `task_complete` kept decode-only) and `WriteRequest::task_op_normalized`; `TaskCloseApplied` carried as `WriteOutcome.task_close`; `TASK_CONSECUTIVE_REFUSAL_THRESHOLD`; `HTTP_API_VERSION` 1.5.0 |
 | BA.2 | `AsyncTaskLedgerReader::open_tasks_for_team`; `task_migration.rs` (`migrate_task_identity`, `TaskMigrationReport`, crate-private); `DoctorFinding::TaskQueueGap` |
-| BA.3 | `herdr_task_disposition.rs`: `TaskDisposition`, `EpisodeKind`, `HoldReason`, `dispose`; `EpisodeState`/`Episode` (replacing `EscalationState`); `task_started` template text (existing template class, no new nudge kind) |
-| BA.4 | clap `Task(TaskCommand)` with five subcommands; `OutcomeArg`; `task_query.rs` (`TaskListQuery`, `TaskEventQuery`, `TaskPage` — copied from AZ); `task_close.rs` (`ClosePreflight`, `preflight_close`); `RequestEnvelope::TaskMove`, `ResponseEnvelope::TaskMove`, `TaskMoveRequest`, `TaskMoveOutcome`; `WriteOp::TaskMove`, `WriteOpResult::TaskMoved`; `EscalationKind::RefusalsEscalated`; `HTTP_API_VERSION` 1.5.0 |
-| BA.5 | `Attention`, `select_attention`, `HoldReason::MailPending`, `is_open` |
+| BA.3 | `herdr_task_disposition.rs`: `TaskDisposition`, `EpisodeKind` (+ `as_str`), `HoldReason` (incl. `NoDeliveryChannel`), `dispose`, `reminder_due`, `TASK_REMINDER_INTERVAL_MS`; `EscalationState` reshaped to `{episodes, cleared_at}` with `Episode { kind, since, notified }`, `observe`, `mark_notified`, `last_cleared`; `episode_summary`, `episode_already_reported`; `escalate_mail`; `EscalationKind::RefusalsEscalated` (`BreakerOpened` deleted); `MemberObservation`; `task_started` template text (existing template class, no new nudge kind) |
+| BA.4 | clap `Task(TaskCommand)` with five subcommands (design §5 syntax; `list` has only `--all`/`--json`); `OutcomeArg`; `task_query.rs` (`TaskListQuery`, `TaskEventQuery`, `TaskPage` — copied from AZ); `task_close.rs` (`ClosePreflight`, `preflight_close`, `report_recipient`); `require_daemon_api`; ULID minting for an omitted `--task-id`; `RequestEnvelope::TaskMove`, `ResponseEnvelope::TaskMove`, `TaskMoveRequest`, `TaskMoveOutcome`; `WriteOp::TaskMove`, `WriteOpResult::TaskMoved`; `HTTP_API_VERSION` 1.6.0 |
+| BA.5 | `OPEN_ITEM_SQL`; `PendingNudgeStore::rearm_pending_after_handoff` (rename of `clear_pending_on_handoff`) and `clear_pending_on_read(…, next_due)`; `nudge_dispatch::rearm_queue_marker_after_handoff` (rename); claim predicate `nudge_pending_at <= now`; `HoldReason::MailPending` |
 | BA.6 | nothing |
 
 A sprint that needs an entry not on this list stops and amends this table
@@ -275,7 +285,8 @@ call `escalate_blocked` (`herdr_queue_wake_reminders.rs:123-132`);
 10. §9's additions table matches the shipped diff exactly.
 11. ADR-062 and ADR-054 amendments merged with BA.2 / BA.5; ADR-063 marked
     superseded; `schema-reviewer` sign-off recorded on BA.2 and BA.4; R0's
-    approval and exception cited by PR comment.
+    approval and D3 exception recorded as an ADR-061 D6 entry and cited by PR
+    comment.
 12. `CLAUDE.md` and `docs/team-protocol.md` steer assignment to
     `atm task assign` / `atm send --task-id` and non-interrupting delivery to
     `atm queue`.

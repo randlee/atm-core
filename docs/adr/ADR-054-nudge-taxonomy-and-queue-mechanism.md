@@ -294,10 +294,13 @@ the six traits recorded above; it does not widen `MessageStore`.
 An `atm queue` item is a scheduling view over its message, not a task: no task
 row, no task state, no `task_events` entry. Its lifecycle is the message's own
 read and acknowledgement state: it is open while unread, or while unacknowledged
-when the message has `requires_ack`, and closed otherwise. The `PendingNudgeStore`
-marker remains the first delivery attempt only. For an idle member the selector discharges queued
-messages before it selects the next task (ADR-062, Phase BA amendment). No
-column or mechanism is added.
+when the message has `requires_ack`, and closed otherwise. The existing
+`PendingNudgeStore` marker (`nudge_pending_at`) is the item: it is read as
+"next prompt due at", re-armed to now + `TASK_REMINDER_INTERVAL_MS` after each
+successful handoff, and cleared when the item closes. Messages that never
+carried the marker (immediate sends) are never reminded. For an idle member
+the pending drain discharges queued messages before the task pass (ADR-062,
+Phase BA amendment). No column or mechanism is added.
 
 ## Rejected alternatives
 
