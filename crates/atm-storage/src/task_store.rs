@@ -21,6 +21,14 @@ pub enum EscalationScope {
 /// Reminder count at which an open task is considered stalled and escalated.
 pub const TASK_STALLED_REMINDER_THRESHOLD: u32 = 10;
 
+/// Minimum spacing between task reminders for one assignee.
+pub const TASK_REMINDER_INTERVAL_MS: i64 = 60_000;
+
+/// Consecutive refused closes that hold task prompting and escalate the run.
+///
+/// See Phase BA plan §2 R5.
+pub const TASK_CONSECUTIVE_REFUSAL_THRESHOLD: u32 = 3;
+
 /// Maximum recipients retained for one daemon or team escalation scope.
 pub const MAX_ESCALATION_RECIPIENTS: usize = 8;
 
