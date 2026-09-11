@@ -56,7 +56,18 @@ body at most once per member every 60 seconds. Drain comes first and shares the 
 budget, so a queue prompt counts as that member's reminder attempt for the
 tick.
 
-Superseded by Phase BA (docs/plans/phase-ba/phase-ba-plan.md §4, sprint BA.3): the reminder cycle runs regardless of delivery backend; a task reminder is emitted only when the assignee is Idle with no pending mail, at most once per `TASK_REMINDER_INTERVAL_MS`; `Blocked` outcomes are recorded for offline members and escalate to the lead after `TASK_STALLED_REMINDER_THRESHOLD`.
+Superseded by Phase BA (docs/plans/phase-ba/phase-ba-plan.md §4, sprint
+BA.3): the reminder cycle runs regardless of delivery backend; a task reminder
+is emitted only when the assignee is Idle with no pending mail, at most once
+per `TASK_REMINDER_INTERVAL_MS`;
+the assignee's runtime state selects one of three dispositions (BA.3 `dispose`):
+`Idle` → nudge the head task; `Active` →
+hold, no reminder; `Blocked`/`Offline` → escalate once per episode to the lead
+and every configured recipient with
+zero task reminders and no reminder outcome recorded. Escalation for a stalled
+`Idle` assignee happens once at
+`TASK_STALLED_REMINDER_THRESHOLD` reminders and then holds until the task
+changes state or is reassigned/reopened.
 
 ## Lead notification and escalation
 
@@ -130,4 +141,3 @@ task in queue order.
 ## Consequences
 
 The lifecycle remains one row per task id, with explicit assignment events for reassignment and reopen; close outcomes remain limited to completed, refused, and cancelled.
-
