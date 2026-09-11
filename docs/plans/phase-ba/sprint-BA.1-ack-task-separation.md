@@ -24,6 +24,8 @@ lives only on `integrate/phase-ba`.
 
 ## Deliverables
 
+Same-id reassign/reopen lands in BA.2; BA.1 remains ack-only.
+
 - [ ] D1 — delete `apply_task_acknowledgement`
   (`crates/atm-storage-rusqlite/src/writer/task_ops.rs:418-457`) and its
   call in `execute_acknowledgement` (`writer/ops.rs:516`); drop the import.
@@ -40,6 +42,7 @@ lives only on `integrate/phase-ba`.
 #[serde(rename_all = "snake_case")]
 pub enum TaskEvent {
     Assigned,
+    Started,
     Completed,
 }
 
@@ -50,18 +53,16 @@ pub fn transition(
     event: TaskEvent,
     task_id: &TaskId,
     actor: &AgentName,
-    current_assignee: Option<&AgentName>,
-    requested_assignee: &AgentName,
 ) -> Result<Transition, TaskRejected> {
     match (state, event) {
         (None, TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
         (None, TaskEvent::Completed) => Err(TaskRejected::new(format!("no open task {task_id} for {actor}"))),
-        (Some(TaskState::Assigned | TaskState::Active), TaskEvent::Assigned)
-            if current_assignee == Some(requested_assignee) => Ok(Transition(TaskState::Assigned)),
-        (Some(TaskState::Assigned | TaskState::Active), TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
+        (Some(TaskState::Assigned), TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
+        (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition(TaskState::Active)),
+        (Some(TaskState::Assigned), TaskEvent::Started) => Ok(Transition(TaskState::Active)),
+        (Some(TaskState::Active), TaskEvent::Started) => Ok(Transition(TaskState::Active)),
         (Some(TaskState::Assigned | TaskState::Active), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
-        (Some(TaskState::Complete(_)), TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
-        (Some(TaskState::Complete), TaskEvent::Completed) => Err(TaskRejected::new(format!("task {task_id} already complete"))),
+        (Some(TaskState::Complete), TaskEvent::Assigned | TaskEvent::Started | TaskEvent::Completed) => Err(TaskRejected::new(format!("task {task_id} is already complete"))),
     }
 }
 

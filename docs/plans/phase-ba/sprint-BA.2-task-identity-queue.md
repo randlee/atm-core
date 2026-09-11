@@ -24,8 +24,8 @@ legacy `task_complete` key (see "Wire" below).
 
 | id | deliverable | where |
 | --- | --- | --- |
-| D1 | `QueuePosition`, `TaskCloseOutcome` (completed, refused, cancelled); `TaskState::Complete(outcome)`, `TaskStateTag`, `TaskEvent::{Assigned,Started,Reassigned,Reopened,Completed(outcome)}`, `transition()`, `TaskRejected`/`TaskRejectionKind` | `crates/atm-storage/src/task_state.rs` |
-| D2 | `TaskRow` + `TaskRowWire`, `TaskEventRow` + `TaskEventRowWire`, `TaskEventKind::{Started,Reassigned,Reopened,Moved,Migrated}` | `crates/atm-storage/src/task_state.rs` |
+| D1 | `QueuePosition`, `TaskCloseOutcome` (completed, refused, cancelled); `TaskState::Complete(outcome)`, `TaskStateTag`, `TaskEvent::{Assigned,Started,Completed(outcome)}`, `transition()`, `TaskRejected`/`TaskRejectionKind` | `crates/atm-storage/src/task_state.rs` |
+| D2 | `TaskRow` + `TaskRowWire`, `TaskEventRow` + `TaskEventRowWire`, `TaskEventKind::{Assigned,Started,Reassigned,Reopened,Completed,Refused,Cancelled,Moved,Migrated}` | `crates/atm-storage/src/task_state.rs` |
 | D3 | `TaskOp`, `MoveTarget`, `TaskCloseApplied`, `TASK_CONSECUTIVE_REFUSAL_THRESHOLD` | `crates/atm-storage/src/task_op.rs` (new), `task_store.rs` |
 | D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, `WriteOutcome.task_close`, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
 | D5 | `TASK_SCHEMA_DDL` rebuilt (two tables, three indexes) | `crates/atm-storage-rusqlite/src/task_store.rs:15-58` |
@@ -158,8 +158,6 @@ impl TaskState {
 pub enum TaskEvent {
     Assigned,
     Started,
-    Reassigned,
-    Reopened,
     Completed(TaskCloseOutcome),
 }
 
@@ -180,8 +178,8 @@ pub fn transition(
         (None, E::Started | E::Completed(_)) => Err(TaskRejected::new(format!("no open task {task_id} for {actor}"))),
         (Some(S::Assigned), E::Assigned) if current_assignee == Some(requested_assignee) => Ok(Transition(S::Assigned)),
         (Some(S::Active), E::Assigned) if current_assignee == Some(requested_assignee) => Ok(Transition(S::Active)),
-        (Some(S::Assigned | S::Active), E::Assigned) => Ok(Transition(S::Assigned)), // reassign in place
-        (Some(S::Complete(_)), E::Assigned) => Ok(Transition(S::Assigned)), // reopen
+        (Some(S::Assigned | S::Active), E::Assigned) => Ok(Transition(S::Assigned)),
+        (Some(S::Complete(_)), E::Assigned) => Ok(Transition(S::Assigned)),
         (Some(S::Assigned | S::Active), E::Started) => Ok(Transition(S::Active)), // idempotent when Active
         (Some(S::Assigned | S::Active), E::Completed(outcome)) => Ok(Transition(S::Complete(outcome))),
         (Some(S::Complete(_)), E::Started | E::Completed(_)) => Err(TaskRejected::already_complete(task_id)),
@@ -304,9 +302,11 @@ pub enum TaskEventKind {
     Assigned,
     Acked,      // history only; never written after BA.1
     Started,
+    Completed,
+    Refused,
+    Cancelled,
     Reassigned,
     Reopened,
-    Completed,
     Rejected,
     Reminded,
     LeadNotified,
@@ -639,8 +639,9 @@ one total order is `seq` under the new `PRIMARY KEY (team, task_id, seq)` —
 new event taking `max(seq) + 1` for its task, so a demoted row folds to
 `assigned` and a synthesized `completed` folds to `complete`; `rejected`, `reminded`, `lead_notified`, `acked` and `moved`
 events carry `to_state = from_state` (or NULL for pre-BA rows) and never
-change it; `migrated` is the only event other than `started` /
-`completed` allowed to change state, and only the migration writes it.
+change it; `started`, `completed`, `refused`, `cancelled`, `reassigned`, and
+`reopened` change state. The first `assigned` event establishes initial state;
+`moved` is state-neutral.
 The migration asserts, before commit, that this fold equals `tasks.state`
 / `close_outcome` for every row (`debug_assert!` + the
 `replay_of_migrated_history_reproduces_row_state` test).
@@ -825,10 +826,10 @@ Pure — `task_state.rs`:
 
 Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
 
-- `assign_second_row_same_task_id_different_assignee_is_rejected` — the PK;
-  explicit same-id reopen when complete, otherwise idempotent
-  resend only when assignee matches, else `Rejected` with detail naming the
-  existing assignee. Corner: **same** task id resent to a different member.
+- `assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues` — one id, both queues renumbered.
+- `assign_closed_id_reopens_in_place_clearing_outcome_and_counters`.
+- `reassign_releases_old_active_slot_in_same_transaction`.
+- `assign_same_agent_open_id_emits_no_event`.
 - `start_when_another_task_active_is_rejected_active_elsewhere` — the index;
   row stays `assigned`; one `rejected` event.
 - `start_moves_task_to_position_one_and_resets_counters` — A has T1(pos1,
@@ -866,7 +867,7 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
 - `write_outcome_carries_task_close` — `WriteOutcome.task_close` is
   `Some(TaskCloseApplied{Refused, 1})` after one refused close.
 - `start_by_member_actor_is_not_authorized`.
-- `refused_close_counts_trailing_refusals_only` — closes: refused, refused,
+- `trailing_refusal_run_counts_raw_stored_event_values` — closes: refused, refused,
   completed, refused, refused, refused → the last returns 3; a following
   `completed` returns 0; a following `refused` returns 1 (run restarted).
 
