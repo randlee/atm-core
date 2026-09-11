@@ -25,7 +25,6 @@ pub(crate) fn select_task_row(
     connection: &Connection,
     team: &TeamName,
     task_id: &TaskId,
-    _assignee: &AgentName,
 ) -> rusqlite::Result<Option<TaskRow>> {
     connection
         .query_row(

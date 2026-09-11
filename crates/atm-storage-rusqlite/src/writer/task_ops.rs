@@ -35,7 +35,7 @@ fn load_task_row(
     task_id: &TaskId,
     assignee: &AgentName,
 ) -> Result<Option<TaskRow>, AtmError> {
-    task_sql::select_task_row(connection, team, task_id, assignee)
+    task_sql::select_task_row(connection, team, task_id)
         .map_err(|error| sqlite_error(target, "failed to load task row", error))
 }
 

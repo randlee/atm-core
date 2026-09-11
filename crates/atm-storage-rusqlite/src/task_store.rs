@@ -160,7 +160,7 @@ impl SqliteTaskStore {
         member: &MemberKey,
         task_id: &TaskId,
     ) -> Result<Option<TaskRow>, AtmError> {
-        task_sql::select_task_row(connection, member.team(), task_id, member.agent())
+        task_sql::select_task_row(connection, member.team(), task_id)
             .map_err(|error| self.db.error("failed to load task row", error))
     }
 
