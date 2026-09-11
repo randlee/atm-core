@@ -36,6 +36,12 @@ impl TaskCloseOutcome {
 #[serde(rename_all = "snake_case")]
 pub enum TaskStateTag { Assigned, Active, Complete }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RefusalRun {
+    pub count: u32,
+    pub started_at: Option<IsoTimestamp>,
+}
+
 /// The reserved sender identity used by daemon-originated task events.
 pub const DAEMON_ACTOR_NAME: &str = "atm-daemon";
 
@@ -81,6 +87,7 @@ pub struct TaskRow {
     pub assignee: AgentName,
     pub assigner: AgentName,
     pub state: TaskState,
+    pub position: Option<QueuePosition>,
     pub assignment_message_id: AtmMessageId,
     pub description: String,
     pub assigned_at: IsoTimestamp,

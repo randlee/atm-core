@@ -91,6 +91,7 @@ impl SqliteTaskStore {
             assignee: parse(&assignee, "task assignee")?,
             assigner: parse(&assigner, "task assigner")?,
             state: parse_state(&state)?,
+            position: None,
             assignment_message_id: parse(&assignment_message_id, "assignment message id")?,
             description,
             assigned_at: parse(&assigned_at, "task assigned timestamp")?,
