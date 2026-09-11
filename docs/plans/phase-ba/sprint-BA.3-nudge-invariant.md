@@ -196,16 +196,18 @@ pub(crate) async fn episode_already_reported(
     deadline: ReadDeadline,
 ) -> Result<bool, ReadLaneError> {
     let query = MessageQuery { team: target.team.clone(), agent: target.agent.clone(),
-        sender: Some(daemon_actor()), task_id: None, limit: Some(ESCALATION_MAILBOX_SCAN_LIMIT) };
+        sender: Some(DAEMON_ACTOR.clone()), task_id: None, limit: Some(ESCALATION_MAILBOX_SCAN_LIMIT) };
     let messages = reader.list_messages(target.clone(), query, deadline).await?;
     Ok(messages.iter().any(|m| m.envelope.summary.as_deref() == Some(summary)
         && m.envelope.timestamp >= since))
 }
 ```
 
-`daemon_actor()` is the existing construction of the `atm-daemon`
-`AgentName` used by `write_escalation_mail` (`DAEMON_ACTOR_NAME`,
-`atm-storage/src/task_state.rs:13`); no new constant. Targets are exactly
+`DAEMON_ACTOR` is the existing private
+`static DAEMON_ACTOR: LazyLock<AgentName>` in `herdr_escalation.rs:29-30`
+(built from `atm_core::boundary::DAEMON_ACTOR_NAME`, already cloned at
+`:405` for `write_escalation_mail`); no new constant, no new function
+(RBQA-F005). Targets are exactly
 the existing `EscalationTargets { lead: Option<AgentName>, recipients:
 Vec<String> }` (`herdr_escalation.rs:204-207`): the lead when unique, and
 every configured recipient. `write_escalation_mail` writes each target
@@ -505,11 +507,22 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
 - `every_escalation_summary_comes_from_one_constructor` — architecture
   test: `grep -c 'format!("escalation:' crates/` = 1 (RBP-F002).
 - `escalation_ownership_architecture_test` — `crates/atm-architecture/tests/escalation_ownership.rs`
-  (new): no `escalate`/`escalate_mail`/`escalation_summary` identifier under
-  `crates/atm-core/src`; exactly one `match` over `RuntimeMemberState` in
-  `crates/atm-http-runtime/src/herdr_*` and it is inside `dispose` (the
-  existing `boundary_enforcement.rs` syn-visitor pattern; no boundary TOML
-  edit, so no §10-style ruling is needed — RBQA-F001).
+  (new, standing CI, replaces the one-time AC 1 grep): (a) no
+  `escalate`/`escalate_mail`/`escalation_summary` identifier under
+  `crates/atm-core/src`; (b) a `syn` visitor over every non-`#[cfg(test)]`
+  item in `crates/atm-http-runtime/src/herdr_*.rs` records **every**
+  `syn::Path` whose segments name `RuntimeMemberState` or one of its
+  variants — in `match` arms, `matches!` macro tokens, `==`/`!=` operands,
+  `if let`, `map_or` defaults alike (the develop idiom at
+  `herdr_queue_wake.rs:505-514` is `matches!` and `==`, not `match`;
+  RBQA-F003) — and asserts each occurrence lies inside exactly one of three
+  functions: `dispose` (`herdr_task_disposition.rs`), the observation
+  constructor `runtime_state` (`herdr_queue_wake.rs:934`, builds the value,
+  inspects nothing), or the pre-emit re-check (§"Re-check before emit").
+  Macro bodies are scanned as token streams (`syn::Macro::tokens`), so
+  `matches!` cannot evade it. Same visitor pattern as
+  `boundary_enforcement.rs:587-620`; no boundary TOML edit, so no
+  §10-style ruling is needed (RBQA-F001).
 - `breaker_open_produces_no_escalation_mail` — trip the Herdr breaker → 0
   mail with kind `breaker_opened` (the kind no longer exists — compile-time
   proof is the enum, this test pins the runtime behaviour).
@@ -518,9 +531,10 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
 
 ## Acceptance criteria
 
-1. `dispose` is the only place that decides nudge/escalate/hold; grep for
-   `RuntimeMemberState::` in `herdr_queue_wake*.rs` shows only the
-   observation mapping and the pre-emit re-check.
+1. `dispose` is the only place that decides nudge/escalate/hold:
+   `escalation_ownership_architecture_test` passes in CI (every
+   `RuntimeMemberState` reference in `herdr_*` production code is inside
+   `dispose`, `runtime_state`, or the pre-emit re-check — RBQA-F003).
 2. All tests above pass; the 72-row table is present.
 3. `grep -rn "BLOCKED_RENOTIFY_MS\|select_open_task\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation" crates/` returns nothing (PLAN-SCOPE-002 grep gate).
 4. `grep -n "DeliveryChannel::HerdrSteer" crates/atm-http-runtime/src/herdr_queue_wake.rs` returns nothing — the candidate sweep is backend-neutral.

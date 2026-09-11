@@ -2985,7 +2985,10 @@ Task lifecycle (Phase BA):
 2. Task state MUST be `assigned` (queued), `active` (working), or closed.
 3. An agent MUST hold at most one `active` task; the database MUST enforce
    this with a unique index on `(team, assignee)` restricted to
-   `state = 'active'`, checked at `atm task assign` admission.
+   `state = 'active'`. The index fires when a task **starts** (the implicit
+   `assigned → active` move; rejected as `ActiveElsewhere`), never at
+   `atm task assign` admission — any number of `assigned` rows may queue
+   behind the active one.
 4. Starting a task MUST move it from `assigned` to `active` and MUST send the
    assigner a start notification.
 5. An agent's queue MUST be ordered by `(position, assigned_at, task_id)`;

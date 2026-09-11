@@ -243,6 +243,14 @@ plan's approval is the written ruling those edits require:
 
 No new manifest. No manifest relaxation.
 
+BA.5 additionally edits the ADR-054 frozen-inventory gate
+(`scripts/check-nudge-taxonomy.py` `ALLOWED_NUDGE_IDENTIFIERS`): rename
+`clear_pending_on_handoff` → `rearm_pending_after_handoff`, delete
+`clear_pending_on_read`. This is a rename of two `PendingNudgeStore` method
+names already in the inventory — no new nudge kind, no new identifier
+family — and the ADR-054 Phase-BA amendment (`:292-303`) is its recorded
+authority. This paragraph is the written ruling for that edit (RBQA-F004).
+
 ## 11. Phase AZ code: what is used, and how
 
 Phase AZ was abandoned as too complicated: it grew unauthorised subcommands,

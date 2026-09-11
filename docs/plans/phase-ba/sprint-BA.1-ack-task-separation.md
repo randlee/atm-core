@@ -43,6 +43,8 @@ pub enum TaskEvent {
     Completed,
 }
 
+// Shape after D4 in this same sprint: `Transition` is the tuple struct
+// `pub struct Transition(pub TaskState)`; `Transition::To` no longer exists (QA2-002).
 pub fn transition(
     state: Option<TaskState>,
     event: TaskEvent,
@@ -50,11 +52,11 @@ pub fn transition(
     actor: &AgentName,
 ) -> Result<Transition, TaskRejected> {
     match (state, event) {
-        (None, TaskEvent::Assigned) => Ok(Transition::To(TaskState::Assigned)),
+        (None, TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
         (None, TaskEvent::Completed) => Err(TaskRejected::new(format!("no open task {task_id} for {actor}"))),
-        (Some(TaskState::Assigned), TaskEvent::Assigned) => Ok(Transition::To(TaskState::Assigned)),
-        (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition::To(TaskState::Active)),
-        (Some(TaskState::Assigned | TaskState::Active), TaskEvent::Completed) => Ok(Transition::To(TaskState::Complete)),
+        (Some(TaskState::Assigned), TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
+        (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition(TaskState::Active)),
+        (Some(TaskState::Assigned | TaskState::Active), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
         (Some(TaskState::Complete), TaskEvent::Assigned) => Err(TaskRejected::new(format!("task {task_id} already complete; use a new id"))),
         (Some(TaskState::Complete), TaskEvent::Completed) => Err(TaskRejected::new(format!("task {task_id} already complete"))),
     }

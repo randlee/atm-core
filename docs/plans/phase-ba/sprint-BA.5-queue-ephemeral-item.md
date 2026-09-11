@@ -40,6 +40,7 @@ reminded (FNX-BA-CRIT-017: no widening to "any open message").
 | D4 | `complete_successful_claim` calls D3; `HoldReason::MailPending` for a member the drain prompted this tick | `herdr_queue_wake.rs:739-770`, `herdr_task_disposition.rs` |
 | D5 | Verify the committed ADR-054 Phase-BA amendment (`docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md:292-303`, already rewritten in this docs PR to the due-at lifecycle) still matches the shipped statements; edit only on drift (ATM-QA-002) | `docs/adr/ADR-054-…md` Phase-BA amendment |
 | D6 | tests named below | `pending_nudge_store.rs` tests, `tests/herdr_queue_ephemeral.rs` |
+| D7 | ADR-054 frozen-inventory gate: in `ALLOWED_NUDGE_IDENTIFIERS` replace `clear_pending_on_handoff` with `rearm_pending_after_handoff` and delete `clear_pending_on_read` (`:89-90`); add `rearm_queue_marker_after_handoff` only if `just lint nudge-taxonomy` flags it. Rename-only, no new nudge kind — ruling: plan §10 (RBQA-F004) | `scripts/check-nudge-taxonomy.py:89-90` |
 
 ## Phase AZ code used
 
@@ -180,7 +181,7 @@ Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
 
 1. Schema of `mail_message_states` is unchanged (column list asserted).
 2. All tests above pass.
-3. `grep -rn "clear_pending_on_handoff\|clear_queue_marker_after_handoff\|clear_pending_on_read" crates/` → nothing.
+3. `grep -rn "clear_pending_on_handoff\|clear_queue_marker_after_handoff\|clear_pending_on_read" crates/ scripts/` → nothing, and `just lint nudge-taxonomy` passes.
 4. `grep -rn "lane\|cursor\|reservation" crates/atm-http-runtime/src/herdr_*` → nothing new.
 5. `grep -rn "list_messages" crates/atm-http-runtime/src/herdr_*` → no new call.
 6. ADR-054's Phase-BA amendment describes the due-at marker lifecycle.
