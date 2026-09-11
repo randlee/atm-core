@@ -561,11 +561,17 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
     (expression position); none appears in a pattern, guard, or scrutinee;
     the function has no other statements. Any inspection of a
     `RuntimeMemberState` there fails the test.
-  - `still_idle_is_a_single_comparison` — `still_idle` returns `bool`, its
-    body is exactly one `syn::Expr::Binary` with `BinOp::Eq`, the right
-    operand is `Some(RuntimeMemberState::Idle)`, and that is the only
-    `RuntimeMemberState` path in the function. A second branch, a `match`,
-    or a second variant fails the test.
+  - `still_idle_is_a_single_comparison` — `still_idle` returns `bool`; its
+    body has no statements and exactly one tail expression, a
+    `syn::Expr::Binary` with `BinOp::Eq`. The **left** operand is pinned to
+    the exact chain `ExprMethodCall(map)` whose receiver is
+    `ExprMethodCall(roster_ephemeral_state)` on the `runtime` parameter and
+    whose single argument is the closure `|record| record.state` (one
+    field access, nothing else); any other method call in the chain
+    (`filter`, `and_then`, `unwrap_or`, …) fails. The right operand is
+    `Some(RuntimeMemberState::Idle)`, the only `RuntimeMemberState` path in
+    the function. A second statement, branch, `match`, variant, or extra
+    call fails the test (BA-QA4-001, ARCH-BA4-001).
 - `breaker_open_produces_no_escalation_mail` — trip the Herdr breaker → 0
   mail with kind `breaker_opened` (the kind no longer exists — compile-time
   proof is the enum, this test pins the runtime behaviour).
