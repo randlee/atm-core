@@ -27,13 +27,13 @@ the marker set until the item **closes**, and reads it as *"next prompt due
 at"*: admission → due now; successful handoff → due now + 60 s; read (or
 ack) → `NULL`. The claim that already exists is the reminder. Nothing
 outside `atm queue` ever carries the marker, so nothing else is ever
-reminded (FNX-BA-CRIT-017: no widening to "any open message").
+reminded (FNX-BA-CRIT-017: no widening to "any open message"). A claimed-but-unconfirmed prompt holds a one-interval lease on the marker, so a daemon exit between claim and re-arm delays the next reminder by at most one interval and never drops the item.
 
 ## Deliverables
 
 | id | deliverable | where |
 | --- | --- | --- |
-| D1 | `OPEN_ITEM_SQL` predicate used by `claim_next_pending` (eligibility adds `nudge_pending_at <= now`) **and** `list_pending_members` (FNX-BA-CRIT-031); `requeue_pending` backs off to the interval at `MAX_NUDGE_ATTEMPTS` instead of stopping (FNX-BA-CRIT-033); `rearm_pending_after_handoff` (replaces `clear_pending_on_handoff`); `clear_pending_on_read` deleted | `crates/atm-storage-rusqlite/src/pending_nudge_store.rs` |
+| D1 | `OPEN_ITEM_SQL` predicate used by `claim_next_pending` (eligibility adds `nudge_pending_at <= now`) and the claim writes a one-interval lease instead of `NULL` **and** `list_pending_members` (FNX-BA-CRIT-031); `requeue_pending` backs off to the interval at `MAX_NUDGE_ATTEMPTS` instead of stopping (FNX-BA-CRIT-033); `rearm_pending_after_handoff` (replaces `clear_pending_on_handoff`); `clear_pending_on_read` deleted | `crates/atm-storage-rusqlite/src/pending_nudge_store.rs` |
 | D1a | `mark_message_read` — the production read transition — closes or re-arms the marker | `crates/atm-storage-rusqlite/src/writer/stmt_cache.rs:44-53` |
 | D2 | `PendingNudgeStore` trait: `clear_pending_on_handoff` → `rearm_pending_after_handoff(member, msg, next_due)`; `clear_pending_on_read` removed (no production caller on develop: only `contract.rs:1674`, router `:1237` and `received_hook_selector.rs:978`, all `#[cfg(test)]`); doc comments state the due-at semantics | `crates/atm-storage/src/contract.rs:1290-1320` |
 | D3 | `nudge_dispatch::rearm_queue_marker_after_handoff` (renamed) computes `next_due = now + TASK_REMINDER_INTERVAL_MS`; every caller and the name-pinning boundary test renamed | `crates/atm-core/src/nudge_dispatch.rs:30`; callers `herdr_queue_wake.rs:754`, `queue_drain.rs:417`, `received_hook_selector.rs:617`; adapter `storage_and_nudge_router.rs:1240`; tests `boundary_enforcement.rs:566-623`, `nudge_mode.rs:132`, bootstrap `lib.rs:1385` |
@@ -64,10 +64,10 @@ const OPEN_ITEM_SQL: &str =
 | statement | before (`develop`) | after |
 | --- | --- | --- |
 | `mark_pending` (`:35-36`) | `SET nudge_pending_at = now, nudge_attempts = 0 … WHERE read = 0 AND deleted_at IS NULL` | unchanged — due now |
-| `claim_next_pending` (`:60-66`) | `WHERE … nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL AND nudge_attempts < ?max … RETURNING` and `SET nudge_pending_at = NULL` | `WHERE … nudge_pending_at IS NOT NULL AND nudge_pending_at <= ?now AND {OPEN_ITEM_SQL} AND nudge_attempts < ?max`; still `SET nudge_pending_at = NULL` while the prompt is in flight (the at-most-once mechanism is unchanged: one conditional `UPDATE … RETURNING`) |
+| `claim_next_pending` (`:60-66`) | `WHERE … nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL AND nudge_attempts < ?max … RETURNING` and `SET nudge_pending_at = NULL` | `WHERE … nudge_pending_at IS NOT NULL AND nudge_pending_at <= ?now AND {OPEN_ITEM_SQL} AND nudge_attempts < ?max`; `SET nudge_pending_at = ?now + TASK_REMINDER_INTERVAL_MS` while the prompt is in flight — a lease, never `NULL` (a one-interval lease): the `nudge_pending_at <= ?now` predicate keeps the claimed item out of the selectable set for one interval, and if the process exits before re-arm the item becomes eligible again on its own (FNX-BA-DRIFT-056). At-most-once claiming is unchanged: one conditional `UPDATE … RETURNING` |
 | `requeue_pending` (`:94-97`, failed dispatch) | `SET nudge_pending_at = now, nudge_attempts = attempt + 1` | `SET nudge_pending_at = CASE WHEN ?next_attempt >= ?max THEN ?next_due ELSE ?now END, nudge_attempts = CASE WHEN ?next_attempt >= ?max THEN 0 ELSE ?next_attempt END` — five immediate retries, then one retry per interval for as long as the item is open; an open item never leaves the selectable set (design §9; FNX-BA-CRIT-033). `MAX_NUDGE_ATTEMPTS = 5` (`contract.rs:1238`) keeps its value and its role as the burst bound |
 | `release_pending` (`:118-121`, refused for lifecycle) | unchanged | unchanged |
-| `clear_pending_on_handoff` (`:143-148`) | `SET nudge_pending_at = NULL` | **renamed `rearm_pending_after_handoff(member, msg, next_due)`**: `SET nudge_pending_at = ?next_due, updated_at = now WHERE … AND {OPEN_ITEM_SQL}` — a message read between claim and handoff stays `NULL` |
+| `clear_pending_on_handoff` (`:143-148`) | `SET nudge_pending_at = NULL` | **renamed `rearm_pending_after_handoff(member, msg, next_due)`**: `SET nudge_pending_at = ?next_due, updated_at = now WHERE … AND {OPEN_ITEM_SQL}` — idempotent with the lease (same value); a message read between claim and handoff was set `NULL` by `mark_message_read` and `{OPEN_ITEM_SQL}` leaves it so |
 | `clear_pending_on_read` (`:135-140`) | `SET nudge_pending_at = NULL` | **deleted** — it has no production caller; the read transition is `mark_message_read` below (FNX-BA-CRIT-030) |
 | `mark_message_read` (`writer/stmt_cache.rs:44-53`, run by `execute_read_display_state`, `writer/ops.rs:264-284`, for every `atm read` / pull) | `SET read = 1, updated_at = ?4, nudge_pending_at = NULL` | `SET read = 1, updated_at = ?4, nudge_pending_at = CASE WHEN nudge_pending_at IS NOT NULL AND pending_ack_at IS NOT NULL AND acknowledged_at IS NULL THEN ?5 ELSE NULL END` with `?5 = next_due` computed by the writer op from `TASK_REMINDER_INTERVAL_MS` (atm-storage) — closed-on-read, or re-armed until the ack (design §9). The `nudge_pending_at IS NOT NULL` guard keeps immediate sends unmarked |
 | `list_pending_members` (`:151-158`) | `WHERE nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL` | `WHERE nudge_pending_at IS NOT NULL AND {OPEN_ITEM_SQL}` — a read-but-unacked member is discovered by the pump on a fresh tick (FNX-BA-CRIT-031) |
@@ -140,6 +140,8 @@ Storage — `pending_nudge_store.rs` tests (existing module):
 
 - `claim_skips_items_not_yet_due` — `nudge_pending_at = now + 30 s` → `None`;
   `now` → claimed; `now − 1 ms` → claimed.
+- `restart_after_claim_reexposes_unread_item` — claim (lease written), drop the runtime without re-arm, advance `now` by one interval, new runtime: `list_pending_members` lists the member and `claim_next_pending` returns the same item; `nudge_attempts` unchanged.
+- `claimed_item_is_not_reclaimed_within_lease` — second claim in the same interval returns `None`.
 - `rearm_after_handoff_sets_next_due_and_keeps_attempts` — attempts stay
   0; `nudge_pending_at == next_due` byte-equal.
 - `rearm_after_handoff_is_noop_when_read_meanwhile` — mark read between
