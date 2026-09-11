@@ -52,7 +52,7 @@ Reassign/reopen are not verbs: `atm task assign` on an existing id performs the 
 Design §5, verbatim contract this code implements:
 
 ```
-atm task assign <agent> --template <j2> --vars <json> [--task-id <id>]
+atm task assign <agent> --template <j2> --vars <json> [--task-id <id>] [--before <other-task-id> | --head]
 atm task close  <task-id> <outcome> [reason]
 atm task move   <task-id> --before <other> | --head | --end
 atm task list [--all]
@@ -143,7 +143,7 @@ struct TaskCloseCommand {
 }
 
 impl TaskCloseCommand {
-    /// clap cannot express "reason required for two of four enum values" on
+    /// clap cannot express "reason required for two of three enum values" on
     /// a positional; this runs first in `execute`.
     fn validate(&self) -> Result<(), AtmError> {
         let has_report = self.report.is_present() || self.reason.is_some();
@@ -237,7 +237,7 @@ pub enum ClosePreflight {
     /// Row open: deliver report and close in one write.
     Proceed { row: TaskRow },
     /// Row already closed: deliver the report as a plain message, then inform.
-    ReopenViaAssign { row: TaskRow },
+    AlreadyClosed { row: TaskRow },
     /// No such task id on this team: block before anything is sent.
     Unknown,
 }
@@ -255,17 +255,16 @@ pub fn report_recipient(row: &TaskRow, caller: &AgentName) -> AgentName {
 }
 ```
 
-| stage | `Proceed` | `ReopenViaAssign` | `Unknown` |
+| stage | `Proceed` | `AlreadyClosed` | `Unknown` |
 | --- | --- | --- | --- |
 | 1 preflight (reader lane, `list_tasks(team, None)` filtered — no new read method) | continue | continue | exit 1: `task <id> does not exist on team <t>`; nothing sent |
 | 2 deliver | one `WriteRequest { to: report_recipient(row, caller), task_id, task_op: Some(Close{outcome, reason}) }` — report and close are **one transaction**; if the close arm rejects, the writer rolls back the whole write and the CLI retries once as stage-2b: plain message (`task_op: None`, `task_id: None`) then reports the rejection | `WriteRequest` with `task_id: None` to `report_recipient` — plain delivery | — |
 | 3 result | `closed <id> (<outcome>)`; exit 0 | `task <id> was already closed (<outcome>) on <at>; report delivered`; exit 0 | — |
 
 Stage 2's single transaction is what design §5.2 means by "deliver first":
-the report is never lost — either both land or the report lands alone with
-an explicit assignment transition. `ReopenViaAssign` directs the caller to `assign`
-from BA.2 when the race (closed between stage 1 and 2) occurs: the writer
-rejects, the CLI runs 2b and prints the stage-3 informational line. The
+the report is never lost. `AlreadyClosed` is informational only when the race
+(closed between stage 1 and 2) occurs: the writer makes no task transition,
+the CLI runs 2b and prints the stage-3 informational line. The
 report body is the message source when given, else the `reason` text.
 
 ## Consecutive-refusal escalation (design §4.2)
@@ -352,7 +351,7 @@ CLI parse — `crates/atm/src/commands/task.rs` tests:
   `{list, events, assign, close, move}`.
 - `close_parses_positional_outcome_and_reason` — `close T1 refused "no
   capacity"`; `close T1 completed` (no reason, `--template` given) ok;
-  `close T1 bogus` → parse error listing the four values.
+  `close T1 bogus` → parse error listing the three values.
 - `close_refused_requires_reason`, `close_cancelled_requires_reason`,
   `close_completed_without_reason_or_source_is_rejected`,
   `assign_existing_open_id_to_other_agent_reassigns_in_place`,
@@ -381,12 +380,12 @@ Close — `crates/atm/tests/task_close.rs` (fixture daemon, loopback):
 - `close_by_unique_lead_reports_to_assignee` — lead who is neither party.
 - `close_by_lead_who_is_assigner_reports_to_assignee`.
 - `close_unknown_task_sends_nothing_and_exits_one` — mailbox count unchanged.
-- `close_already_closed_delivers_and_informs_exit_zero`.
-- `close_raced_by_concurrent_close_delivers_plain_and_informs` — close from
+- `close_already_closed_delivers_report_without_task_event`.
+- `close_raced_by_other_closer_writes_zero_new_events` — close from
   two processes; second gets the informational line; two reports delivered.
 - `close_rejected_for_authority_delivers_report_and_prints_rejection` —
   third party closes: report lands (2b), row untouched, exit 1.
-- `close_each_outcome_roundtrips` — 4 outcomes visible in `atm task events --json`.
+- `close_each_outcome_roundtrips` — 3 outcomes visible in `atm task events --json`.
 - `assign_existing_open_id_to_other_agent_reassigns_in_place`.
 - `refusal_releases_next_queued_task` — A has T1, T2; refuse T1 → T2 is
   position 1 (`atm task list --json`) and is the next nudge (BA.3 runtime).

@@ -766,6 +766,10 @@ outcome returns `consecutive_refusals = 0`.
 `one_active_task_per_agent` violation on `Start` maps to
 `TaskRejectionKind::ActiveElsewhere`, not to a generic SQLite error.
 
+The writer's Start gate uses the latest reminder audit:
+`SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' ORDER BY at DESC, seq DESC LIMIT 1`.
+It starts only for `outcome = 'emitted'`; otherwise Start is a silent no-op.
+
 Every accepted op appends one `task_events` row (`started` / `completed` +
 `close_outcome` / `moved` with `detail = "<from>→<to>"`); every rejection
 appends one `rejected` row with the `TaskRejectionKind` in `detail`
@@ -805,9 +809,9 @@ Pure — `task_state.rs`:
 
 - `transition_table_is_exhaustive_over_three_events` — all
   `(Option<TaskState> incl. every Complete(outcome), TaskEvent incl. every
-  Completed(outcome))` pairs → the table above; 4 outcomes × … enumerated,
+  Completed(outcome))` pairs → the table above; 3 outcomes × … enumerated,
   no wildcard in the test.
-- `started_on_active_is_idempotent`, `assigned_on_complete_says_use_new_id`,
+- `started_on_active_is_idempotent`, `assigned_on_complete_reopens_same_id`,
   `completed_on_complete_is_already_complete_kind`.
 - `task_row_json_keeps_scalar_state_and_adds_close_outcome` — a
   `Complete(Refused)` row serialises to `"state":"complete","close_outcome":"refused"`
@@ -842,7 +846,7 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
   counters 0/0/NULL on T2, T1's counters untouched.
 - `close_renumbers_remaining_queue_contiguously` — T1..T4; close T2 →
   positions 1,2,3 for T1,T3,T4; T2 `position IS NULL`, `close_outcome` set.
-- `close_each_outcome_persists_column_and_event` — 4 cases.
+- `close_each_outcome_persists_column_and_event` — 3 cases.
 - `move_head_with_active_task_lands_at_position_two`; `move_head_without_active_lands_at_one`;
   `move_end`; `move_before_target_of_other_member_is_unknown_target`;
   `move_before_self_is_noop_with_moved_event`; `move_never_changes_assigned_at`

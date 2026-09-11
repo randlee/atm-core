@@ -632,3 +632,5 @@ target ≤ 3,700 lines after deletions), `just lint-boundaries`.
 
 Mail-before-task ordering and the queue-item reminder (BA.5); CLI (BA.4);
 any new nudge template kind (ADR-054 inventory unchanged).
+
+- Handoff gate: `unrenderable_reminder_never_becomes_start_owed` keeps the head assigned across two ticks with zero started events; the writer checks the latest reminded event outcome is `emitted` before Start. Exact query: `SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' ORDER BY at DESC, seq DESC LIMIT 1`.

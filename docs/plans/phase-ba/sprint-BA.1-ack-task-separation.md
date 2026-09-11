@@ -42,7 +42,6 @@ Same-id reassign/reopen lands in BA.2; BA.1 remains ack-only.
 #[serde(rename_all = "snake_case")]
 pub enum TaskEvent {
     Assigned,
-    Started,
     Completed,
 }
 
@@ -59,10 +58,8 @@ pub fn transition(
         (None, TaskEvent::Completed) => Err(TaskRejected::new(format!("no open task {task_id} for {actor}"))),
         (Some(TaskState::Assigned), TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
         (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition(TaskState::Active)),
-        (Some(TaskState::Assigned), TaskEvent::Started) => Ok(Transition(TaskState::Active)),
-        (Some(TaskState::Active), TaskEvent::Started) => Ok(Transition(TaskState::Active)),
         (Some(TaskState::Assigned | TaskState::Active), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
-        (Some(TaskState::Complete), TaskEvent::Assigned | TaskEvent::Started | TaskEvent::Completed) => Err(TaskRejected::new(format!("task {task_id} is already complete"))),
+        (Some(TaskState::Complete), TaskEvent::Assigned | TaskEvent::Completed) => Err(TaskRejected::new(format!("task {task_id} is already complete"))),
     }
 }
 
