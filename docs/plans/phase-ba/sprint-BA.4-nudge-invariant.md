@@ -64,6 +64,14 @@ Required:
 - state the cost in the sprint's own docs as `O(members + open_tasks + teams)`
 - the rate-limit gate is evaluated from that same snapshot
 
+**Bounding the call count is not bounding the work (PLAN-CRIT-008).** One
+`list_tasks` per team caps *calls*; the existing reader returns
+`Vec<TaskRow>` and the SQL has no state predicate and no `LIMIT`, so with BA.3
+retaining rows forever the per-team snapshot grows without bound and the
+claimed `O(open_tasks)` is false. The snapshot query must carry **both** a
+`state <> 'complete'` predicate and a `LIMIT`, pushed into SQL, and the
+acceptance test must count **rows returned**, not calls issued.
+
 This requires **no new trait, table, or state machine**.
 
 ### D2. Exact agent state, not the picker projection
@@ -146,13 +154,29 @@ This is **not** edge detection and must not be argued away as such: the
 invariant is evaluated continuously, and its inputs must still hold **at the
 effect boundary**, not merely when the candidate was built.
 
-Required: reminder and queued-message dispatch admission is serialized with
-canonical roster mutation, or performs an atomic current-state check
-immediately before committing the steer, so a known Active transition wins and
-suppresses the dispatch. **A plain second read without serialization is still
-TOCTOU and does not satisfy this.** A per-member lock or CAS at the existing
-ephemeral roster boundary is sufficient — no target generation, no eligibility
-edge, no scheduler state machine.
+**PLAN-CRIT-010: a CAS followed by an `await` is not sufficient, and an
+earlier revision of this plan asserted that it was.** The existing roster lock
+guards snapshot mutation and is released before the awaited emitter call, so a
+check-then-await reopens exactly the window it was meant to close. Requiring
+"emission count is zero" while forbidding reservations left no implementable
+design.
+
+Required: define an explicit **admission seam** — the point after which an
+emission is committed — and hold the member's admission across it, by one of:
+
+  a. holding the per-member admission guard across the emit await (simplest;
+     costs one in-flight emit per member, which is the existing concurrency
+     anyway), or
+  b. re-checking state inside the same guard immediately before the emitter is
+     invoked AND treating a post-seam Active transition as an **accepted
+     in-flight tolerance** of at most one nudge, stated in the acceptance
+     criteria rather than claimed away.
+
+Pick one in the sprint and write down which. Option (b) weakens the guarantee
+and must say so out loud. What is **not** acceptable is claiming (a)'s
+guarantee while implementing (b)'s structure.
+
+No target generation, no eligibility edge, no scheduler state machine.
 
 Test the exact race: poll observes Idle, pause before emit, a heartbeat POST
 commits Active, resume — emission count must be zero. Also assert Idle remains
@@ -181,17 +205,22 @@ suppresses the dispatch.
 ## Acceptance criteria
 
 1. **Scale**: a fixture with 17 teams and 51 members, all idle with open
-   tasks, issues at most one bounded task read per team per tick. Asserted on
-   a counted read, not on wall-clock timing.
+   tasks, issues at most one task read per team per tick **and** returns a
+   bounded number of rows per read. Both asserted by counting; a fixture with
+   10,000 historical complete tasks must not increase rows returned
+   (PLAN-CRIT-008). Wall-clock timing is diagnostic only.
 2. **Slow-read isolation**: one team whose task read is artificially slow does
    not serialise the global pass. This is the acceptance test SOLAR-BA-001
    requires and it must fail against `origin/develop`.
-3. A blocked member receives **zero** nudges and produces exactly one
-   escalation call for the episode.
-4. An offline/dead member receives zero nudges and produces exactly one
-   escalation call, distinguishable in the escalation body from the blocked
-   case. This must fail against `origin/develop`, where Offline is never
-   admitted as a candidate.
+3. A blocked member receives **zero** nudges and produces **at most one
+   escalation call per tick**. How many calls an episode produces over time is
+   BA.8's terminality deliverable and is explicitly **not** asserted here
+   (PLAN-CRIT-011) — a single-tick test must not be read as proving
+   terminality.
+4. An offline/dead member receives zero nudges and produces an escalation
+   call distinguishable in the body from the blocked case. Must fail against
+   `origin/develop`, where Offline is never admitted as a candidate.
+   Terminality is BA.8's.
 5. All six `RuntimeMemberState` variants have a tested disposition, including
    `Unknown` and `IdentityConflict`, and none of them routes through
    `PickerMemberStatus`. Gate: `git grep -n 'picker_projection\|PickerMemberStatus'
@@ -199,8 +228,10 @@ suppresses the dispatch.
 6. Assigning to an agent with an Active task writes an `assigned` row and
    emits no nudge.
 7. **Roster dispatch race**: an agent observed Idle that commits Active via
-   the heartbeat route before the emit boundary receives **zero** nudges.
-   Must fail against `origin/develop`.
+   the heartbeat route before the **admission seam** receives zero nudges.
+   If the sprint chose D5a option (b), the criterion instead reads: at most
+   one in-flight nudge may land after the seam, and the test asserts that
+   bound explicitly. Either way it must fail against `origin/develop`.
 8. Idle remains eligible across the same paused window, and a Blocked or
    Offline transition in that window suppresses the dispatch.
 

@@ -8,7 +8,7 @@
 | Dependency | `must_follow` BA.3 — operates on the schema BA.3 establishes. PR-completion trigger. |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
-| Governed interface | yes — ADR-061 minor with migration |
+| Governed interface | yes — **ADR-061 MAJOR** (R0), one-way, no bridge. Shares BA.3's approval record. |
 
 ## Goal
 
@@ -52,9 +52,23 @@ copy AZ's precedence.**
 Required instead:
 
 1. **A migration preflight that classifies every duplicate group** before any
-   schema mutation. Classes: byte-identical duplicates (mergeable), mirror
-   pattern (mergeable under a stated rule), and everything else.
-2. **Abort before mutation** on any non-identical or multi-assignee group. Emit
+   schema mutation. Three classes, and the boundary between them is the whole
+   deliverable:
+
+   | class | test | disposition |
+   | --- | --- | --- |
+   | identical | one row, or rows agreeing on state and timestamps | merge |
+   | **mirror** | exactly two rows; one is a completion-side row with **no** independent lifecycle — no `Acked`/`Active` event of its own, and its events postdate the real row's | merge into the real row |
+   | everything else | anything not matching the two above, including two rows with independent `assigned → active` histories | **abort** |
+
+   **PLAN-CRIT-005: "abort on any multi-assignee group" was wrong and
+   contradicted the mirror row in the same table.** A mirror *is*
+   multi-assignee — that is what makes it a mirror. Multi-assignee is
+   therefore not the abort predicate. The predicate is **independent
+   lifecycle**: two rows that each acked or activated are two real tasks and
+   the migration must not choose between them.
+
+2. **Abort before mutation** on any group in the third class. Emit
    `team / task_id / assignee / state / assigned_at / updated_at` per row plus
    a concrete operator recovery instruction. The migration exits non-zero and
    the schema version does not change.
@@ -120,11 +134,17 @@ identity change and cannot be deferred past it.
 
 ## Acceptance criteria
 
-1. The migration **aborts before mutating** on a fixture containing a
-   multi-assignee duplicate group: exits non-zero, leaves the schema version
-   unchanged, and prints every conflicting row with a recovery instruction.
-2. The migration succeeds on a fixture of byte-identical duplicates and on the
-   mirror pattern; row and event counts are asserted before and after.
+1. The migration **aborts before mutating** on a fixture whose duplicate group
+   has two independent lifecycles (the `FIX-1325-…` shape): exits non-zero,
+   leaves the schema version unchanged, prints every conflicting row, and
+   gives a recovery instruction.
+2. The migration **succeeds** on a byte-identical fixture and on the mirror
+   fixture (the `FIX-PRERELEASE-R3-…` shape), which is multi-assignee and must
+   not trip the abort. Row and event counts asserted before and after. These
+   two criteria together are the PLAN-CRIT-005 regression.
+2a. A binary predating the migration **refuses to open** the migrated database
+   with a clear message, and does not operate on it. This is R0's version gate
+   and replaces AZ's dual-write bridge.
 3. An agent holding two Active rows pre-migration is deterministically
    demoted, the demotion is recorded, and no live work is closed.
 4. `task_events` has one total order per `(team, task_id)` after migrating an
@@ -145,7 +165,11 @@ identity change and cannot be deferred past it.
 - **the deployment step**: the 14 live duplicate groups classified and
   explicitly resolved, recorded as sprint evidence. This is an operator
   action with a written record, not something the code decides.
-- `schema-reviewer` sign-off alongside BA.3's
+- `schema-reviewer` sign-off alongside BA.3's, plus Rand's recorded approval
+  of the ADR-061 MAJOR classification. Both are **preconditions for opening
+  this sprint**, not end-of-sprint validation (PLAN-CRIT-025): this sprint
+  rewrites production task history one way, and an approval obtained after
+  the migration runs approves nothing.
 
 ## Non-closure
 

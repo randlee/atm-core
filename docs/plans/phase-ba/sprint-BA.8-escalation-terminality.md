@@ -2,10 +2,10 @@
 
 | Field | Value |
 | --- | --- |
-| Wave | 3 |
+| Wave | 5 |
 | Branch | `feature/ba8-escalation-terminality` |
 | Base | `integrate/phase-ba` (independent PR, not stacked) |
-| Dependency | `must_follow` BA.4 (owns the reminder path) and BA.3 (logical identity, typed outcome) — PR-completion trigger: both merged to `integrate/phase-ba` |
+| Dependency | `must_follow` BA.3, BA.4, **BA.5** (serializes with its mutations and tests its receipts — PLAN-CRIT-015) and **BA.6** (AC11 needs BA.6's remindability — PLAN-CRIT-012). PR-completion trigger. |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
 
@@ -48,6 +48,21 @@ Required: at `TASK_STALLED_REMINDER_THRESHOLD` (10), escalate **once** and
 **stop nudging**.
 
 **SOLAR-BA-008 (BLOCKING) constrains both ends of that rule.**
+
+*Escalation delivery must be idempotent across a crash (PLAN-CRIT-017).* Each
+retry currently constructs a fresh `WriteRequest` and message id, so a crash
+after the mail commits but before the audit writes produces a **second**
+escalation on the next tick. Derive the escalation message id deterministically
+from `(team, task_id, escalation_epoch)` so the retry is recognised and
+collapses instead of duplicating. Without that identity, AC2's post-mail crash
+case cannot pass.
+
+*The audit must record what was actually delivered (PLAN-CRIT-018).* The
+existing escalation caller records a resolved lead and its message id. With
+zero or two leads and a successful recipient write, delivery happened but no
+durable audit exists to earn suppression — so the task repeats forever while
+oversight believes it was told. Extend the audit event to record recipient
+writes, not just the lead's.
 
 *Suppression must be earned, not counted.* The current order durably increments
 `reminder_count` first and only then calls `maybe_escalate_task`
@@ -94,7 +109,19 @@ emission count must be zero in each. If the product instead accepts one
 in-flight stale nudge, that weakening has to be written down explicitly — the
 current absolute wording does not permit it.
 
-### D3. Consecutive-refusal guard, derived from durable events
+### D3. Consecutive-refusal guard, from a bounded read of the task table
+
+**PLAN-CRIT-016: "the tail of durable events" is not reachable.**
+`AsyncTaskLedgerReader` lists tasks for a team/member, or events for **one**
+task id. There is no cross-task event tail, so an implementer would have to
+read every task and then every task's events, reuse the volatile in-RAM
+counter this finding exists to reject, or add an unbudgeted capability.
+
+Derive it instead from the **task rows**, which BA.3 already gives a typed
+`close_outcome`: the agent's most recently closed tasks, ordered, limited to
+the streak threshold plus one. That is one bounded query over an existing
+table through the existing reader, it is durable across restart, and it adds
+no capability, table, or state.
 
 **SOLAR-BA-011 (IMPORTANT).** The design's consecutive-refusal guard is
 underspecified and its cited precedent is unrelated: `release_streaks`
@@ -140,7 +167,8 @@ unnudged-task path sitting in the middle of problem (a)'s fix.
 Required, and it costs no new structure:
 
 1. Every escalation notice is sent with `requires_ack = true`, so it does not
-   discharge on read.
+   discharge on read. The remindability that makes this meaningful is BA.6's
+   D1 — hence this sprint follows BA.6 (PLAN-CRIT-012).
 2. State the promise precisely in the doc and the code comment: **ATM
    re-nudges until a human acknowledges custody. After that the human or
    oversight layer owns resolution, even if the source task stays
@@ -168,8 +196,11 @@ member" silences a genuine later unblock→reblock **forever**; ignoring history
 duplicates on every restart. Read/clear weakens the mailbox as proof further.
 The claim as written is not implementable.
 
-Pick one and state it in the sprint doc:
+The options, for the record:
 
+> **DECIDED: option (a)** (PLAN-CRIT-019 — this was a product ruling, not an
+> implementer's choice, and the phase acceptance criterion now matches).
+>
 > a. **Weaken the guarantee explicitly** to *at-least-once per daemon epoch*,
 >    accepting restart duplicates, and stamp the escalation with the daemon
 >    epoch so a recipient can tell a restart duplicate from a new episode.
@@ -178,10 +209,9 @@ Pick one and state it in the sprint doc:
 >    can supply one across a restart, say so plainly and justify the new
 >    persisted state against the repeated-notification problem.
 >
-> **Recommendation: (a).** A duplicate after a daemon restart is cheap and
-> self-explanatory; permanent suppression of a real re-block is exactly the
-> failure this phase exists to remove. Do not spend new persisted state on
-> the stronger claim unless Rand asks for it.
+> A duplicate after a daemon restart is cheap and self-explanatory; permanent
+> suppression of a real re-block is exactly the failure this phase exists to
+> remove. Option (b) is not built.
 
 Either way: **stop claiming the mailbox alone answers "have I already reported
 this episode."** Tests: restart while still blocked, and unblock→reblock.
@@ -225,9 +255,16 @@ members — pointless once each episode is reported once). **Retain**
 1. A task reaching 10 reminders produces one escalation and then **no further
    reminders**, proven by advancing the clock well past the eleventh interval
    and asserting the reminder count is unchanged.
-2. **Crash before escalation durability**: a daemon killed after the tenth
-   reminder write but before the escalation mail write retries the escalation
-   on the next tick and does **not** enter suppression.
+2. **Crash before the mail write**: a daemon killed after the tenth reminder
+   write but before the escalation mail retries on the next tick and does
+   **not** enter suppression.
+2a. **Crash after the mail write, before the audit**: the retry produces
+   **no second escalation message** — proven by asserting one message in the
+   recipient's mailbox — and then earns suppression. Requires the
+   deterministic message id.
+2b. With zero leads and one configured recipient, a successful recipient write
+   produces a durable audit sufficient to earn suppression; the task stops
+   reminding. Must fail against an implementation that audits only the lead.
 3. **No durable target**: with no lead, no recipients, and every mail write
    failing, the task does not enter suppression, and the condition is
    observable in `atm task list` and in logs rather than silent.
@@ -240,8 +277,9 @@ members — pointless once each episode is reported once). **Retain**
 6. **Task dispatch race**: a task closed after selection and before emit
    produces zero nudges; a task reassigned in the same window sends nothing to
    the old assignee. Both must fail against `origin/develop`.
-7. Consecutive refusals are bounded by a streak derived from durable task
-   events, and the bound survives a daemon restart.
+7. Consecutive refusals are bounded by a streak derived from a **bounded**
+   query over closed task rows — asserted on rows read, not just behaviour —
+   and the bound survives a daemon restart.
 8. A daemon restart while a member is still blocked behaves per the D5 choice,
    and an unblock→reblock always produces a new notification.
 9. Starting or closing a task while the assigner is Active persists the

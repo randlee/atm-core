@@ -51,6 +51,32 @@ not verbs.
 
 ## Deliverables
 
+### D0. The protocol path — without it this sprint ships a facade
+
+**PLAN-CRIT-002 (BLOCKING), verified.** Every CLI operation crosses
+`RequestEnvelope` / `DaemonApiClient`. On `origin/develop`, `RequestEnvelope`
+has fifteen variants — `Write`, `CompatibilityPreflight`, `Heartbeat`,
+`QueueGetNext`, four graft variants, `List`, `Peek`, `Receive`, `Clear`,
+`Doctor`, `Search`, `ReloadRuntimeView` — and **not one task mutation**.
+`TaskStore` exposes reads plus reminder/lead audit. An earlier revision of
+this sprint listed only the CLI and a new `atm-core` module, which would let a
+developer satisfy most of the listed surface with a command that parses,
+validates, prints, and never mutates anything.
+
+Required, and it must land before any verb is wired:
+
+1. task mutation request and response variants on `RequestEnvelope` /
+   `ResponseEnvelope` — **additive, ADR-061 MINOR** (`:59`, "a new optional
+   field, argument, request variant"), with the matching
+   `HTTP_API_VERSION` / `CLI_SCHEMA_VERSION` bump in the same change set
+2. the router and runtime handler that dispatch them
+3. the mutation entry point on the storage side, reached through the existing
+   backend-neutral boundary — **not** a SQLite handle crossing the boundary
+   and **not** the CLI writing storage directly
+
+Gate: an integration test drives each verb through a real daemon round trip.
+A unit test against an in-process service does not discharge this deliverable.
+
 ### D1. One id flag
 
 `--task-id` names the task; verb flags say what to do with it. This inverts
@@ -87,7 +113,9 @@ stage 1  read-only preflight   existence + authorization
                                before the message is persisted
 stage 2  persist and deliver   the mandatory report commits
 stage 3  idempotent close      already-complete / concurrent-close is
-                               INFORMATIONAL, never a rollback
+                               INFORMATIONAL, never a rollback.
+                               REVALIDATES the assignee and assignment epoch
+                               captured at stage 1 (PLAN-CRIT-023)
 ```
 
 If stage 2 commits and stage 3 transiently fails, return a stable recoverable
@@ -98,8 +126,19 @@ RBP-001: unknown id, already closed, unauthorized actor, and post-delivery
 close failure are four **distinct, stable** error/disposition contracts, not
 one generic failure.
 
-Races to test: close vs close, close vs reassign, and a crash after the report
-commits but before the close.
+**Stage 3 must revalidate, not assume (PLAN-CRIT-023).** Stage 1 authorizes
+against the assignee it read; a same-id reassignment (R2) can land between
+stages, and without revalidation the *old* assignee closes a task that now
+belongs to someone else. Capture the assignment epoch at stage 1 and require
+it to match at stage 3.
+
+Races to test, each with a named winning outcome — not merely "test the race":
+
+| race | required outcome |
+| --- | --- |
+| close vs close | first commits; second is informational, no duplicate report |
+| close vs reassign | **reassign wins**; the stale close fails at stage 3 revalidation with a distinct error, and its already-delivered report remains delivered |
+| crash after report commit, before close | retry closes without duplicating the report |
 
 The unknown-id hard error is sound only while task rows are never deleted
 (BA.3 D7).
@@ -206,6 +245,10 @@ activation.
 
 ## Affected paths
 
+- `crates/atm-core/src/protocol.rs` — new request/response variants (D0)
+- `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — routing for the
+  new variants **only**; coordinate with BA.4/BA.2, which own other hunks
+- the runtime handler wiring those variants to the storage boundary
 - `crates/atm/src/commands/task.rs` — new
 - `crates/atm/src/commands/mod.rs`
 - `crates/atm/src/commands/send.rs` — alias flags
@@ -220,8 +263,13 @@ activation.
 
 ## Acceptance criteria
 
-1. `atm task` exposes exactly five subcommands. Gate: the CLI surface baseline
-   contains no sixth, and none of the absent verbs above.
+1. `atm task` exposes exactly five subcommands **as of this sprint**. Gate:
+   the CLI surface baseline contains none of the verbs listed absent above.
+   BA.9 adds `start` under ruling R1(a) and **owns the amendment of this
+   criterion and of the baseline** — the two sprints must not both claim the
+   verb count (PLAN-CRIT-014).
+1a. Every verb executes through a real daemon round trip in an integration
+   test (D0). A verb that parses and prints without mutating fails.
 2. `--task-complete` against an already-complete task **delivers the message**
    and returns an informational result. This must fail on `origin/develop`,
    where the body is discarded.

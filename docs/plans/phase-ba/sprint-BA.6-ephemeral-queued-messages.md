@@ -5,7 +5,7 @@
 | Wave | 4 |
 | Branch | `feature/ba6-ephemeral-queued-messages` |
 | Base | `feature/ba5-atm-task-commands` (stack layer 4) |
-| Dependency | `must_follow` BA.5; `must_follow` BA.4 by PR completion — BA.4 merges to `integrate/phase-ba` in wave 1 |
+| Dependency | `must_follow` BA.5, `must_follow` BA.4 (PR-completion). **BA.8 now follows THIS sprint**, not the reverse (PLAN-CRIT-012). |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
 
@@ -51,6 +51,14 @@ columns or state **on the existing message row** — that constraint holds — b
 the current unread / pending-ack fields alone are insufficient and the sprint
 must add what is missing rather than assert the view already works.
 
+**Name the columns in the sprint doc before coding (PLAN-CRIT-004).** ADR-054
+says downstream sprints *implement* its marker/`read = 0` contract rather than
+redefine it, and this deliverable changes what stays claimable after handoff.
+Unspecified "state on the message row" is not reviewable. The sprint must
+state, in the doc, each added column with its name, type, default, and the
+transitions that write it — and BA.11 carries the matching ADR-054 amendment.
+A design that cannot be written down that way is not ready to build.
+
 Also required: a **post-handoff reminder cadence**. Handoff is not discharge,
 so an item that was handed off and never read must come back.
 
@@ -70,11 +78,24 @@ message suppresses task selection **forever** while an incomplete assigned task
 sits there — which is precisely "the agent stops for no acceptable reason",
 problem (a), rebuilt out of problem (b)'s fix.
 
-Required: a non-starvation rule under which pending acknowledgement cannot
-indefinitely bar the persistent task invariant. State it explicitly (a bounded
-number of discharge attempts, or a deadline after which the task proceeds and
-the unacked message is escalated rather than re-blocking), and test it. The
-rule is the deliverable; the exact bound is the sprint's to choose and justify.
+**PLAN-CRIT-013: "messages always first" and "messages can never starve a
+task" are not simultaneously satisfiable, and delegating the bound to the
+implementer let two incompatible builds both claim compliance.** The rule is
+normative here:
+
+  1. A queued message is offered **before** the next task — D4's intent —
+     but each message is offered **at most once** per scheduling pass.
+  2. A message that has been offered and not discharged does **not** block the
+     pass again. It stays remindable on its own cadence (D1) but loses its
+     precedence.
+  3. At most **one** message discharge may precede a task selection in a
+     single pass. Continuous arrivals therefore cannot stack.
+  4. A read-but-unacked `requires_ack` message never blocks task selection at
+     all. It is remindable, not blocking.
+
+Together these give D4 its purpose — a queued message is seen before the agent
+starts the next task — without letting the mailbox hold the task queue
+hostage. AC6 asserts each of the four, not "eventually".
 
 ### D3. One ordered list, which is a sort
 
@@ -128,9 +149,14 @@ assignment, and no exemption is needed.
 4. Deferred-vs-immediate origin is still distinguishable after handoff.
 5. An agent with both an undischarged message and an assigned task receives
    the message first.
-6. **Non-starvation**: continuous queued-message arrivals cannot indefinitely
-   delay the assigned task, and one never-acked message cannot bar it forever.
-   Both asserted with the task eventually selected.
+6. **Non-starvation**, asserted as four separate cases, not "eventually":
+   (a) a message is offered before the next task; (b) an undischarged message
+   is not re-offered in the same pass; (c) with messages arriving on every
+   tick, at most one discharge precedes each task selection; (d) a
+   read-but-unacked `requires_ack` message never blocks task selection while
+   remaining remindable.
+6a. Each added message-row column is named in the sprint doc with type,
+   default and writing transitions, and matches what shipped.
 7. An undischarged message never prevents a task assignment and never occupies
    the one-active slot.
 8. No new table and no new state machine is introduced. Gate: the diff adds no

@@ -80,3 +80,10 @@ project's own instructions.
 This sprint documents `atm queue` as it exists today. It does **not**
 implement ephemeral queued-message scheduling; that is BA.6. If BA.6 changes
 observable behaviour, BA.6 owns the follow-up documentation edit.
+
+**This sprint is not the final word on the `atm task` surface
+(PLAN-CRIT-021).** It runs in wave 1, before R1 and R2 are exercised in code
+and before BA.5 and BA.9 ship the verbs, so AC3 deliberately requires the
+surface be described as *planned*. **BA.11** owns the replacement text once
+the surface exists. Do not treat this sprint's wording as durable, and do not
+pre-empt BA.11 by describing unshipped verbs in the present tense here.

@@ -8,7 +8,7 @@
 | Dependency | `must_follow` BA.5 (owns the command surface), `must_follow` BA.3 (identity and typed outcome) |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
-| Ruling gate | **R1 for the start half, R2 for the reassign half** |
+| Ruling gate | **Both decided**: R1(a) explicit `atm task start`, R2(a) same-id reassignment. Reversible by Rand. |
 
 ## Goal
 
@@ -18,17 +18,20 @@ become `active`, and it can change hands.
 Split out of BA.5 (PLAN-SCOPE-004). These two deliverables were gating seven
 unrelated ones on two unrelated human rulings.
 
-## Ruling gate — per half, not per sprint
+## Rulings — both decided, no gate remains
 
-| half | gated on | may open when |
-| --- | --- | --- |
-| D1 start | **R1** | R1 is recorded in the phase plan |
-| D2 reassign | **R2** | R2 is recorded in the phase plan |
+R1(a) and R2(a) are recorded in the phase plan. This sprint opens on its
+dependencies alone.
 
-If only one ruling has landed, build that half and leave the other's
-deliverable and acceptance criteria untouched. They share
-`crates/atm/src/commands/task.rs`, so they stay one sprint rather than two
-colliding ones — but neither waits on the other's ruling.
+**This sprint owns the verb-count amendment (PLAN-CRIT-014).** BA.5 ships five
+subcommands and its acceptance criterion says so; R1(a) makes the set six.
+BA.9 amends BA.5's criterion and regenerates `cli_surface_baseline.json` to
+six. Exactly one sprint owns that number at a time.
+
+R2(a)'s event semantics are fixed in the phase plan and are **not** open here:
+one `Reassigned` event, the state never passes through `complete`,
+`close_outcome` stays `NULL`, position and reminder counters reset in the same
+transaction.
 
 ## Deliverables
 
@@ -123,7 +126,7 @@ task, and reminder-counter reset.
 
 ## Acceptance criteria
 
-Start half (R1):
+Start half:
 
 1. A task is observably `active` only after the explicit start operation.
 2. Two concurrent starts leave exactly one Active row and exactly one receipt.
@@ -137,14 +140,20 @@ Start half (R1):
 7. Only the current assignee may start; any other actor is rejected with the
    BA.5 D2a authority error before any write.
 
-Reassign half (R2):
+Reassign half:
 
 8. Reassignment is legal from both `assigned` and `active`.
 9. Two concurrent reassignments leave one winner and one stable error.
 10. The new assignee receives a notice; queue position and reminder counters
     are reset per the R2 shape.
 11. The full event history remains reachable from `atm task events` after
-    reassignment.
+    reassignment, and the `Reassigned` event records actor, from-assignee and
+    to-assignee.
+12. Reassignment never writes `state = 'complete'` and never sets
+    `close_outcome`; a terminally suppressed task that is reassigned resumes
+    reminders (the BA.8 D1 reset predicate).
+13. `atm task` exposes exactly six subcommands and the regenerated CLI surface
+    baseline says so.
 
 ## Required validation
 
@@ -158,5 +167,5 @@ Reassign half (R2):
 - No new table, state machine, or capability. If R1 resolves to option (a) it
   adds one CLI verb and nothing else; the complexity budget already accounts
   for that.
-- If a ruling has not landed, the corresponding half does not ship and its
-  acceptance criteria are not marked satisfied. Do not guess the shape.
+- If Rand reverses R1 or R2, the affected half stops and the plan is
+  re-derived; a dev agent must not re-litigate the shape mid-sprint.

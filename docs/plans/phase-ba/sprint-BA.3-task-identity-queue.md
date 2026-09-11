@@ -5,10 +5,10 @@
 | Wave | 2 |
 | Branch | `feature/ba3-task-identity-queue` |
 | Base | `feature/ba1-ack-task-separation` (stack layer 2) |
-| Dependency | `must_follow` BA.1 — merge-forward trigger: BA.1 development pushed, not QA |
+| Dependency | `must_follow` BA.1 (sole owner of `task_state.rs` ack semantics), **`must_follow` BA.4** — both edit `herdr_queue_wake.rs` selection code (PLAN-CRIT-020). Merge-forward trigger: BA.1 and BA.4 development pushed. |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
-| Governed interface | yes — ADR-061 minor with migration |
+| Governed interface | yes — **ADR-061 MAJOR** (R0). Needs Rand's recorded approval + schema-reviewer sign-off before this sprint opens. |
 
 ## Goal
 
@@ -106,9 +106,22 @@ claim failing.
    for one `(team, current_assignee)`. The active row, if any, is fixed at
    position 1; assigned rows are contiguous from 2. A closed row has no
    position.
-2. **Uniqueness.** Enforced in the database, not in application code —
-   a unique index over `(team, current_assignee, position)` restricted to open
-   rows, plus a `CHECK(position >= 1)`. Verified by a concurrent-writer test.
+2. **What the database can and cannot enforce (PLAN-CRIT-006).** An earlier
+   revision claimed contiguity and active-at-position-1 were
+   database-enforced. They are not expressible in SQLite as a unique index or
+   a row-local CHECK, and claiming otherwise made an acceptance criterion
+   impossible to satisfy honestly.
+
+   | invariant | enforced by |
+   | --- | --- |
+   | position unique per open assignee | `UNIQUE INDEX` over `(team, current_assignee, position)` where state <> 'complete' — **database** |
+   | `position >= 1` | `CHECK` — **database** |
+   | contiguity, no gaps | the renumber **transaction**, which rewrites the whole queue; verified by test and by a doctor check |
+   | active occupies position 1 | the same transaction; verified by test and doctor |
+
+   The last two are transaction invariants with an external auditor, not
+   constraints. Say so in the sprint doc and the code comment; do not let a
+   reader believe the database is holding them.
 3. **Migration initialization.** Legacy rows are numbered by the existing
    `(assigned_at, task_id)` FIFO, which preserves today's observable order.
 4. **Renumbering events.** Specify and test what happens on close, start,
@@ -160,7 +173,17 @@ close_outcome TEXT NULL CHECK(close_outcome IN
     ('completed', 'refused', 'cancelled', 'reassigned'))
 ```
 
-`NULL` while the task is open. The sprint still owns the event projection, the
+`NULL` while the task is open.
+
+**The event projection is part of this deliverable, not a follow-up
+(PLAN-CRIT-007).** `TaskEventRow` today carries only
+`outcome: Option<ReminderOutcome>`. A close outcome that lives solely on the
+task row leaves `atm task events` unable to say *why* a task closed, which is
+the oversight question the column exists to answer. Add a distinct
+`close_outcome` projection on the event row alongside the untouched
+`ReminderOutcome`, and record it in the phase's additions list.
+
+The sprint still owns the
 migration default for historical `complete` rows, and the JSON compatibility
 story for `atm task events` consumers. This is a column and type change; it is
 not a new table and not a new state machine.
@@ -211,9 +234,14 @@ as a constraint in the sprint doc and in the code comment on the migration.
    proven under concurrent writers.
 4b. An invalid `--before` target (other assignee, completed task, self)
    returns a typed error and leaves positions unchanged.
-4c. A close outcome is stored in its own typed column; `ReminderOutcome`'s
-   `CHECK` constraint is unchanged and still admits only its three delivery
-   values.
+4c. A close outcome is stored in its own typed column on the task row **and
+   projected on the close event**, so `atm task events <id>` reports why the
+   task closed. `ReminderOutcome`'s `CHECK` is unchanged and still admits only
+   its three delivery values.
+4d. Position uniqueness and `position >= 1` are rejected by the **database**
+   under concurrent writers; contiguity and active-at-1 are asserted by test
+   and reported by a doctor check. No acceptance criterion claims database
+   enforcement of contiguity.
 5. The no-deletion retention constraint (D7) is stated in both this sprint doc
    and a code comment on the schema module, naming BA.5's unknown-id hard
    error as the dependent (PLAN-SCOPE-008).
@@ -226,7 +254,9 @@ as a constraint in the sprint doc and in the code comment on the migration.
 
 - `just test`, `just lint`
 - a fresh-database schema assertion; migration fixtures are BA.10's
-- `schema-reviewer` sign-off on the ADR-061 minor classification **before**
+- `schema-reviewer` sign-off on the ADR-061 **MAJOR** classification (R0) and
+  Rand's recorded approval — both are **preconditions for opening this
+  sprint**, not validation steps run at its end (PLAN-CRIT-025) — **before**
   this sprint opens
 
 ## Non-closure
