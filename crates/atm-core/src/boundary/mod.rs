@@ -9,7 +9,10 @@ pub use atm_storage::TaskState;
 /// Durable roster store used by replacement-runtime maintenance projections.
 #[doc(inline)]
 pub use atm_storage::contract::RosterStore as DurableRosterStore;
-pub use atm_storage::contract::{AckTransition, Message, MessageKey};
+pub use atm_storage::contract::{
+    AckTransition, AsyncMailboxReader, MailboxScope, Message, MessageKey, MessageQuery,
+    ReadLaneError,
+};
 pub use atm_storage::{
     AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, DAEMON_ACTOR_NAME, EscalationScope,
     MAX_ESCALATION_RECIPIENTS, NudgeTemplateOverrideStore, ReadDeadline, ReminderOutcome,
