@@ -5,7 +5,7 @@
 | Wave | 1 |
 | Branch | `feature/ba4-nudge-invariant` |
 | Base | `integrate/phase-ba` (independent PR, not stacked) |
-| Dependency | `parallel_safe` with BA.1, BA.2, BA.7 — disjoint modules |
+| Dependency | `parallel_safe` with BA.1 and BA.7; **`must_follow` BA.2** — both touch `storage_and_nudge_router.rs` (PLAN-SCOPE-002). Merge-forward trigger: BA.2 development pushed. |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
 
@@ -36,6 +36,10 @@ Evaluated continuously, not on a false→true edge. Five arms:
 Re-nudging a still-violating, unchanged pair is **intended**, not a defect.
 
 ## Deliverables
+
+> Numbering note (PLAN-SCOPE-M1): D4 and D6 are absent by design — they moved
+> to BA.8 when this sprint was split. The remaining numbers are kept stable so
+> solar's findings and the phase plan keep pointing at the same deliverables.
 
 ### D1. Bounded evaluation — SOLAR-BA-001, blocking
 
@@ -158,8 +162,10 @@ suppresses the dispatch.
 ## Affected paths
 
 - `crates/atm-http-runtime/src/herdr_queue_wake.rs`
-- `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — roster mutation
-  side of the D5a fence only
+- `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — **shared with
+  BA.2**. This sprint owns only the roster-mutation side of the D5a fence
+  (around `:644-692`); BA.2 owns the nudge-title hunks it cherry-picks. Merge
+  BA.2 forward before editing this file.
 - `crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs` — candidate
   collection and the blocked/offline arms only
 
@@ -167,7 +173,7 @@ suppresses the dispatch.
 
 - `crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs`,
   `herdr_escalation.rs` — BA.8
-- `crates/atm-storage*` — BA.3
+- `crates/atm-storage*` — BA.1 in wave 1, BA.3 from wave 2 (PLAN-SCOPE-M4)
 - `crates/atm/src/commands/*` — BA.5
 - `crates/atm-core/src/picker_projection.rs` — must stay unreferenced from
   this crate, not modified

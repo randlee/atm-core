@@ -6,7 +6,7 @@
 | Branch | `feature/ba2-nudge-title-salvage` |
 | Base | `integrate/phase-ba` |
 | Stack | not stacked — independent PR |
-| Dependency | `parallel_safe` with BA.1, BA.4, BA.7 |
+| Dependency (superseded, see below) | `parallel_safe` with BA.1, BA.4, BA.7 |
 | recommended_agent | Cipher-311d |
 | recommended_model | fast |
 
@@ -29,12 +29,62 @@ Both from `origin/integrate/phase-az`. Neither has any added line referencing
 | `fc81d97cc` | `fix(nudge): dual-write bounded title metadata` |
 | `4682bbbc0` | `fix(nudge): project persisted titles only` |
 
-Combined scope: `crates/atm-core/src/boundary/mod.rs`, `graft.rs`,
-`nudge_dispatch.rs`, `send/hook.rs`, `send/nudge_template.rs`,
-`storage_and_nudge_router.rs`, `crates/atm/src/commands/internal_nudge.rs`,
-`crates/atm-graft-python/src/lib.rs`, three boundary manifests under
-`boundaries/`, plus `docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md`
-and two other ADR/doc updates.
+Combined scope, enumerated from the actual commits — **`fc81d97cc` is 32
+files, not the ~14 an earlier draft of this doc listed** (PLAN-SCOPE-007, and
+worse than reported):
+
+*Code:* `crates/atm-core/src/boundary/mod.rs`, `graft.rs`, `nudge_dispatch.rs`,
+`send/hook.rs`, `send/nudge_template.rs`, `send/tests.rs`,
+`crates/atm-core/tests/nudge_mode.rs`, `tests/task_reminder_dispatch.rs`,
+`crates/atm-http-runtime/src/storage_and_nudge_router.rs`,
+`received_hook_selector.rs`, `crates/atm/src/commands/internal_nudge.rs`,
+`crates/atm-graft/src/nudge_sink.rs`, `runtime/mod.rs`,
+`examples/smoke_same_host.rs`, `crates/atm-graft-python/src/lib.rs`
+
+*Boundary manifests:* `boundaries/atm-core/message-received-hook-emitter.toml`,
+`boundaries/atm-graft/message-received-hook.toml`,
+`boundaries/atm-herdr/herdr-process-adapter.toml`
+
+*Docs:* ADR-052, ADR-054, `docs/architecture.md`, `docs/requirements.md`,
+`docs/project-plan.md`, `docs/atm-core/{architecture,boundaries,requirements}.md`,
+`docs/atm-graft/{architecture,boundaries,requirements}.md`,
+`docs/atm-herdr/{architecture,boundaries,requirements}.md`,
+`docs/atm-http-runtime/architecture.md`,
+`docs/atm/{architecture,requirements}.md`, `docs/user-documents/hooks.md`,
+`docs/examples/hooks/post-send-payload.json`,
+`docs/plans/phase-az/sprint-AZ.1-task-nudge-contract.md`
+
+*Scripts:* `scripts/atm-nudge.py`, `atm-nudge.sh`, `check-nudge-taxonomy.py`,
+`test_atm_nudge.py`
+
+Three consequences the sprint must handle before writing any code.
+
+### Collision with BA.4 — PLAN-SCOPE-002
+
+`crates/atm-http-runtime/src/storage_and_nudge_router.rs` is touched by **both**
+salvage commits and independently by BA.4 D5a, which adds the dispatch-time
+fence at `:644-692`. Both sprints are in wave 1. They are therefore **not**
+`parallel_safe` on that file and the phase plan has been corrected.
+
+Ordering: **BA.2 goes first.** Its edits to that file are small (27 and 2
+lines) and mechanical; BA.4's fence is the substantive change and should be
+written on top of the salvaged state, not rebased under it. BA.4 must merge
+forward from BA.2 before touching the file.
+
+### Boundary manifests need a written ruling — standing constraint
+
+`fc81d97cc` edits three `boundaries/*.toml` manifests. Devs may not edit
+`boundaries/*.toml` without a written ruling. **Obtain the ruling before the
+cherry-pick, or drop those three files from the salvage and record what is
+lost.** Do not carry them across silently because they arrived inside a
+cherry-pick.
+
+### Do not resurrect the phase-AZ sprint doc
+
+`fc81d97cc` modifies `docs/plans/phase-az/sprint-AZ.1-task-nudge-contract.md`.
+Phase AZ is retired. **Drop that file from the cherry-pick.** Likewise, check
+`docs/project-plan.md` and `docs/requirements.md` hunks for AZ-phase language
+before taking them; take only what is true of phase BA.
 
 ## Deliverables
 

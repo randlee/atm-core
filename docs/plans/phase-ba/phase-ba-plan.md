@@ -12,7 +12,7 @@ origin/integrate/phase-az and is cited file:line or by SHA.
 | Supersedes | Phase AZ — retired unmerged; branch retained, not deleted |
 | Base | `develop` |
 | Integration branch | `integrate/phase-ba` |
-| Sprints | 7 |
+| Sprints | 10 |
 | Widest parallel wave | 4 |
 
 ## Why this phase exists
@@ -132,16 +132,20 @@ widest possible wave runs in parallel.
 | BA.6 | Ephemeral queued messages | 4 | arch-ctm / deep-reasoning |
 | BA.7 | Documentation and CLAUDE.md correction | 1 | Cipher-311d / fast |
 | BA.8 | Escalation terminality and lifecycle delivery | 3 | arch-ctm / deep-reasoning |
+| BA.9 | Lifecycle operations: start and reassign | 4 | arch-ctm / deep-reasoning |
+| BA.10 | Task and event migration | 3 | arch-ctm / deep-reasoning |
 
 `recommended_agent` / `recommended_model` are advice, not assignment.
 
 ### Wave plan
 
 ```
-wave 1   BA.1   BA.2   BA.4   BA.7        (four in parallel)
+wave 1   BA.2 -> BA.4     BA.1     BA.7   (BA.1/BA.7 parallel; BA.4 follows BA.2)
 wave 2   BA.3                              (must_follow BA.1)
-wave 3   BA.5   BA.8                       (both must_follow BA.3)
-wave 4   BA.6                              (must_follow BA.5, BA.8)
+wave 3   BA.5   BA.8   BA.10               (all must_follow BA.3; BA.8 also BA.4)
+
+The diagram is a summary; the dependency table below is authoritative.
+wave 4   BA.6   BA.9                       (BA.6: BA.5+BA.8; BA.9: BA.5+BA.3, ruling-gated)
 ```
 
 ## Dependency relations
@@ -149,13 +153,16 @@ wave 4   BA.6                              (must_follow BA.5, BA.8)
 | sprint | relation | rationale |
 |---|---|---|
 | BA.1 | `parallel_safe` with BA.2, BA.4, BA.7 | owns `atm-storage-rusqlite/src/writer/*` and `atm-storage/src/task_state.rs`; no other wave-1 sprint touches either |
-| BA.2 | `parallel_safe` with BA.1, BA.4, BA.7 | owns `atm-core` nudge-title surface and `boundaries/*` title manifests; disjoint from storage and from `atm-http-runtime` |
-| BA.4 | `parallel_safe` with BA.1, BA.2, BA.7 | owns `atm-http-runtime/src/herdr_*`; touches no storage schema and no CLI |
+| BA.2 | `parallel_safe` with BA.1, BA.7 | owns the `atm-core` nudge-title surface and the title boundary manifests; disjoint from storage |
+| BA.4 | `parallel_safe` with BA.1, BA.7; **`must_follow` BA.2** | both edit `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — BA.2's cherry-picks touch it and BA.4 D5a adds the fence at `:644-692`. PLAN-SCOPE-002; they are not parallel-safe. BA.2 first: its hunks are mechanical, BA.4's fence should sit on top. Merge-forward trigger: BA.2 development pushed. |
 | BA.7 | `parallel_safe` with all of wave 1 | documentation only; no code, no tests, no boundary manifests |
 | BA.3 | `must_follow` BA.1 | BA.1 is the sole owner of `task_state.rs` ack semantics; BA.3 then changes identity in the same file. Merge-forward trigger: BA.1 development pushed, not QA. |
 | BA.5 | `must_follow` BA.3 | the command set writes the `outcome` and `position` columns that BA.3 creates |
 | BA.8 | `must_follow` BA.3, `must_follow` BA.4 | serializes on the logical `(team, task_id)` identity BA.3 creates and derives the refusal streak from BA.3's typed outcome; BA.4 owns the reminder path it extends |
-| BA.5 / BA.8 | `parallel_safe` with each other | BA.5 owns `crates/atm/src/commands/*`, BA.8 owns `crates/atm-http-runtime/src/herdr_*`; the one shared file is `atm-core/src/send/mod.rs`, and only BA.8 edits it |
+| BA.5 / BA.8 | `parallel_safe` with each other | BA.5 owns `crates/atm/src/commands/*`, BA.8 owns `crates/atm-http-runtime/src/herdr_*` **and** `atm-core/src/send/mod.rs` outright — BA.5 no longer claims the deferred rule (PLAN-SCOPE-003) |
+| BA.10 | `must_follow` BA.3 | migrates the data onto the schema BA.3 establishes. Split from BA.3 (PLAN-SCOPE-005): a wrong schema is fixable by a follow-up commit, destroyed production history is not. PR-completion trigger. |
+| BA.10 | `parallel_safe` with BA.5, BA.8 | owns the migration path in `schema_version.rs` and the migration fixtures; BA.3 has already landed the schema definitions it migrates onto |
+| BA.9 | `must_follow` BA.5, `must_follow` BA.3 | adds the start and reassign operations to the command surface BA.5 creates. Split from BA.5 (PLAN-SCOPE-004) so seven unrelated deliverables stop waiting on two human rulings. **Gated per half**: the start half on R1, the reassign half on R2. |
 | BA.6 | `must_follow` BA.5, `must_follow` BA.8 (PR-completion) | needs BA.5's close semantics and BA.8's escalation for the non-starvation rule |
 
 `parallel_safe` claims above are made on non-intersecting crates, files,
@@ -219,6 +226,7 @@ Rand: *"I don't want to re-add complexity."*
 | new state machines | attention scheduler, assignment attempts, supersession, breaker maps, two-lane fair selector | **0** |
 | `STORAGE_SCHEMA_VERSION` | 2.0.0 MAJOR + bridge through all 1.6.x + retained 1.5.14 fixture + 1.7.0 removal ADR | **one MINOR with migration** |
 | `atm task` verbs | 11 | **5**, or 6 if Rand rules R1(a) |
+| sprints | 4 merged of an open-ended set | 10 |
 | priority / reordering model | `TaskPriority` with `rank()` | one integer `position` column |
 
 What BA *does* add, in full — this list is exhaustive and any addition beyond
@@ -241,6 +249,11 @@ it needs a written ruling:
 propose persisted escalation-episode identity. The recommendation is option
 (a), which adds nothing. If a sprint reaches for (b), it needs Rand's sign-off
 with the justification that deliverable demands.
+
+Sprint count rose 7 → 10 under review (BA.4 split to BA.8; BA.3 split to
+BA.10; BA.5 split to BA.9). That is sprint **granularity**, not product
+complexity: no row of the table above moved, and each split separates two
+different failure modes rather than adding work.
 
 Solar's twenty-two findings raised the *rigour* of this phase — preflights,
 fences, authorization, bounded reads — without moving any row of the table
@@ -307,7 +320,14 @@ and never from `develop`:
 /sc-git-worktree --create feature/ba3-task-identity-queue      integrate/phase-ba
 /sc-git-worktree --create feature/ba5-atm-task-commands        integrate/phase-ba
 /sc-git-worktree --create feature/ba6-ephemeral-queued-messages integrate/phase-ba
+/sc-git-worktree --create feature/ba8-escalation-terminality    integrate/phase-ba
+/sc-git-worktree --create feature/ba9-lifecycle-operations      integrate/phase-ba
+/sc-git-worktree --create feature/ba10-task-event-migration     integrate/phase-ba
 ```
+
+That is ten worktrees for ten sprints. An earlier revision listed seven and
+omitted BA.8 entirely, which would have silently dropped a sprint carrying
+four blocking dispositions (PLAN-SCOPE-001).
 
 ### The `must_follow` chain is one gh stack
 
@@ -319,21 +339,29 @@ gh stack init --base integrate/phase-ba \
   feature/ba1-ack-task-separation \
   feature/ba3-task-identity-queue \
   feature/ba5-atm-task-commands \
-  feature/ba6-ephemeral-queued-messages
+  feature/ba6-ephemeral-queued-messages \
+  feature/ba9-lifecycle-operations
 gh stack submit --auto
 ```
+
+BA.9 joins the stack above BA.5 because it extends BA.5's command surface in
+the same files. If R1 and R2 have both been answered by the time BA.5 opens,
+consider merging BA.9 back into BA.5 rather than carrying a fifth layer —
+the split exists to stop the rulings blocking BA.5, not to create work.
 
 Layers are added to the stack **when their PR opens**, not held for CI.
 
 ### The parallel sprints are not stacked
 
-BA.2, BA.4 and BA.7 are independent branches with ordinary PRs targeting
-`integrate/phase-ba`. Stacking them would impose an order the dependency
-analysis says does not exist, and would force a rebase of unrelated work every
-time a lower layer moves.
+BA.2, BA.4, BA.7, BA.8 and BA.10 are independent branches with ordinary PRs
+targeting `integrate/phase-ba`. Stacking them would impose an order the
+dependency analysis says does not exist, and would force a rebase of unrelated
+work every time a lower layer moves.
 
-BA.6 depends on BA.4 by **PR completion**, not by branch ancestry: BA.4 merges
-to `integrate/phase-ba` during wave 1, long before BA.6 opens in wave 4.
+Two dependencies here are by **PR completion**, not branch ancestry, because
+the predecessor merges to `integrate/phase-ba` well before the dependent
+opens: BA.8 on BA.4, and BA.6 on BA.8. BA.4 on BA.2 is different — same wave,
+same file — so BA.4 merges BA.2 forward rather than waiting for its PR.
 
 ### Stack discipline
 
@@ -461,7 +489,9 @@ opens.
    into the interrupting path.
 9. No task can be closed, moved, or started by an agent with no authority
    over it.
-10. **The complexity budget above is met exactly.** Gate at phase end: zero
+10. Every sprint in the sequence table has a worktree-creation command and a
+    dependency row. Gate: the counts match.
+11. **The complexity budget above is met exactly.** Gate at phase end: zero
     new tables, zero new sealed traits, zero new semantic capabilities, zero
     new state machines, and one MINOR schema bump. A sprint that needs more
     stops and asks.

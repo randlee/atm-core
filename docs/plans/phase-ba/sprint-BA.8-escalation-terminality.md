@@ -5,7 +5,7 @@
 | Wave | 3 |
 | Branch | `feature/ba8-escalation-terminality` |
 | Base | `integrate/phase-ba` (independent PR, not stacked) |
-| Dependency | `must_follow` BA.4 (owns the reminder path) and BA.3 (logical identity, typed outcome) — merge-forward trigger: both merged to `integrate/phase-ba` |
+| Dependency | `must_follow` BA.4 (owns the reminder path) and BA.3 (logical identity, typed outcome) — PR-completion trigger: both merged to `integrate/phase-ba` |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
 

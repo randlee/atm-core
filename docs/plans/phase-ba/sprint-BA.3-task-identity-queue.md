@@ -139,82 +139,42 @@ primitive column with two unrelated domains violates RBP-004 and makes
 `blocked` ambiguous across the exact two meanings this phase exists to
 separate.
 
-The sprint must name the new type, its column and event projection, the
+The type is fixed here, not left to sprint execution (PLAN-SCOPE-006) — this
+deliverable exists to close an ambiguity, so leaving its shape open reopens it:
+
+```rust
+/// Why a task left the open set. Distinct from `ReminderOutcome`, which
+/// describes whether a *reminder* was delivered. `blocked` is an agent
+/// state and deliberately has no variant here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskCloseOutcome {
+    Completed,
+    Refused,
+    Cancelled,
+    Reassigned,
+}
+```
+
+```sql
+close_outcome TEXT NULL CHECK(close_outcome IN
+    ('completed', 'refused', 'cancelled', 'reassigned'))
+```
+
+`NULL` while the task is open. The sprint still owns the event projection, the
 migration default for historical `complete` rows, and the JSON compatibility
 story for `atm task events` consumers. This is a column and type change; it is
 not a new table and not a new state machine.
 
-### D5. Migration — there is no universal automatic merge rule
+### D5. Migration and event renumbering are **BA.10**
 
-**SOLAR-BA-002 (BLOCKING), verified against the live atm-dev ledger: 109 task
-rows, 95 distinct task ids, 14 duplicated ids.** The duplicate groups are not
-all phantom mirrors:
+The duplicate-group migration (SOLAR-BA-002) and the task_events global
+renumbering (SOLAR-BA-003) moved to **BA.10** (PLAN-SCOPE-005). Both are
+live-data migrations against the real atm-dev ledger with their own
+abort/rollback/proof obligations and a manual deployment step; neither shares
+a failure mode with the schema, index and type work above.
 
-- `FIX-PRERELEASE-R3-…` is the misleading-twin pattern — one real history plus
-  a mirror opened by the completion report.
-- `FIX-1325-…` carries **independent** `assigned → active → complete` histories
-  for two different agents under one id. These are two real tasks that happen
-  to share a name.
-
-A precedence rule — complete-wins, latest-wins, open-wins, or AZ's
-`Active > Assigned > Complete` — cannot distinguish these. It will silently
-conflate distinct historical tasks or pick the wrong assignee, and for a future
-group with two **live** assignees it destroys real work and directly
-manufactures problem (b). **Do not ship a universal merge rule, and do not
-copy AZ's precedence.**
-
-Required instead:
-
-1. **A migration preflight that classifies every duplicate group** before any
-   schema mutation. Classes: byte-identical duplicates (mergeable), mirror
-   pattern (mergeable under a stated rule), and everything else.
-2. **Abort before mutation** on any non-identical or multi-assignee group. Emit
-   `team / task_id / assignee / state / assigned_at / updated_at` per row plus
-   a concrete operator recovery instruction. The migration exits non-zero and
-   the schema version does not change.
-3. **Resolve the 14 existing groups explicitly as a deployment step**, recorded
-   in the sprint evidence — not silently by code.
-4. **Prove row and event counts, and oversight history, after migration.**
-
-Also determine and test: an agent holding two or more Active rows before the
-unique index exists (deterministic demotion to `assigned`, never silent closure
-of live work); and what happens when an assignee reports completion to the
-assigner under the single-row key — today that creates the mirror, now it
-either updates the same row or collides. **Write the test; do not assume.**
-
-Migration must never silently close live work, reopen a completed task, or make
-an existing host unupgradable. Failure rolls back before the version changes.
-
-### D6. Event identity must become task-global
-
-**SOLAR-BA-003 (BLOCKING), verified.** Narrowing only the `tasks` key is half
-an identity change. `task_events` is keyed per assignee and allocates its
-sequence per assignee:
-
-```sql
-PRIMARY KEY (team, task_id, assignee, seq)          -- task_store.rs:42-57
-SELECT COALESCE(MAX(seq), 0) + 1 FROM task_events
-  WHERE team = ?1 AND task_id = ?2 AND assignee = ?3 -- task_store.rs:167-176
-```
-
-and the history read orders by `seq` alone
-(`task_sql.rs:18-21`: `... WHERE team = ?1 AND task_id = ?2 AND (?3 IS NULL OR
-assignee = ?3) ORDER BY seq ASC`).
-
-Live duplicate histories already contain `seq = 1, 2, …` for **both** assignees.
-The moment `tasks` is keyed `(team, task_id)`, `atm task events <id>` returns
-duplicate sequence values in a non-total order, and a future reassignment
-restarts numbering for the new assignee. That breaks exactly the timestamped
-oversight history this phase promises.
-
-Required: `task_events` identity and sequence allocation become task-global —
-`PRIMARY KEY (team, task_id, seq)`, `MAX(seq)` scoped to `(team, task_id)` —
-with `assignee` retained as event **data**. Legacy interleaved streams must be
-renumbered into one total order during the migration, deterministically (order
-by `at`, then existing assignee, then existing seq) with a proof test.
-
-This is not a new table or state machine. It is the second half of the declared
-identity change and cannot be deferred past it.
+This sprint delivers the **shape**. BA.10 delivers the **data move**, and
+`must_follow` this sprint.
 
 ### D7. Retention constraint
 
@@ -254,33 +214,25 @@ as a constraint in the sprint doc and in the code comment on the migration.
 4c. A close outcome is stored in its own typed column; `ReminderOutcome`'s
    `CHECK` constraint is unchanged and still admits only its three delivery
    values.
-5. The migration **aborts before mutating** on a fixture containing a
-   multi-assignee duplicate group, exits non-zero, leaves the schema version
-   unchanged, and prints every conflicting row plus a recovery instruction.
-6. The migration succeeds on a fixture of byte-identical duplicates and on the
-   mirror pattern, and the resulting row and event counts are asserted.
-7. An agent holding two Active rows pre-migration is deterministically demoted,
-   with the demotion recorded; no live work is closed.
-8. `task_events` has one total order per `(team, task_id)` after migrating an
-   interleaved two-assignee legacy stream, and a post-migration append
-   continues that order without collision.
-9. A fresh database and a migrated database have byte-equivalent schema.
+5. The no-deletion retention constraint (D7) is stated in both this sprint doc
+   and a code comment on the schema module, naming BA.5's unknown-id hard
+   error as the dependent (PLAN-SCOPE-008).
+6. A fresh database has the full target schema, including both indexes, the
+   `position` column and the `close_outcome` column with its CHECK.
 10. The sort key is `(position, assigned_at, task_id)` in both `task_sql.rs`
     and `herdr_queue_wake.rs`, with no third ordering site.
 
 ## Required validation
 
 - `just test`, `just lint`
-- migration fixtures for every D5 duplicate class, the abort path, the
-  two-Active demotion, the D6 interleaved-event renumber, and the
-  fresh-vs-migrated equivalence check
-- the deployment step resolving the 14 live duplicate groups, recorded as
-  sprint evidence
+- a fresh-database schema assertion; migration fixtures are BA.10's
 - `schema-reviewer` sign-off on the ADR-061 minor classification **before**
   this sprint opens
 
 ## Non-closure
 
+- No migration ships here; BA.10 owns it. A developer must not "just fix" the
+  14 live duplicate groups while in the schema files.
 - No `atm task move` command ships here; D3 delivers the column and the sort.
   The command is BA.5. Criterion 4 is tested through the storage API.
 - No v2 table, no assignment-attempt table, no operations table, no
