@@ -20,6 +20,7 @@ use crate::schema::{
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, TaskId, TeamName};
+use atm_storage::{MoveTarget, TaskOp};
 
 pub(crate) mod async_persistence;
 mod delivery_persistence;
@@ -166,6 +167,10 @@ pub struct WriteRequest {
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<MoveTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_op: Option<TaskOp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_complete: Option<TaskId>,
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
@@ -213,6 +218,8 @@ impl WriteRequest {
             summary_override,
             requires_ack,
             task_id,
+            placement: None,
+            task_op: None,
             task_complete: None,
             parent_message_id: None,
             thread_mode: None,
@@ -599,6 +606,8 @@ fn build_send_envelope(
         thread_mode: request.thread_mode,
         expires_at: request.expires_at,
         task_id: task_id.clone(),
+        placement: request.placement.clone(),
+        task_op: request.task_op.clone(),
         task_complete: request.task_complete.clone(),
         extra: Map::new(),
     };

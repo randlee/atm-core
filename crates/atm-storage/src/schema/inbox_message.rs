@@ -185,6 +185,10 @@ pub struct MessageEnvelope {
     pub expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
+    #[serde(rename = "placement", default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<crate::task_op::MoveTarget>,
+    #[serde(rename = "taskOp", default, skip_serializing_if = "Option::is_none")]
+    pub task_op: Option<crate::task_op::TaskOp>,
     #[serde(
         rename = "taskComplete",
         default,
@@ -243,6 +247,10 @@ struct RawMessageEnvelope {
     expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     task_id: Option<TaskId>,
+    #[serde(rename = "placement", default, skip_serializing_if = "Option::is_none")]
+    placement: Option<crate::task_op::MoveTarget>,
+    #[serde(rename = "taskOp", default, skip_serializing_if = "Option::is_none")]
+    task_op: Option<crate::task_op::TaskOp>,
     #[serde(
         rename = "taskComplete",
         default,
@@ -276,6 +284,8 @@ impl From<RawMessageEnvelope> for MessageEnvelope {
             thread_mode: value.thread_mode,
             expires_at: value.expires_at,
             task_id: value.task_id,
+            placement: value.placement,
+            task_op: value.task_op,
             task_complete: value.task_complete,
             extra: value.extra,
         }
