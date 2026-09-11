@@ -33,7 +33,7 @@ fn load_task_row(
     target: &SharedDbTarget,
     team: &TeamName,
     task_id: &TaskId,
-    assignee: &AgentName,
+    _assignee: &AgentName,
 ) -> Result<Option<TaskRow>, AtmError> {
     task_sql::select_task_row(connection, team, task_id)
         .map_err(|error| sqlite_error(target, "failed to load task row", error))
