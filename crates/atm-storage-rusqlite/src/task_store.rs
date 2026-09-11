@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     assignee TEXT NOT NULL,
     assigner TEXT NOT NULL,
     state TEXT NOT NULL CHECK(state IN ('assigned', 'active', 'complete')),
+    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled')),
+    position INTEGER NULL CHECK(position IS NULL OR position >= 1),
     assignment_message_id TEXT NOT NULL,
     description TEXT NOT NULL,
     assigned_at TEXT NOT NULL,
@@ -26,8 +28,16 @@ CREATE TABLE IF NOT EXISTS tasks (
     last_reminded_at TEXT NULL,
     reminder_count INTEGER NOT NULL DEFAULT 0,
     lead_notified_count INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (team, task_id, assignee)
+    PRIMARY KEY (team, task_id),
+    CHECK ((state = 'complete') = (close_outcome IS NOT NULL)),
+    CHECK ((state = 'complete') = (position IS NULL))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_agent
+    ON tasks(team, assignee) WHERE state = 'active';
+
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_position_per_member
+    ON tasks(team, assignee, position) WHERE state <> 'complete';
 
 CREATE INDEX IF NOT EXISTS tasks_open_by_member
     ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
@@ -48,6 +58,7 @@ CREATE TABLE IF NOT EXISTS task_events (
     event TEXT NOT NULL,
     from_state TEXT NULL,
     to_state TEXT NULL,
+    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled')),
     actor TEXT NOT NULL,
     message_id TEXT NULL,
     outcome TEXT NULL CHECK(outcome IN ('emitted', 'unrenderable', 'blocked')),
@@ -78,20 +89,21 @@ impl SqliteTaskStore {
         let assignee: String = row.get(2)?;
         let assigner: String = row.get(3)?;
         let state: String = row.get(4)?;
-        let assignment_message_id: String = row.get(5)?;
-        let description: String = row.get(6)?;
-        let assigned_at: String = row.get(7)?;
-        let updated_at: String = row.get(8)?;
-        let last_reminded_at: Option<String> = row.get(9)?;
-        let reminder_count: u32 = row.get(10)?;
-        let lead_notified_count: u32 = row.get(11)?;
+        let position: Option<u32> = row.get(6)?;
+        let assignment_message_id: String = row.get(7)?;
+        let description: String = row.get(8)?;
+        let assigned_at: String = row.get(9)?;
+        let updated_at: String = row.get(10)?;
+        let last_reminded_at: Option<String> = row.get(11)?;
+        let reminder_count: u32 = row.get(12)?;
+        let lead_notified_count: u32 = row.get(13)?;
         Ok(TaskRow {
             team: parse(&team, "task team")?,
             task_id: parse(&task_id, "task id")?,
             assignee: parse(&assignee, "task assignee")?,
             assigner: parse(&assigner, "task assigner")?,
             state: parse_state(&state)?,
-            position: None,
+            position: position.and_then(atm_storage::QueuePosition::new),
             assignment_message_id: parse(&assignment_message_id, "assignment message id")?,
             description,
             assigned_at: parse(&assigned_at, "task assigned timestamp")?,
