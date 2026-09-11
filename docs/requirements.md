@@ -2041,7 +2041,7 @@ adapter.
   cannot acquire reader capacity before its deadline MUST fail explicitly
   with a saturation or deadline outcome; it MUST NOT remain in an indefinite
   queue. Reader capacity MUST be reclaimed when a cancelled request stops.
-- `R-STATE-RACE-1` Durable primary message records MUST remain unchanged unless the owning operation permits an update after
+- `R-STATE-RACE-1` Durable primary message records MUST be immutable after
   admission. Mutable read, acknowledgement, and seen state is
   race-tolerant: a read racing a state change MAY return either value. No
   mailbox-read requirement may demand read-your-writes, snapshot pinning, or

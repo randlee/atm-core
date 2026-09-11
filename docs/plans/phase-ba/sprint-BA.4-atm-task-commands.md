@@ -150,8 +150,6 @@ impl TaskCloseCommand {
         match self.outcome {
             _ if !has_report =>
                 Err(AtmError::validation("a close <id> <outcome> needs a reason or a report source")),
-            _ if !has_report =>
-                Err(AtmError::validation("a close carries a report: give a reason or a message source")),
             _ => Ok(()),
         }
     }
@@ -234,6 +232,8 @@ waiting for, not new work.
 
 ```rust
 pub enum ClosePreflight {
+    /// Caller is neither assignee, assigner, nor the unique team lead: exit 1, nothing sent.
+    NotAuthorized { row: TaskRow },
     /// Row open: deliver report and close in one write.
     Proceed { row: TaskRow },
     /// Row already closed: deliver the report as a plain message, then inform.
@@ -242,7 +242,11 @@ pub enum ClosePreflight {
     Unknown,
 }
 
-pub async fn preflight_close(reader: &dyn AsyncTaskLedgerReader, team: TeamName, task_id: &TaskId, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
+pub async fn preflight_close(reader: &dyn AsyncTaskLedgerReader, team: TeamName, task_id: &TaskId, caller: &AgentName, lead_count: usize, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
+
+Authority is the assignee, assigner, or unique lead (`n == 1`), identical to
+BA.2's writer rule; the writer's `TaskRejectionKind::NotAuthorized` remains the
+authoritative check.
 
 /// Who receives the mandatory report. A self-addressed send is invalid
 /// (`send/recipient.rs:13-31`, enforced in `write_context.rs:129`), so the
@@ -255,14 +259,14 @@ pub fn report_recipient(row: &TaskRow, caller: &AgentName) -> AgentName {
 }
 ```
 
-| stage | `Proceed` | `AlreadyClosed` | `Unknown` |
-| --- | --- | --- | --- |
-| 1 preflight (reader lane, `list_tasks(team, None)` filtered — no new read method) | continue | continue | exit 1: `task <id> does not exist on team <t>`; nothing sent |
-| 2 deliver | one `WriteRequest { to: report_recipient(row, caller), task_id, task_op: Some(Close{outcome, reason}) }` — report and close are **one transaction**; if the close arm rejects, the writer rolls back the whole write and the CLI retries once as stage-2b: plain message (`task_op: None`, `task_id: None`) then reports the rejection | `WriteRequest` with `task_id: None` to `report_recipient` — plain delivery | — |
-| 3 result | `closed <id> (<outcome>)`; exit 0 | `task <id> was already closed (<outcome>) on <at>; report delivered`; exit 0 | — |
+| stage | `Proceed` | `AlreadyClosed` | `NotAuthorized` | `Unknown` |
+| --- | --- | --- | --- | --- |
+| 1 preflight (reader lane, `list_tasks(team, None)` filtered — no new read method) | continue | continue | exit 1: `task <id>: <caller> may not close (not assignee, assigner, or unique lead)`; nothing sent | exit 1: `task <id> does not exist on team <t>`; nothing sent |
+| 2 deliver | one `WriteRequest { to: report_recipient(row, caller), task_id, task_op: Some(Close{outcome, reason}) }` — report and close are **one transaction**; dispatch writer rejection by `TaskRejectionKind`: `AlreadyComplete` → 2b plain delivery + informational line, exit 0; `StaleCounterparty` → one re-preflight/recompose; `NotAuthorized`, `NoOpenTask`, `ActiveElsewhere`, `UnknownTarget` → writer rolled back, CLI prints the rejection, exit 1, NO plain message | `WriteRequest` with `task_id: None` to `report_recipient` — plain delivery | — | — |
+| 3 result | `closed <id> (<outcome>)`; exit 0 | `task <id> was already closed (<outcome>) on <at>; report delivered`; exit 0 | — | — |
 
 Stage 2's single transaction is what design §5.2 means by "deliver first":
-the report is never lost. `AlreadyClosed` is informational only when the race
+the authorized report is never lost. `AlreadyClosed` is informational only when the race
 (closed between stage 1 and 2) occurs: the writer makes no task transition,
 the CLI runs 2b and prints the stage-3 informational line. The
 report body is the message source when given, else the `reason` text.
@@ -386,8 +390,8 @@ Close — `crates/atm/tests/task_close.rs` (fixture daemon, loopback):
 - `close_already_closed_delivers_report_without_task_event`.
 - `close_raced_by_other_closer_writes_zero_new_events` — close from
   two processes; second gets the informational line; two reports delivered.
-- `close_rejected_for_authority_delivers_report_and_prints_rejection` —
-  third party closes: report lands (2b), row untouched, exit 1.
+- `close_by_third_party_sends_nothing_and_exits_one` — open row and already-closed
+  row; `tasks`, `task_events`, `mail_messages` counts unchanged; exit 1.
 - `close_each_outcome_roundtrips` — 3 outcomes visible in `atm task events --json`.
 - `assign_existing_open_id_to_other_agent_reassigns_in_place`.
 - `refusal_releases_next_queued_task` — A has T1, T2; refuse T1 → T2 is

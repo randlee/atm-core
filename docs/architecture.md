@@ -2913,7 +2913,7 @@ not a revival of deleted scaffolding.
 Phase-BA amendment (2026-09-11): the task ledger keys one row per
 `(team, task_id)`, enforces at most one `active` task per agent with a
 database unique index, and orders each agent's queue by
-`(position, assigned_at, task_id)` with `assigned_at` immutable; see
+`(position, assigned_at, task_id)` with `assigned_at` reset only by reassign/reopen and never by move; see
 requirements Sections 15.4 and 22.1.
 
 #### RosterStore

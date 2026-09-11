@@ -51,7 +51,7 @@ revalidation (design §1 "no edge detection/revision revalidation").
 ## Types — exactly as they land (`crates/atm-http-runtime/src/herdr_task_disposition.rs`, new, pure, ≤ 150 lines)
 
 ```rust
-use atm_core::boundary::{RuntimeMemberState, TaskRow, TASK_REMINDER_INTERVAL_MS, TASK_STALLED_REMINDER_THRESHOLD};
+use atm_core::boundary::{RuntimeMemberState, TaskRow, TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS, TASK_STALLED_REMINDER_THRESHOLD};
 use atm_storage::types::IsoTimestamp;
 
 // `TASK_REMINDER_INTERVAL_MS` moves out of this crate: `herdr_queue_wake.rs:44`

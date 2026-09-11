@@ -48,7 +48,7 @@ intentionally not replayable.
 
 ## Reminder cycle
 
-The Tokio-owned Herdr queue wake pump polls every 5 seconds. After it drains
+*Superseded (BA):* The Tokio-owned Herdr queue wake pump polls every 5 seconds. After it drains
 ordinary deferred mail, it checks open tasks for Herdr-backed members reported
 as idle, done, or blocked. *Superseded (BA):* It selects the oldest active
 task (or the oldest assigned task when none is active). It re-sends the Task
@@ -56,16 +56,7 @@ body at most once per member every 60 seconds. Drain comes first and shares the 
 budget, so a queue prompt counts as that member's reminder attempt for the
 tick.
 
-This is Herdr-only. A member that has moved to another backend receives no
-reminder from this pump. `idle_members` retains its queue-dashboard meaning:
-it counts only members that are both idle and have pending deferred mail.
-
-Blocked members are recorded as runtime state `blocked`, receive no Herdr
-prompt, and append a `reminded` audit event with outcome `blocked` on the same
-cadence. Rendering failures append `unrenderable`; successful emissions append
-`emitted`. These events update reminder bookkeeping only and never transition
-task state. If the optional task store is unavailable, only the reminder step
-is skipped; deferred-mail draining continues.
+Superseded by Phase BA (docs/plans/phase-ba/phase-ba-plan.md §4, sprint BA.3): the reminder cycle runs regardless of delivery backend; a task reminder is emitted only when the assignee is Idle with no pending mail, at most once per `TASK_REMINDER_INTERVAL_MS`; `Blocked` outcomes are recorded for offline members and escalate to the lead after `TASK_STALLED_REMINDER_THRESHOLD`.
 
 ## Lead notification and escalation
 

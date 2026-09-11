@@ -26,7 +26,7 @@ legacy `task_complete` key (see "Wire" below).
 | --- | --- | --- |
 | D1 | `QueuePosition`, `TaskCloseOutcome` (completed, refused, cancelled); `TaskState::Complete(outcome)`, `TaskStateTag`, `TaskEvent::{Assigned,Started,Completed(outcome)}`, `transition()`, `TaskRejected`/`TaskRejectionKind` | `crates/atm-storage/src/task_state.rs` |
 | D2 | `TaskRow` + `TaskRowWire`, `TaskEventRow` + `TaskEventRowWire`, `TaskEventKind::{Assigned,Started,Reassigned,Reopened,Completed,Refused,Cancelled,Moved,Migrated}` | `crates/atm-storage/src/task_state.rs` |
-| D3 | `TaskOp`, `MoveTarget`, `RefusalRun`, `TASK_CONSECUTIVE_REFUSAL_THRESHOLD` | `crates/atm-storage/src/task_op.rs` (new), `task_store.rs` |
+| D3 | `TaskOp`, `MoveTarget`, `RefusalRun`, `TASK_CONSECUTIVE_REFUSAL_THRESHOLD`; re-exported from `atm_core::boundary` beside `TASK_STALLED_REMINDER_THRESHOLD` | `crates/atm-storage/src/task_op.rs` (new), `task_store.rs` |
 | D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, ``, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
 | D5 | `TASK_SCHEMA_DDL` rebuilt (two tables, three indexes) | `crates/atm-storage-rusqlite/src/task_store.rs:15-58` |
 | D6 | `migrate_task_identity` + `TaskMigrationReport` | `crates/atm-storage-rusqlite/src/task_migration.rs` (new) |
