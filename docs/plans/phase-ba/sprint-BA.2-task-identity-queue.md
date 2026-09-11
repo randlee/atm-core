@@ -368,7 +368,7 @@ struct TaskEventRowWire {
 // source row), where `from_state == to_state`; both decode from the same
 // `close_outcome` (FNX-BA-CRIT-022; `append_rejected_task_event`, `task_ops.rs:112-129`,
 // already writes both states equal to the current row). `from_state = Complete`
-// with `to_state ≠ Complete` is a validation error — terminal is terminal.
+// with `to_state ≠ Complete` is a validation error — terminal-to-assigned is valid only for reopened.
 // Row decode from SQLite uses the same helpers with the `close_outcome` column.
 ```
 
@@ -859,7 +859,7 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
   with `tasks_position_per_member` in place, move T2 `--head` over T1 (a pure
   swap) and move T4 `--head` over T1..T3; no `SQLITE_CONSTRAINT`, final
   positions contiguous (FNX-BA-CRIT-021).
-- `assigned_at_absent_from_every_update_statement` — greps the source file
+- `assigned_at_updated_only_by_reassign_and_reopen` — greps the source file
   for `UPDATE tasks` statements and asserts none sets `assigned_at`.
 - `close_by_third_party_is_not_authorized`, `close_by_unique_lead_succeeds`,
   `close_by_lead_when_two_leads_is_not_authorized_with_count_in_detail`,
@@ -984,3 +984,5 @@ kinds are `assigned`, `reassigned`, `reopened`, `started`, `completed`,
 
 Boundary authority: `apply_task_close` enforces `StaleCounterparty`; `TaskRejected::stale_counterparty` is an atomic rejection.
 The `TaskRejected::stale_counterparty` kind is sixth and is atomic: no message, close, or non-rejected event is written.
+
+`StaleCounterparty` is a six-variant close rejection; `TaskRejected::stale_counterparty` emits only a rejected event.

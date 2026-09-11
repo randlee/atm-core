@@ -454,3 +454,6 @@ Placement syntax: `atm task assign <agent> --template <j2> --vars <json> [--task
 
 BA.4 recomposes the recipient once after StaleCounterparty, then exits 1 if ownership changes twice.
 A second `StaleCounterparty` after recomposition exits 1 and sends no stale report.
+
+Placement conversion: `fn placement(&self) -> Option<MoveTarget> { match (&self.before, self.head) { (Some(id), false) => Some(MoveTarget::Before(id.clone())), (None, true) => Some(MoveTarget::Head), (None, false) => None, (Some(_), true) => unreachable!("clap ArgGroup") } }`.
+`StaleCounterparty` is handled before plain delivery; a second occurrence exits 1.

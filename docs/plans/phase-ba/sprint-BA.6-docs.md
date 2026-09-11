@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Design | whole document (commit `18db5acc3`) |
-| Outcomes | B14 (queryability documented); phase acceptance 11, 12 |
+| Outcomes | B14 (queryability documented); phase acceptance 13, 14 |
 | Recommended | Cipher-311d / fast |
 | Depends on | `must_follow` BA.1–BA.5 (PR completion) |
 | Worktree | `docs/ba6-task-nudge-documentation` off `integrate/phase-ba` |
@@ -44,7 +44,7 @@ shipped and updates the operator-facing docs.
   AZ section already marked retired.
 - [ ] D7 — `docs/plans/phase-ba/phase-ba-plan.md` §4: each R-row gets its
   "decided: … (comment URL)" line; §9 additions table reconciled against
-  `git diff develop...integrate/phase-ba --stat` (phase acceptance 10).
+  `git diff develop...integrate/phase-ba --stat` (phase acceptance 14).
 - [ ] D8 — `docs/architecture.md` Task Storage: one paragraph per state
   machine (task, disposition, ephemeral item), each a copy of the plan §3
   table — no prose restatement.
