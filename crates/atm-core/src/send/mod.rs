@@ -196,7 +196,10 @@ impl WriteRequest {
             )),
             (_, None, Some(legacy)) => Ok((
                 Some(legacy.clone()),
-                Some(TaskOp::Close { outcome: atm_storage::TaskCloseOutcome::Completed, reason: None }),
+                Some(TaskOp::Close {
+                    outcome: atm_storage::TaskCloseOutcome::Completed,
+                    reason: None,
+                }),
             )),
             (id, None, None) => Ok((id.clone(), None)),
         }
