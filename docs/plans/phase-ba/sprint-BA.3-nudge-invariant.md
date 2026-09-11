@@ -178,12 +178,6 @@ pub(crate) fn escalation_summary(kind: EscalationKind, member: &MemberKey, task:
     }
 }
 
-/// Newest-first scan bound for the mailbox check (`mailbox_reader.rs:207`
-/// orders `message_at DESC`); the query is already narrowed to
-/// `sender = daemon`, so 500 covers any real mailbox. Overflow means one
-/// duplicate mail, never a lost one (RSH-002).
-pub(crate) const ESCALATION_MAILBOX_SCAN_LIMIT: usize = 500;
-
 /// Design §6.1: the mailbox is the record. Called once per **target** when an
 /// episode is first seen by this process (not per tick). A report counts only
 /// if it is at or after the episode's start, so a report from an earlier,
@@ -196,7 +190,7 @@ pub(crate) async fn episode_already_reported(
     deadline: ReadDeadline,
 ) -> Result<bool, ReadLaneError> {
     let query = MessageQuery { team: target.team.clone(), agent: target.agent.clone(),
-        sender: Some(DAEMON_ACTOR.clone()), task_id: None, limit: Some(ESCALATION_MAILBOX_SCAN_LIMIT) };
+        sender: Some(DAEMON_ACTOR.clone()), task_id: None, limit: None };
     let messages = reader.list_messages(target.clone(), query, deadline).await?;
     Ok(messages.iter().any(|m| m.envelope.summary.as_deref() == Some(summary)
         && m.envelope.timestamp >= since))
@@ -311,7 +305,7 @@ asserted (RBQA-F006):
 // outside `dispose`.
 fn still_idle(runtime: &LocalServiceRuntime, member: &MemberKey) -> bool {
     runtime.roster_ephemeral_state(member.team(), member.agent()) // service_runtime.rs:668
-        .map(|record| record.state)
+        .map(|record| record.runtime.state)
         == Some(RuntimeMemberState::Idle)
 }
 ```
@@ -565,13 +559,17 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
     body has no statements and exactly one tail expression, a
     `syn::Expr::Binary` with `BinOp::Eq`. The **left** operand is pinned to
     the exact chain `ExprMethodCall(map)` whose receiver is
-    `ExprMethodCall(roster_ephemeral_state)` on the `runtime` parameter and
-    whose single argument is the closure `|record| record.state` (one
-    field access, nothing else); any other method call in the chain
-    (`filter`, `and_then`, `unwrap_or`, …) fails. The right operand is
+    `ExprMethodCall(roster_ephemeral_state)` on the `runtime` parameter,
+    with exactly the two arguments `member.team()` and `member.agent()`
+    (zero-argument method calls on the `member` parameter), and whose
+    closure is exactly `|record| record.runtime.state` (the two field
+    accesses `runtime` then `state`, nothing else). Any other argument,
+    field access, or method call in the chain (`filter`, `and_then`,
+    `unwrap_or`, …) fails. The right operand is
     `Some(RuntimeMemberState::Idle)`, the only `RuntimeMemberState` path in
     the function. A second statement, branch, `match`, variant, or extra
-    call fails the test (BA-QA4-001, ARCH-BA4-001).
+    call fails the test (ARCH-BA5-001, BA-QA5-001, BA-QA4-001,
+    ARCH-BA4-001).
 - `breaker_open_produces_no_escalation_mail` — trip the Herdr breaker → 0
   mail with kind `breaker_opened` (the kind no longer exists — compile-time
   proof is the enum, this test pins the runtime behaviour).

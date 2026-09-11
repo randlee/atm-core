@@ -603,18 +603,18 @@ rollback is diagnosable rather than surprising:
 - open and every read succeed — `TASK_SCHEMA_DDL` is `CREATE TABLE IF NOT
   EXISTS`, and every task query names its columns (`task_ops.rs`,
   `task_store.rs`), so the new columns are ignored;
-- plain sends, reads and acks are unaffected (they never touch `tasks`);
-- the first task-bearing write fails inside the writer transaction with the
-  SQLite constraint the new DDL adds — `CHECK constraint failed: tasks`
-  (an assignment insert with no `position`) or `UNIQUE constraint failed:
-  tasks.team, tasks.task_id` (a second assignee row) — surfaced as the
-  existing storage write error; nothing is half-written;
+- plain sends and reads are unaffected; a task-bearing ack still executes the
+  legacy `assigned → active` transition and may succeed or be refused;
+- assignment inserts fail inside the writer transaction with the new
+  `CHECK constraint failed: tasks` (no `position`), and a second-assignee
+  row fails with `UNIQUE constraint failed: tasks.team, tasks.task_id`;
+  these are surfaced as the existing storage write error; nothing is
+  half-written;
 - the supported rollback is: stop the daemon, restore
   `<db>.pre-ba2.<utc>.sqlite` (step 1), start the pre-BA binary. Task rows
-  created after the migration are lost with the restore; mail is not
-  (the backup is a point-in-time copy, so mail written after it must be
-  accepted as lost too — the operator is told this in the startup log line
-  that names the backup).
+  Both task and mail writes made after the point-in-time snapshot are lost
+  with the restore; the operator is told this in the startup log line that
+  names the backup.
 
 This is the one-way, no-bridge default of plan §4 R0; the R0 approval and
 ADR-061 D3 exception record it. Test:
