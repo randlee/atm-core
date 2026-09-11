@@ -38,6 +38,7 @@ reminded (FNX-BA-CRIT-017: no widening to "any open message").
 | D2 | `PendingNudgeStore` trait: `clear_pending_on_handoff` → `rearm_pending_after_handoff(member, msg, next_due)`; `clear_pending_on_read` removed (no production caller on develop: only `contract.rs:1674`, router `:1237` and `received_hook_selector.rs:978`, all `#[cfg(test)]`); doc comments state the due-at semantics | `crates/atm-storage/src/contract.rs:1290-1320` |
 | D3 | `nudge_dispatch::rearm_queue_marker_after_handoff` (renamed) computes `next_due = now + TASK_REMINDER_INTERVAL_MS`; every caller and the name-pinning boundary test renamed | `crates/atm-core/src/nudge_dispatch.rs:30`; callers `herdr_queue_wake.rs:754`, `queue_drain.rs:417`, `received_hook_selector.rs:617`; adapter `storage_and_nudge_router.rs:1240`; tests `boundary_enforcement.rs:566-623`, `nudge_mode.rs:132`, bootstrap `lib.rs:1385` |
 | D4 | `complete_successful_claim` calls D3; `HoldReason::MailPending` for a member the drain prompted this tick | `herdr_queue_wake.rs:739-770`, `herdr_task_disposition.rs` |
+| D4a | calls `complete_task_handoff` for head-task assignment messages; no other task activation | `herdr_queue_wake.rs::complete_successful_claim` |
 | D5 | Verify the committed ADR-054 Phase-BA amendment (`docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md:292-303`, already rewritten in this docs PR to the due-at lifecycle) still matches the shipped statements; edit only on drift (ATM-QA-002) | `docs/adr/ADR-054-…md` Phase-BA amendment |
 | D6 | tests named below | `pending_nudge_store.rs` tests, `tests/herdr_queue_ephemeral.rs` |
 | D7 | ADR-054 frozen-inventory gate: in `ALLOWED_NUDGE_IDENTIFIERS` replace `clear_pending_on_handoff` with `rearm_pending_after_handoff` and delete `clear_pending_on_read` (`:89-90`); add `rearm_queue_marker_after_handoff` only if `just lint nudge-taxonomy` flags it. Rename-only, no new nudge kind — ruling: plan §10 (RBQA-F004) | `scripts/check-nudge-taxonomy.py:89-90` |
@@ -184,6 +185,8 @@ Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
 - `blocked_member_with_open_item_escalates_not_reminded`.
 - `bare_cli_pull_closes_item` — FIFO member: `queue_get_next` → read →
   marker `NULL`; no re-arm.
+- `deferred_assignment_handoff_starts_head_task_once` — assign to Idle → drain handoff → task active, reminder_count 1, exactly one receipt; roster Active 20 ticks → zero further receipts/nudges.
+- `deferred_assignment_handoff_for_non_head_task_does_not_start`.
 - `queue_creates_no_task_row_and_no_state_column` — `PRAGMA table_info(mail_message_states)`
   column set equals develop's; `tasks` count unchanged.
 - `no_mailbox_list_read_in_the_queue_pass` — count `list_messages` calls

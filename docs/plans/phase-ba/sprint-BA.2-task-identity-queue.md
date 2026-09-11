@@ -577,7 +577,7 @@ SELECT team, task_id, assignee, assigner, state,
        CASE state WHEN 'complete' THEN 'completed' END,
        NULL,   -- positions assigned in step 7
        assignment_message_id, description,
-       winner.assigned_at,
+       assigned_at,
        updated_at, last_reminded_at, reminder_count, lead_notified_count
   FROM ranked WHERE winner = 1;
 ```
@@ -742,7 +742,7 @@ pub struct RefusalRun { pub count: u32, pub started_at: Option<IsoTimestamp> }
 `TaskRejectionKind::ActiveElsewhere`, not to a generic SQLite error.
 
 The writer's Start gate uses the latest reminder audit:
-`SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' ORDER BY rowid DESC LIMIT 1`.
+`SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team = ?1 AND task_id = ?2 AND event IN ('assigned','reassigned','reopened')) ORDER BY rowid DESC LIMIT 1`.
 It starts only for `outcome = 'emitted'`; otherwise Start is a silent no-op.
 
 Every accepted op appends one `task_events` row (`started` / `completed` +
@@ -797,10 +797,7 @@ Pure — `task_state.rs`:
   `position = None` (FNX-BA-CRIT-019).
 - `task_row_json_rejects_position_on_complete_row` — `state:"complete"` with
   `position: 1` → validation error.
-- `task_event_row_json_reopened_round_trips_and_other_kinds_reject_complete_to_assigned` — a `reopened`
-  event with `from_state = to_state = Complete(Refused)` serialises with one
-  `close_outcome: "refused"` key and round-trips; `from_state: "complete",
-  to_state: "assigned"` → validation error (FNX-BA-CRIT-022).
+- `task_event_row_json_reopened_round_trips_and_other_kinds_reject_complete_to_assigned` — a `reopened` row `from_state: "complete", close_outcome: "<o>", to_state: "assigned"` round-trips for each of the three prior outcomes; the same `from_state`/`to_state` pair with any other `event` is rejected.
 - `task_state_from_parts_rejects_mismatched_outcome` — 5 arms of
   `from_parts`.
 - `task_event_row_json_projects_close_outcome_from_to_state`.
@@ -834,8 +831,7 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
   with `tasks_position_per_member` in place, move T2 `--head` over T1 (a pure
   swap) and move T4 `--head` over T1..T3; no `SQLITE_CONSTRAINT`, final
   positions contiguous (FNX-BA-CRIT-021).
-- `assigned_at_updated_only_by_reassign_and_reopen` — greps the source file
-  for `UPDATE tasks` statements and asserts none sets `assigned_at`.
+- `assigned_at_updated_only_by_reassign_and_reopen` — Start, Close, Move and renumber leave `assigned_at` unchanged; reassign and reopen set it to `now`.
 - `close_by_third_party_is_not_authorized`, `close_by_unique_lead_succeeds`,
   `close_by_lead_when_two_leads_is_not_authorized_with_count_in_detail`,
   `close_by_lead_when_no_lead_is_not_authorized`, `move_by_assignee_is_not_authorized`.
@@ -874,6 +870,9 @@ string, never from production code):
   `active`, assigner mirror row `assigned`) → one `active` row, assignee =
   winner's; one `migrated` event naming the loser.
 - `duplicate_group_winner_keeps_its_own_assigned_at_and_losers_are_in_events`.
+- `winner_query_executes_against_duplicate_group_fixture` — runs this exact
+  statement on a fixture with two legacy rows for one id and asserts one
+  canonical row carrying the winner's own `assigned_at`.
 - `two_active_tasks_same_member_demotes_later_one` — winner by
   `(assigned_at, task_id)`; loser `assigned`, `migrated` event with the AZ
   detail text; positions 1 (active) and 2.
@@ -895,6 +894,9 @@ string, never from production code):
   rows by the replay rule and assert equality with `tasks.state` /
   `close_outcome`; the demotion fixture's fold ends on the `migrated`
   event's `to_state = assigned`.
+- `migration_replay_mismatch_rolls_back_whole_transaction` — a fixture whose
+  re-fold cannot equal the row (corrupted event) → migrate returns AtmError,
+  no table changed, schema version unchanged.
 - `migration_failure_leaves_legacy_tables_and_backup` — inject failure after
   step 4; assert `tasks_legacy` absent (renamed back by rollback → original
   `tasks` present with original PK), backup file exists.
@@ -920,7 +922,7 @@ Required tests: `assign_existing_open_id_to_other_agent_reassigns_in_place_and_r
    where quoted as code (QA diffs them).
 2. Every test above exists by name and passes.
 3. `sqlite3 <fixture> "SELECT sql FROM sqlite_master WHERE name IN ('tasks','task_events','one_active_task_per_agent','tasks_position_per_member')"` matches the DDL section.
-4. `grep -n "assigned_at" crates/atm-storage-rusqlite/src/writer/task_ops.rs` shows it only in `INSERT` and `SELECT`/`ORDER BY` contexts.
+4. `grep -n "assigned_at" crates/atm-storage-rusqlite/src/writer/task_ops.rs` shows it in `UPDATE … SET` only inside the reassign and reopen branches of `apply_task_assignment`.
 5. `schema-reviewer` sign-off recorded on the PR with R0's approval comment
    linked **and** ADR-061 D6 showing the Phase BA approval + D3 exception
    entry (a PR comment alone does not satisfy this — FNX-BA-CRIT-003).

@@ -131,7 +131,7 @@ carried message.
 | assignee `Idle` with an incomplete task | remind, at most once per `TASK_REMINDER_INTERVAL_MS` (60 s) per member; queued messages are discharged first (ADR-054, Phase BA amendment) |
 | assignee `Active` | none; never divert |
 | assignee `Blocked` or `Offline` | no reminder; one escalation message per episode (first accepted observation of the state until the first accepted observation of another state), no cooldown, no re-notification |
-| `reminder_count` reaches `TASK_STALLED_REMINDER_THRESHOLD` (10) | escalate once; reminders stop until the task changes state |
+| `reminder_count` reaches `TASK_STALLED_REMINDER_THRESHOLD` (10) | escalate once; reminders stop until the task changes state (start or close) or is reassigned or reopened; a change in the assignee's runtime state alone does not resume nudging. |
 
 Task selection for an idle member: the active task, else the first `assigned`
 task in queue order.

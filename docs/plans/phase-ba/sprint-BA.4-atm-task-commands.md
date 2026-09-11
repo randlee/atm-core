@@ -354,6 +354,9 @@ CLI parse — `crates/atm/src/commands/task.rs` tests:
   `close T1 bogus` → parse error listing the three values.
 - `close_refused_requires_reason`, `close_cancelled_requires_reason`,
   `close_completed_without_reason_or_source_is_rejected`,
+- `close_refused_with_stdin_and_no_reason_is_accepted` — `close T1 refused --stdin` with a body and no positional reason → accepted, reason None, body is the report;
+- `close_cancelled_with_template_and_no_reason_is_accepted` — same with `--template`;
+- `close_without_reason_or_report_source_is_rejected` — `close T1 refused` alone → error `close <id> <outcome> needs a reason or a report source`.
   `assign_existing_open_id_to_other_agent_reassigns_in_place`,
   `assign_closed_id_reopens_same_row`, `assign_same_agent_open_id_is_noop`,
   `assign_with_head_places_after_active`.

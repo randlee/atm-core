@@ -3035,8 +3035,9 @@ Nudge invariant (Phase BA):
 18. Escalation MUST be one ordinary message to the roster lead (when exactly
     one) and to every configured escalation recipient, resolved
     independently; when a task's reminder count reaches 10 it MUST escalate
-    once and nudging MUST stop until the assignee's state changes or the task
-    is closed.
+    once and nudging MUST stop until the task changes state (start or close) or
+    is reassigned or reopened; a change in the assignee's runtime state alone
+    does not resume nudging.
 
 ## 16. Observability Requirements
 

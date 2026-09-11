@@ -288,16 +288,7 @@ Tick order per team: (1) roster observations applied, (2) queue drain
 member `dispose(...)` → act. A member prompted by the drain in this tick is
 `Hold`-equivalent for tasks (existing `prompted_by_drain` skip, kept).
 
-**Successful handoff helper:** `complete_task_handoff(runtime, member, head,
-now)` is the single helper for a successful task handoff. It records
-`ReminderOutcome::Emitted`, submits the idempotent `TaskOp::Start` write, and
-sends the existing `task_started` receipt. The task-reminder path calls it
-after an emitted reminder; BA.5 calls it after a claimed assignment message
-only when its envelope `task_id` equals the current head (`position = 1`,
-`state = assigned`). Thus deferred assignment mail is the task's first nudge;
-non-task and non-head claims do not activate a task. A failed Start remains
-start-owed for the next tick, without another prompt. It is the only Start
-write submission path.
+One helper owns a successful task handoff: `pub(crate) async fn complete_task_handoff(runtime: &LocalServiceRuntime, member: &MemberKey, head: &TaskRow, now: IsoTimestamp)` in `crates/atm-http-runtime/src/herdr_task_start.rs` (new): (1) `record_task_reminder(member, head.task_id, now, ReminderOutcome::Emitted)`; (2) the idempotent `Start` write and `task_started` receipt. The task-reminder path calls it after `Emitted`; BA.5 calls it from `complete_successful_claim` when the claimed message carries `task_id` equal to the member's head (`position = 1`, `state = assigned`). It is the only call site that submits `TaskOp::Start` (architecture grep gate: `grep -rn "TaskOp::Start" crates/atm-http-runtime/src` → herdr_task_start.rs only).
 
 **Start (R1):** when the task nudge for `head` is handed off successfully
 (`ReminderOutcome::Emitted`), the pump submits one `WriteRequest` from
@@ -600,7 +591,7 @@ target ≤ 3,700 lines after deletions), `just lint-boundaries`.
 Mail-before-task ordering and the queue-item reminder (BA.5); CLI (BA.4);
 any new nudge template kind (ADR-054 inventory unchanged).
 
-- Handoff gate: `unrenderable_reminder_never_becomes_start_owed` keeps the head assigned across two ticks with zero started events; the writer checks the latest reminded event outcome is `emitted` before Start. Exact query: `SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' ORDER BY rowid DESC LIMIT 1`.
+- Handoff gate: `unrenderable_reminder_never_becomes_start_owed` keeps the head assigned across two ticks with zero started events; the writer checks the latest reminded event outcome is `emitted` before Start. Exact query: `SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team = ?1 AND task_id = ?2 AND event IN ('assigned','reassigned','reopened')) ORDER BY rowid DESC LIMIT 1`.
 
 Writer gate: latest reminded event query uses ORDER BY rowid DESC LIMIT 1 and permits Start only when outcome = 'emitted'; otherwise silent no-op.
 
