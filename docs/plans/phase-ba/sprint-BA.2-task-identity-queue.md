@@ -207,6 +207,10 @@ pub enum TaskRejectionKind {
     UnknownTarget,   // Move Before(id) names no open task of the same member
     AlreadyComplete, // close repeated after completion; informational rejection
 }
+
+`TaskRejectionKind::AlreadyComplete` is also exposed by the
+`TaskRejected::already_complete` constructor for repeated close attempts;
+assign-on-complete uses the separate reopen branch.
 ```
 
 Authority failures are rejections, not error codes: a caller who is neither
