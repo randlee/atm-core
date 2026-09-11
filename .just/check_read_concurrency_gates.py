@@ -31,6 +31,9 @@ ALLOWED_WRITE_OPS = {
     # AW.2 sprint authorizes these lower-priority diagnostic-lane mutations.
     "PruneDiagnostics",
     "RecordDiagnostics",
+    # Phase BA plan §7 / sprint BA.2 §Writer: queue move is a serialized
+    # mutation; the router arm lands in BA.4.
+    "TaskMove",
 }
 HANDLER_LIST = Path(__file__).with_name("allowlists") / "read_concurrency_handlers.txt"
 READ_HANDLERS = tuple(

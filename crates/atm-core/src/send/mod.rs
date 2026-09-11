@@ -347,7 +347,7 @@ pub(crate) enum DeliveryExecutionMode {
 
 pub(crate) fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskId>) -> bool {
     request.requires_ack
-        || task_id.is_some()
+        || (task_id.is_some() && request.task_op.is_none())
         || matches!(
             &request.message_source,
             SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
@@ -382,7 +382,7 @@ pub(crate) fn send_mode_for_task_request(
     request: &SendRequest,
     task_id: &Option<TaskId>,
 ) -> NudgeMode {
-    if task_id.is_some() {
+    if task_id.is_some() && request.task_op.is_none() {
         NudgeMode::Deferred
     } else {
         request.nudge_mode
@@ -729,9 +729,10 @@ pub(crate) mod tests;
 mod path_body_tests {
     use super::{
         NudgeMode, SendMessageSource, WriteRequest, looks_like_path_only_body,
-        send_mode_for_task_request,
+        request_requires_ack, send_mode_for_task_request,
     };
     use crate::types::TeamName;
+    use atm_storage::TaskOp;
 
     #[test]
     fn detects_existing_relative_and_absolute_files() {
@@ -807,6 +808,15 @@ mod path_body_tests {
             send_mode_for_task_request(&task_request, &task_id),
             NudgeMode::Deferred
         );
+        assert!(request_requires_ack(&task_request, &task_id));
+
+        let mut task_operation = task_request.clone();
+        task_operation.task_op = Some(TaskOp::Start);
+        assert_eq!(
+            send_mode_for_task_request(&task_operation, &task_id),
+            NudgeMode::Immediate
+        );
+        assert!(!request_requires_ack(&task_operation, &task_id));
 
         let ordinary_request = WriteRequest::new(
             home_dir.path().to_path_buf(),

@@ -246,6 +246,6 @@ fn cli_task_completion_covers_ac2_success_unknown_id_and_conflict() {
     assert!(
         conflict_error
             .message()
-            .contains("assign and complete a task")
+            .contains("task_id and task_complete name different tasks")
     );
 }

@@ -16,7 +16,7 @@ roots = []
 
 [ownership]
 io_owns = ["task_event_audit_append", "task_row_read"]
-io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn", "task_state_transition", "task_body_dereference"]
+io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn", "task_state_transition"]
 
 [dependencies]
 allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
@@ -35,6 +35,7 @@ notes = [
   "state change: only the message writer transaction applies Assigned/Started/Reassigned/Reopened/Completed; no TaskStore method changes tasks.state",
   "audit: task_events is append-only; every accepted transition, rejection, reminder, and lead notification is one row in the acting transaction",
   "replay: per (team, task_id) the Assigned/Started/Reassigned/Reopened/Completed rows replayed through transition reproduce tasks.state; latest Assigned/Reassigned/Reopened.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at; count(LeadNotified) == lead_notified_count; description is not replayable",
+  "task rows carry assignment_message_id only; nothing in this store dereferences the message body (design §3)",
   "CLI (atm) reads TaskRow/TaskEventRow through atm_storage::contract; daemon crates import through atm_core::boundary",
   "escalation recipients: list_escalation_recipients, add_escalation_recipient and remove_escalation_recipient store daemon or team-scoped ADR-040 addresses; team resolution falls back to the daemon list only when the team list is empty",
 ]

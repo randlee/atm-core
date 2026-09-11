@@ -74,6 +74,116 @@ pub(crate) fn migrate_task_identity(
     }
 }
 
+const TASK_IDENTITY_ROWS_MIGRATION: &str = r#"
+WITH ranked AS (
+    SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY team, task_id
+        ORDER BY CASE state WHEN 'complete' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,
+                 updated_at DESC, assignee ASC) AS winner
+    FROM tasks_legacy
+), winners AS (SELECT * FROM ranked WHERE winner = 1)
+INSERT INTO tasks(team, task_id, assignee, assigner, state, close_outcome, position,
+                  assignment_message_id, description, assigned_at, updated_at,
+                  last_reminded_at, reminder_count, lead_notified_count)
+SELECT team, task_id, assignee, assigner, state,
+       CASE state WHEN 'complete' THEN 'completed' END,
+       CASE WHEN state = 'complete' THEN NULL ELSE ROW_NUMBER() OVER (
+           PARTITION BY team, assignee, (state = 'complete')
+           ORDER BY CASE state WHEN 'active' THEN 0 ELSE 1 END,
+                    assigned_at ASC, task_id ASC) END,
+       assignment_message_id, description, assigned_at, updated_at,
+       last_reminded_at, reminder_count, lead_notified_count
+FROM winners;
+
+INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
+                        close_outcome, actor, message_id, outcome, marker, detail)
+SELECT team, task_id, assignee,
+       ROW_NUMBER() OVER (PARTITION BY team, task_id ORDER BY at, assignee, seq),
+       at, event, from_state, to_state,
+       CASE WHEN to_state = 'complete' OR from_state = 'complete' THEN 'completed' END,
+       actor, message_id, outcome, marker, detail
+FROM task_events_legacy;
+
+WITH ranked AS (
+    SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY team, task_id
+        ORDER BY CASE state WHEN 'complete' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,
+                 updated_at DESC, assignee ASC) AS winner
+    FROM tasks_legacy
+), losers AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY team, task_id ORDER BY updated_at, assignee) AS loser_no
+    FROM ranked WHERE winner <> 1
+)
+INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
+                        close_outcome, actor, detail)
+SELECT loser.team, loser.task_id, loser.assignee,
+       COALESCE((SELECT MAX(event.seq) FROM task_events event
+                 WHERE event.team = loser.team AND event.task_id = loser.task_id), 0) + loser.loser_no,
+       loser.updated_at, 'migrated', winner.state, winner.state,
+       CASE winner.state WHEN 'complete' THEN 'completed' END,
+       'atm-daemon',
+       'migrated source row: assignee=' || loser.assignee || ', state=' || loser.state || ', assigned_at=' || loser.assigned_at
+FROM losers loser
+JOIN ranked winner ON winner.team = loser.team AND winner.task_id = loser.task_id AND winner.winner = 1;
+
+INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
+                        actor, detail)
+SELECT task.team, task.task_id, task.assignee,
+       COALESCE((SELECT MAX(seq) FROM task_events event
+                 WHERE event.team = task.team AND event.task_id = task.task_id), 0) + 1,
+       task.updated_at, 'started', 'assigned', 'active', 'atm-daemon',
+       'synthesized by BA.2 migration'
+FROM tasks task
+WHERE task.state = 'active'
+  AND NOT EXISTS (SELECT 1 FROM task_events event
+                  WHERE event.team = task.team AND event.task_id = task.task_id
+                    AND event.event = 'started');
+
+INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
+                        close_outcome, actor, detail)
+SELECT task.team, task.task_id, task.assignee,
+       COALESCE((SELECT MAX(seq) FROM task_events event
+                 WHERE event.team = task.team AND event.task_id = task.task_id), 0) + 1,
+       task.updated_at, 'completed', 'assigned', 'complete', 'completed', 'atm-daemon',
+       'synthesized by BA.2 migration'
+FROM tasks task
+WHERE task.state = 'complete'
+  AND NOT EXISTS (SELECT 1 FROM task_events event
+                  WHERE event.team = task.team AND event.task_id = task.task_id
+                    AND event.event IN ('completed', 'refused', 'cancelled'));
+
+CREATE TEMP TABLE active_demotions AS
+SELECT team, task_id, assignee, assigned_at,
+       ROW_NUMBER() OVER (PARTITION BY team, assignee ORDER BY assigned_at, task_id) AS active_rank
+FROM tasks WHERE state = 'active';
+
+UPDATE tasks SET state = 'assigned'
+WHERE (team, task_id) IN (SELECT team, task_id FROM active_demotions WHERE active_rank > 1);
+
+INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
+                        actor, detail)
+SELECT demotion.team, demotion.task_id, demotion.assignee,
+       COALESCE((SELECT MAX(seq) FROM task_events event
+                 WHERE event.team = demotion.team AND event.task_id = demotion.task_id), 0) + 1,
+       task.updated_at, 'migrated', 'active', 'assigned', 'atm-daemon',
+       'demoted because another active task for this member wins by original assignment time and task id'
+FROM active_demotions demotion
+JOIN tasks task ON task.team = demotion.team AND task.task_id = demotion.task_id
+WHERE demotion.active_rank > 1;
+
+UPDATE tasks AS current SET position = (
+    SELECT COUNT(*) FROM tasks preceding
+    WHERE preceding.team = current.team AND preceding.assignee = current.assignee
+      AND preceding.state <> 'complete'
+      AND (CASE preceding.state WHEN 'active' THEN 0 ELSE 1 END,
+           preceding.assigned_at, preceding.task_id)
+          <= (CASE current.state WHEN 'active' THEN 0 ELSE 1 END,
+              current.assigned_at, current.task_id)
+) WHERE current.state <> 'complete';
+
+DROP TABLE active_demotions;
+"#;
+
 fn migrate_transaction(
     transaction: &Transaction<'_>,
     target: &SharedDbTarget,
@@ -90,117 +200,9 @@ fn migrate_transaction(
         .execute_batch(TASK_TABLES_DDL)
         .map_err(|error| sqlite_error(target, "failed to create BA.2 task tables", error))?;
 
-    transaction.execute_batch(
-        r#"
-        WITH ranked AS (
-            SELECT *, ROW_NUMBER() OVER (
-                PARTITION BY team, task_id
-                ORDER BY CASE state WHEN 'complete' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,
-                         updated_at DESC, assignee ASC) AS winner
-            FROM tasks_legacy
-        ), winners AS (SELECT * FROM ranked WHERE winner = 1)
-        INSERT INTO tasks(team, task_id, assignee, assigner, state, close_outcome, position,
-                          assignment_message_id, description, assigned_at, updated_at,
-                          last_reminded_at, reminder_count, lead_notified_count)
-        SELECT team, task_id, assignee, assigner, state,
-               CASE state WHEN 'complete' THEN 'completed' END,
-               CASE WHEN state = 'complete' THEN NULL ELSE ROW_NUMBER() OVER (
-                   PARTITION BY team, assignee, (state = 'complete')
-                   ORDER BY CASE state WHEN 'active' THEN 0 ELSE 1 END,
-                            assigned_at ASC, task_id ASC) END,
-               assignment_message_id, description, assigned_at, updated_at,
-               last_reminded_at, reminder_count, lead_notified_count
-        FROM winners;
-
-        INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
-                                close_outcome, actor, message_id, outcome, marker, detail)
-        SELECT team, task_id, assignee,
-               ROW_NUMBER() OVER (PARTITION BY team, task_id ORDER BY at, assignee, seq),
-               at, event, from_state, to_state,
-               CASE WHEN to_state = 'complete' OR from_state = 'complete' THEN 'completed' END,
-               actor, message_id, outcome, marker, detail
-        FROM task_events_legacy;
-
-        WITH ranked AS (
-            SELECT *, ROW_NUMBER() OVER (
-                PARTITION BY team, task_id
-                ORDER BY CASE state WHEN 'complete' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,
-                         updated_at DESC, assignee ASC) AS winner
-            FROM tasks_legacy
-        ), losers AS (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY team, task_id ORDER BY updated_at, assignee) AS loser_no
-            FROM ranked WHERE winner <> 1
-        )
-        INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
-                                close_outcome, actor, detail)
-        SELECT loser.team, loser.task_id, loser.assignee,
-               COALESCE((SELECT MAX(event.seq) FROM task_events event
-                         WHERE event.team = loser.team AND event.task_id = loser.task_id), 0) + loser.loser_no,
-               loser.updated_at, 'migrated', winner.state, winner.state,
-               CASE winner.state WHEN 'complete' THEN 'completed' END,
-               'atm-daemon',
-               'migrated source row: assignee=' || loser.assignee || ', state=' || loser.state || ', assigned_at=' || loser.assigned_at
-        FROM losers loser
-        JOIN ranked winner ON winner.team = loser.team AND winner.task_id = loser.task_id AND winner.winner = 1;
-
-        INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
-                                actor, detail)
-        SELECT task.team, task.task_id, task.assignee,
-               COALESCE((SELECT MAX(seq) FROM task_events event
-                         WHERE event.team = task.team AND event.task_id = task.task_id), 0) + 1,
-               task.updated_at, 'started', 'assigned', 'active', 'atm-daemon',
-               'synthesized by BA.2 migration'
-        FROM tasks task
-        WHERE task.state = 'active'
-          AND NOT EXISTS (SELECT 1 FROM task_events event
-                          WHERE event.team = task.team AND event.task_id = task.task_id
-                            AND event.event = 'started');
-
-        INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
-                                close_outcome, actor, detail)
-        SELECT task.team, task.task_id, task.assignee,
-               COALESCE((SELECT MAX(seq) FROM task_events event
-                         WHERE event.team = task.team AND event.task_id = task.task_id), 0) + 1,
-               task.updated_at, 'completed', 'assigned', 'complete', 'completed', 'atm-daemon',
-               'synthesized by BA.2 migration'
-        FROM tasks task
-        WHERE task.state = 'complete'
-          AND NOT EXISTS (SELECT 1 FROM task_events event
-                          WHERE event.team = task.team AND event.task_id = task.task_id
-                            AND event.event IN ('completed', 'refused', 'cancelled'));
-
-        CREATE TEMP TABLE active_demotions AS
-        SELECT team, task_id, assignee, assigned_at,
-               ROW_NUMBER() OVER (PARTITION BY team, assignee ORDER BY assigned_at, task_id) AS active_rank
-        FROM tasks WHERE state = 'active';
-
-        UPDATE tasks SET state = 'assigned'
-        WHERE (team, task_id) IN (SELECT team, task_id FROM active_demotions WHERE active_rank > 1);
-
-        INSERT INTO task_events(team, task_id, assignee, seq, at, event, from_state, to_state,
-                                actor, detail)
-        SELECT demotion.team, demotion.task_id, demotion.assignee,
-               COALESCE((SELECT MAX(seq) FROM task_events event
-                         WHERE event.team = demotion.team AND event.task_id = demotion.task_id), 0) + 1,
-               task.updated_at, 'migrated', 'active', 'assigned', 'atm-daemon',
-               'demoted because another active task for this member wins by original assignment time and task id'
-        FROM active_demotions demotion
-        JOIN tasks task ON task.team = demotion.team AND task.task_id = demotion.task_id
-        WHERE demotion.active_rank > 1;
-
-        UPDATE tasks AS current SET position = (
-            SELECT COUNT(*) FROM tasks preceding
-            WHERE preceding.team = current.team AND preceding.assignee = current.assignee
-              AND preceding.state <> 'complete'
-              AND (CASE preceding.state WHEN 'active' THEN 0 ELSE 1 END,
-                   preceding.assigned_at, preceding.task_id)
-                  <= (CASE current.state WHEN 'active' THEN 0 ELSE 1 END,
-                      current.assigned_at, current.task_id)
-        ) WHERE current.state <> 'complete';
-
-        DROP TABLE active_demotions;
-        "#,
-    ).map_err(|error| sqlite_error(target, "failed to migrate task identity rows", error))?;
+    transaction
+        .execute_batch(TASK_IDENTITY_ROWS_MIGRATION)
+        .map_err(|error| sqlite_error(target, "failed to migrate task identity rows", error))?;
 
     verify_positions(transaction, target)?;
     verify_replay(transaction, target)?;
