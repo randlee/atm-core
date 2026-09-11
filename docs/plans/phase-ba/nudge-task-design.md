@@ -3,6 +3,10 @@
 Status: DRAFT for Rand's review. Work is STOPPED until he approves.
 Author: fenix. Source: Rand's rulings 2026-09-10, verified against origin/develop
 and origin/integrate/phase-az.
+Amended 2026-09-11 (Rand's rulings, recorded by fenix): §3.1a one id for the
+life of a task — reassign and reopen in place; §4 close outcomes and event
+kinds; §4.3 `assigned_at`; §5 `assign` placement flags. This commit replaces
+9b5c7d876 as the frozen baseline the phase-BA plan cites.
 
 ## 0. The two problems this exists to fix
 
@@ -137,6 +141,38 @@ resolves the single existing row on develop (sender first, then recipient).
 Under (team, task_id) the fallback lookup no longer needs an assignee at all.
 The behaviour is not in question; the regression test is still required.
 
+### 3.1a One id for the life of a task: reassign and reopen (Rand, 2026-09-11)
+
+Three rulings:
+
+1. A single task id (a bead id, a TTL id, a sprint id such as `ba-1-qa-1`, or
+   a minted ULID) is never queued or active for more than one agent at the
+   same time. `PRIMARY KEY (team, task_id)` is the enforcement: one row, one
+   assignee column.
+2. The same id can be reassigned, and closed then reopened, any number of
+   times. The bead database's primary key is the task id for the bead's whole
+   life; ATM never forces a second id for the same piece of work.
+3. Every state transition of that id is one row in the event log under that
+   id (section 4).
+
+Mechanism — `atm task assign <agent> --task-id <id>` on an id that already
+exists does exactly one of three things, decided by the row:
+
+| row state | same agent | other agent |
+|---|---|---|
+| `assigned` / `active` | idempotent resend (no transition, no event) | **reassign in place**: `assignee` updated, state `assigned`, position END of the new agent's queue unless `--before`/`--head`; the old agent's active slot is freed; event `reassigned` |
+| closed (any outcome) | **reopen**: state `assigned` on the named agent, position as above; event `reopened` | same |
+
+No new verb: reassign and reopen are `assign`. "Terminal truth wins" is
+narrowed to what it is for: a closed task never nudges and nothing implicit
+(a late ack, a reminder, a report) revives it; only an explicit `assign`
+does. The "already complete; use a new id" rejection is deleted.
+
+`assigned_at` is the time of the CURRENT assignment: reassign and reopen set
+it, because they are an assignment, so the task queues behind the new agent's
+existing work. The first `assigned` event keeps the origin time; nothing is
+lost for reconstruction.
+
 ### 3.2 Retention
 
 Nothing deletes task rows on develop. No `DELETE FROM tasks`, no
@@ -152,6 +188,9 @@ If anyone adds task GC, that rule silently becomes wrong.
 - start  -> working (state: active); MUST notify the assigner (Rand: "when a
   task is started, a message needs to be sent letting the sender know")
 - close  -> leaves the queue (no more nudges) AND records a timestamped event
+- reassign -> same id moves to another agent's queue (state: assigned);
+  section 3.1a
+- reopen -> a closed id is queued again (state: assigned); section 3.1a
 
 Dequeue and the event record are TWO facts, not one. That separation is the
 mirror fix independent of the key change: if dequeue keys on task-id rather than
@@ -159,14 +198,22 @@ on the row, a completed task cannot keep nudging from a twin.
 
 Outcomes are TYPED, not free text, because oversight must tell them apart:
 
-    completed | refused | cancelled | reassigned
+    completed | refused | cancelled
 
-Rationale: reassignment is close-and-create, so the outcome is the only thing in
-the ledger distinguishing a finished task from an abandoned one. Free text
-cannot be counted.
+Rationale: the outcome is the only thing in the ledger distinguishing a
+finished task from an abandoned one. Free text cannot be counted.
+`reassigned` is NOT an outcome (amended 2026-09-11): reassignment is not a
+close, it is `assign` on an open id (section 3.1a).
 
-NOTE: the transition table already enforces close-and-create --
-`(Some(Complete), Assigned) => Err("already complete; use a new id")`.
+Event kinds, one row per transition under the one id, keyed
+`(team, task_id, seq)`:
+
+    assigned | started | reassigned | reopened |
+    completed | refused | cancelled | moved | migrated
+
+The event row's `assignee` is who holds the task after the event, so a
+reassignment reads as two rows with different assignees; a reopen reads as a
+row whose from-state is a close.
 
 ### 4.1 "blocked" is two different things -- never use one word
 
@@ -219,7 +266,9 @@ Rules:
   - Position is a SEPARATE COLUMN, never `assigned_at`. Reordering by rewriting
     the timestamp falsifies the audit record; timestamps are what make incident
     reconstruction possible (the 587 analysis depended on them). Sort on
-    (position, assigned_at, task_id); `assigned_at` stays immutable.
+    (position, assigned_at, task_id); `assigned_at` is never rewritten for
+    reordering. Reassign and reopen set it because they ARE an assignment
+    (section 3.1a); the event log keeps every earlier one.
   - Default position is END. FIFO remains the behaviour when nobody intervenes.
   - `--head` means NEXT UP, NOT NOW. Position governs the assigned queue only.
     The active task is never repositioned and never preempted -- otherwise
@@ -234,10 +283,10 @@ Command:
     atm task move <task-id> --head
     atm task move <task-id> --end
 
-Composes with close-and-create: an opus task mis-assigned to a haiku agent is
-closed (outcome=reassigned) and re-created on the right agent with
+Composes with reassign-in-place (section 3.1a): an opus task mis-assigned to
+a haiku agent is `assign`ed to the right agent under the same id with
 `--before`/`--head`, landing in the correct slot instead of at the back.
-Position is what makes close-and-create usable for reordering at all.
+Position is what makes reassignment usable for reordering at all.
 
 ## 5. Command surface
 
@@ -246,6 +295,7 @@ enum is closed by construction, so this lints under ADR-001/RBP-003 with no
 extra machinery. No `atm task` namespace exists today.
 
     atm task assign <agent> --template <j2> --vars <json> [--task-id <id>]
+                    [--before <other-task-id> | --head]   # placement, default END
     atm task close  <task-id> <outcome> [reason]
     atm task move   <task-id> --before <other> | --head | --end
     atm task list                      # oversight, section 7
@@ -258,9 +308,10 @@ Aliases, as implied subcommands:
     atm send <assigner> --task-complete --task-id <id> --template ... --vars ...
         -> atm task close (outcome=completed), carrying a MANDATORY report
 
-Deliberately absent: start, ack, reassign, supersede, block. Start is implicit
-in beginning work and produces the receipt. Reassign is close-and-create. Ack
-left the task domain entirely (section 5.1).
+Deliberately absent: start, ack, reassign, reopen, supersede, block. Start is
+implicit in beginning work and produces the receipt. Reassign and reopen are
+`assign` on an existing id (section 3.1a). Ack left the task domain entirely
+(section 5.1).
 
 ### 5.1 ack and task are mutually exclusive, under the hood
 
