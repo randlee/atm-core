@@ -123,7 +123,7 @@ struct TaskAssignCommand {
     caller: CallerArgs,
 }
 
-**Local-only guard (plan §4 R8).** `execute` first rejects `assignee` (and, for close/`--task-id`, the recipient) when `AgentAddress::host()` is `Some` — before preflight, before any `WriteRequest`. Error text exactly: `task commands are local-team only; <addr> is on another host — send a plain message or assign the local alias`. The same guard applies to `atm send --task-id`/`--task-complete` (:214-218 share the request builder, so the check lives in the shared builder).
+**Local-only guard (plan §4 R8).** `execute` first rejects `assignee` (and, for close/`--task-id`, the recipient) when `resolve_recipient(addr, caller_team).team != caller_team` or `AgentAddress::host()` is `Some` — before preflight, before any `WriteRequest`. Error text exactly: `task commands are local-team only; <addr> resolves to another team or host — send a plain message or assign the local alias`. The same guard applies to `atm send --task-id`/`--task-complete` (:214-218 share the request builder, so the check lives in the shared builder).
 
 #[derive(Debug, Args)]
 struct TaskCloseCommand {
@@ -404,6 +404,8 @@ Close — `crates/atm/tests/task_close.rs` (fixture daemon, loopback):
 - `close_by_unique_lead_passes_preflight_on_open_and_closed_rows`.
 - `assign_host_qualified_target_is_rejected_before_send` — `x@other.host`: exit 1, no message row, no task row, no peer dispatch.
 - `send_task_id_to_host_qualified_recipient_is_rejected_before_send` — same via `atm send --task-id`; `--task-complete` likewise.
+- `assign_other_team_target_is_rejected_before_send` — `x@other-team` (host `None`): exit 1, no message row, no task row.
+- `send_task_id_to_other_team_recipient_is_rejected_before_send` — same via `atm send --task-id`; `--task-complete` likewise.
 - `close_each_outcome_roundtrips` — 3 outcomes visible in `atm task events --json`.
 - `assign_existing_open_id_to_other_agent_reassigns_in_place`.
 - `refusal_releases_next_queued_task` — A has T1, T2; refuse T1 → T2 is

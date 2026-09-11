@@ -701,7 +701,7 @@ last_reminded_at IS NOT NULL` is the "start owed" predicate BA.3 retries on. `Cl
 sets `close_outcome`, `position = NULL`, renumbers the remainder, and keeps
 `acknowledge_completed_assignment`. `Move` renumbers only; `assigned_at`
 appears in an `UPDATE … SET` list only in the reassign and reopen branches of `apply_task_assignment` (never Start, Close, Move, or renumber).
-`commit_write` with `task_op.is_some()` and a host-qualified `to` returns the same local-only validation error (`task commands are local-team only; <addr> is on another host — send a plain message or assign the local alias`) before opening the transaction (plan §4 R8); test `writer_rejects_task_op_on_host_qualified_recipient`.
+`commit_write` with `task_op.is_some()` and a `to` whose team differs from the writer's caller team or whose host is set returns the same local-only validation error (`task commands are local-team only; <addr> resolves to another team or host — send a plain message or assign the local alias`) before opening the transaction (plan §4 R8); test `writer_rejects_task_op_on_foreign_team_or_host_recipient`.
 
 `apply_task_move` — the active task holds position 1 by invariant and is
 never repositioned or preempted (design §4.3). Exact arm, before any
