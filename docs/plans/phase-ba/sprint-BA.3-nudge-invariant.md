@@ -351,52 +351,6 @@ refused timestamp. It is carried beside `head` on the existing per-member
 task input; no new table or state is introduced. The pure `dispose` function
 receives only the count.
 
-Seam: `StorageAndNudgeRouter::reader tick` (`storage_and_nudge_router.rs:273-337`)
-already holds the `WriteOutcome` after `prepared.finish(...)` (`:297`).
-This crate depends on `atm-core`, owns `EscalationTargets`, and is the only
-place that may call the escalation path (`escalate` is `pub(crate)` at
-`herdr_escalation.rs:161`; `atm-core` cannot call it without a dependency
-cycle — FNX-BA-CRIT-014 / PLAN-SCOPE-001). Exact addition, after `:297`:
-
-```rust
-        // `outcome: WriteOutcome` (an enum, write/pipeline.rs:13-16); the
-        // router has `service_runtime: LocalServiceRuntime` and `daemon_home:
-        // PathBuf` fields (storage_and_nudge_router.rs:54-62) and no task_store
-        // field — the store comes from the runtime as herdr_queue_wake.rs:371
-        // already does (FNX-BA-CRIT-026).
-        if let atm_core::write::WriteOutcome::Sent(sent) = &outcome {
-            if let Some(applied) = sent.task_close.as_ref() {
-                if applied.outcome == TaskCloseOutcome::Refused
-                    && applied.consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD
-                {
-                    let team = canonical_request.caller_team.clone();
-                    // keyed to the refusing assignee, never the caller — the
-                    // assigner or the unique lead may have submitted the close
-                    // (FNX-BA-CRIT-027)
-                    let member = MemberKey::new(team.clone(), applied.assignee.clone());
-                    let summary = crate::herdr_escalation::escalation_summary(
-                        EscalationKind::RefusalsEscalated, &member, None);
-                    let body = refusals_body(applied); // assignee, count, task id
-                    let task_store = self.service_runtime.task_store().ok();
-                    // `>=` plus suppression bounded to the run start: the 3rd
-                    // the threshold refusal writes the mail; if a target write
-                    // fails, the held task run retries only that target on the
-                    // next tick (RSH-001).
-                    let _ = crate::herdr_escalation::escalate_mail(
-                        &self.service_runtime, task_store.as_ref(), &self.daemon_home,
-                        &team, &summary, &body, EscalationKind::RefusalsEscalated,
-                        Some(applied.run_started_at),
-                    ).await;
-                }
-            }
-        }
-```
-
-A compile-pinning test (`refusal_seam_compiles_against_write_outcome`, in
-the router's test module) constructs a `WriteOutcome::Sent` with
-`task_close = Some(RefusalRun { consecutive_refusals: 3, .. })` and
-asserts one `escalate_mail` call; the seam is code, not pseudocode.
-
 The threshold refusal closes the run and holds the member: from the third
 refusal onward, the normal tick emits no task prompts and retries only missing
 per-target refusal escalation mail via `escalate_mail(...,
@@ -536,7 +490,7 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
   idle members → 1 per tick.
 - `escalation_mail_does_not_consume_prompt_budget` — 16 idle members with
   due tasks + 1 blocked → 16 prompts and 1 mail in one tick.
-- `third_refusal_escalates_then_member_is_held` — through the real
+- `third_refusal_tick_holds_and_escalates_once` — through the real
   `reader tick`: 3 refused closes by A → 1 mail to lead + recipients with
   `summary == "escalation:refusals_escalated:A@<team>"`, kind `refusals_escalated`; a 4th
   refused close → no second mail; subsequent ticks produce 0 task prompts.
