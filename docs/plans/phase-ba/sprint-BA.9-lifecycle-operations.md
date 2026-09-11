@@ -4,7 +4,7 @@
 | --- | --- |
 | Wave | 4 |
 | Branch | `feature/ba9-lifecycle-operations` |
-| Base | `feature/ba5-atm-task-commands` (stack layer 4) |
+| Base | `feature/ba5-atm-task-commands` (stack layer 5) |
 | Dependency | `must_follow` BA.5 (owns the command surface), `must_follow` BA.3 (identity and typed outcome) |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
@@ -35,7 +35,7 @@ transaction.
 
 ## Deliverables
 
-### D1. The explicit start operation — gated on R1
+### D1. The explicit start operation — **R1 decided: (a)**
 
 **SOLAR-BA-004 (BLOCKING), verified.** The closed set above deliberately omits
 `start`, and BA.1 deletes ack-driven activation. On develop the *only*
@@ -56,8 +56,8 @@ None of the implicit substitutes work, and the sprint must not adopt one:
 The fix is an explicit lifecycle operation that atomically selects the task,
 moves `Assigned → Active` under the unique index, appends the event, and
 creates the assigner receipt. It adds no state, table, or state machine — but
-it **is** a sixth verb or an equivalent explicit API call, which crosses
-Rand's closed-set ruling.
+it **is** an additional verb or an equivalent explicit API call, which
+crosses Rand's closed-set ruling. R1 decided it: a verb.
 
 > **DECIDED: (a)** — R1 in the phase plan. The three shapes considered:
 >
@@ -79,9 +79,10 @@ Acceptance: concurrency (two starts racing), duplicate-start
 idempotency, receipt-write failure and retry, and the crash boundary either
 side of the receipt.
 
-### D2. Reassignment — gated on R2
+### D2. Reassignment — **R2 decided: (a)**
 
-**SOLAR-BA-009 (BLOCKING).** Reassignment is specified as close-and-create,
+**SOLAR-BA-009 (BLOCKING), as originally filed against the design.**
+Reassignment *was* specified as close-and-create,
 task ids are never deleted or reused, and `(team, task_id)` becomes unique.
 Those three cannot all hold:
 
@@ -110,30 +111,39 @@ another agent if he KNOWS."* It must not be an implementation guess.
 > new one, that is acceptable"* was permission, not a requirement, and it
 > predates the single-row identity ruling. (b) is not built.
 
-**The command syntax (PLAN-SCOPE-013).** Reassignment adds **no verb**. It is
-`assign` applied to a task id that already exists:
+**The command syntax (PLAN-SCOPE-013, corrected by R2-CRIT-016).**
+Reassignment is its **own verb**:
 
 ```
-atm task assign <new-agent> --task-id <existing-task-id> [--reason <text>]
+atm task reassign <task-id> --to <new-agent> --reason <text>
 ```
 
-- `--task-id` naming an **unknown** id → ordinary assignment, unchanged.
-- `--task-id` naming an **open** task → reassignment: one `Reassigned` event
+*An earlier revision made it `assign` onto an existing task id, selecting the
+meaning by whether the id already existed. That was wrong and it contradicted
+this sprint's own reasoning: D1 rejected shape (c), "`atm task assign`
+self-targeted as an implicit start", on RBP grounds for overloading `assign`
+with two meanings. An implicit mode switch keyed on row existence is the same
+defect, and worse — it is invisible at the call site and races another writer
+creating the id.*
+
+The closed set is therefore **seven**: `assign`, `start`, `close`,
+`reassign`, `move`, `list`, `events`. Seven closed verbs is not a budget
+breach: the budget counts traits, capabilities, tables, state machines and id
+types, and a clap variant is none of those. The five-verb figure was a design
+preference, and it stopped being achievable the moment ack left the task
+domain (R1) and reassignment became a first-class transition (R2).
+
+- `reassign` on an **open** task → one `Reassigned` event
   carrying actor / `from_assignee` / `to_assignee` / reason, `current_assignee`
   updated, position recomputed in the new assignee's queue, reminder counters
   reset, all in one transaction. `state` never reaches `complete` and
   `close_outcome` stays `NULL`.
-- `--task-id` naming a **closed** task → the existing stable error. Reopening
-  is not in this phase.
-- Omitting `--reason` on a reassignment is rejected. A handover with no
-  recorded reason is the audit gap this deliverable exists to close; on a
-  first assignment the flag is not accepted at all.
-
-This is why AC13 says **six** subcommands and not seven: `assign`, `start`,
-`close`, `move`, `list`, `events`. Reassignment is a second meaning for
-`assign` that is unambiguous because it is selected by whether the id exists,
-not by a mode flag. An earlier revision of BA.11 listed a seventh `reassign`
-verb and a `show` verb that appears nowhere in BA.5 — both were wrong.
+- `reassign` on a **closed** task → the existing stable error. Reopening is
+  not in this phase.
+- `reassign` on an **unknown** id → a distinct stable error, never a silent
+  assignment.
+- `--reason` is **required**. A handover with no recorded reason is the audit
+  gap this deliverable exists to close.
 
 Acceptance: legality from both `assigned` and `active`, concurrent
 reassignment, the receipt to the new assignee, queue position of the moved
@@ -161,7 +171,10 @@ Start half:
 2. Two concurrent starts leave exactly one Active row and exactly one receipt.
 3. A duplicate start is idempotent, not an error and not a second receipt.
 4. The start receipt reaches the assigner's mailbox, asserted on the mailbox,
-   not on a log line, and does not steer an Active assigner (BA.8 D6's rule).
+   not on a log line. **Whether it steers an Active assigner is BA.8's
+   assertion, not this sprint's** (R2-CRIT-015): BA.8 owns deferred lifecycle
+   delivery and follows this sprint, so an AC here would test behaviour that
+   does not exist at this head.
 5. A receipt write failure does not roll back the started task and is
    retryable without duplicating the receipt.
 6. Starting a second task while one is active is rejected by the
@@ -179,14 +192,18 @@ Reassign half:
     reassignment, and the `Reassigned` event records actor, from-assignee and
     to-assignee.
 12. Reassignment never writes `state = 'complete'` and never sets
-    `close_outcome`; a terminally suppressed task that is reassigned resumes
-    reminders (the BA.8 D1 reset predicate).
-13. `atm task` exposes exactly six subcommands — `assign`, `start`, `close`,
-    `move`, `list`, `events` — and the regenerated CLI surface baseline says
-    so. Reassignment adds no verb.
-14. `atm task assign --task-id <open-id>` reassigns rather than erroring, and
-    `atm task assign --task-id <unknown-id>` still assigns. Both asserted.
+    `close_outcome`. **The terminal-suppression reset on reassignment is
+    BA.8's assertion** (R2-CRIT-015) — BA.8 D1 owns the reset predicate and
+    follows this sprint. This sprint owns the persistence and the event; BA.8
+    owns what the reminder loop then does with them.
+13. `atm task` exposes exactly **seven** subcommands — `assign`, `start`,
+    `close`, `reassign`, `move`, `list`, `events` — and the regenerated CLI
+    surface baseline says so.
+14. `atm task reassign` on an unknown id is a distinct stable error and never
+    creates a task; on a closed id it is the existing stable error.
 15. A reassignment with no `--reason` is rejected before any write.
+16. `atm task assign` has **no** implicit reassignment behaviour: assigning
+    onto an existing open id is rejected, not silently reinterpreted.
 
 ## Required validation
 

@@ -12,7 +12,7 @@ origin/integrate/phase-az and is cited file:line or by SHA.
 | Supersedes | Phase AZ — retired unmerged; branch retained, not deleted |
 | Base | `develop` |
 | Integration branch | `integrate/phase-ba` |
-| Sprints | 11 |
+| Sprints | 12 |
 | Widest parallel wave | 4 |
 
 ## Why this phase exists
@@ -124,6 +124,7 @@ widest possible wave runs in parallel.
 
 | sprint | title | wave | recommended |
 |---|---|---|---|
+| BA.0 | Normative ADR decisions, before any implementation | 0 | Cipher-311d / fast |
 | BA.1 | Ack/task separation (salvage) | 1 | Cipher-311d / fast |
 | BA.2 | Nudge title metadata (salvage evaluation) | 1 | Cipher-311d / fast |
 | BA.3 | Task identity, one-active, queue position | 2 | arch-ctm / deep-reasoning |
@@ -134,13 +135,14 @@ widest possible wave runs in parallel.
 | BA.8 | Escalation terminality and lifecycle delivery | 5 | arch-ctm / deep-reasoning |
 | BA.9 | Lifecycle operations: start and reassign | 4 | arch-ctm / deep-reasoning |
 | BA.10 | Task and event migration | 3 | arch-ctm / deep-reasoning |
-| BA.11 | ADR amendments and final task-surface documentation | 6 | Cipher-311d / fast |
+| BA.11 | Final code-verified documentation and consistency sweep | 6 | Cipher-311d / fast |
 
 `recommended_agent` / `recommended_model` are advice, not assignment.
 
 ### Wave plan
 
 ```
+wave 0   BA.0                               (ADR decisions; blocks every code sprint)
 wave 1   BA.2 -> BA.4     BA.1     BA.7   (BA.1/BA.7 parallel; BA.4 follows BA.2)
 wave 2   BA.3                              (must_follow BA.1 and BA.4)
 wave 3   BA.5   BA.10                      (both must_follow BA.3)
@@ -148,6 +150,16 @@ wave 4   BA.6   BA.9                       (BA.6: BA.5+BA.4; BA.9: BA.5+BA.3)
 wave 5   BA.8                               (must_follow BA.3, BA.4, BA.5, BA.6)
 wave 6   BA.11                              (must_follow everything)
 ```
+
+**BA.0 exists because BA.11 was the wrong place for normative decisions
+(R2-CRIT-004).** ADR-054 says later sprints *implement* its contract and never
+redefine it; ADR-061 D3 requires MAJOR approval **before plan approval**. An
+amendment written after the code lets the implementer define the contract, and
+an ADR-064 marked `Accepted` after the migration records approval for
+something irreversible that already happened. So the phase splits in two:
+**BA.0 decides**, every code sprint conforms, **BA.11 verifies** what shipped
+against the decision and writes the user-facing documentation. BA.11 keeps no
+normative content.
 
 The diagram is a summary; the dependency table below is authoritative.
 
@@ -167,16 +179,17 @@ it must serialize with BA.5's mutations and test BA.5's receipts.
 | BA.4 | `parallel_safe` with BA.1, BA.7; **`must_follow` BA.2** | both edit `crates/atm-http-runtime/src/storage_and_nudge_router.rs` — BA.2's cherry-picks touch it and BA.4 D5a adds the fence at `:644-692`. PLAN-SCOPE-002; they are not parallel-safe. BA.2 first: its hunks are mechanical, BA.4's fence should sit on top. Merge-forward trigger: BA.2 development pushed. |
 | BA.7 | `parallel_safe` with all of wave 1 | documentation only; no code, no tests, no boundary manifests |
 | BA.3 | `must_follow` BA.1 | BA.1 is the sole owner of `task_state.rs` ack semantics; BA.3 then changes identity in the same file. Merge-forward trigger: BA.1 development pushed, not QA. |
-| BA.3 | **`must_follow` BA.4** | both edit the selection code in `crates/atm-http-runtime/src/herdr_queue_wake.rs`: BA.4 replaces edge detection with continuous evaluation there, BA.3 changes what selection reads (`position`, logical identity). BA.4 first — BA.3 should land on the new evaluation shape, not be rewritten by it. PLAN-CRIT-002. This row was missing while BA.3's header asserted the dependency (PLAN-SCOPE-010); the table is authoritative, so the table is where it has to be. |
+| BA.3 | **`must_follow` BA.4** | both edit the selection code in `crates/atm-http-runtime/src/herdr_queue_wake.rs`: BA.4 replaces edge detection with continuous evaluation there, BA.3 changes what selection reads (`position`, logical identity). BA.4 first — BA.3 should land on the new evaluation shape, not be rewritten by it. PLAN-CRIT-020. This row was missing while BA.3's header asserted the dependency (PLAN-SCOPE-010); the table is authoritative, so the table is where it has to be. *(Round 2 re-cited this as PLAN-CRIT-002 — wrong; 002 is BA.5's mutation boundary, which was separately unaddressed. R2-CRIT-019.)* |
 | BA.5 | `must_follow` BA.3 | the command set writes the `outcome` and `position` columns that BA.3 creates |
 | BA.8 | `must_follow` BA.3, BA.4, **BA.5**, **BA.6** | BA.3 gives the logical `(team, task_id)` identity and the typed outcome the refusal streak reads; BA.4 owns the reminder path it extends; **BA.5** because BA.8 serializes with BA.5's mutations and its AC tests BA.5's receipts (PLAN-CRIT-015); **BA.6** because AC11's read-without-ack remindability is BA.6's deliverable (PLAN-CRIT-012) |
 | BA.5 / BA.8 | ~~`parallel_safe`~~ **withdrawn** | file ownership is still disjoint (BA.5 `crates/atm/src/commands/*`, BA.8 `crates/atm-http-runtime/src/herdr_*` and `atm-core/src/send/mod.rs`), but disjoint files are not sufficient when one sprint's acceptance criteria assert the other's behaviour. PLAN-CRIT-015 |
 | BA.10 | `must_follow` BA.3 | migrates the data onto the schema BA.3 establishes. Split from BA.3 (PLAN-SCOPE-005): a wrong schema is fixable by a follow-up commit, destroyed production history is not. PR-completion trigger. |
-| BA.10 | `parallel_safe` with BA.5, BA.8 | owns the migration path in `schema_version.rs` and the migration fixtures; BA.3 has already landed the schema definitions it migrates onto |
+| BA.10 | ~~`parallel_safe` with BA.5, BA.8~~ **withdrawn** | BA.3+BA.10 are one deployable unit (R2-CRIT-002); nothing may consume the new columns until BA.10 has merged, so BA.5 and BA.8 sit above BA.10, not beside it |
 | BA.9 | `must_follow` BA.5, `must_follow` BA.3 | adds the start and reassign operations to the command surface BA.5 creates. Split from BA.5 (PLAN-SCOPE-004) so seven unrelated deliverables stop waiting on two human rulings. **Gated per half**: the start half on R1, the reassign half on R2. |
 | BA.6 | `must_follow` BA.5, `must_follow` BA.4 (PR-completion) | needs BA.5's close semantics and BA.4's invariant evaluation. **The former dependency on BA.8 is reversed** (PLAN-CRIT-012): the non-starvation rule is now normative in BA.6 D4 and needs nothing from BA.8, while BA.8 does need BA.6 |
 | BA.6 / BA.9 | `parallel_safe` with each other | both in wave 4, both downstream of BA.5, and disjoint: BA.9 owns the `atm task` clap enum and `crates/atm/src/commands/task*`, BA.6 owns `mail_message_states` and the scheduling pass in `crates/atm-http-runtime/`. Neither's acceptance criteria assert the other's behaviour — the test PLAN-CRIT-015 established. BA.9 is a stack layer, BA.6 is an independent branch (PLAN-SCOPE-011) |
 | BA.8 | **`must_follow` BA.9** | AC9 exercises the **start** receipt, which BA.9 introduces; BA.5 D6/D7 moved `start` out of BA.5. Wave order already sequences them, but an undocumented dependency is what produced the BA.6/BA.8 cycle once already. PLAN-SCOPE-016 |
+| BA.0 | blocks **every** code sprint | it carries the ADR-054 and ADR-062 amendments and the ADR-064 migration decision. No sprint may implement a contract its ADR has not yet decided (ADR-054's "later sprints implement, never define"; ADR-061 D3's "before plan approval"). Doc-only, so it is one short wave, but it is a hard gate, not a formality |
 | BA.11 | `must_follow` every other sprint (PR-completion) | it records what shipped. An amendment written ahead of the code is a prediction; phase AZ produced several that then disagreed with the merge. Doc-only, so it costs one short wave |
 
 `parallel_safe` claims above are made on non-intersecting crates, files,
@@ -190,7 +203,46 @@ and his 2026-09-11 direction was to fix all reviewer findings and iterate to
 clean. All three are therefore **decided here by fenix and reversible by Rand**,
 not held open.
 
-### R0 — BA.3 is a MAJOR storage change (PLAN-CRIT-001)
+### R0 — BA.3 is a MAJOR storage change (PLAN-CRIT-001) — **REOPENED, ESCALATED TO RAND**
+
+> **STOP. This ruling is withdrawn pending Rand's decision (R2-CRIT-001,
+> R2-CRIT-003). BA.3, BA.10 and the ADR-064 record may not open until it is
+> answered.** I ruled the shape below; I had no authority to, and it is
+> illegal as written.
+>
+> **ADR-061 D3 forbids it.** Verified on `origin/develop`
+> (`docs/adr/ADR-061-governed-interface-schema-versioning.md:77-86`): a major
+> change *"must ship with a co-existence window: the new build still serves
+> the previous major (or negotiates down) for the duration Rand approves.
+> **No change may require every host to upgrade together.**"* One-way, no
+> bridge, old-binary-refuses is exactly a change that requires every host to
+> upgrade together.
+>
+> **And the version gate I promised cannot exist.** ADR-061 D1 states
+> *"`STORAGE_SCHEMA_VERSION` does not exist yet and needs its own planned
+> sprint"*, and `git grep STORAGE_SCHEMA_VERSION origin/develop` returns
+> nothing. A binary that predates the constant cannot inspect a marker
+> introduced after it shipped, so "the old binary refuses to open the
+> migrated database" is unimplementable against *the actual previous
+> binary*. BA.10's AC2a could never pass.
+>
+> **The three legal shapes, for Rand:**
+>
+> | | shape | cost |
+> | --- | --- | --- |
+> | **i** | Express BA.3 **additively** and stay MINOR. ADR-061's own design rule requires this be attempted first: *"before proposing a major change, the author must show why the capability cannot be expressed additively."* | needs a real attempt; may prove impossible for a primary-key narrowing, but that proof does not exist yet and I did not write it |
+> | **ii** | MAJOR **with** the coexistence window ADR-061 demands | this is AZ's shape — the bridge, the retained old-binary fixture, the removal ADR. It is the expense this phase was created to avoid |
+> | **iii** | Rand grants a **recorded exception to ADR-061 D3**, or amends ADR-061 by an accepted pre-implementation ADR | fastest, and the only route to the one-way shape. Requires a prerequisite release that ships `STORAGE_SCHEMA_VERSION` *before* the migration, or the old-binary-refuses claim is withdrawn |
+>
+> My recommendation is **(iii) plus the prerequisite release**, with (i)
+> attempted first and its result recorded either way. But this is Rand's by
+> ADR-061's construction — *"Rand's explicit, recorded approval and sign-off
+> **before plan approval**"* — not mine, and my standing instruction to make
+> the call does not extend to overriding a governing ADR.
+>
+> Everything below this box is the withdrawn ruling, kept so the reasoning is
+> reviewable. **Do not execute it.**
+
 
 **Decision: accept MAJOR. One-way migration with a version gate. No bridge.**
 
@@ -251,10 +303,9 @@ redundant the moment ack left the task domain.
 ### R2 — reassignment identity (SOLAR-BA-009)
 
 **Decision: option (a), same-id reassignment**, with the event semantics fixed
-below during round-1 hardening. *(An earlier revision cited PLAN-CRIT-025 here;
-that id belongs to the `schema-reviewer` precondition finding. Same
-mis-citation class as PLAN-SCOPE-010 — corrected rather than re-pointed at a
-guess.)*
+below (PLAN-CRIT-025). *(Round 2 briefly deleted this citation as a
+mis-reference. That was wrong — PLAN-CRIT-025 is exactly this finding. The
+citation is restored; see R2-CRIT-019.)*
 
 Reassignment as close-and-create, ids never reused, and unique
 `(team, task_id)` cannot all hold at once. Reusing the id collides with the
@@ -272,7 +323,7 @@ Rand's *"if that means close one and create a new one, that is acceptable"*
 was permission, not a requirement, and it predates the single-row identity
 ruling.
 
-**The event semantics, fixed.** "Atomic close/reopen" was not
+**The event semantics, fixed (PLAN-CRIT-025).** "Atomic close/reopen" was not
 a specification and two implementations could both claim to satisfy it with
 different audit truth. Reassignment is **one** transition, not a close
 followed by an assign:
@@ -318,6 +369,16 @@ work away but never destroying it — this ruling is wrong and BA.5 D2a's
 matrix changes before the sprint opens.
 
 ## Complexity budget — the hard ceiling
+
+**The exhaustive additions list lives in BA.0 D4.** The budget below counts
+traits, capabilities, tables, state machines and id types — all zero. Several
+deliverables add *types and fields*, which are none of those and were
+accumulating unrecorded: `TaskCloseOutcome`, `TaskOp`, `WriteRequest.task_op`,
+`AsyncTaskLedgerReader::recent_closed_tasks`, the runtime `escalation_epoch`
+field, and `mail_message_states.delivery_mode` / `handed_off_at`. Anything not
+on BA.0's list at phase end is a breach, and a sprint that needs a new entry
+amends that list before it builds.
+
 
 Phase AZ was retired for adding structure, not for being wrong. This phase
 inherits an explicit ceiling, and it is a **merge gate**, not an aspiration.
@@ -415,31 +476,31 @@ before it was folded in; none were rebutted. The dispositions:
 
 | id | disposition |
 | --- | --- |
-| PLAN-CRIT-001 | **R0 ruling** — BA.3 is ADR-061 MAJOR; budget row, BA.3/BA.10 headers and phase AC11 corrected |
-| PLAN-CRIT-002 | BA.3 header — `must_follow` BA.4 added |
-| PLAN-CRIT-003 | **BA.11 D1** — ADR-062 amendment; BA.7 could not own it |
-| PLAN-CRIT-004 | **BA.11 D2** — ADR-054 queue-contract amendment; BA.6 must name its columns |
-| PLAN-CRIT-005 | BA.10 — three-class preflight table replaces the self-contradictory abort rule |
-| PLAN-CRIT-006 | BA.3 D3 — enforced / not-enforced table; SQLite cannot express contiguity |
-| PLAN-CRIT-007 | BA.3 D4 — close outcome projected into an event, not only a column |
-| PLAN-CRIT-008 | BA.4 D1 — bound is on rows returned, not calls issued |
-| PLAN-CRIT-009 | BA.4 D3 — stale premise corrected at source |
-| PLAN-CRIT-010 | BA.4 D5a — admission seam stated as (a) or (b), one must be chosen |
-| PLAN-CRIT-011 | BA.4 — per-tick wording made exact |
-| PLAN-CRIT-012 | **wave restructure** — BA.6/BA.8 cycle broken; BA.8 moves to wave 5 |
-| PLAN-CRIT-013 | BA.6 D4/D2a — four normative scheduling rules replace "eventually" |
-| PLAN-CRIT-014 | BA.9 owns the verb-count amendment and the baseline regeneration |
-| PLAN-CRIT-015 | BA.5/BA.8 `parallel_safe` withdrawn; BA.8 `must_follow` BA.5 |
-| PLAN-CRIT-016 | BA.8 D3 — streak from a bounded read of closed task rows, not an unreachable event tail |
-| PLAN-CRIT-017 | BA.8 — deterministic escalation message id from `(team, task_id, epoch)` |
-| PLAN-CRIT-018 | BA.8 — audit records recipient writes, not only a resolved lead |
-| PLAN-CRIT-019 | BA.8 D5 **decided**: option (a), at-least-once per daemon epoch; phase AC1 matches |
-| PLAN-CRIT-020 | BA.5 D0 — the protocol path was missing entirely; `RequestEnvelope` has no task mutation |
-| PLAN-CRIT-021 | **BA.11 D4** — BA.7 documents a planned surface; BA.11 documents the shipped one |
-| PLAN-CRIT-022 | "Already built" — the stale "no lead means nobody is notified" claim removed here too |
-| PLAN-CRIT-023 | BA.5 D2 — stage-3 epoch revalidation with a named-outcome race table |
-| PLAN-CRIT-024 | BA.2 — cherry-pick scope is 32 files, three governed manifests, one retired AZ sprint doc |
-| PLAN-CRIT-025 | BA.3/BA.10 — `schema-reviewer` sign-off named as a precondition, not a validation step |
+| PLAN-CRIT-001 | BA.3 classified MINOR though it renames `assignee` and narrows two primary keys → **R0**, now reopened and escalated |
+| PLAN-CRIT-002 | BA.5's command surface cannot reach backend-neutral task mutation → **still open until this round**; see BA.5 D0a. My round-1 catalogue mis-mapped this id and the finding went unaddressed (R2-CRIT-019) |
+| PLAN-CRIT-003 | phase BA changes nearly every normative ADR-062 decision → **BA.0 D1** (was BA.11 D1; moved earlier by R2-CRIT-004) |
+| PLAN-CRIT-004 | BA.6 redefines ADR-054's durable queue contract → **BA.0 D2** + BA.6 D1's named columns |
+| PLAN-CRIT-005 | BA.10 D5 classified the mirror pattern mergeable then commanded abort on any multi-assignee group → three-class preflight table |
+| PLAN-CRIT-006 | contiguity claimed as database-enforced but not expressible → BA.3 D3 enforced / not-enforced table |
+| PLAN-CRIT-007 | close outcome needs a column **and** an event projection → BA.3 D4 |
+| PLAN-CRIT-008 | one `list_tasks` per team bounds calls, not rows → BA.4 D1 (and R2-CRIT-009: bounding without coverage was also wrong) |
+| PLAN-CRIT-009 | BA.4 D2's "nudges a blocked agent every 60s" premise was false → corrected at source |
+| PLAN-CRIT-010 | CAS-then-await is not a fence → BA.4 D5a, **decided this round** (R2-CRIT-011) |
+| PLAN-CRIT-011 | BA.4 AC required an escalation call BA.4 excludes → per-tick wording made exact |
+| PLAN-CRIT-012 | BA.6/BA.8 dependency cycle → BA.8 moved to wave 5 behind BA.6 |
+| PLAN-CRIT-013 | absolute message priority vs no-starvation → BA.6 D4's four normative rules |
+| PLAN-CRIT-014 | BA.5 AC1 still asserted five verbs while AC8-9 required a sixth → verb-count amendment, now **seven** (R2-CRIT-016) |
+| PLAN-CRIT-015 | BA.8 declared parallel-safe with BA.5 → withdrawn, `must_follow` |
+| PLAN-CRIT-016 | refusal streak needs a cross-task tail `AsyncTaskLedgerReader` cannot produce → BA.8 D3, **still not closed until this round** (R2-CRIT-012) |
+| PLAN-CRIT-017 | mail-then-audit is not exactly-once across a crash → deterministic escalation id, **still underspecified until this round** (R2-CRIT-013) |
+| PLAN-CRIT-018 | audit records only a resolved lead → recipient writes, **single-recipient only until this round** (R2-CRIT-014) |
+| PLAN-CRIT-019 | phase AC promised one escalation while BA.8 let the sprint pick a weaker guarantee → decided: at-least-once per daemon epoch, both documents aligned |
+| PLAN-CRIT-020 | BA.3 and BA.4 both edit `herdr_queue_wake.rs` but were not ordered → BA.3 `must_follow` BA.4. **This is the correct id for that finding**; round 1 cited it as the protocol-path finding and round 2's "correction" made it worse (R2-CRIT-019) |
+| PLAN-CRIT-021 | BA.7 documents the surface before the rulings; nothing documents the shipped one → BA.11 D4 |
+| PLAN-CRIT-022 | "Already built" still said no lead means nobody → corrected |
+| PLAN-CRIT-023 | three-stage close did not revalidate at stage 3 → BA.5 D2 epoch revalidation |
+| PLAN-CRIT-024 | BA.8 had a branch and dependencies but no worktree row and no independent-PR row → both added |
+| PLAN-CRIT-025 | "atomic close/reopen" does not define the state-machine event → R2's fixed event semantics. **This is the correct id**; round 2 mistakenly deleted the citation as a mis-reference (R2-CRIT-019) |
 
 Three of these (003, 004, 021) had the same shape as PLAN-SCOPE-001: a real
 deliverable with no owning sprint. That is what BA.11 exists to close.
@@ -475,6 +536,44 @@ one — so its `ready_for_next_step: false` reflects the contract, not the
 findings. The findings themselves are independent of that gap and all eight
 are applied.
 
+## Critical plan review, round 2 — solar, 2026-09-11
+
+Solar re-ran `critical-plan-reviewer` and returned twenty findings, thirteen
+blocking, plus one wording item. It verified ten of the round-1 findings
+closed and fifteen **not** closed — several because my round-1 disposition
+catalogue mis-mapped their ids, so a finding could be marked applied while
+the actual defect stood. Every finding below was verified against
+`origin/develop` before it was applied; none were rebutted.
+
+| id | disposition |
+| --- | --- |
+| R2-CRIT-001 | **R0 reopened and escalated to Rand.** ADR-061 D3 forbids a major change that requires every host to upgrade together. The governed-interface inventory was also wrong: BA.5, BA.6 and BA.9 each carry a MINOR change that had no owner |
+| R2-CRIT-002 | `TASK_SCHEMA_DDL` is `CREATE TABLE IF NOT EXISTS`, so BA.3 alone changes nothing on an existing database. **BA.10 is now a stack layer directly above BA.3** and BA.5/BA.9 stack above BA.10 |
+| R2-CRIT-003 | `STORAGE_SCHEMA_VERSION` does not exist on `origin/develop`, so "the old binary refuses to open the migrated database" is unimplementable against the actual previous binary. Folded into the R0 escalation |
+| R2-CRIT-004 | **BA.0 created.** Normative ADR decisions move to wave 0, before any implementation; BA.11 keeps only verification and code-verified documentation |
+| R2-CRIT-005 | PLAN-CRIT-002 was never addressed — the storage mutation boundary. **BA.5 D0a** names it: extend `WriteRequest` with `task_op`, no new trait, applied in the existing writer transaction |
+| R2-CRIT-006 | BA.6's columns are now named in BA.6 D1 and decided in BA.0 D2, with the MINOR classification and version obligation |
+| R2-CRIT-007 | BA.10's `identical` classifier is now field-by-field over every durable column **and** the full ordered event history; any inequality aborts |
+| R2-CRIT-008 | BA.10 ships a bounded pre-migration repair artifact: `atm doctor task-duplicates`, a reviewed disposition file, dry-run, restore point, audit record, post-repair preflight |
+| R2-CRIT-009 | a bare `LIMIT` traded an unbounded read for incomplete coverage. BA.4 D1 now selects **one due task per member**, cap derived from the roster, with a coverage AC that a `LIMIT`-only implementation fails |
+| R2-CRIT-010 | BA.4's two `?` dispositions and the staleness rule are **decided**: `Unknown` escalates as Offline after three passes, `IdentityConflict` escalates immediately and is never nudged |
+| R2-CRIT-011 | BA.4 D5a **decided: option (b)**, and the invariant is restated everywhere — *no nudge is admitted once a member is Active; at most one already-admitted emit may land.* The absolute guarantee needs an async fence this budget does not authorize |
+| R2-CRIT-012 | BA.8 D3 said rows and then events. **Rows.** The bounded projection does not exist, so BA.3 ships `recent_closed_tasks` as an additive reader method and BA.8 follows BA.3 |
+| R2-CRIT-013 | the daemon epoch is now fully defined — source, lifetime, scope, deterministic id derivation, collision test, recipient visibility — and budgeted |
+| R2-CRIT-014 | escalation audit is **per target**: one row per `(team, task_id, epoch, target)`, retries only unsucceeded targets, suppression needs all of them. Two-recipient partial-fan-out AC added |
+| R2-CRIT-015 | a second cycle: BA.9's AC4 and AC12 asserted BA.8 behaviour. Moved to BA.8 AC6a; BA.9 owns persistence and events only |
+| R2-CRIT-016 | the verb surface is **seven**: `assign`, `start`, `close`, `reassign`, `move`, `list`, `events`. My six-verb answer overloaded `assign` by row existence — the same defect this sprint rejected for `start` |
+| R2-CRIT-017 | `TaskCloseOutcome::Reassigned` removed (already applied from PLAN-SCOPE-014) |
+| R2-CRIT-018 | dependency metadata reconciled across the table, headers, affected paths and the stack order; BA.2's header no longer claims `parallel_safe` with BA.4 |
+| R2-CRIT-019 | **my round-1 catalogue was wrong in four places** and masked an open blocking finding. Rebuilt from the original review JSON; the two "corrections" round 2 made on the strength of the bad catalogue are reverted |
+| R2-CRIT-020 | stale-instruction sweep: BA.1 pointed start at BA.5, BA.10 claimed completion still creates mirrors, BA.9 still said "gated" |
+| R2-CRIT-M1 | sprint counts corrected to twelve |
+
+`granularity_assessment` was that eleven documents were not the problem but
+that four of them hid structural failures. Three of those four are fixed here
+(the BA.3/BA.10 intermediate, the BA.8/BA.9 cycle, BA.6's delegated schema);
+the fourth — BA.11 deferring normative decisions — is fixed by BA.0.
+
 ## Worktrees and the gh stack
 
 One integration branch, created first, off `develop`:
@@ -487,6 +586,7 @@ Every sprint worktree is created from `integrate/phase-ba`, never from `main`
 and never from `develop`:
 
 ```bash
+/sc-git-worktree --create docs/ba0-normative-adr-decisions      integrate/phase-ba
 /sc-git-worktree --create feature/ba1-ack-task-separation      integrate/phase-ba
 /sc-git-worktree --create feature/ba2-nudge-title-salvage      integrate/phase-ba
 /sc-git-worktree --create feature/ba4-nudge-invariant          integrate/phase-ba
@@ -497,10 +597,10 @@ and never from `develop`:
 /sc-git-worktree --create feature/ba8-escalation-terminality    integrate/phase-ba
 /sc-git-worktree --create feature/ba9-lifecycle-operations      integrate/phase-ba
 /sc-git-worktree --create feature/ba10-task-event-migration     integrate/phase-ba
-/sc-git-worktree --create docs/ba11-adr-amendments              integrate/phase-ba
+/sc-git-worktree --create docs/ba11-final-verification          integrate/phase-ba
 ```
 
-That is eleven worktrees for eleven sprints. An earlier revision listed seven
+That is twelve worktrees for twelve sprints. An earlier revision listed seven
 and omitted BA.8 entirely, which would have silently dropped a sprint carrying
 four blocking dispositions (PLAN-SCOPE-001); a later one omitted BA.11, which
 would have left three accepted ADRs describing behaviour this phase deletes
@@ -508,17 +608,30 @@ would have left three accepted ADRs describing behaviour this phase deletes
 
 ### The `must_follow` chain is one gh stack
 
-BA.1 → BA.3 → BA.5 → BA.9 form a **branch-ancestry** chain, so they are linked
+BA.1 → BA.3 → BA.10 → BA.5 → BA.9 form a **branch-ancestry** chain, so they are linked
 as a single stack rooted on the integration branch:
 
 ```bash
 gh stack init --base integrate/phase-ba \
   feature/ba1-ack-task-separation \
   feature/ba3-task-identity-queue \
+  feature/ba10-task-event-migration \
   feature/ba5-atm-task-commands \
   feature/ba9-lifecycle-operations
 gh stack submit --auto
 ```
+
+**BA.10 sits immediately above BA.3, and BA.3 may not merge to
+`integrate/phase-ba` without it (R2-CRIT-002).** `TASK_SCHEMA_DDL` is
+`CREATE TABLE IF NOT EXISTS tasks`
+(`task_store.rs:15`), so changing the declaration does **nothing** to an
+existing database. BA.3 alone therefore produces a head where new decoders
+read `current_assignee` / `position` / `close_outcome` from a table that still
+has the old columns — a non-operational intermediate that BA.5 was previously
+allowed to build on in parallel. The split from PLAN-SCOPE-005 survives (a
+wrong schema is fixable by a follow-up commit, destroyed history is not), but
+it is now a **stack layer, not an independent branch**: two PRs, one merge
+event, and BA.5/BA.9 stack above BA.10 rather than above BA.3.
 
 BA.9 is in the stack because it edits **BA.5's own files** — it adds `start`
 to the same clap enum and the same command module. That is ancestry, not
@@ -541,8 +654,8 @@ Layers are added to the stack **when their PR opens**, not held for CI.
 
 ### The parallel sprints are not stacked
 
-BA.2, BA.4, BA.6, BA.7, BA.8, BA.10 and BA.11 are independent branches with
-ordinary PRs targeting `integrate/phase-ba`. Stacking them would impose an order the
+BA.0, BA.2, BA.4, BA.6, BA.7, BA.8 and BA.11 are independent branches with
+ordinary PRs targeting `integrate/phase-ba`. **BA.10 is not** — see below. Stacking them would impose an order the
 dependency analysis says does not exist, and would force a rebase of unrelated
 work every time a lower layer moves.
 
@@ -646,8 +759,22 @@ they implement the blocked-agent escalation this phase requires.
 
 ## ADR-061 governed interfaces
 
-BA.3 is the only governed-interface change, and it is **MAJOR** under
-ADR-061:64 — the primary-key narrowing renames/removes a field and the
+**BA.3 is not the only governed-interface change (R2-CRIT-001).** The
+inventory, all three interfaces:
+
+| sprint | interface | change | ADR-061 class |
+| --- | --- | --- | --- |
+| BA.5 D0 | HTTP/peer API | new `RequestEnvelope` / `ResponseEnvelope` variants for task mutation; `CLI_SCHEMA_VERSION` and `HTTP_API_VERSION` bumps | **MINOR** — additive variants, older consumers ignore them (ADR-061:59). Needs the bump in the same change set and an older-consumer test |
+| BA.6 D1 | SQLite storage | `delivery_mode`, `handed_off_at` added to `mail_message_states` with defaults | **MINOR** — columns with defaults (ADR-061:59). Needs a version bump and an older-consumer test, and must be named in the pre-implementation ADR |
+| BA.3 / BA.10 | SQLite storage | primary-key narrowing, constraint and meaning changes | **MAJOR** — and blocked on R0 above |
+| BA.9 | HTTP/peer API + CLI | `start` and `reassign` variants and verbs | **MINOR** — additive |
+
+An earlier revision said "BA.3 is the only governed-interface change", which
+was false, and it is the reason two MINOR bumps had no owner. Each MINOR above
+carries ADR-061 D3's full minor obligation: the bump, the documentation, and
+a test proving the older consumer still works.
+
+BA.3 is the only **MAJOR** change, and it is **MAJOR** under ADR-061:64 — the primary-key narrowing renames/removes a field and the
 previous binary cannot operate against the migrated database. See **R0**,
 which is the single authoritative classification statement; this section
 carries only what R0 does not.

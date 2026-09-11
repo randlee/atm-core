@@ -5,7 +5,7 @@
 | Wave | 1 |
 | Branch | `feature/ba1-ack-task-separation` |
 | Base | `integrate/phase-ba` |
-| Stack | bottom layer of the BA.1 → BA.3 → BA.5 → BA.6 stack |
+| Stack | bottom layer of the BA.1 → BA.3 → BA.10 → BA.5 → BA.9 stack |
 | Dependency | `parallel_safe` with BA.2, BA.4, BA.7 |
 | recommended_agent | Cipher-311d |
 | recommended_model | fast |
@@ -67,7 +67,7 @@ Two directions, both live on `origin/develop`:
    (`task_state.rs:97-109`, applied by `writer/task_ops.rs:418-440`), so after
    this sprint nothing moves a task to Active and there is no event on which
    to hang a receipt. The receipt therefore requires the explicit start
-   operation specified in **BA.5 D6**, and moves there with it.
+   operation specified in **BA.9 D1**, and moves there with it. *(BA.5 D6 was the original owner; BA.5 split and start went to BA.9 — R2-CRIT-020.)*
 
    What this sprint MUST do is leave the hole visible rather than papered
    over: after BA.1, an assigned task stays `assigned` while it is worked.
@@ -99,7 +99,7 @@ Two directions, both live on `origin/develop`:
    must fail against `origin/develop`.
 3. No `Assigned → Active` transition is reachable from a message
    acknowledgement. Gate: the transition table has no arm producing `Active`
-   from `Acked`. The remaining absence of any start path is BA.5's to close
+   from `Acked`. The remaining absence of any start path is BA.9's to close
    and is **not** a finding against this sprint.
 4. No production caller of `apply_task_acknowledgement` remains. Gate:
    `git grep -n apply_task_acknowledgement -- 'crates/*/src'` returns nothing.
@@ -112,7 +112,7 @@ Two directions, both live on `origin/develop`:
 
 ## Non-closure
 
-- The start receipt and the explicit start operation are BA.5 D6. This sprint
+- The start receipt and the explicit start operation are BA.9 D1. This sprint
   must not invent an implicit activation (roster Active, nudge handoff, or
   first outbound message) to fill the gap — SOLAR-BA-004 rules all three out:
   roster activity may be unrelated to the queue and cannot identify *which*

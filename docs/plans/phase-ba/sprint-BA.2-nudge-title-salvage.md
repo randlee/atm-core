@@ -6,7 +6,7 @@
 | Branch | `feature/ba2-nudge-title-salvage` |
 | Base | `integrate/phase-ba` |
 | Stack | not stacked — independent PR |
-| Dependency (superseded, see below) | `parallel_safe` with BA.1, BA.4, BA.7 |
+| Dependency | `parallel_safe` with BA.1 and BA.7. **BA.4 `must_follow` this sprint** — both edit `crates/atm-http-runtime/src/storage_and_nudge_router.rs`, which the cherry-picks touch, so they are *not* parallel-safe (PLAN-SCOPE-002, restated by R2-CRIT-018 because this header still said otherwise). |
 | recommended_agent | Cipher-311d |
 | recommended_model | fast |
 

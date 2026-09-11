@@ -4,7 +4,7 @@
 | --- | --- |
 | Wave | 3 |
 | Branch | `feature/ba5-atm-task-commands` |
-| Base | `feature/ba3-task-identity-queue` (stack layer 3) |
+| Base | `feature/ba10-task-event-migration` (stack layer 4) — BA.10 sits between this sprint and BA.3 so nothing consumes an unmigrated schema (R2-CRIT-002) |
 | Dependency | `must_follow` BA.3 — needs the `outcome` and `position` columns |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
@@ -36,7 +36,12 @@ atm send <assigner> --task-complete --task-id <id> --template ... --vars ...
     → atm task close, outcome=completed, carrying a mandatory report
 ```
 
-**Deliberately absent**: `start`, `ack`, `block`, `unblock`, `reassign`,
+`start` and `reassign` are added by BA.9, giving a final closed set of
+**seven**: `assign`, `start`, `close`, `reassign`, `move`, `list`, `events`
+(R2-CRIT-016). They are absent *here* because BA.9 owns them, not because
+they are absent from the phase.
+
+**Deliberately absent**: `ack`, `block`, `unblock`,
 `reopen`, `supersede`, `fail`, `abort`. Start is implicit in beginning work
 and produces the receipt (BA.1/BA.4). Reassignment is close-and-create.
 Ack left the task domain in BA.1. `fail` and `abort` are outcomes of `close`,
@@ -76,6 +81,59 @@ Required, and it must land before any verb is wired:
 
 Gate: an integration test drives each verb through a real daemon round trip.
 A unit test against an in-process service does not discharge this deliverable.
+
+### D0a. The storage mutation boundary — named, not gestured at
+
+**PLAN-CRIT-002 was never addressed** (R2-CRIT-005). My round-1 catalogue
+mis-mapped the id, so a blocking finding closed on paper and stayed open in
+fact. D0 gave the protocol path; it did not say what the runtime calls to
+mutate a task, and "the existing backend-neutral boundary" names nothing.
+
+The facts on `origin/develop`:
+
+- `TaskStore` (`atm-storage/src/task_store.rs:66-111`) exposes reads,
+  `record_reminder`, `record_lead_notified`, and escalation-recipient CRUD.
+  **No lifecycle mutation.**
+- Task state is mutated inside the writer — `apply_task_completion`
+  (`writer/task_ops.rs:295-338`) — reached through `WriteRequest`
+  (`atm-core/src/send/mod.rs:127`), which already carries `task_id` and
+  `task_complete`. That is today's mutation boundary, and it is already
+  backend-neutral.
+
+**The decision: extend `WriteRequest`, add no trait.**
+
+```rust
+// atm-storage: the operation, not a capability
+pub enum TaskOp {
+    Start,
+    Close { outcome: TaskCloseOutcome, report_message_id: AtmMessageId },
+    Move { target: QueuePosition },
+    Reassign { to: AgentName, reason: String },
+}
+
+// atm-core/src/send/mod.rs, WriteRequest — one additive field
+pub task_op: Option<TaskOp>,
+```
+
+- applied in `writer/task_ops.rs`, in the **same transaction** as the message
+  write, so a close and its report cannot diverge
+- authority (D2a) is checked in the writer before any mutation, and its
+  failure is the existing writer error type with a new stable variant — no
+  new error enum
+- `task_complete` is retained as the alias path and lowers to
+  `TaskOp::Close { outcome: Completed, .. }`
+
+**Budget impact, stated rather than hidden:** one enum (`TaskOp`), one
+optional struct field. Zero new sealed traits, zero new semantic
+capabilities, zero new tables, zero new state machines. `TaskOp` joins the
+exhaustive additions list in the phase budget. If a reviewer judges that
+extending `WriteRequest` *is* a new capability, the phase stops and asks
+rather than shipping it as an unremarked extension.
+
+**Acceptance binds the whole path**, not the boundary in isolation: one
+end-to-end test per verb that goes CLI → protocol → router → runtime →
+writer → SQLite and asserts the row, with a real daemon. A unit test against
+`TaskOp` alone does not satisfy it.
 
 ### D1. One id flag
 
@@ -164,7 +222,7 @@ preflight of D2 stage 1, **before** any mutation:
 | `close` with `completed` / `refused` | the current assignee |
 | `close` with `cancelled` | the assigner, or the team lead (R3) |
 | `move` | the assigner, or the team lead (R3) |
-| reassign (`assign` onto an existing task id, BA.9) | the assigner, or the team lead (R3) |
+| `reassign` (BA.9) | the assigner, or the team lead (R3) |
 
 `reassigned` is **not** a close outcome and does not appear in this matrix as
 one (PLAN-SCOPE-014): under R2(a) reassignment is a single `Reassigned` event

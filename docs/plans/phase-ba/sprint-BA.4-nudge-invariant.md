@@ -72,7 +72,30 @@ claimed `O(open_tasks)` is false. The snapshot query must carry **both** a
 `state <> 'complete'` predicate and a `LIMIT`, pushed into SQL, and the
 acceptance test must count **rows returned**, not calls issued.
 
-This requires **no new trait, table, or state machine**.
+**A `LIMIT` alone trades an unbounded read for incomplete coverage
+(R2-CRIT-009).** With a bare `LIMIT` and no ordering discipline, tasks past
+the first page are never evaluated — on every tick, forever — and AC1 as
+originally written would have proved only that the result was small. The
+projection must be bounded **and** complete:
+
+- the snapshot selects **at most one due open task per member**, not the
+  first N rows of the team's tasks: `state <> 'complete'`, partitioned by
+  `current_assignee`, taking the row at the lowest `position` (BA.3 D3 makes
+  that the active-or-next task, which is the only one the invariant can act
+  on anyway)
+- the row cap is therefore `LIMIT <members in team>`, a bound derived from
+  the roster rather than an arbitrary constant
+- a member whose one due task is not actionable this tick does not displace
+  any other member: coverage per tick is every member, not every task
+
+Ordering is by `(current_assignee, position)` so the projection is
+deterministic and keyset-resumable if a later phase needs paging. No cursor
+state is persisted in this phase because none is needed — one row per member
+fits every roster this product has.
+
+This requires **no new trait, table, or state machine**, but it **does**
+require a new bounded read on the existing reader; BA.3 ships it (see BA.8
+D3, which needs the same projection shape).
 
 ### D2. Exact agent state, not the picker projection
 
@@ -122,12 +145,24 @@ Active hides stalled work. Ship an explicit matrix:
 | `Active` | never divert |
 | `Blocked` | escalate once, zero nudges |
 | `Offline` | escalate once, zero nudges; body distinguishes it from Blocked |
-| `Unknown` | ? — no nudge, no escalation until the staleness condition below |
-| `IdentityConflict` | ? — no nudge; escalate as an operator-facing condition |
+| `Unknown` | no nudge. No escalation while the member has been observed within the staleness window; **escalate once as Offline** when it has not (rule below) |
+| `IdentityConflict` | no nudge, ever. **Escalate once immediately**, as an operator-facing condition distinct from Blocked and Offline — the roster cannot say who this is, so nudging it could steer the wrong agent |
 
-The two `?` rows must be decided **in this sprint** and justified in the doc,
-together with the availability/staleness condition that separates "not observed
-yet" from "observed and gone". Each of the six gets a test.
+**Decided here, not by the implementer (R2-CRIT-010).** An earlier revision
+left both rows as `?` while AC5 claimed to assert "exact" dispositions, so two
+materially different products could both pass.
+
+**The staleness rule, exactly.** `Unknown` means "no runtime observation has
+been accepted for this member". It becomes Offline for disposition purposes
+when the member's last accepted observation is older than
+**three consecutive evaluation passes** of the invariant — the same pass
+cadence the sprint already runs on, so no timer, no new constant beyond the
+multiplier, and no wall-clock assumption. A member never observed at all since
+daemon start is `Unknown` and is **not** escalated until three passes have
+elapsed since daemon start, so a restart does not escalate the whole roster.
+
+Each of the six gets a test, and the Unknown row gets three: inside the
+window, crossing it, and the daemon-restart case.
 
 ### D5. No diversion
 
@@ -161,27 +196,41 @@ check-then-await reopens exactly the window it was meant to close. Requiring
 "emission count is zero" while forbidding reservations left no implementable
 design.
 
-Required: define an explicit **admission seam** — the point after which an
-emission is committed — and hold the member's admission across it, by one of:
+**DECIDED: option (b), and the invariant is restated to match
+(R2-CRIT-011).** Leaving this to the sprint was the defect, not the fix: the
+two options are incompatible guarantees, and one of them — (a) — is a
+synchronous roster lock held across an awaited network emit on a Tokio task,
+which is not something this codebase should grow.
 
-  a. holding the per-member admission guard across the emit await (simplest;
-     costs one in-flight emit per member, which is the existing concurrency
-     anyway), or
-  b. re-checking state inside the same guard immediately before the emitter is
-     invoked AND treating a post-seam Active transition as an **accepted
-     in-flight tolerance** of at most one nudge, stated in the acceptance
-     criteria rather than claimed away.
+The admission seam is the **last read of member state before the emitter is
+invoked**, inside the existing roster guard, which is released before the
+await. The guarantee is therefore:
 
-Pick one in the sprint and write down which. Option (b) weakens the guarantee
-and must say so out loud. What is **not** acceptable is claiming (a)'s
-guarantee while implementing (b)'s structure.
+> **No nudge is *admitted* for a member once that member is Active.** At most
+> **one** already-admitted emit may still be in flight when the member
+> transitions to Active, and it may land.
+
+That is a real weakening of "an Active agent is never diverted" and it is
+written into phase acceptance, BA.4's AC, and BA.0's ADR-062 amendment in
+those words — not claimed away. The bound is one, not "some": the guard
+admits one emit per member at a time, so a second cannot be admitted while
+the first is in flight.
+
+The alternative, for the record: closing the window completely needs an async
+fence (an admission token released by the emitter's completion), which is new
+concurrency state this phase's budget does not authorize. If Rand wants the
+absolute guarantee, that fence must be budgeted and this ruling revisited.
 
 No target generation, no eligibility edge, no scheduler state machine.
 
-Test the exact race: poll observes Idle, pause before emit, a heartbeat POST
-commits Active, resume — emission count must be zero. Also assert Idle remains
-eligible, and that a Blocked or Offline transition in the same window
-suppresses the dispatch.
+Test the exact race: poll observes Idle, pause **before admission**, a
+heartbeat POST commits Active, resume — **admission count must be zero**.
+Then the weakened case, asserted explicitly rather than left implicit: poll
+observes Idle, the emit is **admitted**, the heartbeat commits Active while
+the emit is in flight — at most **one** nudge lands, and a second cannot be
+admitted while the first is outstanding. Also assert Idle remains eligible,
+and that a Blocked or Offline transition before admission suppresses the
+dispatch.
 
 ## Affected paths
 
@@ -205,10 +254,15 @@ suppresses the dispatch.
 ## Acceptance criteria
 
 1. **Scale**: a fixture with 17 teams and 51 members, all idle with open
-   tasks, issues at most one task read per team per tick **and** returns a
-   bounded number of rows per read. Both asserted by counting; a fixture with
-   10,000 historical complete tasks must not increase rows returned
+   tasks, issues at most one task read per team per tick **and** returns at
+   most one row per member. Both asserted by counting; a fixture with 10,000
+   historical complete tasks must not increase rows returned
    (PLAN-CRIT-008). Wall-clock timing is diagnostic only.
+1a. **Coverage** (R2-CRIT-009): a fixture with **more open tasks than the row
+   cap** — 51 members holding 20 open tasks each — evaluates **every** member
+   on **every** tick. Asserted by observing one nudge per eligible member
+   within a single tick, not eventually. A bare-`LIMIT` implementation must
+   fail this.
 2. **Slow-read isolation**: one team whose task read is artificially slow does
    not serialise the global pass. This is the acceptance test SOLAR-BA-001
    requires and it must fail against `origin/develop`.

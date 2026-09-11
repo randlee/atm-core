@@ -4,11 +4,11 @@
 | --- | --- |
 | Wave | 3 |
 | Branch | `feature/ba10-task-event-migration` |
-| Base | `integrate/phase-ba` (independent PR, not stacked) |
-| Dependency | `must_follow` BA.3 — operates on the schema BA.3 establishes. PR-completion trigger. |
+| Base | `feature/ba3-task-identity-queue` — **stack layer 3, immediately above BA.3** (R2-CRIT-002). BA.3 may not merge to `integrate/phase-ba` without this sprint: `TASK_SCHEMA_DDL` is `CREATE TABLE IF NOT EXISTS` (`task_store.rs:15`), so BA.3 alone leaves an existing database unmigrated while every new decoder reads a stale table. |
+| Dependency | `must_follow` BA.3 by **branch ancestry**, not PR completion. BA.5 and everything above it stack on this sprint, not on BA.3. |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
-| Governed interface | yes — **ADR-061 MAJOR** (R0), one-way, no bridge. Shares BA.3's approval record. |
+| Governed interface | yes — **ADR-061 MAJOR**. **BLOCKED: R0 is reopened and escalated to Rand** (R2-CRIT-001, R2-CRIT-003). Neither the one-way shape nor the version gate survives ADR-061 D3 as written. This sprint does not open until Rand rules. |
 
 ## Goal
 
@@ -57,9 +57,24 @@ Required instead:
 
    | class | test | disposition |
    | --- | --- | --- |
-   | identical | one row, or rows agreeing on state and timestamps | merge |
+   | identical | one row, or rows equal on **every durable field and the complete event history** (see below) | merge |
    | **mirror** | exactly two rows; one is a completion-side row with **no** independent lifecycle — no `Acked`/`Active` event of its own, and its events postdate the real row's | merge into the real row |
    | everything else | anything not matching the two above, including two rows with independent `assigned → active` histories | **abort** |
+
+   **"agreeing on state and timestamps" was data-destructive (R2-CRIT-007).**
+   Two rows can agree on state and timestamps and still differ in assignee,
+   assigner, assignment message id, description, reminder counters, lead
+   counters, or event history — and the merge would silently discard one
+   side. `identical` therefore means equal on **all** of:
+
+   `assignee`, `assigner`, `assignment_message_id`, `description`, `state`,
+   `assigned_at`, `updated_at`, every reminder/lead counter, and the full
+   ordered `task_events` sequence compared element-by-element.
+
+   Any inequality in any of those fields puts the group in class three and
+   the migration aborts. The implementation predicate and the AC2 fixture
+   use this **same** definition, expressed once in code and referenced by
+   the test — not restated in two places that can drift.
 
    **PLAN-CRIT-005: "abort on any multi-assignee group" was wrong and
    contradicted the mirror row in the same table.** A mirror *is*
@@ -72,14 +87,30 @@ Required instead:
    `team / task_id / assignee / state / assigned_at / updated_at` per row plus
    a concrete operator recovery instruction. The migration exits non-zero and
    the schema version does not change.
-3. **Resolve the 14 existing groups explicitly as a deployment step**, recorded
-   in the sprint evidence — not silently by code.
+3. **A bounded pre-migration repair artifact (R2-CRIT-008).** "Resolve the 14
+   groups as a deployment step" named no tool, no authorization and no
+   rollback, which left an operator performing destructive identity repair on
+   production data outside any owned contract. The sprint ships, as
+   deliverables:
+
+   | artifact | contract |
+   | --- | --- |
+   | `atm doctor task-duplicates` | read-only inventory: every duplicate group, its class, and per-row `team / task_id / assignee / state / assigned_at / updated_at`. Exits non-zero if any group is class three |
+   | a reviewed disposition file | one line per class-three group with its chosen resolution, authored by the operator and **reviewed by Rand or the team lead before execution** — this is production history |
+   | `atm doctor task-duplicates --repair <file> --dry-run` | prints the exact row changes and refuses any group not named in the file |
+   | a restore point | a file copy of the database taken by the repair command itself, path printed, before any write |
+   | an audit record | one `task_events` entry per repaired group naming the actor and the disposition file's digest |
+   | post-repair preflight | the class-three count must be zero before the migration is allowed to run |
+
+   `--repair` without `--dry-run` refuses to run unless the dry-run output
+   for that exact file digest was produced in the same session. No hand-run
+   SQL, and no repair path that is not reproducible from the file.
 4. **Prove row and event counts, and oversight history, after migration.**
 
 Also determine and test: an agent holding two or more Active rows before the
 unique index exists (deterministic demotion to `assigned`, never silent closure
 of live work); and what happens when an assignee reports completion to the
-assigner under the single-row key — today that creates the mirror, now it
+assigner under the single-row key — **PR #1381 already stopped that creating a mirror** (`writer/task_ops.rs:295-338` resolves the existing row and only UPDATEs); under the single-row key it
 either updates the same row or collides. **Write the test; do not assume.**
 
 Migration must never silently close live work, reopen a completed task, or make

@@ -52,17 +52,49 @@ Required: at `TASK_STALLED_REMINDER_THRESHOLD` (10), escalate **once** and
 *Escalation delivery must be idempotent across a crash (PLAN-CRIT-017).* Each
 retry currently constructs a fresh `WriteRequest` and message id, so a crash
 after the mail commits but before the audit writes produces a **second**
-escalation on the next tick. Derive the escalation message id deterministically
-from `(team, task_id, escalation_epoch)` so the retry is recognised and
-collapses instead of duplicating. Without that identity, AC2's post-mail crash
-case cannot pass.
+escalation on the next tick. Derive the escalation message id deterministically from
+`(team, task_id, escalation_epoch)` so the retry is recognised and collapses
+instead of duplicating. Without that identity, AC2's post-mail crash case
+cannot pass.
+
+**Naming the tuple is not defining it (R2-CRIT-013).** None of it exists on
+`origin/develop`, so all of it is specified here:
+
+| element | definition |
+| --- | --- |
+| `escalation_epoch` | the **daemon start ULID**, generated once at runtime construction and held in the runtime struct. Process-scoped and host-scoped by construction; a restart yields a new one; two daemons on one host cannot share one (the singleton rule forbids them anyway) |
+| lifetime | the daemon process. Not persisted, not recovered — that is exactly what makes the guarantee *per epoch* rather than absolute |
+| message id | `AtmMessageId` derived as a **UUIDv5-style digest** of `(team, task_id, escalation_epoch)` rendered into the existing ULID-shaped id space. No new id type: it is an `AtmMessageId` whose bytes are computed instead of random |
+| collision | two escalations for one task in one epoch are *intended* to collide — that is the idempotency. Across tasks or epochs the digest inputs differ, and the test asserts no collision over 10,000 synthetic `(task, epoch)` pairs |
+| recipient visibility | the epoch is rendered in the **escalation body text**, not in a new envelope field, so a human can tell a restart duplicate from a new episode without a wire change |
+
+**Budget impact, stated:** one runtime field (`escalation_epoch: Ulid`), one
+derivation function. Zero new id types — `AtmMessageId` is reused, not
+subclassed — zero new tables, zero persisted state. This line goes in the
+phase's exhaustive additions list.
 
 *The audit must record what was actually delivered (PLAN-CRIT-018).* The
 existing escalation caller records a resolved lead and its message id. With
 zero or two leads and a successful recipient write, delivery happened but no
 durable audit exists to earn suppression — so the task repeats forever while
-oversight believes it was told. Extend the audit event to record recipient
-writes, not just the lead's.
+oversight believes it was told. Extend the audit event to record recipient writes, not just the lead's.
+
+**Per target, not per escalation (R2-CRIT-014).** "Record recipient writes"
+plural is not a contract: with two recipients and one success, retrying all
+duplicates the success and suppressing after any success abandons the
+failure. The rule:
+
+- the audit records **one row per target**: `(team, task_id, epoch, target)`
+  with its outcome
+- a retry re-attempts **only targets with no success row**, so a partial
+  fan-out converges without duplicating a delivered message
+- suppression is earned when **every** configured target has a success row,
+  or when there are no configured targets and the lead write succeeded
+- a target that never succeeds keeps the task remindable; it does not
+  silently disappear, and the queue-pump statistics surface it
+
+Zero recipients, one, and many are all defined by that rule rather than by
+three special cases.
 
 *Suppression must be earned, not counted.* The current order durably increments
 `reminder_count` first and only then calls `maybe_escalate_task`
@@ -130,11 +162,30 @@ member only, and exists to bound repeated delivery attempts — not durable task
 outcomes. Reusing it means a daemon restart clears the protection and the whole
 queue can be dumped into lead's mailbox again.
 
-Required: derive the streak from the tail of the existing durable task events,
-not from `release_streaks`. Specify and test the threshold, the reset rule
-(successful completion, start, reassignment, or empty queue), and crash
-behaviour. Sequences to cover: refuse/refuse, refuse/complete/refuse, restart
-mid-streak, and reassignment.
+*The original finding said "the tail of durable task events". That is the
+right instinct and the wrong source — no such read exists, and leaving both
+sentences standing meant two implementations could each claim compliance
+(R2-CRIT-012). **Rows, not events.** The paragraph above is the contract.*
+
+**The bounded read does not exist yet and must be owned (R2-CRIT-012).**
+`AsyncTaskLedgerReader` offers unbounded `list_tasks` or one task's events;
+neither is an ordered, limited, cross-task projection. **BA.3 ships it** as an
+additive method on the existing reader — the same projection shape BA.4 D1
+needs — and **BA.8 `must_follow` BA.3** for it:
+
+```rust
+/// Most recently closed tasks for one member, newest first, at most `limit`.
+fn recent_closed_tasks(
+    &self, member: &MemberKey, limit: usize,
+) -> Result<Vec<TaskRow>, AtmError>;
+```
+
+Additive method on a sealed trait: ADR-061 MINOR, zero new capabilities,
+named in the phase budget rather than smuggled in as "an existing reader".
+
+Specify and test the threshold, the reset rule (successful completion, start,
+reassignment, or empty queue), and crash behaviour. Sequences to cover:
+refuse/refuse, refuse/complete/refuse, restart mid-streak, and reassignment.
 
 ### D4. Escalation is a message, not a stream
 
@@ -265,6 +316,11 @@ members — pointless once each episode is reported once). **Retain**
 2b. With zero leads and one configured recipient, a successful recipient write
    produces a durable audit sufficient to earn suppression; the task stops
    reminding. Must fail against an implementation that audits only the lead.
+2c. **Two recipients, partial fan-out** (R2-CRIT-014): recipient A succeeds,
+   recipient B fails. The retry delivers to B only — asserted by counting A's
+   mailbox at exactly one message — and suppression is earned only after B
+   succeeds. Repeated with the crash landing between the two writes, and with
+   B never succeeding (the task must stay remindable).
 3. **No durable target**: with no lead, no recipients, and every mail write
    failing, the task does not enter suppression, and the condition is
    observable in `atm task list` and in logs rather than silent.
@@ -277,6 +333,12 @@ members — pointless once each episode is reported once). **Retain**
 6. **Task dispatch race**: a task closed after selection and before emit
    produces zero nudges; a task reassigned in the same window sends nothing to
    the old assignee. Both must fail against `origin/develop`.
+6a. **Lifecycle delivery, moved here from BA.9 (R2-CRIT-015).** Starting or
+   closing a task while the assigner is Active persists the receipt and sends
+   **no** steer; and a terminally suppressed task that is reassigned resumes
+   reminders. Both were BA.9 acceptance criteria testing behaviour that does
+   not exist at BA.9's head. BA.9 owns the persistence and the event; this
+   sprint owns what the reminder and delivery loops do with them.
 7. Consecutive refusals are bounded by a streak derived from a **bounded**
    query over closed task rows — asserted on rows read, not just behaviour —
    and the bound survives a daemon restart.

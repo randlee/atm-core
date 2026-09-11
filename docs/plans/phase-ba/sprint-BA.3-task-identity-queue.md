@@ -8,7 +8,7 @@
 | Dependency | `must_follow` BA.1 (sole owner of `task_state.rs` ack semantics), **`must_follow` BA.4** — both edit `herdr_queue_wake.rs` selection code (PLAN-CRIT-002; an earlier revision mis-cited PLAN-CRIT-020, which is BA.5's protocol-path finding — PLAN-SCOPE-010). Merge-forward trigger: BA.1 and BA.4 development pushed. |
 | recommended_agent | arch-ctm |
 | recommended_model | deep-reasoning |
-| Governed interface | yes — **ADR-061 MAJOR** (R0). Needs Rand's recorded approval + schema-reviewer sign-off before this sprint opens. |
+| Governed interface | yes — **ADR-061 MAJOR**. **BLOCKED: R0 is reopened and escalated to Rand** (R2-CRIT-001, R2-CRIT-003). ADR-061 D3 forbids a change that requires every host to upgrade together, and `STORAGE_SCHEMA_VERSION` does not exist on `origin/develop`, so the promised version gate is unimplementable against the actual previous binary. This sprint does not open until Rand rules. |
 
 ## Goal
 
