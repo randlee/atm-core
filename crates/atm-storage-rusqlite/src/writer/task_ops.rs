@@ -1,7 +1,7 @@
 //! The rusqlite writer's sole task-ledger application site (AX.3, C6).
 //!
 //! `tasks.state` and `task_events` are mutated only here, inside the writer's
-//! transaction connection, so a message insert or acknowledgement, its task
+//! transaction connection, so a message insert, its task
 //! row, and its audit event either commit together or roll back together.
 //! `atm_storage::task_state` defines the pure, backend-neutral transition
 //! table this module's SQL mirrors; nothing here changes that table's rules.
@@ -265,9 +265,7 @@ fn apply_task_assignment(
         (None, Transition(TaskState::Assigned)) => {
             insert_task_assignment(record, task_id, connection, target, &at, message_id)
         }
-        (_, Transition(_)) => Err(task_rejected(
-            "task assignment did not produce an assigned state",
-        )),
+        (_, Transition(_)) => unreachable!("task assignment did not produce an assigned state"),
     }
 }
 
@@ -388,6 +386,9 @@ fn acknowledge_completed_assignment(
         envelope: record.envelope.clone(),
     };
     let mut assignment = load_existing_message(&requested, connection, target)?;
+    if assignment.envelope.acknowledged_at.is_some() {
+        return Ok(None);
+    }
     mark_source_acknowledged(&mut assignment, record.envelope.timestamp);
     let _ = execute_upsert_message(
         &assignment,

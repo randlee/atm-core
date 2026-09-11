@@ -111,24 +111,19 @@ pub fn admit(
     task_id: &TaskId,
     actor: &AgentName,
 ) -> Result<(), TaskRejected> {
-    let Some(row) = row else {
-        return if event == TaskEvent::Completed {
+    match (row, event) {
+        (None, TaskEvent::Completed) => Err(TaskRejected::new(format!(
+            "no open task {task_id} for {actor}"
+        ))),
+        (None, TaskEvent::Assigned) => Ok(()),
+        (Some(row), TaskEvent::Completed) if actor != &row.assignee && actor != &row.assigner => {
             Err(TaskRejected::new(format!(
-                "no open task {task_id} for {actor}"
+                "task {} is not assigned to or by {actor}",
+                row.task_id
             )))
-        } else {
-            Ok(())
-        };
-    };
-
-    if event == TaskEvent::Completed && actor != &row.assignee && actor != &row.assigner {
-        return Err(TaskRejected::new(format!(
-            "task {} is not assigned to or by {actor}",
-            row.task_id
-        )));
+        }
+        (Some(_), _) => Ok(()),
     }
-
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
