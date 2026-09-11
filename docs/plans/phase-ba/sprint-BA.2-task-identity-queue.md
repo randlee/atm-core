@@ -611,8 +611,8 @@ rollback is diagnosable rather than surprising:
   these are surfaced as the existing storage write error; nothing is
   half-written;
 - the supported rollback is: stop the daemon, restore
-  `<db>.pre-ba2.<utc>.sqlite` (step 1), start the pre-BA binary. Task rows
-  Both task and mail writes made after the point-in-time snapshot are lost
+  `<db>.pre-ba2.<utc>.sqlite` (step 1), start the pre-BA binary. Both task
+  and mail writes made after the point-in-time snapshot are lost
   with the restore; the operator is told this in the startup log line that
   names the backup.
 
