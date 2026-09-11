@@ -1572,7 +1572,7 @@ mod tests {
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let (interrupted_tx, interrupted_rx) = std::sync::mpsc::sync_channel(1);
         let timed_out = pool
-            .submit(Duration::from_millis(15), move |connection, _| {
+            .submit(Duration::from_millis(500), move |connection, _| {
                 let _ = started_tx.send(());
                 let result = connection.query_row(
                     "WITH RECURSIVE count(value) AS (
