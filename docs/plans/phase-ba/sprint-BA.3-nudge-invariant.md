@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Design | [`nudge-task-design.md`](./nudge-task-design.md) §1, §2, §4.2, §6, §6.1, §6.2, §8 (commit `9b5c7d876`) |
+| Design | [`nudge-task-design.md`](./nudge-task-design.md) §1, §2, §4.2, §6, §6.1, §6.2, §8 (commit `18db5acc3`) |
 | Outcomes | B1, B2, B11, B12 |
 | Recommended | arch-ctm / deep-reasoning — replaces the reminder/escalation loop in a 4k-line runtime module |
 | Depends on | `must_follow` BA.2 (dev push) — `open_tasks_for_team`, `TaskOp::Start`, `position`, `WriteOutcome.task_close` |
@@ -343,10 +343,13 @@ fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
 
 ## Consecutive-refusal escalation (design §4.2, plan §4 R5)
 
-The runtime derives `consecutive_refusals` each tick with one SQL query over
-closed task rows for the assignee, ordered by `updated_at DESC`, counting the
-leading `close_outcome = 'refused'` run. It is carried beside `head` on the
-existing per-member task input; no new table or state is introduced.
+The runtime obtains one `RefusalRun` per member per tick through the existing
+task read surface's `refusal_run(team, assignee)` method. Storage implements
+the single `trailing_refusal_run` query over `task_events`, ordered by
+`at DESC, seq DESC`, and returns the leading refused count plus the oldest
+refused timestamp. It is carried beside `head` on the existing per-member
+task input; no new table or state is introduced. The pure `dispose` function
+receives only the count.
 
 Seam: `StorageAndNudgeRouter::commit_write` (`storage_and_nudge_router.rs:273-337`)
 already holds the `WriteOutcome` after `prepared.finish(...)` (`:297`).
@@ -611,7 +614,8 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
    `dispose`, the constructor `runtime_state` (asserted to only construct)
    or the re-check `still_idle` (asserted to be one `== Idle` comparison)
    (RBQA-F003, ARCH-BA3-001, RBQA-F006, BA-QA3-001).
-2. All tests above pass; the 72-row table is present.
+2. All tests above pass; the 13-arm disposition table is present, including
+   the refusal-hold arm.
 3. `grep -rn "BLOCKED_RENOTIFY_MS\|select_open_task\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation" crates/` returns nothing (PLAN-SCOPE-002 grep gate).
 4. `grep -n "DeliveryChannel::HerdrSteer" crates/atm-http-runtime/src/herdr_queue_wake.rs` returns nothing — the candidate sweep is backend-neutral.
 5. `doctor` and `atm task events` show `started` events with actor

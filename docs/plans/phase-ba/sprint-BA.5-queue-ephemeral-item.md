@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Design | [`nudge-task-design.md`](./nudge-task-design.md) §6, §9 (commit `9b5c7d876`) |
+| Design | [`nudge-task-design.md`](./nudge-task-design.md) §6, §9 (commit `18db5acc3`) |
 | Outcomes | B13 |
 | Recommended | arch-ctm / deep-reasoning — changes the at-most-once claim predicate the whole nudge path relies on |
 | Depends on | `must_follow` BA.3 (dev push) |

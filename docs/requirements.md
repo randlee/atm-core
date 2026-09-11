@@ -2998,10 +2998,13 @@ Task lifecycle (Phase BA):
    `assigned` task only; `--head` MUST place it next up behind the active
    task, and the active task MUST never be repositioned or preempted.
 7. Closing a task MUST record one typed outcome from
-   `completed | refused | cancelled | reassigned` with optional reason text,
+   `completed | refused | cancelled` with optional reason text,
    MUST remove the task from the queue, and MUST append a timestamped event.
-8. Reassignment MUST be close (`reassigned`) and create; a closed task id
-   MUST NOT be reopened.
+8. Reassignment and reopening MUST use `atm task assign` on the same id:
+   an open id may be reassigned in place, and a closed id may be reopened;
+   neither operation creates a second row or permits simultaneous assignees.
+   Every transition MUST append exactly one `task_events` row under that id;
+   `reassigned` and `reopened` are event kinds, not outcomes.
 9. `atm task` MUST be the closed subcommand set `assign`, `close`, `move`,
    `list`, `events`; `atm send <agent> --task-id <id>` MUST alias `assign`
    and `atm send <assigner> --task-complete --task-id <id>` MUST alias

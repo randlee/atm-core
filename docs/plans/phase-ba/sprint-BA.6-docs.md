@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Design | whole document (commit `9b5c7d876`) |
+| Design | whole document (commit `18db5acc3`) |
 | Outcomes | B14 (queryability documented); phase acceptance 11, 12 |
 | Recommended | Cipher-311d / fast |
 | Depends on | `must_follow` BA.1–BA.5 (PR completion) |

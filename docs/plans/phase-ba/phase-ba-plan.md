@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Design authority | [`nudge-task-design.md`](./nudge-task-design.md) — committed verbatim at `9b5c7d876` (this branch). Where this plan and the design disagree, the design wins and this plan is the defect. |
+| Design authority | [`nudge-task-design.md`](./nudge-task-design.md) — committed verbatim at `18db5acc3` (this branch). Where this plan and the design disagree, the design wins and this plan is the defect. |
 | Supersedes | Phase AZ (`integrate/phase-az`, PR #1394) — retired unmerged 2026-09-11; branch retained, plan docs retained as history |
 | Base | `develop` |
 | Integration branch | `integrate/phase-ba` |
@@ -32,11 +32,11 @@ One line each; the design section is the full statement.
 | B3 | One task id is one row; at most one `active` task per agent, enforced by the database; `assigned` rows are the queue | §3.1 |
 | B4 | ATM resolves nothing but a task id; no provider, no body dereference | §3 |
 | B5 | Queue order is `(position, assigned_at, task_id)`; `position` is its own column; `assigned_at` is immutable; `--head` = position 2 when a task is active | §4.3 |
-| B6 | Close outcome is typed: `completed \| refused \| cancelled \| reassigned`; reassignment is close-and-create | §4 |
+| B6 | Close outcome is typed: `completed \| refused \| cancelled`; reassignment and reopen are explicit `assign` transitions on the same id | §3.1a, §4 |
 | B7 | `blocked` is an agent state; `refused` is a task outcome; the words never cross | §4.1 |
 | B8 | `atm task` is a closed set `{assign, close, move, list, events}`; `atm send --task-id` / `--task-complete` are aliases | §5 |
 | B9 | Ack never touches task state; task state never gates an ack | §5.1 |
-| B10 | A close delivers its report before applying the close; unknown id blocks, already-complete informs | §5.2 |
+| B10 | A close delivers its report before applying the close; unknown id blocks, and an already-complete id can be explicitly reopened by `assign` | §5.2 |
 | B11 | Escalation is terminal at `TASK_STALLED_REMINDER_THRESHOLD` (10): one message, then nudging stops until the task changes state | §6 |
 | B12 | Escalation is a message to lead + configured recipients, never a new structure | §6.1, §6.2 |
 | B13 | `atm queue` items are a scheduling view over the message: closed on read (on ack when `requires_ack`), selected before tasks, never `active` | §9 |
@@ -57,7 +57,7 @@ States: `assigned` → `active` → `complete`. Events: `Assigned`, `Started`,
 | none | → `assigned` | reject `no open task` | reject `no open task` |
 | `assigned` | → `assigned` (idempotent resend) | → `active`; reject `ActiveElsewhere` when the member's one-active index is already held | → `complete(o)` |
 | `active` | → `active` (idempotent resend) | → `active` (idempotent) | → `complete(o)` |
-| `complete` | reject `already complete; use a new id` | reject `already complete` | reject `already complete` — **informational** at the command layer (B10) |
+| `complete` | reject `already complete; use assign to reopen` | reject `already complete` | reject `already complete` — **informational** at the command layer (B10) |
 
 Row invariants enforced by the database (BA.2): one row per `(team, task_id)`;
 at most one `active` row per `(team, assignee)`; `position` unique per open
@@ -114,6 +114,7 @@ changes the named sprint before it opens; nothing else moves.
 | **R4** | **Escalation across a daemon restart.** `EscalationState` is in-RAM; after a restart a still-blocked agent looks like a new episode. | **Each target's mailbox is the record (design §6.1, §6.2).** Once per episode start, per target (unique lead and every configured recipient), the runtime reads that mailbox for a daemon-sent message whose `summary` equals `escalation:<kind>:<agent>@<team>` (one constructor, `escalation_summary`) and whose timestamp is at or after `Episode.since` (the roster's `state_changed_at`). A target holding one is skipped; every other target is written. A cleared-then-new episode has a later `since`, so it is reported again. No `cleared_at`; the only in-RAM state is the current episode per member. | Persist episode start on the roster record (new state — design-excluded). |
 
 | **R5** | **Consecutive-refusal threshold.** Design §4.2 says consecutive refusals by one agent escalate but names no number. | `TASK_CONSECUTIVE_REFUSAL_THRESHOLD = 3`; derive the trailing refusal run from closed task rows each tick, escalate at 3, then hold task prompts while retrying only missing refusal mail; a non-refused close or reassign/reopen resets the derived run. | 2, or make it a per-team setting (outside the budget). |
+| **R6** | **One id for the life of a task.** Rand's amendment §3.1a makes reassignment and reopen explicit in-place `assign` transitions. | Decided: one `(team, task_id)` row can be reassigned or reopened any number of times; every transition is an event row under that id. | Require a new id for reassignment. |
 
 R2 is intentionally unused: the question it named (a `start` verb) is settled
 by design §5 and folded into R1.
@@ -195,7 +196,7 @@ state machines beyond the three in §3. Everything this phase adds, by sprint:
 | --- | --- |
 | BA.1 | nothing — deletions only |
 | BA.2 | columns `tasks.position`, `tasks.close_outcome`, `task_events.close_outcome`; PK `(team, task_id)` ×2; indexes `one_active_task_per_agent`, `tasks_position_per_member`; two `CHECK` constraints |
-| BA.2 | `QueuePosition(NonZeroU32)` newtype; `TaskCloseOutcome`; `TaskState::Complete(TaskCloseOutcome)`; `TaskEvent::Started`, `TaskEvent::Completed(outcome)`; `TaskEventKind::{Started, Moved, Migrated}`; `TaskRejected { kind }` + `TaskRejectionKind` (5); `TaskRow.position`; `Transition(pub TaskState)` struct |
+| BA.2 | `QueuePosition(NonZeroU32)` newtype; `TaskCloseOutcome`; `TaskState::Complete(TaskCloseOutcome)`; `TaskEvent::Started`, `TaskEvent::Completed(outcome)`, `Reassigned`, `Reopened`; `TaskEventKind::{Started, Reassigned, Reopened, Moved, Migrated}`; `TaskRejected { kind }` + `TaskRejectionKind`; `TaskRow.position`; `Transition(pub TaskState)` struct |
 | BA.2 | `TaskStateTag` (scalar wire tag); `TaskRowWire`, `TaskEventRowWire` (serde `try_from`/`into` shapes; `TaskState::from_parts`, `tag()`, `close_outcome()`); `TaskOp { Start, Close }` (no message-carried move — design §5), `MoveTarget { Head, End, Before }` (used only by BA.4's `TaskMoveRequest`); `WriteRequest.task_op` (additive; `task_complete` kept decode-only) and `WriteRequest::task_op_normalized`; `TaskCloseApplied { task_id, assignee, outcome, consecutive_refusals, run_started_at }` carried as `SendOutcome.task_close`; `TASK_CONSECUTIVE_REFUSAL_THRESHOLD`; `HTTP_API_VERSION` 1.5.0 |
 | BA.2 | `AsyncTaskLedgerReader::open_tasks_for_team`; `task_migration.rs` (`migrate_task_identity`, `TaskMigrationReport`, crate-private); `DoctorFinding::TaskQueueGap` |
 | BA.3 | `herdr_task_disposition.rs`: `TaskDisposition`, `EpisodeKind` (+ `as_str`), `HoldReason` (incl. `NoDeliveryChannel`, `RefusalsEscalated`), `dispose` with derived `consecutive_refusals`, `reminder_due`; `TASK_REMINDER_INTERVAL_MS` moved to `atm-storage/src/task_store.rs` (`i64`); `EscalationState` reshaped to `{episodes}` with `Episode { kind, since, notified }`, `observe`, `mark_notified`; `escalation_summary(kind, member, task)` (the one summary constructor), `episode_already_reported(target, summary, since)` with an unbounded mailbox scan narrowed by daemon sender; `escalate_mail(…, suppress_since)` used by every terminal escalation (episodes, stalled, refusals); `EscalationKind::OfflineEscalated` + `From<EpisodeKind>`; `crates/atm-architecture/tests/escalation_ownership.rs` (path visitor + shape assertions `runtime_state_only_constructs`, `still_idle_is_a_single_comparison`); `runtime_state(Option<HerdrAgentStatus>)` widened; `still_idle(runtime, member) -> bool`; start-owed retry of `TaskOp::Start` for reminded `assigned` heads; refusal-run SQL derivation and refusal-hold tick retry tests; `EscalationKind::RefusalsEscalated` (`BreakerOpened` deleted); `MemberObservation`; `task_started` template text (existing template class, no new nudge kind) |
@@ -213,7 +214,7 @@ error code is added.
 
 | failure | surfaced as | where |
 | --- | --- | --- |
-| task op on a missing / complete / foreign task; lead authority on a team with ≠ 1 leads; second active task; `--before` naming another member's task | `TaskRejected { kind: TaskRejectionKind::{NoOpenTask, AlreadyComplete, NotAuthorized, ActiveElsewhere, UnknownTarget} }` (existing error, `detail` names the reason; one `rejected` event) | BA.2 writer |
+| task op on a missing / foreign task; lead authority on a team with ≠ 1 leads; second active task; `--before` naming another member's task | `TaskRejected { kind: TaskRejectionKind::{NoOpenTask, NotAuthorized, ActiveElsewhere, UnknownTarget} }`; a complete task is reopened by explicit `assign` | BA.2 writer |
 | `task_id` and legacy `task_complete` name different tasks | `AtmError::validation_with_recovery` (`error.rs:377-382`) | BA.2 `task_op_normalized` |
 | `state`/`close_outcome`/`position` wire combination impossible (`from_parts`, complete row with position, terminal→open) | `AtmError::validation` on decode | BA.2 wire types |
 | migration cannot complete (duplicate-group conflict it cannot resolve, I/O) | transaction rolled back; startup fails with the existing storage error naming the backup path | BA.2 migration |
@@ -233,15 +234,16 @@ outside the writer transaction. BA.2 tightens it to the new decisions and the
 plan's approval is the written ruling those edits require:
 
 - `[contracts].notes` replay rule → per `(team, task_id)`; events
-  `Assigned/Started/Completed`; `Acked` removed
+  `Assigned/Started/Reassigned/Reopened/Completed`; `Acked` removed. The same
+  `(team, task_id)` row is retained for reassignment and reopen.
 - `[enforcement].review_gates` += `no_ack_task_coupling` (grep gate:
   `apply_task_acknowledgement` has no production caller),
   `no_task_state_write_outside_task_op` (the only writers of `tasks.state` are
   the `TaskOp` arms in `writer/task_ops.rs`)
 - `[ownership].io_forbidden` += `task_body_dereference` (B4)
 - same edits mirrored in `boundaries/atm-storage-rusqlite/task-store-sqlite.toml`
-  and `async-task-ledger-reader*.toml` (`open_tasks_for_team` added to the
-  read surface)
+  and `async-task-ledger-reader*.toml` (`open_tasks_for_team` and `refusal_run(team, assignee)` added to the
+  existing read surface)
 
 No new manifest. No manifest relaxation.
 
@@ -311,7 +313,10 @@ call `escalate_blocked` (`herdr_queue_wake_reminders.rs:123-132`);
 9. An `Idle` member with an open `atm queue` message is reminded of the
    message before its next task; a read (or acked) message is never reminded.
 10. §9's additions table matches the shipped diff exactly.
-11. ADR-062 and ADR-054 amendments merged with BA.2 / BA.5; ADR-063 marked
+13. One task id remains one row across reassignment and reopen; the acceptance
+    suite proves both transitions and every transition has an event under that
+    id (design §3.1a).
+14. ADR-062 and ADR-054 amendments merged with BA.2 / BA.5; ADR-063 marked
     superseded; `schema-reviewer` sign-off recorded on BA.2 and BA.4; R0's
     approval and D3 exception recorded as an ADR-061 D6 entry and cited by PR
     comment.

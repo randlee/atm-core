@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Design | [`nudge-task-design.md`](./nudge-task-design.md) §3.1, §3.2, §4, §4.1, §4.3 (commit `9b5c7d876`) |
+| Design | [`nudge-task-design.md`](./nudge-task-design.md) §3.1, §3.2, §4, §4.1, §4.3 (commit `18db5acc3`) |
 | Outcomes | B3, B5, B6, B7 |
 | Recommended | arch-ctm / deep-reasoning — schema rebuild with live data and a transactional queue renumber |
 | Depends on | `must_follow` BA.1 (branch ancestry — same files) |
@@ -24,8 +24,8 @@ legacy `task_complete` key (see "Wire" below).
 
 | id | deliverable | where |
 | --- | --- | --- |
-| D1 | `QueuePosition`, `TaskCloseOutcome`, `TaskState::Complete(outcome)`, `TaskStateTag`, `TaskEvent::{Assigned,Started,Completed(outcome)}`, `transition()`, `TaskRejected`/`TaskRejectionKind` | `crates/atm-storage/src/task_state.rs` |
-| D2 | `TaskRow` + `TaskRowWire`, `TaskEventRow` + `TaskEventRowWire`, `TaskEventKind::{Started,Moved,Migrated}` | `crates/atm-storage/src/task_state.rs` |
+| D1 | `QueuePosition`, `TaskCloseOutcome` (completed, refused, cancelled); `TaskState::Complete(outcome)`, `TaskStateTag`, `TaskEvent::{Assigned,Started,Reassigned,Reopened,Completed(outcome)}`, `transition()`, `TaskRejected`/`TaskRejectionKind` | `crates/atm-storage/src/task_state.rs` |
+| D2 | `TaskRow` + `TaskRowWire`, `TaskEventRow` + `TaskEventRowWire`, `TaskEventKind::{Started,Reassigned,Reopened,Moved,Migrated}` | `crates/atm-storage/src/task_state.rs` |
 | D3 | `TaskOp`, `MoveTarget`, `TaskCloseApplied`, `TASK_CONSECUTIVE_REFUSAL_THRESHOLD` | `crates/atm-storage/src/task_op.rs` (new), `task_store.rs` |
 | D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, `WriteOutcome.task_close`, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
 | D5 | `TASK_SCHEMA_DDL` rebuilt (two tables, three indexes) | `crates/atm-storage-rusqlite/src/task_store.rs:15-58` |
@@ -83,7 +83,6 @@ pub enum TaskCloseOutcome {
     Completed,
     Refused,
     Cancelled,
-    Reassigned,
 }
 
 impl TaskCloseOutcome {
@@ -93,7 +92,6 @@ impl TaskCloseOutcome {
             Self::Completed => "completed",
             Self::Refused => "refused",
             Self::Cancelled => "cancelled",
-            Self::Reassigned => "reassigned",
         }
     }
 }
@@ -160,6 +158,8 @@ impl TaskState {
 pub enum TaskEvent {
     Assigned,
     Started,
+    Reassigned,
+    Reopened,
     Completed(TaskCloseOutcome),
 }
 
@@ -170,17 +170,20 @@ pub fn transition(
     event: TaskEvent,
     task_id: &TaskId,
     actor: &AgentName,
+    current_assignee: Option<&AgentName>,
+    requested_assignee: &AgentName,
 ) -> Result<Transition, TaskRejected> {
     use TaskEvent as E;
     use TaskState as S;
     match (state, event) {
         (None, E::Assigned) => Ok(Transition(S::Assigned)),
         (None, E::Started | E::Completed(_)) => Err(TaskRejected::new(format!("no open task {task_id} for {actor}"))),
-        (Some(S::Assigned), E::Assigned) => Ok(Transition(S::Assigned)),   // idempotent resend
-        (Some(S::Active), E::Assigned) => Ok(Transition(S::Active)),       // idempotent resend
+        (Some(S::Assigned), E::Assigned) if current_assignee == Some(requested_assignee) => Ok(Transition(S::Assigned)),
+        (Some(S::Active), E::Assigned) if current_assignee == Some(requested_assignee) => Ok(Transition(S::Active)),
+        (Some(S::Assigned | S::Active), E::Assigned) => Ok(Transition(S::Assigned)), // reassign in place
+        (Some(S::Complete(_)), E::Assigned) => Ok(Transition(S::Assigned)), // reopen
         (Some(S::Assigned | S::Active), E::Started) => Ok(Transition(S::Active)), // idempotent when Active
         (Some(S::Assigned | S::Active), E::Completed(outcome)) => Ok(Transition(S::Complete(outcome))),
-        (Some(S::Complete(_)), E::Assigned) => Err(TaskRejected::new(format!("task {task_id} already complete; use a new id"))),
         (Some(S::Complete(_)), E::Started | E::Completed(_)) => Err(TaskRejected::already_complete(task_id)),
     }
 }
@@ -201,7 +204,6 @@ pub struct TaskRejected {
 #[serde(rename_all = "snake_case")]
 pub enum TaskRejectionKind {
     NoOpenTask,
-    AlreadyComplete,
     NotAuthorized,   // wrong actor, or "lead" authority claimed on a team with 0 or 2+ leads (detail names the count)
     ActiveElsewhere, // one-active index hit on Started
     UnknownTarget,   // Move Before(id) names no open task of the same member
@@ -302,6 +304,8 @@ pub enum TaskEventKind {
     Assigned,
     Acked,      // history only; never written after BA.1
     Started,
+    Reassigned,
+    Reopened,
     Completed,
     Rejected,
     Reminded,
@@ -460,7 +464,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     assignee TEXT NOT NULL,
     assigner TEXT NOT NULL,
     state TEXT NOT NULL CHECK(state IN ('assigned', 'active', 'complete')),
-    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled', 'reassigned')),
+    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled')),
     position INTEGER NULL CHECK(position IS NULL OR position >= 1),
     assignment_message_id TEXT NOT NULL,
     description TEXT NOT NULL,
@@ -494,7 +498,7 @@ CREATE TABLE IF NOT EXISTS task_events (
     event TEXT NOT NULL,
     from_state TEXT NULL,
     to_state TEXT NULL,
-    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled', 'reassigned')),
+    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled')),
     actor TEXT NOT NULL,
     message_id TEXT NULL,
     outcome TEXT NULL CHECK(outcome IN ('emitted', 'unrenderable', 'blocked')),
@@ -692,7 +696,7 @@ renumber:
     let row = load_task_row(team, task_id, connection, target)?
         .ok_or_else(|| task_rejected(TaskRejectionKind::NoOpenTask, format!("no task {task_id} on {team}")))?;
     let Some(current) = row.position else {
-        return Err(task_rejected(TaskRejectionKind::AlreadyComplete, format!("task {task_id} is complete")));
+        return Err(task_rejected(TaskRejectionKind::NotAuthorized, format!("task {task_id} requires explicit assign to reopen")));
     };
     if row.state == TaskState::Active {
         append_task_event(team, task_id, &row.assignee, TaskEventKind::Moved, Some(row.state), Some(row.state),
@@ -706,13 +710,22 @@ renumber:
 `detail` for every other move is `"<from>→<to>"` with the 1-based positions
 (e.g. `"3→1"`).
 
-Consecutive refusals (design §4.2): `apply_task_close` with
+Consecutive refusals (design §4.2): `atm-storage-rusqlite/src/task_sql.rs`
+owns `trailing_refusal_run(conn, team, assignee) -> RefusalRun`:
+`SELECT event, at FROM task_events WHERE team = ?1 AND assignee = ?2 AND
+event IN ('completed','refused','cancelled','reopened','reassigned') ORDER BY
+at DESC, seq DESC`. Rust counts leading refused rows; `started_at` is the
+oldest refused timestamp. Started/assigned/moved/migrated do not reset it;
+completed/cancelled/reopened/reassigned end it. `apply_task_close` with
 `outcome = Refused` computes, in the same transaction, the assignee's
 trailing run of `refused` closes (`SELECT close_outcome FROM tasks WHERE team
 = ?1 AND assignee = ?2 AND state = 'complete' ORDER BY updated_at DESC,
 task_id DESC` read until the first non-`refused`) and returns it:
 
 ```rust
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefusalRun { pub count: u32, pub started_at: Option<IsoTimestamp> }
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskCloseApplied {
     pub task_id: TaskId,
@@ -730,7 +743,8 @@ pub struct TaskCloseApplied {
 pub const TASK_CONSECUTIVE_REFUSAL_THRESHOLD: u32 = 3; // atm-storage/src/task_store.rs, next to TASK_STALLED_REMINDER_THRESHOLD (plan §4 R5)
 ```
 
-The writer only counts. `TaskCloseApplied` travels `WriteOpResult` →
+The writer calls the shared storage function after inserting the close event
+and places its result in `TaskCloseApplied`. `TaskCloseApplied` travels `WriteOpResult` →
 `SendOutcome.task_close: Option<TaskCloseApplied>` (atm-core
 `send/outcome.rs:15-35`, new field, `#[serde(default, skip_serializing_if =
 "Option::is_none")]`) → `WriteOutcome::Sent(SendOutcome)` (`write/pipeline.rs:13-16`
@@ -808,7 +822,7 @@ Pure — `task_state.rs`:
 Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
 
 - `assign_second_row_same_task_id_different_assignee_is_rejected` — the PK;
-  rejection kind `AlreadyComplete` when complete, otherwise idempotent
+  explicit same-id reopen when complete, otherwise idempotent
   resend only when assignee matches, else `Rejected` with detail naming the
   existing assignee. Corner: **same** task id resent to a different member.
 - `start_when_another_task_active_is_rejected_active_elsewhere` — the index;

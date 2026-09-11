@@ -103,7 +103,7 @@ event, is never gated on task state, and never transitions a task.
 | One row per task | `PRIMARY KEY (team, task_id)`; `assignee` is a column, not identity |
 | At most one active task per agent | `CREATE UNIQUE INDEX one_active_task_per_agent ON tasks(team, assignee) WHERE state = 'active'`; any number of `assigned` rows per agent |
 | Queue order | `ORDER BY position, assigned_at, task_id`; `position` is a separate column, default end of queue; `assigned_at` is immutable |
-| Close outcome | typed `completed \| refused \| cancelled \| reassigned`; free text is a human-facing reason only |
+| Close outcome | typed `completed \| refused \| cancelled|completed \| refused \| cancelled|completed \| refused \| cancelled|completed \| refused \| cancelled`; free text is a human-facing reason only |
 | Reassignment | close with outcome `reassigned`, then create a new task id; no in-place reassign |
 | Replay | per `(team, task_id)`: the fold of `to_state` over the row's events in ascending `seq` (the `PRIMARY KEY (team, task_id, seq)` order — `at` is never an ordering key), taking the last non-NULL value, equals the row's `state` (with `close_outcome` when `complete`). `Moved`, `rejected`, `reminded`, `lead_notified` and `acked` events carry `to_state = from_state`; `migrated` is the only migration-written state-changing event |
 
@@ -117,7 +117,7 @@ States: `assigned`, `active`, `complete`. Events: `Assigned`, `Started`,
 | ∅ | assigned | reject | reject |
 | assigned | assigned (resend) | active; reject when another task is active for the assignee | complete |
 | active | active (resend) | active | complete |
-| complete | reject (use a new id) | reject | no transition; deliver the carried message and report already complete |
+| complete | assign reopens the same id | reject | assigned transition; preserve the task id and append a reopened event |
 
 `Started` notifies the assigner. `Completed(outcome)` dequeues the task (no
 further reminders) and appends one timestamped event carrying the outcome;
@@ -137,6 +137,20 @@ Task selection for an idle member: the active task, else the first `assigned`
 task in queue order.
 
 ## Consequences
+
+## Phase BA design amendment (2026-09-11)
+
+Rand's ruling adds the following normative edges without rewriting the
+historical text above: `complete → assigned` is `reopened`, and
+`assigned|active → assigned` with a different assignee is `reassigned`.
+`TaskCloseOutcome` is exactly `completed | refused | cancelled`; `reassigned`
+is an event kind, not a close outcome. Event kinds include `reassigned` and
+`reopened`, and every transition appends one event row under the same
+`(team, task_id)`. The same id may be reassigned or reopened any number of
+times, never held by more than one agent at once. `assigned_at` is the time of
+the current assignment, changed by assign/reassign/reopen but never by queue
+reordering. Assignment accepts `--before <task-id> | --head`, reusing
+`MoveTarget`.
 
 This is a fresh Phase AX design, not restoration of the AC.6 scaffolding. It
 replaces the historical Claude-code/Pydantic deferral because ATM tasks are

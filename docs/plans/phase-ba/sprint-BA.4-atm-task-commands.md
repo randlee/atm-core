@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Design | [`nudge-task-design.md`](./nudge-task-design.md) §4, §5, §5.1, §5.2, §7, §7.1, §9 (commit `9b5c7d876`) |
+| Design | [`nudge-task-design.md`](./nudge-task-design.md) §4, §5, §5.1, §5.2, §7, §7.1, §9 (commit `18db5acc3`) |
 | Outcomes | B8, B10, B14 |
 | Recommended | arch-ctm / deep-reasoning — three-stage close and a new envelope variant |
 | Depends on | `must_follow` BA.3 (dev push) — BA.3 owns `storage_and_nudge_router.rs`; this sprint adds the `TaskMove` arm to `dispatch_non_write` in that file after BA.3 has landed its `commit_write` change (PLAN-SCOPE-001) |
@@ -120,7 +120,7 @@ struct TaskAssignCommand {
 #[derive(Debug, Args)]
 struct TaskCloseCommand {
     task_id: TaskId,
-    /// completed | refused | cancelled | reassigned (design §4).
+    /// completed | refused | cancelled |completed \| refused \| cancelled (design §4).
     #[arg(value_enum)]
     outcome: OutcomeArg,
     /// Free text recorded on the close event; also the report body when no
@@ -170,13 +170,12 @@ struct TaskMoveCommand {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 #[value(rename_all = "lowercase")]
-enum OutcomeArg { Completed, Refused, Cancelled, Reassigned }
+enum OutcomeArg { Completed, Refused, Cancelled }
 ```
 
 The `ArgGroup` makes zero targets and two targets both parse errors
-(FNX-BA-CRIT-016). `Reassigned` is accepted on `close` so the
-close-and-create sequence can be expressed; `atm task` has **no** reassign
-verb — reassignment is `atm task close <id> reassigned "<why>"` followed by
+(FNX-BA-CRIT-016). close-and-create sequence can be expressed; `atm task` has **no** reassign
+verb — reassignment is `atm task close <id>completed \| refused \| cancelled "<why>"` followed by
 `atm task assign <new-agent> --task-id <new-id> …` (or without `--task-id`,
 letting the CLI mint one). Documented, not automated.
 
@@ -235,7 +234,7 @@ pub enum ClosePreflight {
     /// Row open: deliver report and close in one write.
     Proceed { row: TaskRow },
     /// Row already closed: deliver the report as a plain message, then inform.
-    AlreadyComplete { row: TaskRow },
+    ReopenViaAssign { row: TaskRow },
     /// No such task id on this team: block before anything is sent.
     Unknown,
 }
@@ -253,7 +252,7 @@ pub fn report_recipient(row: &TaskRow, caller: &AgentName) -> AgentName {
 }
 ```
 
-| stage | `Proceed` | `AlreadyComplete` | `Unknown` |
+| stage | `Proceed` | `ReopenViaAssign` | `Unknown` |
 | --- | --- | --- | --- |
 | 1 preflight (reader lane, `list_tasks(team, None)` filtered — no new read method) | continue | continue | exit 1: `task <id> does not exist on team <t>`; nothing sent |
 | 2 deliver | one `WriteRequest { to: report_recipient(row, caller), task_id, task_op: Some(Close{outcome, reason}) }` — report and close are **one transaction**; if the close arm rejects, the writer rolls back the whole write and the CLI retries once as stage-2b: plain message (`task_op: None`, `task_id: None`) then reports the rejection | `WriteRequest` with `task_id: None` to `report_recipient` — plain delivery | — |
@@ -261,7 +260,7 @@ pub fn report_recipient(row: &TaskRow, caller: &AgentName) -> AgentName {
 
 Stage 2's single transaction is what design §5.2 means by "deliver first":
 the report is never lost — either both land or the report lands alone with
-an explicit rejection. `AlreadyComplete` uses `TaskRejectionKind::AlreadyComplete`
+an explicit assignment transition. `ReopenViaAssign` directs the caller to `assign`
 from BA.2 when the race (closed between stage 1 and 2) occurs: the writer
 rejects, the CLI runs 2b and prints the stage-3 informational line. The
 report body is the message source when given, else the `reason` text.
