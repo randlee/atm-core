@@ -1730,6 +1730,7 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(index, agent)| TaskRow {
+                position: None,
                 team: team.clone(),
                 task_id: format!("AX5-TASK-{index:02}").parse().expect("task id"),
                 assignee: agent.parse().expect("agent"),
