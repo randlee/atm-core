@@ -708,7 +708,16 @@ mod tests {
     }
 
     #[test]
-    fn admit_keeps_completion_authority_rule() {
+    fn admit_has_no_cross_row_input() {
+        let assignee: AgentName = "assignee".parse().unwrap();
+        let task_id: TaskId = "AX.3".parse().unwrap();
+        let _: fn(Option<&TaskRow>, TaskEvent, &TaskId, &AgentName) -> Result<(), TaskRejected> =
+            admit;
+        admit(None, TaskEvent::Assigned, &task_id, &assignee).unwrap();
+    }
+
+    #[test]
+    fn admit_rejects_completion_by_third_party() {
         let task_id: TaskId = "AX.3".parse().unwrap();
         let row = row("AX.3", TaskState::Assigned);
         let intruder: AgentName = "intruder".parse().unwrap();
@@ -721,6 +730,12 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn admit_accepts_completion_by_assigner_and_by_assignee() {
+        let task_id: TaskId = "AX.3".parse().unwrap();
+        let row = row("AX.3", TaskState::Assigned);
         admit(
             Some(&row),
             TaskEvent::Completed(TaskCloseOutcome::Completed),

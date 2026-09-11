@@ -142,12 +142,30 @@ impl SqliteTaskStore {
             from_state: row
                 .get::<_, Option<String>>(6)?
                 .as_deref()
-                .map(|state| parse_state(state, close_outcome.as_deref()))
+                .map(|state| {
+                    parse_state(
+                        state,
+                        if state == "complete" {
+                            close_outcome.as_deref()
+                        } else {
+                            None
+                        },
+                    )
+                })
                 .transpose()?,
             to_state: row
                 .get::<_, Option<String>>(7)?
                 .as_deref()
-                .map(|state| parse_state(state, close_outcome.as_deref()))
+                .map(|state| {
+                    parse_state(
+                        state,
+                        if state == "complete" {
+                            close_outcome.as_deref()
+                        } else {
+                            None
+                        },
+                    )
+                })
                 .transpose()?,
             actor: if actor == atm_storage::DAEMON_ACTOR_NAME {
                 TaskActor::Daemon

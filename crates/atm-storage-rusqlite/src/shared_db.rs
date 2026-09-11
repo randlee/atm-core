@@ -327,6 +327,7 @@ impl SharedDb {
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for message upsert",
@@ -405,6 +406,7 @@ impl SharedDb {
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
@@ -480,6 +482,7 @@ impl SharedDb {
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for atomic message commit",
@@ -503,6 +506,7 @@ impl SharedDb {
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for acknowledgement admission",
@@ -527,6 +531,7 @@ impl SharedDb {
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",

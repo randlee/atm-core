@@ -3590,9 +3590,8 @@ mod tests {
         let events = tasks
             .list_task_events(&team(), &task_id, Some(&agent()))
             .expect("task events");
-        assert_eq!(events.len(), 3);
-        assert_eq!(events[1].event, TaskEventKind::Assigned);
-        assert_eq!(events[2].event, TaskEventKind::Completed);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[1].event, TaskEventKind::Completed);
 
         let peer_task: atm_storage::TaskId = "AX.3-peer".parse().expect("peer task");
         let mut peer = message("atm:peer-task", "peer receipt");
@@ -3789,7 +3788,7 @@ mod tests {
                 .expect("load completed task")
                 .expect("task row")
                 .state,
-            TaskState::Complete
+            TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
         );
         assert!(
             store
@@ -3980,16 +3979,14 @@ mod tests {
         store
             .save_message(&second_fanout)
             .expect("second fanout task");
-        assert_eq!(
-            tasks
-                .list_tasks(&team(), None)
-                .expect("fanout task rows")
-                .into_iter()
-                .filter(|row| row.task_id == fanout_id)
-                .count(),
-            2,
-            "a task fan-out creates one row per recipient"
-        );
+        let fanout = tasks
+            .list_tasks(&team(), None)
+            .expect("fanout task rows")
+            .into_iter()
+            .filter(|row| row.task_id == fanout_id)
+            .collect::<Vec<_>>();
+        assert_eq!(fanout.len(), 1, "one task id retains one canonical row");
+        assert_eq!(fanout[0].assignee, second_fanout.agent);
     }
 
     #[test]

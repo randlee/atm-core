@@ -947,6 +947,8 @@ mod tests {
                 parent_message_id: None,
                 thread_mode: None,
                 task_complete: None,
+                placement: None,
+                task_op: None,
                 expires_at: None,
                 task_id: None,
                 extra: serde_json::Map::new(),
