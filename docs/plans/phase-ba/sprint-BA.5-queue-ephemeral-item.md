@@ -35,6 +35,7 @@ reminded (FNX-BA-CRIT-017: no widening to "any open message").
 | --- | --- | --- |
 | D1 | `OPEN_ITEM_SQL` predicate used by `claim_next_pending` (eligibility adds `nudge_pending_at <= now`) **and** `list_pending_members` (FNX-BA-CRIT-031); `requeue_pending` backs off to the interval at `MAX_NUDGE_ATTEMPTS` instead of stopping (FNX-BA-CRIT-033); `rearm_pending_after_handoff` (replaces `clear_pending_on_handoff`); `clear_pending_on_read` deleted | `crates/atm-storage-rusqlite/src/pending_nudge_store.rs` |
 | D1a | `mark_message_read` — the production read transition — closes or re-arms the marker | `crates/atm-storage-rusqlite/src/writer/stmt_cache.rs:44-53` |
+| D1b | `mark_source_acknowledged` clears `nudge_pending_at` (requires-ack items close on ack) | `crates/atm-storage-rusqlite/src/writer/ops.rs:528-532`, `writer/stmt_cache.rs:33` |
 | D2 | `PendingNudgeStore` trait: `clear_pending_on_handoff` → `rearm_pending_after_handoff(member, msg, next_due)`; `clear_pending_on_read` removed (no production caller on develop: only `contract.rs:1674`, router `:1237` and `received_hook_selector.rs:978`, all `#[cfg(test)]`); doc comments state the due-at semantics | `crates/atm-storage/src/contract.rs:1290-1320` |
 | D3 | `nudge_dispatch::rearm_queue_marker_after_handoff` (renamed) computes `next_due = now + TASK_REMINDER_INTERVAL_MS`; every caller and the name-pinning boundary test renamed | `crates/atm-core/src/nudge_dispatch.rs:30`; callers `herdr_queue_wake.rs:754`, `queue_drain.rs:417`, `received_hook_selector.rs:617`; adapter `storage_and_nudge_router.rs:1240`; tests `boundary_enforcement.rs:566-623`, `nudge_mode.rs:132`, bootstrap `lib.rs:1385` |
 | D4 | `complete_successful_claim` calls D3; `HoldReason::MailPending` for a member the drain prompted this tick | `herdr_queue_wake.rs:739-770`, `herdr_task_disposition.rs` |
@@ -71,7 +72,7 @@ const OPEN_ITEM_SQL: &str =
 | `clear_pending_on_read` (`:135-140`) | `SET nudge_pending_at = NULL` | **deleted** — it has no production caller; the read transition is `mark_message_read` below (FNX-BA-CRIT-030) |
 | `mark_message_read` (`writer/stmt_cache.rs:44-53`, run by `execute_read_display_state`, `writer/ops.rs:264-284`, for every `atm read` / pull) | `SET read = 1, updated_at = ?4, nudge_pending_at = NULL` | `SET read = 1, updated_at = ?4, nudge_pending_at = CASE WHEN nudge_pending_at IS NOT NULL AND pending_ack_at IS NOT NULL AND acknowledged_at IS NULL THEN ?5 ELSE NULL END` with `?5 = next_due` computed by the writer op from `TASK_REMINDER_INTERVAL_MS` (atm-storage) — closed-on-read, or re-armed until the ack (design §9). The `nudge_pending_at IS NOT NULL` guard keeps immediate sends unmarked |
 | `list_pending_members` (`:151-158`) | `WHERE nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL` | `WHERE nudge_pending_at IS NOT NULL AND {OPEN_ITEM_SQL}` — a read-but-unacked member is discovered by the pump on a fresh tick (FNX-BA-CRIT-031) |
-| ack write (`writer/ops.rs::mark_source_acknowledged`, `:528-532`, persisted by the `stmt_cache.rs:33` upsert) | does not touch the marker | **unchanged.** The ack sets `acknowledged_at`; `{OPEN_ITEM_SQL}` in the claim then excludes the item. A stale non-NULL `nudge_pending_at` on a closed item is inert (never claimable) and is not cleaned up — no ack-writer edit, no shared file with BA.4 |
+| ack write (`writer/ops.rs::mark_source_acknowledged`, `:528-532`, persisted by the `stmt_cache.rs:33` upsert) | sets `acknowledged_at` | **one column added:** `mark_source_acknowledged` (`writer/ops.rs:528-532`, `stmt_cache.rs:33` upsert) also sets `nudge_pending_at = NULL` on the acknowledged message's state row — the item closes on ack, so the marker is cleared exactly as on read (ADR-054 Phase-BA amendment). `{OPEN_ITEM_SQL}` is unchanged; an acknowledged-but-unread row (not produced by any CLI path) is simply never prompted again. |
 
 `next_due = now + TASK_REMINDER_INTERVAL_MS` (60 s, design §6 — the one
 rate limit for messages and tasks; BA.3 moves the constant to
@@ -147,8 +148,8 @@ Storage — `pending_nudge_store.rs` tests (existing module):
 - `mark_message_read_closes_item_without_ack_requirement` — through
   `execute_read_display_state`, the real read path.
 - `mark_message_read_rearms_item_when_ack_owed` — `pending_ack_at` set, not
-  acked → `nudge_pending_at == next_due`; after `acknowledged_at` is set the
-  item is never claimed again (marker value irrelevant).
+  acked → `nudge_pending_at == next_due`; after `acknowledged_at` is set,
+  `nudge_pending_at IS NULL` and the item is closed.
 - `mark_message_read_leaves_unmarked_message_null` — an immediate send read
   → `NULL` before and after.
 - `list_pending_members_includes_read_but_unacked_member` — `read = 1`,
@@ -173,7 +174,8 @@ Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
   → 0 further prompts.
 - `requires_ack_message_reminded_until_acked` — read (real `atm read`), then
   a **fresh** tick with an empty in-memory candidate set → the pump
-  rediscovers the member and reminds at the interval; `atm ack` → silence.
+  rediscovers the member and reminds at the interval; ack → marker NULL,
+  no further prompt.
 - `immediate_send_is_never_reminded` — plain `atm send` to an Idle member,
   never read → 0 queue prompts over 200 ticks (only the one immediate
   nudge at send time). **This is the R3 boundary.**
