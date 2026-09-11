@@ -21,6 +21,10 @@ live in `atm-daemon`.
   - the paired write-through `RosterStore`/`RosterRuntimeMirror` handles over
     one RAM master-roster record; durable roster fields hydrate from SQLite,
     while live state/freshness/revision fields remain ephemeral only
+- `atm-runtime` must compose the nudge and escalation path against the exact
+  `RuntimeMemberState` exposed by `RosterRuntimeMirror`; it must not inject
+  `PickerMemberStatus` or a `RuntimeHealth` projection as a nudge-eligibility
+  input
 - `atm-runtime` must expose storage-neutral runtime inputs to callers through
   the `atm-core` trait surfaces frozen by `Phase AA`.
 - `atm-runtime` must own the concrete `ConfigDoctor` implementation used by

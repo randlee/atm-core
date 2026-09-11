@@ -74,11 +74,17 @@ deletion stands: ADR-062 revives none of that scaffolding.
 
 Phase-AX.6 amendment (2026-09-05): lead notification and escalation are part
 of the retained task surface. `atm-daemon` is the reserved daemon actor and
-cannot be added to or renamed in the roster. Open-task reminders notify the
-single roster lead at reminder thresholds 10, 20, and so on; blocked runtime
-episodes use the same escalation path with an initial 60-second delay and
-10-minute re-notification. Configured daemon and per-team escalation
-recipients are additive fan-out destinations, with a per-tick cap of eight.
+cannot be added to or renamed in the roster. Configured daemon and per-team
+escalation recipients are additive fan-out destinations, with a per-tick cap
+of eight.
+
+Phase-BA amendment (2026-09-11): escalation is one ordinary message to the
+roster lead and to every configured escalation recipient, resolved
+independently. An open task escalates once when its reminder count reaches 10
+and nudging then stops until the task changes state (start or close) or is
+reassigned or reopened — a change in the assignee's
+runtime state alone does not resume it; a `Blocked` or `Offline` assignee
+escalates once per episode and receives zero nudges. See Section 15.4.
 
 The retained product surface is:
 - `atm send`
@@ -96,6 +102,9 @@ Approved additive CLI feature for the Phase `Y` line:
 
 Approved additive CLI feature for the Phase `AX` line:
 - `atm escalation add|remove|list`
+
+Approved additive CLI feature for the Phase `BA` line:
+- `atm task assign|close|move|list|events`
 
 The system must preserve the retained command behavior unless these
 requirements explicitly retire or change it.
@@ -1451,7 +1460,7 @@ Write one message into one target inbox.
 - `--from <name>`
 - `--requires-ack`
 - `--task-id <id>`
-- `--task-complete <id>`
+- `--task-complete` (requires `--task-id`)
 
 Retired from the current implementation:
 - `--offline-action`
@@ -1575,15 +1584,23 @@ Required behavior:
 - persist `taskId`
 - require acknowledgement for any task-linked message
 - reject blank task ids
+- acknowledgement MUST NOT read, gate on, or change task state
 
 If `--task-id` is present:
 - treat the message as task-linked mail
 - imply `--requires-ack`
 
-`--task-complete <id>` records completion of the open task identified by
-`id`. It is mutually exclusive with `--task-id`; the assigner or assignee may
-complete the task, and an unknown or already-complete task fails without
-writing a message.
+`--task-complete` closes the task named by `--task-id` with outcome
+`completed`; it requires `--task-id` and carries the mandatory completion
+report. It is the alias of `atm task close <id> completed`.
+
+Required behavior:
+1. the assigner or assignee MUST be able to close the task
+2. the report message MUST be delivered before the close is applied
+3. closing an already-complete task MUST deliver the message and report the
+   condition to the caller
+4. closing a task id that never existed MUST fail without writing a message
+5. `atm send <agent> --task-id <id>` MUST be the alias of `atm task assign`
 
 ### 6.6 Output Contract
 
@@ -2959,18 +2976,72 @@ Required rules:
 - a task-linked message remains actionable until acknowledged
 - a task-linked message must continue to appear in `atm read` until acknowledged
 - a task-linked message must never be removed by `atm clear` before acknowledgement
-- task state is `assigned`, `active`, then `complete`; acknowledgement moves
-  an assigned task to active only when the assignee has no other active task
-- the assigner or assignee completes an open task with
-  `atm send <assignee> --task-complete <id> --stdin`; completion from assigned
-  acknowledges the assignment in the same transaction so it cannot remain
-  pending acknowledgement
-- every transition, rejection, resend, and reminder is append-only audit data;
-  the durable tables and replay contract are defined by ADR-062
-- the Tokio Herdr queue wake pump checks open tasks after draining deferred
-  mail: for an idle or done Herdr assignee it re-sends the Task body no more
-  than once per 60 seconds, sharing the drain prompt budget; a blocked assignee
-  receives no prompt but records a `blocked` reminder on the same cadence
+- acknowledgement is message hygiene only: `atm ack` MUST NOT read, gate on,
+  or change task state, and task admission MUST NOT reject a message ack
+- every transition, rejection, and reminder is append-only audit data; a
+  same-agent resend of an open task id records no task event and changes no task
+  state; it refreshes only the assignment message linkage (Phase BA design
+  §3.1a); the durable tables and replay contract are
+  defined by ADR-062
+
+Task lifecycle (Phase BA):
+1. A task MUST exist as exactly one row per `(team, task_id)`.
+2. Task state MUST be `assigned` (queued), `active` (working), or closed.
+3. An agent MUST hold at most one `active` task; the database MUST enforce
+   this with a unique index on `(team, assignee)` restricted to
+   `state = 'active'`. The index fires when a task **starts** (the implicit
+   `assigned → active` move; rejected as `ActiveElsewhere`), never at
+   `atm task assign` admission — any number of `assigned` rows may queue
+   behind the active one.
+4. Starting a task MUST move it from `assigned` to `active` and MUST send the
+   assigner a start notification.
+5. An agent's queue MUST be ordered by `(position, assigned_at, task_id)`;
+   `assigned_at` MUST be the time of the current assignment; it is reset only by reassignment or reopen and never by a queue move; a new task's default position MUST be the
+   end of the queue.
+6. `atm task move <id> --before <other> | --head | --end` MUST reposition an
+   `assigned` task only; `--head` MUST place it next up behind the active
+   task, and the active task MUST never be repositioned or preempted.
+7. Closing a task MUST record one typed outcome from
+   `completed | refused | cancelled` with optional reason text,
+   MUST remove the task from the queue, and MUST append a timestamped event.
+8. Reassignment and reopening MUST use `atm task assign` on the same id:
+   an open id may be reassigned in place, and a closed id may be reopened;
+   neither operation creates a second row or permits simultaneous assignees.
+   Every transition MUST append exactly one `task_events` row under that id;
+   `reassigned` and `reopened` are event kinds, not outcomes.
+9. `atm task` MUST be the closed subcommand set `assign`, `close`, `move`,
+   `list`, `events`; `atm send <agent> --task-id <id>` MUST alias `assign`
+   and `atm send <assigner> --task-complete --task-id <id>` MUST alias
+   `close <id> completed` with a mandatory report.
+10. Close MUST deliver the report message before applying the close; an
+    already-complete task MUST deliver and inform the caller; a task id that
+    never existed MUST fail without writing a message.
+11. `atm task list` MUST show the caller's queue in order and `--all` MUST show
+    every member's queue; agent state shown there MUST be read live from the
+    canonical roster record and MUST NOT be persisted.
+12. `atm queue` MUST deliver as an ephemeral queue item that is a scheduling
+    view over the message, never a task row or `task_events` entry; it MUST
+    close on read, or on ack when `requires_ack` is set, and MUST be
+    discharged before the next task is nudged.
+13. A refusal MUST release the next queued task; consecutive refusals by one
+    agent MUST escalate instead of continuing to feed.
+
+Nudge invariant (Phase BA):
+14. Nudge eligibility MUST consume the exact canonical `RuntimeMemberState`
+    from the ephemeral roster record; it MUST NOT consume
+    `PickerMemberStatus`, a `RuntimeHealth` projection, raw Herdr output, or
+    heartbeat DTOs.
+15. `Idle` with an open task MUST be nudged, no more than once per 60 seconds
+    per task.
+16. `Active` MUST never be nudged or diverted to another task.
+17. `Blocked` or `Offline` MUST escalate once per episode and MUST receive
+    zero nudges.
+18. Escalation MUST be one ordinary message to the roster lead (when exactly
+    one) and to every configured escalation recipient, resolved
+    independently; when a task's reminder count reaches 10 it MUST escalate
+    once and nudging MUST stop until the task changes state (start or close) or
+    is reassigned or reopened; a change in the assignee's
+    runtime state alone does not resume nudging.
 
 ## 16. Observability Requirements
 
@@ -3976,7 +4047,19 @@ mail correctness.
 `TaskStore` is the sealed, backend-neutral task-ledger capability. SQLite owns
 the `tasks` and append-only `task_events` tables; `MessageWriteOrigin`
 distinguishes local task-bearing messages from peer receipts so only local
-writer admission and acknowledgements apply task transitions.
+writer admission and `atm task` commands apply task transitions.
+
+Task ledger shape (Phase BA):
+1. `tasks` MUST have `PRIMARY KEY (team, task_id)`.
+2. `tasks` MUST carry a unique index on `(team, assignee)` restricted to
+   `state = 'active'`.
+3. `tasks` MUST carry a queue `position` column separate from `assigned_at`;
+   `assigned_at` records the current assignment and is reset by reassign/reopen,
+   never by move.
+4. Close MUST record a typed outcome (`completed | refused | cancelled`).
+   `reassigned` and `reopened` are same-id event kinds produced by `assign`.
+5. `tasks` and `task_events` rows MUST NOT be deleted; a task id that ever
+   existed MUST always resolve.
 
 - `REQ-CORE-RUNTIME-001` ATM mail and team roster state must move to SQLite as
   the authoritative source of truth.
@@ -4086,7 +4169,7 @@ writer admission and acknowledgements apply task transitions.
     record while retaining distinct persistence domains
   - roster removal atomically removes its ephemeral state; re-addition starts
     at `Unknown` with a new revision sequence
-  - all live-state readers, including attention scheduling, runtime health,
+  - all live-state readers, including nudge scheduling, runtime health,
     doctor, `teams`, and `members`, read this record or a scoped projection of
     it; a second global member-state map is forbidden
   - `pid` is transient runtime state rather than durable roster truth and must
@@ -4096,9 +4179,9 @@ writer admission and acknowledgements apply task transitions.
 > the merged AJ.1–AJ.8 source and named tests in ADR-045's evidence table.
 
 - `REQ-CORE-RUNTIME-004` Accepted runtime observations converge on the one
-  ephemeral master-roster state. Runtime health is a projection, while the
-  Phase AZ idle-attention exception is the only workflow policy that may
-  consume the canonical state.
+  ephemeral master-roster state. Runtime health is a projection, and the
+  Section 15.4 nudge invariant is the only workflow policy that may consume
+  the canonical state.
 
   Required behavior:
   - an authenticated local heartbeat POST (including an external hook's
@@ -4129,7 +4212,7 @@ writer admission and acknowledgements apply task transitions.
   - a failed or incomplete Herdr poll is not a state observation: it preserves
     the prior state and revision, marks observation availability unavailable
     with an attempt timestamp, records a structured refresh diagnostic, and
-    creates no idle opportunity
+    triggers no nudge
   - a successful Herdr result is applied as one scoped batch so readers cannot
     observe a half-updated poll and the runtime does not clone the roster once
     per member
@@ -4159,15 +4242,14 @@ writer admission and acknowledgements apply task transitions.
     shared dispatch
   - session, pid, and observation metadata must not drive routing,
     notification, retry, admission, or delivery logic
-  - the sole state-policy exception is Phase AZ attention eligibility: each
-    accepted `Idle` observation revision creates one idempotent
-    `IdleOpportunityId`; only the attention selector may reserve zero or one
-    queued-message nudge or task reminder for that opportunity, and it must
-    revalidate the same member's current canonical state and revision before
-    emission
-  - Herdr polling and heartbeat handlers update state and publish the idle
-    opportunity only; neither ingress may inspect queues/tasks or emit a nudge
-    directly
+  - the sole state-policy exception is the Section 15.4 nudge invariant: the
+    nudge path MUST consume the exact canonical `RuntimeMemberState` and MUST
+    NOT consume `PickerMemberStatus`, a `RuntimeHealth` projection, raw Herdr
+    output, or heartbeat DTOs; `Idle` with an open task MUST be nudged
+    (rate-limited), `Active` MUST never be nudged or diverted, and `Blocked`
+    or `Offline` MUST escalate once with zero nudges
+  - Herdr polling and heartbeat handlers update state only; neither ingress
+    may inspect queues/tasks or emit a nudge directly
   - any further exception requires an explicit requirement, ADR, boundary
     record, and test; telemetry never enters SQLite, durable roster state, mail
     rows, or message payloads

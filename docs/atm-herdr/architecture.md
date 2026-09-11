@@ -380,7 +380,7 @@ HerdrProcessInvoker::list(session, deadline)        (once per distinct session)
   |   [atm-http-runtime -> ephemeral master-roster record]
   |   working=Active, idle/done=Idle, blocked=Blocked,
   |   covered unknown/absent=Unknown; never writes pid/session
-  |   failed list preserves state and publishes no idle opportunity
+  |   failed list preserves state and triggers no nudge
   |
   | for each pending member whose committed canonical
   |   state update is fresh Idle:

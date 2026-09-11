@@ -1105,8 +1105,8 @@ the replacement-runtime owner: authenticated heartbeat POSTs and successful
 Herdr polls converge on one ephemeral master-roster member record, while
 `RuntimeHealth` becomes a projection only. Pre-cutover local activity metadata
 remains tolerated but is not canonical state ingress. Session, pid, source, and
-timestamp metadata remain non-policy inputs; Phase AZ explicitly permits only
-canonical `Idle` state revisions to publish attention opportunities.
+timestamp metadata remain non-policy inputs; the Phase BA nudge invariant is
+the only policy that consumes canonical state.
 
 | Sprint | Status | Branch | Purpose |
 | --- | --- | --- | --- |
@@ -1732,7 +1732,13 @@ Phase AY sprint status:
 | `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `merged` (#1310, 47f359cf9) | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
 | `DOCTOR-HERDR-TARGET-R1` | Doctor | standalone target-resolution, breaker, and stale-session diagnostics | `complete` | `fix/doctor-herdr-target-resolution` | `docs/plans/doctor/sprint-DOCTOR-HERDR-TARGET-R1.md` |
 
-## 58. Phase AZ — Bounded Nudges And Durable Task Lifecycle [APPROVED]
+## 58. Phase AZ — Bounded Nudges And Durable Task Lifecycle [SUPERSEDED BY PHASE BA — RETIRED UNMERGED 2026-09-11]
+
+Superseded by Phase BA, retired unmerged 2026-09-11: the four AZ sprints on
+`integrate/phase-az` (PR #1394) will not merge to `develop`. Issue #1378's
+canonical roster state and HTTP API `1.4.0` (PRs #1381, #1384) merged to
+`develop` independently and remain in force. The text below is the retired
+plan, kept for record.
 
 Phase AZ begins with the AZ.1 metadata-only nudge repair: every Steer, Queue,
 rebuilt Queue, Task, acknowledge-family, and task-reminder path projects only
@@ -1769,10 +1775,10 @@ sprint doc per row below and a maintained
 
 | Sprint | Status | Branch | Artifacts |
 | --- | --- | --- | --- |
-| `AZ.1` | `planned` | `feature/az1-task-nudge-contract` | bounded notification event/template repair, external hook compatibility, long-body/J2 regressions |
-| `AZ.2` | `planned` | `feature/az2-task-domain-storage` | lifecycle types, immutable attempts/events, SQLite migration, atomic invariants and task-aware nudge cleanup |
-| `AZ.3` | `planned` | `feature/az3-task-command-handoff` | canonical task CLI/API, authorization, atomic handoffs/supersession, legacy adapters |
-| `AZ.4` | `planned` | `feature/az4-attention-scheduler` | one-item idle selector, durable fair interleaving, attempt-aware persistent reminders |
+| `AZ.1` | `retired (unmerged)` | `feature/az1-task-nudge-contract` | bounded notification event/template repair, external hook compatibility, long-body/J2 regressions |
+| `AZ.2` | `retired (unmerged)` | `feature/az2-task-domain-storage` | lifecycle types, immutable attempts/events, SQLite migration, atomic invariants and task-aware nudge cleanup |
+| `AZ.3` | `retired (unmerged)` | `feature/az3-task-command-handoff` | canonical task CLI/API, authorization, atomic handoffs/supersession, legacy adapters |
+| `AZ.4` | `retired (unmerged)` | `feature/az4-attention-scheduler` | one-item idle selector, durable fair interleaving, attempt-aware persistent reminders |
 
 The stack is strict `AZ.1 -> AZ.2 -> AZ.3 -> AZ.4`. Parent development must be
 pushed before child work starts, the parent is merged forward before every
