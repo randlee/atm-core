@@ -27,13 +27,43 @@ legacy `task_complete` key (see "Wire" below).
 | D1 | `QueuePosition`, `TaskCloseOutcome` (completed, refused, cancelled); `TaskState::Complete(outcome)`, `TaskStateTag`, `TaskEvent::{Assigned,Started,Completed(outcome)}`, `transition()`, `TaskRejected`/`TaskRejectionKind` | `crates/atm-storage/src/task_state.rs` |
 | D2 | `TaskRow` + `TaskRowWire`, `TaskEventRow` + `TaskEventRowWire`, `TaskEventKind::{Assigned,Started,Reassigned,Reopened,Completed,Refused,Cancelled,Moved,Migrated}` | `crates/atm-storage/src/task_state.rs` |
 | D3 | `TaskOp`, `MoveTarget`, `RefusalRun`, `TASK_CONSECUTIVE_REFUSAL_THRESHOLD`; re-exported from `atm_core::boundary` beside `TASK_STALLED_REMINDER_THRESHOLD` | `crates/atm-storage/src/task_op.rs` (new), `task_store.rs` |
-| D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
+| D4 | `WriteRequest.task_op` + `task_op_normalized()`, envelope `task_op`, `SendOutcome.already_closed: Option<TaskCloseOutcome>`, `HTTP_API_VERSION = "1.5.0"` | `crates/atm-core/src/send/mod.rs`, `crates/atm-storage/src/schema/inbox_message.rs`, `crates/atm-core/src/protocol.rs:99` |
 | D5 | `TASK_SCHEMA_DDL` rebuilt (two tables, three indexes) | `crates/atm-storage-rusqlite/src/task_store.rs:15-58` |
 | D6 | `migrate_task_identity` + `TaskMigrationReport` | `crates/atm-storage-rusqlite/src/task_migration.rs` (new) |
-| D7 | writer: `apply_task_message` dispatch, `apply_task_start`, `apply_task_close`, `apply_task_move`, `renumber_queue`, authority rules — Start (daemon), Close (assignee/assigner/unique lead), Move (assignee), Assign-on-existing-row (assigner/unique lead) | `crates/atm-storage-rusqlite/src/writer/task_ops.rs` |
+| D7 | writer: `apply_task_message` dispatch, `apply_task_start`, `apply_task_close`, `apply_task_move`, `renumber_queue`, `append_rejected_task_event`, authority rules — Start (daemon), Close (assignee/assigner/unique lead), Move (assigner/unique lead), Assign-on-existing-row (assigner/unique lead) | `crates/atm-storage-rusqlite/src/writer/task_ops.rs` |
 | D8 | `AsyncTaskLedgerReader::open_tasks_for_team`, `TaskStore::load_task(team, task_id)`, `DoctorFinding::TaskQueueGap` | `crates/atm-storage/src/contract.rs:916`, `task_store.rs:66`, `crates/atm-core/src/doctor/` |
 | D9 | boundary manifest edits per plan §10 | `boundaries/atm-storage/task-store.toml`, `…-rusqlite/task-store-sqlite.toml`, `async-task-ledger-reader*.toml` |
 | D10 | tests named below; ADR-061 D6 approval entry cited on the PR | `tests/task_identity.rs`, `tests/task_migration.rs` |
+
+`SendOutcome` in `crates/atm-core/src/send/outcome.rs` retains the current
+develop fields and adds one optional result for a repeated close:
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendOutcome {
+    pub action: CommandAction,
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub sender: AgentName,
+    pub outcome: SendCommandOutcome,
+    pub message_id: AtmMessageId,
+    pub requires_ack: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<TaskId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_complete: Option<TaskId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<WarningEntry>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub dry_run: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub already_closed: Option<TaskCloseOutcome>,
+}
+```
 
 **Why one sprint (plan-scope PLAN-SCOPE-006):** D1–D2 change the type of
 `tasks.state`, `TaskRow` and `TaskEventRow`; every existing reader and
@@ -182,14 +212,15 @@ pub fn transition(
         (Some(S::Complete(_)), E::Assigned) => Ok(Transition(S::Assigned)),
         (Some(S::Assigned | S::Active), E::Started) => Ok(Transition(S::Active)), // idempotent when Active
         (Some(S::Assigned | S::Active), E::Completed(outcome)) => Ok(Transition(S::Complete(outcome))),
-        (Some(S::Complete(_)), E::Started | E::Completed(_)) => Err(TaskRejected::already_complete(task_id)),
+        (Some(S::Complete(_)), E::Started | E::Completed(_)) => {
+            unreachable!("complete-row close is handled by apply_task_close")
+        }
     }
 }
 ```
 
-`TaskRejected::already_complete` is a distinct constructor so BA.4 can tell
-"already complete" (inform) from every other rejection (block) without
-string matching:
+Complete-row close is handled by `apply_task_close` before `transition()`;
+the writer returns `already_closed` after its ordinary mail write.
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -206,12 +237,11 @@ pub enum TaskRejectionKind {
     ActiveElsewhere, // one-active index hit on Started
     UnknownTarget,   // Move/assign placement target invalid
     StaleCounterparty, // close recipient is not the current counterparty
-    AlreadyComplete, // close repeated after completion; informational rejection
 }
 
-`TaskRejectionKind::AlreadyComplete` is also exposed by the
-`TaskRejected::already_complete` constructor for repeated close attempts;
-assign-on-complete uses the separate reopen branch.
+There is no already-complete rejection: a repeated close is an ordinary mail
+write that returns `already_closed`; assign-on-complete uses the separate
+reopen branch.
 ```
 
 Authority failures are rejections, not error codes: a caller who is neither
@@ -663,7 +693,7 @@ envelope:
 | `task_id` | `task_op` | applies |
 | --- | --- | --- |
 | `None` | any | nothing (a `task_op` without `task_id` is rejected at the CLI and at `WriteRequest` validation) |
-| `Some` | `None` | `apply_task_assignment`: (a) no row inserts `assigned`; (b) same agent: in one transaction, mark the prior current assignment message acknowledged (superseded; `mark_source_acknowledged`, same hygiene as close) if it is still open, then one UPDATE of `assignment_message_id, description, updated_at` from the new message; no state/queue/timestamp/counter change and no event; (c) other agent renumbers both queues, updates assignee/state/assigned_at/position per `placement`, and emits `reassigned`; (d) closed row resets outcome/counters, assigns position per `placement`, and emits `reopened`. `placement: Option<MoveTarget>` is consumed only here; None means END. |
+| `Some` | `None` | `apply_task_assignment`: (a) no row inserts `assigned`; (b) same agent: in one transaction, mark the prior current assignment message acknowledged (superseded; `mark_source_acknowledged`, same hygiene as close) if it is still open, then one UPDATE of `assignment_message_id, description, updated_at` from the new message; no state/queue/timestamp/counter change and no event; (c) other agent renumbers both queues, acknowledges the superseded assignment message via `acknowledge_superseded_assignment`, then updates assignee/state/assigned_at/position per `placement` and emits `reassigned`; (d) closed row resets outcome/counters, assigns position per `placement`, and emits `reopened`. `placement: Option<MoveTarget>` is consumed only here; None means END. |
 | (legacy `task_complete = Some`) | — | never reaches the writer: `WriteRequest::task_op_normalized()` has already turned it into `task_id = Some, task_op = Some(Close{Completed})` |
 | `Some` | `Some(Start)` | `apply_task_start` |
 | `Some` | `Some(Close{..})` | `apply_task_close` |
@@ -705,7 +735,14 @@ appears in an `UPDATE … SET` list only in the reassign and reopen branches of 
 `Assign` on an existing row (branches b, c, d of `apply_task_assignment`) requires `caller == row.assigner || caller == unique_lead`; the assignee and any third party are `NotAuthorized` (detail `"<actor> is neither assigner nor the unique lead of <team>"`). Branch a (no row) has no task-level authority check beyond send authority. The check runs before `transition()` inside the same transaction, exactly as for `Close`.
 The authorized caller becomes `assigner` in branches c and d (and the message link in b), so receipts and reports route to the sender of the current assignment message.
 
+Branch c (other-agent reassign) runs `acknowledge_superseded_assignment(row.assignment_message_id, now)` (reusing `mark_source_acknowledged`) before repointing the task; the prior assignment is closed before the new message becomes current.
+
 Branch b (same-agent resend) runs `acknowledge_superseded_assignment(prior_message_id, now)` (reuses `mark_source_acknowledged`) then one `UPDATE tasks SET assignment_message_id, description, updated_at` from the new message; it changes no state, queue, timestamp, counter, or event.
+
+`apply_task_close`: when the canonical row is already `complete`, the writer
+stores the report as ordinary mail in the same transaction with the `task_id`
+link dropped, appends no task event, leaves the row unchanged, and returns
+`already_closed: Some(outcome)`.
 
 `apply_task_move` — the active task holds position 1 by invariant and is
 never repositioned or preempted (design §4.3). Exact arm, before any
@@ -753,12 +790,19 @@ It starts only for `outcome = 'emitted'`; otherwise Start is a silent no-op.
 Every accepted op appends one `task_events` row (`started` / `completed` +
 `close_outcome` / `moved` with `detail = "<from>→<to>"`); every rejection
 appends one `rejected` row with the `TaskRejectionKind` in `detail`
-(`append_rejected_task_event` at `:68`, unchanged).
+`append_rejected_task_event` (`writer/task_ops.rs:68-110`) is REWRITTEN for the one-id key: after the savepoint rollback it loads the canonical row by
+(team, task_id) and audits assignee = row.assignee (unchanged holder),
+state/outcome from row; requested recipient only when no row; it also matches
+`WriteOp::TaskMove` (actor = move caller). Design: event assignee is whoever
+holds task after event.
 
 `TaskStore` (`crates/atm-storage/src/task_store.rs:66`) is unchanged except
 `load_task(&self, team: &TeamName, task_id: &TaskId)` — the `MemberKey`
 parameter goes away with the key. `open_tasks(&MemberKey)` keeps its shape
 and now returns rows ordered by `position`.
+
+For an unknown task id, the writer reports "no task exists to audit" and
+returns `NoOpenTask`; the close command sends nothing.
 
 ## Boundary manifests (ruling: phase plan §10)
 
@@ -790,7 +834,8 @@ Pure — `task_state.rs`:
   Completed(outcome))` pairs → the table above; 3 outcomes × … enumerated,
   no wildcard in the test.
 - `started_on_active_is_idempotent`, `assigned_on_complete_reopens_same_id`,
-  `completed_on_complete_is_already_complete_kind`.
+  `completed_on_complete_returns_already_closed_result` — the writer delivers
+  ordinary mail and returns `SendOutcome.already_closed` without a task event.
 - `task_row_json_keeps_scalar_state_and_adds_close_outcome` — a
   `Complete(Refused)` row serialises to `"state":"complete","close_outcome":"refused"`
   and no `position` key; an `Assigned` row to `"state":"assigned","position":2`
@@ -839,8 +884,21 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
 - `assigned_at_updated_only_by_reassign_and_reopen` — Start, Close, Move and renumber leave `assigned_at` unchanged; reassign and reopen set it to `now`.
 - `close_by_third_party_is_not_authorized`, `close_by_unique_lead_succeeds`,
   `close_by_lead_when_two_leads_is_not_authorized_with_count_in_detail`,
-  `close_by_lead_when_no_lead_is_not_authorized`, `move_by_assignee_is_not_authorized`.
+  `close_by_lead_when_no_lead_is_not_authorized`.
+- `move_by_assignee_is_not_authorized` and
+  `move_before_target_of_other_member_is_unknown_target` — each appends one
+  rejected event for the canonical holder and leaves the row state unchanged.
+- `move_by_assigner_succeeds`, `move_by_unique_lead_succeeds`.
+- `reopen_by_unique_lead_succeeds_and_lead_becomes_assigner`, `reopen_on_two_lead_team_by_claimed_lead_is_not_authorized`, `same_agent_resend_by_unique_lead_succeeds_and_lead_becomes_assigner`, `same_agent_resend_on_two_lead_team_by_claimed_lead_is_not_authorized`.
 - `reassign_by_third_party_is_not_authorized`, `reassign_by_assignee_is_not_authorized` (hand-back is `close refused`), `reassign_by_assigner_succeeds_and_assigner_unchanged`, `reassign_by_unique_lead_succeeds_and_lead_becomes_assigner`, `reassign_on_team_with_two_leads_by_lead_is_not_authorized`, `reopen_by_third_party_is_not_authorized`, `reopen_by_assigner_succeeds`, `same_agent_resend_by_third_party_is_not_authorized` — each rejection appends one `rejected` event and changes no row.
+- `reassign_acknowledges_prior_assignment_message` — other-agent reassign
+  acknowledges the superseded assignment before the new assignment becomes
+  current.
+- `rejected_reassign_audits_canonical_holder_not_target`,
+  `rejected_reopen_audits_canonical_holder`,
+  `rejected_resend_audits_canonical_holder` — each rejected event records the
+  canonical holder and unchanged state/outcome; move-by-assignee and invalid
+  target make the same canonical-holder assertion.
 - `same_agent_resend_with_unacked_prior_supersedes_it` — assign M1 (unread, unacked); same-agent resend M2; M1 `acknowledged_at` set and `nudge_pending_at IS NULL`, M2 is the only open task-linked item; close → M2 acknowledged; no `task_events` row for the resend.
 - `move_of_active_task_returns_current_position_and_renumbers_nothing` —
   assert every other row's `position` and `updated_at` byte-equal.

@@ -6,7 +6,7 @@
 | Outcomes | B8, B10, B14 |
 | Recommended | arch-ctm / deep-reasoning — three-stage close and a new envelope variant |
 | Depends on | `must_follow` BA.3 (dev push) — BA.3 owns `storage_and_nudge_router.rs`; this sprint adds the `TaskMove` arm to `dispatch_non_write` in that file after BA.3 has landed its `reader tick` change (PLAN-SCOPE-001) |
-| `parallel_safe` | BA.5 — this sprint owns `crates/atm/src/commands/*`, `crates/atm-core/src/protocol.rs`, `crates/atm-core/src/task_close.rs` (new), `crates/atm-core/src/task_query.rs` (new), `crates/atm-core/src/send/*`, `crates/atm-storage-rusqlite/src/writer/ops.rs` (`WriteOp::TaskMove` arm only), `crates/atm-http-runtime/src/storage_and_nudge_router.rs::dispatch_non_write` (`TaskMove` arm only, `:484`). **Shared file with BA.5:** `storage_and_nudge_router.rs` — BA.5 edits only the `PendingNudgeStore` test-fixture adapter inside `mod tests` (`:1240-1245`, method rename); the regions are disjoint and neither sprint's acceptance criteria assert the other's behaviour (PLAN-SCOPE-008). Every other file above is BA.4-only. |
+| `parallel_safe` | BA.5 — this sprint owns `crates/atm/src/commands/*`, `crates/atm-core/src/protocol.rs`, `crates/atm-core/src/task_close.rs` (new), `crates/atm-core/src/task_query.rs` (new), `crates/atm-core/src/send/*`, `crates/atm-storage-rusqlite/src/writer/ops.rs` (`WriteOp::TaskMove` arm only), `crates/atm-http-runtime/src/storage_and_nudge_router.rs::dispatch_non_write` (`TaskMove` arm only, `:484`). **Two shared files:** `storage_and_nudge_router.rs` (BA.5 test-fixture adapter inside `mod tests`, `:1240-1245`; BA.4 `TaskMove` arm at `:484`) and `writer/ops.rs` (BA.5 `execute_read_display_state` `:264-284`; BA.4 `TaskMove` arm). The regions are disjoint and each merge check passes five params (PLAN-SCOPE-008). Every other file above is BA.4-only. |
 | Worktree | `feature/ba4-atm-task-commands` off `integrate/phase-ba` (merge BA.3 forward) |
 | Governed interfaces | HTTP/peer API **MINOR**: `RequestEnvelope::TaskMove`, `ResponseEnvelope::TaskMove`; `HTTP_API_VERSION` `1.5.0` (BA.2) → `1.6.0` |
 
@@ -28,7 +28,7 @@ here (BA.3 emits it from the runtime; this sprint only produces the close).
 | D3 | `require_daemon_api(min)` guard on every `atm task` verb and on the aliases | `crates/atm/src/commands/task.rs` |
 | D4 | `ClosePreflight`, `preflight_close`, `report_recipient` | `crates/atm-core/src/task_close.rs` (new) |
 | D5 | `TaskListQuery`, `TaskEventQuery`, `TaskPage` (AZ copy) | `crates/atm-core/src/task_query.rs` (new) |
-| D6 | `TaskMoveRequest`, `TaskMoveOutcome`, envelope variants, `HTTP_API_VERSION = "1.6.0"`, peer-ingress rejection | `crates/atm-core/src/protocol.rs`, `storage_and_nudge_router.rs::dispatch_non_write` |
+| D6 | `TaskMoveRequest`, `TaskMoveOutcome`, envelope variants, `HTTP_API_VERSION = "1.6.0"`, `SendOutcome.already_closed: Option<TaskCloseOutcome>`, peer-ingress rejection | `crates/atm-core/src/protocol.rs`, `crates/atm-core/src/send/outcome.rs`, `storage_and_nudge_router.rs::dispatch_non_write` |
 | D7 | `WriteOp::TaskMove` → `WriteOpResult::TaskMoved` | `crates/atm-storage-rusqlite/src/writer/ops.rs:39,114` |
 | D8 | list / events rendering (human + `--json`) | `crates/atm/src/commands/task.rs` |
 | D9 | deletions under "Paths to delete"; tests named below | — |
@@ -231,27 +231,50 @@ handoff is the Start (plan §4 R1). A close report (`--task-complete`,
 `atm task close`) keeps `Immediate` — it is a reply the counterparty is
 waiting for, not new work.
 
+`SendOutcome` in `crates/atm-core/src/send/outcome.rs` keeps the existing
+fields and adds the optional repeated-close result:
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendOutcome {
+    pub action: CommandAction,
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub sender: AgentName,
+    pub outcome: SendCommandOutcome,
+    pub message_id: AtmMessageId,
+    pub requires_ack: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<TaskId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_complete: Option<TaskId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<WarningEntry>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub dry_run: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub already_closed: Option<TaskCloseOutcome>,
+}
+```
+
 ## Close — three stages (design §5.2), `crates/atm-core/src/task_close.rs` (new, ≤ 200 lines)
 
 ```rust
 pub enum ClosePreflight {
-    /// Caller is neither assignee, assigner, nor the unique team lead: exit 1, nothing sent.
-    NotAuthorized { row: TaskRow },
     /// Row open: deliver report and close in one write.
     Proceed { row: TaskRow },
-    /// Row read as closed: still sent as the guarded task write; the writer's `AlreadyComplete` rejection (not this read) decides plain delivery.
+    /// Row read as closed: still sent as the guarded task write; the writer
+    /// decides whether to close or return `already_closed`.
     AlreadyClosed { row: TaskRow },
-    /// No such task id on this team: block before anything is sent.
+    /// no task exists to audit; block before anything is sent.
     Unknown,
 }
 
-pub async fn preflight_close(reader: &dyn AsyncTaskLedger, team: TeamName, task_id: &TaskId, caller: &AgentName, unique_lead: Option<&AgentName>, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
-
-`unique_lead` is `Some(lead)` only when the roster the CLI already loads has
-exactly one `agent_type = Lead` member (the same filter
-`herdr_escalation.rs:214-243` uses), else `None`. Authority is
-`caller == &row.assignee || caller == &row.assigner || unique_lead == Some(caller)`;
-a count is never an authority proof.
+pub async fn preflight_close(reader: &dyn AsyncTaskLedger, team: TeamName, task_id: &TaskId, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
 
 /// Who receives the mandatory report. A self-addressed send is invalid
 /// (`send/recipient.rs:13-31`, enforced in `write_context.rs:129`), so the
@@ -264,20 +287,19 @@ pub fn report_recipient(row: &TaskRow, caller: &AgentName) -> AgentName {
 }
 ```
 
-| stage | `Proceed` | `AlreadyClosed` | `NotAuthorized` | `Unknown` |
-| --- | --- | --- | --- | --- |
-| 1 preflight (reader lane, `list_tasks(team, None)` filtered — no new read method) | continue | continue | exit 1: `task <id>: <caller> may not close (not assignee, assigner, or unique lead)`; nothing sent | exit 1: `task <id> does not exist on team <t>`; nothing sent |
-| 2 deliver | one `WriteRequest { to: report_recipient(row, caller), task_id, task_op: Some(Close{outcome, reason}) }` — report and close are **one transaction**; dispatch writer rejection by `TaskRejectionKind`: `AlreadyComplete` → 2b plain delivery + informational line, exit 0; `StaleCounterparty` → one re-preflight/recompose; `NotAuthorized`, `NoOpenTask`, `ActiveElsewhere`, `UnknownTarget` → writer rolled back, CLI prints the rejection, exit 1, NO plain message | same guarded `WriteRequest` as `Proceed` (task_id + `Close` op); never a plain message directly from preflight | — | — |
-| 3 result | `closed <id> (<outcome>)`; exit 0 | `task <id> was already closed (<outcome>) on <at>; report delivered`; exit 0 | — | — |
+| stage | `Proceed` | `AlreadyClosed` | `Unknown` |
+| --- | --- | --- | --- |
+| 1 preflight (reader lane, `list_tasks(team, None)` filtered — no new read method) | continue | continue | exit 1: `task <id> does not exist on team <t>`; nothing sent |
+| 2 deliver | same guarded write; writer decides: applies close, or (row complete) delivers plain and returns `already_closed`, or rejects | same guarded write; writer decides: applies close, or (row complete) delivers plain and returns `already_closed`, or rejects | — |
+| 3 result | `closed <id> (<outcome>)`; exit 0 | `task <id> was already closed (<outcome>); report delivered`; exit 0, with the text sourced from `SendOutcome.already_closed` and no `on <at>` | — |
 
 Stage 2's single transaction is what design §5.2 means by "deliver first":
 the authorized report is never lost. Both `Proceed` and `AlreadyClosed` submit
 the same guarded write, so a same-id reopen or reassignment between preflight and
-write is seen by the writer: it either applies the close (authorized, counterparty
-current), or returns `StaleCounterparty`/`NotAuthorized`/`AlreadyComplete`; only
-`AlreadyComplete` leads to 2b plain delivery and the informational line. No plain
-report is ever sent from the preflight read alone. The report body is the message
-source when given, else the `reason` text.
+write is seen by the writer: it either applies the close, returns
+`StaleCounterparty`/`NotAuthorized`, or, for a complete row, delivers plain and
+returns `already_closed`. No plain report is ever sent from the preflight read
+alone. The report body is the message source when given, else the `reason` text.
 
 ## Consecutive-refusal escalation (design §4.2)
 
@@ -395,10 +417,17 @@ Close — `crates/atm/tests/task_close.rs` (fixture daemon, loopback):
 - `close_by_unique_lead_reports_to_assignee` — lead who is neither party.
 - `close_by_lead_who_is_assigner_reports_to_assignee`.
 - `close_unknown_task_sends_nothing_and_exits_one` — mailbox count unchanged.
-- `close_already_closed_delivers_report_without_task_event`.
+- `close_already_closed_delivers_report_without_task_event` — the writer returns
+  `SendOutcome.already_closed` after delivering the ordinary report.
+- `close_after_reopen_race_never_sends_stale_plain_report` — a close preflight
+  racing an explicit reopen either closes the current row or recomposes once;
+  it never sends a stale plain report to the old counterparty.
 - `close_raced_by_other_closer_writes_zero_new_events` — close from
   two processes; second gets the informational line; two reports delivered.
 - `already_closed_preflight_then_reopen_before_write_closes_or_recomposes_not_stale_report` — preflight reads Complete; the id is reopened/reassigned by another process; the guarded write returns `StaleCounterparty` (recompose once) or closes the now-open row; zero plain reports to the old counterparty.
+- `close_by_third_party_is_rejected_by_writer` — preflight proceeds for an open
+  row, but the writer rejects the third-party close, records the rejected event
+  against the canonical holder, and sends no report.
 - `close_by_third_party_sends_nothing_and_exits_one` — open row and already-closed
   row; `tasks`, `task_events`, `mail_messages` counts unchanged; exit 1, including
   a one-lead roster where the caller is not that lead.
@@ -470,7 +499,9 @@ no ATM read is role-gated today and this phase adds no authority to reads).
 
 Additional CLI validation test: `assign_before_rejects_with_start_flag`.
 
-`AlreadyClosed` is a preflight hint; the writer's `AlreadyComplete` is the decision, and a repeated close creates no task transition or event.
+`AlreadyClosed` is a preflight hint; the writer's complete-row result is the
+decision, and a repeated close delivers ordinary mail with `already_closed` and
+creates no task transition or event.
 
 Placement syntax: `atm task assign <agent> --template <j2> --vars <json> [--task-id <id>] [--before <other-task-id> | --head]`.
 
