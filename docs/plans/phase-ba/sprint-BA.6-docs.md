@@ -23,18 +23,23 @@ shipped and updates the operator-facing docs.
   quick-reference table: add `atm task assign|close|move|list|events`; state
   the aliases; state "use `atm queue` for anything that must not interrupt
   the current task".
-- [ ] D2 — `docs/team-protocol.md:11`: closing = `atm task close <id>
-  --outcome completed --stdin` (or the alias `atm send <assigner> --task-id
-  <id> --task-complete --stdin`); add the refused/cancelled/reassigned
+- [ ] D2 — `docs/team-protocol.md:11`: closing = `atm task close <task-id>
+  completed --stdin` (positional outcome, design §5 / BA.4; `reason` is the
+  optional third positional for `refused` / `cancelled`) or the alias
+  `atm send <assigner> --task-id <task-id> --task-complete --stdin`; add the refused/cancelled/reassigned
   paragraph; add "an ack never changes task state".
 - [ ] D3 — `docs/requirements.md:2482` doctor remediation literal → the
   string the shipped code emits; add `TaskQueueGap` to the doctor table.
-- [ ] D4 — `docs/atm-daemon/http-api.md`: `1.5.0`, `TaskMove` request/response,
-  `task_op` on write requests, peer-ingress rejection of task ops.
+- [ ] D4 — `docs/atm-daemon/http-api.md`: the final `1.6.0` surface —
+  `task_op` on write requests and the `TaskRow` wire additions (1.5.0, BA.2),
+  `TaskMove` request/response (1.6.0, BA.4), peer-ingress rejection of task
+  ops — with a version-history table listing both minor bumps
+  (FNX-BA-CRIT-035).
 - [ ] D5 — ADR-062 Phase-BA amendment: replace "R1 pending" wording with the
   recorded decision; mark the blocked-episode cooldown paragraph superseded
   (BA.3 deleted `BLOCKED_RENOTIFY_MS`); ADR-061 version records: SQLite
-  MAJOR row (R0 approval comment URL), HTTP 1.5.0 row.
+  MAJOR row (R0 approval — D6 entry + comment URL), HTTP `1.5.0` row (BA.2)
+  **and** HTTP `1.6.0` row (BA.4).
 - [ ] D6 — `docs/project-plan.md`: Phase BA section (six sprints, status),
   AZ section already marked retired.
 - [ ] D7 — `docs/plans/phase-ba/phase-ba-plan.md` §4: each R-row gets its
@@ -59,7 +64,13 @@ shipped and updates the operator-facing docs.
 
 ## Acceptance criteria
 
-1. `grep -rn "atm list --tasks\|--task-complete <" CLAUDE.md docs/*.md` → nothing.
+1. `grep -rn "atm list --tasks\|--task-complete <\|task close .* --outcome" CLAUDE.md docs/*.md` → nothing.
+1a. Every `atm task` example in `CLAUDE.md` and `docs/team-protocol.md` parses:
+    a test extracts the fenced `atm task …` lines and runs them through the
+    clap parser (`Cli::try_parse_from`) — the full close example included, not
+    just the subcommand name (FNX-BA-CRIT-034).
+1b. The HTTP version in `docs/atm-daemon/http-api.md` equals `HTTP_API_VERSION`
+    at the integrated head (`grep` in the docs test).
 2. Every "decided:" line in plan §4 has a URL.
 3. `quality-mgr` Final Quality Report posted on the phase PR.
 

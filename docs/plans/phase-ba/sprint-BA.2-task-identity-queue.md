@@ -271,8 +271,12 @@ impl TryFrom<TaskRowWire> for TaskRow {
             (_, other) => other,
         };
         let state = TaskState::from_parts(wire.state, close_outcome)?;
-        if state.is_open() != wire.position.is_some() {
-            return Err(AtmError::validation("position must be present exactly for open tasks"));
+        // A complete row never carries a position. An open row from a 1.5.0
+        // producer carries one; an open row from a 1.4.0 producer has none and
+        // decodes with `position = None` (FNX-BA-CRIT-019: verbatim 1.4.0
+        // payloads decode). The wire is a projection; the DDL is the invariant.
+        if !state.is_open() && wire.position.is_some() {
+            return Err(AtmError::validation("a complete task has no queue position"));
         }
         Ok(Self { team: wire.team, task_id: wire.task_id, assignee: wire.assignee, assigner: wire.assigner,
             state, position: wire.position, assignment_message_id: wire.assignment_message_id,
@@ -348,10 +352,15 @@ struct TaskEventRowWire {
     marker: Option<TaskEventMarker>,
     detail: Option<String>,
 }
-// TryFrom/From: `from_state` is always open (never carries an outcome);
-// `to_state = Complete` pairs with `close_outcome` (None from a 1.4.0
-// producer → `Completed`), exactly as `TaskRowWire`. Row decode from SQLite
-// uses the same two helpers with the `close_outcome` column.
+// TryFrom/From: `close_outcome` is the row's one outcome key. `to_state =
+// Complete` pairs with it (None from a 1.4.0 producer → `Completed`), exactly
+// as `TaskRowWire`. `from_state = Complete` occurs only on state-neutral events
+// written against a completed task (`rejected`, `reminded`, a `migrated`
+// source row), where `from_state == to_state`; both decode from the same
+// `close_outcome` (FNX-BA-CRIT-022; `append_rejected_task_event`, `task_ops.rs:112-129`,
+// already writes both states equal to the current row). `from_state = Complete`
+// with `to_state ≠ Complete` is a validation error — terminal is terminal.
+// Row decode from SQLite uses the same helpers with the `close_outcome` column.
 ```
 
 ```rust
@@ -363,9 +372,12 @@ pub enum TaskOp {
     /// Daemon-only (plan §4 R1). Resets reminder counters.
     Start,
     Close { outcome: TaskCloseOutcome, #[serde(default, skip_serializing_if = "Option::is_none")] reason: Option<String> },
-    Move { target: MoveTarget },
+    // No `Move`: design §5 makes move message-less; the only move boundary is
+    // `WriteOp::TaskMove` / `RequestEnvelope::TaskMove` (BA.4) — FNX-BA-CRIT-023.
 }
 
+/// Target of a message-less move (`TaskMoveRequest`, BA.4). Lives here so the
+/// writer (`apply_task_move`) and the envelope share one type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", tag = "to")]
 pub enum MoveTarget {
@@ -583,9 +595,13 @@ SELECT team, task_id, assignee, assigner, state,
    untouched and the daemon fails to start with the error and the backup
    path in the message.
 
-**Replay rule** (ADR-062 "Replay" row, made exact): the state of `(team,
-task_id)` is the `to_state` of its highest-`seq` event whose `to_state IS
-NOT NULL`; `rejected`, `reminded`, `lead_notified`, `acked` and `moved`
+**Replay rule** (ADR-062 "Replay" row, made exact; FNX-BA-CRIT-020): the
+one total order is `seq` under the new `PRIMARY KEY (team, task_id, seq)` —
+`at` is never used for ordering and ties in `at` are irrelevant. The state of
+`(team, task_id)` is the `to_state` of its highest-`seq` event whose
+`to_state IS NOT NULL`. Migration steps 5, 6 and 7 append in that order, each
+new event taking `max(seq) + 1` for its task, so a demoted row folds to
+`assigned` and a synthesized `completed` folds to `complete`; `rejected`, `reminded`, `lead_notified`, `acked` and `moved`
 events carry `to_state = from_state` (or NULL for pre-BA rows) and never
 change it; `migrated` is the only event other than `started` /
 `completed` allowed to change state, and only the migration writes it.
@@ -605,7 +621,7 @@ envelope:
 | (legacy `task_complete = Some`) | — | never reaches the writer: `WriteRequest::task_op_normalized()` has already turned it into `task_id = Some, task_op = Some(Close{Completed})` |
 | `Some` | `Some(Start)` | `apply_task_start` |
 | `Some` | `Some(Close{..})` | `apply_task_close` |
-| `Some` | `Some(Move{..})` | `apply_task_move` (also reachable without a message: BA.4 `WriteOp::TaskMove`) |
+| — | — | `apply_task_move` is **not** message-carried: only `WriteOp::TaskMove` (BA.4, message-less `RequestEnvelope::TaskMove`) reaches it (design §5; FNX-BA-CRIT-023) |
 
 Signatures:
 
@@ -615,7 +631,13 @@ fn apply_task_assignment(record: &Message, task_id: &TaskId, connection: &Connec
 fn apply_task_start(record: &Message, task_id: &TaskId, connection: &Connection, target: &SharedDbTarget) -> Result<(), AtmError>;
 fn apply_task_close(record: &Message, task_id: &TaskId, outcome: TaskCloseOutcome, reason: Option<&str>, connection: &Connection, cache: &mut WriterStatementCache, target: &SharedDbTarget) -> Result<(), AtmError>;
 pub(super) fn apply_task_move(team: &TeamName, task_id: &TaskId, actor: &AgentName, target_pos: &MoveTarget, at: IsoTimestamp, connection: &Connection, target: &SharedDbTarget) -> Result<QueuePosition, AtmError>;
-/// Renumbers one member's open queue to 1..=n in `order`; one UPDATE per row inside the caller's transaction.
+/// Renumbers one member's open queue to 1..=n in `order`, inside the caller's transaction, in two
+/// phases so `tasks_position_per_member` (immediate; SQLite has no deferrable UNIQUE) never sees a
+/// transient duplicate (FNX-BA-CRIT-021):
+///   1. `UPDATE tasks SET position = position + ?3 WHERE team = ?1 AND assignee = ?2 AND state <> 'complete'`
+///      with ?3 = order.len() — parks every open row above the old range (positions stay >= 1);
+///   2. one `UPDATE tasks SET position = ?3 WHERE team = ?1 AND task_id = ?2` per entry of `order`, ?3 = 1..=n.
+/// A swap of positions 1 and 2 therefore goes 1,2 → 3,4 → 2,1 with no collision.
 fn renumber_queue(team: &TeamName, assignee: &AgentName, order: &[TaskId], connection: &Connection, target: &SharedDbTarget) -> Result<(), AtmError>;
 ```
 
@@ -625,8 +647,11 @@ Authority: `Start` requires `actor == Daemon`; `Close` requires assignee,
 assigner or the team's unique lead; `Move` requires assigner or unique lead
 (AZ `require_unique_lead` copied; a team with `n != 1` leads rejects with
 `NotAuthorized` and the count in `detail` — no error code exists or is added,
-see the `TaskRejectionKind` note above). `Start` sets `reminder_count = 0, lead_notified_count = 0,
-last_reminded_at = NULL` and moves the row to position 1 (renumber). `Close`
+see the `TaskRejectionKind` note above). `Start` sets `reminder_count = 0, lead_notified_count = 0` and moves the row
+to position 1 (renumber); it leaves `last_reminded_at` exactly as the handoff
+audit wrote it — a `NULL` here would make the task due again on the next
+tick (FNX-BA-CRIT-029), and `state = assigned AND position = 1 AND
+last_reminded_at IS NOT NULL` is the "start owed" predicate BA.3 retries on. `Close`
 sets `close_outcome`, `position = NULL`, renumbers the remainder, and keeps
 `acknowledge_completed_assignment`. `Move` renumbers only; `assigned_at`
 is never in any `UPDATE … SET` list in this file (grep gate).
@@ -660,14 +685,25 @@ trailing run of `refused` closes (`SELECT close_outcome FROM tasks WHERE team
 task_id DESC` read until the first non-`refused`) and returns it:
 
 ```rust
-pub struct TaskCloseApplied { pub outcome: TaskCloseOutcome, pub consecutive_refusals: u32 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskCloseApplied {
+    pub task_id: TaskId,
+    /// The refusing member — the run is theirs even when the assigner or the
+    /// unique lead submitted the close (FNX-BA-CRIT-027).
+    pub assignee: AgentName,
+    pub outcome: TaskCloseOutcome,
+    pub consecutive_refusals: u32,
+}
 // carried on WriteOpResult / SendOutcome as `task_close: Option<TaskCloseApplied>`
 pub const TASK_CONSECUTIVE_REFUSAL_THRESHOLD: u32 = 3; // atm-storage/src/task_store.rs, next to TASK_STALLED_REMINDER_THRESHOLD (plan §4 R5)
 ```
 
-The writer only counts. `TaskCloseApplied` travels `WriteOpResult →
-SendOutcome → WriteOutcome.task_close` (atm-core `send/outcome.rs`, new
-field, `#[serde(default)]`); **BA.3** observes it in the Tokio runtime's
+The writer only counts. `TaskCloseApplied` travels `WriteOpResult` →
+`SendOutcome.task_close: Option<TaskCloseApplied>` (atm-core
+`send/outcome.rs:15-35`, new field, `#[serde(default, skip_serializing_if =
+"Option::is_none")]`) → `WriteOutcome::Sent(SendOutcome)` (`write/pipeline.rs:13-16`
+— `WriteOutcome` is an enum; there is no `WriteOutcome.task_close` field,
+FNX-BA-CRIT-026); **BA.3** matches `WriteOutcome::Sent` in the Tokio runtime's
 post-write seam and sends the escalation (BA.3 "Consecutive-refusal
 escalation"; FNX-BA-CRIT-014 / PLAN-SCOPE-001). A close with any other
 outcome returns `consecutive_refusals = 0`.
@@ -723,8 +759,15 @@ Pure — `task_state.rs`:
   and no `close_outcome` key; both round-trip.
 - `task_row_json_from_1_4_0_producer_decodes` — the exact `TaskRow` JSON a
   1.4.0 daemon emits (fixture string, `state:"complete"`, no new keys) →
-  `Complete(Completed)`; `state:"active"` without `position` → error (an
-  open row must carry its position).
+  `Complete(Completed)`; the exact `state:"active"` and `state:"assigned"`
+  rows a 1.4.0 daemon emits (no `position` key) → `Active` / `Assigned` with
+  `position = None` (FNX-BA-CRIT-019).
+- `task_row_json_rejects_position_on_complete_row` — `state:"complete"` with
+  `position: 1` → validation error.
+- `task_event_row_json_rejected_after_complete_round_trips` — a `rejected`
+  event with `from_state = to_state = Complete(Refused)` serialises with one
+  `close_outcome: "refused"` key and round-trips; `from_state: "complete",
+  to_state: "assigned"` → validation error (FNX-BA-CRIT-022).
 - `task_state_from_parts_rejects_mismatched_outcome` — 5 arms of
   `from_parts`.
 - `task_event_row_json_projects_close_outcome_from_to_state`.
@@ -754,6 +797,10 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
 - `renumber_is_atomic_under_failure` — inject a failing statement mid-renumber
   (test hook on `renumber_queue`); assert the queue is unchanged and
   contiguous.
+- `renumber_swap_of_positions_one_and_two_never_violates_unique_index` —
+  with `tasks_position_per_member` in place, move T2 `--head` over T1 (a pure
+  swap) and move T4 `--head` over T1..T3; no `SQLITE_CONSTRAINT`, final
+  positions contiguous (FNX-BA-CRIT-021).
 - `assigned_at_absent_from_every_update_statement` — greps the source file
   for `UPDATE tasks` statements and asserts none sets `assigned_at`.
 - `close_by_third_party_is_not_authorized`, `close_by_unique_lead_succeeds`,
@@ -804,7 +851,12 @@ string, never from production code):
   `migrated_complete_row_without_completed_event_gets_one` — synthesized
   `started` / `completed`, actor `atm-daemon`, `detail` as specified; a row
   that already has the event gets nothing.
-- `replay_of_migrated_history_reproduces_row_state` — for each of the five
+- `replay_of_migrated_history_reproduces_row_state`
+- `replay_uses_seq_not_at_when_timestamps_tie` — two events with identical
+  `at` and opposite `to_state`; the fold follows `seq` (FNX-BA-CRIT-020).
+- `replay_after_active_conflict_demotion_yields_assigned` — a demoted row's
+  synthesized `started` (step 6) then `migrated active→assigned` (step 7)
+  fold to `assigned`. — for each of the five
   fixtures (migrated `assigned`, migrated `active`, migrated `complete`,
   duplicate loser folded, active-conflict demotion) fold the `task_events`
   rows by the replay rule and assert equality with `tasks.state` /

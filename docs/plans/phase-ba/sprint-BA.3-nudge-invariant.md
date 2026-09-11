@@ -30,7 +30,7 @@ in design §8 is deleted.
 | id | deliverable | where |
 | --- | --- | --- |
 | D1 | `TaskDisposition`, `EpisodeKind`, `HoldReason`, `dispose()`, `reminder_due()`, `TASK_REMINDER_INTERVAL_MS` | `crates/atm-http-runtime/src/herdr_task_disposition.rs` (new, pure) |
-| D2 | `EscalationState` re-shaped to `{episodes, cleared_at}`, `Episode`, `episode_summary()`, `episode_already_reported()` | `crates/atm-http-runtime/src/herdr_escalation.rs` |
+| D2 | `EscalationState` re-shaped to `{episodes}`, `Episode`, `episode_summary()`, `episode_already_reported(target, summary, since)` — per-target, episode-bounded | `crates/atm-http-runtime/src/herdr_escalation.rs` |
 | D3 | `EscalationKind::RefusalsEscalated`; `escalate_mail()` factored out of `escalate()`; `write_escalation_mail` gains `summary` | `herdr_escalation.rs` |
 | D4 | roster-wide candidate sweep (`herdr_candidates` filter removed), `MemberObservation`, one `open_tasks_for_team` per team per tick, `dispose` → act, pre-emit re-check | `herdr_queue_wake.rs`, `herdr_queue_wake_reminders.rs` |
 | D5 | `escalate_stalled_task`, `escalate_episode` | `herdr_queue_wake_escalation.rs` |
@@ -51,10 +51,16 @@ revalidation (design §1 "no edge detection/revision revalidation").
 ## Types — exactly as they land (`crates/atm-http-runtime/src/herdr_task_disposition.rs`, new, pure, ≤ 150 lines)
 
 ```rust
-use atm_core::boundary::{RuntimeMemberState, TaskRow, TASK_STALLED_REMINDER_THRESHOLD};
+use atm_core::boundary::{RuntimeMemberState, TaskRow, TASK_REMINDER_INTERVAL_MS, TASK_STALLED_REMINDER_THRESHOLD};
 use atm_storage::types::IsoTimestamp;
 
-pub(crate) const TASK_REMINDER_INTERVAL_MS: i64 = 60_000; // moved here from herdr_queue_wake.rs:41
+// `TASK_REMINDER_INTERVAL_MS` moves out of this crate: `herdr_queue_wake.rs:44`
+// (`pub const TASK_REMINDER_INTERVAL_MS: u64`) is deleted and
+// `pub const TASK_REMINDER_INTERVAL_MS: i64 = 60_000;` lands in
+// `crates/atm-storage/src/task_store.rs`, next to `TASK_STALLED_REMINDER_THRESHOLD`
+// (`:22`), re-exported through `atm_core::boundary`. atm-storage is below both
+// atm-core and atm-http-runtime, so BA.5's `nudge_dispatch` (atm-core) and this
+// crate read one constant (design §6; FNX-BA-CRIT-032).
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TaskDisposition {
@@ -138,10 +144,9 @@ and the "last seen healthy" map come:
 #[derive(Clone, Default)]
 pub(crate) struct EscalationState {
     /// Members currently in a Blocked/Offline episode, as seen by this process.
+    /// The only in-RAM escalation state; the durable record is the mailbox
+    /// (design §6.1) and the episode bound is `Episode.since`.
     episodes: Arc<Mutex<HashMap<MemberKey, Episode>>>,
-    /// Last time this process saw the member in a non-episode state. Absent
-    /// after a restart until the member is seen Idle/Active/Unknown/… once.
-    cleared_at: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,12 +160,10 @@ pub(crate) struct Episode {
 
 impl EscalationState {
     /// Records the observation. Blocked/Offline → the current episode
-    /// (started now, or replaced when the kind flipped), else clears any
-    /// episode, records `cleared_at = now`, and returns `None`.
+    /// (started at `state_changed_at`, else `now`; replaced when the kind
+    /// flipped), else removes any episode and returns `None`.
     pub(crate) fn observe(&self, member: &MemberKey, state: RuntimeMemberState, state_changed_at: Option<IsoTimestamp>, now: IsoTimestamp) -> Option<Episode>;
     pub(crate) fn mark_notified(&self, member: &MemberKey);
-    /// `cleared_at` for the member, if this process has seen it healthy.
-    pub(crate) fn last_cleared(&self, member: &MemberKey) -> Option<IsoTimestamp>;
 }
 
 /// The `summary` of every episode message; equality is the durable
@@ -169,31 +172,45 @@ pub(crate) fn episode_summary(kind: EpisodeKind, member: &MemberKey) -> String {
     format!("escalation:{}:{}", kind.as_str(), member)
 }
 
-/// Design §6.1: the mailbox is the record. Called only when an episode is
-/// first seen by this process (not per tick). `after` is `last_cleared`;
-/// `None` (fresh process) accepts any existing report — an episode that
-/// straddles a daemon restart is reported once, not twice (R4).
+/// Design §6.1: the mailbox is the record. Called once per **target** when an
+/// episode is first seen by this process (not per tick). A report counts only
+/// if it is at or after the episode's start, so a report from an earlier,
+/// cleared episode never suppresses a new one (FNX-BA-CRIT-028).
 pub(crate) async fn episode_already_reported(
     reader: &dyn AsyncMailboxReader,
-    team: &TeamName,
-    lead: &AgentName,
+    target: &MailboxScope,          // lead: (team, lead); recipient: parsed from its address
     summary: &str,
-    after: Option<IsoTimestamp>,
+    since: IsoTimestamp,            // Episode.since
     deadline: ReadDeadline,
 ) -> Result<bool, ReadLaneError> {
-    let query = MessageQuery { team: team.clone(), agent: lead.clone(),
+    let query = MessageQuery { team: target.team.clone(), agent: target.agent.clone(),
         sender: Some(daemon_actor()), task_id: None, limit: None }; // limit None = no LIMIT (mailbox_reader.rs:187-190)
-    let messages = reader.list_messages(MailboxScope::new(team.clone(), lead.clone()), query, deadline).await?;
+    let messages = reader.list_messages(target.clone(), query, deadline).await?;
     Ok(messages.iter().any(|m| m.envelope.summary.as_deref() == Some(summary)
-        && after.is_none_or(|t| m.envelope.timestamp > t)))
+        && m.envelope.timestamp >= since))
 }
 ```
 
 `daemon_actor()` is the existing construction of the `atm-daemon`
 `AgentName` used by `write_escalation_mail` (`DAEMON_ACTOR_NAME`,
-`atm-storage/src/task_state.rs:13`); no new constant. When the team has no
-unique lead the check is skipped and the recipients-only message is sent
-(existing `EscalationTargets` behaviour).
+`atm-storage/src/task_state.rs:13`); no new constant. Targets are exactly
+the existing `EscalationTargets { lead: Option<AgentName>, recipients:
+Vec<String> }` (`herdr_escalation.rs:204-207`): the lead when unique, and
+every configured recipient. `write_escalation_mail` writes each target
+through the local write path, so the local store holds the row under the
+recipient's `(team, agent)` scope whatever host it forwards to; a recipient
+address that does not parse into a mailbox scope is written unconditionally
+(existing behaviour). Each target is checked and written **independently**
+(design §6.2): a target with no report since `since` is written this tick,
+whatever happened to the others, so a lead-success/recipient-failure tick is
+completed on the next tick rather than suppressed forever.
+
+Restart behaviour (R4): `since` is the roster's `state_changed_at`. A member
+Herdr still lists as Blocked keeps its original `state_changed_at` across a
+daemon restart, so the existing report suppresses. A heartbeat-only member
+whose first post-restart observation starts a new `state_changed_at` may be
+reported once more — the mirror-image residual design §6.1 already accepts,
+stated here so QA does not file it.
 
 ```rust
 pub(crate) enum EscalationKind {
@@ -215,6 +232,10 @@ pub(crate) async fn escalate_mail(
     summary: &str,
     mail_body: &str,
     kind: EscalationKind,
+    /// `Some(since)`: skip every target already holding this `summary` at or
+    /// after `since` (episodes). `None`: write every target (refusals — one
+    /// shot per run of three, nothing to suppress against).
+    suppress_since: Option<IsoTimestamp>,
 ) -> EscalationOutcome;
 ```
 
@@ -223,12 +244,12 @@ pub(crate) async fn escalate_mail(
 | before (develop) | after |
 | --- | --- |
 | `herdr_candidates` (`herdr_queue_wake.rs:868-900`) `continue`s every member whose channel is not `DeliveryChannel::HerdrSteer` (`:876-884`) and every `Tmux` backend (`:890`) — non-Herdr members never reach state evaluation | every roster member is a candidate; the backend is resolved **after** disposition by the existing `rebuild_received_hook_dispatch` (`:669-677`, per-backend `BuiltInPostSendDispatch`) and emitted through the existing `AsyncMessageReceivedHookEmitter`; a member whose backend yields no dispatch is `Hold(NoDeliveryChannel)` (FNX-BA-CRIT-007). Escalation needs no channel — it is mail. |
-| `collect_idle_members(…, task_candidates: &mut Vec<TaskCandidate>)` pushes `Idle | Blocked` only (`herdr_queue_wake.rs:444-518`) | pushes every member with an accepted observation as `MemberObservation { member: HerdrCandidate, state: RuntimeMemberState, state_changed_at: Option<IsoTimestamp> }`; `TaskCandidate { blocked: bool }` deleted |
+| `collect_idle_members(…, task_candidates: &mut Vec<TaskCandidate>)` pushes `Idle | Blocked` only (`herdr_queue_wake.rs:444-518`) | pushes every member with an accepted observation as `MemberObservation { member: MemberKey, state: RuntimeMemberState, state_changed_at: Option<IsoTimestamp> }` — roster identity only; no `HerdrCandidate`, no Herdr agent name or session (those are resolved per backend after disposition, FNX-BA-CRIT-024); `TaskCandidate { blocked: bool }` deleted |
 | `read_due_task` — one `list_tasks(team, Some(member))` per candidate (`_reminders.rs:81-113`) | one `open_tasks_for_team(team, deadline)` per team per tick; grouped in memory `HashMap<AgentName, Vec<TaskRow>>` (already `position`-ordered); head = `.first()` |
 | `select_open_task` (`herdr_queue_wake.rs:855-866`, Active-first then `assigned_at`) | deleted — the queue order is the storage order |
 | `emit_task_reminder` → `record_task_outcome` → `maybe_escalate_task` with multiplicative threshold (`_escalation.rs:37-43`) | `emit_task_reminder` runs only on `Nudge`; `EscalateStalled` calls `escalate_stalled_task` (renamed `maybe_escalate_task`, threshold test removed — `dispose` decided) which sends the one message and `record_lead_notified` |
-| `escalate_blocked` / `escalate_one_blocked` with `BLOCKED_NOTIFY_MS`, `blocked_cooldown`, `next_blocked_batch` (`_escalation.rs:176-235`) | `escalate_episode(member, episode, open_tasks)` on `EscalateEpisode`: if `!episode.notified` and `episode_already_reported(...)` → `mark_notified`, no send; else `escalate(...)` with `summary = episode_summary(kind, member)`, body = existing `blocked_body` (`_escalation.rs:279`) generalised with the kind word and `since`; `mark_notified` on `reached_anyone()` |
-| `maybe_escalate_breaker` / `escalate_breaker_cycle` on breaker open (`herdr_queue_wake.rs:301-379`, `herdr_breaker_escalation.rs`) | deleted (design §8). A Herdr outage surfaces as `Offline` observations → one episode message per member. |
+| `escalate_blocked` / `escalate_one_blocked` with `BLOCKED_NOTIFY_MS`, `blocked_cooldown`, `next_blocked_batch` (`_escalation.rs:176-235`) | `escalate_episode(member, episode, open_tasks)` on `EscalateEpisode`: `escalate_mail(…, summary = episode_summary(kind, member), body = existing `blocked_body` (`_escalation.rs:279`) generalised with the kind word and `since`, kind, suppress_since = Some(episode.since))` — per target: already reported since `since` → skip; else write. `mark_notified` when every target is either skipped or written; a failed target leaves `notified = false` so the next tick retries **that target only** (the others are then skipped by their own report) |
+| `maybe_escalate_breaker` / `escalate_breaker_cycle` on breaker open (`herdr_queue_wake.rs:301-379`, `herdr_breaker_escalation.rs`) | deleted (design §8). A Herdr list failure changes **no** roster state: the observation is recorded unavailable (`herdr_queue_wake.rs:424-435`, unchanged), no member enters an episode, no mail is written (requirements.md:4196-4203: a failed poll preserves state and triggers nothing). `Offline` is only ever an explicit observation (FNX-BA-CRIT-025). |
 | `HERDR_MAX_PROMPTS_PER_TICK` guard applies to reminders | unchanged; escalation messages do not count against it (they are mail, not prompts) |
 
 Tick order per team: (1) roster observations applied, (2) queue drain
@@ -243,9 +264,18 @@ head.task_id`, `task_op = Some(TaskOp::Start)`, body from the existing
 `task_started` template class (add one template alongside the reminder
 templates; no new nudge kind — ADR-054 inventory unchanged). If the head is
 already `Active` the pump skips the write (the writer's idempotent arm would
-make it a no-op and the receipt must not repeat). Failure to write the
-start is logged and retried next tick; the nudge already went out — the
-receipt is at-least-once.
+make it a no-op and the receipt must not repeat).
+
+**Start owed (FNX-BA-CRIT-029):** the handoff audit (`record_task_reminder`,
+unchanged) has already set `last_reminded_at`, so a failed `Start` write
+leaves a row with `state = assigned AND position = 1 AND last_reminded_at IS
+NOT NULL` — the "start owed" predicate (BA.2 keeps `last_reminded_at` across
+`Start`). At the top of every tick, before disposition, the pump submits the
+idempotent `Start` write for every owed head in `open_tasks_for_team`, with
+no prompt and regardless of the member's state — an `Active` member (the
+common case after a successful handoff) gets its receipt this way. Rows at
+position ≥ 2 are never owed (only heads are handed off), so a migrated
+member with several reminded `assigned` rows starts exactly its head.
 
 **Re-check before emit:** immediately before handing a nudge to the
 emitter, the pump re-reads the member's roster record (`service_runtime`
@@ -262,30 +292,46 @@ place that may call the escalation path (`escalate` is `pub(crate)` at
 cycle — FNX-BA-CRIT-014 / PLAN-SCOPE-001). Exact addition, after `:297`:
 
 ```rust
-        if let Some(applied) = outcome.task_close.as_ref()
-            && applied.outcome == TaskCloseOutcome::Refused
-            && applied.consecutive_refusals == TASK_CONSECUTIVE_REFUSAL_THRESHOLD
-        {
-            let team = canonical_request.caller_team.clone();
-            let body = refusals_body(&canonical_request, applied); // assignee, count, latest task id + reason
-            let summary = format!("escalation:refusals:{}", canonical_request.caller_identity);
-            let _ = crate::herdr_escalation::escalate_mail(
-                &self.service_runtime, self.task_store.as_ref(), self.daemon_home(),
-                &team, &summary, &body, EscalationKind::RefusalsEscalated,
-            ).await;
+        // `outcome: WriteOutcome` (an enum, write/pipeline.rs:13-16); the
+        // router has `service_runtime: LocalServiceRuntime` and `daemon_home:
+        // PathBuf` fields (storage_and_nudge_router.rs:54-62) and no task_store
+        // field — the store comes from the runtime as herdr_queue_wake.rs:371
+        // already does (FNX-BA-CRIT-026).
+        if let atm_core::write::WriteOutcome::Sent(sent) = &outcome {
+            if let Some(applied) = sent.task_close.as_ref() {
+                if applied.outcome == TaskCloseOutcome::Refused
+                    && applied.consecutive_refusals == TASK_CONSECUTIVE_REFUSAL_THRESHOLD
+                {
+                    let team = canonical_request.caller_team.clone();
+                    // keyed to the refusing assignee, never the caller — the
+                    // assigner or the unique lead may have submitted the close
+                    // (FNX-BA-CRIT-027)
+                    let summary = format!("escalation:refusals:{}/{}", team, applied.assignee);
+                    let body = refusals_body(applied); // assignee, count, task id
+                    let task_store = self.service_runtime.task_store().ok();
+                    let _ = crate::herdr_escalation::escalate_mail(
+                        &self.service_runtime, task_store.as_ref(), &self.daemon_home,
+                        &team, &summary, &body, EscalationKind::RefusalsEscalated, None,
+                    ).await;
+                }
+            }
         }
 ```
+
+A compile-pinning test (`refusal_seam_compiles_against_write_outcome`, in
+the router's test module) constructs a `WriteOutcome::Sent` with
+`task_close = Some(TaskCloseApplied { consecutive_refusals: 3, .. })` and
+asserts one `escalate_mail` call; the seam is code, not pseudocode.
 
 Exactly-equal, not `>=`: one message per run of three; a fourth refusal is
 silent; a non-refused close resets the run (BA.2 counts). The write has
 already committed — a failed escalation write is logged, never surfaced to
-the closing caller. `daemon_home()` is the existing daemon-home accessor the
-router uses for doctor context (`with_daemon_context`, `:235`).
+the closing caller.
 
 ## Constants
 
-`TASK_REMINDER_INTERVAL_MS = 60_000` (moved, now `i64` for the signed
-difference), `TASK_STALLED_REMINDER_THRESHOLD = 10` (unchanged,
+`TASK_REMINDER_INTERVAL_MS = 60_000` (moved to `atm-storage/src/task_store.rs`,
+now `i64` for the signed difference; deleted from `herdr_queue_wake.rs:44`), `TASK_STALLED_REMINDER_THRESHOLD = 10` (unchanged,
 `atm-storage/src/task_store.rs:20`), `TASK_CONSECUTIVE_REFUSAL_THRESHOLD = 3`
 (BA.2). Deleted: `BLOCKED_NOTIFY_MS`, `BLOCKED_RENOTIFY_MS`. Offline is
 reported on the first accepted `Offline` observation with no debounce — the
@@ -333,8 +379,8 @@ Pure — `herdr_task_disposition.rs`:
 - `rate_limit_clock_reversal_is_not_due` — `last_reminded_at = now + 5 s`
   (clock stepped back) → RateLimited, not Nudge.
 - `episode_state_replaces_kind_on_flip` — Blocked then Offline → new
-  episode, `notified = false`; `observe(Idle)` clears and sets
-  `cleared_at`; `observe(Blocked)` again → fresh `since`.
+  episode, `notified = false`; `observe(Idle)` removes the episode;
+  `observe(Blocked)` again with a newer `state_changed_at` → fresh `since`.
 - `episode_since_prefers_roster_state_changed_at`.
 - `episode_summary_is_stable` — same `(kind, member)` → byte-equal string,
   no timestamp.
@@ -361,12 +407,28 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
   again → 2nd mail.
 - `offline_member_gets_one_message_zero_nudges_per_episode` — same shape.
 - `blocked_with_no_open_task_still_escalates`.
-- `daemon_restart_does_not_reescalate_ongoing_episode` — R4: Blocked,
-  1 mail; restart the runtime (fresh `EscalationState`); 50 ticks still
-  Blocked → **0** further mail (`episode_already_reported` found the lead's
-  message); then Idle → Blocked → 1 new mail (`after = cleared_at`
-  excludes the old report). Also asserts exactly one lead-mailbox read per
+- `daemon_restart_does_not_reescalate_ongoing_episode` — R4: Blocked
+  (roster `state_changed_at = t0`), 1 mail; restart the runtime (fresh
+  `EscalationState`); 50 ticks still Blocked with the same `state_changed_at`
+  → **0** further mail. Also asserts exactly one mailbox read per target per
   episode start, none per tick.
+- `recovered_then_reblocked_episode_is_reported_again` — Idle then Blocked
+  with `state_changed_at = t1 > t0` → the old report (timestamp < t1) does
+  not suppress; 1 new mail (FNX-BA-CRIT-028).
+- `recipients_only_episode_is_not_duplicated_after_restart` — team with two
+  leads (no unique lead) and one configured recipient: 1 mail to the
+  recipient; restart; 50 ticks → 0 further mail (the recipient's own mailbox
+  is the record).
+- `partial_target_failure_completes_missing_target_next_tick` — inject a
+  failing recipient write on the first tick: lead written, recipient failed,
+  `notified = false`; next tick → recipient written, lead **not** re-written;
+  then `notified = true`.
+- `poll_failure_produces_no_episode` — Herdr list error for 20 ticks →
+  roster states unchanged, 0 mail, 0 prompts (FNX-BA-CRIT-025).
+- `failed_start_write_then_active_member_still_starts_once` — handoff
+  succeeds, the `Start` write is made to fail once, the member turns Active;
+  next tick → `Start` applied through the owed-head path with no prompt,
+  exactly one `task_started` receipt, row `active` (FNX-BA-CRIT-029).
 - `episode_message_summary_and_body` — `summary == "escalation:blocked:<team>/<agent>"`
   (exact `MemberKey` `Display`), body contains `since`.
 - `tenth_reminder_escalates_once_then_silence` — drive 10 emitted
@@ -394,12 +456,15 @@ no lead; backends: Herdr steer, tmux, bare-CLI FIFO):
   due tasks + 1 blocked → 16 prompts and 1 mail in one tick.
 - `third_consecutive_refusal_escalates_once` — through the real
   `commit_write`: 3 refused closes by A → 1 mail to lead + recipients with
-  `summary == "escalation:refusals:A"`, kind `refusals_escalated`; a 4th
+  `summary == "escalation:refusals:<team>/A"`, kind `refusals_escalated`; a 4th
   refused close → no second mail; a `completed` then 3 more refused → one
   more mail. The closes themselves succeed whether or not the mail write
   succeeds (inject a failing lead write → close still committed, `warn`).
 - `refusal_escalation_is_mail_only` — no Herdr notification is sent for
   `RefusalsEscalated` (design §6.1).
+- `refusal_run_is_keyed_to_assignee_not_closer` — three refused closes of
+  A's tasks submitted by the assigner, then by the unique lead → one mail
+  naming A (FNX-BA-CRIT-027).
 - `breaker_open_produces_no_escalation_mail` — trip the Herdr breaker → 0
   mail with kind `breaker_opened` (the kind no longer exists — compile-time
   proof is the enum, this test pins the runtime behaviour).
