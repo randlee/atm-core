@@ -592,3 +592,5 @@ any new nudge template kind (ADR-054 inventory unchanged).
 Writer gate: latest reminded event query uses ORDER BY rowid DESC LIMIT 1 and permits Start only when outcome = 'emitted'; otherwise silent no-op.
 
 Refusal escalation is tick-driven only: the next tick reads refusal_run, holds the member, and sends at most one escalation mail per run; no write result seam is used.
+
+Tests: `reassign_from_stalled_row_starts_fresh_episode`, `prior_assignment_reminder_never_makes_new_assignment_start_owed`, `close_after_reassignment_between_preflight_and_write_is_rejected_then_recomposed`.

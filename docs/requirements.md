@@ -2992,7 +2992,7 @@ Task lifecycle (Phase BA):
 4. Starting a task MUST move it from `assigned` to `active` and MUST send the
    assigner a start notification.
 5. An agent's queue MUST be ordered by `(position, assigned_at, task_id)`;
-   `assigned_at` MUST be immutable; a new task's default position MUST be the
+   `assigned_at` MUST be the time of the current assignment; it is reset only by reassignment or reopen and never by a queue move; a new task's default position MUST be the
    end of the queue.
 6. `atm task move <id> --before <other> | --head | --end` MUST reposition an
    `assigned` task only; `--head` MUST place it next up behind the active

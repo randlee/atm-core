@@ -57,7 +57,7 @@ States: `assigned` → `active` → `complete`. Events: `Assigned`, `Started`,
 | none | → `assigned` | reject `no open task` | reject `no open task` |
 | `assigned` | → `assigned` (idempotent resend) | → `active`; reject `ActiveElsewhere` when the member's one-active index is already held | → `complete(o)` |
 | `active` | → `active` (idempotent resend) | → `active` (idempotent) | → `complete(o)` |
-| `complete` | reject `already complete; use assign to reopen` | reject `already complete` | reject `already complete` — **informational** at the command layer (B10) |
+| `complete` | → `assigned` (reopen in place; event `reopened`) | reject `already complete` | reject `already complete` — **informational** at the command layer (B10) |
 
 Row invariants enforced by the database (BA.2): one row per `(team, task_id)`;
 at most one `active` row per `(team, assignee)`; `position` unique per open
@@ -314,17 +314,18 @@ call `escalate_blocked` (`herdr_queue_wake_reminders.rs:123-132`);
 9. An `Idle` member with an open `atm queue` message is reminded of the
    message before its next task; a read (or acked) message is never reminded.
 10. §9's additions table matches the shipped diff exactly.
-13. One task id remains one row across reassignment and reopen; the acceptance
+11. One task id remains one row across reassignment and reopen; the acceptance
     suite proves both transitions and every transition has an event under that
     id (design §3.1a).
-14. ADR-062 and ADR-054 amendments merged with BA.2 / BA.5; ADR-063 marked
+12. ADR-062 and ADR-054 amendments merged with BA.2 / BA.5; ADR-063 marked
     superseded; `schema-reviewer` sign-off recorded on BA.2 and BA.4; R0's
     approval and D3 exception recorded as an ADR-061 D6 entry and cited by PR
     comment.
-12. `CLAUDE.md` and `docs/team-protocol.md` steer assignment to
+13. `CLAUDE.md` and `docs/team-protocol.md` steer assignment to
     `atm task assign` / `atm send --task-id` and non-interrupting delivery to
     `atm queue`.
 
 The state-write boundary is module-owned: `writer/task_ops.rs` alone writes
 `tasks.state` through assignment, start, and close; move and renumber are
 state-neutral. The review gate is `no_task_state_write_outside_task_ops`.
+14. Reassignment and reopen preserve one task id and record their event kinds; close outcomes remain completed, refused, or cancelled.

@@ -138,20 +138,5 @@ task in queue order.
 
 ## Consequences
 
-## Phase BA design amendment (2026-09-11)
+The lifecycle remains one row per task id, with explicit assignment events for reassignment and reopen; close outcomes remain limited to completed, refused, and cancelled.
 
-Rand's ruling adds the following normative edges without rewriting the
-historical text above: `complete → assigned` is `reopened`, and
-`assigned|active → assigned` with a different assignee is `reassigned`.
-`TaskCloseOutcome` is exactly `completed | refused | cancelled`; `reassigned`
-is an event kind, not a close outcome. Event kinds include `reassigned` and
-`reopened`, and every transition appends one event row under the same
-`(team, task_id)`. The same id may be reassigned or reopened any number of
-times, never held by more than one agent at once. `assigned_at` is the time of
-the current assignment, changed by assign/reassign/reopen but never by queue
-reordering. Assignment accepts `--before <task-id> | --head`, reusing
-`MoveTarget`.
-
-This is a fresh Phase AX design, not restoration of the AC.6 scaffolding. It
-replaces the historical Claude-code/Pydantic deferral because ATM tasks are
-cross-host records derived from messages the Rust daemon already persists.

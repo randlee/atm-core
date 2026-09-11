@@ -451,3 +451,6 @@ Additional CLI validation test: `assign_before_rejects_with_start_flag`.
 `AlreadyClosed` is the preflight state; repeated close creates no task transition or event.
 
 Placement syntax: `atm task assign <agent> --template <j2> --vars <json> [--task-id <id>] [--before <other-task-id> | --head]`.
+
+BA.4 recomposes the recipient once after StaleCounterparty, then exits 1 if ownership changes twice.
+A second `StaleCounterparty` after recomposition exits 1 and sends no stale report.

@@ -981,3 +981,6 @@ Boundary clarification (FNX-BA-DRIFT-031): only `writer/task_ops.rs` writes
 `apply_task_move` and `renumber_queue` never touch it. State-changing audit
 kinds are `assigned`, `reassigned`, `reopened`, `started`, `completed`,
 `refused`, `cancelled`, and `migrated`; `moved` is state-neutral.
+
+Boundary authority: `apply_task_close` enforces `StaleCounterparty`; `TaskRejected::stale_counterparty` is an atomic rejection.
+The `TaskRejected::stale_counterparty` kind is sixth and is atomic: no message, close, or non-rejected event is written.
