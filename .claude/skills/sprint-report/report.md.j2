@@ -13,8 +13,10 @@ required_variables:
 ────────────────────────────────────────
 {{ integration_row }}
 {% else %}
-| Sprint | DEV | QA | CI | PR |
-|--------|-----|----|----|-----|
+| Sprint | DEV | QA | CI | PR | B | I | M | Ready | OK |
+|--------|-----|----|----|-----|---|---|---|-------|----|
 {{ sprint_rows }}
 {{ integration_row }}
+{{ current_integration_summary }}
+{{ stale_occurrences_summary }}
 {% endif %}
