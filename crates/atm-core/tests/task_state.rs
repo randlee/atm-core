@@ -198,7 +198,10 @@ fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_sto
         &runtime,
     )
     .expect("task acknowledgement");
-    assert_eq!(task_row(&runtime, &team, &task_id).state, TaskState::Active);
+    assert_eq!(
+        task_row(&runtime, &team, &task_id).state,
+        TaskState::Assigned
+    );
 
     let (mut completion, _) = task_write_request(&home, &team, "sender", task_id.clone());
     completion.task_id = None;
@@ -217,8 +220,8 @@ fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_sto
             .iter()
             .filter(|event| event.event == TaskEventKind::Acked)
             .count(),
-        1,
-        "one successful acknowledgement appends exactly one Acked event"
+        0,
+        "acknowledgement does not append a task event"
     );
 }
 
@@ -259,7 +262,10 @@ fn deferred_herdr_prepare_persists_the_same_task_assignment() {
         &runtime,
     )
     .expect("task acknowledgement");
-    assert_eq!(task_row(&runtime, &team, &task_id).state, TaskState::Active);
+    assert_eq!(
+        task_row(&runtime, &team, &task_id).state,
+        TaskState::Assigned
+    );
 }
 
 #[test]

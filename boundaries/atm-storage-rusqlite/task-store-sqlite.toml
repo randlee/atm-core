@@ -40,7 +40,7 @@ forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-TASK-STORE-SQLITE"]
-review_gates = ["private_sqlite_impl", "no_cli_sqlite_lookup"]
+review_gates = ["private_sqlite_impl", "no_cli_sqlite_lookup", "no_ack_task_coupling"]
 
 [status]
 state = "concrete_landed"

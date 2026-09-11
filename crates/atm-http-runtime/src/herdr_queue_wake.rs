@@ -2420,7 +2420,7 @@ mod tests {
                 .expect("load first task")
                 .expect("first task")
                 .state,
-            TaskState::Active
+            TaskState::Assigned
         );
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:02:10Z").expect("test timestamp");
