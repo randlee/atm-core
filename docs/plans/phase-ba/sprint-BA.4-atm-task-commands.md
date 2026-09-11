@@ -45,6 +45,7 @@ here (BA.3 emits it from the runtime; this sprint only produces the close).
 Not used: `Start`, `Block`, `Unblock`, `Reassign`, `Reopen`, `Fail`, `Abort`,
 `PriorityArg`, `AbortReasonArg`, `TaskCommandService`, `CoreTaskCommandService`,
 `TaskMutationCommand`, `operation_id`, `expected_revision`.
+Reassign/reopen are not verbs: `atm task assign` on an existing id performs the in-place transition (design §3.1a).
 
 ## CLI — exactly as it lands (`crates/atm/src/commands/task.rs`, new)
 
@@ -107,6 +108,11 @@ struct TaskAssignCommand {
     /// Task id. When omitted a ULID is generated and printed (design §5: `[--task-id <id>]`).
     #[arg(long = "task-id")]
     task_id: Option<TaskId>,
+    /// Optional placement; mutually exclusive, default END.
+    #[arg(long, value_name = "OTHER_TASK_ID", group = "placement")]
+    before: Option<TaskId>,
+    #[arg(long, group = "placement")]
+    head: bool,
     #[command(flatten)]
     message: MessageSourceArgs,  // AZ MessageSource, verbatim
     #[arg(long = "requires-ack")]
@@ -120,7 +126,7 @@ struct TaskAssignCommand {
 #[derive(Debug, Args)]
 struct TaskCloseCommand {
     task_id: TaskId,
-    /// completed | refused | cancelled |completed \| refused \| cancelled (design §4).
+    /// completed | refused | cancelled (design §4).
     #[arg(value_enum)]
     outcome: OutcomeArg,
     /// Free text recorded on the close event; also the report body when no
@@ -174,10 +180,7 @@ enum OutcomeArg { Completed, Refused, Cancelled }
 ```
 
 The `ArgGroup` makes zero targets and two targets both parse errors
-(FNX-BA-CRIT-016). close-and-create sequence can be expressed; `atm task` has **no** reassign
-verb — reassignment is `atm task close <id>completed \| refused \| cancelled "<why>"` followed by
-`atm task assign <new-agent> --task-id <new-id> …` (or without `--task-id`,
-letting the CLI mint one). Documented, not automated.
+(FNX-BA-CRIT-016). `atm task` has no reassign or reopen verb: `assign <agent> --task-id <id>` is a same-agent no-op, reassigns an open row in place, or reopens a closed row in place. It preserves one row and appends `reassigned` or `reopened`; placement uses `MoveTarget` (`--before`/`--head`, default END).
 
 **Generated task id:** `ulid::Ulid::new().to_string()` (the `ulid` crate
 already backs `AtmMessageId`, `inbox_message.rs:22`) parsed through
@@ -352,7 +355,9 @@ CLI parse — `crates/atm/src/commands/task.rs` tests:
   `close T1 bogus` → parse error listing the four values.
 - `close_refused_requires_reason`, `close_cancelled_requires_reason`,
   `close_completed_without_reason_or_source_is_rejected`,
-  `close_reassigned_reason_optional_with_template`.
+  `assign_existing_open_id_to_other_agent_reassigns_in_place`,
+  `assign_closed_id_reopens_same_row`, `assign_same_agent_open_id_is_noop`,
+  `assign_with_head_places_after_active`.
 - `move_requires_exactly_one_target` — 0 targets → error, 2 targets →
   error, each of the 3 alone → ok.
 - `assign_without_task_id_mints_ulid` — 26-char Crockford, printed;
@@ -382,7 +387,7 @@ Close — `crates/atm/tests/task_close.rs` (fixture daemon, loopback):
 - `close_rejected_for_authority_delivers_report_and_prints_rejection` —
   third party closes: report lands (2b), row untouched, exit 1.
 - `close_each_outcome_roundtrips` — 4 outcomes visible in `atm task events --json`.
-- `close_reassigned_then_assign_new_id_yields_two_rows_two_histories`.
+- `assign_existing_open_id_to_other_agent_reassigns_in_place`.
 - `refusal_releases_next_queued_task` — A has T1, T2; refuse T1 → T2 is
   position 1 (`atm task list --json`) and is the next nudge (BA.3 runtime).
 

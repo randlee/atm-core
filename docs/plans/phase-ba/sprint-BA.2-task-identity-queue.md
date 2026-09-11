@@ -403,6 +403,10 @@ it to `1.6.0` for `TaskMove`.
 
 ```rust
     pub task_id: Option<TaskId>,
+    /// Assignment placement; absent in 1.4.0 payloads and therefore None,
+    /// which means END. BA.2 carries the existing MoveTarget type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<MoveTarget>,
     /// Mutation applied to `task_id` in the same writer transaction as this
     /// message. `None` with `task_id` set means assign.
     #[serde(default, skip_serializing_if = "Option::is_none")]

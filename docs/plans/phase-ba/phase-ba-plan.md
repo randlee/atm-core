@@ -120,7 +120,8 @@ R2 is intentionally unused: the question it named (a `start` verb) is settled
 by design §5 and folded into R1.
 
 Reassignment is **not** a question: design §4 and Rand (23:01) say
-close-and-create with outcome `reassigned`. No `reassign` verb.
+Reassignment and reopen are explicit `assign` transitions on the existing id;
+there is no `reassign` or `reopen` verb and no close outcome named reassigned.
 
 ## 5. Sprint sequence
 
@@ -179,7 +180,7 @@ discipline per `/gh-stack-view`.
 | sprint | interface | change | class |
 | --- | --- | --- | --- |
 | BA.2 | SQLite | PK narrowing ×2, two partial unique indexes, `position`, `close_outcome` ×2, two `CHECK`s; table rebuild migration with `VACUUM INTO` backup | **MAJOR — R0** |
-| BA.2 | HTTP/peer API | `WriteRequest.task_op: Option<TaskOp>` added; `task_complete` retained decode-only (a 1.4.0 CLI's `task_complete` still closes the task via `task_op_normalized`); `TaskRow`/`TaskEventRow` wire shape keeps scalar `state`, adds optional `close_outcome` and `position`; `SendOutcome.task_close` optional. `HTTP_API_VERSION` 1.4.0 → 1.5.0. Compatibility contract: additive decode (no `deny_unknown_fields`), CLI refuses a daemon below the verb's minimum version (`require_daemon_api`), and a newer request reaching an older daemon fails explicitly on the unknown variant — never silently. Fixtures: verbatim 1.4.0 payloads decode on 1.5.0. | MINOR |
+| BA.2 | HTTP/peer API | `WriteRequest.task_op: Option<TaskOp>` and `placement: Option<MoveTarget>` added; absent placement decodes as `None` (END); `task_complete` retained decode-only; `TaskRow`/`TaskEventRow` adds optional `close_outcome` and `position`; `HTTP_API_VERSION` 1.4.0 → 1.5.0. | MINOR |
 | BA.4 | HTTP/peer API | `RequestEnvelope::TaskMove` / `ResponseEnvelope::TaskMove` (additive variants, local-only; peer ingress rejects explicitly); `HTTP_API_VERSION` 1.5.0 → 1.6.0; `atm task move` requires 1.6.0. Fixtures: verbatim 1.5.0 payloads decode on 1.6.0. | MINOR |
 | BA.3, BA.5 | Herdr IPC | none; request shape and `HERDR_MINIMUM_VERSION` unchanged | none |
 

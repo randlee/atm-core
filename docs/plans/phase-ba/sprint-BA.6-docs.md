@@ -26,8 +26,12 @@ shipped and updates the operator-facing docs.
 - [ ] D2 — `docs/team-protocol.md:11`: closing = `atm task close <task-id>
   completed --stdin` (positional outcome, design §5 / BA.4; `reason` is the
   optional third positional for `refused` / `cancelled`) or the alias
-  `atm send <assigner> --task-id <task-id> --task-complete --stdin`; add the refused/cancelled/reassigned
-  paragraph; add "an ack never changes task state".
+  `atm send <assigner> --task-id <task-id> --task-complete --stdin`; add the refused/cancelled
+  paragraph; add "an ack never changes task state". Document that assign on
+  an existing id is a same-agent no-op, reassigns an open row in place, or
+  reopens a closed row in place; `--before <id> | --head` controls placement
+  and defaults to END. The close-outcome examples must not include
+  no `reassigned` close outcome; reassignment is an existing-id assign.
 - [ ] D3 — `docs/requirements.md:2482` doctor remediation literal → the
   string the shipped code emits; add `TaskQueueGap` to the doctor table.
 - [ ] D4 — `docs/atm-daemon/http-api.md`: the final `1.6.0` surface —
