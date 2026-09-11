@@ -33,9 +33,10 @@ transition table is:
 assignment/completion, and only the acknowledgement writer operation applies
 acknowledgement. Peer-originated receipts are stored with
 `MessageWriteOrigin::Peer` and never transition the ledger. A local same-agent
-resend of an open id is idempotent under Phase BA: no state change, no task
-event, no row change (design §3.1a; the pre-BA refresh of message id and
-description is superseded). Assigning the same open id to another agent, or
+resend of an open id is idempotent under Phase BA: no state change and no task
+event; it refreshes only `assignment_message_id`, `description`, and
+`updated_at` so that close hygiene acknowledges the current assignment message
+(design §3.1a; DRIFT-062). Assigning the same open id to another agent, or
 any id that is closed, is the in-place reassign/reopen transition.
 Completion may be authored by the assignee or assigner; it rejects a missing
 task. *Superseded (BA):* it rejects a completed task. *Superseded (BA):*

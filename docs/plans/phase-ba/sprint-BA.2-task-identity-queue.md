@@ -743,6 +743,8 @@ reports route to the sender of the current assignment message.
 
 Branch c (other-agent reassign) runs `acknowledge_superseded_assignment(row.assignment_message_id, now)` (reusing `mark_source_acknowledged`) before repointing the task; the prior assignment is closed before the new message becomes current.
 
+Branch b: `UPDATE tasks SET assignment_message_id = ?msg, description = ?desc, updated_at = ?now WHERE team = ?team AND task_id = ?id` — nothing else, no `task_events` row (design §3.1a: no transition, no event; DRIFT-062: close hygiene acks the current `assignment_message_id`).
+
 Branch b (same-agent resend) runs `acknowledge_superseded_assignment(prior_message_id, now)` (reuses `mark_source_acknowledged`) then one `UPDATE tasks SET assignment_message_id, description, updated_at` from the new message; it changes no state, queue, timestamp, counter, or event.
 
 `apply_task_close`: when the canonical row is already `complete`, the writer
@@ -850,6 +852,10 @@ Pure — `task_state.rs`:
 - `started_on_active_is_idempotent`, `assigned_on_complete_reopens_same_id`,
   `completed_on_complete_returns_already_closed_result` — the writer delivers
   ordinary mail and returns `SendOutcome.already_closed` without a task event.
+- `same_agent_resend_refreshes_message_link_without_event` — assign M1, ack M1,
+  same-agent resend M2 (new description), close → M2 is acknowledged by close
+  hygiene, description on the row is M2's, zero `assigned`/`reassigned` events
+  after the first, position/assigned_at/counters byte-equal to before the resend.
 - `task_row_json_keeps_scalar_state_and_adds_close_outcome` — a
   `Complete(Refused)` row serialises to `"state":"complete","close_outcome":"refused"`
   and no `position` key; an `Assigned` row to `"state":"assigned","position":2`

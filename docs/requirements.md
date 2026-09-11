@@ -2979,8 +2979,9 @@ Required rules:
 - acknowledgement is message hygiene only: `atm ack` MUST NOT read, gate on,
   or change task state, and task admission MUST NOT reject a message ack
 - every transition, rejection, and reminder is append-only audit data; a
-  same-agent resend of an open task id is idempotent and records no task
-  event (Phase BA design §3.1a); the durable tables and replay contract are
+  same-agent resend of an open task id records no task event and changes no task
+  state; it refreshes only the assignment message linkage (Phase BA design
+  §3.1a); the durable tables and replay contract are
   defined by ADR-062
 
 Task lifecycle (Phase BA):

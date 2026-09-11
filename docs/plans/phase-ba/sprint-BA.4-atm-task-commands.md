@@ -180,7 +180,7 @@ enum OutcomeArg { Completed, Refused, Cancelled }
 ```
 
 The `ArgGroup` makes zero targets and two targets both parse errors
-(FNX-BA-CRIT-016). `atm task` has no reassign or reopen verb: `assign <agent> --task-id <id>` is a same-agent no-op, reassigns an open row in place, or reopens a closed row in place. It preserves one row and appends `reassigned` or `reopened`; placement uses `MoveTarget` (`--before`/`--head`, default END).
+(FNX-BA-CRIT-016). `atm task` has no reassign or reopen verb: `assign <agent> --task-id <id>` is a same-agent resend (message link refreshed, no state change, no event), reassigns an open row in place, or reopens a closed row in place. It preserves one row and appends `reassigned` or `reopened`; placement uses `MoveTarget` (`--before`/`--head`, default END).
 Reassign, reopen, and resend of an existing id perform the same writer
 operation without a caller check; only close retains the develop assignee-or-
 assigner check.
@@ -276,7 +276,7 @@ pub enum ClosePreflight {
     Unknown,
 }
 
-pub async fn preflight_close(reader: &dyn AsyncTaskLedger, team: TeamName, task_id: &TaskId, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
+pub async fn preflight_close(reader: &dyn AsyncTaskLedgerReader, team: TeamName, task_id: &TaskId, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
 
 /// Who receives the mandatory report. A self-addressed send is invalid
 /// (`send/recipient.rs:13-31`, enforced in `write_context.rs:129`), so the
@@ -451,7 +451,7 @@ Assign — `crates/atm/tests/task_assign.rs`:
   --task-id` both: row `assigned`, message persisted with the deferred
   marker, **0 prompts** over 20 ticks; flip to `Idle` → 1 prompt, task
   `active`, receipt to assigner (FNX-BA-CRIT-010).
-- `assign_same_id_twice_is_idempotent_resend`.
+- `assign_same_id_twice_refreshes_link_without_event`.
 
 Move — `crates/atm/tests/task_move.rs`:
 
