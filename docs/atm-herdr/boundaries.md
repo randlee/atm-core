@@ -61,9 +61,8 @@ Rules:
   `atm-http-runtime`'s `HerdrQueueWakePump`, which only calls this
   crate's `list` and `prompt` methods (Rand's 2026-08-26 decision)
 - `atm-herdr` reports typed snapshots only; it neither owns nor mutates the
-  canonical ephemeral master-roster member state, creates idle opportunities,
-  reads `RuntimeHealth`, nor decides whether a returned state is eligible for
-  attention scheduling
+  canonical ephemeral master-roster member state, reads `RuntimeHealth`, nor
+  decides whether a returned state is eligible for a nudge
 - `atm-herdr` must not fall back to `agent send-keys`, `pane send-keys`,
   `pane send-input`, `tmux send-keys`, or any other raw-keystroke or
   terminal-automation delivery mechanism on any code path

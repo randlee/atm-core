@@ -1420,8 +1420,8 @@ Architectural rules:
 - runtime-sourced session, pid, state, availability, and timestamp enrichment may be layered
   on without changing the base local verification purpose of the command; the
   metadata is diagnostic and is never required for roster inspection to
-  succeed; only the canonical state owner—not this display projection—may
-  publish Phase AZ idle opportunities
+  succeed; the nudge path reads the canonical state owner, never this display
+  projection
 - this daemon-free fallback is the CLI-side half of the runtime-health
   observation boundary described in Section 21.6.3: `MembersCommand::run`
   renders the retained roster even when `runtime_snapshot` cannot obtain a
@@ -2910,6 +2910,12 @@ has no Python, and a Claude Code task list is a per-session harness artifact,
 not a cross-host record. The AC.6 deletion stands: ADR-062 is a fresh design,
 not a revival of deleted scaffolding.
 
+Phase-BA amendment (2026-09-11): the task ledger keys one row per
+`(team, task_id)`, enforces at most one `active` task per agent with a
+database unique index, and orders each agent's queue by
+`(position, assigned_at, task_id)` with `assigned_at` immutable; see
+requirements Sections 15.4 and 22.1.
+
 #### RosterStore
 
 Dispatch model:
@@ -3110,11 +3116,11 @@ Architectural rules:
   retain a second member map. Pre-cutover local activity metadata is tolerated
   for wire compatibility but does not mutate canonical state.
 - Session, pid, source, and timestamps never select routing, retry, admission,
-  delivery, or notification behavior. Under ADR-045's Phase AZ amendment, an
-  accepted `Idle` state revision may publish one attention opportunity; the
-  attention selector revalidates the same canonical state/revision before
-  emitting zero or one item.
-- A failed Herdr poll preserves prior state and creates no opportunity. A
+  delivery, or notification behavior. The nudge invariant (requirements
+  Section 15.4) is the only policy that reads runtime member state; it reads
+  the exact canonical `RuntimeMemberState`, never a `RuntimeHealth` or picker
+  projection.
+- A failed Herdr poll preserves prior state and triggers no nudge. A
   successful covered unknown/absent result becomes `Unknown`; only explicit
   heartbeat `SessionEnded` becomes `Offline`. Projection gaps never render
   `Dead`.

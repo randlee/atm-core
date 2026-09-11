@@ -4,7 +4,7 @@ This document is the authoritative contract for durable roster truth and the
 replacement Tokio/Axum runtime's canonical ephemeral agent state.
 
 > **Phase AJ implemented contract.** The rules and Rust shapes below describe
-> the AJ observation baseline as amended by issue #1378 and Phase AZ. ADR-045
+> the AJ observation baseline as amended by issue #1378. ADR-045
 > records the original evidence and the later canonical-state amendment.
 
 ## Ownership
@@ -123,14 +123,21 @@ synthesize durable membership.
   state to `Unknown` for a covered absent/unknown member without clearing that
   member's pid/session metadata.
 
-## Attention-policy exception
+## Nudge-policy exception
 
-Session ID, PID, source, and timestamps are diagnostic metadata only. State may
-drive exactly one policy: an accepted `Idle` observation revision publishes one
-`IdleOpportunityId` to the Phase AZ attention selector. The ingress handler
-does not query work or emit. The selector reserves zero or one item, then
-revalidates that the same canonical member record is still `Idle` at the same
-revision before emission. Replaying the same opportunity is idempotent.
+Session ID, PID, source, and timestamps are diagnostic metadata only. State
+may drive exactly one policy, the Phase BA nudge invariant:
+
+1. The nudge path MUST consume the exact canonical `RuntimeMemberState` from
+   this record; it MUST NOT consume `PickerMemberStatus`, a `RuntimeHealth`
+   projection, raw Herdr output, or heartbeat DTOs.
+2. `Idle` with an open task MUST be nudged, no more than once per 60 seconds
+   per task.
+3. `Active` MUST never be nudged or diverted.
+4. `Blocked` or `Offline` MUST escalate once per episode and MUST receive zero
+   nudges.
+5. Ingress handlers MUST update this record only and MUST NOT query work or
+   emit a nudge.
 
 No other routing, notification, retry, admission, delivery, access, or policy
 decision may inspect runtime state or its metadata. A future exception requires
@@ -160,15 +167,14 @@ of session ID followed by `…` when longer.
 - a successful poll writes all covered members, including `Unknown` for
   absent/unknown values; a failed poll preserves state and revision;
 - a failed poll changes only typed availability/attempt metadata and cannot
-  create an idle opportunity; a later accepted observation restores `Fresh`;
+  trigger a nudge; a later accepted observation restores `Fresh`;
 - a scoped Herdr poll applies as one batch rather than one roster clone per
   member;
 - `Unknown` and `Offline` remain distinct; only explicit heartbeat
   `SessionEnded` sets `Offline`;
 - state-edge timestamps update only on a real transition;
-- every accepted state observation advances the typed revision and an `Idle`
-  revision publishes exactly one idempotent opportunity;
-- scheduling revalidates canonical state/revision and never consumes raw Herdr
-  output or a `RuntimeHealth` projection;
+- every accepted state observation advances the typed revision;
+- the nudge path consumes the exact canonical `RuntimeMemberState` and never
+  raw Herdr output, a `RuntimeHealth` projection, or `PickerMemberStatus`;
 - raw JSON and shortened human roster projections have the documented shape;
 - a narrow source-use gate rejects observation references in policy modules.
