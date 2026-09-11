@@ -863,9 +863,7 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
 - `assign_same_agent_open_id_emits_no_event`.
 - `start_when_another_task_active_is_rejected_active_elsewhere` — the index;
   row stays `assigned`; one `rejected` event.
-- `start_moves_task_to_position_one_and_resets_counters` — A has T1(pos1,
-  reminder_count 7), T2(pos2); start T2 → T2 pos1 active, T1 pos2,
-  counters 0/0/NULL on T2, T1's counters untouched.
+- `start_moves_task_to_position_one_and_resets_counters_preserving_last_reminded_at` — A has T1(pos1, reminder_count 7), T2(pos2, `last_reminded_at = t_h` written by the emitted handoff audit); start T2 → T2 pos1 active, T1 pos2; T2 `reminder_count = 0`, `lead_notified_count = 0`, `last_reminded_at` byte-equal to `t_h` (never NULL — :695-699); T1's counters untouched.
 - `close_renumbers_remaining_queue_contiguously` — T1..T4; close T2 →
   positions 1,2,3 for T1,T3,T4; T2 `position IS NULL`, `close_outcome` set.
 - `close_each_outcome_persists_column_and_event` — 3 cases.
