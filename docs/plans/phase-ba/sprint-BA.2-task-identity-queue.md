@@ -419,7 +419,7 @@ impl WriteRequest {
         match (&self.task_id, &self.task_op, &self.task_complete) {
             (_, Some(op), _) => Ok((self.task_id.clone(), Some(op.clone()))),
             (Some(id), None, Some(legacy)) if id != legacy =>
-                Err(AtmError::validation("task_id and task_complete name different tasks")),
+                Err(AtmError::validation_with_recovery("task_id and task_complete name different tasks", "pass one task: `--task-id <id> --task-complete`, or the legacy `--task-complete <id>` alone")), // error.rs:377-382 (RBP-F001)
             (_, None, Some(legacy)) => Ok((Some(legacy.clone()),
                 Some(TaskOp::Close { outcome: TaskCloseOutcome::Completed, reason: None }))),
             (id, None, None) => Ok((id.clone(), None)),
@@ -595,6 +595,34 @@ SELECT team, task_id, assignee, assigner, state,
    untouched and the daemon fails to start with the error and the backup
    path in the message.
 
+**Rollback and the pre-BA binary (SCHEMA-SQLITE-ROLLBACK).** There is no
+`STORAGE_SCHEMA_VERSION` on `develop` (ADR-061 D1), so a pre-BA binary
+cannot refuse the migrated database; its exact behaviour is specified so a
+rollback is diagnosable rather than surprising:
+
+- open and every read succeed — `TASK_SCHEMA_DDL` is `CREATE TABLE IF NOT
+  EXISTS`, and every task query names its columns (`task_ops.rs`,
+  `task_store.rs`), so the new columns are ignored;
+- plain sends, reads and acks are unaffected (they never touch `tasks`);
+- the first task-bearing write fails inside the writer transaction with the
+  SQLite constraint the new DDL adds — `CHECK constraint failed: tasks`
+  (an assignment insert with no `position`) or `UNIQUE constraint failed:
+  tasks.team, tasks.task_id` (a second assignee row) — surfaced as the
+  existing storage write error; nothing is half-written;
+- the supported rollback is: stop the daemon, restore
+  `<db>.pre-ba2.<utc>.sqlite` (step 1), start the pre-BA binary. Task rows
+  created after the migration are lost with the restore; mail is not
+  (the backup is a point-in-time copy, so mail written after it must be
+  accepted as lost too — the operator is told this in the startup log line
+  that names the backup).
+
+This is the one-way, no-bridge default of plan §4 R0; the R0 approval and
+ADR-061 D3 exception record it. Test:
+`pre_ba_task_insert_against_migrated_schema_fails_with_check_constraint`
+(execute the exact `INSERT INTO tasks (...)` statement text from develop's
+`apply_task_assignment` against a migrated fixture; assert the constraint
+error; assert `mail_messages` untouched).
+
 **Replay rule** (ADR-062 "Replay" row, made exact; FNX-BA-CRIT-020): the
 one total order is `seq` under the new `PRIMARY KEY (team, task_id, seq)` —
 `at` is never used for ordering and ties in `at` are irrelevant. The state of
@@ -693,6 +721,10 @@ pub struct TaskCloseApplied {
     pub assignee: AgentName,
     pub outcome: TaskCloseOutcome,
     pub consecutive_refusals: u32,
+    /// `updated_at` of the oldest close in the trailing refused run (this
+    /// close's own `updated_at` when the run is 1). BA.3 bounds its mailbox
+    /// suppression check to it (RSH-001).
+    pub run_started_at: IsoTimestamp,
 }
 // carried on WriteOpResult / SendOutcome as `task_close: Option<TaskCloseApplied>`
 pub const TASK_CONSECUTIVE_REFUSAL_THRESHOLD: u32 = 3; // atm-storage/src/task_store.rs, next to TASK_STALLED_REMINDER_THRESHOLD (plan §4 R5)
@@ -732,7 +764,7 @@ task_id)`; `[ownership].io_forbidden` += `"task_body_dereference"`;
 
 ## Paths to delete
 
-- `apply_task_completion` (`task_ops.rs:295-371`) — replaced by `apply_task_close`
+- `apply_task_completion` (`task_ops.rs:295-364`) — replaced by `apply_task_close`
 - `load_open_task_rows` if still present after BA.1
 - every *read* of `task_complete` except `task_op_normalized()` (the field
   itself stays, decode-only — see "Wire"); the `task_complete` field on

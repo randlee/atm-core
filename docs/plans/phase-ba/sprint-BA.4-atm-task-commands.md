@@ -66,6 +66,8 @@ pub struct TaskCommand {
 }
 
 #[derive(Debug, Subcommand)]
+// Closed set: a Rust enum without `#[non_exhaustive]` is closed by
+// construction — five variants is a compile-time fact, no sealing needed (RBP-F003).
 enum TaskSubcommand {
     /// Queue view: the caller's open tasks in (position, assigned_at, task_id) order; --all for every member.
     List(TaskListCommand),

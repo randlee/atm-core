@@ -25,7 +25,7 @@ lives only on `integrate/phase-ba`.
 ## Deliverables
 
 - [ ] D1 — delete `apply_task_acknowledgement`
-  (`crates/atm-storage-rusqlite/src/writer/task_ops.rs:418-460`) and its
+  (`crates/atm-storage-rusqlite/src/writer/task_ops.rs:418-457`) and its
   call in `execute_acknowledgement` (`writer/ops.rs:516`); drop the import.
 - [ ] D2 — delete the ack-refusal branch of `admit()`
   (`crates/atm-storage/src/task_state.rs:139-148`, "task … is active;

@@ -38,7 +38,7 @@ reminded (FNX-BA-CRIT-017: no widening to "any open message").
 | D2 | `PendingNudgeStore` trait: `clear_pending_on_handoff` → `rearm_pending_after_handoff(member, msg, next_due)`; `clear_pending_on_read` removed (no production caller on develop: only `contract.rs:1674`, router `:1237` and `received_hook_selector.rs:978`, all `#[cfg(test)]`); doc comments state the due-at semantics | `crates/atm-storage/src/contract.rs:1290-1320` |
 | D3 | `nudge_dispatch::rearm_queue_marker_after_handoff` (renamed) computes `next_due = now + TASK_REMINDER_INTERVAL_MS`; every caller and the name-pinning boundary test renamed | `crates/atm-core/src/nudge_dispatch.rs:30`; callers `herdr_queue_wake.rs:754`, `queue_drain.rs:417`, `received_hook_selector.rs:617`; adapter `storage_and_nudge_router.rs:1240`; tests `boundary_enforcement.rs:566-623`, `nudge_mode.rs:132`, bootstrap `lib.rs:1385` |
 | D4 | `complete_successful_claim` calls D3; `HoldReason::MailPending` for a member the drain prompted this tick | `herdr_queue_wake.rs:739-770`, `herdr_task_disposition.rs` |
-| D5 | ADR-054 amendment sentence ("marker remains the first delivery attempt only") corrected to the due-at lifecycle | `docs/adr/ADR-054-…md` Phase-BA amendment |
+| D5 | Verify the committed ADR-054 Phase-BA amendment (`docs/adr/ADR-054-nudge-taxonomy-and-queue-mechanism.md:292-303`, already rewritten in this docs PR to the due-at lifecycle) still matches the shipped statements; edit only on drift (ATM-QA-002) | `docs/adr/ADR-054-…md` Phase-BA amendment |
 | D6 | tests named below | `pending_nudge_store.rs` tests, `tests/herdr_queue_ephemeral.rs` |
 
 ## Phase AZ code used
