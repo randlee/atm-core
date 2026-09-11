@@ -310,8 +310,9 @@ fn apply_task_completion(
         &typed_task_id,
         &record.envelope.from,
     )?;
-    let row =
-        row.ok_or_else(|| task_rejected("task completion admission found no existing task row"))?;
+    let Some(row) = row else {
+        unreachable!("task completion admission found no existing task row");
+    };
     let Transition(next_state) = next;
     let at = record.envelope.timestamp.to_string();
     connection.execute(

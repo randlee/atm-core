@@ -3726,6 +3726,61 @@ mod tests {
     }
 
     #[test]
+    fn close_of_never_acked_active_row_sets_acknowledged_at() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3-active-close-unacked".parse().expect("task id");
+        let assignment_id = AtmMessageId::new();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "active assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = "lead".parse().expect("assigner");
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        store.save_message(&assignment).expect("save assignment");
+
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+                        params![team().as_str(), task_id.as_str(), agent().as_str()],
+                    )
+                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                Ok(())
+            })
+            .expect("seed active task");
+
+        let mut completion = message("atm:active-close-unacked", "completed");
+        completion.envelope.from = "lead".parse().expect("assigner");
+        completion.envelope.task_complete = Some(task_id.clone());
+        store
+            .save_message(&completion)
+            .expect("complete active task");
+
+        let member = MemberKey::new(team(), agent());
+        assert_eq!(
+            tasks
+                .load_task(&member, &task_id)
+                .expect("load completed task")
+                .expect("task row")
+                .state,
+            TaskState::Complete
+        );
+        assert!(
+            store
+                .load_message(&assignment.message_key)
+                .expect("load assignment")
+                .expect("assignment row")
+                .envelope
+                .acknowledged_at
+                .is_some(),
+            "closing an active task acknowledges its assignment"
+        );
+    }
+
+    #[test]
     fn ack_of_assignment_when_another_task_is_active_succeeds() {
         struct ReplyBuilder {
             actor: AgentName,
