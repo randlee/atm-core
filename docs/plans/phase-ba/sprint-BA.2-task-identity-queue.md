@@ -786,7 +786,7 @@ and now returns rows ordered by `position`.
 `[contracts].notes` "state change" → `only TaskOp arms in writer/task_ops.rs
 change tasks.state; events Assigned/Started/Completed`; "replay" → `per (team,
 task_id)`; `[ownership].io_forbidden` += `"task_body_dereference"`;
-`[enforcement].review_gates` += `"no_task_state_write_outside_task_op"`,
+`[enforcement].review_gates` += `"no_task_state_write_outside_task_ops"`,
 `"assigned_at_immutable"`. `async-task-ledger-reader*.toml`: add
 `open_tasks_for_team` to the read surface. No new manifest.
 
@@ -976,3 +976,10 @@ as `pub(super)` for it).
 R11 addendum contract tests: reassigned_task_reminder_renders_current_assignment; reassigned_task_start_receipt_goes_to_current_assigner; reopened_task_close_report_goes_to_current_assigner; refusal_run_order_is_writer_application_order_not_timestamp.
 
 The same storage query is pinned by `ORDER BY rowid DESC LIMIT 1` for cross-task application order.
+
+Boundary clarification (FNX-BA-DRIFT-031): only `writer/task_ops.rs` writes
+`tasks.state`: `apply_task_assignment` handles initial/reassign/reopen,
+`apply_task_start` and `apply_task_close` handle their transitions;
+`apply_task_move` and `renumber_queue` never touch it. State-changing audit
+kinds are `assigned`, `reassigned`, `reopened`, `started`, `completed`,
+`refused`, `cancelled`, and `migrated`; `moved` is state-neutral.

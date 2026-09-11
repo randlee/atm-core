@@ -239,7 +239,7 @@ plan's approval is the written ruling those edits require:
   `(team, task_id)` row is retained for reassignment and reopen.
 - `[enforcement].review_gates` += `no_ack_task_coupling` (grep gate:
   `apply_task_acknowledgement` has no production caller),
-  `no_task_state_write_outside_task_op` (the only writers of `tasks.state` are
+  `no_task_state_write_outside_task_ops` (the only writers of `tasks.state` are
   the `TaskOp` arms in `writer/task_ops.rs`)
 - `[ownership].io_forbidden` += `task_body_dereference` (B4)
 - same edits mirrored in `boundaries/atm-storage-rusqlite/task-store-sqlite.toml`
@@ -324,3 +324,7 @@ call `escalate_blocked` (`herdr_queue_wake_reminders.rs:123-132`);
 12. `CLAUDE.md` and `docs/team-protocol.md` steer assignment to
     `atm task assign` / `atm send --task-id` and non-interrupting delivery to
     `atm queue`.
+
+The state-write boundary is module-owned: `writer/task_ops.rs` alone writes
+`tasks.state` through assignment, start, and close; move and renumber are
+state-neutral. The review gate is `no_task_state_write_outside_task_ops`.
