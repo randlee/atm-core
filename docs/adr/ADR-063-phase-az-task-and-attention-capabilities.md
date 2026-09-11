@@ -1,9 +1,19 @@
 # ADR-063 — Phase AZ Task And Attention Storage Capabilities
 
+> **Superseded:** Phase AZ was retired unmerged on 2026-09-11 and none of the
+> decisions below shipped. Phase BA replaces it
+> (`docs/plans/phase-ba/nudge-task-design.md`; normative task contract in
+> ADR-062, Phase BA amendment). Phase BA adds no sealed storage capability
+> trait, no attention scheduler, no v2 task tables, no
+> `STORAGE_SCHEMA_VERSION` 2.x, no `TaskOperationId`, no assignment attempts,
+> and no supersession. The ADR-061 D6 approval recorded here was withdrawn with
+> the phase. The body is retained as history only and is not authority for new
+> work.
+
 | Field | Value |
 | --- | --- |
 | ID | ADR-063 |
-| Status | Accepted — ADR-061 major change approved 2026-09-09 |
+| Status | **Superseded** — Phase AZ retired unmerged 2026-09-11; replaced by Phase BA (`docs/plans/phase-ba/nudge-task-design.md`) |
 | Scope | Phase AZ task lifecycle mutation, attention scheduling, and SQLite v2 coexistence |
 | Relates to | ADR-009, ADR-018, ADR-035, ADR-036, ADR-054, ADR-061, ADR-062, Phase AZ |
 
@@ -25,7 +35,7 @@ This ADR therefore recounts the live baseline rather than carrying the stale
 ordinal forward. ADR-061 separately requires explicit approval and coexistence
 for a major storage interface change.
 
-## Decision
+## Historical decision (retired unmerged)
 
 ### D1. Stable task domain and mutation owner
 

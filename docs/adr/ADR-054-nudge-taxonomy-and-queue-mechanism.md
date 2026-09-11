@@ -289,6 +289,19 @@ separate durable domain, while message-derived state transitions remain inside
 the existing backend writer transaction. This recounts the ADR-018 §3 cap from
 the six traits recorded above; it does not widen `MessageStore`.
 
+### Phase-BA amendment (2026-09-11)
+
+An `atm queue` item is a scheduling view over its message, not a task: no task
+row, no task state, no `task_events` entry. Its lifecycle is the message's own
+read and acknowledgement state: it is open while unread, or while unacknowledged
+when the message has `requires_ack`, and closed otherwise. The existing
+`PendingNudgeStore` marker (`nudge_pending_at`) is the item: it is read as
+"next prompt due at", re-armed to now + `TASK_REMINDER_INTERVAL_MS` after each
+successful handoff, and cleared when the item closes. Messages that never
+carried the marker (immediate sends) are never reminded. For an idle member
+the pending drain discharges queued messages before the task pass (ADR-062,
+Phase BA amendment). No column or mechanism is added.
+
 ## Rejected alternatives
 
 1. **Trait in `atm-core::boundary` (D1 option ii).** Rejected: forces

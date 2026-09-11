@@ -2,16 +2,16 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Accepted — amended by issue #1378 and Phase AZ |
+| Status | Accepted — amended by issue #1378 and Phase BA |
 | Scope | Phase AJ runtime observation; canonical roster-state amendment |
-| Relates to | `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`, ADR-014, ADR-015, ADR-063, issue #1378 |
+| Relates to | `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`, ADR-014, ADR-015, ADR-062, issue #1378 |
 
 ## Original Phase AJ decision
 
-The following records the implemented Phase AJ baseline. The issue #1378 and
-Phase AZ amendment below supersedes its owner, accepted state-ingress set, and
-blanket ban on state-based attention; all other attribution and trust-boundary
-clauses remain active.
+The following records the implemented Phase AJ baseline. The issue #1378
+amendment below supersedes its owner and accepted state-ingress set, and the
+Phase BA task-reminder exception narrows its blanket ban on state-based
+attention; all other attribution and trust-boundary clauses remain active.
 
 Session, pid, heartbeat activity, and derived agent state are in-memory,
 best-effort telemetry. They are forbidden inputs to routing, nudge,
@@ -68,7 +68,7 @@ session for its matching member. JSON retains raw values; human output omits
 default `Unknown` / absent-session telemetry and never uses display state to
 make a workflow decision.
 
-## Issue #1378 and Phase AZ amendment
+## Issue #1378 amendment
 
 The original default-deny policy remains, with one explicit exception and a
 corrected owner:
@@ -92,12 +92,14 @@ corrected owner:
    `Offline` remains exclusive to an explicit heartbeat `SessionEnded` event;
    no failed poll, timeout, absent snapshot, or projection gap may synthesize
    `Offline` or `Dead`.
-5. Phase AZ attention eligibility is the sole policy exception. An accepted
-   `Idle` observation revision publishes one `IdleOpportunityId`; only the
-   attention selector may reserve zero or one work item, and emission requires
-   revalidation of the same canonical state and revision. Poll/heartbeat
-   ingress never reads queues/tasks or emits directly. Either accepted source
-   may publish an opportunity; delivery-channel policy remains downstream.
+5. Task-reminder eligibility is the sole policy exception (ADR-062, Phase BA
+   amendment). The reminder path reads the exact canonical `RuntimeMemberState`
+   from the master roster: `Idle` is eligible, `Active` is never interrupted,
+   `Blocked` and `Offline` receive no reminder and are escalated. It must not
+   consume `PickerMemberStatus`, a `RuntimeHealth` projection, or raw Herdr
+   list results as its eligibility authority. Poll/heartbeat ingress never
+   reads queues/tasks or emits directly; delivery-channel policy remains
+   downstream.
 6. Session, pid, source, and freshness metadata remain forbidden policy inputs.
    Any additional state consumer still requires a requirement, ADR, boundary
    record, and regression test.

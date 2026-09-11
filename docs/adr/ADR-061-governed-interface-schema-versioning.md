@@ -116,20 +116,30 @@ migration functions directly.
   when absent, so 1.2.0 readers accept 1.1.0 payloads and older readers may
   ignore the new field. This is therefore a minor, backward-compatible bump.
 
-### D6. Phase AZ storage-schema approval record
+### D6. Storage-schema approval record
 
-- **2026-09-09 — Phase AZ:** Rand approved the planned
+- **2026-09-09 — Phase AZ (withdrawn):** Rand approved a planned
   `STORAGE_SCHEMA_VERSION = 2.0.0` task-domain migration as an ADR-061 major
-  change. ATM `1.6.0` introduces canonical v2 storage and the bidirectional v1
-  compatibility bridge. Every `1.6.x` release retains that bridge. ATM `1.7.0`
-  is the planned removal target and the earliest permitted removal release;
-  removal remains a separate ADR-061 major change requiring its own approval.
-- During the `1.6.x` coexistence window, retained ATM `1.5.14` must be able to
-  open and read the migrated database and make its supported
-  assign/acknowledge/complete writes without a crash or compatibility
-  rejection. The bridge may reconcile those writes to authoritative v2
-  constraints, including deterministic active-conflict demotion; exact v1
-  state semantics are not part of the rollback guarantee.
+  change (ATM `1.6.0` canonical v2 tables with a v1 bridge through `1.6.x`;
+  `1.7.0` earliest bridge removal).
+- **2026-09-11 — withdrawal:** Phase AZ was retired unmerged and that approval
+  was withdrawn with it. Nothing under it shipped. Phase BA's storage major
+  change is approved in the next entry. Phase BA
+  (`docs/plans/phase-ba/nudge-task-design.md`,
+  ADR-062 Phase BA amendment) changes the `tasks` table in place and is
+  classified under D2 and gated under D3 on its own record; ADR-063 is
+  superseded and is not approval for any storage change.
+- **2026-09-11 — Phase BA (approved):** On 2026-09-11, Rand approved Phase
+  BA's SQLite MAJOR change — `PRIMARY KEY (team, task_id)` on `tasks` and
+  `(team, task_id, seq)` on `task_events`, the `position` / `close_outcome`
+  columns and their `CHECK`s — as one-way with no compatibility bridge, with a
+  D3 exception: daemon and CLI are one install and
+  always switch together via `/daemon-switch`; rollback is restoring the
+  `VACUUM INTO` backup the
+  migration writes; a pre-BA binary against the migrated database operates
+  read-only-safe: reads and ordinary mail work, legacy task-bearing acks still
+  run the old transition, assignment writes fail on the new constraints (BA.2
+  'Rollback and the pre-BA binary'). Recorded on PR #1398.
 
 ## Consequences
 
