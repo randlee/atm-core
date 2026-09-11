@@ -9,7 +9,7 @@ use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 use crate::task_store::ReminderOutcome;
 
-/// One-based queue position; zero is not representable.
+/// 1-based queue place; the active task, when one exists, holds 1.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
 pub struct QueuePosition(NonZeroU32);
@@ -25,7 +25,7 @@ impl QueuePosition {
     }
     #[must_use]
     pub fn next(self) -> Self {
-        Self(NonZeroU32::new(self.0.get().saturating_add(1)).unwrap_or(self.0))
+        Self(self.0.saturating_add(1))
     }
 }
 
@@ -48,28 +48,22 @@ impl TaskCloseOutcome {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum TaskStateTag {
-    Assigned,
-    Active,
-    Complete,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct RefusalRun {
-    pub count: u32,
-    pub started_at: Option<IsoTimestamp>,
-}
-
 /// The reserved sender identity used by daemon-originated task events.
 pub const DAEMON_ACTOR_NAME: &str = "atm-daemon";
 
-const RECOVERY: &str = "Run: atm list --task-events <task_id> --member <assignee>";
+/// Open state and a terminal outcome are unrepresentable together. JSON goes
+/// through `TaskRowWire` / `TaskEventRowWire` (scalar `state` + `close_outcome`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskState {
+    Assigned,
+    Active,
+    Complete(TaskCloseOutcome),
+}
 
+/// The scalar `state` value as it appears in JSON and in the columns.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskState {
+pub enum TaskStateTag {
     Assigned,
     Active,
     Complete,
@@ -81,17 +75,51 @@ impl TaskState {
         match self {
             Self::Assigned => "assigned",
             Self::Active => "active",
-            Self::Complete => "complete",
+            Self::Complete(_) => "complete",
+        }
+    }
+    #[must_use]
+    pub const fn is_open(self) -> bool {
+        !matches!(self, Self::Complete(_))
+    }
+    #[must_use]
+    pub const fn tag(self) -> TaskStateTag {
+        match self {
+            Self::Assigned => TaskStateTag::Assigned,
+            Self::Active => TaskStateTag::Active,
+            Self::Complete(_) => TaskStateTag::Complete,
+        }
+    }
+    #[must_use]
+    pub const fn close_outcome(self) -> Option<TaskCloseOutcome> {
+        match self {
+            Self::Complete(outcome) => Some(outcome),
+            _ => None,
+        }
+    }
+    /// Column/wire → typestate. `complete` requires an outcome and open
+    /// states forbid one; the DDL `CHECK` enforces the same on disk.
+    pub fn from_parts(
+        tag: TaskStateTag,
+        close_outcome: Option<TaskCloseOutcome>,
+    ) -> Result<Self, AtmError> {
+        match (tag, close_outcome) {
+            (TaskStateTag::Assigned, None) => Ok(Self::Assigned),
+            (TaskStateTag::Active, None) => Ok(Self::Active),
+            (TaskStateTag::Complete, Some(outcome)) => Ok(Self::Complete(outcome)),
+            (TaskStateTag::Complete, None) => {
+                Err(AtmError::validation("complete task without close_outcome"))
+            }
+            (_, Some(_)) => Err(AtmError::validation("open task with close_outcome")),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskEvent {
     Assigned,
     Started,
-    Completed,
+    Completed(TaskCloseOutcome),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -101,7 +129,8 @@ pub enum TaskActor {
     Daemon,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "TaskRowWire", into = "TaskRowWire")]
 pub struct TaskRow {
     pub team: TeamName,
     pub task_id: TaskId,
@@ -118,6 +147,80 @@ pub struct TaskRow {
     pub lead_notified_count: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TaskRowWire {
+    team: TeamName,
+    task_id: TaskId,
+    assignee: AgentName,
+    assigner: AgentName,
+    state: TaskStateTag,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    close_outcome: Option<TaskCloseOutcome>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    position: Option<QueuePosition>,
+    assignment_message_id: AtmMessageId,
+    description: String,
+    assigned_at: IsoTimestamp,
+    updated_at: IsoTimestamp,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_reminded_at: Option<IsoTimestamp>,
+    reminder_count: u32,
+    lead_notified_count: u32,
+}
+
+impl TryFrom<TaskRowWire> for TaskRow {
+    type Error = AtmError;
+
+    fn try_from(wire: TaskRowWire) -> Result<Self, Self::Error> {
+        let close_outcome = if wire.state == TaskStateTag::Complete && wire.close_outcome.is_none()
+        {
+            Some(TaskCloseOutcome::Completed)
+        } else {
+            wire.close_outcome
+        };
+        let state = TaskState::from_parts(wire.state, close_outcome)?;
+        if !state.is_open() && wire.position.is_some() {
+            return Err(AtmError::validation("complete task with queue position"));
+        }
+        Ok(Self {
+            team: wire.team,
+            task_id: wire.task_id,
+            assignee: wire.assignee,
+            assigner: wire.assigner,
+            state,
+            position: wire.position,
+            assignment_message_id: wire.assignment_message_id,
+            description: wire.description,
+            assigned_at: wire.assigned_at,
+            updated_at: wire.updated_at,
+            last_reminded_at: wire.last_reminded_at,
+            reminder_count: wire.reminder_count,
+            lead_notified_count: wire.lead_notified_count,
+        })
+    }
+}
+
+impl From<TaskRow> for TaskRowWire {
+    fn from(row: TaskRow) -> Self {
+        Self {
+            team: row.team,
+            task_id: row.task_id,
+            assignee: row.assignee,
+            assigner: row.assigner,
+            state: row.state.tag(),
+            close_outcome: row.state.close_outcome(),
+            position: row.position,
+            assignment_message_id: row.assignment_message_id,
+            description: row.description,
+            assigned_at: row.assigned_at,
+            updated_at: row.updated_at,
+            last_reminded_at: row.last_reminded_at,
+            reminder_count: row.reminder_count,
+            lead_notified_count: row.lead_notified_count,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskRejected {
     pub detail: String,
@@ -126,7 +229,7 @@ pub struct TaskRejected {
 impl TaskRejected {
     fn new(detail: impl Into<String>) -> Self {
         Self {
-            detail: format!("{}; {RECOVERY}", detail.into()),
+            detail: detail.into(),
         }
     }
 
@@ -144,24 +247,31 @@ pub fn transition(
     event: TaskEvent,
     task_id: &TaskId,
     actor: &AgentName,
+    current_assignee: Option<&AgentName>,
+    requested_assignee: &AgentName,
 ) -> Result<Transition, TaskRejected> {
+    use TaskEvent as E;
+    use TaskState as S;
     match (state, event) {
-        (None, TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
-        (None, TaskEvent::Started | TaskEvent::Completed) => Err(TaskRejected::new(format!(
+        (None, E::Assigned) => Ok(Transition(S::Assigned)),
+        (None, E::Started | E::Completed(_)) => Err(TaskRejected::new(format!(
             "no open task {task_id} for {actor}"
         ))),
-        (Some(TaskState::Assigned), TaskEvent::Assigned) => Ok(Transition(TaskState::Assigned)),
-        (Some(TaskState::Assigned), TaskEvent::Started) => Ok(Transition(TaskState::Active)),
-        (Some(TaskState::Assigned), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
-        (Some(TaskState::Active), TaskEvent::Assigned) => Ok(Transition(TaskState::Active)),
-        (Some(TaskState::Active), TaskEvent::Started) => Ok(Transition(TaskState::Active)),
-        (Some(TaskState::Active), TaskEvent::Completed) => Ok(Transition(TaskState::Complete)),
-        (
-            Some(TaskState::Complete),
-            TaskEvent::Assigned | TaskEvent::Started | TaskEvent::Completed,
-        ) => Err(TaskRejected::new(format!(
-            "task {task_id} is already complete"
-        ))),
+        (Some(S::Assigned), E::Assigned) if current_assignee == Some(requested_assignee) => {
+            Ok(Transition(S::Assigned))
+        }
+        (Some(S::Active), E::Assigned) if current_assignee == Some(requested_assignee) => {
+            Ok(Transition(S::Active))
+        }
+        (Some(S::Assigned | S::Active), E::Assigned) => Ok(Transition(S::Assigned)),
+        (Some(S::Complete(_)), E::Assigned) => Ok(Transition(S::Assigned)),
+        (Some(S::Assigned | S::Active), E::Started) => Ok(Transition(S::Active)),
+        (Some(S::Assigned | S::Active), E::Completed(outcome)) => {
+            Ok(Transition(S::Complete(outcome)))
+        }
+        (Some(S::Complete(_)), E::Started | E::Completed(_)) => {
+            unreachable!("complete-row start/close is handled by the writer before transition()")
+        }
     }
 }
 
@@ -173,11 +283,16 @@ pub fn admit(
     actor: &AgentName,
 ) -> Result<(), TaskRejected> {
     match (row, event) {
-        (None, TaskEvent::Completed) => Err(TaskRejected::new(format!(
+        (None, TaskEvent::Completed(_)) => Err(TaskRejected::new(format!(
             "no open task {task_id} for {actor}"
         ))),
         (None, TaskEvent::Assigned) => Ok(()),
-        (Some(row), TaskEvent::Completed) if actor != &row.assignee && actor != &row.assigner => {
+        (None, TaskEvent::Started) => Err(TaskRejected::new(format!(
+            "no open task {task_id} for {actor}"
+        ))),
+        (Some(row), TaskEvent::Completed(_))
+            if actor != &row.assignee && actor != &row.assigner =>
+        {
             Err(TaskRejected::new(format!(
                 "task {} is not assigned to or by {actor}",
                 row.task_id
@@ -192,10 +307,17 @@ pub fn admit(
 pub enum TaskEventKind {
     Assigned,
     Acked,
+    Started,
     Completed,
+    Refused,
+    Cancelled,
+    Reassigned,
+    Reopened,
     Rejected,
     Reminded,
     LeadNotified,
+    Moved,
+    Migrated,
 }
 
 impl TaskEventKind {
@@ -204,10 +326,17 @@ impl TaskEventKind {
         match self {
             Self::Assigned => "assigned",
             Self::Acked => "acked",
+            Self::Started => "started",
             Self::Completed => "completed",
+            Self::Refused => "refused",
+            Self::Cancelled => "cancelled",
+            Self::Reassigned => "reassigned",
+            Self::Reopened => "reopened",
             Self::Rejected => "rejected",
             Self::Reminded => "reminded",
             Self::LeadNotified => "lead_notified",
+            Self::Moved => "moved",
+            Self::Migrated => "migrated",
         }
     }
 }
@@ -229,7 +358,8 @@ impl TaskEventMarker {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "TaskEventRowWire", into = "TaskEventRowWire")]
 pub struct TaskEventRow {
     pub team: TeamName,
     pub task_id: TaskId,
@@ -244,6 +374,105 @@ pub struct TaskEventRow {
     pub outcome: Option<ReminderOutcome>,
     pub marker: Option<TaskEventMarker>,
     pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TaskEventRowWire {
+    team: TeamName,
+    task_id: TaskId,
+    assignee: AgentName,
+    seq: u64,
+    at: IsoTimestamp,
+    event: TaskEventKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    from_state: Option<TaskStateTag>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    to_state: Option<TaskStateTag>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    close_outcome: Option<TaskCloseOutcome>,
+    actor: TaskActor,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    message_id: Option<AtmMessageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    outcome: Option<ReminderOutcome>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    marker: Option<TaskEventMarker>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+}
+
+impl TryFrom<TaskEventRowWire> for TaskEventRow {
+    type Error = AtmError;
+
+    fn try_from(wire: TaskEventRowWire) -> Result<Self, Self::Error> {
+        let outcome_for = |tag: TaskStateTag| {
+            if tag == TaskStateTag::Complete {
+                Some(wire.close_outcome.unwrap_or(TaskCloseOutcome::Completed))
+            } else {
+                None
+            }
+        };
+        if wire.close_outcome.is_some()
+            && wire.from_state != Some(TaskStateTag::Complete)
+            && wire.to_state != Some(TaskStateTag::Complete)
+        {
+            return Err(AtmError::validation(
+                "task event close_outcome without complete state",
+            ));
+        }
+        Ok(Self {
+            team: wire.team,
+            task_id: wire.task_id,
+            assignee: wire.assignee,
+            seq: wire.seq,
+            at: wire.at,
+            event: wire.event,
+            from_state: wire
+                .from_state
+                .map(|tag| TaskState::from_parts(tag, outcome_for(tag)))
+                .transpose()?,
+            to_state: wire
+                .to_state
+                .map(|tag| TaskState::from_parts(tag, outcome_for(tag)))
+                .transpose()?,
+            actor: wire.actor,
+            message_id: wire.message_id,
+            outcome: wire.outcome,
+            marker: wire.marker,
+            detail: wire.detail,
+        })
+    }
+}
+
+impl From<TaskEventRow> for TaskEventRowWire {
+    fn from(row: TaskEventRow) -> Self {
+        let close_outcome = row
+            .to_state
+            .and_then(TaskState::close_outcome)
+            .or_else(|| row.from_state.and_then(TaskState::close_outcome));
+        Self {
+            team: row.team,
+            task_id: row.task_id,
+            assignee: row.assignee,
+            seq: row.seq,
+            at: row.at,
+            event: row.event,
+            from_state: row.from_state.map(TaskState::tag),
+            to_state: row.to_state.map(TaskState::tag),
+            close_outcome,
+            actor: row.actor,
+            message_id: row.message_id,
+            outcome: row.outcome,
+            marker: row.marker,
+            detail: row.detail,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RefusalRun {
+    pub count: u32,
+    pub started_at: Option<IsoTimestamp>,
 }
 
 #[cfg(test)]

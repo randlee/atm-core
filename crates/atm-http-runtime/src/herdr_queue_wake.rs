@@ -853,7 +853,7 @@ struct TaskCandidate {
 }
 
 fn select_open_task(mut rows: Vec<TaskRow>) -> Option<TaskRow> {
-    rows.retain(|row| row.state != TaskState::Complete);
+    rows.retain(|row| row.state.is_open());
     rows.sort_by(|left, right| {
         left.assigned_at
             .cmp(&right.assigned_at)

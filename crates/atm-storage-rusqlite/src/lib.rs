@@ -33,6 +33,7 @@ mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod shared_db_support;
 mod task_ledger_reader;
+mod task_migration;
 mod task_sql;
 mod task_store;
 mod team_roster_schema;

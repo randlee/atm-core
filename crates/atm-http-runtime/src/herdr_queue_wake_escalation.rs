@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use atm_core::boundary::{
     AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventKind, TaskEventRow,
-    TaskRow, TaskState,
+    TaskRow,
 };
 use atm_core::types::IsoTimestamp;
 
@@ -251,10 +251,7 @@ async fn blocked_tasks(
         )
         .await
     {
-        Ok(rows) => rows
-            .into_iter()
-            .filter(|row| row.state != TaskState::Complete)
-            .collect(),
+        Ok(rows) => rows.into_iter().filter(|row| row.state.is_open()).collect(),
         Err(error) => {
             tracing::warn!(
                 subsystem = "herdr_queue_wake",

@@ -46,8 +46,15 @@ fn transition_for(
     actor: &AgentName,
 ) -> Result<Transition, AtmError> {
     admit(row, event, task_id, actor).map_err(|error| error.into_atm_error())?;
-    transition(row.map(|task| task.state), event, task_id, actor)
-        .map_err(|error| error.into_atm_error())
+    transition(
+        row.map(|task| task.state),
+        event,
+        task_id,
+        actor,
+        row.map(|task| &task.assignee),
+        row.map_or(actor, |task| &task.assignee),
+    )
+    .map_err(|error| error.into_atm_error())
 }
 
 /// Writes the durable rejection audit after the failed operation's savepoint
@@ -273,7 +280,7 @@ const fn state_name(state: TaskState) -> &'static str {
     match state {
         TaskState::Assigned => "assigned",
         TaskState::Active => "active",
-        TaskState::Complete => "complete",
+        TaskState::Complete(_) => "complete",
     }
 }
 
@@ -306,7 +313,7 @@ fn apply_task_completion(
     };
     let next = transition_for(
         row.as_ref(),
-        TaskEvent::Completed,
+        TaskEvent::Completed(atm_storage::TaskCloseOutcome::Completed),
         &typed_task_id,
         &record.envelope.from,
     )?;
@@ -359,7 +366,7 @@ fn acknowledge_completed_assignment(
     assignee: &str,
     state: TaskState,
 ) -> Result<Option<&'static str>, AtmError> {
-    if state == TaskState::Complete {
+    if matches!(state, TaskState::Complete(_)) {
         return Ok(None);
     }
     let message_key: Option<String> = connection
