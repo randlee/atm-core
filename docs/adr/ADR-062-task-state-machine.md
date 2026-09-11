@@ -32,8 +32,11 @@ transition table is:
 *Superseded (BA):* Only local message admission applies
 assignment/completion, and only the acknowledgement writer operation applies
 acknowledgement. Peer-originated receipts are stored with
-`MessageWriteOrigin::Peer` and never transition the ledger. A local resend
-refreshes the assignment message id and description but does not change state.
+`MessageWriteOrigin::Peer` and never transition the ledger. A local same-agent
+resend of an open id is idempotent under Phase BA: no state change, no task
+event, no row change (design §3.1a; the pre-BA refresh of message id and
+description is superseded). Assigning the same open id to another agent, or
+any id that is closed, is the in-place reassign/reopen transition.
 Completion may be authored by the assignee or assigner; it rejects a missing
 task. *Superseded (BA):* it rejects a completed task. *Superseded (BA):*
 Acknowledging an assigned task rejects when another task is active for that
@@ -117,8 +120,8 @@ States: `assigned`, `active`, `complete`. Events: `Assigned`, `Started`,
 | Current | Assigned | Started | Completed(outcome) |
 | --- | --- | --- | --- |
 | ∅ | assigned | reject | reject |
-| assigned | assigned (resend) | active; reject when another task is active for the assignee | complete |
-| active | active (resend) | active | complete |
+| assigned | assigned (resend) — no event | active; reject when another task is active for the assignee | complete |
+| active | active (resend) — no event | active | complete |
 | complete | assign reopens the same id | reject | no transition; deliver and inform already complete |
 
 `Started` notifies the assigner. `Completed(outcome)` dequeues the task (no
