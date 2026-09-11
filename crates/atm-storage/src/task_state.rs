@@ -1,6 +1,6 @@
 //! Backend-neutral task ledger types and the pure task state machine.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::num::NonZeroU32;
 
 use crate::error::AtmError;
@@ -129,8 +129,8 @@ pub enum TaskActor {
     Daemon,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "TaskRowWire", into = "TaskRowWire")]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "TaskRowWire")]
 pub struct TaskRow {
     pub team: TeamName,
     pub task_id: TaskId,
@@ -200,24 +200,28 @@ impl TryFrom<TaskRowWire> for TaskRow {
     }
 }
 
-impl From<TaskRow> for TaskRowWire {
-    fn from(row: TaskRow) -> Self {
-        Self {
-            team: row.team,
-            task_id: row.task_id,
-            assignee: row.assignee,
-            assigner: row.assigner,
-            state: row.state.tag(),
-            close_outcome: row.state.close_outcome(),
-            position: row.position,
-            assignment_message_id: row.assignment_message_id,
-            description: row.description,
-            assigned_at: row.assigned_at,
-            updated_at: row.updated_at,
-            last_reminded_at: row.last_reminded_at,
-            reminder_count: row.reminder_count,
-            lead_notified_count: row.lead_notified_count,
+impl Serialize for TaskRow {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        TaskRowWire {
+            team: self.team.clone(),
+            task_id: self.task_id.clone(),
+            assignee: self.assignee.clone(),
+            assigner: self.assigner.clone(),
+            state: self.state.tag(),
+            close_outcome: self.state.close_outcome(),
+            position: self.position,
+            assignment_message_id: self.assignment_message_id,
+            description: self.description.clone(),
+            assigned_at: self.assigned_at,
+            updated_at: self.updated_at,
+            last_reminded_at: self.last_reminded_at,
+            reminder_count: self.reminder_count,
+            lead_notified_count: self.lead_notified_count,
         }
+        .serialize(serializer)
     }
 }
 
@@ -358,8 +362,8 @@ impl TaskEventMarker {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "TaskEventRowWire", into = "TaskEventRowWire")]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "TaskEventRowWire")]
 pub struct TaskEventRow {
     pub team: TeamName,
     pub task_id: TaskId,
@@ -454,28 +458,32 @@ impl TryFrom<TaskEventRowWire> for TaskEventRow {
     }
 }
 
-impl From<TaskEventRow> for TaskEventRowWire {
-    fn from(row: TaskEventRow) -> Self {
-        let close_outcome = row
+impl Serialize for TaskEventRow {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let close_outcome = self
             .to_state
             .and_then(TaskState::close_outcome)
-            .or_else(|| row.from_state.and_then(TaskState::close_outcome));
-        Self {
-            team: row.team,
-            task_id: row.task_id,
-            assignee: row.assignee,
-            seq: row.seq,
-            at: row.at,
-            event: row.event,
-            from_state: row.from_state.map(TaskState::tag),
-            to_state: row.to_state.map(TaskState::tag),
+            .or_else(|| self.from_state.and_then(TaskState::close_outcome));
+        TaskEventRowWire {
+            team: self.team.clone(),
+            task_id: self.task_id.clone(),
+            assignee: self.assignee.clone(),
+            seq: self.seq,
+            at: self.at,
+            event: self.event,
+            from_state: self.from_state.map(TaskState::tag),
+            to_state: self.to_state.map(TaskState::tag),
             close_outcome,
-            actor: row.actor,
-            message_id: row.message_id,
-            outcome: row.outcome,
-            marker: row.marker,
-            detail: row.detail,
+            actor: self.actor.clone(),
+            message_id: self.message_id,
+            outcome: self.outcome,
+            marker: self.marker,
+            detail: self.detail.clone(),
         }
+        .serialize(serializer)
     }
 }
 

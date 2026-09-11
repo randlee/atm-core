@@ -153,48 +153,22 @@ fn apply_task_assignment(
         .message_id
         .ok_or_else(|| task_rejected("task assignment is missing message id"))?;
 
-    if let Some(row) = row.as_ref()
-        && row.state.is_open()
-        && row.assignee == record.agent
-    {
-        acknowledge_assignment(connection, cache, target, record, row)?;
-        connection
-            .execute(
-                "UPDATE tasks SET assignment_message_id=?3, description=?4, updated_at=?5
-                 WHERE team=?1 AND task_id=?2",
-                params![
-                    record.team.as_str(),
-                    task_id.as_str(),
-                    message_id.to_string(),
-                    record.envelope.text,
-                    at.to_string()
-                ],
-            )
-            .map_err(|error| sqlite_error(target, "failed to refresh task assignment", error))?;
+    if refresh_same_assignment(
+        record,
+        task_id,
+        row.as_ref(),
+        message_id,
+        connection,
+        cache,
+        target,
+    )? {
         return Ok(());
     }
 
     let was_closed = row
         .as_ref()
         .is_some_and(|row| matches!(row.state, TaskState::Complete(_)));
-    if let Some(row) = row.as_ref().filter(|row| row.state.is_open()) {
-        acknowledge_assignment(connection, cache, target, record, row)?;
-        let old_order = queue_order(connection, target, &record.team, &row.assignee)?
-            .into_iter()
-            .filter(|id| id != task_id)
-            .collect::<Vec<_>>();
-        connection
-            .execute(
-                "UPDATE tasks SET position=position+?3 WHERE team=?1 AND assignee=?2 AND state<>'complete'",
-                params![
-                    record.team.as_str(),
-                    row.assignee.as_str(),
-                    old_order.len() + 1
-                ],
-            )
-            .map_err(|error| sqlite_error(target, "failed to release old task position", error))?;
-        write_queue_positions(&record.team, &old_order, connection, target)?;
-    }
+    release_previous_assignment(record, task_id, row.as_ref(), connection, cache, target)?;
 
     let mut order = queue_order(connection, target, &record.team, &record.agent)?;
     order.retain(|id| id != task_id);
@@ -209,14 +183,109 @@ fn apply_task_assignment(
     )?;
     let temporary =
         u32::try_from(order.len()).map_err(|_| task_rejected("task queue too large"))?;
+    apply_task_assignment_row(
+        record,
+        task_id,
+        row.as_ref(),
+        temporary,
+        message_id,
+        at,
+        connection,
+        target,
+    )?;
+    renumber_previous_assignment(record, row.as_ref(), connection, target)?;
+    renumber_queue(&record.team, &record.agent, &order, connection, target)?;
+    append_assignment_event(
+        record,
+        task_id,
+        row.as_ref(),
+        was_closed,
+        message_id,
+        at,
+        connection,
+        target,
+    )
+}
 
+#[allow(clippy::too_many_arguments)]
+fn refresh_same_assignment(
+    record: &Message,
+    task_id: &TaskId,
+    row: Option<&TaskRow>,
+    message_id: AtmMessageId,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<bool, AtmError> {
+    let Some(row) = row.filter(|row| row.state.is_open() && row.assignee == record.agent) else {
+        return Ok(false);
+    };
+    acknowledge_assignment(connection, cache, target, record, row)?;
+    connection
+        .execute(
+            "UPDATE tasks SET assignment_message_id=?3, description=?4, updated_at=?5
+             WHERE team=?1 AND task_id=?2",
+            params![
+                record.team.as_str(),
+                task_id.as_str(),
+                message_id.to_string(),
+                record.envelope.text,
+                record.envelope.timestamp.to_string()
+            ],
+        )
+        .map_err(|error| sqlite_error(target, "failed to refresh task assignment", error))?;
+    Ok(true)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn release_previous_assignment(
+    record: &Message,
+    task_id: &TaskId,
+    row: Option<&TaskRow>,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let Some(row) = row.filter(|row| row.state.is_open()) else {
+        return Ok(());
+    };
+    acknowledge_assignment(connection, cache, target, record, row)?;
+    let old_order = queue_order(connection, target, &record.team, &row.assignee)?
+        .into_iter()
+        .filter(|id| id != task_id)
+        .collect::<Vec<_>>();
+    connection
+        .execute(
+            "UPDATE tasks SET position=position+?3
+             WHERE team=?1 AND assignee=?2 AND state<>'complete'",
+            params![
+                record.team.as_str(),
+                row.assignee.as_str(),
+                old_order.len() + 1
+            ],
+        )
+        .map_err(|error| sqlite_error(target, "failed to release old task position", error))?;
+    write_queue_positions(&record.team, &old_order, connection, target)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_task_assignment_row(
+    record: &Message,
+    task_id: &TaskId,
+    row: Option<&TaskRow>,
+    temporary: u32,
+    message_id: AtmMessageId,
+    at: IsoTimestamp,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     if row.is_some() {
         connection
             .execute(
                 "UPDATE tasks SET assignee=?3, assigner=?4, state='assigned', close_outcome=NULL,
                  position=?5, assignment_message_id=?6, description=?7, assigned_at=?8,
                  updated_at=?8, last_reminded_at=NULL, reminder_count=0, lead_notified_count=0
-             WHERE team=?1 AND task_id=?2",
+                 WHERE team=?1 AND task_id=?2",
                 params![
                     record.team.as_str(),
                     task_id.as_str(),
@@ -229,22 +298,53 @@ fn apply_task_assignment(
                 ],
             )
             .map_err(|error| sqlite_error(target, "failed to reassign task", error))?;
-        if let Some(old) = row.as_ref().filter(|old| old.state.is_open()) {
-            let old_order = queue_order(connection, target, &record.team, &old.assignee)?;
-            renumber_queue(&record.team, &old.assignee, &old_order, connection, target)?;
-        }
     } else {
-        connection.execute(
-            "INSERT INTO tasks(team, task_id, assignee, assigner, state, close_outcome, position,
+        connection
+            .execute(
+                "INSERT INTO tasks(team, task_id, assignee, assigner, state, close_outcome, position,
                  assignment_message_id, description, assigned_at, updated_at,
                  last_reminded_at, reminder_count, lead_notified_count)
-             VALUES (?1,?2,?3,?4,'assigned',NULL,?5,?6,?7,?8,?8,NULL,0,0)",
-            params![record.team.as_str(), task_id.as_str(), record.agent.as_str(),
-                record.envelope.from.as_str(), temporary, message_id.to_string(),
-                record.envelope.text, at.to_string()],
-        ).map_err(|error| sqlite_error(target, "failed to insert task assignment", error))?;
+                 VALUES (?1,?2,?3,?4,'assigned',NULL,?5,?6,?7,?8,?8,NULL,0,0)",
+                params![
+                    record.team.as_str(),
+                    task_id.as_str(),
+                    record.agent.as_str(),
+                    record.envelope.from.as_str(),
+                    temporary,
+                    message_id.to_string(),
+                    record.envelope.text,
+                    at.to_string()
+                ],
+            )
+            .map_err(|error| sqlite_error(target, "failed to insert task assignment", error))?;
     }
-    renumber_queue(&record.team, &record.agent, &order, connection, target)?;
+    Ok(())
+}
+
+fn renumber_previous_assignment(
+    record: &Message,
+    row: Option<&TaskRow>,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let Some(old) = row.filter(|old| old.state.is_open()) else {
+        return Ok(());
+    };
+    let old_order = queue_order(connection, target, &record.team, &old.assignee)?;
+    renumber_queue(&record.team, &old.assignee, &old_order, connection, target)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_assignment_event(
+    record: &Message,
+    task_id: &TaskId,
+    row: Option<&TaskRow>,
+    was_closed: bool,
+    message_id: AtmMessageId,
+    at: IsoTimestamp,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     let event = if was_closed {
         "reopened"
     } else if row.is_some() {
@@ -260,9 +360,9 @@ fn apply_task_assignment(
         &record.agent,
         &at,
         event,
-        row.as_ref().map(|row| row.state.as_str()),
+        row.map(|row| row.state.as_str()),
         Some("assigned"),
-        row.as_ref().and_then(|row| row.state.close_outcome()),
+        row.and_then(|row| row.state.close_outcome()),
         &record.envelope.from,
         Some(message_id),
         None,
@@ -277,51 +377,14 @@ fn apply_task_start(
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    let Some(row) = load_task_row(connection, target, &record.team, task_id)? else {
-        return Err(task_rejected(format!(
-            "no open task {task_id} for {}",
-            record.envelope.from
-        )));
-    };
-    if !row.state.is_open() {
-        return Err(task_rejected(format!(
-            "no open task {task_id} for {}",
-            record.envelope.from
-        )));
-    }
-    if record.envelope.from.as_str() != DAEMON_ACTOR_NAME {
-        return Err(task_rejected(format!(
-            "task {task_id} start requires {DAEMON_ACTOR_NAME}"
-        )));
-    }
-    let reminder: Option<String> = connection
-        .query_row(
-            "SELECT outcome FROM task_events WHERE team=?1 AND task_id=?2 AND event='reminded'
-             AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team=?1 AND task_id=?2
-               AND event IN ('assigned','reassigned','reopened'))
-             ORDER BY rowid DESC LIMIT 1",
-            params![record.team.as_str(), task_id.as_str()],
-            |raw| raw.get(0),
-        )
-        .optional()
-        .map_err(|error| sqlite_error(target, "failed to load task reminder gate", error))?;
-    if reminder.as_deref() != Some("emitted") || row.state == TaskState::Active {
+    let row = load_startable_task(record, task_id, connection, target)?;
+    if !start_reminder_was_emitted(record, task_id, connection, target)?
+        || row.state == TaskState::Active
+    {
         return Ok(());
     }
-    let active: Option<String> = connection
-        .query_row(
-            "SELECT task_id FROM tasks WHERE team=?1 AND assignee=?2 AND state='active' AND task_id<>?3",
-            params![record.team.as_str(), row.assignee.as_str(), task_id.as_str()],
-            |raw| raw.get(0),
-        )
-        .optional()
-        .map_err(|error| sqlite_error(target, "failed to check active task", error))?;
-    if active.is_some() {
-        return Err(task_rejected(format!(
-            "task {task_id}: {} already has an active task",
-            row.assignee
-        )));
-    }
+    reject_concurrent_active_task(record, task_id, &row, connection, target)?;
+
     let mut order = queue_order(connection, target, &record.team, &row.assignee)?;
     order.retain(|id| id != task_id);
     order.insert(0, task_id.clone());
@@ -329,7 +392,11 @@ fn apply_task_start(
         .execute(
             "UPDATE tasks SET state='active', reminder_count=0, lead_notified_count=0, updated_at=?3
              WHERE team=?1 AND task_id=?2",
-            params![record.team.as_str(), task_id.as_str(), record.envelope.timestamp.to_string()],
+            params![
+                record.team.as_str(),
+                task_id.as_str(),
+                record.envelope.timestamp.to_string()
+            ],
         )
         .map_err(|error| sqlite_error(target, "failed to start task", error))?;
     renumber_queue(&record.team, &row.assignee, &order, connection, target)?;
@@ -350,6 +417,81 @@ fn apply_task_start(
         None,
         None,
     )
+}
+
+fn load_startable_task(
+    record: &Message,
+    task_id: &TaskId,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<TaskRow, AtmError> {
+    let Some(row) = load_task_row(connection, target, &record.team, task_id)? else {
+        return Err(task_rejected(format!(
+            "no open task {task_id} for {}",
+            record.envelope.from
+        )));
+    };
+    if !row.state.is_open() {
+        return Err(task_rejected(format!(
+            "no open task {task_id} for {}",
+            record.envelope.from
+        )));
+    }
+    if record.envelope.from.as_str() != DAEMON_ACTOR_NAME {
+        return Err(task_rejected(format!(
+            "task {task_id} start requires {DAEMON_ACTOR_NAME}"
+        )));
+    }
+    Ok(row)
+}
+
+fn start_reminder_was_emitted(
+    record: &Message,
+    task_id: &TaskId,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<bool, AtmError> {
+    let reminder: Option<String> = connection
+        .query_row(
+            "SELECT outcome FROM task_events WHERE team=?1 AND task_id=?2 AND event='reminded'
+             AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team=?1 AND task_id=?2
+               AND event IN ('assigned','reassigned','reopened'))
+             ORDER BY rowid DESC LIMIT 1",
+            params![record.team.as_str(), task_id.as_str()],
+            |raw| raw.get(0),
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to load task reminder gate", error))?;
+    Ok(reminder.as_deref() == Some("emitted"))
+}
+
+fn reject_concurrent_active_task(
+    record: &Message,
+    task_id: &TaskId,
+    row: &TaskRow,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let active: Option<String> = connection
+        .query_row(
+            "SELECT task_id FROM tasks
+             WHERE team=?1 AND assignee=?2 AND state='active' AND task_id<>?3",
+            params![
+                record.team.as_str(),
+                row.assignee.as_str(),
+                task_id.as_str()
+            ],
+            |raw| raw.get(0),
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to check active task", error))?;
+    if active.is_some() {
+        return Err(task_rejected(format!(
+            "task {task_id}: {} already has an active task",
+            row.assignee
+        )));
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

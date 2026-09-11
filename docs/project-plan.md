@@ -1786,6 +1786,22 @@ child development/fix round, and parent PRs merge first. No Phase AZ sprint
 touches the frozen synchronous daemon or uses live daemon/test-daemon, release,
 tag, publish, or installation evidence.
 
+## 59. Phase BA — One Invariant, One Queue, One Task Command Set [IN PROGRESS]
+
+Phase BA replaces the retired Phase AZ task work with the simpler design in
+[the Phase BA plan](./plans/phase-ba/phase-ba-plan.md). BA.1 and BA.2 form the
+initial stack; BA.3 follows BA.2, BA.4 and BA.5 then run in parallel, and BA.6
+closes the phase documentation.
+
+| Sprint | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- |
+| `BA.1` | `merged` | `feature/ba1-ack-task-separation` | `docs/plans/phase-ba/sprint-BA.1-ack-task-separation.md` |
+| `BA.2` | `complete; PR #1400 pending QA/merge` | `feature/ba2-task-identity-queue` | `docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md` |
+| `BA.3` | `planned` | `feature/ba3-nudge-invariant` | `docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md` |
+| `BA.4` | `planned` | `feature/ba4-atm-task-commands` | `docs/plans/phase-ba/sprint-BA.4-atm-task-commands.md` |
+| `BA.5` | `planned` | `feature/ba5-queue-ephemeral-item` | `docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md` |
+| `BA.6` | `planned` | `docs/ba6-task-nudge-documentation` | `docs/plans/phase-ba/sprint-BA.6-docs.md` |
+
 ## Daemon-Switch Scope Reduction
 
 Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:

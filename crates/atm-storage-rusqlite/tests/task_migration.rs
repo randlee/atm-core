@@ -28,6 +28,21 @@ fn fixture() -> (TempDir, std::path::PathBuf, Connection) {
     let root = tempfile::tempdir().expect("tempdir");
     let path = root.path().join("mail.db");
     let connection = Connection::open(&path).expect("legacy database");
+    let version: String = connection
+        .query_row("SELECT sqlite_version()", [], |row| row.get(0))
+        .expect("read SQLite version");
+    let mut components = version
+        .split('.')
+        .map(|part| part.parse::<u32>().expect("numeric SQLite version"));
+    let parsed = (
+        components.next().expect("SQLite major version"),
+        components.next().expect("SQLite minor version"),
+        components.next().expect("SQLite patch version"),
+    );
+    assert!(
+        parsed >= (3, 25, 0),
+        "BA.2 migration requires SQLite >= 3.25.0; found {version}"
+    );
     connection.execute_batch(LEGACY_DDL).expect("legacy schema");
     (root, path, connection)
 }

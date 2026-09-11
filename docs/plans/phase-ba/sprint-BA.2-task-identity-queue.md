@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba2-task-identity-queue
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba2-task-identity-queue
+---
+
 # BA.2 — Task identity, queue position, typed outcome, migration
 
 | Field | Value |

@@ -69,7 +69,7 @@ fn writer_rejects_task_op_on_foreign_team_or_host_recipient() {
 
 #[test]
 fn legacy_task_complete_request_closes_the_task() {
-    let legacy_json = r#"{
+    let producer_1_4_json = r#"{
         "home_dir":"/tmp",
         "current_dir":"/tmp",
         "caller_identity":"sender",
@@ -81,19 +81,20 @@ fn legacy_task_complete_request_closes_the_task() {
         "task_complete":"T1",
         "dry_run":false
     }"#;
-    let mut legacy: SendRequest = serde_json::from_str(legacy_json).expect("1.4.0 request");
-    super::validate_task_request(&mut legacy).expect("legacy close normalizes");
-    assert_eq!(legacy.task_id.as_ref().map(TaskId::as_str), Some("T1"));
+    let mut request_1_4: SendRequest =
+        serde_json::from_str(producer_1_4_json).expect("1.4.0 request");
+    super::validate_task_request(&mut request_1_4).expect("legacy close normalizes");
+    assert_eq!(request_1_4.task_id.as_ref().map(TaskId::as_str), Some("T1"));
     assert_eq!(
-        legacy.task_op,
+        request_1_4.task_op,
         Some(atm_storage::TaskOp::Close {
             outcome: atm_storage::TaskCloseOutcome::Completed,
             reason: None,
         })
     );
-    assert_eq!(legacy.task_complete, None);
+    assert_eq!(request_1_4.task_complete, None);
 
-    let mut mismatch = legacy.clone();
+    let mut mismatch = request_1_4.clone();
     mismatch.task_op = None;
     mismatch.task_id = Some("T1".parse().expect("task id"));
     mismatch.task_complete = Some("T2".parse().expect("task id"));
@@ -763,7 +764,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         SendMessageSource::Inline("hello".to_string()),
         Some("hello".to_string()),
         false,
-        Some("task-123".parse().expect("task id")),
+        None,
         false,
     )
     .expect("test send request")
@@ -1104,6 +1105,7 @@ fn send_aliases_are_resolved_before_any_message_is_persisted() {
             .parse()
             .expect("alias recipient"),
     );
+    request.task_id = Some("task-123".parse().expect("task id"));
 
     let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect("alias send succeeds");
