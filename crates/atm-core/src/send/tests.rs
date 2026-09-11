@@ -60,6 +60,8 @@ pub(crate) fn message(
         thread_mode,
         expires_at: None,
         task_id: None,
+        placement: None,
+        task_op: None,
         task_complete: None,
         extra: Map::new(),
     }
@@ -671,6 +673,8 @@ pub(super) fn outbound_message() -> InboxMessage {
         thread_mode: None,
         expires_at: None,
         task_id: Some("task-123".parse().expect("task id")),
+        placement: None,
+        task_op: None,
         task_complete: None,
         extra: Map::new(),
     }

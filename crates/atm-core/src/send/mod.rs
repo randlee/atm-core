@@ -623,6 +623,8 @@ fn build_send_envelope(
         thread_mode: request.thread_mode,
         expires_at: request.expires_at,
         task_id: task_id.clone(),
+        placement: request.placement.clone(),
+        task_op: request.task_op.clone(),
         task_complete: request.task_complete.clone(),
         extra: Map::new(),
     };
