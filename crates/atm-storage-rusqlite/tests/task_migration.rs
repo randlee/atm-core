@@ -41,6 +41,7 @@ fn task(connection: &Connection, id: &str, assignee: &str, state: &str, assigned
     ).expect("legacy task");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn event(
     connection: &Connection,
     id: &str,

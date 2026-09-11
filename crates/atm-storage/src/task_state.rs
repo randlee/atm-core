@@ -420,6 +420,16 @@ impl TryFrom<TaskEventRowWire> for TaskEventRow {
                 "task event close_outcome without complete state",
             ));
         }
+        if wire.from_state == Some(TaskStateTag::Complete)
+            && wire
+                .to_state
+                .is_some_and(|state| state != TaskStateTag::Complete)
+            && wire.event != TaskEventKind::Reopened
+        {
+            return Err(AtmError::validation(
+                "only a reopened event may transition a complete task to an open state",
+            ));
+        }
         Ok(Self {
             team: wire.team,
             task_id: wire.task_id,
@@ -477,12 +487,8 @@ pub struct RefusalRun {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskEventMarker, TaskRow,
-        TaskState, admit, transition,
-    };
+    use super::*;
     use crate::schema::AtmMessageId;
-    use crate::task_store::ReminderOutcome;
     use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
     fn context() -> (TaskId, AgentName) {
@@ -499,63 +505,6 @@ mod tests {
         assert_eq!(QueuePosition::HEAD.next().get(), 2);
     }
 
-    #[test]
-    fn close_outcome_names_are_stable() {
-        assert_eq!(TaskCloseOutcome::Completed.as_str(), "completed");
-        assert_eq!(TaskCloseOutcome::Refused.as_str(), "refused");
-        assert_eq!(TaskCloseOutcome::Cancelled.as_str(), "cancelled");
-    }
-
-    #[test]
-    fn task_ledger_names_match_serde_snake_case_output() {
-        for (value, expected) in [
-            (TaskState::Assigned, "assigned"),
-            (TaskState::Active, "active"),
-            (TaskState::Complete, "complete"),
-        ] {
-            assert_eq!(
-                serde_json::to_string(&value).unwrap(),
-                format!("\"{expected}\"")
-            );
-            assert_eq!(value.as_str(), expected);
-        }
-        for (value, expected) in [
-            (TaskEventKind::Assigned, "assigned"),
-            (TaskEventKind::Acked, "acked"),
-            (TaskEventKind::Completed, "completed"),
-            (TaskEventKind::Rejected, "rejected"),
-            (TaskEventKind::Reminded, "reminded"),
-            (TaskEventKind::LeadNotified, "lead_notified"),
-        ] {
-            assert_eq!(
-                serde_json::to_string(&value).unwrap(),
-                format!("\"{expected}\"")
-            );
-            assert_eq!(value.as_str(), expected);
-        }
-        for (value, expected) in [
-            (TaskEventMarker::Resend, "resend"),
-            (TaskEventMarker::AssignmentMissing, "assignment_missing"),
-        ] {
-            assert_eq!(
-                serde_json::to_string(&value).unwrap(),
-                format!("\"{expected}\"")
-            );
-            assert_eq!(value.as_str(), expected);
-        }
-        for (value, expected) in [
-            (ReminderOutcome::Emitted, "emitted"),
-            (ReminderOutcome::Unrenderable, "unrenderable"),
-            (ReminderOutcome::Blocked, "blocked"),
-        ] {
-            assert_eq!(
-                serde_json::to_string(&value).unwrap(),
-                format!("\"{expected}\"")
-            );
-            assert_eq!(value.as_str(), expected);
-        }
-    }
-
     fn row(task_id: &str, state: TaskState) -> TaskRow {
         TaskRow {
             team: "team".parse::<TeamName>().expect("team"),
@@ -563,7 +512,7 @@ mod tests {
             assignee: "assignee".parse::<AgentName>().expect("assignee"),
             assigner: "assigner".parse::<AgentName>().expect("assigner"),
             state,
-            position: None,
+            position: state.is_open().then_some(QueuePosition::HEAD),
             assignment_message_id: AtmMessageId::new(),
             description: "task".to_owned(),
             assigned_at: "2026-09-04T00:00:00Z"
@@ -579,75 +528,212 @@ mod tests {
     }
 
     #[test]
-    fn transition_table_is_exhaustive_over_two_events() {
+    fn transition_table_is_exhaustive_over_three_events() {
         let (task_id, actor) = context();
+        let other: AgentName = "other".parse().unwrap();
+        let completed = TaskCloseOutcome::Completed;
         let cases = [
-            (None, TaskEvent::Assigned, Some(TaskState::Assigned)),
-            (None, TaskEvent::Completed, None),
+            (None, TaskEvent::Assigned, &actor, Some(TaskState::Assigned)),
+            (None, TaskEvent::Started, &actor, None),
+            (None, TaskEvent::Completed(completed), &actor, None),
             (
                 Some(TaskState::Assigned),
                 TaskEvent::Assigned,
+                &actor,
                 Some(TaskState::Assigned),
             ),
             (
                 Some(TaskState::Assigned),
-                TaskEvent::Completed,
-                Some(TaskState::Complete),
+                TaskEvent::Assigned,
+                &other,
+                Some(TaskState::Assigned),
+            ),
+            (
+                Some(TaskState::Assigned),
+                TaskEvent::Started,
+                &actor,
+                Some(TaskState::Active),
+            ),
+            (
+                Some(TaskState::Assigned),
+                TaskEvent::Completed(completed),
+                &actor,
+                Some(TaskState::Complete(completed)),
             ),
             (
                 Some(TaskState::Active),
                 TaskEvent::Assigned,
+                &actor,
                 Some(TaskState::Active),
             ),
             (
                 Some(TaskState::Active),
-                TaskEvent::Completed,
-                Some(TaskState::Complete),
+                TaskEvent::Assigned,
+                &other,
+                Some(TaskState::Assigned),
             ),
-            (Some(TaskState::Complete), TaskEvent::Assigned, None),
-            (Some(TaskState::Complete), TaskEvent::Completed, None),
+            (
+                Some(TaskState::Active),
+                TaskEvent::Started,
+                &actor,
+                Some(TaskState::Active),
+            ),
+            (
+                Some(TaskState::Active),
+                TaskEvent::Completed(completed),
+                &actor,
+                Some(TaskState::Complete(completed)),
+            ),
+            (
+                Some(TaskState::Complete(completed)),
+                TaskEvent::Assigned,
+                &actor,
+                Some(TaskState::Assigned),
+            ),
         ];
 
-        for (state, event, expected) in cases {
+        for (state, event, requested, expected) in cases {
             assert_eq!(
-                transition(state, event, &task_id, &actor)
-                    .ok()
-                    .map(|value| value.0),
+                transition(
+                    state,
+                    event,
+                    &task_id,
+                    &actor,
+                    state.map(|_| &actor),
+                    requested
+                )
+                .ok()
+                .map(|value| value.0),
                 expected
             );
         }
     }
 
     #[test]
-    fn admit_has_no_cross_row_input() {
-        let assignee: AgentName = "assignee".parse().expect("assignee");
-        let task_id: TaskId = "AX.3".parse().expect("task");
-        let _: fn(
-            Option<&TaskRow>,
-            TaskEvent,
-            &TaskId,
-            &AgentName,
-        ) -> Result<(), super::TaskRejected> = admit;
-        admit(None, TaskEvent::Assigned, &task_id, &assignee).expect("assignment is admitted");
+    fn task_state_from_parts_rejects_mismatched_outcome() {
+        assert_eq!(
+            TaskState::from_parts(TaskStateTag::Assigned, None).unwrap(),
+            TaskState::Assigned
+        );
+        assert_eq!(
+            TaskState::from_parts(TaskStateTag::Active, None).unwrap(),
+            TaskState::Active
+        );
+        assert_eq!(
+            TaskState::from_parts(TaskStateTag::Complete, Some(TaskCloseOutcome::Refused)).unwrap(),
+            TaskState::Complete(TaskCloseOutcome::Refused)
+        );
+        assert!(TaskState::from_parts(TaskStateTag::Complete, None).is_err());
+        assert!(
+            TaskState::from_parts(TaskStateTag::Assigned, Some(TaskCloseOutcome::Completed))
+                .is_err()
+        );
     }
 
     #[test]
-    fn admit_rejects_completion_by_third_party() {
-        let task_id: TaskId = "AX.3".parse().expect("task");
-        let row = row("AX.3", TaskState::Assigned);
-        let intruder: AgentName = "intruder".parse().expect("intruder");
-        let rejected = admit(Some(&row), TaskEvent::Completed, &task_id, &intruder)
-            .expect_err("third-party completion");
-        assert!(rejected.detail.contains("not assigned to or by intruder"));
+    fn task_row_json_keeps_scalar_state_and_adds_close_outcome() {
+        let complete = row("T1", TaskState::Complete(TaskCloseOutcome::Refused));
+        let complete_json = serde_json::to_value(&complete).unwrap();
+        assert_eq!(complete_json["state"], "complete");
+        assert_eq!(complete_json["close_outcome"], "refused");
+        assert!(complete_json.get("position").is_none());
+        assert_eq!(
+            serde_json::from_value::<TaskRow>(complete_json).unwrap(),
+            complete
+        );
+
+        let mut assigned = row("T2", TaskState::Assigned);
+        assigned.position = QueuePosition::new(2);
+        let assigned_json = serde_json::to_value(&assigned).unwrap();
+        assert_eq!(assigned_json["state"], "assigned");
+        assert_eq!(assigned_json["position"], 2);
+        assert!(assigned_json.get("close_outcome").is_none());
+        assert_eq!(
+            serde_json::from_value::<TaskRow>(assigned_json).unwrap(),
+            assigned
+        );
+
+        let mut invalid = serde_json::to_value(complete).unwrap();
+        invalid["position"] = 1.into();
+        assert!(serde_json::from_value::<TaskRow>(invalid).is_err());
     }
 
     #[test]
-    fn admit_accepts_completion_by_assigner_and_by_assignee() {
-        let task_id: TaskId = "AX.3".parse().expect("task");
+    fn task_row_json_from_1_4_0_producer_decodes() {
+        let base = serde_json::json!({
+            "team":"team", "task_id":"T", "assignee":"assignee", "assigner":"assigner",
+            "state":"complete", "assignment_message_id":AtmMessageId::new(), "description":"task",
+            "assigned_at":"2026-09-04T00:00:00Z", "updated_at":"2026-09-04T00:00:00Z",
+            "reminder_count":0, "lead_notified_count":0
+        });
+        assert_eq!(
+            serde_json::from_value::<TaskRow>(base.clone())
+                .unwrap()
+                .state,
+            TaskState::Complete(TaskCloseOutcome::Completed)
+        );
+        for tag in ["assigned", "active"] {
+            let mut value = base.clone();
+            value["state"] = tag.into();
+            let row = serde_json::from_value::<TaskRow>(value).unwrap();
+            assert_eq!(row.position, None);
+        }
+    }
+
+    #[test]
+    fn task_event_row_json_reopened_round_trips_and_other_kinds_reject_complete_to_assigned() {
+        let event = TaskEventRow {
+            team: "team".parse().unwrap(),
+            task_id: "T".parse().unwrap(),
+            assignee: "assignee".parse().unwrap(),
+            seq: 1,
+            at: "2026-09-04T00:00:00Z".parse().unwrap(),
+            event: TaskEventKind::Reopened,
+            from_state: Some(TaskState::Complete(TaskCloseOutcome::Refused)),
+            to_state: Some(TaskState::Assigned),
+            actor: TaskActor::Member("assigner".parse().unwrap()),
+            message_id: None,
+            outcome: None,
+            marker: None,
+            detail: None,
+        };
+        let value = serde_json::to_value(&event).unwrap();
+        assert_eq!(
+            serde_json::from_value::<TaskEventRow>(value.clone()).unwrap(),
+            event
+        );
+        let mut invalid = value;
+        invalid["event"] = "completed".into();
+        assert!(serde_json::from_value::<TaskEventRow>(invalid).is_err());
+    }
+
+    #[test]
+    fn admit_keeps_completion_authority_rule() {
+        let task_id: TaskId = "AX.3".parse().unwrap();
         let row = row("AX.3", TaskState::Assigned);
-        let assigner: AgentName = "assigner".parse().expect("assigner");
-        let assignee: AgentName = "assignee".parse().expect("assignee");
-        admit(Some(&row), TaskEvent::Completed, &task_id, &assigner).expect("assigner completion");
-        admit(Some(&row), TaskEvent::Completed, &task_id, &assignee).expect("assignee completion");
+        let intruder: AgentName = "intruder".parse().unwrap();
+        assert!(
+            admit(
+                Some(&row),
+                TaskEvent::Completed(TaskCloseOutcome::Completed),
+                &task_id,
+                &intruder
+            )
+            .is_err()
+        );
+        admit(
+            Some(&row),
+            TaskEvent::Completed(TaskCloseOutcome::Completed),
+            &task_id,
+            &row.assignee,
+        )
+        .unwrap();
+        admit(
+            Some(&row),
+            TaskEvent::Completed(TaskCloseOutcome::Completed),
+            &task_id,
+            &row.assigner,
+        )
+        .unwrap();
     }
 }

@@ -3572,7 +3572,10 @@ mod tests {
             .load_task(&member, &task_id)
             .expect("load completed task")
             .expect("task row");
-        assert_eq!(completed.state, TaskState::Complete);
+        assert_eq!(
+            completed.state,
+            TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+        );
         assert!(
             store
                 .load_message(&resend.message_key)
@@ -3609,15 +3612,32 @@ mod tests {
             .iter()
             .filter_map(|event| match event.event {
                 TaskEventKind::Assigned => Some(TaskEvent::Assigned),
-                TaskEventKind::Completed => Some(TaskEvent::Completed),
+                TaskEventKind::Completed => Some(TaskEvent::Completed(
+                    atm_storage::TaskCloseOutcome::Completed,
+                )),
                 TaskEventKind::Acked
+                | TaskEventKind::Started
+                | TaskEventKind::Refused
+                | TaskEventKind::Cancelled
+                | TaskEventKind::Reassigned
+                | TaskEventKind::Reopened
                 | TaskEventKind::Rejected
                 | TaskEventKind::Reminded
-                | TaskEventKind::LeadNotified => None,
+                | TaskEventKind::LeadNotified
+                | TaskEventKind::Moved
+                | TaskEventKind::Migrated => None,
             })
             .try_fold(None, |state, event| {
-                atm_storage::transition(state, event, &task_id, &agent())
-                    .map(|transition| Some(transition.0))
+                let assignee = agent();
+                atm_storage::transition(
+                    state,
+                    event,
+                    &task_id,
+                    &assignee,
+                    state.map(|_| &assignee),
+                    &assignee,
+                )
+                .map(|transition| Some(transition.0))
             })
             .expect("task event replay");
         assert_eq!(replayed, Some(completed.state), "AC5 event replay");
@@ -3713,7 +3733,7 @@ mod tests {
                 .expect("load completed task")
                 .expect("task row")
                 .state,
-            TaskState::Complete
+            TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
         );
         assert_eq!(
             store
