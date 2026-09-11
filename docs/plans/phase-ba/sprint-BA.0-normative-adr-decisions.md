@@ -73,21 +73,17 @@ current contract.
 
 BA.6 then implements this text. BA.11 diffs the shipped DDL against it.
 
-### D3. ADR-064 — the migration decision (**blocked on R0**)
+### D3. ADR-064 is **not** this sprint's — it is in the plan PR
 
-> **This deliverable cannot be written until Rand rules on R0.** ADR-061 D3
-> forbids a major change that requires every host to upgrade together, and
-> `STORAGE_SCHEMA_VERSION` does not exist on `origin/develop`, so the one-way
-> version-gated shape the plan assumed is both illegal and unimplementable.
-> The phase plan's R0 box states the three legal options.
+ADR-061 D3 requires the approval *"before plan approval"*, so the migration
+decision cannot be a phase deliverable at all. `docs/adr/ADR-064-…` ships in
+the plan PR (#1397) as `Proposed`, and Rand's decision on its D4 sets its
+status before any sprint opens.
 
-Once ruled, ADR-064 records: the ADR-061 classification and its reasoning; the
-chosen migration shape; **Rand's approval quoted with its date**; the
-`schema-reviewer` sign-off reference; and the consequence in plain words
-(whether a supported downgrade exists, and what rollback means if it does
-not). If the ruling is option (i) — additive, MINOR — ADR-064 instead records
-why the capability *can* be expressed additively, and BA.3/BA.10 are rescoped
-before they open.
+This sprint's only obligation to it: if D4 resolves to option (i), the
+additive shape, then BA.0's ADR-062 amendment must describe writer-enforced
+uniqueness rather than a schema-enforced primary key, and BA.3/BA.10 are
+rescoped before they open.
 
 ### D4. The exhaustive additions list
 
@@ -113,8 +109,9 @@ needs a new entry stops and amends this list first.
    and writing transitions, and classifies the change MINOR with its version
    obligation.
 5. ADR-054's nudge-title section is untouched by this sprint.
-6. ADR-064 exists **or** the phase is formally paused on R0. It is never
-   marked `Accepted` without Rand's quoted approval.
+6. ADR-064's D4 has been decided and its status is no longer `Proposed`, and
+   this sprint's amendments describe the shape that was chosen. If D4 is
+   still open, this sprint does not open.
 7. The exhaustive additions list exists and every entry names the sprint that
    ships it.
 8. `docs/adr/INDEX.md` reflects the amendments.

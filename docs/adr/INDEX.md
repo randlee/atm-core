@@ -70,6 +70,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-061 — Governed Interface Schema Versioning And Breaking-Change Approval](./ADR-061-governed-interface-schema-versioning.md)
 - [ADR-062 — Task State Machine](./ADR-062-task-state-machine.md)
 - [ADR-063 — Phase AZ Task And Attention Storage Capabilities](./ADR-063-phase-az-task-and-attention-capabilities.md) *(Accepted)*
+- [ADR-064 — Phase BA Task Identity Storage Change](./ADR-064-phase-ba-task-identity-storage-change.md) *(Proposed)*
 
 ## Extracted Crate-Local ADRs
 

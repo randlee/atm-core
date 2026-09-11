@@ -189,7 +189,7 @@ it must serialize with BA.5's mutations and test BA.5's receipts.
 | BA.6 | `must_follow` BA.5, `must_follow` BA.4 (PR-completion) | needs BA.5's close semantics and BA.4's invariant evaluation. **The former dependency on BA.8 is reversed** (PLAN-CRIT-012): the non-starvation rule is now normative in BA.6 D4 and needs nothing from BA.8, while BA.8 does need BA.6 |
 | BA.6 / BA.9 | `parallel_safe` with each other | both in wave 4, both downstream of BA.5, and disjoint: BA.9 owns the `atm task` clap enum and `crates/atm/src/commands/task*`, BA.6 owns `mail_message_states` and the scheduling pass in `crates/atm-http-runtime/`. Neither's acceptance criteria assert the other's behaviour — the test PLAN-CRIT-015 established. BA.9 is a stack layer, BA.6 is an independent branch (PLAN-SCOPE-011) |
 | BA.8 | **`must_follow` BA.9** | AC9 exercises the **start** receipt, which BA.9 introduces; BA.5 D6/D7 moved `start` out of BA.5. Wave order already sequences them, but an undocumented dependency is what produced the BA.6/BA.8 cycle once already. PLAN-SCOPE-016 |
-| BA.0 | blocks **every** code sprint | it carries the ADR-054 and ADR-062 amendments and the ADR-064 migration decision. No sprint may implement a contract its ADR has not yet decided (ADR-054's "later sprints implement, never define"; ADR-061 D3's "before plan approval"). Doc-only, so it is one short wave, but it is a hard gate, not a formality |
+| BA.0 | blocks **every** code sprint | it carries the ADR-054 and ADR-062 amendments. No sprint may implement a contract its ADR has not yet decided (ADR-054's "later sprints implement, never define"). The **migration decision is not here** — ADR-061 D3's "before plan approval" puts ADR-064 in this PR. Doc-only, so it is one short wave, but it is a hard gate, not a formality |
 | BA.11 | `must_follow` every other sprint (PR-completion) | it records what shipped. An amendment written ahead of the code is a prediction; phase AZ produced several that then disagreed with the merge. Doc-only, so it costs one short wave |
 
 `parallel_safe` claims above are made on non-intersecting crates, files,
@@ -197,51 +197,50 @@ public contracts, and boundary manifests. `plan-scope-reviewer` verifies them.
 
 ## Rulings
 
-Four questions the design did not answer. Rand's standing instruction is that
+Three questions the design did not answer, plus one that turned out not to be
+mine at all — the task identity storage change, now `ADR-064` in this PR. Rand's standing instruction is that
 he is not in iteration loops — *make the call, record it, report the outcome* —
 and his 2026-09-11 direction was to fix all reviewer findings and iterate to
 clean. All three are therefore **decided here by fenix and reversible by Rand**,
 not held open.
 
-### R0 — BA.3 is a MAJOR storage change (PLAN-CRIT-001) — **REOPENED, ESCALATED TO RAND**
+### R0 — the task identity storage change — **DECIDED BY ADR-064, IN THIS PR**
 
-> **STOP. This ruling is withdrawn pending Rand's decision (R2-CRIT-001,
-> R2-CRIT-003). BA.3, BA.10 and the ADR-064 record may not open until it is
-> answered.** I ruled the shape below; I had no authority to, and it is
-> illegal as written.
+> **R0 is no longer a ruling in this plan. It is `docs/adr/ADR-064-phase-ba-task-identity-storage-change.md`, shipped in this PR as `Proposed`, awaiting Rand's decision on its D4.**
 >
-> **ADR-061 D3 forbids it.** Verified on `origin/develop`
-> (`docs/adr/ADR-061-governed-interface-schema-versioning.md:77-86`): a major
-> change *"must ship with a co-existence window: the new build still serves
-> the previous major (or negotiates down) for the duration Rand approves.
-> **No change may require every host to upgrade together.**"* One-way, no
-> bridge, old-binary-refuses is exactly a change that requires every host to
-> upgrade together.
+> Three things moved it there:
 >
-> **And the version gate I promised cannot exist.** ADR-061 D1 states
-> *"`STORAGE_SCHEMA_VERSION` does not exist yet and needs its own planned
-> sprint"*, and `git grep STORAGE_SCHEMA_VERSION origin/develop` returns
-> nothing. A binary that predates the constant cannot inspect a marker
-> introduced after it shipped, so "the old binary refuses to open the
-> migrated database" is unimplementable against *the actual previous
-> binary*. BA.10's AC2a could never pass.
+> 1. **ADR-061 D3 requires the approval "before plan approval."** An ADR
+>    written during the phase cannot satisfy that, so deferring it to BA.0 was
+>    still too late. Rand's observation — *"I looked at pr, there are no adr in
+>    the pr"* — is the defect: a plan that changes a governed interface and
+>    carries no ADR has nothing for `schema-reviewer` to approve.
+> 2. **ADR-061 D3 forbids the shape I ruled.** *"No change may require every
+>    host to upgrade together."* One-way, no bridge, old-binary-refuses is
+>    exactly that.
+> 3. **The version gate I promised cannot exist.** ADR-061 D1:
+>    *"`STORAGE_SCHEMA_VERSION` does not exist yet"*, confirmed by
+>    `git grep` on `origin/develop`. A binary predating the constant cannot
+>    check it.
 >
-> **The three legal shapes, for Rand:**
+> **And the premise underneath all of it was wrong.** ADR-061 D3 obliges the
+> author to show why a capability cannot be expressed additively. I asserted
+> it could not and never did the work. ADR-064 D2 does it, and an additive
+> shape exists: keep both primary keys, add `current_assignee` / `position` /
+> `close_outcome` as defaulted columns, and enforce task-id uniqueness and
+> one-active-per-agent **in the writer** — the same layer where PR #1381
+> already fixed the mirror — with a `doctor` check and tests. That is ADR-061
+> MINOR, needs no bridge, no exception, no prerequisite release, and leaves
+> nothing in the phase irreversible.
 >
-> | | shape | cost |
-> | --- | --- | --- |
-> | **i** | Express BA.3 **additively** and stay MINOR. ADR-061's own design rule requires this be attempted first: *"before proposing a major change, the author must show why the capability cannot be expressed additively."* | needs a real attempt; may prove impossible for a primary-key narrowing, but that proof does not exist yet and I did not write it |
-> | **ii** | MAJOR **with** the coexistence window ADR-061 demands | this is AZ's shape — the bridge, the retained old-binary fixture, the removal ADR. It is the expense this phase was created to avoid |
-> | **iii** | Rand grants a **recorded exception to ADR-061 D3**, or amends ADR-061 by an accepted pre-implementation ADR | fastest, and the only route to the one-way shape. Requires a prerequisite release that ships `STORAGE_SCHEMA_VERSION` *before* the migration, or the old-binary-refuses claim is withdrawn |
+> Its cost is real and is stated in ADR-064: uniqueness stops being
+> schema-enforced. Contiguity and active-at-position-1 were already in that
+> category because SQLite cannot express them, so this moves one more
+> invariant across a line the plan had already crossed.
 >
-> My recommendation is **(iii) plus the prerequisite release**, with (i)
-> attempted first and its result recorded either way. But this is Rand's by
-> ADR-061's construction — *"Rand's explicit, recorded approval and sign-off
-> **before plan approval**"* — not mine, and my standing instruction to make
-> the call does not extend to overriding a governing ADR.
->
-> Everything below this box is the withdrawn ruling, kept so the reasoning is
-> reviewable. **Do not execute it.**
+> **ADR-064 recommends the additive shape (option i).** Until Rand decides
+> D4, BA.3 and BA.10 do not open and the sections below are provisional.
+
 
 
 **Decision: accept MAJOR. One-way migration with a version gate. No bridge.**
@@ -774,7 +773,9 @@ was false, and it is the reason two MINOR bumps had no owner. Each MINOR above
 carries ADR-061 D3's full minor obligation: the bump, the documentation, and
 a test proving the older consumer still works.
 
-BA.3 is the only **MAJOR** change, and it is **MAJOR** under ADR-061:64 — the primary-key narrowing renames/removes a field and the
+BA.3's classification is **ADR-064's to state, not this plan's** — and ADR-064
+D2 finds an additive shape the plan had wrongly declared impossible. Under
+ADR-061:64 — the primary-key narrowing renames/removes a field and the
 previous binary cannot operate against the migrated database. See **R0**,
 which is the single authoritative classification statement; this section
 carries only what R0 does not.
@@ -832,12 +833,14 @@ for opening BA.3 and BA.10**, not plan-review checkboxes.
     dependency row. Gate: the counts match.
 11. **The complexity budget above is met exactly.** Gate at phase end: zero
     new tables, zero new sealed traits, zero new semantic capabilities, zero
-    new state machines, and **one MAJOR schema change** — one-way,
-    version-gated, no bridge, no dual authority (R0). A sprint that needs
-    more stops and asks. The earlier "one MINOR bump" wording was wrong and
-    is corrected here; PLAN-CRIT-001 falsified it.
-12. **Every accepted ADR that phase BA contradicts has been amended, and no
-    amendment describes anything the phase did not ship.** Gate: BA.11's
-    acceptance criteria pass, ADR-064 quotes Rand's recorded approval, and no
-    agent-facing document describes the task surface in the future tense
-    (PLAN-CRIT-003, PLAN-CRIT-004, PLAN-CRIT-021).
+    new state machines, and **one schema change** to the task tables, whose
+    ADR-061 classification and shape ADR-064 D4 decides. A sprint that needs
+    more stops and asks. **Whether the schema change is MAJOR or MINOR is
+    ADR-064 D4's to answer**; this criterion asserts the count, not the
+    classification.
+12. **Every accepted ADR that phase BA contradicts was amended before the
+    code that contradicts it, and the shipped code matches.** Gate: BA.0's
+    amendments merged before wave 1, ADR-064 is no longer `Proposed`, BA.11's
+    verification criteria pass, and no agent-facing document describes the
+    task surface in the future tense (PLAN-CRIT-003, PLAN-CRIT-004,
+    PLAN-CRIT-021, R2-CRIT-004).
