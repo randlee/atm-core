@@ -187,6 +187,20 @@ pub struct WriteRequest {
 }
 
 impl WriteRequest {
+    /// Normalize the legacy completion carrier into the typed task operation.
+    pub fn task_op_normalized(&self) -> Result<(Option<TaskId>, Option<TaskOp>), AtmError> {
+        match (&self.task_id, &self.task_op, &self.task_complete) {
+            (_, Some(op), _) => Ok((self.task_id.clone(), Some(op.clone()))),
+            (Some(id), None, Some(legacy)) if id != legacy => Err(AtmError::validation(
+                "task_id and task_complete name different tasks",
+            )),
+            (_, None, Some(legacy)) => Ok((
+                Some(legacy.clone()),
+                Some(TaskOp::Close { outcome: atm_storage::TaskCloseOutcome::Completed, reason: None }),
+            )),
+            (id, None, None) => Ok((id.clone(), None)),
+        }
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
