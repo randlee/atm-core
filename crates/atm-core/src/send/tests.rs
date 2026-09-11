@@ -35,6 +35,80 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, PaneId, TaskId, TeamName};
 
+#[test]
+fn writer_rejects_task_op_on_foreign_team_or_host_recipient() {
+    let mut request = SendRequest::new(
+        PathBuf::from("/tmp"),
+        PathBuf::from("/tmp"),
+        "sender".parse().unwrap(),
+        "recipient@other-team",
+        "local-team".parse().unwrap(),
+        SendMessageSource::Inline("task".to_owned()),
+        None,
+        false,
+        Some("T1".parse().unwrap()),
+        false,
+    )
+    .unwrap();
+    request.task_op = Some(atm_storage::TaskOp::Start);
+    let foreign = super::validate_task_request(&mut request).expect_err("foreign team");
+    assert!(
+        foreign
+            .message()
+            .contains("task commands are local-team only")
+    );
+
+    request.to = Some("recipient@local-team.example.test".parse().unwrap());
+    let hosted = super::validate_task_request(&mut request).expect_err("host target");
+    assert!(
+        hosted
+            .message()
+            .contains("task commands are local-team only")
+    );
+}
+
+#[test]
+fn legacy_task_complete_request_closes_the_task() {
+    let legacy_json = r#"{
+        "home_dir":"/tmp",
+        "current_dir":"/tmp",
+        "caller_identity":"sender",
+        "caller_team":"local-team",
+        "to":{"agent":"recipient"},
+        "message_source":{"Inline":"task"},
+        "summary_override":null,
+        "requires_ack":false,
+        "task_complete":"T1",
+        "dry_run":false
+    }"#;
+    let mut legacy: SendRequest = serde_json::from_str(legacy_json).expect("1.4.0 request");
+    super::validate_task_request(&mut legacy).expect("legacy close normalizes");
+    assert_eq!(legacy.task_id.as_ref().map(TaskId::as_str), Some("T1"));
+    assert_eq!(
+        legacy.task_op,
+        Some(atm_storage::TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        })
+    );
+    assert_eq!(legacy.task_complete, None);
+
+    let mut mismatch = legacy.clone();
+    mismatch.task_op = None;
+    mismatch.task_id = Some("T1".parse().expect("task id"));
+    mismatch.task_complete = Some("T2".parse().expect("task id"));
+    let error = super::validate_task_request(&mut mismatch).expect_err("mismatch rejected");
+    assert!(error.message().contains("name different tasks"));
+    assert!(error.message().contains("Recovery:"));
+
+    let mut explicit = mismatch;
+    explicit.task_op = Some(atm_storage::TaskOp::Start);
+    super::validate_task_request(&mut explicit).expect("typed operation wins");
+    assert_eq!(explicit.task_id.as_ref().map(TaskId::as_str), Some("T1"));
+    assert_eq!(explicit.task_op, Some(atm_storage::TaskOp::Start));
+    assert_eq!(explicit.task_complete, None);
+}
+
 pub(crate) fn message(
     from: &str,
     message_id: AtmMessageId,
@@ -748,6 +822,7 @@ fn path_body_detection_emits_structured_warning_event() {
         requires_ack: false,
         task_id: None,
         task_complete: None,
+        already_closed: None,
         summary: Some("path reference".to_owned()),
         message: None,
         warnings: Vec::new(),

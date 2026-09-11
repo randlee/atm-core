@@ -208,12 +208,8 @@ impl SqliteTaskStore {
         let seq: u64 = connection
             .query_row(
                 "SELECT COALESCE(MAX(seq), 0) + 1 FROM task_events
-                 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-                params![
-                    member.team().as_str(),
-                    task_id.as_str(),
-                    member.agent().as_str()
-                ],
+                 WHERE team = ?1 AND task_id = ?2",
+                params![member.team().as_str(), task_id.as_str()],
                 |row| row.get(0),
             )
             .map_err(|error| {

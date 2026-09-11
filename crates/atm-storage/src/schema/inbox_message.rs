@@ -5,6 +5,7 @@ use std::fmt;
 use ulid::Ulid;
 
 use crate::task_op::{MoveTarget, TaskOp};
+use crate::task_state::TaskCloseOutcome;
 use crate::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName};
 
 #[derive(Debug, Clone)]
@@ -267,6 +268,17 @@ impl From<RawMessageEnvelope> for MessageEnvelope {
         let requires_ack = value
             .requires_ack
             .unwrap_or(value.pending_ack_at.is_some() && value.acknowledges_message_id.is_none());
+        let (task_id, task_op) = match (value.task_id, value.task_op, value.task_complete) {
+            (task_id, Some(task_op), _) => (task_id, Some(task_op)),
+            (_, None, Some(task_id)) => (
+                Some(task_id),
+                Some(TaskOp::Close {
+                    outcome: TaskCloseOutcome::Completed,
+                    reason: None,
+                }),
+            ),
+            (task_id, None, None) => (task_id, None),
+        };
         Self {
             from: value.from,
             source_chat_id: value.source_chat_id,
@@ -284,10 +296,10 @@ impl From<RawMessageEnvelope> for MessageEnvelope {
             parent_message_id: value.parent_message_id,
             thread_mode: value.thread_mode,
             expires_at: value.expires_at,
-            task_id: value.task_id,
+            task_id,
             placement: value.placement,
-            task_op: value.task_op,
-            task_complete: value.task_complete,
+            task_op,
+            task_complete: None,
             extra: value.extra,
         }
     }
@@ -314,6 +326,7 @@ pub struct PendingAck {
 mod tests {
     use super::MessageEnvelope;
     use crate::types::{AgentName, IsoTimestamp, TaskId};
+    use crate::{TaskCloseOutcome, TaskOp};
 
     fn envelope(task_complete: Option<TaskId>) -> MessageEnvelope {
         MessageEnvelope {
@@ -344,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn task_complete_round_trips_and_omits_absent_carrier() {
+    fn legacy_task_complete_decodes_to_typed_close_and_omits_absent_carrier() {
         let absent = serde_json::to_value(envelope(None)).expect("serialize");
         assert!(absent.get("taskComplete").is_none());
         let decoded: MessageEnvelope = serde_json::from_value(absent).expect("deserialize");
@@ -357,6 +370,14 @@ mod tests {
             Some(task.as_str())
         );
         let decoded: MessageEnvelope = serde_json::from_value(present).expect("deserialize");
-        assert_eq!(decoded.task_complete, Some(task));
+        assert_eq!(decoded.task_id, Some(task));
+        assert_eq!(
+            decoded.task_op,
+            Some(TaskOp::Close {
+                outcome: TaskCloseOutcome::Completed,
+                reason: None,
+            })
+        );
+        assert_eq!(decoded.task_complete, None);
     }
 }

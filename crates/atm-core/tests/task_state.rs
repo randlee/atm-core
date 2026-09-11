@@ -179,7 +179,7 @@ fn task_row(
 }
 
 #[test]
-fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_store() {
+fn legacy_task_complete_request_closes_existing_task_end_to_end() {
     let (root, runtime, team) = setup(RosterHarness::ClaudeCode);
     let home = root.path().join("home");
     std::fs::create_dir_all(&home).expect("home");

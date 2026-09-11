@@ -46,12 +46,7 @@ pub(super) fn append_rejected_task_event(
         WriteOp::UpsertMessage { record, provenance }
             if *provenance == MessageWriteOrigin::Local =>
         {
-            let Some(task_id) = record
-                .envelope
-                .task_id
-                .as_ref()
-                .or(record.envelope.task_complete.as_ref())
-            else {
+            let Some(task_id) = record.envelope.task_id.as_ref() else {
                 return Ok(());
             };
             (
@@ -117,25 +112,10 @@ pub(super) fn apply_task_message(
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    let Some(task_id) = record
-        .envelope
-        .task_id
-        .as_ref()
-        .or(record.envelope.task_complete.as_ref())
-    else {
+    let Some(task_id) = record.envelope.task_id.as_ref() else {
         return Ok(());
     };
     match record.envelope.task_op.as_ref() {
-        None if record.envelope.task_complete.is_some() => apply_task_close(
-            record,
-            task_id,
-            TaskCloseOutcome::Completed,
-            None,
-            connection,
-            cache,
-            target,
-        )
-        .map(|_| ()),
         None => apply_task_assignment(
             record,
             task_id,
@@ -373,7 +353,7 @@ fn apply_task_start(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn apply_task_close(
+pub(crate) fn apply_task_close(
     record: &Message,
     task_id: &TaskId,
     outcome: TaskCloseOutcome,
@@ -611,6 +591,9 @@ fn insert_at_placement(
     Ok(())
 }
 
+/// Renumbers one member's open queue without transient unique-index overlap.
+/// Phase one adds `MAX(current position) + order.len()` so every old value is
+/// above the occupied range; phase two writes the exact `1..=n` order.
 fn renumber_queue(
     team: &TeamName,
     assignee: &AgentName,
@@ -618,7 +601,16 @@ fn renumber_queue(
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    let offset = i64::try_from(order.len()).map_err(|_| task_rejected("task queue too large"))?;
+    let maximum: i64 = connection
+        .query_row(
+            "SELECT COALESCE(MAX(position),0) FROM tasks WHERE team=?1 AND assignee=?2 AND state<>'complete'",
+            params![team.as_str(), assignee.as_str()],
+            |row| row.get(0),
+        )
+        .map_err(|error| sqlite_error(target, "failed to size task queue offset", error))?;
+    let offset = maximum
+        .checked_add(i64::try_from(order.len()).map_err(|_| task_rejected("task queue too large"))?)
+        .ok_or_else(|| task_rejected("task queue too large"))?;
     connection
         .execute(
             "UPDATE tasks SET position=position+?3 WHERE team=?1 AND assignee=?2 AND state<>'complete'",

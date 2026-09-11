@@ -1059,6 +1059,7 @@ mod tests {
                 requires_ack: false,
                 task_id: None,
                 task_complete: None,
+                already_closed: None,
                 summary: None,
                 message: Some("typed route fixture".to_owned()),
                 warnings: Vec::new(),

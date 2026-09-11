@@ -191,9 +191,12 @@ impl WriteRequest {
     pub fn task_op_normalized(&self) -> Result<(Option<TaskId>, Option<TaskOp>), AtmError> {
         match (&self.task_id, &self.task_op, &self.task_complete) {
             (_, Some(op), _) => Ok((self.task_id.clone(), Some(op.clone()))),
-            (Some(id), None, Some(legacy)) if id != legacy => Err(AtmError::validation(
-                "task_id and task_complete name different tasks",
-            )),
+            (Some(id), None, Some(legacy)) if id != legacy => {
+                Err(AtmError::validation_with_recovery(
+                    "task_id and task_complete name different tasks",
+                    "pass one task: `--task-id <id> --task-complete`, or the legacy `--task-complete <id>` alone",
+                ))
+            }
             (_, None, Some(legacy)) => Ok((
                 Some(legacy.clone()),
                 Some(TaskOp::Close {
@@ -351,12 +354,27 @@ pub(crate) fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskI
         )
 }
 
-pub(crate) fn validate_task_request(request: &SendRequest) -> Result<(), AtmError> {
-    if request.task_id.is_some() && request.task_complete.is_some() {
-        return Err(AtmError::validation(
-            "a message cannot assign and complete a task at the same time",
-        ));
+pub(crate) fn validate_task_request(request: &mut SendRequest) -> Result<(), AtmError> {
+    let (task_id, task_op) = request.task_op_normalized()?;
+    if task_op.is_some() && task_id.is_none() {
+        return Err(AtmError::validation("task_op requires task_id"));
     }
+    if (task_id.is_some() || task_op.is_some())
+        && request.to.as_ref().is_some_and(|target| {
+            target.host().is_some()
+                || target
+                    .team()
+                    .is_some_and(|team| team != &request.caller_team)
+        })
+    {
+        let target = request.to.as_ref().expect("checked target");
+        return Err(AtmError::validation(format!(
+            "task commands are local-team only; {target} resolves to another team or host — send a plain message or assign the local alias"
+        )));
+    }
+    request.task_id = task_id;
+    request.task_op = task_op;
+    request.task_complete = None;
     Ok(())
 }
 
