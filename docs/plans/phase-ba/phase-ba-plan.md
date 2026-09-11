@@ -20,7 +20,7 @@ States: `assigned` → `active` → `complete`. Events: `Assigned`, `Started`,
 | --- | --- | --- | --- |
 | none | → `assigned` | reject `no open task` | reject `no open task` |
 | `assigned` | → `assigned` (same agent: resend; other agent: reassign, event `reassigned`) | → `active`; reject when the member's one-active index is already held | → `complete(o)` |
-| `active` | → `active` (same agent: resend; other agent: reassign) | → `active` (idempotent) | → `complete(o)` |
+| `active` | → `active` (same agent: resend, idempotent); → `assigned` (other agent: reassign in place, event `reassigned`, old active slot freed) | → `active` (idempotent) | → `complete(o)` |
 | `complete` | → `assigned` (reopen in place; event `reopened`) | ordinary mail write returns `already_closed` | ordinary mail write returns `already_closed` — informational at the command layer (design §5.2) |
 
 Row invariants enforced by the database (BA.2): one row per `(team, task_id)`;
