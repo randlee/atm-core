@@ -4,7 +4,9 @@ mod release_guard;
 mod task_pass;
 
 use release_guard::ReleasePendingOnDrop;
-use task_pass::{queue_drain_eligible, runtime_state};
+#[cfg(test)]
+use task_pass::runtime_state;
+use task_pass::{queue_drain_eligible, runtime_state_with_absence};
 
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
@@ -16,7 +18,6 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
-    TASK_REMINDER_INTERVAL_MS,
 };
 use atm_core::delivery_channel::{HerdrAgentName, HerdrSession, local_message_received_backend};
 use atm_core::error::{AtmError, AtmErrorCode};
@@ -43,7 +44,6 @@ pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 const HERDR_REQUEST_BUDGET: Duration = Duration::from_secs(5);
-const OFFLINE_ABSENCE_INTERVALS: i64 = 2;
 
 pub(crate) fn herdr_request_deadline() -> RequestDeadline {
     RequestDeadline::after(HERDR_REQUEST_BUDGET)
@@ -412,7 +412,12 @@ impl HerdrQueueWakePump {
             let CandidateTarget::Herdr(target) = &member.target else {
                 continue;
             };
-            let state = self.runtime_state_with_absence(
+            let mut absences = self
+                .absence_started_at
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let state = runtime_state_with_absence(
+                &mut absences,
                 &member.key,
                 snapshots
                     .get(target.agent.as_str())
@@ -443,30 +448,6 @@ impl HerdrQueueWakePump {
             }
         }
         accepted
-    }
-
-    fn runtime_state_with_absence(
-        &self,
-        member: &MemberKey,
-        status: Option<atm_herdr::HerdrAgentStatus>,
-        observed_at: IsoTimestamp,
-    ) -> RuntimeMemberState {
-        let mut absences = self
-            .absence_started_at
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let Some(status) = status else {
-            let started_at = absences.entry(member.clone()).or_insert(observed_at);
-            let absent_for =
-                (observed_at.into_inner() - started_at.into_inner()).num_milliseconds();
-            return if absent_for >= TASK_REMINDER_INTERVAL_MS * OFFLINE_ABSENCE_INTERVALS {
-                RuntimeMemberState::Offline
-            } else {
-                RuntimeMemberState::Unknown
-            };
-        };
-        absences.remove(member);
-        runtime_state(Some(status))
     }
 
     fn record_unavailable_members(&self, members: &[HerdrCandidate], observed_at: IsoTimestamp) {

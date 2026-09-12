@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use atm_core::boundary::{
     AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome,
-    TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TaskRow,
+    TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS, TaskRow,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
@@ -34,6 +34,27 @@ pub(super) fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberSt
             HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
         },
     }
+}
+
+pub(super) fn runtime_state_with_absence(
+    absences: &mut HashMap<MemberKey, IsoTimestamp>,
+    member: &MemberKey,
+    status: Option<HerdrAgentStatus>,
+    observed_at: IsoTimestamp,
+) -> RuntimeMemberState {
+    const OFFLINE_ABSENCE_INTERVALS: i64 = 2;
+
+    let Some(status) = status else {
+        let started_at = absences.entry(member.clone()).or_insert(observed_at);
+        let absent_for = (observed_at.into_inner() - started_at.into_inner()).num_milliseconds();
+        return if absent_for >= TASK_REMINDER_INTERVAL_MS * OFFLINE_ABSENCE_INTERVALS {
+            RuntimeMemberState::Offline
+        } else {
+            RuntimeMemberState::Unknown
+        };
+    };
+    absences.remove(member);
+    runtime_state(Some(status))
 }
 
 pub(super) struct PreparedTaskPass {
