@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SMK-006>
+  a triage:Finding ;
+  triage:findingId "SMK-006" ;
+  triage:title "Queued non-head assignments deliver the full Task call-to-action nudge immediately, and their reminders are misattributed to the head task" ;
+  triage:description "fenix (ATM 01M2B64GWTBZGR4G9G079JN7ZD, 2026-09-12T16:10:17Z), found from Rand's nudge-test-1/2/3 exercise, verified against the live DB and source. Two compounding defects: (1) Queued non-head assignments nudge the assignee immediately with the full Task call-to-action wording (\"execute the assigned task\"), not just the head task. The three nudge-test assignment messages to cipher were written 2026-09-12T15:27:32.9Z; the queue-wake pump claimed and delivered their mail markers at 15:27:34, 15:27:54 and 15:28:09 (cipher acked each within ~6s: 15:27:42, 15:28:00, 15:28:14) -- i.e. tasks 2 and 3 were fully 'execute the assigned task'-nudged while still queued behind task 1. The mail claim (pending_nudge_store.rs claim_next_pending, ORDER BY message_key) ignores task queue position entirely; only the head *start* (activation into the active work state) is position-gated (task_pass.rs queue_prompt_is_head_assignment). (2) Those non-head nudge deliveries are recorded as reminders against the HEAD task's counter, not the task whose assignment message was actually delivered: record_queue_prompt_reminders (herdr_queue_wake/task_pass.rs:105-146) records a Reminded(emitted) event against queue_reminder_head(member) for every mail prompt delivered, regardless of which task's message it was. Result: nudge-test-1's event log shows three reminders in 35s (15:27:34/54/15:28:09) -- but two of those three are actually reminders for delivering task-2's and task-3's assignment mail markers, misattributed to task-1's counter -- while nudge-test-2/3 show zero reminders in the log despite their assignment messages having genuinely been nudged and acked by cipher. Team-lead's earlier read of the event log ('tasks 2 and 3 sat silently at zero reminders while queued') was a correct log read but an incorrect description of what cipher actually received -- that gap between log and reality is itself the observability defect. Both issues feed Rand's per-transition nudge design decision directly (queued = informational only, no call-to-action; ready = call-to-action only at head+idle). Not blocking any release; important input to the design ruling before SMK-004's fix shape is set." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T16:10:17Z"^^xsd:dateTime ;
+  triage:deferredNote "Not blocking; direct input to Rand's per-transition nudge-granularity design discussion (see SMK-004, SMK-005). dispatchReady left false pending that ruling; fix shape (position-gate the mail claim, and/or attribute reminders to the correct task) follows from it. Hold #1431 as the landing vehicle per fenix's instruction." ;
+  triage:relatedFinding "SMK-004" ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T16:10:17Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SMK-006/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SMK-006/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 876 ;
+  triage:snippet "claim_next_pending (pending_nudge_store.rs, ORDER BY message_key) ignores task queue position and delivers the full Task call-to-action for a queued non-head assignment; record_queue_prompt_reminders (herdr_queue_wake/task_pass.rs:105-146) then records that delivery's Reminded(emitted) event against queue_reminder_head(member) -- the head task's counter -- not the task whose message was actually delivered, so the event log undercounts nudges on non-head tasks and overcounts them on the head" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "281e6f546" ;
+  triage:occursIn <urn:atm:triage:worktree/SMK-006/1> .
+
+<urn:atm:triage:worktree/SMK-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "post-landing backlog: develop @ 281e6f546 (Phase BA merged)" ;
+  triage:branch "develop" ;
+  triage:headSha "281e6f546" ;
+  triage:orderIndex 12 .
