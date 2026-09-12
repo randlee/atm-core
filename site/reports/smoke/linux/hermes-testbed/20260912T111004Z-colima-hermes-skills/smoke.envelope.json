@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-09-12T11:24:06.536077+00:00",
+  "host_label": "hermes-testbed",
+  "report_html": "smoke/linux/hermes-testbed/20260912T111004Z-colima-hermes-skills/index.html",
+  "status": "PASS"
+}

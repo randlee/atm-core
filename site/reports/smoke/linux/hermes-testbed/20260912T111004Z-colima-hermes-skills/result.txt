@@ -1,0 +1,14 @@
+PASS  skills reported 7/7, PASS 7/7 (7 report messages); herdr doctor ok: yes
+atm:    1.5.16 (prerelease/v1.5.16 @ 3d4ecc631, prerelease-archive run 34689815975, ci run 34690097411)
+hermes: randlee/hermes-agent @ a909c4f5b
+hermes Hermes Agent v0.21.2 (2026.9.11) · upstream a909c4f5 | atm-daemon 1.5.16 | herdr 0.8.2
+herdr transport: socket ({'kind': 'ok', 'version': '0.8.2', 'protocol': 20}) (atm doctor --json .herdr.endpoints[].transport; bringup writes [herdr] transport="socket" to /root/.atm.toml)
+skill: atm-setup-environment agent: tester@testbed  tools: cli result: PASS   (5/5 steps) 
+skill: atm-setup-environment agent: hermes@testbed  tools: native+cli result: PASS   (6/6 steps) 
+skill: atm-smoke agent: hermes@testbed  tools: native+cli result: PASS   (10/10 steps) 
+skill: atm-smoke agent: tester@testbed  tools: cli result: PASS   (9/9 steps) 
+skill: atm-hermes-ready agent: tester@testbed  tools: cli result: PASS   (5/5 steps) 
+skill: atm-nudge-roundtrip agent: hermes@testbed  tools: native+cli result: PASS   (5/5 steps) 
+skill: atm-nudge-roundtrip agent: tester@testbed  tools: cli result: PASS   (3/3 steps) 
+reports and logs: /Users/randlee/Documents/github/atm-hermes-testbed/.cache/results/20260912T111004Z
+the fixture is still running: docker exec hermes-testbed ... ; ./teardown.sh when done
