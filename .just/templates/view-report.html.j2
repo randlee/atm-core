@@ -65,21 +65,21 @@ metadata:
   </header>
 
   <section class="summary">
-{{ summary_html }}
+{{ summary_html | safe }}
   </section>
 
-{{ sections_html }}
+{{ sections_html | safe }}
 
 {% if recommendations_html %}
   <section class="recommendations">
     <h2>Recommendations</h2>
-{{ recommendations_html }}
+{{ recommendations_html | safe }}
   </section>
 {% endif %}
 
 {% if footer_html %}
   <footer>
-{{ footer_html }}
+{{ footer_html | safe }}
   </footer>
 {% endif %}
   <script type="text/javascript">
