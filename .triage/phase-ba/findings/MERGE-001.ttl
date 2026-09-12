@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/MERGE-001>
+  a triage:Finding ;
+  triage:findingId "MERGE-001" ;
+  triage:title "Seven herdr_nudge_invariant tests fail at merge of BA.3 into fix/phase-ba-cleanup" ;
+  triage:description "quality-mgr BA3-QA2-1789189465, PR #1402. At cipher's merge commit b9f7c4386 on fix/phase-ba-cleanup (merging feature/ba3-nudge-invariant@c462c6977 forward), seven tests in crates/atm-http-runtime/tests/herdr_nudge_invariant.rs fail that passed on feature/ba3-nudge-invariant itself. This is a merge-induced regression, not a BA.3-only defect." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "regression" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix's ruling (ATM 2026-09-12T05:27:38Z, confirmed 2026-09-12T05:32:23Z): BLOCKING; merge-induced regression at cipher's merge b9f7c4386, not a BA.3-only defect (BA.3 itself frozen, unaffected). Fix once on fix/phase-ba-merge-fix (solar)." ;
+  triage:promoteTo "fix/phase-ba-merge-fix" ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/MERGE-001/merge-001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/MERGE-001/merge-001-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 895, 1007, 1070, 797, 755, 839, 1212 ;
+  triage:snippet "handoff_applies_start_and_sends_receipt_to_assigner (895), head_already_active_handoff_sends_no_receipt (1007), failed_start_write_then_active_member_still_starts_once (1070), close_of_stalled_task_resumes_nudging_on_next_task (797), tenth_reminder_escalates_once_then_silence (755), reopen_of_stalled_task_escalates_again_at_threshold (839), non_refused_close_releases_refusal_hold (1212)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386> .
+
+<urn:atm:triage:worktree/cleanup/b9f7c4386>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/phase-ba-cleanup" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:orderIndex 5 .

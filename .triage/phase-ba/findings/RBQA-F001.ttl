@@ -1,0 +1,81 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001" ;
+  triage:title "tests/*.rs files are include!'d into src/, invisible to src-scoped boundary/lint scanners" ;
+  triage:description "quality-mgr BA3-QA2-1789189465, PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643745166. Multiple phase-BA test files are include!'d directly into src/ modules rather than compiled as ordinary integration tests under tests/, which makes their content invisible to boundary/lint scanners that are scoped to src/ only. Confirmed occurrences: feature/ba3-nudge-invariant (herdr_nudge_invariant.rs), feature/ba5-queue-ephemeral-item (herdr_queue_ephemeral.rs), fix/phase-ba-cleanup (herdr_queue_no_delivery.rs). fenix's ruling: correlate as one finding across all three worktrees rather than filing three separate records." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-guard" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo-wide grep for include!(...) pulling a tests/*.rs or *_test.rs file into a src/ module" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 2026-09-12T05:32:23Z): promotion target is the post-landing review-findings stack (deferred) -- a scanner-scope design question, not an immediate fix dispatch. Do not set a live gh-stack layer as promoteTo until that design question resolves." ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/BA3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/BA5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/PBCLEANUP-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001/BA3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1039 ;
+  triage:snippet "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/tests/herdr_nudge_invariant.rs\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3/c462c6977> .
+
+<urn:atm:triage:occurrence/RBQA-F001/BA5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1120 ;
+  triage:snippet "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/tests/herdr_queue_ephemeral.rs\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:occursIn <urn:atm:triage:worktree/BA5/7997f8aaa> .
+
+<urn:atm:triage:occurrence/RBQA-F001/PBCLEANUP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1127 ;
+  triage:snippet "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/tests/herdr_queue_no_delivery.rs\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/PBCLEANUP/b9f7c4386> .
+
+<urn:atm:triage:worktree/BA3/c462c6977>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/BA5/7997f8aaa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ba5-queue-ephemeral-item" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/PBCLEANUP/b9f7c4386>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/phase-ba-cleanup" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:orderIndex 5 .

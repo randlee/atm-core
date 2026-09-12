@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-001" ;
+  triage:title "recovered_then_reblocked_episode_is_reported_again uses wall-clock, making it flaky/nondeterministic" ;
+  triage:description "The test recovered_then_reblocked_episode_is_reported_again reads real wall-clock time (IsoTimestamp::now()) instead of an injected/fake clock, making it a timing-dependent, potentially flaky test." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:deferredNote "team-lead correction (2026-09-12T05:40:00Z): the qa-triage agent's own JSON summary called fix/phase-ba-merge-fix and fix/phase-ba-cleanup-b 'fixed', but that read solar's uncommitted working-tree edits on fix/phase-ba-merge-fix, not its committed HEAD -- git show HEAD:crates/atm-http-runtime/tests/herdr_nudge_invariant.rs at b9f7c4386 still has the IsoTimestamp::now() wall-clock call (identical to fix/phase-ba-cleanup, since it is currently the same commit). fix/phase-ba-cleanup-b@5ea53c28d has no wall-clock call either, but only because it still carries the pre-BA3-FIX-R3B hollow alias version of this test (assert_non_idle_status_never_prompts-style, no IsoTimestamp use at all) -- it has not yet absorbed BA.3's rewritten test body, so the defect is not fixed there, it is simply not yet present. Status held open; promote to fix/phase-ba-merge-fix (solar) per fenix's ruling." ;
+  triage:promoteTo "fix/phase-ba-merge-fix" ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 658 ;
+  triage:snippet "let first_since = IsoTimestamp::now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3-nudge-invariant-c462c6977> .
+
+<urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 658 ;
+  triage:snippet "let first_since = IsoTimestamp::now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3-cleanup-b9f7c4386> .
+
+<urn:atm:triage:worktree/integrate/phase-ba-eb4df2215>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ba" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "eb4df2215" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/ba3-nudge-invariant-c462c6977>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ba3-cleanup-b9f7c4386>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba3-cleanup" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:orderIndex 5 .
+
