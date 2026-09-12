@@ -1809,6 +1809,29 @@ stack practice: [`docs/development/gh-stack-guidelines.md`](./development/gh-sta
 | cleanup | `merged` (#1413, #1414, #1415) | `fix/phase-ba-cleanup`, `fix/phase-ba-cleanup-b`, `fix/phase-ba-merge-fix` | consolidated non-blocking findings, bounded blocking, BA.3 fixtures under merged tick order |
 | review-findings | `in progress` (#1419 …) | `fix/phase-ba-review-1` → `-2` → `-3`, `docs/phase-ba-post-mortem` | phase-ending review, production readiness review, post-mortem — stacked above `integrate/phase-ba` |
 
+## 60. Phase BB — Task Transitions You Can See [PLANNED — plan PR #1432, plan QA round 2 pending]
+
+Phase BB replaces the two task-family nudge kinds with six per-transition
+kinds so every task transition is visible in the recipient's prompt line, and
+adds `atm task start` for the assignee. Design authority:
+[`docs/plans/nudge-transition-templates/design.md`](./plans/nudge-transition-templates/design.md);
+plan: [the Phase BB plan](./plans/phase-bb/phase-bb-plan.md). Base `develop`
+at `281e6f546`; integration branch `integrate/phase-bb`. Wave 1 is BB.1, BB.2
+and BB.3 in parallel; BB.4, BB.5 and BB.6 stack on BB.1 in that order; BB.7
+closes the phase documentation after BB.6 and BB.2 merge. Triage seed:
+PR #1431 (SMK-004, SMK-005, SMK-006). BB.7 D6 keeps this table current;
+team-lead lands the final status when the phase PR merges.
+
+| Sprint | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- |
+| `BB.1` | `planned` | `feature/bb1-transition-templates` | `docs/plans/phase-bb/sprint-BB.1-transition-templates.md` |
+| `BB.2` | `planned` | `feature/bb2-orchestration-templates-1516` | `docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md` |
+| `BB.3` | `planned` | `feature/bb3-test-procedure-pages` | `docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md` |
+| `BB.4` | `planned` | `feature/bb4-task-start` | `docs/plans/phase-bb/sprint-BB.4-task-start.md` |
+| `BB.5` | `planned` | `feature/bb5-assignment-write-task-pass` | `docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md` |
+| `BB.6` | `planned` | `feature/bb6-prompt-handoffs` | `docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md` |
+| `BB.7` | `planned` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
+
 ## Daemon-Switch Scope Reduction
 
 Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:

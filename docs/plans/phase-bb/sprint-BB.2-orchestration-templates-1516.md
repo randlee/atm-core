@@ -64,6 +64,12 @@ plain send leaves the assigner's mirror task open and the reminder loop runs.
   assignee closes with a report, the assigner's mirror closes with it; no
   separate `--task-complete` by team-lead is needed on 1.5.16 — verify in D6
   and document the verified behavior, not the memory.
+- [ ] D6 — every template this sprint edits keeps its `metadata:` front
+  matter (`type`, `tags`, `workflow`; declared by PR #1434 so monitoring
+  detects dispatches with `atm search --workflow-stage`/`--type`) unchanged;
+  a body edit never drops or reorders it. Proof: `atm templates list --json`
+  after live step 1 shows a non-null `template_type` for the newly
+  registered SHA.
 
 ## Tests
 
@@ -90,6 +96,7 @@ Repo checks:
 2. Live steps 1–3 recorded with ids.
 3. D4 diff delivered to team-lead; D5 documents verified behavior.
 4. `just lint spell` passes.
+5. Every edited template still declares its `metadata:` block; the live step 1 registration is typed (D6).
 
 ## Required validation
 

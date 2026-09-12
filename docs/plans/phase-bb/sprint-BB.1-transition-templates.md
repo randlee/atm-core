@@ -140,33 +140,32 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
 - [ ] D5 — the three builders set `task_transition`:
   1. Claim path, `crates/atm-core/src/nudge_dispatch.rs` (the builder above
      `build_task_reminder_dispatch`, fed by
-     `herdr_queue_wake.rs::load_received_hook_dispatch_message`): a
-     task-linked message with `task_op = None` → `Ready` when the row is
-     `assigned` at position 1 (the same test
-     `queue_prompt_is_head_assignment` makes today, `task_pass.rs:148-169`),
-     else `Queued { position }` from the task row (`TaskStore::load_task`);
-     `task_op = Some(Start)` →
-     `Started` — this builder only ever sees a start the writer applied: a
-     rejected start (duplicate, non-assignee, complete, another task
-     active) fails the write and is rolled back before post-write routing
-     (plan P12, `batch.rs:432-438`); `task_op = Some(Close { outcome, .. })`
-     → `Complete` when `envelope.from == row.assignee`, else
-     `Closed { Cancelled }`; a rejected close (`RejectedReportDelivered`) and
-     an `already_closed` admission are retained with the link stripped by
-     `with_task_rejection` / `with_already_closed`
-     (`crates/atm-core/src/send/delivery_persistence.rs:76-95`) and render
-     `delivery` (plan §1 rows 17, 19). This is the **immediate** builder; the
-     claim path (`load_received_hook_dispatch_message`) sets no transition at
-     all — after BB.5 no task-linked message is deferred, and a legacy one
-     renders the non-task kind (D3).
+     `herdr_queue_wake.rs::load_received_hook_dispatch_message`): sets no
+     `task_transition`, ever. After BB.5 no task-linked message is deferred,
+     so this builder never sees one; a legacy pre-BB task-linked row that is
+     still claimed renders the non-task kind (D3, plan P14).
   2. Task pass, `nudge_dispatch.rs:157-189` `build_task_reminder_dispatch`:
      `Ready` when `row.reminder_count == 0`, else
      `Reminder { attempt: row.reminder_count }`.
   3. Immediate path, `crates/atm-core/src/send/hook.rs` (event built from the
-     write result): same rule as 1 for `Close`; an immediate assignment does
-     not exist today (assignments are deferred until BB.5), so `Queued` is
-     set from the write result's position when BB.5 lands and is `None` →
-     ordinary `delivery` until then (plan P14; test pins it).
+     write result); this is the only builder that maps a write to a
+     transition:
+     - `task_op = None` (an assignment) → `Queued { position }` from the
+       write result's queue position once BB.5 makes assignments immediate;
+       until BB.5 an immediate assignment does not exist, the field stays
+       `None` and the message renders ordinary `delivery` (plan P14; test
+       pins it).
+     - `task_op = Some(Start)` → `Started`. This builder only ever sees a
+       start the writer applied: a rejected start (duplicate, non-assignee,
+       complete, another task active) fails the write and is rolled back
+       before post-write routing (plan P12, `batch.rs:432-438`).
+     - `task_op = Some(Close { outcome, .. })` → `Complete` when
+       `envelope.from == row.assignee`, else `Closed { Cancelled }`. A
+       rejected close (`RejectedReportDelivered`) and an `already_closed`
+       admission are retained with the link stripped by
+       `with_task_rejection` / `with_already_closed`
+       (`crates/atm-core/src/send/delivery_persistence.rs:76-95`) and render
+       `delivery` (plan §1 rows 17, 19).
   Line numbers are pinned in the PR body at task start; QA diffs.
 
 - [ ] D6 — doctor, `crates/atm-core/src/doctor/mod.rs:691-700` (beside the
@@ -208,7 +207,10 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
 - [ ] D8 — `docs/requirements.md:1368-1383` (eleven kinds; delete
   `acknowledge_task`; "task-tagged messages select `task` in either family"
   → "a task-linked message selects the kind named by its `task_transition`");
-  `:4971` seven → eleven; ADR-054 (a) lists the eleven kinds and gains a
+  `:4971` seven → eleven; `docs/architecture.md:2757-2760` (the built-in
+  renderer bullet: seven kinds → eleven, `task`/`acknowledge_task` retired,
+  a task-linked message selects the kind named by its `task_transition`);
+  ADR-054 (a) lists the eleven kinds and gains a
   "Phase-BB amendment (2026-09-xx)" recording the retirement and the (g)
   both-sides change; ADR-061 D5 entry "Phase BB.1: 1.7.0 → 1.8.0".
 
@@ -216,7 +218,7 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
 
 - `boundaries/atm-storage/nudge-template-override-store.toml`
 - `boundaries/atm-storage-rusqlite/nudge-template-override-store-sqlite.toml`
-- `docs/requirements.md`, `docs/adr/ADR-054-…`, `docs/adr/ADR-061-…` (D8)
+- `docs/requirements.md`, `docs/architecture.md`, `docs/adr/ADR-054-…`, `docs/adr/ADR-061-…` (D8)
 
 ## Paths to delete
 

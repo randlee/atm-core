@@ -8,7 +8,7 @@
 | Integration branch | `integrate/phase-bb` |
 | Sprints | 7 |
 | Widest parallel wave | 3 (BB.1, BB.2, BB.3) |
-| Status | plan-hardening complete: plan-scope review closed round 3; solar critical review closed after two runs (STEP3-R1, STEP3-R2; all findings applied, P10–P14); quality-mgr plan review pending |
+| Status | plan-hardening complete: plan-scope review closed round 3; solar critical review closed after two runs (STEP3-R1, STEP3-R2; all findings applied, P10–P14); quality-mgr plan QA round 1 FAIL (ATM-QA-001–006, RBQA-F001/F002) fixed at this head; round 2 pending |
 | Exactness | every enum, struct, signature, SQL statement, template body and test name is written in its sprint doc as it lands; QA diffs source against the doc. |
 | Triage seed | PR #1431 (SMK-004, SMK-005, SMK-006) becomes the phase's first `.triage` records, not a fix branch |
 
@@ -61,7 +61,7 @@ rejections that keep the message are the close ones in row 19.
 | 2, 3 | `task_pass_first_prompt_is_ready_then_reminder_with_attempt` (BB.5) |
 | 4 | `start_by_assignee_moves_assigned_task_to_head_and_active`, `task_start_line_reaches_assigner_at_write_time` (BB.4) |
 | 5 | `duplicate_start_is_rejected_nothing_delivered_one_rejected_row`, `concurrent_starts_admit_exactly_one_started_event` (BB.4) |
-| 6, 7 | `close_by_assignee_renders_task_complete`, `cancel_shows_closed_cancelled_to_assignee` (BB.1 D5 unit, BB.5 colima) |
+| 6, 7 | `close_builder_sets_complete_for_assignee_and_closed_cancelled_for_assigner` (BB.1 D5 unit), `cancel_shows_closed_cancelled_to_assignee` (BB.5 colima) |
 | 8 | `reassign_inserts_closed_reassigned_message_to_old_assignee_in_same_transaction` (BB.5) |
 | 9 | `reopen_complete_task_emits_task_queued` (BB.5) |
 | 10, 16 | `move_to_head_while_idle_shows_ready_next_pass_and_no_extra_line` (BB.5), `move_of_active_task_appends_moved_head_to_head` (BB.4) |
@@ -117,10 +117,10 @@ visible before any logic changes.
 
 | sprint | relation | rationale |
 | --- | --- | --- |
-| BB.2 / BB.1 | `parallel_safe` | BB.2 owns `.claude/skills/graph-orchestration/*.j2`, `.claude/skills/codex-orchestration/*.j2` and both `SKILL.md`; BB.1 owns `crates/**` only |
+| BB.2 / BB.1 | `parallel_safe` | BB.2 owns `.claude/skills/graph-orchestration/*.j2`, `.claude/skills/codex-orchestration/*.j2` and both `SKILL.md`; BB.1 owns `crates/**`, the two override-store manifests under `boundaries/**` (D6a) and the D8 doc edits (`docs/requirements.md`, `docs/architecture.md`, ADR-054, ADR-061); no skill file |
 | BB.3 / BB.1, BB.2 | `parallel_safe` | BB.3 owns `docs/procedures/**`, `scripts/procedures/**`, `templates/procedure-report/**`, `site/reports/procedures/**`, `.just/generate_report_index.py`, two evidence writers and their tests; no crate, no skill file |
 | BB.4 | `must_follow` BB.1 (dev push) | emits `TaskTransition::Started` from the writer; BB.1 defines the enum and the kind |
-| BB.5 | `must_follow` BB.4 (dev push) | both edit `herdr_queue_wake/task_pass.rs` and `herdr_task_start.rs`; BB.5 deletes `record_queue_prompt_reminders`, which BB.4 reduces first |
+| BB.5 | `must_follow` BB.4 (dev push) | both edit `crates/atm-http-runtime/src/herdr_task_start.rs`: BB.4 deletes `start_assigned_task` and routes the writer-applied start through `complete_task_handoff`, BB.5 then removes the daemon-side reminder gate around it; `record_queue_prompt_reminders` is touched by BB.5 D3 only |
 | BB.6 | `must_follow` BB.5 (dev push) | the `task_pass` trigger row is written from the task pass BB.5 rewrites |
 | BB.7 | `must_follow` BB.6 (PR completion) and BB.2 (PR completion) | documents the shipped surface; adds the `atm task start` step to the templates BB.2 corrected |
 
@@ -160,6 +160,7 @@ one sprint and is in that sprint's deliverables.
 | --- | --- | --- | --- |
 | `docs/requirements.md` | 1368–1383 | "exactly seven named template cases" → the eleven kinds of BB.1 D1; `acknowledge_task` removed; "task-tagged messages select `task`" → transition selects the task kind | BB.1 |
 | `docs/requirements.md` | 4971 | "seven built-in nudge template bodies" → eleven | BB.1 |
+| `docs/architecture.md` | 2757–2760 (built-in renderer bullet) | "exactly one of seven named template kinds … task-tagged messages select `task`" → the eleven kinds of BB.1 D1; `task`/`acknowledge_task` retired; a task-linked message selects the kind named by its `task_transition` | BB.1 |
 | `docs/adr/ADR-061-…` | D5 | 1.8.0 entry (BB.1); 1.9.0 entry (BB.6) | BB.1, BB.6 |
 | `docs/adr/ADR-061-…` | D6 | storage-schema record: additive `prompt_handoffs` table, MINOR, no approval needed (BB.6); note row for the BB.5 open-time marker normalization (no DDL change) | BB.5, BB.6 |
 | `docs/adr/ADR-061-…` | D5 (1.8.0 entry) | BB.4 appends "additive error code `ATM_TASK_ALREADY_ACTIVE`" to the entry BB.1 opens | BB.4 |
@@ -175,10 +176,11 @@ one sprint and is in that sprint's deliverables.
 | `docs/adr/ADR-062-…` | new subsection | `prompt_handoffs` is the best-effort emission record of every task-linked prompt (P10, P11); `task_events.reminded` stays the task-side counter | BB.6 |
 | `docs/adr/ADR-061-…` | D3 (older consumer keeps working) | evidence rows for the previous-consumer proofs: a frozen 1.7 `PostSendHookEvent` shape decodes a 1.8 payload (BB.1); a frozen 1.8 task-events response shape decodes a 1.9 payload and the pre-BB DDL set reads and writes a database that has `prompt_handoffs` (BB.6) | BB.1, BB.6 |
 | `docs/adr/ADR-054-…` | capability count (L280) | no edit: BB.6 adds no optional storage capability (P10); the sprint states this in its PR body | BB.6 |
-| `docs/team-protocol.md` | 24–41 "Task Commands"; 42–60 message classes | `atm task start`; task assignments are informational until `task_ready`; never `atm ack` a task assignment | BB.7 |
+| `docs/team-protocol.md` | 24–41 "Task Commands"; 54–80 "Message Classes" | `atm task start`; task assignments are informational until `task_ready`; never `atm ack` a task assignment | BB.7 |
 | `CLAUDE.md` | 239–247 quick reference | `Start a task` row; alias note | BB.7 |
 | `docs/agent-conventions.md` | nudge section | six task lines and what each asks of the reader | BB.7 |
 | `docs/adr/INDEX.md` | — | amendment rows | BB.7 |
+| `docs/project-plan.md` | §60 "Phase BB" | sprint status rows as each sprint merges; phase status line when the phase PR merges (the section itself lands with this plan, PR #1432) | BB.7 |
 
 ## 8. Additions list
 
@@ -196,8 +198,11 @@ Nothing outside this list is added; deletions are listed per sprint.
 
 ## 9. Phase acceptance
 
-1. Every row of §1 is exercised by a named colima integration test (BB.4,
-   BB.5, BB.6 docs) and every test passes on the integrate head.
+1. Every row of §1 is exercised by the test §1.1 names for it, at the
+   level its sprint doc places that test (BB.1 D5 unit; BB.4 and BB.5
+   writer/runtime tests; BB.5 colima for rows 6–7), and every one passes on
+   the integrate head; the colima integration lists of BB.4, BB.5 and BB.6
+   pass on the fixture for every roster shape.
 2. `grep -rn "AcknowledgeTask\|K::Task\b\|start_assigned_task\|start_reminder_was_emitted\|queue_prompt_is_head_assignment\|record_queue_prompt_reminders" crates/` returns nothing.
 3. A three-task assignment to an idle agent on the live team shows exactly
    one `queued="2"`, one `queued="3"`, one `ready` (SMK-006 closed).

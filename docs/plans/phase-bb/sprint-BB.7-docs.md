@@ -21,7 +21,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb7-docs
   BA-123 "starting: reading the sprint doc"` to the closed set; state the
   lifecycle as the agent sees it: `task_queued` (informational, no action)
   → `task_ready` (read, start, execute) → `atm task start` → work →
-  `atm task close`. `:42-60` message classes: a task assignment is
+  `atm task close`. `:54-80` "Message Classes": a task assignment is
   **informational** until `task_ready`; never `atm ack` an assignment;
   "task assignment" moves from the `requires_ack` examples to the
   informational examples. The "Daemon escalation messages" paragraph is
@@ -49,8 +49,10 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb7-docs
   rows for the ADR-054 and ADR-062 Phase BB amendments and the ADR-061
   1.8.0 / 1.9.0 entries.
 - [ ] D6 — `docs/plans/phase-bb/*.md` front-matter `status` fields to
-  `complete` for merged sprints; plan status to "merged" once the phase PR
-  merges (team-lead lands that last edit).
+  `complete` for merged sprints; `docs/project-plan.md` §60 "Phase BB"
+  sprint rows to `merged (#PR)` for every merged sprint (the section itself
+  landed with the plan, PR #1432); plan status and the §60 heading to
+  "merged" once the phase PR merges (team-lead lands that last edit).
 
 ## Tests
 
