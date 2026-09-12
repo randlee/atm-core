@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T23:34:12Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: route both column lists through task_sql.rs's existing one-owner convention instead of independent literals. Routed to one storage-only fix layer above the stack top (branch fix/bb6-storage-qa1), dev to be picked by fenix." ;
+  triage:deferredNote "Fix: route both column lists through task_sql.rs's existing one-owner convention instead of independent literals. Routed to solar on BB6-FIX-STORAGE-QA1-1789265000, branch fix/bb6-storage-qa1 cut from a7d4664d1, fence crates/atm-storage (+ rusqlite sibling)." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-12T23:33:40Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-001/1>
   a triage:Occurrence ;
