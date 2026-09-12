@@ -192,14 +192,17 @@ async fn unread_queue_item_is_reprompted_every_interval() {
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
     let pending_store = runtime.pending_nudge_store().expect("pending store");
 
-    for (tick, timestamp) in [
-        "2020-01-01T00:00:00Z",
-        "2020-01-01T00:01:00Z",
-        "2020-01-01T00:02:00Z",
+    for (tick, (timestamp, next_due)) in [
+        ("2030-01-01T00:00:00Z", "2030-01-01T00:01:00+00:00"),
+        ("2030-01-01T00:01:00Z", "2030-01-01T00:02:00+00:00"),
+        ("2030-01-01T00:02:00Z", "2030-01-01T00:03:00+00:00"),
     ]
     .into_iter()
     .enumerate()
     {
+        if tick > 0 {
+            make_failed_attempt_due(pending_store.as_ref(), &key, &message_id);
+        }
         *now.lock().expect("test clock lock") = timestamp.parse().expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
@@ -209,10 +212,7 @@ async fn unread_queue_item_is_reprompted_every_interval() {
             "one prompt at tick {tick}"
         );
         let (marker, attempts) = pending_state(root.path(), &key, message_id);
-        assert!(
-            marker.is_some(),
-            "the unread item stays pending after tick {tick}"
-        );
+        assert_eq!(marker.as_deref(), Some(next_due));
         assert_eq!(
             attempts, 0,
             "successful reminders do not consume retry attempts"
@@ -220,7 +220,7 @@ async fn unread_queue_item_is_reprompted_every_interval() {
     }
 
     *now.lock().expect("test clock lock") =
-        IsoTimestamp::from_str("2020-01-01T00:02:10Z").expect("test timestamp");
+        IsoTimestamp::from_str("2030-01-01T00:02:10Z").expect("test timestamp");
     close_message(root.path(), &runtime, &key, message_id);
     assert_eq!(pending_state(root.path(), &key, message_id), (None, 0));
     for _ in 0..100 {
@@ -247,7 +247,7 @@ async fn requires_ack_message_reminded_until_acked() {
     let message_id =
         queue_requires_ack_message(root.path(), &runtime, key.team(), key.agent().as_str());
     let now = Arc::new(Mutex::new(
-        IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
 
@@ -262,8 +262,20 @@ async fn requires_ack_message_reminded_until_acked() {
     close_message(root.path(), &runtime, &key, message_id);
     assert!(pending_state(root.path(), &key, message_id).0.is_some());
 
+    assert_eq!(
+        pending_state(root.path(), &key, message_id).0.as_deref(),
+        Some("2030-01-01T00:01:00+00:00")
+    );
+    make_failed_attempt_due(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .as_ref(),
+        &key,
+        &message_id,
+    );
     *now.lock().expect("test clock lock") =
-        IsoTimestamp::from_str("2020-01-01T00:01:00Z").expect("test timestamp");
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
     assert_eq!(
@@ -271,13 +283,17 @@ async fn requires_ack_message_reminded_until_acked() {
         2,
         "read-but-unacked item is rediscovered"
     );
+    assert_eq!(
+        pending_state(root.path(), &key, message_id).0.as_deref(),
+        Some("2030-01-01T00:02:00+00:00")
+    );
 
     add_roster_member(&runtime, key.team(), "sender");
     ack_task_assignment(root.path(), &runtime, key.team(), message_id);
     assert_eq!(pending_state(root.path(), &key, message_id), (None, 0));
     for seconds in 0..100 {
         *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str(&format!("2020-01-01T00:01:{:02}Z", seconds.min(59)))
+            IsoTimestamp::from_str(&format!("2030-01-01T00:01:{:02}Z", seconds.min(59)))
                 .expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
