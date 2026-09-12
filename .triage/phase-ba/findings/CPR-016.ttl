@@ -16,16 +16,17 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_task_disposition.rs" ;
-  triage:status "fixed" ;
-  triage:dispatchReady false ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
-  triage:deferredNote "fenix (ATM 01M2AAHXS8QB8CQTR4J0BSHVST, 2026-09-12T08:08:16Z): fixed at review-2 a719f8955, chain b337cdfce (counter) + 8f3dfcc40 (own-assignment handoff guard) + a719f8955 (dead-flag cleanup); all gate-green on fenix's host. Closes both CPR-016 and CPR-005 with one counter change." ;
+  triage:deferredNote "fenix (ATM 01M2AAHXS8QB8CQTR4J0BSHVST, 2026-09-12T08:08:16Z): fixed at review-2 a719f8955, chain b337cdfce (counter) + 8f3dfcc40 (own-assignment handoff guard) + a719f8955 (dead-flag cleanup); all gate-green on fenix's host. Closes both CPR-016 and CPR-005 with one counter change. quality-mgr consolidated QA (BA-REVIEW-QA-1789194730, PR #1425 comment 5645308114, 2026-09-12T10:24:25Z): the counter-freeze aspect (ex-CPR-005) is confirmed fixed, but the original unbounded-mail-pending-hold aspect remains -- an undeliverable/retry-exhausted queue item still leaves dispose()'s Hold(\"mail pending\") unbounded with no escalation fallback once permanently unclaimable; pending_nudge_store.rs test comment cites ADR-054(f) as the accepted current behavior (team-lead confirmed the ADR-054(f) comment exists at crates/atm-storage-rusqlite/src/pending_nudge_store.rs:905). Reopened as post-landing backlog (Important); the reminder-counter closure stands." ;
   triage:relatedFinding "CPR-005" ;
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CPR-016/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CPR-016/2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-016/3> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/CPR-016/1>
   a triage:Occurrence ;
@@ -68,3 +69,22 @@
   triage:branch "fix/phase-ba-review-2" ;
   triage:headSha "4e621bb4a" ;
   triage:orderIndex 8 .
+
+<urn:atm:triage:occurrence/CPR-016/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_task_disposition.rs" ;
+  triage:line 42 ;
+  triage:snippet "dispose() still returns Hold(\"mail pending\") unbounded for a permanently unclaimable item; no escalation fallback once retry-exhausted -- accepted current behavior per ADR-054(f)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:resolutionNote "quality-mgr consolidated QA re-verified independently at 9774e113c; unbounded-hold aspect not addressed by the counter fix. Not blocking; routed to post-landing backlog as Important." ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9774e113c" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-016/3> .
+
+<urn:atm:triage:worktree/CPR-016/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "post-landing backlog: integrate/phase-ba @ 9774e113c, escalation-fallback fix pending" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9774e113c" ;
+  triage:orderIndex 11 .
