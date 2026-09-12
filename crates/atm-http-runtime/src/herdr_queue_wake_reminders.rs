@@ -50,6 +50,28 @@ impl HerdrQueueWakePump {
 
         if let (Some(reader), Some(task_store)) = (reader.as_ref(), task_store.as_ref()) {
             let heads = self.open_task_heads(reader.as_ref(), &candidates).await;
+            for head in heads.values().filter(|head| {
+                head.state == atm_core::boundary::TaskState::Assigned
+                    && head.last_reminded_at.is_some()
+            }) {
+                if let Err(error) = crate::herdr_task_start::start_assigned_task(
+                    &self.service_runtime,
+                    &self.daemon_home,
+                    head,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        subsystem = "herdr_queue_wake",
+                        action = "task_start_owed",
+                        outcome = "failed",
+                        member = %head.assignee,
+                        task_id = %head.task_id,
+                        error = %error,
+                        "Owed task start could not be completed"
+                    );
+                }
+            }
             for candidate in candidates {
                 let head = heads.get(&candidate.member);
                 let disposition = dispose(
@@ -210,9 +232,20 @@ impl HerdrQueueWakePump {
         outcome: ReminderOutcome,
         stats: &mut HerdrQueueWakeStats,
     ) {
-        let recorded_row = self
-            .record_task_reminder(context.task_store, context.member, row, now, outcome)
-            .await;
+        let recorded_row = if outcome == ReminderOutcome::Emitted {
+            crate::herdr_task_start::complete_task_handoff(
+                &self.service_runtime,
+                context.task_store,
+                &self.daemon_home,
+                context.member,
+                row,
+                now,
+            )
+            .await
+        } else {
+            self.record_task_reminder(context.task_store, context.member, row, now, outcome)
+                .await
+        };
         match outcome {
             ReminderOutcome::Emitted => {
                 stats.prompted += 1;
