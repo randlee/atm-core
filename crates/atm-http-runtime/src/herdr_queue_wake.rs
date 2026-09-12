@@ -1106,9 +1106,8 @@ mod tests {
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
-        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MemberKey,
-        MessageReceivedHookSelector, NudgeKind, PostSendEmissionPath, RosterEntry, RosterHarness,
-        RosterMemberKind,
+        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
+        PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::NullObservability;
@@ -1131,6 +1130,7 @@ mod tests {
     use std::future::Future;
     use std::pin::Pin;
     use std::str::FromStr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
@@ -1370,6 +1370,80 @@ mod tests {
             .persisted_message_id()
     }
 
+    fn queue_requires_ack_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+    ) -> AtmMessageId {
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).expect("home");
+        let recipient = format!("{agent}@{team}");
+        write_mail_with_runtime(
+            WriteRequest::new(
+                home.clone(),
+                home,
+                "sender".parse().expect("sender"),
+                &recipient,
+                team.clone(),
+                SendMessageSource::Inline("requires acknowledgement".to_owned()),
+                None,
+                true,
+                None,
+                false,
+            )
+            .expect("requires-ack write request")
+            .with_nudge_mode(NudgeMode::Deferred),
+            &NullObservability,
+            runtime,
+        )
+        .expect("queue requires-ack message")
+        .persisted_message_id()
+    }
+
+    fn pending_state(
+        root: &std::path::Path,
+        key: &atm_core::boundary::MemberKey,
+        message_id: AtmMessageId,
+    ) -> (Option<String>, u32) {
+        let connection = rusqlite::Connection::open(root.join("runtime/mail.sqlite3"))
+            .expect("open test database");
+        connection
+            .query_row(
+                "SELECT nudge_pending_at, nudge_attempts FROM mail_message_states
+                 WHERE team = ?1 AND agent = ?2 AND message_key = ?3",
+                rusqlite::params![
+                    key.team().as_str(),
+                    key.agent().as_str(),
+                    atm_storage::MessageKey::from(message_id).as_str(),
+                ],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read pending marker state")
+    }
+
+    fn acknowledgement_is_pending(
+        root: &std::path::Path,
+        key: &atm_core::boundary::MemberKey,
+        message_id: AtmMessageId,
+    ) -> bool {
+        let connection = rusqlite::Connection::open(root.join("runtime/mail.sqlite3"))
+            .expect("open test database");
+        connection
+            .query_row(
+                "SELECT pending_ack_at IS NOT NULL AND acknowledged_at IS NULL
+                 FROM mail_message_states
+                 WHERE team = ?1 AND agent = ?2 AND message_key = ?3",
+                rusqlite::params![
+                    key.team().as_str(),
+                    key.agent().as_str(),
+                    atm_storage::MessageKey::from(message_id).as_str(),
+                ],
+                |row| row.get(0),
+            )
+            .expect("read acknowledgement state")
+    }
+
     fn pump_with_clock(
         runtime: LocalServiceRuntime,
         fake: Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
@@ -1520,6 +1594,18 @@ mod tests {
             runtime,
         )
         .expect("task acknowledgement");
+    }
+
+    fn add_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(team)
+            .expect("load roster");
+        roster.members.push(herdr_member(team, agent));
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("save roster member");
     }
 
     fn complete_task(
@@ -3875,6 +3961,44 @@ mod tests {
         }
     }
 
+    struct CountingMessageStore {
+        inner: Arc<dyn atm_storage::MessageStore + Send + Sync>,
+        list_messages_calls: Arc<AtomicUsize>,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for CountingMessageStore {}
+    impl atm_storage::MessageStore for CountingMessageStore {
+        fn save_message(&self, message: &atm_storage::Message) -> Result<(), AtmError> {
+            self.inner.save_message(message)
+        }
+
+        fn save_messages_atomically(
+            &self,
+            messages: &[atm_storage::Message],
+        ) -> Result<(), AtmError> {
+            self.inner.save_messages_atomically(messages)
+        }
+
+        fn load_message(
+            &self,
+            key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, AtmError> {
+            self.inner.load_message(key)
+        }
+
+        fn list_messages(
+            &self,
+            query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, AtmError> {
+            self.list_messages_calls.fetch_add(1, Ordering::SeqCst);
+            self.inner.list_messages(query)
+        }
+
+        fn delete_message(&self, key: &atm_storage::MessageKey) -> Result<(), AtmError> {
+            self.inner.delete_message(key)
+        }
+    }
+
     struct NoopNudgeTemplateOverrideStore;
     impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
     impl atm_core::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
@@ -4071,22 +4195,224 @@ mod tests {
 
     #[tokio::test]
     async fn task_prompt_waits_while_queue_item_open_across_ticks() {
-        run_ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence().await;
+        let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
+        let queue_message_id =
+            queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        let task_id: TaskId = "BA5-OPEN-TASK".parse().expect("task id");
+        let task_message_id = queue_task_message(
+            root.path(),
+            &runtime,
+            key.team(),
+            key.agent().as_str(),
+            task_id,
+        );
+        close_message(root.path(), &runtime, &key, task_message_id);
+        add_roster_member(&runtime, key.team(), "sender");
+        ack_task_assignment(root.path(), &runtime, key.team(), task_message_id);
+        let now = Arc::new(Mutex::new(
+            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
+        ));
+        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+        assert_eq!(
+            pump.stats().prompted,
+            1,
+            "the unread queue item is prompted at t0"
+        );
+        assert_eq!(
+            pump.stats().task_reminders,
+            0,
+            "the open queue item holds the task"
+        );
+
+        for seconds in [5, 10, 55] {
+            *now.lock().expect("test clock lock") =
+                IsoTimestamp::from_str(&format!("2030-01-01T00:00:{seconds:02}Z"))
+                    .expect("test timestamp");
+            queue_idle_result(&fake, &key);
+            pump.tick_once().await;
+            assert_eq!(
+                pump.stats().task_reminders,
+                0,
+                "open queue item holds at +{seconds}s"
+            );
+        }
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:00:58Z").expect("test timestamp");
+        close_message(root.path(), &runtime, &key, queue_message_id);
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+        assert_eq!(
+            pump.stats().task_reminders,
+            1,
+            "the open task is prompted at +60s"
+        );
+        assert!(
+            prompt_texts(&fake)
+                .last()
+                .is_some_and(|text| text.contains("BA5-OPEN-TASK"))
+        );
     }
 
     #[tokio::test]
     async fn open_mail_set_is_read_each_tick_not_cached() {
-        run_ax5_02_drain_prompt_consumes_the_shared_reminder_budget().await;
+        let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
+        let queue_message_id =
+            queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        let task_id: TaskId = "BA5-CACHE-TASK".parse().expect("task id");
+        let task_message_id = queue_task_message(
+            root.path(),
+            &runtime,
+            key.team(),
+            key.agent().as_str(),
+            task_id,
+        );
+        close_message(root.path(), &runtime, &key, task_message_id);
+        add_roster_member(&runtime, key.team(), "sender");
+        ack_task_assignment(root.path(), &runtime, key.team(), task_message_id);
+        let now = Arc::new(Mutex::new(
+            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
+        ));
+        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+        assert_eq!(
+            pump.stats().task_reminders,
+            0,
+            "the queue item is still open"
+        );
+        close_message(root.path(), &runtime, &key, queue_message_id);
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:00:05Z").expect("test timestamp");
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+        assert_eq!(
+            pump.stats().task_reminders,
+            1,
+            "the next tick observes the item as read"
+        );
+        assert!(
+            prompt_texts(&fake)
+                .last()
+                .is_some_and(|text| text.contains("BA5-CACHE-TASK"))
+        );
     }
 
     #[tokio::test]
     async fn unread_queue_item_is_reprompted_every_interval() {
-        run_ac01_fifo_per_member_via_claim().await;
+        let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
+        let message_id = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        let now = Arc::new(Mutex::new(
+            IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+        ));
+        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+        let pending_store = runtime.pending_nudge_store().expect("pending store");
+
+        for (tick, timestamp) in [
+            "2020-01-01T00:00:00Z",
+            "2020-01-01T00:01:00Z",
+            "2020-01-01T00:02:00Z",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            *now.lock().expect("test clock lock") = timestamp.parse().expect("test timestamp");
+            queue_idle_result(&fake, &key);
+            pump.tick_once().await;
+            assert_eq!(
+                prompt_texts(&fake).len(),
+                tick + 1,
+                "one prompt at tick {tick}"
+            );
+            let (marker, attempts) = pending_state(root.path(), &key, message_id);
+            assert!(
+                marker.is_some(),
+                "the unread item stays pending after tick {tick}"
+            );
+            assert_eq!(
+                attempts, 0,
+                "successful reminders do not consume retry attempts"
+            );
+        }
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2020-01-01T00:02:10Z").expect("test timestamp");
+        close_message(root.path(), &runtime, &key, message_id);
+        assert_eq!(pending_state(root.path(), &key, message_id), (None, 0));
+        for _ in 0..100 {
+            queue_idle_result(&fake, &key);
+            pump.tick_once().await;
+        }
+        assert_eq!(
+            prompt_texts(&fake).len(),
+            3,
+            "reading stops all later reminders"
+        );
+        assert!(
+            pending_store
+                .list_pending_members()
+                .expect("pending members")
+                .is_empty()
+        );
     }
 
     #[tokio::test]
     async fn requires_ack_message_reminded_until_acked() {
-        run_ac01_ack_and_completion_advance_to_the_next_task_reminder().await;
+        let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
+        let message_id =
+            queue_requires_ack_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        let now = Arc::new(Mutex::new(
+            IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+        ));
+        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+        assert_eq!(
+            prompt_texts(&fake).len(),
+            1,
+            "the requires-ack item is initially prompted"
+        );
+        assert!(acknowledgement_is_pending(root.path(), &key, message_id));
+        close_message(root.path(), &runtime, &key, message_id);
+        assert!(pending_state(root.path(), &key, message_id).0.is_some());
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2020-01-01T00:01:00Z").expect("test timestamp");
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+        assert_eq!(
+            prompt_texts(&fake).len(),
+            2,
+            "read-but-unacked item is rediscovered"
+        );
+
+        add_roster_member(&runtime, key.team(), "sender");
+        ack_task_assignment(root.path(), &runtime, key.team(), message_id);
+        assert_eq!(pending_state(root.path(), &key, message_id), (None, 0));
+        for seconds in 0..100 {
+            *now.lock().expect("test clock lock") =
+                IsoTimestamp::from_str(&format!("2020-01-01T00:01:{:02}Z", seconds.min(59)))
+                    .expect("test timestamp");
+            queue_idle_result(&fake, &key);
+            pump.tick_once().await;
+        }
+        assert_eq!(
+            prompt_texts(&fake).len(),
+            2,
+            "acknowledgement stops reminders"
+        );
     }
 
     #[tokio::test]
@@ -4111,38 +4437,51 @@ mod tests {
 
     #[tokio::test]
     async fn failed_dispatch_backs_off_after_max_attempts_and_still_closes_on_read() {
-        run_ax5_04_emit_failure_retries_until_durable_reminder_rate_limits().await;
-    }
+        let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
+        let message_id = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        let now = Arc::new(Mutex::new(
+            IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+        ));
+        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+        let pending_store = runtime.pending_nudge_store().expect("pending store");
 
-    #[test]
-    fn bare_cli_pull_closes_item() {
-        let fifo: crate::BareCliFifo = Default::default();
-        let drops: crate::BareCliQueueFullDrops = Default::default();
-        let member = MemberKey::new(
-            "ba5-bare-cli".parse().expect("team"),
-            "agent".parse().expect("agent"),
-        );
-        crate::append_bare_cli_message(
-            &fifo,
-            &drops,
-            member.clone(),
-            atm_core::protocol::QueuedNudgeMessage {
-                kind: NudgeKind::Queue,
-                msg_id: AtmMessageId::new(),
-                body: "queued".to_owned(),
-            },
-        )
-        .expect("append bare CLI item");
+        for failure in 0..atm_storage::MAX_NUDGE_ATTEMPTS {
+            fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentPromptStalled));
+            queue_idle_result(&fake, &key);
+            pump.tick_once().await;
+            assert_eq!(
+                pump.stats().released,
+                1,
+                "failed attempt {failure} is released"
+            );
+            if failure + 1 < atm_storage::MAX_NUDGE_ATTEMPTS {
+                pending_store
+                    .rearm_pending_after_handoff(
+                        &key,
+                        &message_id,
+                        IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+                    )
+                    .expect("make the next failed claim due");
+            }
+        }
+        let (marker, attempts) = pending_state(root.path(), &key, message_id);
+        assert!(marker.is_some(), "max-attempt item remains durably marked");
+        assert_eq!(attempts, 0, "max attempts reset the retry counter");
         assert_eq!(
-            crate::drain_bare_cli_messages(&fifo, &member)
-                .expect("drain")
-                .len(),
-            1
+            prompt_texts(&fake).len(),
+            atm_storage::MAX_NUDGE_ATTEMPTS as usize
         );
-        assert!(
-            crate::drain_bare_cli_messages(&fifo, &member)
-                .expect("second drain")
-                .is_empty()
+
+        close_message(root.path(), &runtime, &key, message_id);
+        assert_eq!(pending_state(root.path(), &key, message_id), (None, 0));
+        for _ in 0..100 {
+            queue_idle_result(&fake, &key);
+            pump.tick_once().await;
+        }
+        assert_eq!(
+            prompt_texts(&fake).len(),
+            atm_storage::MAX_NUDGE_ATTEMPTS as usize
         );
     }
 
@@ -4192,12 +4531,60 @@ mod tests {
 
     #[tokio::test]
     async fn no_mailbox_list_read_in_the_queue_pass() {
-        let (root, runtime, fake, pump, _health, key) = build_test_pump();
-        clear_pending_markers(root.path(), &runtime, &key);
+        let root = tempfile::tempdir().expect("temporary root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+        let team: TeamName = "aq27-team".parse().expect("team");
+        let agent: atm_core::types::AgentName = "aq27-agent".parse().expect("agent");
+        let key = atm_core::boundary::MemberKey::new(team.clone(), agent.clone());
+        let durable_roster = assembly.service_runtime.shared_roster_store_arc();
+        durable_roster
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![herdr_member(&team, agent.as_str())],
+                refreshed_at: None,
+            })
+            .expect("roster");
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(durable_roster)
+            .expect("write-through roster fixture");
+        let list_messages_calls = Arc::new(AtomicUsize::new(0));
+        let message_store = Arc::new(CountingMessageStore {
+            inner: assembly.message_store_arc(),
+            list_messages_calls: Arc::clone(&list_messages_calls),
+        });
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            message_store,
+            roster,
+            Arc::new(NoopNudgeTemplateOverrideStore),
+            Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
+        )
+        .with_pending_nudge_store(
+            assembly
+                .service_runtime
+                .pending_nudge_store()
+                .expect("pending store"),
+        );
+        let message_id = queue_message(root.path(), &runtime, &team, agent.as_str());
+        assert!(pending_state(root.path(), &key, message_id).0.is_some());
+        list_messages_calls.store(0, Ordering::SeqCst);
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        let now = Arc::new(Mutex::new(
+            IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+        ));
+        let pump = pump_with_clock(
+            runtime.clone(),
+            fake.clone(),
+            super::RuntimeHealth::default(),
+            now,
+        );
         for _ in 0..50 {
             queue_idle_result(&fake, &key);
             pump.tick_once().await;
         }
-        assert!(prompt_texts(&fake).is_empty());
+        assert_eq!(prompt_texts(&fake).len(), 50);
+        assert_eq!(
+            list_messages_calls.load(Ordering::SeqCst),
+            0,
+            "the queue pass must use pending markers and never enumerate the mailbox"
+        );
     }
 }

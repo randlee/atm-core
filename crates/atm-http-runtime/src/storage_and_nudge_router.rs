@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::MessageReceivedHookSelector;
+use atm_core::boundary::{MessageReceivedHookSelector, NudgeKind};
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
@@ -708,15 +708,43 @@ impl StorageAndNudgeRouter {
         }
         let runtime = self.service_runtime.clone();
         let fifo = self.bare_cli_fifo.clone();
+        let observability = Arc::clone(&self.observability);
+        let daemon_home = self.daemon_home.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
                 validate_heartbeat_member(&runtime, &request.team, &request.member)?;
                 let member = atm_core::boundary::MemberKey::new(request.team, request.member);
-                drain_bare_cli_messages(&fifo, &member).map(|messages| {
-                    ApiResponse::new(ResponseEnvelope::QueueGetNext(
-                        atm_core::protocol::QueueGetNextResponse { messages },
-                    ))
-                })
+                let messages = drain_bare_cli_messages(&fifo, &member)?;
+                for message in messages
+                    .iter()
+                    .filter(|message| message.kind == NudgeKind::Queue)
+                {
+                    let message_id = message.msg_id.to_string();
+                    let query = ReadQuery::new(
+                        daemon_home.clone(),
+                        daemon_home.clone(),
+                        member.agent().clone(),
+                        Some(&format!("{}@{}", member.agent(), member.team())),
+                        member.team().clone(),
+                        atm_core::types::ReadSelection::All,
+                        false,
+                        true,
+                        Some(&message_id),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )?;
+                    atm_core::read::read_mail_with_runtime(
+                        query,
+                        observability.as_ref(),
+                        &runtime,
+                    )?;
+                }
+                Ok(ApiResponse::new(ResponseEnvelope::QueueGetNext(
+                    atm_core::protocol::QueueGetNextResponse { messages },
+                )))
             })
             .await
     }
@@ -2288,6 +2316,71 @@ mod tests {
         assert_eq!(
             response.messages[0].body,
             "<atm><action>queue</action></atm>"
+        );
+    }
+
+    /// A bare-CLI pull is a real queue handoff: the returned queue item is
+    /// closed through the read path, so the durable marker cannot be rearmed
+    /// after the in-memory FIFO entry has been removed.
+    #[tokio::test]
+    async fn bare_cli_pull_closes_item() {
+        let fixture = fixture(true, None, None);
+        let member = MemberKey::new(
+            "test-team".parse().expect("team"),
+            "recipient".parse().expect("agent"),
+        );
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_nudge_mode(NudgeMode::Deferred);
+        request.to = Some("recipient@test-team".parse().expect("recipient"));
+        let message_id = atm_core::send::write_mail_with_runtime(
+            request,
+            &NullObservability,
+            &fixture.router.service_runtime,
+        )
+        .expect("deferred queue write")
+        .persisted_message_id();
+        fixture
+            .pending_nudge_store
+            .mark_pending(&member, &message_id, IsoTimestamp::now())
+            .expect("mark queue item pending");
+
+        let fifo: BareCliFifo = Default::default();
+        let drops: BareCliQueueFullDrops = Default::default();
+        append_bare_cli_message(
+            &fifo,
+            &drops,
+            member.clone(),
+            QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: message_id,
+                body: "queued".to_owned(),
+            },
+        )
+        .expect("seed FIFO");
+        let router = fixture.router.clone().with_bare_cli_fifo(fifo, drops);
+        let response = router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::QueueGetNext(QueueGetNextRequest {
+                    team: member.team().clone(),
+                    member: member.agent().clone(),
+                })),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("authorized queue-get");
+        let ResponseEnvelope::QueueGetNext(response) = response.into_inner() else {
+            panic!("expected a QueueGetNext response");
+        };
+        assert_eq!(response.messages.len(), 1);
+        assert_eq!(response.messages[0].msg_id, message_id);
+        assert!(
+            fixture
+                .pending_nudge_store
+                .list_pending_members()
+                .expect("list pending members")
+                .is_empty(),
+            "pull closes the stored nudge marker instead of rearming it"
         );
     }
 
