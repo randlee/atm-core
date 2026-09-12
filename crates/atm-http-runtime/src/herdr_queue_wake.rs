@@ -456,11 +456,11 @@ impl HerdrQueueWakePump {
             .collect();
         let mut updates_by_team = HashMap::new();
         for member in &members {
-            let state = snapshots
-                .get(member.herdr_agent.as_str())
-                .map_or(RuntimeMemberState::Unknown, |snapshot| {
-                    runtime_state(snapshot.status)
-                });
+            let state = runtime_state(
+                snapshots
+                    .get(member.herdr_agent.as_str())
+                    .map(|snapshot| snapshot.status),
+            );
             updates_by_team
                 .entry(member.key.team().clone())
                 .or_insert_with(Vec::new)
@@ -511,7 +511,7 @@ impl HerdrQueueWakePump {
                     blocked: observation.state == RuntimeMemberState::Blocked,
                 });
             }
-            if member.pending && observation.state == RuntimeMemberState::Idle {
+            if member.pending && still_idle(observation.state) {
                 stats.idle_members += 1;
                 eligible.push(member);
             }
@@ -931,13 +931,20 @@ fn member_order(left: &MemberKey, right: &MemberKey) -> std::cmp::Ordering {
         .then_with(|| left.agent().as_str().cmp(right.agent().as_str()))
 }
 
-fn runtime_state(status: HerdrAgentStatus) -> RuntimeMemberState {
+fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
     match status {
-        HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
-        HerdrAgentStatus::Working => RuntimeMemberState::Active,
-        HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
-        HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        None => RuntimeMemberState::Unknown,
+        Some(status) => match status {
+            HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
+            HerdrAgentStatus::Working => RuntimeMemberState::Active,
+            HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
+            HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        },
     }
+}
+
+const fn still_idle(state: RuntimeMemberState) -> bool {
+    matches!(state, RuntimeMemberState::Idle)
 }
 
 struct ReleasePendingOnDrop {
@@ -3746,19 +3753,19 @@ mod tests {
     #[test]
     fn herdr_statuses_project_to_runtime_states() {
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Idle),
+            runtime_state(Some(HerdrAgentStatus::Idle)),
             RuntimeMemberState::Idle
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Done),
+            runtime_state(Some(HerdrAgentStatus::Done)),
             RuntimeMemberState::Idle
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Working),
+            runtime_state(Some(HerdrAgentStatus::Working)),
             RuntimeMemberState::Active
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Unknown),
+            runtime_state(Some(HerdrAgentStatus::Unknown)),
             RuntimeMemberState::Unknown
         );
     }
