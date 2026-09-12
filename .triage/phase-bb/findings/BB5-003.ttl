@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: write the 14 missing named tests (unit/writer and Runtime lists) per the sprint-BB.5 doc's Tests section, or obtain a lead ruling narrowing the manifest. Routed to arch-ctm on fix/bb5-closure-r1 (BB5-FIX-R1-1789256000)." ;
+  triage:deferredNote "Fix: write the 14 missing named tests (unit/writer and Runtime lists) per the sprint-BB.5 doc's Tests section, or obtain a lead ruling narrowing the manifest. Routed to arch-ctm on fix/bb5-closure-r1 (BB5-FIX-R1-1789256000). BB5-FIX-R1 completed (arch-ctm, task event 2026-09-12T22:56:30Z) at fix/bb5-closure-r1 @ 1c7e76da5; just lint 36/36, just test exit 0. Fixed-pending-QA; QA dispatched as BB5-QA-R1-1789261000 on PR #1453 (queued behind BB5-QA-CT1 on #1456)." ;
   triage:foundIn triage:BB5 ;
   triage:foundAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-003/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB5-003/1>
   a triage:Occurrence ;
@@ -32,13 +32,13 @@
   triage:snippet "14 of 17 named tests in sprint-BB.5's Tests section (unit/writer and Runtime lists) do not exist; nearest partial coverage here" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
   triage:occursIn <urn:atm:triage:worktree/BB5-003/1> .
 
 <urn:atm:triage:worktree/BB5-003/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1452, feature/bb-collapsed" ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:path "PR #1453, fix/bb5-closure-r1" ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
   triage:orderIndex 1 .

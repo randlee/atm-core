@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-12T19:00:24Z",
-    "end": "2026-09-12T22:19:10Z"
+    "end": "2026-09-12T23:02:25Z"
   },
   "scope": "BB.1 (PR #1438, feature/bb1-transition-templates) and BB.2 (PR #1439, feature/bb2-orchestration-templates-1516) each have one QA-1 round in flight (assigned, no result yet -- verdict/pass/result_* fields are null/empty until quality-mgr reports). BB.3 (PR #1436, feature/bb3-test-procedure-pages) has one QA-1 FAIL round closed and a QA-2 round in flight on the fix-round push (BB3-FIX-R1, cipher, head 8a8b29640). fenix's parallel critical reviews (on BB.1 and BB.3 so far) are not dispatched quality-mgr QA runs; their findings are recorded separately under .triage/phase-bb/findings/ (BB1-001..021, BB3-001..012), correlated with QA findings on the same commit rather than duplicated. Phase BB is orchestrated with plain atm send (codex-orchestration), not graph-orchestration Assignment/Completion events, but .sprints/BB/events.ttl records dev Assignment/Completion events anyway per fenix's ruling so /triage-report's DEV column works.",
   "count_basis": "headline/reviewer",
@@ -258,6 +258,56 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "Sprint BB.4 QA-2 (QA Findings Update): FAIL (0 blocking / 2 important / 0 minor), deliverables 4/4 (100%), PR #1446 @ a66fbcbb3. https://github.com/randlee/atm-core/pull/1446#issuecomment-5649061544. BB4-001..004 confirmed fixed (req-qa PASS 100%/0 findings; rust-qa-agent PASS, fmt/clippy/tests all green); closed. New Important: ARCH-001 (ADR-062 line 126 'no event or delivery' contradicts its own Replay row and the actual writer, which appends one Rejected event) and RBQA-F001 (docs/architecture.md:2924 Task Storage table still teaches pre-BB.4 idempotent-resend behavior, no Phase-BB amendment) recorded as BB4-005/BB4-006, owner solar. Not merge-ready. ruthless-boundary-qa's RBQA-F002/F003 (BB.1/BB.5 sprint-doc observations) flagged as phase-wide awareness items, not counted against this verdict, not filed. Completed post-cancellation on Rand's explicit instruction (fenix's carved-out exception)."
+    },
+    {
+      "run_id": "BB5-QA-CT1",
+      "aich_sprint": "BB5",
+      "phase_sprint": "BB.5",
+      "pass": true,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-12T22:47:55Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2BWWM46A455ZZ8K0ZP742CB",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB5-QA-CT1-1789259000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1456, pinned head d1969185f (fix/bb5-contract-tests, fenix's contract-test + BB3-023 fix layer, stack #1457 layer 2) -- BB.5 contract-tests QA-1 pass.",
+      "result_time_utc": "2026-09-12T23:01:56Z",
+      "result_time_pst": null,
+      "result_message_id": "01M2BXPERMJ6AKWS7DWR1RRPQ5",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 1,
+      "minor": 1,
+      "count_basis": "headline/reviewer",
+      "evidence": "Sprint BB.5 QA-CT1 (Final Quality Report): PASS (0 blocking / 1 important / 1 contested-informational minor), PR #1456 @ d1969185f. https://github.com/randlee/atm-core/pull/1456#issuecomment-5649270537 (posted 2026-09-12T23:01:51Z). Deliverables 10/10. BB3-023 and BB5-006 independently confirmed fixed at this head by req-qa/arch-qa/rust-qa-agent; closed by team-lead. New Important BB5-QA-CT1-001 (filed as BB5-007): sprint AC1's literal grep for record_queue_prompt_reminders is not clean -- two test comments at crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs:1299,1729 still name the deleted symbol verbatim (deletion itself complete, comment-only); routed to arch-ctm's BB.6 runtime layer feature/bb6-runtime-prompt-handoffs. BB5-QA-CT1-002 [minor, contested]: nudge_mode async-graft fixture note ruled not a finding (2 of 3 reviewers; InMemoryAsyncStore admits nothing, async position logic unit-tested at the storage layer), not filed. Merge-ready per quality-mgr."
+    },
+    {
+      "run_id": "BB5-QA-R1",
+      "aich_sprint": "BB5",
+      "phase_sprint": "BB.5",
+      "pass": null,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-12T22:58:24Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2BXFSN7Z4X9E4T4M2BVYW6Z",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB5-QA-R1-1789261000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1453, pinned head 1c7e76da5 (fix/bb5-closure-r1, arch-ctm's BB5-FIX-R1 closure layer, stack #1457 layer 3; supersedes arch-ctm's direct handoff 01M2BXBVZJXBG26MPHA1FWAGB7) -- BB.5 closure round QA-1 pass, queued behind BB5-QA-CT1 in quality-mgr's queue. Review scope: BB5-001 (both occurrences), BB5-003, BB5-005.",
+      "result_time_utc": null,
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": null,
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PENDING",
+      "blockers": null,
+      "important": null,
+      "minor": null,
+      "count_basis": "headline/reviewer",
+      "evidence": "In flight at audit_window.end; task active in quality-mgr's queue (started 2026-09-12T23:02:15Z), no verdict yet."
     }
   ]
 }

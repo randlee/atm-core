@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB5-007>
+  a triage:Finding ;
+  triage:findingId "BB5-007" ;
+  triage:title "Sprint AC1's literal grep for record_queue_prompt_reminders is not clean: two test comments still name the deleted symbol verbatim" ;
+  triage:description "fenix, QA-1 on PR #1456 (fix/bb5-contract-tests @ d1969185f), 2026-09-12T23:02:24Z, filed as BB5-QA-CT1-001 [important]: crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs:1299 and :1729 each carry an explanatory comment naming the deleted record_queue_prompt_reminders symbol verbatim, so sprint-BB.5 AC1's literal grep check is not clean even though the deletion itself is confirmed complete (no code defect, comment text only). Routed to arch-ctm on the BB.6 runtime crate-boundary layer feature/bb6-runtime-prompt-handoffs." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "quality-mgr QA-1 (BB5-QA-CT1-1789259000)" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T23:02:24Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: reword the two comments at lines 1299 and 1729 to stop naming the deleted symbol verbatim; file fence is those two lines only. Routed to arch-ctm on feature/bb6-runtime-prompt-handoffs (BB.6 runtime layer)." ;
+  triage:foundIn triage:BB5 ;
+  triage:foundAt "2026-09-12T23:02:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-007/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB5-007/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:line 1299 ;
+  triage:snippet "comments at :1299 and :1729 name the deleted record_queue_prompt_reminders symbol verbatim, tripping AC1's literal grep despite the deletion itself being complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-007/1> .
+
+<urn:atm:triage:worktree/BB5-007/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1456, fix/bb5-contract-tests" ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
+  triage:orderIndex 1 .

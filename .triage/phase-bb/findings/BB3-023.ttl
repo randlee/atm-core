@@ -16,22 +16,31 @@
   triage:source "fenix root-cause analysis" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/phase-ai/test_run_hermes_graft_live.py; scripts/smoke/report_runtime.py" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T22:40:58Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix (test-only, mirrors scripts/smoke/test_run_feature_smoke.py::test_report_and_envelope_carry_source_revision): supply the selected page and patch _resolve_procedure_page; patch os.environ via patch.dict, getpid only. Implemented by fenix on fix/bb5-contract-tests @ d1969185f (PR #1456, stack: #1452 feature/bb-collapsed (frozen) -> #1456 fix/bb5-contract-tests -> #1453 fix/bb5-closure-r1 -> #1455 fix/bb3-qa3-r4); just lint 36/36, just test green. Fixed-pending-QA; not routed further, fenix owns this layer." ;
+  triage:deferredNote "Fix (test-only, mirrors scripts/smoke/test_run_feature_smoke.py::test_report_and_envelope_carry_source_revision): supply the selected page and patch _resolve_procedure_page; patch os.environ via patch.dict, getpid only. Implemented by fenix on fix/bb5-contract-tests @ d1969185f (PR #1456, stack: #1452 feature/bb-collapsed (frozen) -> #1456 fix/bb5-contract-tests -> #1453 fix/bb5-closure-r1 -> #1455 fix/bb3-qa3-r4); just lint 36/36, just test green. Verified fixed at d1969185f by req-qa/arch-qa/rust-qa-agent under BB5-QA-CT1-1789259000 (PASS, PR #1456 comment 2026-09-12T23:01:51Z); closed." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T22:40:58Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-023/1> ;
-  triage:triageRecordVersion "2" .
+  triage:hasResolution <urn:atm:triage:resolution/BB3-023/1> ;
+  triage:closedAt "2026-09-12T23:01:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:resolution/BB3-023/1>
+  a triage:Resolution ;
+  triage:resolutionNote "Fixed on fix/bb5-contract-tests @ d1969185f; verified PASS by BB5-QA-CT1-1789259000 (req-qa/arch-qa/rust-qa-agent), PR #1456." ;
+  triage:resolvedAt "2026-09-12T23:01:51Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/BB3-023/1>
   a triage:Occurrence ;
   triage:file "scripts/phase-ai/test_run_hermes_graft_live.py" ;
   triage:line 28 ;
   triage:snippet "test_graft_report_and_envelope_carry_source_revision_and_procedure patches ROOT to an empty temp dir and mocks the whole os module, so report_runtime.resolve_procedure_page's manifest.json read always raises; turns just lint and just test red on every BB layer" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb5-contract-tests" ;
   triage:headSha "d1969185f" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-023/1> .

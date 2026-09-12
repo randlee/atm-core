@@ -94,3 +94,12 @@ triage:a13 a triage:Assignment ;
     triage:ofSprint triage:BB5 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-09-12T22:24:23Z"^^xsd:dateTime .
+
+triage:c6 a triage:Completion ;
+    triage:ofSprint triage:BB5 ;
+    triage:at "2026-09-12T22:56:30Z"^^xsd:dateTime .
+
+triage:a14 a triage:Assignment ;
+    triage:ofSprint triage:BB6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-12T22:58:24Z"^^xsd:dateTime .

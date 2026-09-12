@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: either run and commit just lint/just test/boundaries/RULE-003 gate evidence for BB.5, or revert the frontmatter status claim until BB5-002/003/004 close. Routed to arch-ctm on fix/bb5-closure-r1 (BB5-FIX-R1-1789256000)." ;
+  triage:deferredNote "Fix: either run and commit just lint/just test/boundaries/RULE-003 gate evidence for BB.5, or revert the frontmatter status claim until BB5-002/003/004 close. Routed to arch-ctm on fix/bb5-closure-r1 (BB5-FIX-R1-1789256000). BB5-FIX-R1 completed (arch-ctm, task event 2026-09-12T22:56:30Z) at fix/bb5-closure-r1 @ 1c7e76da5; just lint 36/36, just test exit 0. Fixed-pending-QA; QA dispatched as BB5-QA-R1-1789261000 on PR #1453 (queued behind BB5-QA-CT1 on #1456)." ;
   triage:foundIn triage:BB5 ;
   triage:foundAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-005/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB5-005/1>
   a triage:Occurrence ;
@@ -32,13 +32,13 @@
   triage:snippet "frontmatter status: complete with no just lint/just test/boundaries/RULE-003 evidence committed on the branch" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
   triage:occursIn <urn:atm:triage:worktree/BB5-005/1> .
 
 <urn:atm:triage:worktree/BB5-005/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1452, feature/bb-collapsed" ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:path "PR #1453, fix/bb5-closure-r1" ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
   triage:orderIndex 1 .

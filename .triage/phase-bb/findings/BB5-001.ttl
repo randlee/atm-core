@@ -19,12 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T21:05:59Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: an assignee-side report send carrying --task-id must not be interpreted as a reassign action; only an explicit assign/reassign command (or the assigner's own --task-id send) should trigger a reassigned event. This is BB.5's own subject -- routing pending fenix's/arch-ctm's ruling on whether to fix in the current BB.5 push or as a follow-up. RECURRED (fenix, 2026-09-12T21:13:38Z): arch-ctm's second --task-id push hit the identical pattern -- seq8 reassigned assigned->assigned (arch-ctm, 21:12:07Z), seq9 reminded, seq10 started assigned->active (atm-daemon, 21:13:09Z), seq11 reassigned active->assigned (fenix, 21:13:38Z, manual correction back). Confirms the defect is deterministic on every arch-ctm --task-id push on this task, not a one-off. WIDENED (fenix, BB.5 completeness review of b74f0d6ef, 2026-09-12T22:27:39Z; reviewer's own numbering BB5-002, correlated here rather than filed separately -- same defect, root cause now pinpointed): writer/task_ops.rs:169-177 routes any task_id message with task_op=None to apply_task_assignment with no sender check; task_state.rs:292 admits without an actor guard; D4 then emits a spurious reassigned notice. Routed to arch-ctm on fix/bb5-closure-r1 (BB5-FIX-R1-1789256000). Ruling (fenix, 2026-09-12T22:31:05Z): a non-assigner task-linked send is delivered as a plain message keeping task_id metadata, no task mutation, no refusal; arch-ctm's f0f565139 (PR #1453, fix/bb5-closure-r1, base feature/bb-collapsed) implements this ruling; BB5-001 focused writer+CLI tests reported green on first push, pending QA." ;
+  triage:deferredNote "Fix: an assignee-side report send carrying --task-id must not be interpreted as a reassign action; only an explicit assign/reassign command (or the assigner's own --task-id send) should trigger a reassigned event. This is BB.5's own subject -- routing pending fenix's/arch-ctm's ruling on whether to fix in the current BB.5 push or as a follow-up. RECURRED (fenix, 2026-09-12T21:13:38Z): arch-ctm's second --task-id push hit the identical pattern -- seq8 reassigned assigned->assigned (arch-ctm, 21:12:07Z), seq9 reminded, seq10 started assigned->active (atm-daemon, 21:13:09Z), seq11 reassigned active->assigned (fenix, 21:13:38Z, manual correction back). Confirms the defect is deterministic on every arch-ctm --task-id push on this task, not a one-off. WIDENED (fenix, BB.5 completeness review of b74f0d6ef, 2026-09-12T22:27:39Z; reviewer's own numbering BB5-002, correlated here rather than filed separately -- same defect, root cause now pinpointed): writer/task_ops.rs:169-177 routes any task_id message with task_op=None to apply_task_assignment with no sender check; task_state.rs:292 admits without an actor guard; D4 then emits a spurious reassigned notice. Routed to arch-ctm on fix/bb5-closure-r1 (BB5-FIX-R1-1789256000). Ruling (fenix, 2026-09-12T22:31:05Z): a non-assigner task-linked send is delivered as a plain message keeping task_id metadata, no task mutation, no refusal; arch-ctm's f0f565139 (PR #1453, fix/bb5-closure-r1, base feature/bb-collapsed) implements this ruling; BB5-001 focused writer+CLI tests reported green on first push, pending QA. BB5-FIX-R1 completed (arch-ctm, task event 2026-09-12T22:56:30Z) at fix/bb5-closure-r1 @ 1c7e76da5; just lint 36/36, just test exit 0. Fixed-pending-QA; QA dispatched as BB5-QA-R1-1789261000 on PR #1453 (queued behind BB5-QA-CT1 on #1456)." ;
   triage:foundIn triage:BB5 ;
   triage:foundAt "2026-09-12T21:05:59Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-001/2> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/BB5-001/1>
   a triage:Occurrence ;
@@ -51,13 +51,13 @@
   triage:snippet "task_ops.rs:169-177 routes any task_id message with task_op=None to apply_task_assignment with no sender check; task_state.rs:292 admits without an actor guard; D4 emits a spurious reassigned notice" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
   triage:occursIn <urn:atm:triage:worktree/BB5-001/2> .
 
 <urn:atm:triage:worktree/BB5-001/2>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1452, feature/bb-collapsed" ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:path "PR #1453, fix/bb5-closure-r1" ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
   triage:orderIndex 2 .
