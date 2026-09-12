@@ -16,8 +16,9 @@ use atm_core::observability::NullObservability;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
-use crate::herdr_queue_wake::run_blocking;
+use crate::herdr_queue_wake::herdr_request_deadline;
 use crate::herdr_task_disposition::EpisodeKind;
+use crate::router_support::BoundedBlockingBridge;
 
 pub(crate) const HERDR_NOTIFY_DEADLINE: Duration = Duration::from_secs(5);
 pub(crate) const ESCALATION_RECIPIENT_CAP: usize = MAX_ESCALATION_RECIPIENTS;
@@ -132,6 +133,7 @@ pub(crate) async fn episode_already_reported(
     reason = "the escalation boundary keeps routing and durable-suppression context explicit"
 )]
 pub(crate) async fn escalate_mail(
+    blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     daemon_home: &Path,
@@ -141,7 +143,7 @@ pub(crate) async fn escalate_mail(
     kind: EscalationKind,
     suppress_since: Option<IsoTimestamp>,
 ) -> EscalationOutcome {
-    let targets = match load_escalation_targets(runtime, task_store, team).await {
+    let targets = match load_escalation_targets(blocking_bridge, runtime, task_store, team).await {
         Ok(targets) => targets,
         Err(error) => {
             log_target_load_error(team, &error);
@@ -179,6 +181,7 @@ pub(crate) async fn escalate_mail(
             continue;
         }
         match write_escalation_mail_with_summary(
+            blocking_bridge,
             runtime,
             daemon_home,
             team,
@@ -270,17 +273,19 @@ struct EscalationTargets {
 }
 
 async fn load_escalation_targets(
+    blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     team: &TeamName,
 ) -> Result<EscalationTargets, AtmError> {
     let roster_store = runtime.shared_roster_store_arc();
-    let roster = run_blocking({
-        let roster_store = Arc::clone(&roster_store);
-        let team = team.clone();
-        move || roster_store.load_roster(&team)
-    })
-    .await?;
+    let roster = blocking_bridge
+        .run(herdr_request_deadline(), {
+            let roster_store = Arc::clone(&roster_store);
+            let team = team.clone();
+            move || roster_store.load_roster(&team)
+        })
+        .await?;
     let leads: Vec<_> = roster
         .members
         .iter()
@@ -288,21 +293,23 @@ async fn load_escalation_targets(
         .map(|member| member.agent_name.clone())
         .collect();
     let lead = (leads.len() == 1).then(|| leads[0].clone());
-    let recipients = load_escalation_recipients(task_store, team).await;
+    let recipients = load_escalation_recipients(blocking_bridge, task_store, team).await;
     Ok(EscalationTargets { lead, recipients })
 }
 
 async fn load_escalation_recipients(
+    blocking_bridge: &BoundedBlockingBridge,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     team: &TeamName,
 ) -> Vec<atm_core::address::AgentAddress> {
     let recipients = match task_store {
-        Some(store) => match run_blocking({
-            let store = Arc::clone(store);
-            let team = team.clone();
-            move || store.effective_escalation_recipients(&team)
-        })
-        .await
+        Some(store) => match blocking_bridge
+            .run(herdr_request_deadline(), {
+                let store = Arc::clone(store);
+                let team = team.clone();
+                move || store.effective_escalation_recipients(&team)
+            })
+            .await
         {
             Ok(recipients) => recipients,
             Err(error) => {
@@ -336,6 +343,7 @@ async fn load_escalation_recipients(
 }
 
 async fn write_escalation_mail_with_summary(
+    blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
     daemon_home: &Path,
     team: &TeamName,
@@ -349,24 +357,25 @@ async fn write_escalation_mail_with_summary(
     let recipient = recipient.to_string();
     let team = team.clone();
     let summary = summary.to_owned();
-    run_blocking(move || {
-        let request = WriteRequest::new(
-            daemon_home.clone(),
-            daemon_home,
-            DAEMON_ACTOR.clone(),
-            &recipient,
-            team,
-            SendMessageSource::Inline(body),
-            Some(summary),
-            false,
-            None,
-            false,
-        )?
-        .with_nudge_mode(NudgeMode::Deferred);
-        write_mail_with_runtime(request, &NullObservability, &runtime)
-            .map(|outcome| outcome.persisted_message_id())
-    })
-    .await
+    blocking_bridge
+        .run(herdr_request_deadline(), move || {
+            let request = WriteRequest::new(
+                daemon_home.clone(),
+                daemon_home,
+                DAEMON_ACTOR.clone(),
+                &recipient,
+                team,
+                SendMessageSource::Inline(body),
+                Some(summary),
+                false,
+                None,
+                false,
+            )?
+            .with_nudge_mode(NudgeMode::Deferred);
+            write_mail_with_runtime(request, &NullObservability, &runtime)
+                .map(|outcome| outcome.persisted_message_id())
+        })
+        .await
 }
 
 #[cfg(test)]

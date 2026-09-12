@@ -6,6 +6,7 @@
 //! crate imports `atm-graft`.
 
 use std::future::Future;
+use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -23,7 +24,8 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrError};
 use atm_herdr::{HerdrProcessAdapter, HerdrPromptOutcome};
 use atm_http_runtime::{
-    BareCliFifo, BareCliQueueFullDrops, RuntimeHealth, append_bare_cli_message,
+    BareCliFifo, BareCliQueueFullDrops, BoundedBlockingBridge, HERDR_MAX_PROMPTS_PER_TICK,
+    RuntimeHealth, append_bare_cli_message,
 };
 
 /// Builds the selector injected into every production replacement daemon.
@@ -263,6 +265,11 @@ impl ReplacementReceivedHookSelector {
         bare_cli_fifo: BareCliFifo,
         bare_cli_queue_full_drops: BareCliQueueFullDrops,
     ) -> Self {
+        let blocking_bridge = BoundedBlockingBridge::new(
+            NonZeroUsize::new(HERDR_MAX_PROMPTS_PER_TICK)
+                .expect("receiver-hook blocking capacity is non-zero"),
+            runtime_health.clone(),
+        );
         Self {
             tmux: TokioTmuxReceivedHook,
             herdr: HerdrReceivedHook {
@@ -271,12 +278,14 @@ impl ReplacementReceivedHookSelector {
             graft: PublishedGraftReceivedHook {
                 service_runtime: service_runtime.clone(),
                 runtime_health: runtime_health.clone(),
+                blocking_bridge: blocking_bridge.clone(),
                 #[cfg(test)]
                 forced_failure: false,
             },
             queue_pull: PullPendingReceivedHook {
                 service_runtime,
                 runtime_health,
+                blocking_bridge,
                 bare_cli_fifo,
                 bare_cli_queue_full_drops,
             },
@@ -501,6 +510,7 @@ fn hook_deadline_error(stage: &'static str) -> AtmError {
 struct PublishedGraftReceivedHook {
     service_runtime: LocalServiceRuntime,
     runtime_health: RuntimeHealth,
+    blocking_bridge: BoundedBlockingBridge,
     #[cfg(test)]
     forced_failure: bool,
 }
@@ -511,9 +521,15 @@ impl PublishedGraftReceivedHook {
         service_runtime: LocalServiceRuntime,
         runtime_health: RuntimeHealth,
     ) -> Self {
+        let blocking_bridge = BoundedBlockingBridge::new(
+            NonZeroUsize::new(HERDR_MAX_PROMPTS_PER_TICK)
+                .expect("test receiver-hook blocking capacity is non-zero"),
+            runtime_health.clone(),
+        );
         Self {
             service_runtime,
             runtime_health,
+            blocking_bridge,
             forced_failure: true,
         }
     }
@@ -529,12 +545,12 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
     ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
         let service_runtime = self.service_runtime.clone();
         let runtime_health = self.runtime_health.clone();
+        let blocking_bridge = self.blocking_bridge.clone();
         let kind = dispatch.kind;
         let member = atm_core::boundary::MemberKey::new(
             dispatch.event.recipient_team.clone(),
             dispatch.event.recipient.clone(),
         );
-        let member_for_handoff = member.clone();
         let message_id = dispatch.event.message_id;
         let runtime_health_for_clear = runtime_health.clone();
         #[cfg(test)]
@@ -548,24 +564,20 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
                 ))
             } else {
                 deliver_published_graft_hook(
+                    blocking_bridge.clone(),
                     service_runtime,
                     dispatch,
                     deadline,
-                    kind,
-                    member_for_handoff,
-                    message_id,
                     runtime_health_for_clear,
                 )
                 .await
             };
             #[cfg(not(test))]
             let result = deliver_published_graft_hook(
+                blocking_bridge,
                 service_runtime,
                 dispatch,
                 deadline,
-                kind,
-                member_for_handoff,
-                message_id,
                 runtime_health_for_clear,
             )
             .await;
@@ -590,39 +602,37 @@ impl AsyncMessageReceivedHookEmitter for PublishedGraftReceivedHook {
 }
 
 async fn deliver_published_graft_hook(
+    blocking_bridge: BoundedBlockingBridge,
     service_runtime: LocalServiceRuntime,
     dispatch: BuiltInPostSendDispatch,
     deadline: RequestDeadline,
-    kind: NudgeKind,
-    member: atm_core::boundary::MemberKey,
-    message_id: atm_core::schema::AtmMessageId,
     runtime_health: RuntimeHealth,
 ) -> Result<PostSendEmissionPath, AtmError> {
-    tokio::task::spawn_blocking(move || {
-        let result = atm_core::graft::deliver_published_receiver_hook_from_local_runtime(
-            &service_runtime,
-            &dispatch,
-            deadline,
-        );
-        if result.is_ok() && kind == NudgeKind::Queue {
-            atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
-                &service_runtime,
-                &member,
-                &message_id,
-                atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
-                || runtime_health.record_graft_queue_marker_clear_failure(),
+    blocking_bridge
+        .run(deadline, move || {
+            let kind = dispatch.kind;
+            let member = atm_core::boundary::MemberKey::new(
+                dispatch.event.recipient_team.clone(),
+                dispatch.event.recipient.clone(),
             );
-        }
-        result
-    })
-    .await
-    .map_err(|source| {
-        AtmError::new(
-            AtmErrorCode::InternalError,
-            "published Graft receiver hook task ended unexpectedly",
-        )
-        .with_cause(source)
-    })?
+            let message_id = dispatch.event.message_id;
+            let result = atm_core::graft::deliver_published_receiver_hook_from_local_runtime(
+                &service_runtime,
+                &dispatch,
+                deadline,
+            );
+            if result.is_ok() && kind == NudgeKind::Queue {
+                atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
+                    &service_runtime,
+                    &member,
+                    &message_id,
+                    atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
+                    || runtime_health.record_graft_queue_marker_clear_failure(),
+                );
+            }
+            result
+        })
+        .await
 }
 
 /// Hands a bare-CLI delivery to the daemon-lifetime FIFO and immediately
@@ -641,6 +651,7 @@ async fn deliver_published_graft_hook(
 struct PullPendingReceivedHook {
     service_runtime: LocalServiceRuntime,
     runtime_health: RuntimeHealth,
+    blocking_bridge: BoundedBlockingBridge,
     bare_cli_fifo: BareCliFifo,
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
 }
@@ -651,10 +662,11 @@ impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
     fn emit_received_message(
         &self,
         dispatch: BuiltInPostSendDispatch,
-        _deadline: RequestDeadline,
+        deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
         let service_runtime = self.service_runtime.clone();
         let runtime_health = self.runtime_health.clone();
+        let blocking_bridge = self.blocking_bridge.clone();
         let bare_cli_fifo = self.bare_cli_fifo.clone();
         let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
         let target = match dispatch.target {
@@ -676,38 +688,32 @@ impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
                 msg_id: target.msg_id,
                 body: target.body,
             };
-            tokio::task::spawn_blocking(move || {
-                append_bare_cli_message(
-                    &bare_cli_fifo,
-                    &bare_cli_queue_full_drops,
-                    member.clone(),
-                    message,
-                )?;
-                // The append above IS the handoff (AQ2 handoff semantics).
-                // Immediate writes never set a deferred marker, so clearing
-                // one here would add an unrelated control-path transaction to
-                // every bare-CLI local admission.
-                if target.kind == NudgeKind::Queue {
-                    // A marker-clear failure is never allowed to fail an
-                    // already-successful FIFO append; see the struct doc.
-                    atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
-                        &service_runtime,
-                        &member,
-                        &target.msg_id,
-                        atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
-                        || runtime_health.record_graft_queue_marker_clear_failure(),
-                    );
-                }
-                Ok(PostSendEmissionPath::QueuePull)
-            })
-            .await
-            .map_err(|source| {
-                AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "bare-CLI queue-pull handoff task ended unexpectedly",
-                )
-                .with_cause(source)
-            })?
+            blocking_bridge
+                .run(deadline, move || {
+                    append_bare_cli_message(
+                        &bare_cli_fifo,
+                        &bare_cli_queue_full_drops,
+                        member.clone(),
+                        message,
+                    )?;
+                    // The append above IS the handoff (AQ2 handoff semantics).
+                    // Immediate writes never set a deferred marker, so clearing
+                    // one here would add an unrelated control-path transaction to
+                    // every bare-CLI local admission.
+                    if target.kind == NudgeKind::Queue {
+                        // A marker-clear failure is never allowed to fail an
+                        // already-successful FIFO append; see the struct doc.
+                        atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
+                            &service_runtime,
+                            &member,
+                            &target.msg_id,
+                            atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
+                            || runtime_health.record_graft_queue_marker_clear_failure(),
+                        );
+                    }
+                    Ok(PostSendEmissionPath::QueuePull)
+                })
+                .await
         })
     }
 }

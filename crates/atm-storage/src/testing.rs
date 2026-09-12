@@ -422,6 +422,8 @@ pub(crate) struct PendingStoreState {
     mark_failure: Option<AtmError>,
     mark_failures_remaining: std::sync::atomic::AtomicUsize,
     rearm_failure: Option<AtmError>,
+    release_started: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    release_blocker: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     operation_calls: std::sync::atomic::AtomicUsize,
     rearm_calls: std::sync::atomic::AtomicUsize,
     mark_pending_calls: std::sync::Mutex<Vec<(MemberKey, AtmMessageId)>>,
@@ -434,6 +436,8 @@ impl Default for DummyPendingNudgeStore {
             mark_failure: None,
             mark_failures_remaining: std::sync::atomic::AtomicUsize::new(0),
             rearm_failure: None,
+            release_started: None,
+            release_blocker: None,
             operation_calls: std::sync::atomic::AtomicUsize::new(0),
             rearm_calls: std::sync::atomic::AtomicUsize::new(0),
             mark_pending_calls: std::sync::Mutex::new(Vec::new()),
@@ -460,6 +464,19 @@ impl DummyPendingNudgeStore {
     #[must_use]
     pub fn with_rearm_failure(mut self, failure: AtmError) -> Self {
         self.0.rearm_failure = Some(failure);
+        self
+    }
+
+    /// Blocks release operations until `blocker` becomes false, exposing the
+    /// synchronous-store stall needed by bounded-shutdown tests.
+    #[must_use]
+    pub fn with_release_blocker(
+        mut self,
+        started: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        blocker: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Self {
+        self.0.release_started = Some(started);
+        self.0.release_blocker = Some(blocker);
         self
     }
 
@@ -544,6 +561,14 @@ impl DummyPendingNudgeStore {
 
     pub(crate) fn release(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
         self.record_operation();
+        if let Some(started) = &self.0.release_started {
+            started.store(true, std::sync::atomic::Ordering::Release);
+        }
+        if let Some(blocker) = &self.0.release_blocker {
+            while blocker.load(std::sync::atomic::Ordering::Acquire) {
+                std::thread::yield_now();
+            }
+        }
         self.0
             .inner
             .as_ref()

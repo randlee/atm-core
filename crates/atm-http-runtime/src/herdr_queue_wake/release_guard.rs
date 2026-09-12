@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::router_support::BoundedBlockingBridge;
 use atm_core::LocalServiceRuntime;
 use atm_core::boundary::{MemberKey, PendingNudgeStore};
 use tokio::task::JoinHandle;
 
-use super::{HERDR_MAX_CONSECUTIVE_RELEASES, run_blocking};
+use super::{HERDR_MAX_CONSECUTIVE_RELEASES, herdr_request_deadline};
 
 pub(crate) struct ReleasePendingOnDrop {
     store: Arc<dyn PendingNudgeStore + Send + Sync>,
@@ -13,6 +14,7 @@ pub(crate) struct ReleasePendingOnDrop {
     claim: atm_core::boundary::NudgeClaim,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    blocking_bridge: BoundedBlockingBridge,
     /// Clears the member's ephemeral Herdr wake-pending roster flag when this
     /// claim attempt concludes (success, requeue, or release), regardless of
     /// which exit path was taken. Set alongside claiming a pending nudge in
@@ -31,6 +33,7 @@ impl ReleasePendingOnDrop {
         release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
         service_runtime: LocalServiceRuntime,
         release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
+        blocking_bridge: BoundedBlockingBridge,
     ) -> Self {
         Self {
             store,
@@ -38,6 +41,7 @@ impl ReleasePendingOnDrop {
             claim,
             release_streaks,
             release_handles,
+            blocking_bridge,
             service_runtime,
             armed: true,
         }
@@ -52,14 +56,16 @@ impl ReleasePendingOnDrop {
         let store = Arc::clone(&self.store);
         let member = self.member.clone();
         let claim = self.claim.clone();
-        if let Err(error) = run_blocking(move || {
-            if should_requeue {
-                store.requeue_pending(&member, &claim)
-            } else {
-                store.release_pending(&member, &claim)
-            }
-        })
-        .await
+        if let Err(error) = self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                if should_requeue {
+                    store.requeue_pending(&member, &claim)
+                } else {
+                    store.release_pending(&member, &claim)
+                }
+            })
+            .await
         {
             tracing::warn!(
                 subsystem = "herdr_queue_wake",
@@ -84,7 +90,13 @@ impl ReleasePendingOnDrop {
         let store = Arc::clone(&self.store);
         let member = self.member.clone();
         let claim = self.claim.clone();
-        if let Err(error) = run_blocking(move || store.requeue_pending(&member, &claim)).await {
+        if let Err(error) = self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                store.requeue_pending(&member, &claim)
+            })
+            .await
+        {
             tracing::warn!(
                 subsystem = "herdr_queue_wake",
                 action = "queue_claim_requeue",
@@ -121,24 +133,27 @@ impl ReleasePendingOnDrop {
         let member = self.member.clone();
         let claim = self.claim.clone();
         let release = move || {
-            let result = if should_requeue {
+            if should_requeue {
                 store.requeue_pending(&member, &claim)
             } else {
                 store.release_pending(&member, &claim)
-            };
-            if let Err(error) = result {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "queue_claim_release",
-                    outcome = "failed",
-                    error = %error,
-                    member = %member,
-                    "failed to resolve Herdr queue claim during drop"
-                );
             }
         };
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            let release_handle = handle.spawn_blocking(release);
+            let bridge = self.blocking_bridge.clone();
+            let log_member = self.member.clone();
+            let release_handle = handle.spawn(async move {
+                if let Err(error) = bridge.run(herdr_request_deadline(), release).await {
+                    tracing::warn!(
+                        subsystem = "herdr_queue_wake",
+                        action = "queue_claim_release",
+                        outcome = "failed",
+                        error = %error,
+                        member = %log_member,
+                        "failed to resolve Herdr queue claim during drop"
+                    );
+                }
+            });
             let mut release_handles = self
                 .release_handles
                 .lock()
@@ -146,7 +161,16 @@ impl ReleasePendingOnDrop {
             release_handles.retain(|handle| !handle.is_finished());
             release_handles.push(release_handle);
         } else {
-            release();
+            if let Err(error) = release() {
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "queue_claim_release",
+                    outcome = "failed",
+                    error = %error,
+                    member = %self.member,
+                    "failed to resolve Herdr queue claim during drop"
+                );
+            }
         }
     }
 

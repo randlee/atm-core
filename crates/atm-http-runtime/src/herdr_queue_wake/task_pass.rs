@@ -3,7 +3,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome,
     TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TaskRow,
@@ -17,8 +16,8 @@ use atm_herdr::{AgentSnapshot, HerdrAgentStatus};
 use crate::herdr_task_disposition::{TaskDisposition, dispose};
 
 use super::{
-    CandidateTarget, HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_DEADLINE, HerdrCandidate,
-    HerdrQueueWakePump, HerdrQueueWakeStats, MemberObservation, run_blocking,
+    CandidateTarget, HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_BUDGET, HerdrCandidate,
+    HerdrQueueWakePump, HerdrQueueWakeStats, MemberObservation, herdr_request_deadline,
 };
 
 pub(super) fn queue_drain_eligible(observation: &MemberObservation) -> bool {
@@ -165,12 +164,8 @@ impl HerdrQueueWakePump {
         for head in heads.values().filter(|head| {
             head.state == atm_core::boundary::TaskState::Assigned && head.last_reminded_at.is_some()
         }) {
-            if let Err(error) = crate::herdr_task_start::start_assigned_task(
-                &self.service_runtime,
-                &self.daemon_home,
-                head,
-            )
-            .await
+            if let Err(error) =
+                crate::herdr_task_start::start_assigned_task(self, &self.daemon_home, head).await
             {
                 tracing::warn!(
                     subsystem = "herdr_queue_wake",
@@ -259,7 +254,7 @@ impl HerdrQueueWakePump {
         reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         member: &MemberKey,
     ) -> (u32, Option<IsoTimestamp>) {
-        let Ok(deadline) = ReadDeadline::new(HERDR_REQUEST_DEADLINE) else {
+        let Ok(deadline) = ReadDeadline::new(HERDR_REQUEST_BUDGET) else {
             return (0, None);
         };
         let Ok(run) = reader
@@ -281,7 +276,7 @@ impl HerdrQueueWakePump {
             .map(|candidate| candidate.member.team().clone())
             .collect();
         let mut heads = HashMap::new();
-        let deadline = match ReadDeadline::new(HERDR_REQUEST_DEADLINE) {
+        let deadline = match ReadDeadline::new(HERDR_REQUEST_BUDGET) {
             Ok(deadline) => deadline,
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "deadline_invalid", error = %error, "Herdr task reminder read skipped");
@@ -323,10 +318,12 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let member = candidate.member.clone();
         let row_for_dispatch = row.clone();
-        let dispatch = run_blocking(move || {
-            build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch)
-        })
-        .await;
+        let dispatch = self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch)
+            })
+            .await;
         let dispatch = match dispatch {
             Ok(Some(dispatch)) => dispatch,
             Ok(None) => {
@@ -354,7 +351,7 @@ impl HerdrQueueWakePump {
             return;
         };
         match emitter
-            .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
+            .emit_received_message(dispatch, herdr_request_deadline())
             .await
         {
             Ok(_) => {
@@ -379,7 +376,7 @@ impl HerdrQueueWakePump {
     ) {
         let recorded_row = if outcome == ReminderOutcome::Emitted {
             crate::herdr_task_start::complete_task_handoff(
-                &self.service_runtime,
+                self,
                 context.task_store,
                 &self.daemon_home,
                 context.member,
@@ -427,10 +424,12 @@ impl HerdrQueueWakePump {
         let task_id = row.task_id.clone();
         let write_member = member.clone();
         let write_task_id = task_id.clone();
-        match run_blocking(move || {
-            store.record_reminder(&write_member, &write_task_id, now, outcome)
-        })
-        .await
+        match self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                store.record_reminder(&write_member, &write_task_id, now, outcome)
+            })
+            .await
         {
             Ok(row) => Ok(row),
             Err(error) => {

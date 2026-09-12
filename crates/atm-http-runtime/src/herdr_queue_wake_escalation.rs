@@ -10,7 +10,7 @@ use atm_core::boundary::{
 use atm_core::types::IsoTimestamp;
 
 use crate::herdr_escalation::{EscalationKind, escalate_mail, escalation_summary};
-use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, run_blocking};
+use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, herdr_request_deadline};
 use crate::herdr_task_disposition::EpisodeKind;
 
 const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
@@ -45,6 +45,7 @@ pub(crate) async fn escalate_stalled_task(
     };
     let body = task_escalation_body(row, now, &events);
     let outcome = escalate_mail(
+        &pump.blocking_bridge,
         &pump.service_runtime,
         Some(task_store),
         &pump.daemon_home,
@@ -61,7 +62,7 @@ pub(crate) async fn escalate_stalled_task(
     .await;
     record_escalation_stats(stats, &outcome);
     if let (Some(lead), Some(message_id)) = (outcome.lead, outcome.lead_write) {
-        record_lead_audit(task_store, row, now, lead, message_id, stats).await;
+        record_lead_audit(pump, task_store, row, now, lead, message_id, stats).await;
     }
 }
 
@@ -110,6 +111,7 @@ fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow
 }
 
 async fn record_lead_audit(
+    pump: &HerdrQueueWakePump,
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     row: &TaskRow,
     now: IsoTimestamp,
@@ -120,9 +122,12 @@ async fn record_lead_audit(
     let store = Arc::clone(task_store);
     let member = MemberKey::new(row.team.clone(), row.assignee.clone());
     let task_id = row.task_id.clone();
-    if let Err(error) =
-        run_blocking(move || store.record_lead_notified(&member, &task_id, now, &lead, &message_id))
-            .await
+    if let Err(error) = pump
+        .blocking_bridge
+        .run(herdr_request_deadline(), move || {
+            store.record_lead_notified(&member, &task_id, now, &lead, &message_id)
+        })
+        .await
     {
         tracing::warn!(
             subsystem = "herdr_queue_wake",
@@ -156,6 +161,7 @@ pub(crate) async fn escalate_episode(
 ) {
     let body = episode_body(member, kind, since);
     let outcome = escalate_mail(
+        &pump.blocking_bridge,
         &pump.service_runtime,
         Some(task_store),
         &pump.daemon_home,
@@ -184,6 +190,7 @@ pub(crate) async fn escalate_refusals(
         member.agent(),
     );
     let outcome = escalate_mail(
+        &pump.blocking_bridge,
         &pump.service_runtime,
         Some(task_store),
         &pump.daemon_home,

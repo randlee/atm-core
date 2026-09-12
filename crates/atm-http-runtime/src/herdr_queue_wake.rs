@@ -7,6 +7,7 @@ use release_guard::ReleasePendingOnDrop;
 use task_pass::{queue_drain_eligible, runtime_state};
 
 use std::collections::{HashMap, HashSet};
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -31,6 +32,7 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 use crate::herdr_escalation::EscalationState;
+use crate::router_support::BoundedBlockingBridge;
 use crate::runtime_health::RuntimeHealth;
 
 /// Poll cadence required by AQ2.7.
@@ -39,7 +41,11 @@ pub const HERDR_POLL_INTERVAL_MS: u64 = 5_000;
 pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
-const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
+const HERDR_REQUEST_BUDGET: Duration = Duration::from_secs(5);
+
+pub(crate) fn herdr_request_deadline() -> RequestDeadline {
+    RequestDeadline::after(HERDR_REQUEST_BUDGET)
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct HerdrQueueWakeStats {
@@ -74,6 +80,7 @@ pub struct HerdrQueueWakePump {
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
     release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    pub(crate) blocking_bridge: BoundedBlockingBridge,
     #[cfg(test)]
     pub(crate) handoff_cleanup_test_gate:
         Arc<Mutex<Option<crate::herdr_queue_wake_test_gates::Gate>>>,
@@ -92,7 +99,7 @@ impl HerdrQueueWakePump {
         Self {
             service_runtime,
             selector,
-            runtime_health,
+            runtime_health: runtime_health.clone(),
             herdr_process,
             cursor: Arc::new(Mutex::new(0)),
             release_streaks: Arc::new(Mutex::new(HashMap::new())),
@@ -102,6 +109,11 @@ impl HerdrQueueWakePump {
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
             release_handles: Arc::new(Mutex::new(Vec::new())),
+            blocking_bridge: BoundedBlockingBridge::new(
+                NonZeroUsize::new(HERDR_MAX_PROMPTS_PER_TICK)
+                    .expect("Herdr blocking capacity is non-zero"),
+                runtime_health,
+            ),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
             #[cfg(test)]
@@ -145,11 +157,11 @@ impl HerdrQueueWakePump {
                     }
                 }
             }
-            self.await_release_handles().await;
+            self.await_release_handles(herdr_request_deadline()).await;
         })
     }
 
-    async fn await_release_handles(&self) {
+    async fn await_release_handles(&self, deadline: RequestDeadline) {
         loop {
             let handles = std::mem::take(
                 &mut *self
@@ -160,8 +172,26 @@ impl HerdrQueueWakePump {
             if handles.is_empty() {
                 return;
             }
-            for handle in handles {
-                let _ = handle.await;
+            for mut handle in handles {
+                let Some(remaining) = deadline.remaining() else {
+                    handle.abort();
+                    tracing::warn!(
+                        subsystem = "herdr_queue_wake",
+                        action = "queue_claim_release_shutdown",
+                        outcome = "deadline_exceeded",
+                        "Herdr queue release drain exceeded its shutdown deadline"
+                    );
+                    continue;
+                };
+                if tokio::time::timeout(remaining, &mut handle).await.is_err() {
+                    handle.abort();
+                    tracing::warn!(
+                        subsystem = "herdr_queue_wake",
+                        action = "queue_claim_release_shutdown",
+                        outcome = "deadline_exceeded",
+                        "Herdr queue release drain exceeded its shutdown deadline"
+                    );
+                }
             }
         }
     }
@@ -195,11 +225,13 @@ impl HerdrQueueWakePump {
             }
         };
         let roster_store = self.service_runtime.shared_roster_store_arc();
-        let pending_members = match run_blocking({
-            let pending_store = Arc::clone(&pending_store);
-            move || pending_store.list_pending_members()
-        })
-        .await
+        let pending_members = match self
+            .blocking_bridge
+            .run(herdr_request_deadline(), {
+                let pending_store = Arc::clone(&pending_store);
+                move || pending_store.list_pending_members()
+            })
+            .await
         {
             Ok(members) => members,
             Err(error) => {
@@ -216,11 +248,13 @@ impl HerdrQueueWakePump {
         };
         stats.pending_members = pending_members.len();
         let pending_set: HashSet<_> = pending_members.into_iter().collect();
-        let candidates = match run_blocking({
-            let pending_set = pending_set.clone();
-            move || herdr_candidates(roster_store.as_ref(), &pending_set)
-        })
-        .await
+        let candidates = match self
+            .blocking_bridge
+            .run(herdr_request_deadline(), {
+                let pending_set = pending_set.clone();
+                move || herdr_candidates(roster_store.as_ref(), &pending_set)
+            })
+            .await
         {
             Ok(candidates) => candidates,
             Err(error) => {
@@ -317,10 +351,7 @@ impl HerdrQueueWakePump {
             stats.listed_sessions += 1;
             match self
                 .herdr_process
-                .list(
-                    session.as_ref(),
-                    RequestDeadline::after(HERDR_REQUEST_DEADLINE),
-                )
+                .list(session.as_ref(), herdr_request_deadline())
                 .await
             {
                 Ok(outcome) => {
@@ -464,12 +495,14 @@ impl HerdrQueueWakePump {
         member: &HerdrCandidate,
         stats: &mut HerdrQueueWakeStats,
     ) -> bool {
-        let claim = match run_blocking({
-            let pending_store = Arc::clone(pending_store);
-            let member = member.key.clone();
-            move || pending_store.claim_next_pending(&member)
-        })
-        .await
+        let claim = match self
+            .blocking_bridge
+            .run(herdr_request_deadline(), {
+                let pending_store = Arc::clone(pending_store);
+                let member = member.key.clone();
+                move || pending_store.claim_next_pending(&member)
+            })
+            .await
         {
             Ok(Some(claim)) => claim,
             Ok(None) | Err(_) => return false,
@@ -489,6 +522,7 @@ impl HerdrQueueWakePump {
             Arc::clone(&self.release_streaks),
             self.service_runtime.clone(),
             Arc::clone(&self.release_handles),
+            self.blocking_bridge.clone(),
         );
         let dispatch = match self.rebuild_dispatch(member, claim.msg).await {
             Ok(Some(dispatch)) => dispatch,
@@ -543,10 +577,12 @@ impl HerdrQueueWakePump {
     ) -> Result<Option<atm_core::boundary::BuiltInPostSendDispatch>, AtmError> {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
-        let message = run_blocking(move || {
-            load_received_hook_dispatch_message(&runtime, &member_key, message_id)
-        })
-        .await?;
+        let message = self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                load_received_hook_dispatch_message(&runtime, &member_key, message_id)
+            })
+            .await?;
         let Some(message) = message else {
             return Ok(None);
         };
@@ -571,7 +607,7 @@ impl HerdrQueueWakePump {
         #[cfg(test)]
         self.notify_prompt_started_test_gate();
         match emitter
-            .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
+            .emit_received_message(dispatch, herdr_request_deadline())
             .await
         {
             Ok(_) => {
@@ -632,17 +668,19 @@ impl HerdrQueueWakePump {
         let now = (self.clock)();
         let next_due = atm_core::boundary::next_reminder_due(now);
         let health = self.runtime_health.clone();
-        let _ = run_blocking(move || {
-            atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
-                &runtime,
-                &member_key,
-                &message_id,
-                next_due,
-                || health.record_graft_queue_marker_clear_failure(),
-            );
-            Ok(())
-        })
-        .await;
+        let _ = self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
+                    &runtime,
+                    &member_key,
+                    &message_id,
+                    next_due,
+                    || health.record_graft_queue_marker_clear_failure(),
+                );
+                Ok(())
+            })
+            .await;
         self.complete_task_handoff_if_head(&member.key, message_id, now)
             .await;
         #[cfg(test)]
@@ -667,10 +705,12 @@ impl HerdrQueueWakePump {
     ) {
         let runtime = self.service_runtime.clone();
         let member_for_message = member.clone();
-        let task_id = match run_blocking(move || {
-            load_received_hook_dispatch_message(&runtime, &member_for_message, message_id)
-        })
-        .await
+        let task_id = match self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                load_received_hook_dispatch_message(&runtime, &member_for_message, message_id)
+            })
+            .await
         {
             Ok(Some(message)) => message.envelope.task_id,
             Ok(None) | Err(_) => None,
@@ -684,24 +724,27 @@ impl HerdrQueueWakePump {
         let team = member.team().clone();
         let task_id_for_load = task_id.clone();
         let task_store_for_load = Arc::clone(&task_store);
-        let row =
-            match run_blocking(move || task_store_for_load.load_task(&team, &task_id_for_load))
-                .await
-            {
-                Ok(row) => row,
-                Err(error) => {
-                    tracing::warn!(
-                        subsystem = "herdr_queue_wake",
-                        action = "task_handoff_read",
-                        outcome = "failed",
-                        member = %member,
-                        task_id = %task_id,
-                        error = %error,
-                        "Queue assignment task lookup failed"
-                    );
-                    return;
-                }
-            };
+        let row = match self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                task_store_for_load.load_task(&team, &task_id_for_load)
+            })
+            .await
+        {
+            Ok(row) => row,
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "task_handoff_read",
+                    outcome = "failed",
+                    member = %member,
+                    task_id = %task_id,
+                    error = %error,
+                    "Queue assignment task lookup failed"
+                );
+                return;
+            }
+        };
         let Some(row) = row.filter(|row| {
             row.state == atm_core::boundary::TaskState::Assigned
                 && row.position.is_some_and(|position| position.get() == 1)
@@ -709,7 +752,7 @@ impl HerdrQueueWakePump {
             return;
         };
         if let Err(error) = crate::herdr_task_start::complete_task_handoff(
-            &self.service_runtime,
+            self,
             &task_store,
             &self.daemon_home,
             member,
@@ -861,20 +904,6 @@ fn herdr_candidates(
     Ok(candidates)
 }
 
-pub(crate) async fn run_blocking<T, F>(job: F) -> Result<T, AtmError>
-where
-    T: Send + 'static,
-    F: FnOnce() -> Result<T, AtmError> + Send + 'static,
-{
-    tokio::time::timeout(HERDR_REQUEST_DEADLINE, tokio::task::spawn_blocking(job))
-        .await
-        .map_err(|_| AtmError::new(AtmErrorCode::InternalError, "Herdr blocking work timed out"))?
-        .map_err(|source| {
-            AtmError::new(AtmErrorCode::InternalError, "Blocking task join failed")
-                .with_cause(source)
-        })?
-}
-
 fn member_order(left: &MemberKey, right: &MemberKey) -> std::cmp::Ordering {
     left.team()
         .as_str()
@@ -913,8 +942,8 @@ mod tests {
 
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, ReleasePendingOnDrop, log_herdr_list_failure,
-        run_blocking, runtime_state,
+        HERDR_REQUEST_BUDGET, HerdrQueueWakePump, ReleasePendingOnDrop, RuntimeHealth,
+        herdr_request_deadline, log_herdr_list_failure, runtime_state,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -970,19 +999,25 @@ mod tests {
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let release = Arc::new(AtomicBool::new(false));
         let worker_release = Arc::clone(&release);
+        let bridge = crate::router_support::BoundedBlockingBridge::new(
+            std::num::NonZeroUsize::new(HERDR_MAX_PROMPTS_PER_TICK)
+                .expect("test bridge capacity is non-zero"),
+            RuntimeHealth::default(),
+        );
         let operation = tokio::spawn(async move {
-            run_blocking(move || {
-                started_tx.send(()).expect("signal blocking work started");
-                while !worker_release.load(Ordering::Acquire) {
-                    std::thread::yield_now();
-                }
-                Ok(())
-            })
-            .await
+            bridge
+                .run(herdr_request_deadline(), move || {
+                    started_tx.send(()).expect("signal blocking work started");
+                    while !worker_release.load(Ordering::Acquire) {
+                        std::thread::yield_now();
+                    }
+                    Ok(())
+                })
+                .await
         });
 
         started_rx.await.expect("blocking work starts");
-        tokio::time::advance(HERDR_REQUEST_DEADLINE).await;
+        tokio::time::advance(HERDR_REQUEST_BUDGET).await;
         let error = operation
             .await
             .expect("timeout task joins")
@@ -3071,9 +3106,51 @@ mod tests {
         drop(prompt_gate);
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
+        let (_root, runtime, _fake, pump, health, key) = build_test_pump();
+        let release_started = Arc::new(AtomicBool::new(false));
+        let release_blocked = Arc::new(AtomicBool::new(true));
+        let store = Arc::new(
+            atm_storage::testing::DummyPendingNudgeStore::default()
+                .with_release_blocker(Arc::clone(&release_started), Arc::clone(&release_blocked)),
+        );
+        let store: Arc<dyn atm_core::boundary::PendingNudgeStore + Send + Sync> = store;
+        let release = ReleasePendingOnDrop::new(
+            store,
+            key.clone(),
+            atm_core::boundary::NudgeClaim {
+                msg: AtmMessageId::new(),
+                attempt: 0,
+            },
+            Arc::new(Mutex::new(HashMap::new())),
+            runtime,
+            Arc::clone(&pump.release_handles),
+            pump.blocking_bridge.clone(),
+        );
+        drop(release);
+        while !release_started.load(Ordering::Acquire) {
+            tokio::task::yield_now().await;
+        }
+
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let task = pump.start(shutdown_rx);
+        shutdown_tx.send(()).expect("shutdown notification");
+        tokio::time::advance(HERDR_REQUEST_BUDGET).await;
+        tokio::task::yield_now().await;
+
+        assert!(
+            task.is_finished(),
+            "a stalled release store must not hold pump shutdown past its request deadline"
+        );
+        assert_eq!(health.snapshot().blocking_core_bridge_stalls_total, 1);
+        release_blocked.store(false, Ordering::Release);
+        task.await.expect("bounded pump shutdown joins");
+    }
+
     #[test]
     fn release_pending_on_drop_without_runtime_releases_synchronously() {
-        let (_root, runtime, _fake, _pump, _health, key) = build_test_pump();
+        let (_root, runtime, _fake, pump, _health, key) = build_test_pump();
         let store = runtime.pending_nudge_store().expect("pending store");
         let claim = store
             .claim_next_pending(&key)
@@ -3087,6 +3164,7 @@ mod tests {
             Arc::new(Mutex::new(HashMap::new())),
             runtime,
             release_handles,
+            pump.blocking_bridge.clone(),
         );
 
         drop(release);
