@@ -83,6 +83,19 @@ assignee sends a one-line plain copy of each push report and close summary
 to `cc`; when `lead` and `cc` are the same identity, nothing extra is sent.
 The lead may set `cc` to an empty string to switch copies off.
 
+## Stack Discipline
+
+A phase runs as one append-only `gh stack` above `integrate/phase-N`
+([`docs/development/gh-stack-guidelines.md`](../../../docs/development/gh-stack-guidelines.md) §0).
+Every dispatch in this skill — `dev-task`, `dev-fix`, the CLEANUP pass — is a
+new worktree cut from the current top of the stack, with its PR opened on
+the first push (base = the layer below) and linked into the stack. Nothing
+below the top is ever edited; a layer freezes when its task closes. The
+lead never waits for a layer's QA or CI before cutting the next layer, and
+the dev's next node starts on a layer cut from their just-pushed head. Every
+QA finding, at every severity, goes through `/triaging-findings` the same
+way and is fixed on a new top layer; none is deferred.
+
 ## Defaults
 
 | Setting | Default |
@@ -429,15 +442,15 @@ This 3–4× speedup is load-bearing — do not deviate.
 
 **Orchestrator steps (in order, before dispatching dev-fix):**
 
-1. Confirm all sprint Completions are valid and CI is green on each sprint branch.
-2. Merge sprint branches forward in sequence into the highest-order sprint branch:
-   - Merge S1 → S2's branch
-   - Merge S2 → S3's branch
-   - ... up to S(n-1) → S(n)'s branch
-3. Run CI on the merged S(n) branch. Fix any merge conflicts before proceeding.
-4. Collect all open important/minor findings via `open-findings-sprint.sparql`.
-5. Dispatch ONE dev-fix assignment to S(n)'s worktree with the full findings list.
-6. QA reviews the merged branch once.
+1. Confirm all sprint Completions are valid. On an append-only stack every
+   layer already contains the layers below it, so no merge-forward pass is
+   needed; only the top layer's CI matters.
+2. Cut a new cleanup worktree from the current top of the stack
+   (`git worktree add ../atm-core-worktrees/<branch> -b <branch> origin/<top>`).
+3. Collect all open important/minor findings via `open-findings-sprint.sparql`.
+4. Dispatch ONE dev-fix assignment to that worktree with the full findings list;
+   open its PR (base = the top sprint layer) on the first push and link it.
+5. QA reviews the cleanup layer once.
 
 **Strong default:** Fix important/minor findings on the consolidated highest
 sprint branch during CLEANUP. Dispatching findings back to the branch where
@@ -447,9 +460,9 @@ forward merge dependency and re-merging would be higher churn than fixing
 in place.
 
 **CLEANUP branch template variables (`atm send --template --vars`):**
-- `worktree_path` = highest-order sprint's worktree
-- `branch` = highest-order sprint's branch
-- `pr_target` = phase integration branch
+- `worktree_path` = the new cleanup worktree cut from the top of the stack
+- `branch` = the cleanup layer's branch
+- `pr_target` = the layer below (the top sprint layer's branch)
 - `findings` = full output of `open-findings-sprint.sparql` (all open important/minor)
 - `cleanup_mode` = "true"
 
@@ -543,8 +556,13 @@ QA assignment uses the existing `quality-mgr` prompt directly — no new templat
 
 ## Required Message Sequence
 
-Every ATM task message must follow:
-1. ACK
-2. Work
-3. Completion summary (including git push SHA)
-4. Completion ACK by receiver
+Every ATM task assignment follows:
+1. ACK — `atm ack <message-id> "accepted <task-id>: …"`; accepts the task, does not close it.
+2. Work — a plain `atm send <lead> --stdin` push report (branch + SHA) on the first push.
+3. Task close — `atm task close <task-id> completed --stdin <<'EOF' … EOF` with the
+   completion report as the body, or `atm task close <task-id> refused "<reason>"`
+   when the whole assignment cannot be done. The close is the terminal step: it
+   frees the assignee's queue and there is no completion ACK by the receiver.
+   The lead reads the daemon's close receipt (`atm read --message-id`) and
+   closes the mirror task on its own side; a plain reply is not part of the
+   sequence.

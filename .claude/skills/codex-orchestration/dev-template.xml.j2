@@ -40,6 +40,7 @@ metadata:
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
   <pr-target>{{ pr_target }}</pr-target>
+  <stack-discipline>`{{ branch }}` is a layer cut from the current top of the phase stack; `{{ pr_target }}` is the layer directly below it. Work only on this layer. Never edit, push to, rebase, or open a PR against any layer below, and never wait for a lower layer's QA or CI. If `{{ pr_target }}` gains commits while you work, run `git fetch origin && git merge origin/{{ pr_target }}` once at task start and once before the final push; the parent wins where copies differ. Once this task closes the layer is frozen: every later finding against it is fixed on a new layer cut from the top of the stack, never here.</stack-discipline>
   <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
 
   <dependency-relations>

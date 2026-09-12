@@ -60,8 +60,6 @@ enum TaskSubcommand {
 struct TaskStartCommand {
     task_id: TaskId,
     /// Optional note to the assigner (what you will do first). Also accepts --stdin/--file/--template.
-    #[arg(conflicts_with_all = ["file", "stdin", "template"])]
-    message: Option<String>,
     #[command(flatten)]
     report: MessageSourceArgs,
     #[arg(long)]
@@ -104,10 +102,8 @@ struct TaskAssignCommand {
     before: Option<TaskId>,
     #[arg(long, group = "placement")]
     head: bool,
-    #[arg(value_name = "MESSAGE", conflicts_with_all = ["file", "stdin", "template"])]
-    message: Option<String>,
     #[command(flatten)]
-    source: MessageSourceArgs,
+    message: MessageSourceArgs,
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -203,11 +199,13 @@ struct CallerArgs {
 
 #[derive(Debug, Args)]
 struct MessageSourceArgs {
-    #[arg(long, conflicts_with_all = ["stdin", "template"])]
+    #[arg(value_name = "MESSAGE", conflicts_with_all = ["file", "stdin", "template"])]
+    text: Option<String>,
+    #[arg(long, conflicts_with_all = ["text", "stdin", "template"])]
     file: Option<PathBuf>,
-    #[arg(long, conflicts_with_all = ["file", "template"])]
+    #[arg(long, conflicts_with_all = ["text", "file", "template"])]
     stdin: bool,
-    #[arg(long, conflicts_with_all = ["file", "stdin"])]
+    #[arg(long, conflicts_with_all = ["text", "file", "stdin"])]
     template: Option<PathBuf>,
     #[arg(long, requires = "template")]
     vars: Option<String>,
@@ -215,12 +213,11 @@ struct MessageSourceArgs {
 
 impl MessageSourceArgs {
     fn is_present(&self) -> bool {
-        self.file.is_some() || self.stdin || self.template.is_some()
+        self.text.is_some() || self.file.is_some() || self.stdin || self.template.is_some()
     }
 
     fn into_send_options(
         self,
-        message: Option<String>,
         to: String,
         caller: CallerArgs,
         task_id: Option<TaskId>,
@@ -228,7 +225,7 @@ impl MessageSourceArgs {
     ) -> TaskSendOptions {
         TaskSendOptions {
             to,
-            message,
+            message: self.text,
             team: caller.team,
             actor: caller.actor,
             file: self.file,
@@ -303,16 +300,11 @@ impl TaskStartCommand {
                 caller.caller_identity
             ));
         }
-        let message = if self.report.is_present() {
-            None
-        } else {
-            Some(
-                self.message
-                    .unwrap_or_else(|| format!("started {}", self.task_id)),
-            )
-        };
-        let mut request = SendCommand::for_task(self.report.into_send_options(
-            message,
+        let mut report = self.report;
+        if !report.is_present() {
+            report.text = Some(format!("started {}", self.task_id));
+        }
+        let mut request = SendCommand::for_task(report.into_send_options(
             row.assigner.to_string(),
             self.caller,
             None,
@@ -353,8 +345,7 @@ impl TaskAssignCommand {
         let placement = self.placement();
         let json = self.json;
         let assignee = self.assignee.to_string();
-        let mut request = SendCommand::for_task(self.source.into_send_options(
-            self.message,
+        let mut request = SendCommand::for_task(self.message.into_send_options(
             assignee.clone(),
             self.caller,
             Some(task_id.clone()),
@@ -421,11 +412,18 @@ impl TaskCloseCommand {
         let recipient = report_recipient(&row, &caller.caller_identity);
         let outcome: TaskCloseOutcome = self.outcome.into();
         let reason = self.reason.clone();
-        let has_report_source = self.report.is_present();
-        let report = self.report;
-        let message = (!has_report_source).then_some(self.reason).flatten();
+        let report = if self.report.is_present() {
+            self.report
+        } else {
+            MessageSourceArgs {
+                text: self.reason,
+                file: None,
+                stdin: false,
+                template: None,
+                vars: None,
+            }
+        };
         let mut request = SendCommand::for_task(report.into_send_options(
-            message,
             recipient.to_string(),
             self.caller,
             None,
