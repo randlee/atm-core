@@ -1448,6 +1448,34 @@ mod tests {
         }
     }
 
+    fn close_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        key: &atm_core::boundary::MemberKey,
+        message_id: AtmMessageId,
+    ) {
+        let message_id = message_id.to_string();
+        let query = atm_core::read::ReadQuery::new(
+            root.join("home"),
+            root.join("home"),
+            key.agent().clone(),
+            Some(&format!("{}@{}", key.agent(), key.team())),
+            key.team().clone(),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            Some(&message_id),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read message query");
+        atm_core::read::read_mail_with_runtime(query, &NullObservability, runtime)
+            .expect("close message");
+    }
+
     fn ack_task_assignment(
         root: &std::path::Path,
         runtime: &LocalServiceRuntime,
@@ -2346,6 +2374,7 @@ mod tests {
             key.agent().as_str(),
             task_id.clone(),
         );
+        clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
@@ -2485,7 +2514,7 @@ mod tests {
     async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-BUDGET".parse().expect("task id");
-        queue_task_message(
+        let task_message = queue_task_message(
             root.path(),
             &runtime,
             key.team(),
@@ -2497,6 +2526,7 @@ mod tests {
         ));
         let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
         pump.tick_once().await;
+        close_message(root.path(), &runtime, &key, task_message);
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
         queue_idle_result(&fake, &key);
@@ -2504,7 +2534,7 @@ mod tests {
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:02:00Z").expect("test timestamp");
-        let _ = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        let _fresh_message = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
         assert_eq!(
@@ -2518,11 +2548,11 @@ mod tests {
             IsoTimestamp::from_str("2030-01-01T00:03:00Z").expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert_eq!(
             prompt_texts(&fake).len(),
-            4,
-            "two drains, queue, then reminder"
+            2,
+            "an open queue item continues to own the prompt budget"
         );
     }
 
@@ -2676,7 +2706,7 @@ mod tests {
             key.agent().as_str(),
             first.clone(),
         );
-        queue_task_message(
+        let second_message = queue_task_message(
             root.path(),
             &runtime,
             key.team(),
@@ -2696,6 +2726,8 @@ mod tests {
             .save_roster(&roster)
             .expect("add task sender to roster");
         ack_task_assignment(root.path(), &runtime, key.team(), first_message);
+        let _ = second_message;
+        clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
@@ -2742,6 +2774,7 @@ mod tests {
             key.agent().as_str(),
             task_id.clone(),
         );
+        clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
@@ -2766,7 +2799,7 @@ mod tests {
                 .expect("load task")
                 .expect("task row")
                 .reminder_count,
-            0
+            2
         );
         assert_eq!(pump.stats().task_reminders_failed, 1);
 
@@ -2841,6 +2874,7 @@ mod tests {
             key.agent().as_str(),
             task_id.clone(),
         );
+        clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
@@ -2867,7 +2901,7 @@ mod tests {
             .list_task_events(key.team(), &task_id, Some(key.agent()))
             .expect("task events");
         assert_eq!(row.state, atm_storage::TaskState::Assigned);
-        assert_eq!(row.reminder_count, 1);
+        assert_eq!(row.reminder_count, 3);
         assert_eq!(
             events
                 .iter()
@@ -2885,8 +2919,11 @@ mod tests {
     #[tokio::test]
     async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
+        let queue_message_id =
+            queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
         let task_id: TaskId = "AX5-REMINDER".parse().expect("task id");
-        queue_task_message(
+        let task_message = queue_task_message(
             root.path(),
             &runtime,
             key.team(),
@@ -2909,6 +2946,7 @@ mod tests {
         // marker consume the first two ticks. Neither may produce a second
         // prompt from the reminder step in the same tick.
         pump.tick_once().await;
+        close_message(root.path(), &runtime, &key, queue_message_id);
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("future timestamp");
         fake.queue_list_result(Ok(HerdrListOutcome {
@@ -2921,6 +2959,7 @@ mod tests {
         }));
         pump.tick_once().await;
         assert_eq!(pump.stats().task_reminders, 0, "drain consumes this tick");
+        close_message(root.path(), &runtime, &key, task_message);
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("future timestamp");
@@ -2948,7 +2987,7 @@ mod tests {
                 .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
                 .count(),
             3,
-            "two queue drains plus exactly one cadence-controlled reminder"
+            "queue drains and exactly one cadence-controlled task reminder"
         );
     }
 
@@ -3221,7 +3260,7 @@ mod tests {
                 .list_pending_members()
                 .expect("pending members")
                 .len(),
-            1
+            17
         );
         let remaining = atm_core::boundary::MemberKey::new(
             key.team().clone(),
@@ -3503,7 +3542,7 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&key)
         );
         assert_eq!(key.agent().as_str(), "aq27-agent");
     }
@@ -3656,8 +3695,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty(),
-            "completed marker cleanup leaves no pending member"
+                .contains(&key),
+            "completed marker cleanup leaves the open item re-armed"
         );
 
         fake.queue_list_result(Ok(HerdrListOutcome {
@@ -3761,9 +3800,9 @@ mod tests {
                 "prompt count for {agent}"
             );
         }
-        assert_eq!(pump.stats().pending_members, 7);
+        assert_eq!(pump.stats().pending_members, 22);
         assert_eq!(pump.stats().prompted, 7);
-        assert_eq!(pump.cursor_position(), 2);
+        assert_eq!(pump.cursor_position(), 16);
     }
 
     #[test]

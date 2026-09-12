@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskRow,
+    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TASK_REMINDER_INTERVAL_MS,
+    TaskRow,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
@@ -68,6 +69,13 @@ impl HerdrQueueWakePump {
                         .observe(&candidate.member, candidate.state),
                     0,
                 );
+                let disposition = if matches!(disposition, TaskDisposition::Nudge)
+                    && head.is_some_and(|row| !self.reminder_due(&candidate.member, row, now))
+                {
+                    TaskDisposition::Hold("rate limited")
+                } else {
+                    disposition
+                };
                 if matches!(
                     disposition,
                     TaskDisposition::EscalateEpisode(EpisodeKind::Blocked)
@@ -294,6 +302,23 @@ impl HerdrQueueWakePump {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .insert(member.clone(), now);
+    }
+
+    fn reminder_due(&self, member: &MemberKey, row: &TaskRow, now: IsoTimestamp) -> bool {
+        let due = |then: IsoTimestamp| {
+            now.into_inner()
+                .signed_duration_since(then.into_inner())
+                .num_milliseconds()
+                >= TASK_REMINDER_INTERVAL_MS
+        };
+        row.last_reminded_at.is_none_or(due)
+            && self
+                .last_task_attempt
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .get(member)
+                .copied()
+                .is_none_or(due)
     }
 
     fn note_task_step_availability(&self, available: bool, error: Option<&AtmError>) {
