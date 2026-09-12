@@ -16,6 +16,7 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
+    TASK_REMINDER_INTERVAL_MS,
 };
 use atm_core::delivery_channel::{HerdrAgentName, HerdrSession, local_message_received_backend};
 use atm_core::error::{AtmError, AtmErrorCode};
@@ -42,6 +43,7 @@ pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 const HERDR_REQUEST_BUDGET: Duration = Duration::from_secs(5);
+const OFFLINE_ABSENCE_INTERVALS: i64 = 2;
 
 pub(crate) fn herdr_request_deadline() -> RequestDeadline {
     RequestDeadline::after(HERDR_REQUEST_BUDGET)
@@ -74,6 +76,7 @@ pub struct HerdrQueueWakePump {
     pub(crate) herdr_process: Arc<dyn HerdrProcessAdapter>,
     cursor: Arc<Mutex<usize>>,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
+    absence_started_at: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
     clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>,
     pub(crate) escalation_state: EscalationState,
     pub(crate) daemon_home: PathBuf,
@@ -103,6 +106,7 @@ impl HerdrQueueWakePump {
             herdr_process,
             cursor: Arc::new(Mutex::new(0)),
             release_streaks: Arc::new(Mutex::new(HashMap::new())),
+            absence_started_at: Arc::new(Mutex::new(HashMap::new())),
             clock: Arc::new(IsoTimestamp::now),
             escalation_state: EscalationState::default(),
             daemon_home: PathBuf::new(),
@@ -408,10 +412,12 @@ impl HerdrQueueWakePump {
             let CandidateTarget::Herdr(target) = &member.target else {
                 continue;
             };
-            let state = runtime_state(
+            let state = self.runtime_state_with_absence(
+                &member.key,
                 snapshots
                     .get(target.agent.as_str())
                     .map(|snapshot| snapshot.status),
+                observed_at,
             );
             updates_by_team
                 .entry(member.key.team().clone())
@@ -437,6 +443,30 @@ impl HerdrQueueWakePump {
             }
         }
         accepted
+    }
+
+    fn runtime_state_with_absence(
+        &self,
+        member: &MemberKey,
+        status: Option<atm_herdr::HerdrAgentStatus>,
+        observed_at: IsoTimestamp,
+    ) -> RuntimeMemberState {
+        let mut absences = self
+            .absence_started_at
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let Some(status) = status else {
+            let started_at = absences.entry(member.clone()).or_insert(observed_at);
+            let absent_for =
+                (observed_at.into_inner() - started_at.into_inner()).num_milliseconds();
+            return if absent_for >= TASK_REMINDER_INTERVAL_MS * OFFLINE_ABSENCE_INTERVALS {
+                RuntimeMemberState::Offline
+            } else {
+                RuntimeMemberState::Unknown
+            };
+        };
+        absences.remove(member);
+        runtime_state(Some(status))
     }
 
     fn record_unavailable_members(&self, members: &[HerdrCandidate], observed_at: IsoTimestamp) {

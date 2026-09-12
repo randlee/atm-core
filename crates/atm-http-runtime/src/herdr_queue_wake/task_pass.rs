@@ -165,19 +165,16 @@ impl HerdrQueueWakePump {
             let CandidateTarget::Herdr(target) = &member.target else {
                 continue;
             };
-            if !snapshots.contains_key(target.agent.as_str()) {
-                if member.pending {
-                    stats.not_present += 1;
-                    tracing::info!(
-                        event = "herdr_queue_poll_outcome",
-                        member = %member.key,
-                        herdr_agent = %target.agent,
-                        queue_kind = atm_core::boundary::NudgeKind::Queue.as_str(),
-                        outcome = "held_target_not_present",
-                        "Herdr queue target was absent from the poll result"
-                    );
-                }
-                continue;
+            if !snapshots.contains_key(target.agent.as_str()) && member.pending {
+                stats.not_present += 1;
+                tracing::info!(
+                    event = "herdr_queue_poll_outcome",
+                    member = %member.key,
+                    herdr_agent = %target.agent,
+                    queue_kind = atm_core::boundary::NudgeKind::Queue.as_str(),
+                    outcome = "held_target_not_present",
+                    "Herdr queue target was absent from the poll result"
+                );
             }
             let Some(observation) = accepted.get(&member.key) else {
                 continue;

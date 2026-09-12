@@ -721,6 +721,78 @@ async fn offline_member_gets_one_message_zero_nudges_per_episode() {
 }
 
 #[tokio::test]
+async fn sustained_listing_absence_becomes_offline_after_two_reminder_intervals_once() {
+    let (_root, runtime, fake, pump, store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    install_escalation_targets(
+        &runtime,
+        store.as_ref(),
+        &keys,
+        &["observer@ax5-task-only"],
+    );
+
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:01Z").expect("timestamp");
+    fake.queue_list_result(Ok(HerdrListOutcome { agents: Vec::new() }));
+    pump.tick_once().await;
+    assert_eq!(
+        runtime
+            .roster_ephemeral_state(keys[0].team(), keys[0].agent())
+            .expect("first absent observation")
+            .runtime
+            .state,
+        RuntimeMemberState::Unknown
+    );
+    assert!(
+        daemon_mail_for(
+            &runtime,
+            keys[0].team(),
+            atm_storage::roles::ROLE_TEAM_LEAD,
+        )
+        .await
+        .is_empty()
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:00Z").expect("timestamp");
+    fake.queue_list_result(Ok(HerdrListOutcome { agents: Vec::new() }));
+    pump.tick_once().await;
+    assert_eq!(
+        runtime
+            .roster_ephemeral_state(keys[0].team(), keys[0].agent())
+            .expect("pre-threshold observation")
+            .runtime
+            .state,
+        RuntimeMemberState::Unknown
+    );
+
+    for timestamp in ["2030-01-01T00:02:01Z", "2030-01-01T00:03:01Z"] {
+        *now.lock().expect("clock") = IsoTimestamp::from_str(timestamp).expect("timestamp");
+        fake.queue_list_result(Ok(HerdrListOutcome { agents: Vec::new() }));
+        pump.tick_once().await;
+    }
+
+    let observation = runtime
+        .roster_ephemeral_state(keys[0].team(), keys[0].agent())
+        .expect("member observation")
+        .runtime;
+    assert_eq!(observation.state, RuntimeMemberState::Offline);
+    assert_eq!(pump.stats().task_reminders, 0);
+    assert_eq!(
+        daemon_mail_for(
+            &runtime,
+            keys[0].team(),
+            atm_storage::roles::ROLE_TEAM_LEAD,
+        )
+        .await
+        .len(),
+        1
+    );
+    assert_eq!(daemon_mail_for(&runtime, keys[0].team(), "observer").await.len(), 1);
+}
+
+#[tokio::test]
 async fn daemon_restart_does_not_reescalate_ongoing_episode() {
     let (root, runtime, fake, pump, store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
