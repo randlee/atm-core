@@ -46,6 +46,7 @@ metadata:
   <branch>{{ branch }}</branch>
   <worktree>{{ worktree_path }}</worktree>
   <commits>{{ commits }}</commits>
+  <stack-discipline>`{{ branch }}` is a frozen layer of the phase stack at the commits above. Review exactly that head (`git show &lt;sha&gt;:&lt;path&gt;`), never a moving checkout. Report every finding, at every severity, in this one verdict; none is deferred. {{ lead }} records each one through `/triaging-findings` the same way and every finding is fixed on a new layer above this one, which the next QA round reviews.</stack-discipline>
 
   <review-targets>
 {{ review_targets }}
