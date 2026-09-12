@@ -71,7 +71,6 @@ pub struct HerdrQueueWakePump {
     cursor: Arc<Mutex<usize>>,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>,
-    last_task_attempt: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
     pub(crate) escalation_state: EscalationState,
     breaker_escalation_gates: Arc<Mutex<HashMap<Option<HerdrSession>, HerdrBreakerEscalationGate>>>,
     breaker_escalation_min_interval: Duration,
@@ -104,7 +103,6 @@ impl HerdrQueueWakePump {
             cursor: Arc::new(Mutex::new(0)),
             release_streaks: Arc::new(Mutex::new(HashMap::new())),
             clock: Arc::new(IsoTimestamp::now),
-            last_task_attempt: Arc::new(Mutex::new(HashMap::new())),
             escalation_state: EscalationState::default(),
             breaker_escalation_gates: Arc::new(Mutex::new(HashMap::new())),
             breaker_escalation_min_interval: Duration::from_secs(1_800),
@@ -259,17 +257,10 @@ impl HerdrQueueWakePump {
 
         let (eligible, task_candidates, list_complete) =
             self.list_eligible(candidates, &mut stats).await;
-        let prompted_by_drain = self
-            .drain_eligible(pending_store, eligible, &mut stats)
+        self.drain_eligible(pending_store, eligible, &mut stats)
             .await;
-        self.remind_open_tasks(
-            task_candidates,
-            &prompted_by_drain,
-            &pending_set,
-            list_complete,
-            &mut stats,
-        )
-        .await;
+        self.remind_open_tasks(task_candidates, &pending_set, list_complete, &mut stats)
+            .await;
         self.finish_tick(stats);
     }
 
@@ -575,10 +566,6 @@ impl HerdrQueueWakePump {
             .iter()
             .map(|candidate| candidate.key.clone())
             .collect();
-        self.last_task_attempt
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .retain(|member, _| members.contains(member));
         self.release_streaks
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -2716,7 +2703,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ax5_04_emit_failure_records_no_reminder_and_retries() {
+    async fn ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-RETRY".parse().expect("task id");
         queue_task_message(
@@ -2760,8 +2747,8 @@ mod tests {
         pump.tick_once().await;
         assert_eq!(
             pump.stats().task_reminders,
-            0,
-            "cooldown suppresses a retry"
+            1,
+            "a failed emit retries on the next tick"
         );
 
         *now.lock().expect("test clock lock") =
@@ -2770,8 +2757,8 @@ mod tests {
         pump.tick_once().await;
         assert_eq!(
             pump.stats().task_reminders,
-            1,
-            "the cooldown eventually expires"
+            0,
+            "the durable reminder timestamp rate-limits the later tick"
         );
     }
 
