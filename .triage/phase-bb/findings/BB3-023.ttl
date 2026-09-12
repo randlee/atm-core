@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T22:40:58Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix (test-only, mirrors scripts/smoke/test_run_feature_smoke.py::test_report_and_envelope_carry_source_revision): supply the selected page and patch _resolve_procedure_page; patch os.environ via patch.dict, getpid only. Already implemented by fenix on her fix/bb5-contract-tests layer, fixed-pending-QA. Not routed further; fenix owns this layer." ;
+  triage:deferredNote "Fix (test-only, mirrors scripts/smoke/test_run_feature_smoke.py::test_report_and_envelope_carry_source_revision): supply the selected page and patch _resolve_procedure_page; patch os.environ via patch.dict, getpid only. Implemented by fenix on fix/bb5-contract-tests @ d1969185f (PR #1456, stack: #1452 feature/bb-collapsed (frozen) -> #1456 fix/bb5-contract-tests -> #1453 fix/bb5-closure-r1 -> #1455 fix/bb3-qa3-r4); just lint 36/36, just test green. Fixed-pending-QA; not routed further, fenix owns this layer." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T22:40:58Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-023/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-023/1>
   a triage:Occurrence ;
@@ -32,13 +32,13 @@
   triage:snippet "test_graft_report_and_envelope_carry_source_revision_and_procedure patches ROOT to an empty temp dir and mocks the whole os module, so report_runtime.resolve_procedure_page's manifest.json read always raises; turns just lint and just test red on every BB layer" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-023/1> .
 
 <urn:atm:triage:worktree/BB3-023/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1452, feature/bb-collapsed" ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:path "PR #1456, fix/bb5-contract-tests" ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
   triage:orderIndex 1 .
