@@ -356,8 +356,9 @@ finding ids before editing.
 
 The orchestrator saves `vars` to a temp file and adds non-graph variables.
 Every assignment (dev, fix, QA) is sent with
-`atm send <agent> --template <template> --vars <json>`; that is the only
-sanctioned dispatch form.
+`atm send <agent> --task-id "$TASK_ID" --template <template> --vars <json>`;
+that is the only sanctioned dispatch form. The same `TASK_ID` must also be
+passed as the template's `task_id` variable.
 Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
 consulting triaging-findings:
 
@@ -377,6 +378,7 @@ SPRINT=$(echo "$RESULT" | jq -r .vars.sprint)
 # Check findings via triaging-findings skill (orchestrator step)
 # If blocking findings exist, use dev-fix.xml.j2; otherwise dev-task.xml.j2
 TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
+TASK_ID="GO-$(date +%s)"
 
 # Dispatch via atm send --template (orchestrator supplies remaining vars).
 # Always use this form; never render the template yourself and paste or
@@ -384,9 +386,10 @@ TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
 # `atm compose` with the same --template/--vars/--var arguments. The daemon-owned template admission path records the
 # template and vars structurally, so the dispatch is queryable from outside.
 atm send arch-ctm \
+  --task-id "$TASK_ID" \
   --template ".claude/skills/graph-orchestration/$TEMPLATE" \
   --vars /tmp/graph-vars.json \
-  --var task_id="GO-$(date +%s)" \
+  --var task_id="$TASK_ID" \
   --var worktree_path="$WORKTREE_PATH" \
   --var branch="$BRANCH" \
   --var pr_target="$PR_TARGET" \
