@@ -1406,20 +1406,13 @@ mod tests {
         key: &atm_core::boundary::MemberKey,
         message_id: AtmMessageId,
     ) -> (Option<String>, u32) {
-        let connection = rusqlite::Connection::open(root.join("runtime/mail.sqlite3"))
-            .expect("open test database");
-        connection
-            .query_row(
-                "SELECT nudge_pending_at, nudge_attempts FROM mail_message_states
-                 WHERE team = ?1 AND agent = ?2 AND message_key = ?3",
-                rusqlite::params![
-                    key.team().as_str(),
-                    key.agent().as_str(),
-                    atm_storage::MessageKey::from(message_id).as_str(),
-                ],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .expect("read pending marker state")
+        atm_runtime_test_support::inspect_pending_nudge_state_for_test(
+            root.join("runtime/mail.sqlite3"),
+            key.team().as_str(),
+            key.agent().as_str(),
+            atm_storage::MessageKey::from(message_id).as_str(),
+        )
+        .expect("read pending marker state")
     }
 
     fn acknowledgement_is_pending(
@@ -1427,21 +1420,13 @@ mod tests {
         key: &atm_core::boundary::MemberKey,
         message_id: AtmMessageId,
     ) -> bool {
-        let connection = rusqlite::Connection::open(root.join("runtime/mail.sqlite3"))
-            .expect("open test database");
-        connection
-            .query_row(
-                "SELECT pending_ack_at IS NOT NULL AND acknowledged_at IS NULL
-                 FROM mail_message_states
-                 WHERE team = ?1 AND agent = ?2 AND message_key = ?3",
-                rusqlite::params![
-                    key.team().as_str(),
-                    key.agent().as_str(),
-                    atm_storage::MessageKey::from(message_id).as_str(),
-                ],
-                |row| row.get(0),
-            )
-            .expect("read acknowledgement state")
+        atm_runtime_test_support::inspect_message_ack_state_for_test(
+            root.join("runtime/mail.sqlite3"),
+            key.team().as_str(),
+            key.agent().as_str(),
+            atm_storage::MessageKey::from(message_id).as_str(),
+        )
+        .expect("read acknowledgement state")
     }
 
     fn pump_with_clock(
@@ -2475,13 +2460,15 @@ mod tests {
     async fn ax5_01_assigned_task_is_reminded_without_a_state_transition() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-ASSIGNED".parse().expect("task id");
-        queue_task_message(
+        let task_message = queue_task_message(
             root.path(),
             &runtime,
             key.team(),
             key.agent().as_str(),
             task_id.clone(),
         );
+        add_roster_member(&runtime, key.team(), "sender");
+        ack_task_assignment(root.path(), &runtime, key.team(), task_message);
         clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
@@ -2528,7 +2515,7 @@ mod tests {
             key.agent().as_str(),
             first.clone(),
         );
-        queue_task_message(
+        let second_message = queue_task_message(
             root.path(),
             &runtime,
             key.team(),
@@ -2547,6 +2534,8 @@ mod tests {
             .shared_roster_store_arc()
             .save_roster(&roster)
             .expect("add task sender to roster");
+        ack_task_assignment(root.path(), &runtime, key.team(), first_message);
+        ack_task_assignment(root.path(), &runtime, key.team(), second_message);
         clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
@@ -2571,7 +2560,6 @@ mod tests {
         assert_eq!(prompt_texts(&fake).len(), 2);
         assert!(prompt_texts(&fake)[1].contains("AX5-AC1-FIRST"));
 
-        ack_task_assignment(root.path(), &runtime, key.team(), first_message);
         assert_eq!(
             runtime
                 .task_store()
@@ -2657,7 +2645,7 @@ mod tests {
         assert_eq!(pump.stats().task_reminders, 0);
         assert_eq!(
             prompt_texts(&fake).len(),
-            2,
+            3,
             "an open queue item continues to own the prompt budget"
         );
     }
@@ -2832,7 +2820,7 @@ mod tests {
             .save_roster(&roster)
             .expect("add task sender to roster");
         ack_task_assignment(root.path(), &runtime, key.team(), first_message);
-        let _ = second_message;
+        ack_task_assignment(root.path(), &runtime, key.team(), second_message);
         clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
@@ -2872,13 +2860,15 @@ mod tests {
     async fn run_ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-RETRY".parse().expect("task id");
-        queue_task_message(
+        let task_message = queue_task_message(
             root.path(),
             &runtime,
             key.team(),
             key.agent().as_str(),
             task_id.clone(),
         );
+        add_roster_member(&runtime, key.team(), "sender");
+        ack_task_assignment(root.path(), &runtime, key.team(), task_message);
         clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
@@ -2972,13 +2962,15 @@ mod tests {
     async fn ax5_06_task_reminder_only_appends_audit_bookkeeping() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-AUDIT-ONLY".parse().expect("task id");
-        queue_task_message(
+        let task_message = queue_task_message(
             root.path(),
             &runtime,
             key.team(),
             key.agent().as_str(),
             task_id.clone(),
         );
+        add_roster_member(&runtime, key.team(), "sender");
+        ack_task_assignment(root.path(), &runtime, key.team(), task_message);
         clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
@@ -3063,6 +3055,8 @@ mod tests {
         }));
         pump.tick_once().await;
         assert_eq!(pump.stats().task_reminders, 0, "drain consumes this tick");
+        add_roster_member(&runtime, key.team(), "sender");
+        ack_task_assignment(root.path(), &runtime, key.team(), task_message);
         close_message(root.path(), &runtime, &key, task_message);
 
         *now.lock().expect("test clock lock") =
@@ -3105,13 +3099,15 @@ mod tests {
                 workspace_id: None,
             }]);
         let task_id: TaskId = "AX5-BLOCKED".parse().expect("task id");
-        queue_task_message(
+        let task_message = queue_task_message(
             root.path(),
             &runtime,
             key.team(),
             key.agent().as_str(),
             task_id.clone(),
         );
+        add_roster_member(&runtime, key.team(), "sender");
+        ack_task_assignment(root.path(), &runtime, key.team(), task_message);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));

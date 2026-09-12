@@ -344,6 +344,34 @@ pub fn inspect_template_admission_for_test(
     atm_storage_rusqlite::inspect_template_admission_for_test(path, message_keys)
 }
 
+/// Inspects the durable pending marker without exposing SQLite to a runtime
+/// crate's behavior test.
+pub fn inspect_pending_nudge_state_for_test(
+    path: impl AsRef<Path>,
+    team: &str,
+    agent: &str,
+    message_key: &str,
+) -> Result<(Option<String>, u32), AtmError> {
+    atm_storage_rusqlite::inspect_pending_nudge_state_for_test(path, team, agent, message_key)
+}
+
+/// Inspects the durable mailbox-state schema through the test-support crate.
+pub fn inspect_mail_message_state_columns_for_test(
+    path: impl AsRef<Path>,
+) -> Result<Vec<String>, AtmError> {
+    atm_storage_rusqlite::inspect_mail_message_state_columns_for_test(path)
+}
+
+/// Inspects the durable acknowledgement marker through test support.
+pub fn inspect_message_ack_state_for_test(
+    path: impl AsRef<Path>,
+    team: &str,
+    agent: &str,
+    message_key: &str,
+) -> Result<bool, AtmError> {
+    atm_storage_rusqlite::inspect_message_ack_state_for_test(path, team, agent, message_key)
+}
+
 fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
     let path = std::env::var_os(SQLITE_RUNTIME_PATH_ENV)
         .map(PathBuf::from)

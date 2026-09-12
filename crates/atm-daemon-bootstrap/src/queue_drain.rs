@@ -637,7 +637,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&member),
+            "successful handoff rearms the open queue marker"
         );
         assert_eq!(health.snapshot().queue_messages_drained_total, 2);
     }
@@ -694,7 +695,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&member),
+            "the one successful concurrent handoff leaves its marker rearmed"
         );
     }
 
@@ -859,7 +861,11 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members"),
-            vec![failed_member]
+            vec![
+                failed_member,
+                MemberKey::new(team.clone(), first),
+                MemberKey::new(team, third),
+            ]
         );
         assert_ne!(failed_id, first_id);
     }

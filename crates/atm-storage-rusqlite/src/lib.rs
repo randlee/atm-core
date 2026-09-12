@@ -87,7 +87,8 @@ use template_catalog_store::template_catalog_store;
 #[cfg(any(test, feature = "test-support"))]
 pub use test_support::{
     TemplateAdmissionMessage, TemplateAdmissionSnapshot, diagnostic_queue_batches_for_test,
-    inspect_template_admission_for_test,
+    inspect_mail_message_state_columns_for_test, inspect_message_ack_state_for_test,
+    inspect_pending_nudge_state_for_test, inspect_template_admission_for_test,
 };
 pub use writer::DiagnosticTimelinePersistenceStats;
 
