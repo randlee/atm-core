@@ -1434,9 +1434,9 @@ mod tests {
         GraftReceiverEndpointStore, GraftReceiverRegistration, Message, MessageKey, MessageQuery,
         MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
         PendingNudgeStore, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
-        RosterMemberKind, RosterSnapshot, RosterStore, RosterUniqueName, StorageNotifier,
-        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, derive_ack_requirement,
-        roster_write_delta, sealed,
+        RosterMemberKind, RosterSnapshot, RosterStore, RosterUniqueName,
+        StaleNudgeTemplateOverrideKind, StorageNotifier, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow, derive_ack_requirement, roster_write_delta, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
