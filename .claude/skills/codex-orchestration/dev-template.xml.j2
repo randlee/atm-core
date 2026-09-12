@@ -18,6 +18,17 @@ optional_variables:
   - dependency_relations
 defaults:
   dependency_relations: "- See authoritative sprint doc."
+metadata:
+  type: dev-task
+  tags:
+    - stage:dev
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: dev-start
+    stage: dev
+    transition: start
 ---
 <atm-task id="{{ task_id }}" sprint="{{ sprint }}" assignee="arch-ctm">
   <description>{{ description }}</description>

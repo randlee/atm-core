@@ -24,6 +24,17 @@ defaults:
   validation_requirements: ""
   dependency_relations: "- See authoritative sprint doc."
   assignee: "arch-ctm"
+metadata:
+  type: fix-task
+  tags:
+    - stage:fix
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: fix-start
+    stage: fix
+    transition: start
 ---
 <atm-task id="{{ task_id }}" phase="{{ phase }}" assignee="{{ assignee }}" mode="fix">
   <description>{{ description }}</description>

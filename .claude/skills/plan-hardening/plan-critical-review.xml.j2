@@ -1,0 +1,66 @@
+---
+name: plan-critical-review-task
+version: 1.0.0
+description: assignment template for an agent-run critical plan review (critical-plan-reviewer role) during plan hardening.
+format: xml
+required_variables:
+  - task_id
+  - phase
+  - branch
+  - commit
+  - worktree_path
+  - round_index
+  - review_focus
+  - review_questions
+  - references
+optional_variables:
+  - assignee
+  - previous_step_json
+defaults:
+  assignee: "solar"
+  previous_step_json: ""
+metadata:
+  type: plan-critical-review
+  tags:
+    - stage:plan
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: plan-critical-review
+    stage: plan
+    transition: critical-review
+    iteration_variable: round_index
+---
+<atm-review id="{{ task_id }}" phase="{{ phase }}" assignee="{{ assignee }}" mode="plan-critical-review" round="{{ round_index }}">
+  <branch>{{ branch }}</branch>
+  <commit>{{ commit }}</commit>
+  <worktree>{{ worktree_path }}</worktree>
+
+  <review-focus>
+{{ review_focus }}
+  </review-focus>
+
+  <review-questions>
+{{ review_questions }}
+  </review-questions>
+
+  <references>
+{{ references }}
+  </references>
+
+{% if previous_step_json | trim %}
+  <previous-step-json>
+<![CDATA[
+{{ previous_step_json }}
+]]>
+  </previous-step-json>
+{% endif %}
+
+  <workflow>
+    <step id="a">ACK this message immediately.</step>
+    <step id="b">Assume the `critical-plan-reviewer` role from `.claude/agents/critical-plan-reviewer.md`. Read every document in `<references>` from `{{ worktree_path }}` at commit `{{ commit }}` with `git show {{ commit }}:&lt;path&gt;`; never review working files.</step>
+    <step id="c">Verify every claim the plan makes about existing code against the branch before recording a finding; cite `file:line` on `{{ commit }}`.</step>
+    <step id="d">Return the STEP3 handoff fenced JSON (PLAN-CRIT-nnn findings, sprint_scores, PASS only at zero Blocking and zero Important) with `atm task close {{ task_id }} completed --stdin`.</step>
+  </workflow>
+</atm-review>

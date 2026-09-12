@@ -21,6 +21,17 @@ optional_variables:
 defaults:
   changed_files: ""
   triage_records: ""
+metadata:
+  type: qa-task
+  tags:
+    - stage:qa
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: qa-start
+    stage: qa
+    transition: start
 ---
 <repo-qa-task id="{{ task_id }}" sprint="{{ sprint }}" assignee="quality-mgr">
   <description>{{ description }}</description>

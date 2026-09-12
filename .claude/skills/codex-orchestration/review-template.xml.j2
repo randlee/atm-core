@@ -12,6 +12,17 @@ required_variables:
   - review_focus
   - review_questions
   - references
+metadata:
+  type: review-task
+  tags:
+    - stage:review
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: review-start
+    stage: review
+    transition: start
 ---
 <atm-review id="{{ task_id }}" phase="{{ phase }}" assignee="arch-ctm">
   <description>Phase-ending code review. Read-only analysis only; no code changes.</description>

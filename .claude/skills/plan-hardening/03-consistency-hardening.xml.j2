@@ -16,6 +16,18 @@ required_variables:
   - round_id
   - round_index
   - replay_nonce
+metadata:
+  type: plan-consistency-hardening
+  tags:
+    - stage:plan
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: plan-consistency-hardening
+    stage: plan
+    transition: consistency-hardening
+    iteration_variable: round_index
 ---
 <atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-consistency">
   <description>{{ description }}</description>

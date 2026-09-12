@@ -15,6 +15,18 @@ required_variables:
   - round_id
   - round_index
   - replay_nonce
+metadata:
+  type: plan-scope-review
+  tags:
+    - stage:plan
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: plan-scope-review
+    stage: plan
+    transition: scope-review
+    iteration_variable: round_index
 ---
 <atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-guidelines-pass">
   <description>{{ description }}</description>
