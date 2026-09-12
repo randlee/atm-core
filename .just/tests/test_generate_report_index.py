@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -79,33 +80,40 @@ class GenerateReportIndexTests(unittest.TestCase):
     def test_source_revision_resolves_to_newest_ancestor_without_inference(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            history = root / "history.txt"
+            history.write_text("a\n", encoding="utf-8")
+            subprocess.run(["git", "add", "history.txt"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "a"], cwd=root, check=True)
+            older = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            history.write_text("b\n", encoding="utf-8")
+            subprocess.run(["git", "commit", "-q", "-am", "b"], cwd=root, check=True)
+            newer = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            history.write_text("c\n", encoding="utf-8")
+            subprocess.run(["git", "commit", "-q", "-am", "c"], cwd=root, check=True)
+            source_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
             reports = root / "site/reports"
             write_envelope(root, "ancestor", "benchmark", "2026-08-08T04:00:00Z", "host")
             payload_path = reports / "ancestor.json"
             payload = json.loads(payload_path.read_text(encoding="utf-8"))
-            payload.update({"procedure": "benchmark", "source_revision": "c" * 40})
+            payload.update({"procedure": "benchmark", "source_revision": source_revision})
             payload_path.write_text(json.dumps(payload), encoding="utf-8")
             manifest = {
                 "schema_version": 1,
                 "procedures": [{"procedure": "benchmark", "revisions": [
-                    {"rev": "a" * 40, "date": "2026-08-01", "html": "procedures/benchmark/aaaaaaaa.html"},
-                    {"rev": "b" * 40, "date": "2026-08-05", "html": "procedures/benchmark/bbbbbbbb.html"},
+                    {"rev": older, "date": "2026-08-01", "html": f"procedures/benchmark/{older[:8]}.html"},
+                    {"rev": newer, "date": "2026-08-05", "html": f"procedures/benchmark/{newer[:8]}.html"},
                 ]}],
             }
-            for revision in ("aaaaaaaa", "bbbbbbbb"):
-                page = reports / "procedures/benchmark" / f"{revision}.html"
+            for revision in (older, newer):
+                page = reports / "procedures/benchmark" / f"{revision[:8]}.html"
                 page.parent.mkdir(parents=True, exist_ok=True)
                 page.write_text("<html>procedure</html>\n", encoding="utf-8")
             (reports / "procedures/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-
-            def git_result(command, **kwargs):
-                is_repo_probe = command[:3] == ["git", "rev-parse", "--git-dir"]
-                is_newest_ancestor = len(command) > 3 and command[3] == "b" * 40
-                return mock.Mock(returncode=0 if is_repo_probe or is_newest_ancestor else 1)
-
-            with mock.patch("generate_report_index.subprocess.run", side_effect=git_result):
-                index = _build_index(reports)
-            self.assertIn('href="procedures/benchmark/bbbbbbbb.html"', index)
+            index = _build_index(reports)
+            self.assertIn(f'href="procedures/benchmark/{newer[:8]}.html"', index)
             self.assertNotIn("inferred from run date", index)
 
     def test_source_revision_absent_uses_inferred_date_path(self) -> None:
