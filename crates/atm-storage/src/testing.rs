@@ -387,3 +387,72 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
             })
     }
 }
+
+/// Delegating task reader that fires one caller-provided hook before its first
+/// open-task read. Runtime race tests use it to mutate external in-memory
+/// observation state after polling but before reminder emission.
+pub struct HookedTaskLedgerReader {
+    inner: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    hook: Box<dyn Fn() + Send + Sync>,
+    fired: std::sync::atomic::AtomicBool,
+}
+
+impl HookedTaskLedgerReader {
+    #[must_use]
+    pub fn new(
+        inner: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+        hook: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            inner,
+            hook: Box::new(hook),
+            fired: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+}
+
+impl sealed::Sealed for HookedTaskLedgerReader {}
+
+#[async_trait::async_trait]
+impl AsyncTaskLedgerReader for HookedTaskLedgerReader {
+    async fn open_tasks_for_team(
+        &self,
+        team: TeamName,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        if !self.fired.swap(true, Ordering::SeqCst) {
+            (self.hook)();
+        }
+        self.inner.open_tasks_for_team(team, deadline).await
+    }
+
+    async fn refusal_run(
+        &self,
+        team: TeamName,
+        assignee: AgentName,
+        deadline: ReadDeadline,
+    ) -> Result<crate::RefusalRun, ReadLaneError> {
+        self.inner.refusal_run(team, assignee, deadline).await
+    }
+
+    async fn list_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        self.inner.list_tasks(team, member, deadline).await
+    }
+
+    async fn list_task_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        self.inner
+            .list_task_events(team, task_id, member, deadline)
+            .await
+    }
+}
