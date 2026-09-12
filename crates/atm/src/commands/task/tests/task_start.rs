@@ -19,8 +19,8 @@ fn caller(actor: &str) -> CallerArgs {
 fn start(task: &str, actor: &str, message: Option<&str>) -> TaskStartCommand {
     TaskStartCommand {
         task_id: task.parse().expect("task id"),
-        message: message.map(str::to_owned),
         report: MessageSourceArgs {
+            text: message.map(str::to_owned),
             file: None,
             stdin: false,
             template: None,
