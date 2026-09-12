@@ -2507,7 +2507,15 @@ mod tests {
         );
     }
 
-    async fn run_ac01_ack_and_completion_advance_to_the_next_task_reminder() {
+    fn ac01_task_fixture() -> (
+        tempfile::TempDir,
+        LocalServiceRuntime,
+        Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+        super::RuntimeHealth,
+        atm_core::boundary::MemberKey,
+        TaskId,
+        TaskId,
+    ) {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let first: TaskId = "AX5-AC1-FIRST".parse().expect("task id");
         let second: TaskId = "AX5-AC1-SECOND".parse().expect("task id");
@@ -2540,6 +2548,11 @@ mod tests {
         ack_task_assignment(root.path(), &runtime, key.team(), first_message);
         ack_task_assignment(root.path(), &runtime, key.team(), second_message);
         clear_pending_markers(root.path(), &runtime, &key);
+        (root, runtime, fake, health, key, first, second)
+    }
+
+    async fn run_ac01_ack_and_completion_advance_to_the_next_task_reminder() {
+        let (root, runtime, fake, health, key, first, second) = ac01_task_fixture();
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
