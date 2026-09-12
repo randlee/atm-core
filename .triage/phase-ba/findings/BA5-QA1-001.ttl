@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA1-001>
+  a triage:Finding ;
+  triage:findingId "BA5-QA1-001" ;
+  triage:title "13 pre-existing tests broken by BA.5's own PendingNudgeStore R3 semantics change (11 of 13 BA.5-owned, 2 of 13 shared BA.3 artifact)" ;
+  triage:description "quality-mgr QA-1 (quality-mgr, rust-qa-agent QA-001, req-qa ATM-QA-005, rust-service-hardening-agent RSH-001), PR #1407 @ b617a9eab, https://github.com/randlee/atm-core/pull/1407#issuecomment-5642789392. cargo test --workspace --no-fail-fast fails 10 tests in crates/atm-http-runtime/src/herdr_queue_wake.rs (ac01_ack_and_completion_advance_to_the_next_task_reminder, ac02_seventeen_due_reminders_split_across_ticks_at_sixteen, ax5_01-ax5_07, ax5_09) and 3 in crates/atm-daemon-bootstrap/src/queue_drain.rs (concurrent_transition_and_sweep_claim_once, idle_drain_delivers_oldest_then_next_transition_drains_next, recovery_sweep_isolates_one_member_failure_and_continues). Root cause (arch-qa): the failing tests assert the old 'handoff clears the marker' semantics, which this sprint deliberately overturns under decision R3 (an item stays open, re-armed to next_due, until actually read or acked) -- an incomplete migration, not a flawed predicate. IMPORTANT NUANCE (directive said to record this id fully open against BA.5; the actual ruling text carves it more finely): fenix's ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916) finds this STANDS for only 11 of the 13 tests -- the other 2 (ac02_seventeen_due_reminders_split_across_ticks_at_sixteen, ax5_09_generic_emit_failure_counts_and_respects_cooldown) fail identically on the shared BA.3 merge point 19816c821 alone and are the same BA.3-owned stale-base artifact as BA4-QA1-001 (see that record, foundIn triage:BA3). This finding is recorded here as directed (open, against BA.5, feature/ba5-queue-ephemeral-item, covering the full 13-test list); the 2-test BA.3 overlap is cross-referenced via relatedFinding rather than duplicated. Ruling: update the 11 BA.5-owned tests' fixtures/assertions to the new R3 semantics (list_pending_members().is_empty() -> == next_due, nudge_attempts unchanged); production code changes only if a test exposes a doc deviation." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-failure" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs, crates/atm-daemon-bootstrap/src/queue_drain.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:relatedFinding "BA4-QA1-001" ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA5-QA1-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "13 tests assert pre-R3 'handoff clears the marker' semantics; sprint overturns this under decision R3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:occursIn <urn:atm:triage:worktree/BA5-QA1-001/1> .
+
+<urn:atm:triage:worktree/BA5-QA1-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at b617a9eab (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:orderIndex 0 .
+

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-BA4-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-BA4-F003" ;
+  triage:title "WriteOp::TaskMove still carries a stale #[allow(dead_code)] now that BA.4 adds its construction site" ;
+  triage:description "quality-mgr QA-1 (ruthless-boundary-qa), PR #1408 @ 5ab184d75, https://github.com/randlee/atm-core/pull/1408#issuecomment-5642703785. WriteOp::TaskMove still carries a stale #[allow(dead_code, reason = \"BA.2 owns the atomic writer operation; BA.4 adds its CLI construction site\")] (writer/ops.rs:60) -- this sprint (BA.4) is exactly the sprint that adds the construction site, so the variant is no longer dead and the annotation should be removed. fenix's ruling: fix in R1 (BA4-FIX-R1, solar)." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA4 ;
+  triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BA4-F003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-BA4-F003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 60 ;
+  triage:snippet "#[allow(dead_code, reason = \"BA.2 owns the atomic writer operation; BA.4 adds its CLI construction site\")]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-BA4-F003/1> .
+
+<urn:atm:triage:worktree/RBQA-BA4-F003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at 5ab184d75 (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:orderIndex 0 .
+

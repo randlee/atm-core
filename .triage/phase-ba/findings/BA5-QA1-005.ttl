@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA1-005>
+  a triage:Finding ;
+  triage:findingId "BA5-QA1-005" ;
+  triage:title "run_ac01_ack_and_completion_advance_to_the_next_task_reminder is a new RULE-002 99-line hard violation created by BA.5" ;
+  triage:description "quality-mgr QA-1 (quality-mgr, ruthless-boundary-qa RBQA-BA5-F003, arch-qa ARCH-003/ARCH-004 blocking, rust-qa-agent QA-005, req-qa ATM-QA-006), PR #1407 @ b617a9eab, https://github.com/randlee/atm-core/pull/1407#issuecomment-5642789392. scripts/check-function-length.py --base-ref origin/feature/ba3-nudge-invariant reports two new hard violations (80+ lines) overlapping this diff: crates/atm-http-runtime/src/herdr_queue_wake.rs:2520-2618 run_ac01_ack_and_completion_advance_to_the_next_task_reminder (99 lines) and crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs:22-109 remind_open_tasks (88 lines). SCOPE PER DIRECTIVE: this finding is recorded here covering ONLY run_ac01_ack_and_completion_advance_to_the_next_task_reminder. fenix's ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916): STANDS for run_ac01_... (99 lines, created by BA.5); NOT BA.5 for remind_open_tasks (88 lines at the base, unchanged by BA.5 -- BA.3-owned, already relayed, see BA4-QA1-003, foundIn triage:BA3). Action: split the run_ac01_... test body into helper assertions." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-gate" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs:2520-2618 (run_ac01_ack_and_completion_advance_to_the_next_task_reminder only)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:relatedFinding "BA4-QA1-003" ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-005/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA5-QA1-005/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 2520 ;
+  triage:snippet "fn run_ac01_ack_and_completion_advance_to_the_next_task_reminder(...) -- 99 lines, new RULE-002 hard violation created by BA.5" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:occursIn <urn:atm:triage:worktree/BA5-QA1-005/1> .
+
+<urn:atm:triage:worktree/BA5-QA1-005/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at b617a9eab (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:orderIndex 0 .
+

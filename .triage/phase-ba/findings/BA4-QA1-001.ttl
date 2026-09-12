@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA4-QA1-001>
+  a triage:Finding ;
+  triage:findingId "BA4-QA1-001" ;
+  triage:title "herdr_queue_wake.rs reminder-pacing test failures are a BA.3 stale-base artifact, not a BA.4 or BA.5 regression" ;
+  triage:description "quality-mgr QA-1 (converged: quality-mgr, ruthless-boundary-qa RBQA-BA4-F001, req-qa ATM-QA-002, arch-qa ARCH-001, rust-qa-agent QA-001), PR #1408 @ 5ab184d75, https://github.com/randlee/atm-core/pull/1408#issuecomment-5642703785 -- and independently rediscovered on PR #1407 @ b617a9eab (11 of 13 tests there are a separate BA.5-introduced issue, but ac02_seventeen_due_reminders_split_across_ticks_at_sixteen and ax5_09_generic_emit_failure_counts_and_respects_cooldown are this identical failure, per https://github.com/randlee/atm-core/pull/1407#issuecomment-5642789392, see BA5-QA1-001). cargo test -p atm-http-runtime --lib fails these 2 tests on both 5ab184d75 and b617a9eab: ac02_... panics at herdr_queue_wake.rs:2512 (left==right failed: left 16, right 1); ax5_09_... panics at herdr_queue_wake.rs:2583 (cooldown suppresses a retry, left 2, right 1). fenix's ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5642738654, corroborated at https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916): both tests fail identically on a clean export of the shared BA.3 merge point 19816c821 alone -- git diff 19816c821..5ab184d75 for herdr_queue_wake.rs/herdr_queue_wake_reminders.rs is empty, so this is BA.3's own MemberObservation/still_idle() work, not a BA.4 or BA.5 regression. Resolution: arch-ctm's final BA.3 sha must have both tests green; solar/cipher merge that sha forward once fenix relays it. No BA.4 or BA.5 code change." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-failure" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs (MemberObservation/still_idle reminder pacing)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:relatedFinding "BA5-QA1-001" ;
+  triage:teamLeadRuling "Recorded against BA.3 (feature/ba3-nudge-invariant) per fenix's ruling in both PR #1408 and PR #1407, not against BA.4 or BA.5 where it was independently surfaced." ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA1-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA4-QA1-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 2512 ;
+  triage:snippet "ac02_seventeen_due_reminders_split_across_ticks_at_sixteen / ax5_09_generic_emit_failure_counts_and_respects_cooldown fail identically at 19816c821" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "19816c821" ;
+  triage:occursIn <urn:atm:triage:worktree/BA4-QA1-001/1> .
+
+<urn:atm:triage:worktree/BA4-QA1-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export of shared BA.3 merge point 19816c821 (fenix ruling verification)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "19816c821" ;
+  triage:orderIndex 0 .
+

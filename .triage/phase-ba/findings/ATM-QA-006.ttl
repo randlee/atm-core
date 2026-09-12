@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006" ;
+  triage:title "assign_to_active_member_persists_with_zero_prompts_until_idle does not drive any ticks or an Active->Idle transition" ;
+  triage:description "quality-mgr QA-1 (req-qa), PR #1408 @ 5ab184d75, https://github.com/randlee/atm-core/pull/1408#issuecomment-5642703785. Named test exists but does not drive any ticks or an Active->Idle transition, so it does not verify the zero-prompts-until-idle behavior it is named for. This id (ATM-QA-006) is reused by req-qa across QA passes and collides in string form with BA.1's own, unrelated, already-closed informational finding of the same name -- these are two distinct findings (flagged in the fork report, not resolved here). fenix's ruling: fix in R1 if practical, or explicit deferral by ruling." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/tests/task_close.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA4 ;
+  triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-006/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/task_close.rs" ;
+  triage:line 1 ;
+  triage:snippet "assign_to_active_member_persists_with_zero_prompts_until_idle -- no tick/Active->Idle transition driven" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-006/1> .
+
+<urn:atm:triage:worktree/ATM-QA-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at 5ab184d75 (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:orderIndex 0 .
+

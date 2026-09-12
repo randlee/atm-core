@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA1-004>
+  a triage:Finding ;
+  triage:findingId "BA5-QA1-004" ;
+  triage:title "writer/ops.rs RULE-003 line-count cap exceeded (prod=1002) after BA.5's execute_read_display_state change" ;
+  triage:description "quality-mgr QA-1 (quality-mgr, ruthless-boundary-qa RBQA-BA5-F002, arch-qa ARCH-002 blocking, rust-qa-agent QA-004, req-qa ATM-QA-004 blocking), PR #1407 @ b617a9eab, https://github.com/randlee/atm-core/pull/1407#issuecomment-5642789392. crates/atm-storage-rusqlite/src/writer/ops.rs is prod=1002 lines, 2 over the 1000-line cap. This sprint's own 3-line change to execute_read_display_state (computing next_due and threading it through mark_message_read) pushed the file from 999/1077-total (BA.3 base, and BA.4's own export, which does not touch this file) to 1002/1080-total. fenix's ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916): STANDS -- .just/check_line_counts.py passes on the base and reports the overage on this head; fix inside BA.5's own region (move execute_read_display_state and its helpers to a sibling module); no exclusion added, BA.4's regions untouched." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-gate" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-004/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA5-QA1-004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 1002 ;
+  triage:snippet "RULE-003 violation: prod=1002 exceeds limit 1000 (execute_read_display_state's next_due threading pushed it over)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:occursIn <urn:atm:triage:worktree/BA5-QA1-004/1> .
+
+<urn:atm:triage:worktree/BA5-QA1-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at b617a9eab (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:orderIndex 0 .
+

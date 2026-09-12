@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA4-QA1-003>
+  a triage:Finding ;
+  triage:findingId "BA4-QA1-003" ;
+  triage:title "remind_open_tasks RULE-002 88-line hard violation is BA.3-owned, unchanged by BA.4 or BA.5's own diffs" ;
+  triage:description "quality-mgr QA-1 (rust-qa-agent QA-002, independently re-verified by quality-mgr), PR #1408 @ 5ab184d75, https://github.com/randlee/atm-core/pull/1408#issuecomment-5642703785 -- and independently rediscovered on PR #1407 @ b617a9eab as part of BA5-QA1-005 (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642789392). scripts/check-function-length.py --base-ref origin/feature/ba3-nudge-invariant reports remind_open_tasks (crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs:22-109, 88 lines) as a new hard RULE-002 violation relative to the wrong base-ref. fenix's ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5642738654, corroborated at https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916): the function is 88 lines at both the shared BA.3 merge point 19816c821 and at 5ab184d75/b617a9eab -- unchanged by either branch's own diff. This is a BA.3-owned RULE-002 requirement, relayed to arch-ctm as part of BA3-FIX-R1; BA.4/BA.5 QA-2 must re-run check-function-length.py with the correct merge-base as base-ref after BA.3's fix lands." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-gate" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs (remind_open_tasks)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:relatedFinding "BA5-QA1-005" ;
+  triage:teamLeadRuling "Recorded against BA.3 (feature/ba3-nudge-invariant) per fenix's ruling in both PR #1408 and PR #1407, not against BA.4 or BA.5 where it was independently surfaced." ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA1-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA4-QA1-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 22 ;
+  triage:snippet "fn remind_open_tasks(...) -- 88 lines, unchanged since the shared BA.3 merge point 19816c821" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "19816c821" ;
+  triage:occursIn <urn:atm:triage:worktree/BA4-QA1-003/1> .
+
+<urn:atm:triage:worktree/BA4-QA1-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export of shared BA.3 merge point 19816c821 (fenix ruling verification)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "19816c821" ;
+  triage:orderIndex 0 .
+

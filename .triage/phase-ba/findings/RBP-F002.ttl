@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-F002" ;
+  triage:title "load_escalation_targets returns Result<EscalationTargets, ()>, discarding roster-store read failure context" ;
+  triage:description "quality-mgr QA-1 (rust-best-practices-agent), PR #1408 @ 5ab184d75, https://github.com/randlee/atm-core/pull/1408#issuecomment-5642703785. load_escalation_targets (herdr_escalation.rs:399-434) returns Result<EscalationTargets, ()>, discarding all error context at a real fallibility boundary (roster-store read failure). Recommend returning the underlying AtmError instead of (). fenix's ruling: herdr_escalation.rs is not BA.4-owned; BA.6 fold-in list." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix's BA.4 QA-1 ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5642738654) folds this into BA.6, not BA.4 -- recorded as open against BA.6, not open-against-BA.4, though the occurrence below is where it was actually observed during BA.4's QA-1 pass." ;
+  triage:promoteTo triage:BA6 ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 399 ;
+  triage:snippet "fn load_escalation_targets(...) -> Result<EscalationTargets, ()>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:occursIn <urn:atm:triage:worktree/RBP-F002/1> .
+
+<urn:atm:triage:worktree/RBP-F002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at 5ab184d75 (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:orderIndex 0 .
+

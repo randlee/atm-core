@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-PRE-003>
+  a triage:Finding ;
+  triage:findingId "BA3-PRE-003" ;
+  triage:title "nudge_template unit test fails: task_started template renders assignee's real name, not the assigner-observed test placeholder" ;
+  triage:description "fenix pre-review addendum of BA.3 COMPLETE sha 82ff24ded (PR #1402), comment https://github.com/randlee/atm-core/pull/1402#issuecomment-5642829000. cargo test -p agent-team-mail-core --lib fails send::nudge_template::tests::task_started_template_populates_task_and_assignee at crates/atm-core/src/send/nudge_template.rs:233: assertion `left == right` failed, left: \"ATM recorded that task task-9 was started by test-arch-member.\\n\", right: \"ATM recorded that task task-9 was started by arch-ctm.\\n\". Folded into fix task BA3-FIX-R1 (dispatched to arch-ctm) alongside BA3-PRE-001/002. Boundaries lint, RULE-003, and function-length (vs integrate) all pass at this sha -- this and BA3-PRE-001/002 are the only three blocking items in this pre-review pass." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-failure" ;
+  triage:severity "blocking" ;
+  triage:source "fenix pre-review" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/send/nudge_template.rs (task_started template)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-PRE-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-PRE-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 233 ;
+  triage:snippet "assertion `left == right` failed: left: \"...started by test-arch-member.\\n\" right: \"...started by arch-ctm.\\n\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "82ff24ded" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-PRE-003/1> .
+
+<urn:atm:triage:worktree/BA3-PRE-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "detached worktree of 82ff24ded (fenix pre-review, fresh target dir)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "82ff24ded" ;
+  triage:orderIndex 0 .
+

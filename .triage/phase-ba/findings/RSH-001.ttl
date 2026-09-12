@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-001>
+  a triage:Finding ;
+  triage:findingId "RSH-001" ;
+  triage:title "run_blocking() has no internal timeout on the blocking closure" ;
+  triage:description "quality-mgr QA-1 (rust-service-hardening-agent), PR #1408 @ 5ab184d75, https://github.com/randlee/atm-core/pull/1408#issuecomment-5642703785. run_blocking() (herdr_queue_wake.rs:898), the spawn_blocking wrapper used pervasively by the new MemberObservation-based reminder/escalation pipeline, has no internal timeout on the blocking closure itself. Non-blocking (pre-existing helper design, local SQLite calls not network I/O) but worth bounding consistent with HERDR_REQUEST_DEADLINE-scale timeouts if contention is ever observed. fenix's ruling: pre-existing helper; BA.6 fold-in note." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix's BA.4 QA-1 ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5642738654) folds this into BA.6, not BA.4 -- recorded as open against BA.6, not open-against-BA.4, though the occurrence below is where it was actually observed during BA.4's QA-1 pass." ;
+  triage:promoteTo triage:BA6 ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 898 ;
+  triage:snippet "fn run_blocking(...) -- no internal timeout on the spawn_blocking closure" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:occursIn <urn:atm:triage:worktree/RSH-001/1> .
+
+<urn:atm:triage:worktree/RSH-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at 5ab184d75 (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:orderIndex 0 .
+

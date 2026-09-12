@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA1-003>
+  a triage:Finding ;
+  triage:findingId "BA5-QA1-003" ;
+  triage:title "rusqlite boundary leak: atm-http-runtime adds a raw rusqlite dev-dependency and Connection, 8 lint-boundaries errors" ;
+  triage:description "quality-mgr QA-1 (quality-mgr, ruthless-boundary-qa RBQA-BA5-F001 critical, arch-qa ARCH-001 blocking, rust-qa-agent QA-003, req-qa ATM-QA-003 citing REQ-CORE-STORE-003), PR #1407 @ b617a9eab, https://github.com/randlee/atm-core/pull/1407#issuecomment-5642789392. This sprint's own diff adds rusqlite = { version = \"0.33.0\", features = [\"bundled\"] } as a dev-dependency to crates/atm-http-runtime/Cargo.toml:47 (absent on the BA.3 base and in BA.4's own diff), and new BA.5 test helpers in herdr_queue_wake.rs (~lines 1409, 1415, 1430, 1437, 4504) open a raw rusqlite::Connection and hand-write SQL against mail_message_states columns. just lint-boundaries fails with 8 errors: only atm-storage-rusqlite may depend on/import rusqlite; boundaries/atm-http-runtime/http-runtime.toml was not updated and rusqlite was not added to the manifest-dependency-allowlist. fenix's ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916): STANDS -- remove both; read/seed rows through the PendingNudgeStore/MessageStore trait surface or atm-runtime-test-support. The boundary TOML and allowlist are not relaxed." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/Cargo.toml, crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA5-QA1-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/Cargo.toml" ;
+  triage:line 47 ;
+  triage:snippet "rusqlite = { version = \"0.33.0\", features = [\"bundled\"] } -- unauthorized dev-dependency, 8 lint-boundaries errors" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:occursIn <urn:atm:triage:worktree/BA5-QA1-003/1> .
+
+<urn:atm:triage:worktree/BA5-QA1-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at b617a9eab (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:orderIndex 0 .
+

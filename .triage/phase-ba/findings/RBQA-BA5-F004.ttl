@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-BA5-F004>
+  a triage:Finding ;
+  triage:findingId "RBQA-BA5-F004" ;
+  triage:title "PendingNudgeStore has four independently hand-rolled test-double reimplementations of its full 6-method surface" ;
+  triage:description "quality-mgr QA-1 (ruthless-boundary-qa, minor), PR #1407 @ b617a9eab, https://github.com/randlee/atm-core/pull/1407#issuecomment-5642789392. PendingNudgeStore has one production impl but four independently hand-rolled test-double reimplementations of its full 6-method surface (DummyPendingNudgeStore, FailingClearPendingStore, FailingMarkPendingStore, RecordingPendingNudgeStore) across 4 crates, reintroducing the exact duplication pattern already fixed once for the sibling GraftReceiverEndpointStore trait (RBQA-F002/F003 precedent, contract.rs:1390-1394). fenix's ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916): minor RBQA-BA5-F004 (four hand-rolled PendingNudgeStore doubles) -> BA.6 fold-in." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "duplication" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "PendingNudgeStore test doubles (4 crates: DummyPendingNudgeStore, FailingClearPendingStore, FailingMarkPendingStore, RecordingPendingNudgeStore)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix's BA.5 QA-1 ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916) folds this into BA.6, not BA.5 -- recorded as open against BA.6, though the occurrence below is where it was actually observed during BA.5's QA-1 pass." ;
+  triage:promoteTo triage:BA6 ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BA5-F004/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-BA5-F004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "DummyPendingNudgeStore / FailingClearPendingStore / FailingMarkPendingStore / RecordingPendingNudgeStore -- 4 hand-rolled doubles across 4 crates" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-BA5-F004/1> .
+
+<urn:atm:triage:worktree/RBQA-BA5-F004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at b617a9eab (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "b617a9eab" ;
+  triage:orderIndex 0 .
+

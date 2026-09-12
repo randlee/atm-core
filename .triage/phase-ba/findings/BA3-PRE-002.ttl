@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-PRE-002>
+  a triage:Finding ;
+  triage:findingId "BA3-PRE-002" ;
+  triage:title "BA.3 acceptance criterion 2 unmet: 29 of 32 doc-named tests do not exist under any name" ;
+  triage:description "fenix pre-review of BA.3 COMPLETE sha 82ff24ded (PR #1402), comment https://github.com/randlee/atm-core/pull/1402#issuecomment-5642824942. The doc-named runtime file crates/atm-http-runtime/tests/herdr_nudge_invariant.rs does not exist. Present: blocked_without_task_still_escalates_once, idle_member_with_open_mail_holds_mail_pending, escalation_ownership_architecture_test. Missing (29 named tests, non-exhaustive excerpt): dispose_table_is_exhaustive, active_member_with_stalled_task_holds, threshold_is_terminal, rate_limit_boundary, rate_limit_clock_reversal_is_not_due, episode_map_replaces_kind_on_flip_and_clears_on_recovery, escalation_summary_is_stable, idle_member_with_queued_task_is_nudged_once_per_interval, active_member_is_never_prompted, non_herdr_idle_member_with_task_is_nudged_through_its_backend, member_without_dispatchable_backend_holds_and_logs_once, blocked_member_gets_one_message_zero_nudges_per_episode, offline_member_gets_one_message_zero_nudges_per_episode, daemon_restart_does_not_reescalate_ongoing_episode, recovered_then_reblocked_episode_is_reported_again, recipients_only_episode_is_not_duplicated_after_restart, poll_failure_produces_no_episode, episode_message_summary_and_body, tenth_reminder_escalates_once_then_silence, close_of_stalled_task_resumes_nudging_on_next_task, reopen_of_stalled_task_escalates_again_at_threshold, handoff_applies_start_and_sends_receipt_to_assigner, head_already_active_handoff_sends_no_receipt, failed_start_write_then_active_member_still_starts_once, member_turning_active_between_dispose_and_emit_is_not_prompted, third_refusal_holds_and_escalates_once, non_refused_close_releases_refusal_hold, escalation_mail_does_not_consume_prompt_budget, breaker_open_produces_no_escalation_mail. Fix task BA3-FIX-R1 dispatched to arch-ctm." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:source "fenix pre-review" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs (does not exist)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-PRE-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-PRE-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1 ;
+  triage:snippet "doc-named test file does not exist; 29 of 32 named tests absent under any name" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "82ff24ded" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-PRE-002/1> .
+
+<urn:atm:triage:worktree/BA3-PRE-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "detached worktree of 82ff24ded (fenix pre-review, fresh target dir)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "82ff24ded" ;
+  triage:orderIndex 0 .
+

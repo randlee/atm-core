@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-F001" ;
+  triage:title "TaskStore escalation-recipient surface represents addresses as unvalidated String/&str at the trait boundary" ;
+  triage:description "quality-mgr QA-1 (rust-best-practices-agent), PR #1408 @ 5ab184d75, https://github.com/randlee/atm-core/pull/1408#issuecomment-5642703785. The TaskStore trait's escalation-recipient surface (crates/atm-storage/src/task_store.rs:117-140: list_escalation_recipients, add_escalation_recipient, remove_escalation_recipient, effective_escalation_recipients) represents recipient addresses as raw String/&str with zero validation at the trait boundary, even though every other domain id in the same trait is a validated newtype. atm_core::address::AgentAddress already exists and is parsed ad hoc only at the point of use (herdr_escalation.rs:291). fenix's ruling: predates Phase BA (AX.6, 490a6c42a); BA.6 fold-in list." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/task_store.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix's BA.4 QA-1 ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5642738654) folds this into BA.6, not BA.4 -- recorded as open against BA.6, not open-against-BA.4, though the occurrence below is where it was actually observed during BA.4's QA-1 pass." ;
+  triage:promoteTo triage:BA6 ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_store.rs" ;
+  triage:line 117 ;
+  triage:snippet "list_escalation_recipients/add_escalation_recipient/remove_escalation_recipient/effective_escalation_recipients -- raw String/&str, no validation at trait boundary" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:occursIn <urn:atm:triage:worktree/RBP-F001/1> .
+
+<urn:atm:triage:worktree/RBP-F001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at 5ab184d75 (quality-mgr QA-1 pinned head)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "5ab184d75" ;
+  triage:orderIndex 0 .
+
