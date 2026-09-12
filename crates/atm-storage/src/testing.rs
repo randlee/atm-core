@@ -1,4 +1,4 @@
-//! Shared no-op test doubles for storage contract traits.
+//! Shared configurable test doubles for storage contract traits.
 //!
 //! RBQA-F002/F003: `GraftReceiverEndpointStore` no-op test doubles were
 //! independently duplicated in `atm-storage`'s own test module and in
@@ -14,11 +14,15 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::contract::{
     AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncTaskLedgerReader,
     GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
-    GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery, ReadDeadline,
-    ReadLaneError, sealed,
+    GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery, NudgeClaim,
+    PendingNudgeStore, ReadDeadline, ReadLaneError, sealed,
 };
+use crate::error::AtmError;
+use crate::schema::AtmMessageId;
 use crate::task_state::{TaskEventRow, TaskRow};
-use crate::types::{AgentName, IsoTimestamp, OwnerGeneration, TaskId, TeamName};
+use crate::types::{AgentName, IsoTimestamp, MemberKey, OwnerGeneration, TaskId, TeamName};
+
+pub use crate::contract::DummyPendingNudgeStore;
 
 /// A `GraftReceiverEndpointStore` that accepts every write and reports no
 /// lease. Used by callers that need a wired store to compile against but
@@ -410,5 +414,159 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
                     .cloned()
                     .collect()
             })
+    }
+}
+
+pub(crate) struct PendingStoreState {
+    inner: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
+    mark_failure: Option<AtmError>,
+    mark_failures_remaining: std::sync::atomic::AtomicUsize,
+    rearm_failure: Option<AtmError>,
+    operation_calls: std::sync::atomic::AtomicUsize,
+    rearm_calls: std::sync::atomic::AtomicUsize,
+    mark_pending_calls: std::sync::Mutex<Vec<(MemberKey, AtmMessageId)>>,
+}
+
+impl Default for DummyPendingNudgeStore {
+    fn default() -> Self {
+        Self(PendingStoreState {
+            inner: None,
+            mark_failure: None,
+            mark_failures_remaining: std::sync::atomic::AtomicUsize::new(0),
+            rearm_failure: None,
+            operation_calls: std::sync::atomic::AtomicUsize::new(0),
+            rearm_calls: std::sync::atomic::AtomicUsize::new(0),
+            mark_pending_calls: std::sync::Mutex::new(Vec::new()),
+        })
+    }
+}
+
+impl DummyPendingNudgeStore {
+    #[must_use]
+    pub fn delegating(inner: std::sync::Arc<dyn PendingNudgeStore + Send + Sync>) -> Self {
+        Self(PendingStoreState {
+            inner: Some(inner),
+            ..Self::default().0
+        })
+    }
+
+    #[must_use]
+    pub fn with_mark_failure(mut self, failure: AtmError, count: usize) -> Self {
+        self.0.mark_failure = Some(failure);
+        self.0.mark_failures_remaining = std::sync::atomic::AtomicUsize::new(count);
+        self
+    }
+
+    #[must_use]
+    pub fn with_rearm_failure(mut self, failure: AtmError) -> Self {
+        self.0.rearm_failure = Some(failure);
+        self
+    }
+
+    #[must_use]
+    pub fn mark_pending_call_count(&self) -> usize {
+        self.0
+            .mark_pending_calls
+            .lock()
+            .expect("pending-nudge mark call lock")
+            .len()
+    }
+
+    #[must_use]
+    pub fn operation_call_count(&self) -> usize {
+        self.0
+            .operation_calls
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[must_use]
+    pub fn rearm_call_count(&self) -> usize {
+        self.0.rearm_calls.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn record_operation(&self) {
+        self.0
+            .operation_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn next_mark_failure(&self) -> Option<AtmError> {
+        let previous = self
+            .0
+            .mark_failures_remaining
+            .fetch_update(
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+                |remaining| remaining.checked_sub(1),
+            )
+            .unwrap_or(0);
+        (previous > 0)
+            .then(|| self.0.mark_failure.clone())
+            .flatten()
+    }
+
+    pub(crate) fn mark(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        at: IsoTimestamp,
+    ) -> Result<bool, AtmError> {
+        self.record_operation();
+        self.0
+            .mark_pending_calls
+            .lock()
+            .expect("pending-nudge mark call lock")
+            .push((member.clone(), *msg));
+        if let Some(failure) = self.next_mark_failure() {
+            return Err(failure);
+        }
+        self.0
+            .inner
+            .as_ref()
+            .map_or(Ok(true), |inner| inner.mark_pending(member, msg, at))
+    }
+
+    pub(crate) fn claim(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+        self.record_operation();
+        self.0
+            .inner
+            .as_ref()
+            .map_or(Ok(None), |inner| inner.claim_next_pending(member))
+    }
+
+    pub(crate) fn requeue(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.record_operation();
+        self.0
+            .inner
+            .as_ref()
+            .map_or(Ok(()), |inner| inner.requeue_pending(member, claim))
+    }
+
+    pub(crate) fn release(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.record_operation();
+        self.0
+            .inner
+            .as_ref()
+            .map_or(Ok(()), |inner| inner.release_pending(member, claim))
+    }
+
+    pub(crate) fn rearm_failure(&self) -> Option<AtmError> {
+        self.record_operation();
+        self.0
+            .rearm_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.0.rearm_failure.clone()
+    }
+
+    pub(crate) fn inner(&self) -> Option<&std::sync::Arc<dyn PendingNudgeStore + Send + Sync>> {
+        self.0.inner.as_ref()
+    }
+
+    pub(crate) fn list(&self) -> Result<Vec<MemberKey>, AtmError> {
+        self.record_operation();
+        self.0
+            .inner
+            .as_ref()
+            .map_or_else(|| Ok(Vec::new()), |inner| inner.list_pending_members())
     }
 }

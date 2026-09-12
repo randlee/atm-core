@@ -1335,6 +1335,56 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
     fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError>;
 }
 
+/// One configurable pending-store double shared across workspace tests.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-utils"))]
+pub struct DummyPendingNudgeStore(pub(crate) crate::testing::PendingStoreState);
+
+#[cfg(any(test, feature = "test-utils"))]
+impl sealed::Sealed for DummyPendingNudgeStore {}
+
+#[cfg(any(test, feature = "test-utils"))]
+impl PendingNudgeStore for DummyPendingNudgeStore {
+    fn mark_pending(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        at: IsoTimestamp,
+    ) -> Result<bool, AtmError> {
+        self.mark(member, msg, at)
+    }
+
+    fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+        self.claim(member)
+    }
+
+    fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.requeue(member, claim)
+    }
+
+    fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.release(member, claim)
+    }
+
+    fn rearm_pending_after_handoff(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        next_due: IsoTimestamp,
+    ) -> Result<(), AtmError> {
+        if let Some(failure) = self.rearm_failure() {
+            return Err(failure);
+        }
+        self.inner().map_or(Ok(()), |inner| {
+            inner.rearm_pending_after_handoff(member, msg, next_due)
+        })
+    }
+
+    fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
+        self.list()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1494,62 +1544,14 @@ mod tests {
         }
     }
 
-    #[derive(Default)]
-    struct DummyPendingNudgeStore;
-
-    impl sealed::Sealed for DummyPendingNudgeStore {}
-
-    impl PendingNudgeStore for DummyPendingNudgeStore {
-        fn mark_pending(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-            _at: IsoTimestamp,
-        ) -> Result<bool, AtmError> {
-            Ok(true)
-        }
-
-        fn claim_next_pending(&self, _member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-            Ok(None)
-        }
-
-        fn requeue_pending(
-            &self,
-            _member: &MemberKey,
-            _claim: &NudgeClaim,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn release_pending(
-            &self,
-            _member: &MemberKey,
-            _claim: &NudgeClaim,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn rearm_pending_after_handoff(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-            _next_due: IsoTimestamp,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-            Ok(Vec::new())
-        }
-    }
-
     #[test]
     fn storage_traits_are_object_safe() {
         let store = DummyStore;
         let message_store: &dyn MessageStore = &store;
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
-        let pending_nudge_store: &dyn PendingNudgeStore = &DummyPendingNudgeStore;
+        let pending_nudge_store: &dyn PendingNudgeStore =
+            &crate::testing::DummyPendingNudgeStore::default();
         let override_store: &dyn NudgeTemplateOverrideStore = &DummyNudgeTemplateOverrideStore;
         let graft_receiver_endpoint_store: &dyn GraftReceiverEndpointStore =
             &DummyGraftReceiverEndpointStore;

@@ -1090,9 +1090,9 @@ pub(crate) mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeClaim,
-        NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath,
-        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::observability_counters::{
@@ -1119,6 +1119,7 @@ pub(crate) mod tests {
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
+    use atm_storage::testing::DummyPendingNudgeStore;
     use atm_storage::{
         AsyncTaskLedgerReader, MessageKey, MessageQuery, MessageStore, MoveTarget, RosterSnapshot,
         RosterStore as StorageRosterStore, TaskStore, TemplateFrontmatter, TemplateSha,
@@ -1229,61 +1230,6 @@ pub(crate) mod tests {
             _dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             None
-        }
-    }
-
-    struct FailingMarkPendingStore {
-        inner: Arc<dyn PendingNudgeStore + Send + Sync>,
-        remaining_failures: AtomicUsize,
-    }
-
-    impl atm_storage::contract::sealed::Sealed for FailingMarkPendingStore {}
-
-    impl PendingNudgeStore for FailingMarkPendingStore {
-        fn mark_pending(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-            at: IsoTimestamp,
-        ) -> Result<bool, AtmError> {
-            let previous = self
-                .remaining_failures
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
-                    remaining.checked_sub(1)
-                })
-                .unwrap_or(0);
-            if previous > 0 {
-                return Err(AtmError::daemon_unavailable(
-                    "test pending-marker store failure",
-                ));
-            }
-            self.inner.mark_pending(member, msg, at)
-        }
-
-        fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-            self.inner.claim_next_pending(member)
-        }
-
-        fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.requeue_pending(member, claim)
-        }
-
-        fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.release_pending(member, claim)
-        }
-
-        fn rearm_pending_after_handoff(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-            next_due: IsoTimestamp,
-        ) -> Result<(), AtmError> {
-            self.inner
-                .rearm_pending_after_handoff(member, msg, next_due)
-        }
-
-        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-            self.inner.list_pending_members()
         }
     }
 
@@ -1677,10 +1623,12 @@ pub(crate) mod tests {
         failures: Option<usize>,
     ) -> Arc<dyn PendingNudgeStore + Send + Sync> {
         match failures {
-            Some(failures) => Arc::new(FailingMarkPendingStore {
-                inner: Arc::clone(store),
-                remaining_failures: AtomicUsize::new(failures),
-            }),
+            Some(failures) => Arc::new(
+                DummyPendingNudgeStore::delegating(Arc::clone(store)).with_mark_failure(
+                    AtmError::daemon_unavailable("test pending-marker store failure"),
+                    failures,
+                ),
+            ),
             None => Arc::clone(store),
         }
     }
