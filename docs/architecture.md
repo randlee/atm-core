@@ -2921,7 +2921,7 @@ requirements Sections 15.4 and 22.1.
 | --- | --- | --- | --- |
 | none | → `assigned` | reject: no open task | reject: no open task |
 | `assigned` | same agent: resend with no event; other agent: reassign in place → `assigned` | → `active`; reject when the assignee already has an active task | → `complete(outcome)` |
-| `active` | same agent: resend with no event; other agent: reassign in place → `assigned` and free the old active slot | idempotent → `active` | → `complete(outcome)` |
+| `active` | same agent: resend with no event; other agent: reassign in place → `assigned` and free the old active slot | reject `ATM_TASK_ALREADY_ACTIVE`: the write fails, nothing is delivered, one state-neutral `rejected` event is appended (Phase BB amendment, ADR-062) | → `complete(outcome)` |
 | `complete` | reopen the same id → `assigned` | ordinary mail write reports `already_closed` | ordinary mail write reports `already_closed` |
 
 The runtime's pure disposition function combines the canonical roster state,

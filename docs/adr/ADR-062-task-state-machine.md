@@ -123,7 +123,7 @@ States: `assigned`, `active`, `complete`. Events: `Assigned`, `Started`,
 | --- | --- | --- | --- |
 | ∅ | assigned | reject | reject |
 | assigned | assigned (resend) — no event | active; reject when another task is active for the assignee | complete |
-| active | active (resend) — no event | reject `ATM_TASK_ALREADY_ACTIVE` (`task <id> is already active`); no event or delivery | complete |
+| active | active (resend) — no event | reject `ATM_TASK_ALREADY_ACTIVE` (`task <id> is already active`); the write fails and nothing is delivered; one state-neutral `rejected` event is appended | complete |
 | complete | assign reopens the same id | reject | no transition; deliver and inform already complete |
 
 `Started` notifies the assigner. `Completed(outcome)` dequeues the task (no
