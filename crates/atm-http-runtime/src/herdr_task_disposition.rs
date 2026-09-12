@@ -8,7 +8,6 @@ use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum TaskDisposition {
     Nudge,
     EscalateStalled,
@@ -17,13 +16,11 @@ pub(crate) enum TaskDisposition {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum EpisodeKind {
     Blocked,
     Offline,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 impl EpisodeKind {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
@@ -33,7 +30,6 @@ impl EpisodeKind {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn dispose(
     mail_pending: bool,
     state: RuntimeMemberState,
@@ -77,7 +73,6 @@ pub(crate) fn dispose(
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 fn reminder_due(task: &TaskRow, now: IsoTimestamp) -> bool {
     task.last_reminded_at.is_none_or(|last| {
         (now.into_inner() - last.into_inner()).num_milliseconds() >= TASK_REMINDER_INTERVAL_MS
@@ -141,5 +136,126 @@ mod tests {
     fn episode_kind_has_stable_name() {
         assert_eq!(EpisodeKind::Blocked.as_str(), "blocked");
         assert_eq!(EpisodeKind::Offline.as_str(), "offline");
+    }
+
+    #[test]
+    fn active_member_with_stalled_task_holds() {
+        let mut task = row();
+        task.reminder_count = 10;
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Active,
+                Some(&task),
+                now(),
+                false,
+                0
+            ),
+            TaskDisposition::Hold("active")
+        );
+    }
+
+    #[test]
+    fn threshold_is_terminal() {
+        let mut task = row();
+        task.reminder_count = 10;
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&task),
+                now(),
+                false,
+                0
+            ),
+            TaskDisposition::EscalateStalled
+        );
+        task.lead_notified_count = 1;
+        task.reminder_count = 25;
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&task),
+                now(),
+                false,
+                0
+            ),
+            TaskDisposition::Hold("stalled")
+        );
+    }
+
+    #[test]
+    fn rate_limit_boundary() {
+        let mut task = row();
+        task.last_reminded_at = Some("2026-09-10T23:59:00.001Z".parse().expect("timestamp"));
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&task),
+                now(),
+                false,
+                0
+            ),
+            TaskDisposition::Hold("rate limited")
+        );
+        task.last_reminded_at = Some("2026-09-10T23:59:00Z".parse().expect("timestamp"));
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&task),
+                now(),
+                false,
+                0
+            ),
+            TaskDisposition::Nudge
+        );
+        task.last_reminded_at = None;
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&task),
+                now(),
+                false,
+                0
+            ),
+            TaskDisposition::Nudge
+        );
+    }
+
+    #[test]
+    fn rate_limit_clock_reversal_is_not_due() {
+        let mut task = row();
+        task.last_reminded_at = Some("2026-09-11T00:00:05Z".parse().expect("timestamp"));
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&task),
+                now(),
+                false,
+                0
+            ),
+            TaskDisposition::Hold("rate limited")
+        );
+    }
+
+    #[test]
+    fn dispose_table_is_exhaustive() {
+        let task = row();
+        for state in [
+            RuntimeMemberState::Active,
+            RuntimeMemberState::Blocked,
+            RuntimeMemberState::Offline,
+            RuntimeMemberState::Unknown,
+            RuntimeMemberState::IdentityConflict,
+            RuntimeMemberState::Idle,
+        ] {
+            let _ = dispose(false, state, None, now(), true, 0);
+            let _ = dispose(false, state, Some(&task), now(), true, 0);
+        }
     }
 }

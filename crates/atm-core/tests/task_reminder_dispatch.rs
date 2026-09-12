@@ -69,7 +69,7 @@ fn reminder_dispatch_renders_from_a_task_row_without_assignment_mail() {
 }
 
 #[test]
-fn reminder_dispatch_skips_a_non_herdr_assignee() {
+fn reminder_dispatch_uses_the_configured_non_herdr_assignee_backend() {
     let root = tempfile::tempdir().expect("temporary runtime root");
     let assembly =
         atm_runtime_test_support::open_isolated_sqlite_boundary(root.path()).expect("runtime");
@@ -89,7 +89,7 @@ fn reminder_dispatch_skips_a_non_herdr_assignee() {
     assert!(
         build_task_reminder_dispatch(&assembly.service_runtime, &key, &row)
             .expect("recipient lookup")
-            .is_none()
+            .is_some()
     );
 }
 

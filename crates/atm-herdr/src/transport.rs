@@ -98,10 +98,6 @@ pub(crate) enum HerdrOp<'a> {
     },
     List,
     StatusServer,
-    Notify {
-        title: &'a str,
-        body: &'a str,
-    },
 }
 
 pub(crate) struct HerdrServerStatus {
@@ -338,6 +334,7 @@ fn live_handoff_from_capabilities(capabilities: &Value) -> bool {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn unit_from_envelope(envelope: HerdrEnvelope) -> Result<(), HerdrError> {
     if envelope.result.is_some() {
         Ok(())

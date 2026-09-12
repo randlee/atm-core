@@ -1077,6 +1077,30 @@ mod tests {
             .expect("assign");
     }
 
+    fn start_task(backend: &SqliteStorageBackend, task_id: &atm_storage::TaskId) {
+        let member = MemberKey::new(team(), agent());
+        backend
+            .task_store()
+            .record_reminder(
+                &member,
+                task_id,
+                IsoTimestamp::now(),
+                atm_storage::ReminderOutcome::Emitted,
+            )
+            .expect("record reminder");
+
+        let message_id = AtmMessageId::new();
+        let mut start = message(&format!("atm:{message_id}"), "start");
+        start.envelope.message_id = Some(message_id);
+        start.envelope.from = "atm-daemon".parse().expect("daemon actor");
+        start.envelope.task_id = Some(task_id.clone());
+        start.envelope.task_op = Some(TaskOp::Start);
+        backend
+            .message_store()
+            .save_message(&start)
+            .expect("start task");
+    }
+
     fn move_task(
         backend: &SqliteStorageBackend,
         task: &str,
@@ -1232,6 +1256,19 @@ mod tests {
             .message_store()
             .save_message(&first_close)
             .expect("first close");
+
+        // Complete rows are intercepted by the writer before the state
+        // authority's deliberately unreachable complete-row Start arm.
+        let mut late_start = message("atm:late-start", "start");
+        late_start.envelope.from = "atm-daemon".parse().expect("daemon actor");
+        late_start.envelope.task_id = Some(task_id.clone());
+        late_start.envelope.task_op = Some(TaskOp::Start);
+        let start_error = backend
+            .message_store()
+            .save_message(&late_start)
+            .expect_err("complete task cannot start");
+        assert!(start_error.message().contains("no open task T1"));
+
         let events_before = backend
             .task_store()
             .list_task_events(&team(), &task_id, Some(&agent()))
@@ -3943,18 +3980,7 @@ mod tests {
         assignment.envelope.acknowledged_at = Some(acknowledged_at);
         store.save_message(&assignment).expect("save assignment");
 
-        backend
-            .shared_db_for_test()
-            .with_connection(|connection| {
-                connection
-                    .execute(
-                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-                        params![team().as_str(), task_id.as_str(), agent().as_str()],
-                    )
-                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-                Ok(())
-            })
-            .expect("seed active task");
+        start_task(&backend, &task_id);
 
         let mut completion = message("atm:active-close", "completed");
         completion.envelope.from = "lead".parse().expect("assigner");
@@ -4001,18 +4027,7 @@ mod tests {
         assignment.envelope.requires_ack = true;
         store.save_message(&assignment).expect("save assignment");
 
-        backend
-            .shared_db_for_test()
-            .with_connection(|connection| {
-                connection
-                    .execute(
-                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-                        params![team().as_str(), task_id.as_str(), agent().as_str()],
-                    )
-                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-                Ok(())
-            })
-            .expect("seed active task");
+        start_task(&backend, &task_id);
 
         let mut completion = message("atm:active-close-unacked", "completed");
         completion.envelope.from = "lead".parse().expect("assigner");
@@ -4097,18 +4112,10 @@ mod tests {
         let second = assignment(&second_id);
         store.save_message(&first).expect("first assignment");
         store.save_message(&second).expect("second assignment");
-        backend
-            .shared_db_for_test()
-            .with_connection(|connection| {
-                connection
-                    .execute(
-                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-                        params![team().as_str(), first_id.as_str(), agent().as_str()],
-                    )
-                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-                Ok(())
-            })
-            .expect("seed active task");
+        start_task(&backend, &first_id);
+        let first_events_before_ack = tasks
+            .list_task_events(&team(), &first_id, Some(&agent()))
+            .expect("first events before acknowledgement");
 
         let first_message_id = first.envelope.message_id.expect("first id");
         store
@@ -4132,15 +4139,15 @@ mod tests {
         let first_events = tasks
             .list_task_events(&team(), &first_id, Some(&agent()))
             .expect("first events");
+        assert_eq!(first_events, first_events_before_ack);
         assert_eq!(
             first_events
                 .iter()
                 .map(|event| event.seq)
                 .collect::<Vec<_>>(),
-            vec![1],
+            (1..=first_events.len() as u64).collect::<Vec<_>>(),
             "task event sequences are gapless per task key"
         );
-        assert_eq!(first_events.len(), 1);
 
         let second_message_id = second.envelope.message_id.expect("second id");
         store
