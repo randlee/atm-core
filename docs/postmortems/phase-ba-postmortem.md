@@ -57,7 +57,7 @@ layer.
 | arch-ctm `BA-PHASE-REVIEW` (design-fit read of BA.3–BA.5 against the sprint docs) | 4 findings | ACR-001 `refusal_run` error swallowed into "no refusal" → arch-ctm review-2; ACR-002 pump shutdown drain has no deadline → arch-ctm review-2; ACR-003 test-double `cfg` gating → in place, no TOML edit; ACR-004 design-doc excerpts drifted from shipped code → cipher docs item |
 | solar `BA-READINESS` Part A (release, build, security, migration) | **DO NOT SHIP until RDY-001..004 resolved**; release build, `just validate`, `cargo deny`, `cargo audit` (0 vulns), migration 12/12, identity 22/22 pass | RDY-001 `prerelease/v1.5.15` already exists from the BA.2 dogfood lineage and the tagger's dry-run skips the collision preflight → version ruling **1.5.16** + solar review-3 B2; RDY-002 older-daemon refusal → dismissed, the approved contract is backup restore + CHECK failure (sprint-BA.2 :426-430); RDY-003 = ACR-002; RDY-004 doctor printed the retired `--task-complete` remediation → cipher (`1ceb92d35`); RDY-005 stale plan/frontmatter/design status → this layer; RDY-006 stale pump diagram in `architecture.md` → cipher; RDY-007 yanked `chacha20` lock entry → cipher |
 | hostile closure review (general-purpose opus, four audit threads, every claim verified at `9f5aef2fe`) | **26 findings, 2 blocking** (CPR-001..026) | CPR-001 stalled-task escalation is terminal only on a single-lead roster (zero or two+ leads → one escalation mail per recipient per tick, the §6 failure) and CPR-002 `SendOutcome.already_closed` has no producer so `atm task close` on a closed task prints a false success → arch-ctm review-2; runtime: CPR-003 escalation mail is a Deferred queue item, CPR-016/005 unbounded "mail pending" hold, CPR-007 recipient read fails open to an empty list, CPR-010 close rejections destroy the report (§5.2), CPR-009 a crashed agent is never Offline, CPR-018 oldest-200 truncation of the oversight log, CPR-026, CPR-023 → arch-ctm review-2; CLI: CPR-017 assign alias skips the daemon-version preflight, CPR-020 task-path errors flattened to exit 1, CPR-019 undocumented MESSAGE positional, CPR-004 Immediate receipt → cipher review-1; ~20 doc-named tests that cannot fail (CPR-011..015, CPR-024) → solar review-3 B3; doc drift CPR-006/008/021/022/025 → cipher |
-| quality-mgr `BA-PHASE-END-QA` (report on PR #1418) | pending | — |
+| quality-mgr `BA-PHASE-END-QA` (`review_mode: phase_end`, seven mandatory reviewers, pinned worktree at `9f5aef2fe`) | **PASS — `integration_review_passed`**; 45/45 triage findings disposed; report: PR #1418 comment 5644355381 | 8 stale `open`/`fixed_partial` statuses → occurrence closure (ARCH-001); RBP-F101 one error code for every task rejection → arch-ctm review-2; RSH-002 unbounded `run_blocking` in bootstrap `queue_drain.rs` → arch-ctm (folded into RBQA-F010); RBQA-BA-END-F001 `#[path]` test leak in `task.rs` → solar B1; RBQA-BA-END-F002 duplicated R8 validator → cipher; ATM-QA-101/103 stale plan status → this layer; ATM-QA-102 stale boundary-limitations list → cipher; RBP-F102 = CPR-020. `just validate` cannot run on the host (cargo-shear needs rustc ≥ 1.95, pinned 1.94.1 — pre-existing debt); fmt/clippy/full tests substituted |
 
 Schema review (ADR-061, all three governed interfaces): **no unapproved
 breaking change**. SQLite MAJOR approval recorded at
@@ -224,8 +224,20 @@ Classification vocabulary is the post-mortem reference's
 ## 5. Phase-level outcome
 
 <!-- PHASE_OUTCOME -->
-Pending the required integration review (`integration_review_passed` /
-`integration_review_failed` is recorded by quality-mgr on PR #1418).
+**`integration_review_passed`** (quality-mgr, PR #1418 comment 5644355381,
+2026-09-12): seven mandatory reviewers PASS, zero blocking findings at the
+landing head, `arch-qa` `merge_ready: true`.
+
+**But not closed.** The parallel hostile closure review found two blocking
+defects behind green doc-named tests (CPR-001 terminal escalation holds only
+on a single-lead roster; CPR-002 `already_closed` never reaches the caller)
+and roughly twenty tests that cannot fail. The phase PR to `develop` stays
+draft until every review-findings layer lands on `integrate/phase-ba`, the
+consolidated QA on the stack top passes, and the CI-trigger PR is green on
+the landing sha. Lesson recorded in §3 F1 and §6 row 2: a seven-reviewer
+PASS is a necessary gate, not the critical review; the hostile pass reads
+every test body against the design and is the one that found the defects
+the phase existed to fix.
 
 ## 6. Systemic actions
 
