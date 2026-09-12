@@ -467,11 +467,7 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
         task_id.clone(),
     );
     add_roster_member(&runtime, key.team(), "sender");
-    add_lead_roster_member(
-        &runtime,
-        key.team(),
-        atm_storage::roles::ROLE_TEAM_LEAD,
-    );
+    add_lead_roster_member(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD);
     let now = Arc::new(Mutex::new(
         IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
     ));
@@ -508,12 +504,7 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
     assert_eq!(prompt_texts(&fake).len(), 10);
     assert!(pending_state(root.path(), &key, assignment_id).0.is_some());
     assert_eq!(
-        stalled_escalation_count(
-            &runtime,
-            key.team(),
-            atm_storage::roles::ROLE_TEAM_LEAD,
-        )
-        .await,
+        stalled_escalation_count(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD,).await,
         1
     );
 
@@ -527,14 +518,13 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
         .expect("task row");
     assert_eq!(terminal.reminder_count, 10);
     assert_eq!(terminal.lead_notified_count, 1);
-    assert_eq!(prompt_texts(&fake).len(), 11, "ordinary mail remains deliverable");
     assert_eq!(
-        stalled_escalation_count(
-            &runtime,
-            key.team(),
-            atm_storage::roles::ROLE_TEAM_LEAD,
-        )
-        .await,
+        prompt_texts(&fake).len(),
+        11,
+        "ordinary mail remains deliverable"
+    );
+    assert_eq!(
+        stalled_escalation_count(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD,).await,
         1
     );
 }
@@ -566,7 +556,10 @@ async fn unrelated_mail_prompt_does_not_start_the_assigned_head_task() {
         .expect("load head")
         .expect("head task");
     assert_eq!(head.state, TaskState::Assigned);
-    assert_eq!(head.reminder_count, 1, "plain mail still counts as a reminder");
+    assert_eq!(
+        head.reminder_count, 1,
+        "plain mail still counts as a reminder"
+    );
     assert!(
         store
             .list_task_events(key.team(), &task_id, Some(key.agent()))
@@ -574,7 +567,10 @@ async fn unrelated_mail_prompt_does_not_start_the_assigned_head_task() {
             .iter()
             .all(|event| event.event != atm_storage::TaskEventKind::Started)
     );
-    assert_eq!(task_started_receipt_count(&runtime, key.team(), &task_id).await, 0);
+    assert_eq!(
+        task_started_receipt_count(&runtime, key.team(), &task_id).await,
+        0
+    );
 }
 
 #[tokio::test]

@@ -236,8 +236,9 @@ async fn stale_counterparty_rejection_exits_three_without_retry() {
             .count(),
         1
     );
+    assert!(error.to_string().contains("report delivered"));
     assert_eq!(f.inbox_contents(TEST_SENDER).len(), sender_before);
-    assert_eq!(f.inbox_contents("test-lead").len(), lead_before);
+    assert_eq!(f.inbox_contents("test-lead").len(), lead_before + 1);
 }
 
 #[tokio::test]

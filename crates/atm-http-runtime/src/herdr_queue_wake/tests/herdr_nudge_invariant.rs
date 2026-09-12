@@ -711,12 +711,7 @@ async fn offline_member_gets_one_message_zero_nudges_per_episode() {
 async fn sustained_listing_absence_becomes_offline_after_two_reminder_intervals_once() {
     let (_root, runtime, fake, pump, store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-    install_escalation_targets(
-        &runtime,
-        store.as_ref(),
-        &keys,
-        &["observer@ax5-task-only"],
-    );
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &["observer@ax5-task-only"]);
 
     pump.tick_once().await;
     *now.lock().expect("clock") =
@@ -732,13 +727,9 @@ async fn sustained_listing_absence_becomes_offline_after_two_reminder_intervals_
         RuntimeMemberState::Unknown
     );
     assert!(
-        daemon_mail_for(
-            &runtime,
-            keys[0].team(),
-            atm_storage::roles::ROLE_TEAM_LEAD,
-        )
-        .await
-        .is_empty()
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD,)
+            .await
+            .is_empty()
     );
 
     *now.lock().expect("clock") =
@@ -767,16 +758,17 @@ async fn sustained_listing_absence_becomes_offline_after_two_reminder_intervals_
     assert_eq!(observation.state, RuntimeMemberState::Offline);
     assert_eq!(pump.stats().task_reminders, 0);
     assert_eq!(
-        daemon_mail_for(
-            &runtime,
-            keys[0].team(),
-            atm_storage::roles::ROLE_TEAM_LEAD,
-        )
-        .await
-        .len(),
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD,)
+            .await
+            .len(),
         1
     );
-    assert_eq!(daemon_mail_for(&runtime, keys[0].team(), "observer").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), "observer")
+            .await
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -1059,10 +1051,15 @@ async fn escalation_recipient_read_error_holds_and_warns_once_per_tick() {
         build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
     let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
     for minute in 0..10 {
-        let at = IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z"))
-            .expect("timestamp");
+        let at =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         store
-            .record_reminder(&keys[0], &task_id, at, atm_storage::ReminderOutcome::Emitted)
+            .record_reminder(
+                &keys[0],
+                &task_id,
+                at,
+                atm_storage::ReminderOutcome::Emitted,
+            )
             .expect("seed reminder");
     }
     store.set_fail_escalation_recipient_reads(true);
@@ -1073,14 +1070,16 @@ async fn escalation_recipient_read_error_holds_and_warns_once_per_tick() {
             queue_idle_result(&fake, &keys[0]);
         }
         *now.lock().expect("clock") =
-            IsoTimestamp::from_str(&format!("2030-01-01T00:{}:00Z", tick + 10))
-                .expect("timestamp");
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{}:00Z", tick + 10)).expect("timestamp");
         pump.tick_once()
             .with_subscriber(tracing_subscriber::Registry::default().with(warnings.clone()))
             .await;
         let row = store.row(&keys[0], &task_id);
         assert_eq!(row.reminder_count, 10);
-        assert_eq!(row.lead_notified_count, 0, "failed target reads are non-terminal");
+        assert_eq!(
+            row.lead_notified_count, 0,
+            "failed target reads are non-terminal"
+        );
         let target_warnings = warnings
             .events
             .lock()
@@ -1088,7 +1087,11 @@ async fn escalation_recipient_read_error_holds_and_warns_once_per_tick() {
             .iter()
             .filter(|(action, outcome)| action == "escalation_target_load" && outcome == "failed")
             .count();
-        assert_eq!(target_warnings, tick + 1, "one target-read warning per tick");
+        assert_eq!(
+            target_warnings,
+            tick + 1,
+            "one target-read warning per tick"
+        );
     }
     assert!(prompt_texts(&fake).is_empty());
     assert_eq!(pump.stats().lead_notifications, 0);
@@ -1826,12 +1829,8 @@ async fn third_refusal_holds_and_escalates_once() {
 
 #[tokio::test]
 async fn refusal_threshold_precedes_mail_pending_hold() {
-    let (root, runtime, _fake, pump, key, tasks, now) = build_real_task_pump(&[
-        "OVERLAP-01",
-        "OVERLAP-02",
-        "OVERLAP-03",
-        "OVERLAP-04",
-    ]);
+    let (root, runtime, _fake, pump, key, tasks, now) =
+        build_real_task_pump(&["OVERLAP-01", "OVERLAP-02", "OVERLAP-03", "OVERLAP-04"]);
     for task in &tasks[..3] {
         close_real_task(
             root.path(),
@@ -1882,12 +1881,7 @@ async fn refusal_threshold_precedes_mail_pending_hold() {
 
     pump.tick_once().await;
 
-    let mail = daemon_mail_for(
-        &runtime,
-        key.team(),
-        atm_storage::roles::ROLE_TEAM_LEAD,
-    )
-    .await;
+    let mail = daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD).await;
     assert_eq!(mail.len(), 1, "refusal threshold outranks mail pending");
     assert_eq!(
         mail[0].envelope.summary.as_deref(),

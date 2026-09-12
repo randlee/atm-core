@@ -6,7 +6,10 @@ mod task_list_events;
 mod task_move;
 
 use atm_core::protocol::{CompatibilityVerdict, HttpApiVersion, ReleaseVersion};
+use atm_core::test_support::{EnvGuard, TEST_TEAM};
 use clap::{CommandFactory, Parser};
+use serial_test::serial;
+use tempfile::TempDir;
 
 use super::*;
 use crate::commands::send::require_daemon_api;
@@ -101,9 +104,63 @@ fn assign_without_task_id_mints_ulid() {
 }
 
 #[test]
-fn list_has_only_all_and_json_flags() {
+#[serial(env)]
+fn task_assign_template_load_failure_exits_two() {
+    let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender"))]);
+    let home = TempDir::new().expect("home directory");
+    let current = TempDir::new().expect("current directory");
+    let command = SendCommand::for_task(TaskSendOptions {
+        to: "recipient@test-team".to_string(),
+        message: None,
+        team: Some(TEST_TEAM.to_string()),
+        actor: None,
+        file: None,
+        stdin: false,
+        template: Some(current.path().join("missing.j2")),
+        vars: None,
+        task_id: Some("T1".parse().expect("task id")),
+        json: false,
+    });
+    let error = command
+        .build_request_with_mode(
+            home.path().to_path_buf(),
+            current.path().to_path_buf(),
+            NudgeMode::Deferred,
+            None,
+        )
+        .expect_err("missing task template");
+
+    assert_eq!(crate::exit_code_for_error(&error), 2);
+}
+
+#[test]
+fn list_and_events_accept_bounded_or_all_paging() {
     Cli::try_parse_from(["atm", "task", "list", "--all", "--json"]).expect("documented list flags");
+    Cli::try_parse_from(["atm", "task", "list", "--limit", "10"]).expect("bounded list");
+    assert!(Cli::try_parse_from(["atm", "task", "list", "--all", "--limit", "10"]).is_err());
+    Cli::try_parse_from(["atm", "task", "events", "T1", "--all"]).expect("all events");
+    Cli::try_parse_from(["atm", "task", "events", "T1", "--limit", "10"]).expect("bounded events");
+    assert!(
+        Cli::try_parse_from(["atm", "task", "events", "T1", "--all", "--limit", "10"]).is_err()
+    );
     assert!(Cli::try_parse_from(["atm", "task", "list", "--member", "fenix"]).is_err());
+}
+
+#[test]
+fn close_preflight_query_pushes_down_the_task_id() {
+    let task_id: TaskId = "T1".parse().expect("task id");
+    let home = TempDir::new().expect("home");
+    let current = TempDir::new().expect("current");
+    let query = task_list_request(
+        home.path().to_path_buf(),
+        current.path().to_path_buf(),
+        "alice".parse().expect("agent"),
+        TEST_TEAM.parse().expect("team"),
+        None,
+        Some(&task_id),
+    )
+    .expect("task query");
+    assert_eq!(query.task_filter.as_ref(), Some(&task_id));
 }
 
 #[test]

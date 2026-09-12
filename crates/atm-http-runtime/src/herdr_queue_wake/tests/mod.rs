@@ -4,10 +4,11 @@ mod herdr_nudge_invariant;
 mod herdr_queue_ephemeral;
 mod herdr_queue_no_delivery;
 
+use super::task_pass::runtime_state;
 use super::{
     BoundedBlockingBridge, HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK,
     HERDR_POLL_INTERVAL_MS, HERDR_REQUEST_BUDGET, HerdrQueueWakePump, ReleasePendingOnDrop,
-    RuntimeHealth, herdr_request_deadline, log_herdr_list_failure, runtime_state,
+    RuntimeHealth, herdr_request_deadline, log_herdr_list_failure,
 };
 use atm_core::LocalServiceRuntime;
 use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -1236,7 +1237,7 @@ async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
         1,
         "only the fresh queue nudge is emitted"
     );
-    assert_eq!(pump.stats().task_reminders, 0);
+    assert_eq!(pump.stats().task_reminders, 1);
 
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:03:00Z").expect("test timestamp");
@@ -1442,7 +1443,7 @@ async fn ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
             .expect("load task")
             .expect("task row")
             .reminder_count,
-        1
+        2
     );
     assert_eq!(pump.stats().task_reminders_failed, 0);
 
@@ -1543,7 +1544,7 @@ async fn ax5_06_task_reminder_only_appends_audit_bookkeeping() {
         .list_task_events(key.team(), &task_id, Some(key.agent()))
         .expect("task events");
     assert_eq!(row.state, atm_storage::TaskState::Assigned);
-    assert_eq!(row.reminder_count, 1);
+    assert_eq!(row.reminder_count, 2);
     assert_eq!(
         events
             .iter()
@@ -1596,7 +1597,7 @@ async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
         }],
     }));
     pump.tick_once().await;
-    assert_eq!(pump.stats().task_reminders, 0, "drain consumes this tick");
+    assert_eq!(pump.stats().task_reminders, 1, "drain counts this tick");
 
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("future timestamp");
@@ -1616,7 +1617,7 @@ async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
         .load_task(key.team(), &task_id)
         .expect("load task")
         .expect("task row");
-    assert_eq!(row.reminder_count, 1);
+    assert_eq!(row.reminder_count, 2);
     assert_eq!(pump.stats().task_reminders, 0);
     assert_eq!(
         fake.calls()

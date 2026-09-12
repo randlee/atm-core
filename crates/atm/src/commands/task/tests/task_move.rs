@@ -75,6 +75,7 @@ async fn move_task(f: &LoopbackFixture, task: &str, target: MoveTarget) -> Strin
 async fn list_tasks(f: &LoopbackFixture) -> Vec<TaskRow> {
     let command = TaskListCommand {
         all: false,
+        limit: None,
         json: true,
         caller: CallerArgs {
             actor: Some("recipient".into()),
