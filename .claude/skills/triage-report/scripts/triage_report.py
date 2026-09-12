@@ -334,15 +334,19 @@ def _status_icon(status: str | None) -> str:
     return "—"
 
 
+# Verdict values a QA assignment row carries before its result lands.
+IN_FLIGHT_VERDICTS = frozenset({"", "PENDING", "ASSIGNED", "IN_PROGRESS", "RUNNING"})
+
+
 def _qa_icon(qa: dict[str, Any]) -> str:
     """PASS/FAIL from the recorded verdict; a run assigned without a verdict
     is QA in flight; no run at all is shown as absent, never guessed."""
-    verdict = qa.get("verdict")
-    if verdict:
-        return ICONS["done"] if str(verdict).upper() == "PASS" else ICONS["fail"]
-    if qa.get("run_id"):
-        return ICONS["in_progress"]
-    return "—"
+    verdict = str(qa.get("verdict") or "").strip().upper()
+    if verdict == "PASS":
+        return ICONS["done"]
+    if verdict in IN_FLIGHT_VERDICTS:
+        return ICONS["in_progress"] if qa.get("run_id") else "—"
+    return ICONS["fail"]
 
 
 def _gate_icon(value: bool | None) -> str:

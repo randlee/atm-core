@@ -694,14 +694,15 @@ def test_completed_sprint_awaiting_qa_dispatch_renders_with_a_warning(tmp_path):
 
 
 def test_qa_run_assigned_without_verdict_renders_in_flight(tmp_path):
-    """A QA assignment row appended at dispatch (no result yet) is QA in
-    flight: shown as in progress, never as a failure or a data gap."""
+    """A QA assignment row appended at dispatch (no result yet, verdict
+    "PENDING" or empty) is QA in flight: shown as in progress, never as a
+    failure or a data gap."""
     root, qa_path = _inputs(tmp_path)
     master = json.loads(qa_path.read_text())
     master["runs"] = [run for run in master["runs"] if run["aich_sprint"] != "AICH-S1"] + [
         {"run_id": "S1-QA2", "aich_sprint": "AICH-S1", "run_type": "qa",
          "assignment_time_utc": "2026-07-25T06:00:00Z", "result_time_utc": None,
-         "verdict": "", "pass": None, "blockers": None, "important": None, "minor": None},
+         "verdict": "PENDING", "pass": None, "blockers": None, "important": None, "minor": None},
     ]
     qa_path.write_text(json.dumps(master))
     report = triage_report.build_report(root, "AICH", qa_path)
