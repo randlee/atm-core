@@ -150,6 +150,19 @@ impl Harness {
             })
             .collect()
     }
+
+    fn move_task(&self, task: &str, actor: &str, target: MoveTarget) {
+        self.backend
+            .task_store()
+            .move_task(
+                &self.team,
+                &task.parse().expect("task"),
+                &actor.parse().expect("actor"),
+                &target,
+                IsoTimestamp::now(),
+            )
+            .expect("move task");
+    }
 }
 
 #[test]
@@ -531,11 +544,30 @@ fn assigned_at_set_only_by_assignment() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let assigned = h.row("T1").assigned_at;
+
+    h.move_task("T1", "lead", MoveTarget::End);
+    assert_eq!(h.row("T1").assigned_at, assigned);
+
     h.start("T1", "alice").unwrap();
     assert_eq!(h.row("T1").assigned_at, assigned);
-    h.close("T1", "lead", "alice", TaskCloseOutcome::Completed)
+
+    h.assign("T1", "bob", "new-lead", None);
+    let reassigned = h.row("T1");
+    let reassigned_event = h.events("T1").last().cloned().expect("reassigned event");
+    assert_eq!(reassigned_event.event, TaskEventKind::Reassigned);
+    assert_eq!(reassigned.assigned_at, reassigned_event.at);
+    assert_eq!(reassigned.last_reminded_at, None);
+
+    h.close("T1", "new-lead", "bob", TaskCloseOutcome::Completed)
         .unwrap();
-    assert_eq!(h.row("T1").assigned_at, assigned);
+    assert_eq!(h.row("T1").assigned_at, reassigned.assigned_at);
+
+    h.assign("T1", "alice", "reopen-lead", None);
+    let reopened = h.row("T1");
+    let reopened_event = h.events("T1").last().cloned().expect("reopened event");
+    assert_eq!(reopened_event.event, TaskEventKind::Reopened);
+    assert_eq!(reopened.assigned_at, reopened_event.at);
+    assert_eq!(reopened.last_reminded_at, None);
 }
 
 #[test]
