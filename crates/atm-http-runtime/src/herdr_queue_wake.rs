@@ -916,13 +916,13 @@ where
     T: Send + 'static,
     F: FnOnce() -> Result<T, AtmError> + Send + 'static,
 {
-    tokio::task::spawn_blocking(job).await.map_err(|source| {
-        AtmError::new(
-            AtmErrorCode::InternalError,
-            "Herdr queue wake blocking operation ended unexpectedly",
-        )
-        .with_cause(source)
-    })?
+    tokio::time::timeout(HERDR_REQUEST_DEADLINE, tokio::task::spawn_blocking(job))
+        .await
+        .map_err(|_| AtmError::new(AtmErrorCode::InternalError, "Herdr blocking work timed out"))?
+        .map_err(|source| {
+            AtmError::new(AtmErrorCode::InternalError, "Blocking task join failed")
+                .with_cause(source)
+        })?
 }
 
 fn member_order(left: &MemberKey, right: &MemberKey) -> std::cmp::Ordering {
@@ -1139,7 +1139,8 @@ mod tests {
 
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HerdrQueueWakePump, ReleasePendingOnDrop, log_herdr_list_failure, runtime_state,
+        HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, ReleasePendingOnDrop, log_herdr_list_failure,
+        run_blocking, runtime_state,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -1169,7 +1170,7 @@ mod tests {
     use std::future::Future;
     use std::pin::Pin;
     use std::str::FromStr;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
@@ -1188,6 +1189,34 @@ mod tests {
             }
             SinkOffer::Accepted
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let release = Arc::new(AtomicBool::new(false));
+        let worker_release = Arc::clone(&release);
+        let operation = tokio::spawn(async move {
+            run_blocking(move || {
+                started_tx.send(()).expect("signal blocking work started");
+                while !worker_release.load(Ordering::Acquire) {
+                    std::thread::yield_now();
+                }
+                Ok(())
+            })
+            .await
+        });
+
+        started_rx.await.expect("blocking work starts");
+        tokio::time::advance(HERDR_REQUEST_DEADLINE).await;
+        let error = operation
+            .await
+            .expect("timeout task joins")
+            .expect_err("blocking work must time out");
+        release.store(true, Ordering::Release);
+
+        assert_eq!(error.code(), AtmErrorCode::InternalError);
+        assert!(error.detail().contains("timed out"));
     }
 
     #[test]
