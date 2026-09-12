@@ -323,19 +323,18 @@ pub fn list_task_ledger_with_runtime(
         .clone()
         .ok_or_else(|| AtmError::validation("task ledger list requires a task-ledger selection"))?;
     let store = runtime.task_store()?;
-    let (task_rows, task_event_rows) = match task_ledger {
-        TaskLedgerQuery::Tasks { member } if query.task_filter.is_some() => {
-            let task_id = query.task_filter.as_ref().expect("guarded task filter");
+    let (task_rows, task_event_rows) = match (task_ledger, query.task_filter.as_ref()) {
+        (TaskLedgerQuery::Tasks { member }, Some(task_id)) => {
             let row = store
                 .load_task(&query.caller_team, task_id)?
                 .filter(|row| member.as_ref().is_none_or(|agent| &row.assignee == agent));
             (row.into_iter().collect(), Vec::new())
         }
-        TaskLedgerQuery::Tasks { member } => (
+        (TaskLedgerQuery::Tasks { member }, None) => (
             store.list_tasks(&query.caller_team, member.as_ref())?,
             Vec::new(),
         ),
-        TaskLedgerQuery::Events { task_id, member } => (
+        (TaskLedgerQuery::Events { task_id, member }, _) => (
             Vec::new(),
             store.list_task_events(&query.caller_team, &task_id, member.as_ref())?,
         ),
@@ -356,9 +355,8 @@ pub async fn list_task_ledger_with_runtime_async(
         .clone()
         .ok_or_else(|| AtmError::validation("task ledger list requires a task-ledger selection"))?;
     let reader = runtime.async_task_ledger_reader()?;
-    let (task_rows, task_event_rows) = match task_ledger {
-        TaskLedgerQuery::Tasks { member } if query.task_filter.is_some() => {
-            let task_id = query.task_filter.clone().expect("guarded task filter");
+    let (task_rows, task_event_rows) = match (task_ledger, query.task_filter.clone()) {
+        (TaskLedgerQuery::Tasks { member }, Some(task_id)) => {
             let row = reader
                 .load_task(query.caller_team.clone(), task_id, deadline)
                 .await
@@ -366,14 +364,14 @@ pub async fn list_task_ledger_with_runtime_async(
                 .filter(|row| member.as_ref().is_none_or(|agent| &row.assignee == agent));
             (row.into_iter().collect(), Vec::new())
         }
-        TaskLedgerQuery::Tasks { member } => (
+        (TaskLedgerQuery::Tasks { member }, None) => (
             reader
                 .list_tasks(query.caller_team.clone(), member, deadline)
                 .await
                 .map_err(AtmError::from)?,
             Vec::new(),
         ),
-        TaskLedgerQuery::Events { task_id, member } => (
+        (TaskLedgerQuery::Events { task_id, member }, _) => (
             Vec::new(),
             reader
                 .list_task_events(query.caller_team.clone(), task_id, member, deadline)
