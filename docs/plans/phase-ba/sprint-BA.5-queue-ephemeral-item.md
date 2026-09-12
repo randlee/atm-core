@@ -115,6 +115,9 @@ Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
 
 This file is spliced into `herdr_queue_wake`'s test module with `#[path]`; it
 is not a standalone Cargo integration-test target.
+It is a standalone Runtime test file in the plan's classification, included
+into `herdr_queue_wake.rs`'s `cfg(test)` module via `include!`; run it with
+`cargo test -p atm-http-runtime --lib herdr_queue_ephemeral`.
 
 - `task_prompt_waits_while_queue_item_open_across_ticks` — item prompted at t0; ticks at +5 s, +10 s, +55 s → 0 task prompts; read at +58 s; tick at +60 s → task prompt.
 - `open_mail_set_is_read_each_tick_not_cached`.
