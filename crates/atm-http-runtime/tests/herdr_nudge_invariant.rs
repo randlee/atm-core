@@ -930,6 +930,111 @@ async fn tenth_reminder_escalates_once_then_silence() {
     );
 }
 
+async fn drive_task_to_stall(
+    pump: &HerdrQueueWakePump,
+    fake: &Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+    key: &atm_storage::MemberKey,
+    now: &Arc<Mutex<IsoTimestamp>>,
+) {
+    for minute in 0..=10 {
+        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
+            "2030-01-01T00:{minute:02}:00Z"
+        ))
+        .expect("timestamp");
+        if minute > 0 {
+            queue_idle_result(fake, key);
+        }
+        pump.tick_once().await;
+    }
+}
+
+#[tokio::test]
+async fn tenth_reminder_with_zero_leads_escalates_to_recipients_once_then_silence() {
+    let (_root, runtime, fake, pump, key, tasks, now) =
+        build_real_task_pump(&["LIFE-NO-LEAD"]);
+    let mut roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(key.team())
+        .expect("roster");
+    roster
+        .members
+        .retain(|member| member.agent_type != atm_storage::AgentType::Lead);
+    roster.members.push(bare_member(key.team(), "observer"));
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&roster)
+        .expect("zero-lead roster");
+    runtime
+        .task_store()
+        .expect("task store")
+        .add_escalation_recipient(
+            &atm_storage::EscalationScope::Team(key.team().clone()),
+            &"observer@lifecycle-team".parse().expect("recipient"),
+            *now.lock().expect("clock"),
+        )
+        .expect("escalation recipient");
+
+    drive_task_to_stall(&pump, &fake, &key, &now).await;
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .lead_notified_count,
+        1
+    );
+    assert_eq!(daemon_mail_for(&runtime, key.team(), "observer").await.len(), 1);
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(daemon_mail_for(&runtime, key.team(), "observer").await.len(), 1);
+}
+
+#[tokio::test]
+async fn tenth_reminder_with_two_leads_escalates_to_each_once_then_silence() {
+    let (_root, runtime, fake, pump, key, tasks, now) =
+        build_real_task_pump(&["LIFE-TWO-LEADS"]);
+    let mut roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(key.team())
+        .expect("roster");
+    roster
+        .members
+        .retain(|member| member.agent_type != atm_storage::AgentType::Lead);
+    for name in ["lead-a", "lead-b"] {
+        let mut lead = bare_member(key.team(), name);
+        lead.agent_type = atm_storage::AgentType::Lead;
+        roster.members.push(lead);
+    }
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&roster)
+        .expect("two-lead roster");
+
+    drive_task_to_stall(&pump, &fake, &key, &now).await;
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .lead_notified_count,
+        1
+    );
+    assert_eq!(daemon_mail_for(&runtime, key.team(), "lead-a").await.len(), 1);
+    assert_eq!(daemon_mail_for(&runtime, key.team(), "lead-b").await.len(), 1);
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(daemon_mail_for(&runtime, key.team(), "lead-a").await.len(), 1);
+    assert_eq!(daemon_mail_for(&runtime, key.team(), "lead-b").await.len(), 1);
+}
+
 #[tokio::test]
 async fn close_of_stalled_task_resumes_nudging_on_next_task() {
     let (root, runtime, fake, pump, key, tasks, now) =

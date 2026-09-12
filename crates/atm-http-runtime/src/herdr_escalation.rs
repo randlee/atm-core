@@ -150,10 +150,7 @@ pub(crate) async fn escalate_mail(
             return EscalationOutcome::default();
         }
     };
-    let mut outcome = EscalationOutcome {
-        lead: targets.lead.clone(),
-        ..Default::default()
-    };
+    let mut outcome = EscalationOutcome::default();
     let reader = suppress_since.and_then(|_| match runtime.async_mailbox_reader() {
         Ok(reader) => Some(reader),
         Err(error) => {
@@ -167,15 +164,19 @@ pub(crate) async fn escalate_mail(
             None
         }
     });
-    let mut recipients = targets.recipients;
-    if let Some(lead) = targets.lead {
-        recipients.insert(
-            0,
+    let leads = match kind {
+        EscalationKind::TaskStalled => targets.leads,
+        _ if targets.leads.len() == 1 => targets.leads,
+        _ => Vec::new(),
+    };
+    let recipients = leads
+        .into_iter()
+        .map(|lead| {
             format!("{lead}@{team}")
                 .parse()
-                .expect("validated lead and team form a valid local address"),
-        );
-    }
+                .expect("validated lead and team form a valid local address")
+        })
+        .chain(targets.recipients);
     for recipient in recipients {
         if should_suppress(reader.as_deref(), &recipient, team, summary, suppress_since).await {
             continue;
@@ -191,18 +192,12 @@ pub(crate) async fn escalate_mail(
         )
         .await
         {
-            Ok(message_id)
-                if outcome.lead_write.is_none()
-                    && recipient.to_string()
-                        == outcome
-                            .lead
-                            .as_ref()
-                            .map(|lead| format!("{lead}@{team}"))
-                            .unwrap_or_default() =>
-            {
-                outcome.lead_write = Some(message_id)
+            Ok(message_id) => {
+                if outcome.audit_delivery.is_none() {
+                    outcome.audit_delivery = Some((recipient.agent().clone(), message_id));
+                }
+                outcome.recipients_written = outcome.recipients_written.saturating_add(1);
             }
-            Ok(_) => outcome.recipients_written = outcome.recipients_written.saturating_add(1),
             Err(error) => {
                 outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_write", outcome = "failed", kind = kind.as_str(), recipient = %recipient, error = %error, "Escalation mail write failed");
@@ -254,8 +249,7 @@ async fn should_suppress(
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct EscalationOutcome {
-    pub lead: Option<AgentName>,
-    pub lead_write: Option<atm_core::schema::AtmMessageId>,
+    pub audit_delivery: Option<(AgentName, atm_core::schema::AtmMessageId)>,
     pub recipients_written: u32,
     pub recipients_failed: u32,
 }
@@ -263,12 +257,12 @@ pub(crate) struct EscalationOutcome {
 impl EscalationOutcome {
     #[must_use]
     pub fn reached_anyone(&self) -> bool {
-        self.lead_write.is_some() || self.recipients_written > 0
+        self.recipients_written > 0
     }
 }
 
 struct EscalationTargets {
-    lead: Option<AgentName>,
+    leads: Vec<AgentName>,
     recipients: Vec<atm_core::address::AgentAddress>,
 }
 
@@ -292,9 +286,8 @@ async fn load_escalation_targets(
         .filter(|member| member.agent_type == atm_core::schema::AgentType::Lead)
         .map(|member| member.agent_name.clone())
         .collect();
-    let lead = (leads.len() == 1).then(|| leads[0].clone());
     let recipients = load_escalation_recipients(blocking_bridge, task_store, team).await;
-    Ok(EscalationTargets { lead, recipients })
+    Ok(EscalationTargets { leads, recipients })
 }
 
 async fn load_escalation_recipients(

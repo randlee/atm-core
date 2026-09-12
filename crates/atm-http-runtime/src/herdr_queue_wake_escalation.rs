@@ -61,9 +61,13 @@ pub(crate) async fn escalate_stalled_task(
     )
     .await;
     record_escalation_stats(stats, &outcome);
-    if let (Some(lead), Some(message_id)) = (outcome.lead, outcome.lead_write) {
-        record_lead_audit(pump, task_store, row, now, lead, message_id, stats).await;
-    }
+    let (audit_actor, message_id) = outcome.audit_delivery.unwrap_or_else(|| {
+        (
+            atm_core::types::AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME),
+            atm_core::schema::AtmMessageId::new(),
+        )
+    });
+    record_stall_audit(pump, task_store, row, now, audit_actor, message_id, stats).await;
 }
 
 async fn reminder_events(
@@ -110,7 +114,7 @@ fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow
     )
 }
 
-async fn record_lead_audit(
+async fn record_stall_audit(
     pump: &HerdrQueueWakePump,
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     row: &TaskRow,
