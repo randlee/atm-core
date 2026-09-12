@@ -260,11 +260,17 @@ impl HerdrQueueWakePump {
         };
         self.prune_member_state(&candidates);
 
-        let (eligible, task_candidates) = self.list_eligible(candidates, &mut stats).await;
+        let (mut eligible, task_candidates) = self.list_eligible(candidates, &mut stats).await;
         let prepared_task_pass = self.prepare_task_pass(&mut stats, &task_candidates).await;
-        self.drain_eligible(pending_store, eligible, &mut stats)
+        if let Some(prepared) = prepared_task_pass.as_ref() {
+            eligible.retain(|candidate| prepared.queue_drain_allowed(&candidate.key));
+        }
+        let prompted = self
+            .drain_eligible(pending_store, eligible, &mut stats)
             .await;
         if let Some(prepared_task_pass) = prepared_task_pass {
+            self.record_queue_prompt_reminders(&prepared_task_pass, &prompted, &mut stats)
+                .await;
             self.remind_open_tasks(
                 prepared_task_pass,
                 task_candidates,
@@ -701,8 +707,6 @@ impl HerdrQueueWakePump {
                 Ok(())
             })
             .await;
-        self.complete_task_handoff_if_head(&member.key, message_id, now)
-            .await;
         #[cfg(test)]
         self.await_handoff_cleanup_test_gate().await;
         self.reset_release_streak(&member.key);
@@ -715,82 +719,6 @@ impl HerdrQueueWakePump {
             outcome = "prompted",
             "Herdr queue prompt accepted"
         );
-    }
-
-    async fn complete_task_handoff_if_head(
-        &self,
-        member: &MemberKey,
-        message_id: atm_core::schema::AtmMessageId,
-        now: IsoTimestamp,
-    ) {
-        let runtime = self.service_runtime.clone();
-        let member_for_message = member.clone();
-        let task_id = match self
-            .blocking_bridge
-            .run(herdr_request_deadline(), move || {
-                load_received_hook_dispatch_message(&runtime, &member_for_message, message_id)
-            })
-            .await
-        {
-            Ok(Some(message)) => message.envelope.task_id,
-            Ok(None) | Err(_) => None,
-        };
-        let Some(task_id) = task_id else {
-            return;
-        };
-        let Ok(task_store) = self.service_runtime.task_store() else {
-            return;
-        };
-        let team = member.team().clone();
-        let task_id_for_load = task_id.clone();
-        let task_store_for_load = Arc::clone(&task_store);
-        let row = match self
-            .blocking_bridge
-            .run(herdr_request_deadline(), move || {
-                task_store_for_load.load_task(&team, &task_id_for_load)
-            })
-            .await
-        {
-            Ok(row) => row,
-            Err(error) => {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "task_handoff_read",
-                    outcome = "failed",
-                    member = %member,
-                    task_id = %task_id,
-                    error = %error,
-                    "Queue assignment task lookup failed"
-                );
-                return;
-            }
-        };
-        let Some(row) = row.filter(|row| {
-            row.state == atm_core::boundary::TaskState::Assigned
-                && row.position.is_some_and(|position| position.get() == 1)
-        }) else {
-            return;
-        };
-        if let Err(error) = crate::herdr_task_start::complete_task_handoff(
-            self,
-            &task_store,
-            &self.daemon_home,
-            member,
-            &row,
-            now,
-        )
-        .await
-        {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "task_handoff_start",
-                outcome = "failed",
-                member = %member,
-                task_id = %task_id,
-                error = %error,
-                "Queue assignment task handoff failed"
-            );
-        }
     }
 
     #[must_use]
@@ -2206,7 +2134,7 @@ mod tests {
             1,
             "only the fresh queue nudge is emitted"
         );
-        assert_eq!(pump.stats().task_reminders, 0);
+        assert_eq!(pump.stats().task_reminders, 1);
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:03:00Z").expect("test timestamp");
@@ -2413,7 +2341,7 @@ mod tests {
                 .expect("load task")
                 .expect("task row")
                 .reminder_count,
-            1
+            2
         );
         assert_eq!(pump.stats().task_reminders_failed, 0);
 
@@ -2514,7 +2442,7 @@ mod tests {
             .list_task_events(key.team(), &task_id, Some(key.agent()))
             .expect("task events");
         assert_eq!(row.state, atm_storage::TaskState::Assigned);
-        assert_eq!(row.reminder_count, 1);
+        assert_eq!(row.reminder_count, 2);
         assert_eq!(
             events
                 .iter()
@@ -2567,7 +2495,7 @@ mod tests {
             }],
         }));
         pump.tick_once().await;
-        assert_eq!(pump.stats().task_reminders, 0, "drain consumes this tick");
+        assert_eq!(pump.stats().task_reminders, 1, "drain counts this tick");
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("future timestamp");
@@ -2587,7 +2515,7 @@ mod tests {
             .load_task(key.team(), &task_id)
             .expect("load task")
             .expect("task row");
-        assert_eq!(row.reminder_count, 1);
+        assert_eq!(row.reminder_count, 2);
         assert_eq!(pump.stats().task_reminders, 0);
         assert_eq!(
             fake.calls()

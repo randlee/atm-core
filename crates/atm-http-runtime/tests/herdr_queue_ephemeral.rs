@@ -2,6 +2,42 @@
 
 use super::*;
 
+async fn stalled_escalation_count(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &str,
+) -> usize {
+    runtime
+        .async_mailbox_reader()
+        .expect("mailbox reader")
+        .list_messages(
+            atm_core::boundary::MailboxScope::new(
+                team.clone(),
+                agent.parse().expect("mailbox agent"),
+            ),
+            atm_storage::MessageQuery {
+                team: team.clone(),
+                agent: agent.parse().expect("query agent"),
+                sender: Some("atm-daemon".parse().expect("daemon")),
+                task_id: None,
+                limit: None,
+            },
+            atm_core::boundary::ReadDeadline::new(std::time::Duration::from_secs(1))
+                .expect("deadline"),
+        )
+        .await
+        .expect("read escalation mail")
+        .iter()
+        .filter(|message| {
+            message
+                .envelope
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.starts_with("escalation:lead_notified:"))
+        })
+        .count()
+}
+
 async fn task_started_receipt_count(
     runtime: &LocalServiceRuntime,
     team: &TeamName,
@@ -63,8 +99,8 @@ async fn task_prompt_waits_while_queue_item_open_across_ticks() {
     );
     assert_eq!(
         pump.stats().task_reminders,
-        0,
-        "the open queue item holds the task"
+        1,
+        "the delivered queue prompt counts for the open task"
     );
 
     for seconds in [5, 10, 55] {
@@ -124,19 +160,19 @@ async fn open_mail_set_is_read_each_tick_not_cached() {
     pump.tick_once().await;
     assert_eq!(
         pump.stats().task_reminders,
-        0,
-        "the queue item is still open"
+        1,
+        "the delivered queue prompt counts for the open task"
     );
     close_message(root.path(), &runtime, &key, queue_message_id);
 
     *now.lock().expect("test clock lock") =
-        IsoTimestamp::from_str("2030-01-01T00:00:05Z").expect("test timestamp");
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
     assert_eq!(
         pump.stats().task_reminders,
         1,
-        "the next tick observes the item as read"
+        "the next due tick observes the item as read"
     );
     assert!(
         prompt_texts(&fake)
@@ -382,7 +418,11 @@ async fn mail_and_task_share_one_prompt_per_tick() {
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
     assert_eq!(pump.stats().prompted, 1);
-    assert_eq!(pump.stats().task_reminders, 0, "mail wins the tick");
+    assert_eq!(
+        pump.stats().task_reminders,
+        1,
+        "the mail prompt also counts for the open task"
+    );
     assert_eq!(prompt_texts(&fake).len(), 1);
     assert!(!prompt_texts(&fake)[0].contains(task_id.as_str()));
 
@@ -393,6 +433,91 @@ async fn mail_and_task_share_one_prompt_per_tick() {
     pump.tick_once().await;
     assert_eq!(pump.stats().task_reminders, 1);
     assert!(prompt_texts(&fake)[1].contains(task_id.as_str()));
+}
+
+#[tokio::test]
+async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
+    let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let task_id: TaskId = "BA5-UNREAD-STALL".parse().expect("task id");
+    let assignment_id = queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        task_id.clone(),
+    );
+    add_roster_member(&runtime, key.team(), "sender");
+    add_lead_roster_member(
+        &runtime,
+        key.team(),
+        atm_storage::roles::ROLE_TEAM_LEAD,
+    );
+    let now = Arc::new(Mutex::new(
+        IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+    ));
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+    let store = runtime.task_store().expect("task store");
+
+    for minute in 0..10 {
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str(&format!("2020-01-01T00:{minute:02}:00Z"))
+                .expect("test timestamp");
+        if minute > 0 {
+            queue_idle_result(&fake, &key);
+        }
+        pump.tick_once().await;
+        let row = store
+            .load_task(key.team(), &task_id)
+            .expect("load task")
+            .expect("task row");
+        assert_eq!(row.reminder_count, minute + 1);
+        assert_eq!(row.lead_notified_count, 0);
+    }
+    assert_eq!(prompt_texts(&fake).len(), 10);
+
+    *now.lock().expect("test clock lock") =
+        IsoTimestamp::from_str("2020-01-01T00:10:00Z").expect("test timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    let stalled = store
+        .load_task(key.team(), &task_id)
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(stalled.reminder_count, 10);
+    assert_eq!(stalled.lead_notified_count, 1);
+    assert_eq!(prompt_texts(&fake).len(), 10);
+    assert!(pending_state(root.path(), &key, assignment_id).0.is_some());
+    assert_eq!(
+        stalled_escalation_count(
+            &runtime,
+            key.team(),
+            atm_storage::roles::ROLE_TEAM_LEAD,
+        )
+        .await,
+        1
+    );
+
+    *now.lock().expect("test clock lock") =
+        IsoTimestamp::from_str("2020-01-01T00:11:00Z").expect("test timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    let terminal = store
+        .load_task(key.team(), &task_id)
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(terminal.reminder_count, 10);
+    assert_eq!(terminal.lead_notified_count, 1);
+    assert_eq!(prompt_texts(&fake).len(), 11, "ordinary mail remains deliverable");
+    assert_eq!(
+        stalled_escalation_count(
+            &runtime,
+            key.team(),
+            atm_storage::roles::ROLE_TEAM_LEAD,
+        )
+        .await,
+        1
+    );
 }
 
 #[tokio::test]

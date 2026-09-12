@@ -59,15 +59,15 @@ pub(crate) fn dispose(
         }
         (_, S::Unknown, _) => D::Hold("unobserved"),
         (_, S::IdentityConflict, _) => D::Hold("identity conflict"),
-        (true, S::Idle, _) => D::Hold("mail pending"),
-        (false, S::Idle, None) => D::Hold("no open task"),
-        (false, S::Idle, Some(_)) if consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD => {
+        (_, S::Idle, Some(_)) if consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD => {
             D::Hold("refusals escalated")
         }
-        (false, S::Idle, Some(task)) if task.lead_notified_count > 0 => D::Hold("stalled"),
-        (false, S::Idle, Some(task)) if task.reminder_count >= TASK_STALLED_REMINDER_THRESHOLD => {
+        (_, S::Idle, Some(task)) if task.lead_notified_count > 0 => D::Hold("stalled"),
+        (_, S::Idle, Some(task)) if task.reminder_count >= TASK_STALLED_REMINDER_THRESHOLD => {
             D::EscalateStalled
         }
+        (true, S::Idle, _) => D::Hold("mail pending"),
+        (false, S::Idle, None) => D::Hold("no open task"),
         (false, S::Idle, Some(task)) if !reminder_due(task, now) => D::Hold("rate limited"),
         (false, S::Idle, Some(_)) => D::Nudge,
     }
@@ -160,14 +160,7 @@ mod tests {
         let mut task = row();
         task.reminder_count = 10;
         assert_eq!(
-            dispose(
-                false,
-                RuntimeMemberState::Idle,
-                Some(&task),
-                now(),
-                false,
-                0
-            ),
+            dispose(true, RuntimeMemberState::Idle, Some(&task), now(), false, 0),
             TaskDisposition::EscalateStalled
         );
         task.lead_notified_count = 1;

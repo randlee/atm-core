@@ -81,6 +81,26 @@ impl HerdrQueueWakePump {
         }
     }
 
+    pub(super) async fn record_queue_prompt_reminders(
+        &self,
+        prepared: &PreparedTaskPass,
+        prompted: &HashSet<MemberKey>,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        let now = (self.clock)();
+        for member in prompted {
+            let Some(row) = prepared.queue_reminder_head(member) else {
+                continue;
+            };
+            let context = crate::herdr_queue_wake_escalation::TaskReminderContext {
+                task_store: &prepared.task_store,
+                member,
+            };
+            self.record_task_outcome(&context, row, now, ReminderOutcome::Emitted, true, stats)
+                .await;
+        }
+    }
+
     pub(super) fn collect_idle_members(
         &self,
         agents: Vec<AgentSnapshot>,
@@ -342,8 +362,15 @@ impl HerdrQueueWakePump {
             }
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member, "Herdr task reminder could not render");
-                self.record_task_outcome(&context, &row, now, ReminderOutcome::Unrenderable, stats)
-                    .await;
+                self.record_task_outcome(
+                    &context,
+                    &row,
+                    now,
+                    ReminderOutcome::Unrenderable,
+                    false,
+                    stats,
+                )
+                .await;
                 return;
             }
         };
@@ -365,8 +392,15 @@ impl HerdrQueueWakePump {
             .await
         {
             Ok(_) => {
-                self.record_task_outcome(&context, &row, now, ReminderOutcome::Emitted, stats)
-                    .await
+                self.record_task_outcome(
+                    &context,
+                    &row,
+                    now,
+                    ReminderOutcome::Emitted,
+                    false,
+                    stats,
+                )
+                .await
             }
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {
@@ -382,6 +416,7 @@ impl HerdrQueueWakePump {
         row: &TaskRow,
         now: IsoTimestamp,
         outcome: ReminderOutcome,
+        prompt_already_counted: bool,
         stats: &mut HerdrQueueWakeStats,
     ) {
         let recorded_row = if outcome == ReminderOutcome::Emitted {
@@ -400,7 +435,9 @@ impl HerdrQueueWakePump {
         };
         match outcome {
             ReminderOutcome::Emitted => {
-                stats.prompted += 1;
+                if !prompt_already_counted {
+                    stats.prompted += 1;
+                }
                 stats.task_reminders += 1;
             }
             ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
@@ -474,5 +511,21 @@ impl HerdrQueueWakePump {
                 "Herdr task reminder step skipped: task store unavailable"
             );
         }
+    }
+}
+
+impl PreparedTaskPass {
+    pub(super) fn queue_drain_allowed(&self, member: &MemberKey) -> bool {
+        self.heads.get(member).is_none_or(|head| {
+            head.lead_notified_count > 0
+                || head.reminder_count < atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD
+        })
+    }
+
+    fn queue_reminder_head(&self, member: &MemberKey) -> Option<&TaskRow> {
+        self.heads.get(member).filter(|head| {
+            head.lead_notified_count == 0
+                && head.reminder_count < atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD
+        })
     }
 }
