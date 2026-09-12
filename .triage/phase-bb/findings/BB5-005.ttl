@@ -16,22 +16,31 @@
   triage:source "fenix completeness review" ;
   triage:repeatable false ;
   triage:sweepScope "docs/plans/phase-bb/sprint-BB.5*.md frontmatter" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: either run and commit just lint/just test/boundaries/RULE-003 gate evidence for BB.5, or revert the frontmatter status claim until BB5-002/003/004 close. Routed to arch-ctm on fix/bb5-closure-r1 (BB5-FIX-R1-1789256000). BB5-FIX-R1 completed (arch-ctm, task event 2026-09-12T22:56:30Z) at fix/bb5-closure-r1 @ 1c7e76da5; just lint 36/36, just test exit 0. Fixed-pending-QA; QA dispatched as BB5-QA-R1-1789261000 on PR #1453 (queued behind BB5-QA-CT1 on #1456)." ;
+  triage:deferredNote "Fix: either run and commit just lint/just test/boundaries/RULE-003 gate evidence for BB.5, or revert the frontmatter status claim until BB5-002/003/004 close. Routed to arch-ctm on fix/bb5-closure-r1 (BB5-FIX-R1-1789256000). BB5-FIX-R1 completed (arch-ctm, task event 2026-09-12T22:56:30Z) at fix/bb5-closure-r1 @ 1c7e76da5; just lint 36/36, just test exit 0. quality-mgr's BB5-QA-R1-1789261000 (PR #1453 comment, 2026-09-12T23:24:35Z) reported this still open (a 1-line frontmatter flip alone, no evidence artifact committed). CLOSED BY LEAD RULING (fenix, PR #1453 comment, 2026-09-12T23:25:29Z): the evidence exists in the form this repo uses for lint/test gates -- the dev's task-close report quotes just lint (36 succeeded) and just test (exit 0) at 1c7e76da5, recorded in the phase QA evidence master, and QA-1 itself reran just lint, just lint boundaries, and the RULE-003 check live at this head, all green. No repo rule requires committed lint/test log artifacts on a sprint branch (that form of evidence is for runner-written integration/smoke output under site/reports). Original remediation wording was loose; no further work required. Closed." ;
   triage:foundIn triage:BB5 ;
   triage:foundAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-005/1> ;
-  triage:triageRecordVersion "2" .
+  triage:hasResolution <urn:atm:triage:resolution/BB5-005/1> ;
+  triage:closedAt "2026-09-12T23:25:29Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:resolution/BB5-005/1>
+  a triage:Resolution ;
+  triage:resolutionNote "Lead ruling: dev close-report's quoted just lint/just test lines plus QA's own live rerun at 1c7e76da5 constitute sufficient gate evidence; no repo rule requires committed lint/test log artifacts on a sprint branch. Original remediation wording (requiring committed artifacts) was loose and is superseded by this ruling." ;
+  triage:resolvedAt "2026-09-12T23:25:29Z"^^xsd:dateTime ;
+  triage:resolvedBy "fenix" .
 
 <urn:atm:triage:occurrence/BB5-005/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-bb/sprint-BB.5.md" ;
   triage:line 1 ;
   triage:snippet "frontmatter status: complete with no just lint/just test/boundaries/RULE-003 evidence committed on the branch" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb5-closure-r1" ;
   triage:headSha "1c7e76da5" ;
   triage:occursIn <urn:atm:triage:worktree/BB5-005/1> .

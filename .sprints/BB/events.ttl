@@ -107,3 +107,7 @@ triage:a14 a triage:Assignment ;
 triage:c7 a triage:Completion ;
     triage:ofSprint triage:BB3 ;
     triage:at "2026-09-12T23:08:15Z"^^xsd:dateTime .
+
+triage:c8 a triage:Completion ;
+    triage:ofSprint triage:BB5 ;
+    triage:at "2026-09-12T23:25:29Z"^^xsd:dateTime .

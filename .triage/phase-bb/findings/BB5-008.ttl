@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB5-008>
+  a triage:Finding ;
+  triage:findingId "BB5-008" ;
+  triage:title "ADR-062 states the daemon is the sole actor for the Started transition with no public start command, contradicting requirements.md and the shipped BB.4 atm task start CLI command" ;
+  triage:description "req-qa, BB5-QA-R1-1789261000 on PR #1453 (fix/bb5-closure-r1 @ 1c7e76da5), 2026-09-12T23:24:35Z, out-of-round finding not counted toward that round's pass/fail. docs/adr/ADR-062-task-state-machine.md:134-137 states the daemon is the sole actor for the Started transition with no public start command. This contradicts docs/requirements.md and the shipped, tested BB.4 `atm task start <id>` CLI command (assignee-only; daemon rejects a non-assignee/non-active caller as TaskNotCounterparty). Pre-existing (predates BB.5; BB.5 only touched ADR-062's Reminder/escalation subsection) and unrelated to the BB.5/BB.5-QA-R1 round's diff. Confirmed and filed by fenix's lead ruling (PR #1453 comment, 2026-09-12T23:25:29Z)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "req-qa via BB5-QA-R1-1789261000, filed by fenix lead ruling" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/adr/ADR-062-task-state-machine.md:134-137" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T23:25:29Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: rewrite ADR-062:134-137 to match the BB.4 contract (assignee-only public `atm task start`, daemon rejects non-counterparty callers as TaskNotCounterparty). File fence is that ADR-062 subsection only. Routed to arch-ctm on the BB.6 docs layer feature/bb6-docs-prompt-handoffs (which edits ADR-062 anyway for D5)." ;
+  triage:foundIn triage:BB5 ;
+  triage:foundAt "2026-09-12T23:24:35Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-008/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB5-008/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-062-task-state-machine.md" ;
+  triage:line 134 ;
+  triage:snippet "states the daemon is the sole actor for the Started transition with no public start command, contradicting requirements.md and the shipped BB.4 atm task start CLI (assignee-only; daemon rejects non-counterparty as TaskNotCounterparty)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-008/1> .
+
+<urn:atm:triage:worktree/BB5-008/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1453, fix/bb5-closure-r1" ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
+  triage:orderIndex 1 .

@@ -16,22 +16,25 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/boundary/mod.rs:360" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T22:18:29Z"^^xsd:dateTime ;
-  triage:deferredNote "Recommend adding the missing (is_ack=true, NudgeKind::Queue) parametrized case to kind_decision_covers_every_transition before the next touch of this test. Not routed; Phase BB is cancelled and the code now lives on feature/bb-collapsed (PR #1452). Low-priority test debt only, does not block merge per quality-mgr's own recommendation. cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) fixed this on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA; QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1)." ;
+  triage:deferredNote "Recommend adding the missing (is_ack=true, NudgeKind::Queue) parametrized case to kind_decision_covers_every_transition before the next touch of this test. Not routed; Phase BB is cancelled and the code now lives on feature/bb-collapsed (PR #1452). Low-priority test debt only, does not block merge per quality-mgr's own recommendation. cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) fixed this on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA; QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1). Verified fixed at f94125cf5 under BB3-QA4-1789262000 (PR #1455 comment, 2026-09-12T23:24:52Z): crates/atm-core/src/boundary/mod.rs's kind_decision_covers_every_transition now has all 12 required parametrized arms including the previously-missing (is_ack=true, NudgeKind::Queue) case; rust-qa-agent ran it directly: 1 passed, also green in the full cargo test --workspace run. Closed." ;
   triage:foundIn triage:BB1 ;
   triage:foundAt "2026-09-12T22:18:29Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB1-029/1> ;
-  triage:triageRecordVersion "2" .
+  triage:hasResolution <urn:atm:triage:resolution/BB1-029/1> ;
+  triage:closedAt "2026-09-12T23:24:52Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB1-029/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/boundary/mod.rs" ;
   triage:line 360 ;
   triage:snippet "kind_decision_covers_every_transition parametrizes 11 of 12 required arms per sprint-BB.1-transition-templates.md:237, missing (is_ack=true, NudgeKind::Queue)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa3-r4" ;
   triage:headSha "f94125cf5" ;
   triage:occursIn <urn:atm:triage:worktree/BB1-029/1> .
@@ -42,3 +45,9 @@
   triage:branch "fix/bb3-qa3-r4" ;
   triage:headSha "f94125cf5" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB1-029/1>
+  a triage:Resolution ;
+  triage:resolutionNote "crates/atm-core/src/boundary/mod.rs's kind_decision_covers_every_transition now has all 12 required parametrized arms including the previously-missing (is_ack=true, NudgeKind::Queue) case; rust-qa-agent ran it directly: 1 passed, also green in the full cargo test --workspace run." ;
+  triage:resolvedAt "2026-09-12T23:24:52Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .
