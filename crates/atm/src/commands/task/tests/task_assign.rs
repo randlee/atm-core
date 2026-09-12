@@ -1,7 +1,7 @@
 #![cfg(test)]
 
-use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM};
-use atm_storage::{MemberKey, ReminderOutcome, TaskEventKind, TaskState};
+use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
+use atm_storage::{MemberKey, ReminderOutcome, TaskEventKind, TaskOp, TaskState};
 use serial_test::serial;
 
 use super::*;
@@ -64,7 +64,27 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
             atm_storage::IsoTimestamp::now(),
             ReminderOutcome::Emitted,
         )
-        .expect("reminder");
+        .expect("active reminder");
+    let mut start_active = atm_core::send::SendRequest::new(
+        fixture.home_dir.clone(),
+        fixture.current_dir.clone(),
+        "atm-daemon".parse().unwrap(),
+        TEST_RECIPIENT_ADDRESS,
+        team.clone(),
+        atm_core::send::SendMessageSource::Inline("start ACTIVE".into()),
+        None,
+        false,
+        Some("ACTIVE".parse().unwrap()),
+        false,
+    )
+    .unwrap();
+    start_active.task_op = Some(TaskOp::Start);
+    let observability = CliObservability::fallback();
+    fixture
+        .composition(&observability)
+        .send(start_active)
+        .await
+        .unwrap();
     execute_assign(
         &fixture,
         assign("QUEUED", TEST_RECIPIENT_ADDRESS, TEST_SENDER),
@@ -77,8 +97,32 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
             .expect("queued row");
         assert_eq!(queued.state, TaskState::Assigned);
         assert_eq!(queued.reminder_count, 0);
+        assert!(queued.last_reminded_at.is_none());
     }
-    let queued = store
+    let mut close_active = atm_core::send::SendRequest::new(
+        fixture.home_dir.clone(),
+        fixture.current_dir.clone(),
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
+        team.clone(),
+        atm_core::send::SendMessageSource::Inline("active work finished".into()),
+        None,
+        false,
+        Some("ACTIVE".parse().unwrap()),
+        false,
+    )
+    .unwrap();
+    close_active.task_op = Some(TaskOp::Close {
+        outcome: atm_storage::TaskCloseOutcome::Completed,
+        reason: Some("active work finished".into()),
+    });
+    let observability = CliObservability::fallback();
+    fixture
+        .composition(&observability)
+        .send(close_active)
+        .await
+        .unwrap();
+    store
         .record_reminder(
             &member,
             &"QUEUED".parse().expect("task"),
@@ -86,7 +130,6 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
             ReminderOutcome::Emitted,
         )
         .expect("idle-transition reminder");
-    assert_eq!(queued.reminder_count, 1);
     let mut start = atm_core::send::SendRequest::new(
         fixture.home_dir.clone(),
         fixture.current_dir.clone(),
@@ -100,7 +143,7 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
         false,
     )
     .unwrap();
-    start.task_op = Some(atm_storage::TaskOp::Start);
+    start.task_op = Some(TaskOp::Start);
     let observability = CliObservability::fallback();
     fixture
         .composition(&observability)
@@ -112,7 +155,7 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
         .unwrap()
         .unwrap();
     assert_eq!(active.state, TaskState::Active);
-    assert!(active.last_reminded_at.is_some());
+    assert_eq!(active.reminder_count, 1);
 }
 
 #[tokio::test]

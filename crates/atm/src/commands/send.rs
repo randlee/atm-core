@@ -1641,6 +1641,8 @@ mod tests {
         })
         .build_request_with_mode(".".into(), ".".into(), NudgeMode::Deferred, None)
         .expect("task assignment");
+        assert_eq!(alias_assign.nudge_mode, NudgeMode::Deferred);
+        assert_eq!(task_assign.nudge_mode, NudgeMode::Deferred);
         assert_eq!(
             serde_json::to_vec(&alias_assign).expect("serialize alias assignment"),
             serde_json::to_vec(&task_assign).expect("serialize task assignment")
@@ -1672,6 +1674,8 @@ mod tests {
             None,
         )
         .expect("task close");
+        assert_eq!(alias_close.nudge_mode, NudgeMode::Immediate);
+        assert_eq!(task_close.nudge_mode, NudgeMode::Immediate);
         assert_eq!(
             serde_json::to_vec(&alias_close).expect("serialize alias close"),
             serde_json::to_vec(&task_close).expect("serialize task close")
