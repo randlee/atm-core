@@ -20,11 +20,13 @@
   triage:triagedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
   triage:deferredNote "team-lead correction (2026-09-12T05:40:00Z): the qa-triage agent's own JSON summary called fix/phase-ba-merge-fix and fix/phase-ba-cleanup-b 'fixed', but that read solar's uncommitted working-tree edits on fix/phase-ba-merge-fix, not its committed HEAD -- git show HEAD:crates/atm-http-runtime/tests/herdr_nudge_invariant.rs at b9f7c4386 still has the IsoTimestamp::now() wall-clock call (identical to fix/phase-ba-cleanup, since it is currently the same commit). fix/phase-ba-cleanup-b@5ea53c28d has no wall-clock call either, but only because it still carries the pre-BA3-FIX-R3B hollow alias version of this test (assert_non_idle_status_never_prompts-style, no IsoTimestamp use at all) -- it has not yet absorbed BA.3's rewritten test body, so the defect is not fixed there, it is simply not yet present. Status held open; promote to fix/phase-ba-merge-fix (solar) per fenix's ruling." ;
   triage:promoteTo "fix/phase-ba-merge-fix" ;
+  triage:deferredNote "solar (task BA-MERGE-FIX-1789190857, ATM 01M2A275B1ZFZFH81EXWGJ4X9F, 2026-09-12T05:42:35Z): fix pushed to fix/phase-ba-merge-fix @ c571ae930. team-lead verified via git show: IsoTimestamp::now() wall-clock call no longer present in herdr_nudge_invariant.rs at this commit. Awaiting fenix ACCEPTED before solar sends task-complete; not yet formally closed by this record." ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-mergefix-1> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-1>
   a triage:Occurrence ;
@@ -68,4 +70,21 @@
   triage:branch "fix/phase-ba-cleanup" ;
   triage:headSha "b9f7c4386" ;
   triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/FTQ-001/FTQ-001-mergefix-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:snippet "IsoTimestamp::now() wall-clock call no longer present (verified via git show at c571ae930)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-merge-fix" ;
+  triage:headSha "c571ae930" ;
+  triage:occursIn <urn:atm:triage:worktree/merge-fix/c571ae930> .
+
+<urn:atm:triage:worktree/merge-fix/c571ae930>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 6 (inserted), solar single writer" ;
+  triage:branch "fix/phase-ba-merge-fix" ;
+  triage:headSha "c571ae930" ;
+  triage:orderIndex 6 .
 

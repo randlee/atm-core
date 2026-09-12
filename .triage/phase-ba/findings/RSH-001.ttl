@@ -16,19 +16,20 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:deferredNote "fenix's BA.4 QA-1 ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5642738654) folds this into BA.6, not BA.4. Further promoted by fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z): worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer) -- arch-ctm's BA6-CLEANUP task is cancelled; fix lands once on the cleanup layer, not on docs/ba6." ;
   triage:promoteTo "fix/phase-ba-cleanup-b" ;
   triage:deferredNote "further re-promoted (ATM 2026-09-12T04:51:28Z): docs/ba6-task-nudge-documentation complete and FROZEN at 03c623717 (PR #1412); new layer 6, fix/phase-ba-cleanup-b (arch-ctm single writer), above fix/phase-ba-cleanup (cipher). Rebase-at-task-start is now the rule on every layer -- headSha values in these records are snapshots, not live pointers." ;
+  triage:deferredNote "fenix (ATM 01M2A25E8T4QXDAG7FH85MCWF8, 2026-09-12T05:41:38Z): all four cleanup-b findings (RBP-F001, RBP-F002, RSH-001, RBQA-BA5-F004) are now fixed on fix/phase-ba-cleanup-b. FIXED." ;
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/4> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/RSH-001/1>
   a triage:Occurrence ;
@@ -98,16 +99,19 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 898 ;
   triage:snippet "fn run_blocking(...) -- no internal timeout on the spawn_blocking closure" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:41:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "dev fix by arch-ctm @ 5ea53c28d (run_blocking now wraps tokio::time::timeout(HERDR_REQUEST_DEADLINE, tokio::task::spawn_blocking(job))); fenix confirms fixed on fix/phase-ba-cleanup-b (ATM 01M2A25E8T4QXDAG7FH85MCWF8)." ;
   triage:branch "fix/phase-ba-cleanup-b" ;
-  triage:headSha "5b68d42bf" ;
+  triage:headSha "5ea53c28d" ;
   triage:occursIn <urn:atm:triage:worktree/RSH-001/4> .
 
 <urn:atm:triage:worktree/RSH-001/4>
   a triage:WorktreeSnapshot ;
   triage:path "gh-stack layer 6, arch-ctm single writer" ;
   triage:branch "fix/phase-ba-cleanup-b" ;
-  triage:headSha "5b68d42bf" ;
+  triage:headSha "5ea53c28d" ;
   triage:orderIndex 6 .
 
