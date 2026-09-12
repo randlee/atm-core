@@ -64,7 +64,7 @@ small (progressive disclosure).
 ## Lead Role
 
 The orchestrator in this skill is the **lead**: the identity that dispatches
-sprint nodes, appends events, and receives completion messages.
+sprint nodes, appends events, and receives task-close reports.
 `team-lead` is the default lead; `fenix` or any other identity may hold the role. A lead
 must be appointed for every phase before its first dispatch, recorded in the
 phase status row of `docs/project-plan.md` and the phase ledger, and
@@ -267,7 +267,7 @@ triaging-findings to determine template selection.
 ## Appending Events
 
 **Team-lead is the sole writer of TTL events.** Agents (dev, QA) never append to
-`.sprints/` files directly. Dev sends an ATM completion message; the lead
+`.sprints/` files directly. Dev sends an ATM task-close report; the lead
 appends triage:Completion and triage:Resolution events, then validates.
 
 Assignments and Completions go into `events.ttl`. They are file-appended and
@@ -286,7 +286,7 @@ git add .sprints/<PHASE>/events.ttl && git commit -m "event: Assignment <PHASE>-
 # Validate after every append
 .claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
 
-# Completion — append when the lead receives dev's ATM completion message
+# Completion — append when the lead receives the dev's ATM task-close report
 cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:c<N> a triage:Completion ;
     triage:ofSprint triage:Phase<X>-S<n> ;
@@ -356,8 +356,9 @@ finding ids before editing.
 
 The orchestrator saves `vars` to a temp file and adds non-graph variables.
 Every assignment (dev, fix, QA) is sent with
-`atm send <agent> --template <template> --vars <json>`; that is the only
-sanctioned dispatch form.
+`atm send <agent> --task-id "$TASK_ID" --template <template> --vars <json>`;
+that is the only sanctioned dispatch form. The same `TASK_ID` must also be
+passed as the template's `task_id` variable.
 Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
 consulting triaging-findings:
 
@@ -377,6 +378,7 @@ SPRINT=$(echo "$RESULT" | jq -r .vars.sprint)
 # Check findings via triaging-findings skill (orchestrator step)
 # If blocking findings exist, use dev-fix.xml.j2; otherwise dev-task.xml.j2
 TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
+TASK_ID="GO-$(date +%s)"
 
 # Dispatch via atm send --template (orchestrator supplies remaining vars).
 # Always use this form; never render the template yourself and paste or
@@ -384,9 +386,10 @@ TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
 # `atm compose` with the same --template/--vars/--var arguments. The daemon-owned template admission path records the
 # template and vars structurally, so the dispatch is queryable from outside.
 atm send arch-ctm \
+  --task-id "$TASK_ID" \
   --template ".claude/skills/graph-orchestration/$TEMPLATE" \
   --vars /tmp/graph-vars.json \
-  --var task_id="GO-$(date +%s)" \
+  --var task_id="$TASK_ID" \
   --var worktree_path="$WORKTREE_PATH" \
   --var branch="$BRANCH" \
   --var pr_target="$PR_TARGET" \
@@ -406,7 +409,7 @@ Completion, the Completion is invalidated:
    does not block — dev has sent a Completion, so the sprint is not in-flight;
    a new Assignment is required for re-dispatch)
 2. Team-lead appends a new Assignment event to events.ttl for the sprint
-3. Dev fixes the blocker and sends an ATM completion message; the lead
+3. Dev fixes the blocker and sends an ATM task-close report; the lead
    appends a new Completion
 4. Dev merges forward into the next sprint's worktree, picking up any
    important/minor findings on the way (Step 4 in the j2 template)
@@ -460,7 +463,7 @@ graph-orchestration:
 | `triage:Phase` | — | Phase identity node |
 | `triage:Sprint` | `inPhase`, `order`, `criteria` | One per sprint; `order` is unique within a phase |
 | `triage:Assignment` | `ofSprint`, `assignedTo`, `assignedAt` | Appended by the lead when dispatching; must be unique per sprint |
-| `triage:Completion` | `ofSprint`, `at` | Appended by the lead on receipt of dev's ATM completion message; may be invalidated by a later blocking finding |
+| `triage:Completion` | `ofSprint`, `at` | Appended by the lead on receipt of the dev's ATM task-close report; may be invalidated by a later blocking finding |
 | `triage:Resolution` | `resolves`, `resolvedAt` | Appended by the lead when a non-blocking finding is confirmed fixed; blocking findings need no Resolution |
 
 Findings are defined by the triaging-findings skill and live in

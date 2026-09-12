@@ -3,7 +3,9 @@ required_variables:
   - title
   - generated_at
   - pane_html
-defaults: {}
+defaults:
+  procedure_label: ""
+  procedure_href: ""
 metadata:
   purpose: Browser-friendly combined review page for ATM peer-smoke XHTML panes
 ---
@@ -24,7 +26,7 @@ metadata:
     </style>
   </head>
   <body>
-    <header><strong>{{ title }}</strong><p>Generated {{ generated_at }}</p></header>
+    <header><strong>{{ title | e }}</strong><p>Generated {{ generated_at | e }}</p>{% if procedure_label and procedure_href %}<p>Procedure: <a href="{{ procedure_href | e }}">{{ procedure_label | e }}</a></p>{% endif %}</header>
     <main>{{ pane_html | safe }}</main>
   </body>
 </html>

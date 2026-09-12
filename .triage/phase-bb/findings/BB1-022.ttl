@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-022>
+  a triage:Finding ;
+  triage:findingId "BB1-022" ;
+  triage:title "D3 kind-decision function is structurally infallible but returns Result" ;
+  triage:description "quality-mgr BB1-QA1-1789242600 (Final Quality Report, FAIL, https://github.com/randlee/atm-core/pull/1438#issuecomment-5648365789, 2026-09-12T20:06:37Z), reviewed at b06b3e262. QA1-I1: crates/atm-core/src/boundary/mod.rs:150-173 built_in_nudge_template_kind_from_post_send_event returns Result<BuiltInNudgeTemplateKind, AtmError>, but all 11 match arms over the exhaustive (is_ack, task_transition, requires_ack, delivery_kind) tuple return Ok(...) -- there is no Err(...) anywhere in the function. Every caller propagates it with ? as if failure were possible, adding dead error-handling on a hot dispatch path." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/boundary/mod.rs:150-173 and its callers" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
+  triage:deferredNote "Recommend returning BuiltInNudgeTemplateKind directly (or Result<_, Infallible>) so the signature honestly reflects the guarantee. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-022/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-022/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 150 ;
+  triage:snippet "built_in_nudge_template_kind_from_post_send_event returns Result but every one of its 11 match arms is Ok(...); no Err path exists" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-022/1> .
+
+<urn:atm:triage:worktree/BB1-022/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

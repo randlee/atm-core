@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -22,6 +24,28 @@ def load_module():
 class HermesGraftLiveSmokeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_module()
+
+    def test_graft_report_and_envelope_carry_source_revision_and_procedure(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            with mock.patch.object(self.module.feature_smoke, "ROOT", root), \
+                    mock.patch.object(self.module.feature_smoke, "source_revision", return_value="a" * 40), \
+                    mock.patch.object(self.module.feature_smoke, "platform") as platform, \
+                    mock.patch.object(self.module.feature_smoke, "os") as os_module, \
+                    mock.patch.object(self.module.feature_smoke, "compose"), \
+                    mock.patch.object(self.module.feature_smoke, "update_master_report_index"):
+                platform.system.return_value = "Darwin"
+                platform.node.return_value = "m5"
+                os_module.environ = {"ATM_SMOKE_RUN_ID": "run-1"}
+                os_module.getpid.return_value = 1
+                report = self.module.feature_smoke.write_report("graft-hermes", [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "m5", "destination": "m5"}])
+            self.assertEqual(json.loads(report.read_text())["procedure"], "graft-hermes")
+            self.assertEqual(json.loads((report.parent / "smoke.envelope.json").read_text())["procedure"], "graft-hermes")
+            self.assertEqual(json.loads(report.read_text())["source_revision"], "a" * 40)
+
+    def test_graft_missing_git_writes_null_source_revision(self) -> None:
+        with mock.patch.object(self.module.feature_smoke.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+            self.assertIsNone(self.module.feature_smoke.source_revision())
 
     def test_ready_pair_runs_backend_and_registers_graft_report(self) -> None:
         doctor = {"summary": {"status": "healthy"}, "runtime_status": {"readiness": "ready"}, "client_context": {"version": "1.4.1-beta-ai-1"}, "daemon_context": {"version": "1.4.1-beta-ai-1"}}

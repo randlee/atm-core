@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-021>
+  a triage:Finding ;
+  triage:findingId "BB1-021" ;
+  triage:title "No-op task start returns Ok without a state change, pre-BB.4" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. writer/task_ops.rs:412 returns Ok(row.assignee) on the no-op start (reminder not emitted / already Active), so the pre-BB.4 daemon receipt renders task_started without an actual state change. Consistent with design section 9 (\"Started for the daemon receipt until section 4.4 lands\"); note only, resolved by BB.4." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "design-note" ;
+  triage:severity "minor" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/writer/task_ops.rs:412" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Design note only; resolved when BB.4 lands the writer admit arm for Started. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-021/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-021/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/writer/task_ops.rs" ;
+  triage:line 412 ;
+  triage:snippet "no-op start path returns Ok(row.assignee) and renders task_started with no actual state transition, pending BB.4" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-021/1> .
+
+<urn:atm:triage:worktree/BB1-021/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-002>
+  a triage:Finding ;
+  triage:findingId "BB1-002" ;
+  triage:title "Ruling 1's retained seven-kind early-return path silently drops delivery_task/delivery_task_ack rows" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. crates/atm-storage-rusqlite/src/template_override_migration.rs:163 (if !has_template_kind_check(..) || table_sql...contains(\"'queue'\") { return Ok(()); }) inside the retained migrate_template_override_kinds_to_seven (:155), still called from shared_db.rs:763 before remove_template_override_kind_check (:248). End state is correct (verified by ensure_schema_removes_seven_kind_check_without_changing_stale_rows), but a pre-seven DB is rebuilt twice, the code carries two create-table + two copy paths, and copy_seven_kind_override_rows (:106-129) still silently drops delivery_task/delivery_task_ack rows -- design section 4.2 requires \"reported ... never silently re-mapped\"." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "design-debt" ;
+  triage:severity "blocking" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/template_override_migration.rs (migrate_template_override_kinds_to_seven, load_template_override_rows, create_seven_kind_override_table, copy_seven_kind_override_rows)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (fenix): delete the seven-kind path as the finding says; remove_template_override_kind_check is the only rebuild. Dropped delivery_task/delivery_task_ack rows surface as stale via D6, never silently. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_override_migration.rs" ;
+  triage:line 163 ;
+  triage:snippet "copy_seven_kind_override_rows (template_override_migration.rs:106-129) silently drops delivery_task/delivery_task_ack rows instead of surfacing them" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-002/1> .
+
+<urn:atm:triage:worktree/BB1-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

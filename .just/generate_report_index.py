@@ -17,6 +17,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import sys
+import subprocess
 from typing import Any, Iterable
 
 
@@ -33,6 +34,7 @@ REQUIRED_FIELDS = frozenset(
 # envelopes do not carry it, so discovery must accept both shapes.
 OPTIONAL_FIELDS = frozenset({
     "execution_identity", "measurement_note", "effective_lane_settings", "ratchet",
+    "source_revision", "procedure",
 })
 SMOKE_STATUS_VALUES = frozenset({"PASS", "FAIL"})
 
@@ -51,6 +53,10 @@ class Envelope:
     report_html: str
     source: Path
     status: str | None = None
+    source_revision: str | None = None
+    procedure: str | None = None
+    procedure_html: str | None = None
+    procedure_inferred: bool = False
 
 
 @dataclass(frozen=True)
@@ -62,6 +68,9 @@ class ReportEntry:
     host_labels: tuple[str, ...]
     run_count: int
     status: str | None
+    procedure: str
+    procedure_html: str
+    procedure_inferred: bool
 
 
 def _ensure_inside(path: Path, root: Path, description: str) -> None:
@@ -134,6 +143,124 @@ def _smoke_run_timestamp(value: Any, source: Path) -> tuple[datetime, str]:
     return timestamp, timestamp.isoformat().replace("+00:00", "Z")
 
 
+def _source_revision(value: Any, source: Path) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
+        raise ReportIndexError(f"{source}: source_revision must be a lowercase Git object ID")
+    return value
+
+
+def _sibling_feature(source: Path) -> str | None:
+    for candidate in sorted(source.parent.glob("*.json")):
+        if candidate == source:
+            continue
+        try: payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError): continue
+        if isinstance(payload, dict) and isinstance(payload.get("feature"), str):
+            return payload["feature"]
+    return None
+
+
+def _procedure_for_feature(feature: str) -> str:
+    if feature in {"graft-hermes", "colima-hermes-skills"}:
+        return feature
+    return "smoke-" + ("local-ip" if feature == "local-up" else feature)
+
+
+def _manifest(reports_root: Path) -> dict[str, list[dict[str, Any]]]:
+    path = reports_root / "procedures" / "manifest.json"
+    if not path.is_file():
+        raise ReportIndexError(f"missing procedure manifest: {path}")
+    try: payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ReportIndexError(f"malformed procedure manifest: {path}") from exc
+    procedures = payload.get("procedures") if isinstance(payload, dict) else None
+    if not isinstance(procedures, list):
+        raise ReportIndexError(f"malformed procedure manifest: {path}")
+    return {item["procedure"]: item["revisions"] for item in procedures if isinstance(item, dict) and isinstance(item.get("procedure"), str) and isinstance(item.get("revisions"), list)}
+
+
+def _procedure_for(envelope: Envelope) -> str:
+    if envelope.procedure:
+        return envelope.procedure
+    if envelope.report_type == "benchmark":
+        return envelope.source.name.removesuffix(".json")
+    if envelope.report_type == "smoke":
+        feature = _sibling_feature(envelope.source)
+        if feature == "graft-hermes" or feature == "colima-hermes-skills": return feature
+        return "smoke-" + ("local-ip" if feature == "local-up" else feature or "unknown")
+    target = None
+    for candidate in sorted(envelope.source.parent.glob("*.json")):
+        data = None
+        try: data = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError): pass
+        campaign = data.get("campaign", data) if isinstance(data, dict) else {}
+        if isinstance(campaign, dict) and isinstance(campaign.get("target"), str): target = campaign["target"]; break
+    if target is None and envelope.source.parent.name == "fuzz": target = "unknown"
+    return "fuzz-" + (target or "unknown")
+
+
+def _revision_is_ancestor(revision: str, source_revision: str, reports_root: Path) -> bool | None:
+    repository = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        cwd=reports_root.parent.parent,
+        capture_output=True,
+        check=False,
+    )
+    if repository.returncode != 0:
+        return None
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", revision, source_revision],
+        cwd=reports_root.parent.parent,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return True
+    return False if result.returncode == 1 else None
+
+
+def resolve_procedures(envelopes: list[Envelope], reports_root: Path) -> list[Envelope]:
+    if not envelopes:
+        return []
+    manifest = _manifest(reports_root)
+    resolved: list[Envelope] = []
+    for envelope in envelopes:
+        procedure = _procedure_for(envelope)
+        revisions = manifest.get(procedure)
+        if revisions is None:
+            raise ReportIndexError(f"{envelope.source}: procedure {procedure} has no page")
+        source_revision = envelope.source_revision
+        selected = next((item for item in revisions if source_revision and item.get("rev") == source_revision), None)
+        inferred = source_revision is None
+        if selected is None and source_revision:
+            ancestry = [
+                (_revision_is_ancestor(item["rev"], source_revision, reports_root), item)
+                for item in revisions
+                if isinstance(item.get("rev"), str)
+            ]
+            ancestors = [item for is_ancestor, item in ancestry if is_ancestor]
+            git_unavailable = any(is_ancestor is None for is_ancestor, _item in ancestry)
+            if git_unavailable:
+                dated = [
+                    item for item in revisions
+                    if isinstance(item.get("date"), str)
+                    and item["date"] <= envelope.generated_at_text[:10]
+                ]
+                selected = max(dated, key=lambda item: item["date"], default=None)
+            else:
+                selected = max(ancestors, key=lambda item: item.get("date", ""), default=None)
+        if selected is None and inferred:
+            dated = [item for item in revisions if isinstance(item.get("date"), str) and item["date"] <= envelope.generated_at_text[:10]]
+            selected = max(dated, key=lambda item: item["date"], default=None)
+        if selected is None:
+            revision = source_revision or "none"
+            raise ReportIndexError(f"{envelope.source}: procedure {procedure} has no page for revision {revision} (run date {envelope.generated_at_text})")
+        resolved.append(Envelope(**{**envelope.__dict__, "procedure": procedure, "procedure_html": selected["html"], "procedure_inferred": inferred}))
+    return resolved
+
+
 def parse_envelope(source: Path, reports_root: Path) -> Envelope:
     _ensure_inside(source, reports_root, "envelope")
     try:
@@ -162,6 +289,9 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
             f"{source}: schema_version must be integer {SCHEMA_VERSION}"
         )
     generated_at, generated_at_text = _utc_timestamp(payload["generated_at"], source)
+    procedure = payload.get("procedure")
+    if procedure is not None and (not isinstance(procedure, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", procedure)):
+        raise ReportIndexError(f"{source}: procedure must be a safe procedure id")
     host_label = _safe_host_label(payload["host_label"], source)
     report_html = _safe_relative_html(payload["report_html"], source)
     html_path = reports_root / report_html
@@ -195,6 +325,8 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
         report_html=report_html,
         source=source,
         status=_smoke_status(payload["status"], source) if report_type == "smoke" else None,
+        source_revision=_source_revision(payload.get("source_revision"), source),
+        procedure=procedure,
     )
 
 
@@ -221,6 +353,8 @@ def parse_smoke_result(source: Path, reports_root: Path, payload: dict[str, Any]
         report_html=html_path.relative_to(reports_root).as_posix(),
         source=source,
         status=_smoke_status(payload["status"], source),
+        source_revision=_source_revision(payload.get("source_revision"), source),
+        procedure=_procedure_for_feature(payload["feature"]),
     )
 
 
@@ -266,7 +400,7 @@ def discover_envelopes(reports_root: Path) -> list[Envelope]:
             and {"feature", "platform", "host", "run_id", "status", "cases"}.issubset(payload)
         ):
             envelopes.append(parse_smoke_result(source, reports_root, payload))
-    return envelopes
+    return resolve_procedures(envelopes, reports_root)
 
 
 def aggregate_entries(envelopes: Iterable[Envelope]) -> list[ReportEntry]:
@@ -285,6 +419,9 @@ def aggregate_entries(envelopes: Iterable[Envelope]) -> list[ReportEntry]:
                 host_labels=tuple(sorted({item.host_label for item in group})),
                 run_count=len(group),
                 status=newest.status,
+                procedure=newest.procedure or "unknown",
+                procedure_html=newest.procedure_html or "",
+                procedure_inferred=newest.procedure_inferred,
             )
         )
     return sorted(
@@ -305,12 +442,17 @@ def _entry_html(entry: ReportEntry) -> str:
     if entry.status is not None:
         details.append(entry.status)
     details.append("hosts: " + ", ".join(html.escape(label) for label in entry.host_labels))
+    inferred = " (inferred from run date)" if entry.procedure_inferred else ""
+    procedure = (
+        f'<a class="procedure" href="{html.escape(entry.procedure_html, quote=True)}">procedure {html.escape(entry.procedure)} @ {html.escape(entry.procedure_html.rsplit("/", 1)[-1][:8])}</a>{inferred}'
+        if entry.procedure_html else ""
+    )
     return (
         "      <li>"
         f'<a href="{html.escape(entry.report_html, quote=True)}">{html.escape(report_name)}</a>'
         f'<time datetime="{html.escape(entry.generated_at_text, quote=True)}">'
         f"{html.escape(entry.generated_at_text)}</time>"
-        f'<span class="report-meta">{" · ".join(details)}</span>'
+        f'<span class="report-meta">{" · ".join(details)}{" · " + procedure if procedure else ""}</span>'
         "</li>"
     )
 
