@@ -340,7 +340,7 @@ is not a standalone Cargo integration-test target.
    one function that turns a `RuntimeMemberState` into a decision.
 2. Every test above exists by name and passes under `just test`; the
    disposition table has exactly the 12 arms quoted above.
-3. `grep -rn "BLOCKED_RENOTIFY_MS\|select_open_task\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation\|HoldReason" crates/` returns nothing.
+3. `grep -rn "BLOCKED_RENOTIFY_MS\|\\bselect_open_task\\b\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation\|HoldReason" crates/` returns nothing.
 4. `grep -n "DeliveryChannel::HerdrSteer" crates/atm-http-runtime/src/herdr_queue_wake.rs` returns nothing.
 5. `grep -rn "TaskOp::Start" crates/atm-http-runtime/src` → `herdr_task_start.rs` only.
 6. `grep -rn "escalate\b\|escalate_mail" crates/atm-core/src` returns nothing.

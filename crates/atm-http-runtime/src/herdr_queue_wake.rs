@@ -234,12 +234,20 @@ impl HerdrQueueWakePump {
         };
         self.prune_member_state(&candidates);
 
-        let (eligible, task_candidates, list_complete) =
+        let (eligible, task_candidates, _list_complete) =
             self.list_eligible(candidates, &mut stats).await;
+        let prepared_task_pass = self.prepare_task_pass(&mut stats, &task_candidates).await;
         self.drain_eligible(pending_store, eligible, &mut stats)
             .await;
-        self.remind_open_tasks(task_candidates, &pending_set, list_complete, &mut stats)
+        if let Some(prepared_task_pass) = prepared_task_pass {
+            self.remind_open_tasks(
+                prepared_task_pass,
+                task_candidates,
+                &pending_set,
+                &mut stats,
+            )
             .await;
+        }
         self.finish_tick(stats);
     }
 

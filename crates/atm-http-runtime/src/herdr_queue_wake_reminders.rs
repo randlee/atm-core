@@ -19,27 +19,42 @@ use super::{
     MemberObservation, run_blocking,
 };
 
+pub(super) struct PreparedTaskPass {
+    reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+    task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+    heads: HashMap<MemberKey, TaskRow>,
+}
+
 impl HerdrQueueWakePump {
+    pub(super) async fn prepare_task_pass(
+        &self,
+        stats: &mut HerdrQueueWakeStats,
+        candidates: &[MemberObservation],
+    ) -> Option<PreparedTaskPass> {
+        let (reader, task_store) = self.task_capabilities(stats)?;
+        self.note_task_step_availability(true, None);
+        let heads = self.open_task_heads(reader.as_ref(), candidates).await;
+        self.start_owed_tasks(&heads).await;
+        Some(PreparedTaskPass {
+            reader,
+            task_store,
+            heads,
+        })
+    }
+
     pub(super) async fn remind_open_tasks(
         &self,
+        prepared: PreparedTaskPass,
         candidates: Vec<MemberObservation>,
         open_mail: &HashSet<MemberKey>,
-        list_complete: bool,
         stats: &mut HerdrQueueWakeStats,
     ) {
-        let Some((reader, task_store)) = self.task_capabilities(stats) else {
-            return;
-        };
-        self.note_task_step_availability(true, None);
         let now = (self.clock)();
-        let _ = list_complete;
-        let heads = self.open_task_heads(reader.as_ref(), &candidates).await;
-        self.start_owed_tasks(&heads).await;
         for candidate in candidates {
             self.process_task_candidate(
-                reader.as_ref(),
-                &task_store,
-                &heads,
+                prepared.reader.as_ref(),
+                &prepared.task_store,
+                &prepared.heads,
                 candidate,
                 open_mail,
                 now,
@@ -248,7 +263,18 @@ impl HerdrQueueWakePump {
         .await;
         let dispatch = match dispatch {
             Ok(Some(dispatch)) => dispatch,
-            Ok(None) => return,
+            Ok(None) => {
+                let disposition = TaskDisposition::Hold("no delivery channel");
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "task_reminder_dispatch",
+                    outcome = "held",
+                    disposition = ?disposition,
+                    member = %candidate.member,
+                    "Herdr task reminder held: no delivery channel"
+                );
+                return;
+            }
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member, "Herdr task reminder could not render");
                 self.record_task_outcome(&context, &row, now, ReminderOutcome::Unrenderable, stats)
