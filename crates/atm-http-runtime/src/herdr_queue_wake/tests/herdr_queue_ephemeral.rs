@@ -306,7 +306,7 @@ async fn requires_ack_message_reminded_until_acked() {
 }
 
 #[tokio::test]
-async fn bare_cli_pull_closes_item() {
+async fn bare_cli_pull_preserves_item_until_member_reads() {
     let fixture = crate::storage_and_nudge_router::tests::bare_cli_pull_fixture();
     let member = fixture.member.clone();
     let router = fixture.router;
@@ -334,7 +334,7 @@ async fn bare_cli_pull_closes_item() {
             .list_pending_members()
             .expect("list pending members")
             .contains(&member),
-        "queue_get_next drains the FIFO but preserves the leased marker"
+        "queue_get_next is transport only and preserves the leased marker"
     );
 
     let message_id_text = fixture.message_id.to_string();
