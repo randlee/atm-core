@@ -511,7 +511,7 @@ impl HerdrQueueWakePump {
                     blocked: observation.state == RuntimeMemberState::Blocked,
                 });
             }
-            if member.pending && still_idle(observation.state) {
+            if member.pending && observation.state == RuntimeMemberState::Idle {
                 stats.idle_members += 1;
                 eligible.push(member);
             }
@@ -639,6 +639,19 @@ impl HerdrQueueWakePump {
                 return false;
             }
         };
+        if !still_idle(&self.service_runtime, &member.key) {
+            release.release_without_input().await;
+            stats.released += 1;
+            tracing::info!(
+                event = "herdr_queue_poll_outcome",
+                member = %member.key,
+                msg_id = %claim.msg,
+                queue_kind = NudgeKind::Queue.as_str(),
+                outcome = "held_not_idle",
+                "Herdr queue prompt skipped after the live idle recheck"
+            );
+            return false;
+        }
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
             release.release_without_input().await;
             stats.released += 1;
@@ -943,8 +956,10 @@ fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
     }
 }
 
-const fn still_idle(state: RuntimeMemberState) -> bool {
-    matches!(state, RuntimeMemberState::Idle)
+fn still_idle(runtime: &LocalServiceRuntime, member: &MemberKey) -> bool {
+    runtime
+        .roster_ephemeral_state(member.team(), member.agent())
+        .is_some_and(|state| state.runtime.state == RuntimeMemberState::Idle)
 }
 
 struct ReleasePendingOnDrop {
