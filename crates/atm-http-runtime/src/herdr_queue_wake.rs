@@ -1689,9 +1689,8 @@ mod tests {
             rows.clone(),
             fail_reminders,
         ));
-        let reader = Arc::new(
-            atm_runtime_test_support::InMemoryTaskLedgerReader::with_rows(rows, Vec::new()),
-        );
+        let reader: Arc<dyn atm_core::boundary::AsyncTaskLedgerReader + Send + Sync> =
+            task_store.clone();
         let runtime = assembly
             .service_runtime
             .with_task_store(task_store.clone())

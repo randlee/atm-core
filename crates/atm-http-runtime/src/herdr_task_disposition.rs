@@ -8,7 +8,6 @@ use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum TaskDisposition {
     Nudge,
     EscalateStalled,
@@ -17,13 +16,15 @@ pub(crate) enum TaskDisposition {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum EpisodeKind {
     Blocked,
     Offline,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "episode escalation uses this in task 5")
+)]
 impl EpisodeKind {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
@@ -33,7 +34,6 @@ impl EpisodeKind {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn dispose(
     mail_pending: bool,
     state: RuntimeMemberState,
@@ -77,7 +77,6 @@ pub(crate) fn dispose(
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 fn reminder_due(task: &TaskRow, now: IsoTimestamp) -> bool {
     task.last_reminded_at.is_none_or(|last| {
         (now.into_inner() - last.into_inner()).num_milliseconds() >= TASK_REMINDER_INTERVAL_MS

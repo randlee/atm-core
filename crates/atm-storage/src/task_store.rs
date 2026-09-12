@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use crate::contract::sealed;
+use crate::contract::{AsyncTaskLedgerReader, ReadDeadline, ReadLaneError, sealed};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::task_state::{TaskEventRow, TaskRow};
@@ -160,6 +160,78 @@ impl DummyTaskStore {
 }
 
 impl sealed::Sealed for DummyTaskStore {}
+
+#[async_trait::async_trait]
+impl AsyncTaskLedgerReader for DummyTaskStore {
+    async fn open_tasks_for_team(
+        &self,
+        team: TeamName,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        let mut rows = self
+            .rows
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "dummy task rows lock poisoned".to_owned(),
+            })?
+            .values()
+            .filter(|row| row.team == team && row.state.is_open())
+            .cloned()
+            .collect::<Vec<_>>();
+        rows.sort_by_key(|row| {
+            (
+                row.assignee.clone(),
+                row.position,
+                row.assigned_at,
+                row.task_id.clone(),
+            )
+        });
+        Ok(rows)
+    }
+
+    async fn refusal_run(
+        &self,
+        _team: TeamName,
+        _assignee: AgentName,
+        _deadline: ReadDeadline,
+    ) -> Result<crate::RefusalRun, ReadLaneError> {
+        Ok(crate::RefusalRun {
+            count: 0,
+            started_at: None,
+        })
+    }
+
+    async fn list_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        Ok(
+            TaskStore::list_tasks(self, &team, member.as_ref()).map_err(|error| {
+                ReadLaneError::Unavailable {
+                    message: error.to_string(),
+                }
+            })?,
+        )
+    }
+
+    async fn list_task_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        member: Option<AgentName>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        Ok(
+            TaskStore::list_task_events(self, &team, &task_id, member.as_ref()).map_err(
+                |error| ReadLaneError::Unavailable {
+                    message: error.to_string(),
+                },
+            )?,
+        )
+    }
+}
 
 impl TaskStore for DummyTaskStore {
     fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
