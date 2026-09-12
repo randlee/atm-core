@@ -9,6 +9,10 @@ use shutdown_support::{
     checkpoint_writer_connection, drain_submit_replies, writer_channel_closed_error,
     writer_queue_timeout_error, writer_reply_channel_closed_error, writer_reply_timeout_error,
 };
+#[cfg(test)]
+pub(crate) use stmt_cache::WriterStatementCache;
+#[cfg(test)]
+pub(crate) use task_ops::apply_task_close;
 
 use crate::DIAGNOSTIC_PRUNE_CHECK_EVERY;
 use crate::observability::{
@@ -860,6 +864,8 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                placement: None,
+                task_op: None,
                 task_complete: None,
                 extra: Map::new(),
             },

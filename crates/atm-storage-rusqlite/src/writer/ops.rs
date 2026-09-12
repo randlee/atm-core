@@ -18,6 +18,7 @@ use atm_storage::{
     MessageWriteOrigin, TemplateMessageAdmission, TemplateRegistration,
     TemplateRegistrationOutcome,
 };
+use atm_storage::{MoveTarget, QueuePosition, TaskId};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
 use std::sync::Arc;
@@ -56,6 +57,17 @@ pub(crate) enum WriteOp {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     },
+    #[allow(
+        dead_code,
+        reason = "BA.2 owns the atomic writer operation; BA.4 adds its CLI construction site"
+    )]
+    TaskMove {
+        team: TeamName,
+        task_id: TaskId,
+        actor: AgentName,
+        target: MoveTarget,
+        at: IsoTimestamp,
+    },
     RegisterTemplate(Box<TemplateRegistration>),
     AdmitDecomposedMessage(Box<DecomposedMessageAdmission>),
     AdmitTemplateMessage(Box<TemplateMessageAdmission>),
@@ -86,6 +98,19 @@ impl std::fmt::Debug for WriteOp {
                 .debug_struct("Acknowledge")
                 .field("source", source)
                 .finish_non_exhaustive(),
+            Self::TaskMove {
+                team,
+                task_id,
+                actor,
+                target,
+                ..
+            } => formatter
+                .debug_struct("TaskMove")
+                .field("team", team)
+                .field("task_id", task_id)
+                .field("actor", actor)
+                .field("target", target)
+                .finish(),
             Self::RegisterTemplate(request) => formatter
                 .debug_tuple("RegisterTemplate")
                 .field(&request.sha)
@@ -122,6 +147,7 @@ pub(crate) enum WriteOpResult {
     },
     UpsertMessages,
     Acknowledged(Box<AcknowledgementCommit>),
+    TaskMoved(QueuePosition),
     TemplateRegistration(TemplateRegistrationOutcome),
     DecomposedMessageAdmission(DecomposedMessageAdmissionOutcome),
     TemplateMessageAdmission {
@@ -169,6 +195,16 @@ pub(crate) fn execute(
         WriteOp::Acknowledge { source, builder } => {
             execute_acknowledgement(source, builder, connection, cache, target)
         }
+        WriteOp::TaskMove {
+            team,
+            task_id,
+            actor,
+            target: target_pos,
+            at,
+        } => super::task_ops::apply_task_move(
+            team, task_id, actor, target_pos, *at, connection, target,
+        )
+        .map(WriteOpResult::TaskMoved),
         WriteOp::RegisterTemplate(request) => {
             execute_template_registration(request, connection, target)
         }

@@ -196,7 +196,7 @@ pub(super) fn team_findings(
     }
     reserved_name_findings(team, roster, findings);
     for task in tasks.iter().filter(|task| {
-        task.state != TaskState::Complete
+        !matches!(task.state, TaskState::Complete(_))
             && task.reminder_count >= crate::boundary::TASK_STALLED_REMINDER_THRESHOLD
     }) {
         findings.push(DoctorFinding {

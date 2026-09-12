@@ -2691,6 +2691,7 @@ mod tests {
             refreshed_at: None,
         };
         let assigned_task = TaskRow {
+            position: None,
             team: team.clone(),
             task_id: "ax6-stalled".parse().expect("task"),
             assignee: worker.clone(),

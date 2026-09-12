@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba2-task-identity-queue
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba2-task-identity-queue
+---
+
 # BA.2 — Task identity, queue position, typed outcome, migration
 
 | Field | Value |
@@ -135,7 +141,7 @@ pub fn transition(
 pub struct TaskRejected { pub detail: String }
 ```
 
-The five rejection messages, exactly:
+The six rejection messages, exactly:
 
 | cause | `detail` |
 | --- | --- |
@@ -144,6 +150,7 @@ The five rejection messages, exactly:
 | `one_active_task_per_agent` hit on Start | `task <id>: <assignee> already has an active task` |
 | `--before` target unknown, not open, active, or another member's | `task <id>: placement target <other> is not an open queued task of <assignee>` |
 | close recipient is no longer the current counterparty | `task <id>: <recipient> is no longer the counterparty — re-run the command` |
+| Start actor is not the daemon | `task <id> start requires atm-daemon` |
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,7 +227,11 @@ pub enum MoveTarget {
     End,
     Before { task_id: TaskId },
 }
+```
 
+`RefusalRun` is defined in `crates/atm-storage/src/task_state.rs`:
+
+```rust
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RefusalRun { pub count: u32, pub started_at: Option<IsoTimestamp> }
 ```
@@ -450,7 +461,8 @@ Rules:
 - `Start` requires actor `atm-daemon` and the latest `reminded` event since the
   last `assigned`/`reassigned`/`reopened` to have `outcome = 'emitted'`
   (`SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team = ?1 AND task_id = ?2 AND event IN ('assigned','reassigned','reopened')) ORDER BY rowid DESC LIMIT 1`);
-  otherwise it is a silent no-op. On `active` it is idempotent (no event).
+  a non-daemon actor is rejected; a latest reminder outcome other than
+  `emitted` is a silent no-op. On `active` it is idempotent (no event).
 - `Start` sets `reminder_count = 0, lead_notified_count = 0`, moves the row to
   position 1 (renumber), and leaves `last_reminded_at` as the handoff audit
   wrote it. The `one_active_task_per_agent` violation maps to the "already
@@ -522,7 +534,8 @@ Pure — `task_state.rs`:
   (`"task_complete":"T1"`) → `Close{Completed}` on T1; `task_id = T1` with
   `task_complete = T2` fails validation; both keys present → `task_op` wins.
 
-Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
+Writer — primarily `crates/atm-storage-rusqlite/tests/task_identity.rs` (new);
+the six exceptions are labeled with their actual source file:
 
 - `assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues`
   — one id; the superseded assignment message is acknowledged; `reassigned`
@@ -545,24 +558,30 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
 - `close_renumbers_remaining_queue_contiguously` — T1..T4; close T2 →
   T1,T3,T4 at 1,2,3; T2 `position IS NULL`, `close_outcome` set.
 - `close_each_outcome_persists_column_and_event` — 3 cases.
-- `close_of_complete_row_delivers_mail_and_returns_already_closed` — no event,
+- `close_of_complete_row_delivers_mail_and_returns_already_closed`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) — no event,
   row unchanged, mail row has no `task_id`.
 - `close_by_third_party_is_not_authorized` — rejected event audits the
   canonical holder.
 - `close_by_stale_counterparty_is_rejected_atomically` — reassign between
   preflight and write → rejection, nothing written.
-- `move_head_end_before_land_at_expected_positions` — head with an active
+- `move_head_end_before_land_at_expected_positions`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) — head with an active
   task → 2; head without → 1; end; before.
-- `move_before_target_of_other_member_is_rejected` — one rejected event,
+- `move_before_target_of_other_member_is_rejected`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) — one rejected event,
   state unchanged.
-- `move_of_active_task_is_a_noop_with_moved_event` — `detail = "1→1"`, every
+- `move_of_active_task_is_a_noop_with_moved_event`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) — `detail = "1→1"`, every
   other row byte-equal.
-- `renumber_swap_of_positions_one_and_two_never_violates_unique_index` —
+- `renumber_swap_of_positions_one_and_two_never_violates_unique_index`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) —
   swap T2 over T1; move T4 `--head` over T1..T3; no `SQLITE_CONSTRAINT`.
 - `assigned_at_set_only_by_assignment` — start, move, close leave
   `assigned_at` byte-equal; reassign and reopen set it to the event's `at`
   and `last_reminded_at` to `NULL`.
-- `writer_rejects_task_op_on_foreign_team_or_host_recipient`.
+- `writer_rejects_task_op_on_foreign_team_or_host_recipient`
+  (`crates/atm-core/src/send/tests.rs`).
 - `trailing_refusal_run_counts_raw_stored_event_values` — refused, refused,
   completed, refused, refused, refused → 3; then `completed` → 0; then
   `refused` → 1.

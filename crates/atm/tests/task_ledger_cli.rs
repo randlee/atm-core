@@ -204,7 +204,10 @@ fn cli_task_completion_covers_ac2_success_unknown_id_and_conflict() {
         .into_iter()
         .find(|row| row.task_id == task_id)
         .expect("completed task");
-    assert_eq!(row.state, TaskState::Complete);
+    assert_eq!(
+        row.state,
+        TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+    );
 
     let before = fixture
         .runtime
@@ -243,6 +246,6 @@ fn cli_task_completion_covers_ac2_success_unknown_id_and_conflict() {
     assert!(
         conflict_error
             .message()
-            .contains("assign and complete a task")
+            .contains("task_id and task_complete name different tasks")
     );
 }

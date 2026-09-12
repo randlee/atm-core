@@ -373,6 +373,7 @@ t-42        active    cipher    fenix      2026-09-05T10:12:03Z      3\n"
 
     fn task_row() -> TaskRow {
         TaskRow {
+            position: None,
             team: TEST_TEAM.parse().expect("team"),
             task_id: "t-42".parse().expect("task"),
             assignee: "cipher".parse().expect("assignee"),

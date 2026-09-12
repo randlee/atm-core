@@ -33,6 +33,7 @@ mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod shared_db_support;
 mod task_ledger_reader;
+mod task_migration;
 mod task_sql;
 mod task_store;
 mod team_roster_schema;
@@ -1026,12 +1027,12 @@ mod tests {
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
         DecomposedMessageRecord, InstanceTag, MemberKey, MergedVarsJson, MessageSearchQuery,
-        MessageWriteOrigin, SearchAtom, SearchDeadline, SearchExpression, SearchGroupBy,
-        SearchGroupField, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
-        SimpleAggregate, StorageFactory, TaskEvent, TaskEventKind, TaskState, TemplateFirstSeen,
-        TemplateFrontmatter, TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat,
-        TemplateRegistration, TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission,
-        WorkflowScopeId,
+        MessageWriteOrigin, MoveTarget, QueuePosition, SearchAtom, SearchDeadline,
+        SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
+        SearchMetadataMatch, SearchValue, SimpleAggregate, StorageFactory, TaskCloseOutcome,
+        TaskEvent, TaskEventKind, TaskOp, TaskState, TemplateFirstSeen, TemplateFrontmatter,
+        TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
+        TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
@@ -1061,6 +1062,275 @@ mod tests {
 
     fn agent() -> AgentName {
         "test-agent".parse().expect("agent")
+    }
+
+    fn seed_move_task(backend: &SqliteStorageBackend, task: &str, recipient: &str) {
+        let id = AtmMessageId::new();
+        let mut record = message(&format!("atm:{id}"), task);
+        record.agent = recipient.parse().expect("recipient");
+        record.envelope.message_id = Some(id);
+        record.envelope.from = "lead".parse().expect("lead");
+        record.envelope.task_id = Some(task.parse().expect("task"));
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("assign");
+    }
+
+    fn start_task(backend: &SqliteStorageBackend, task_id: &atm_storage::TaskId) {
+        let member = MemberKey::new(team(), agent());
+        backend
+            .task_store()
+            .record_reminder(
+                &member,
+                task_id,
+                IsoTimestamp::now(),
+                atm_storage::ReminderOutcome::Emitted,
+            )
+            .expect("record reminder");
+
+        let message_id = AtmMessageId::new();
+        let mut start = message(&format!("atm:{message_id}"), "start");
+        start.envelope.message_id = Some(message_id);
+        start.envelope.from = "atm-daemon".parse().expect("daemon actor");
+        start.envelope.task_id = Some(task_id.clone());
+        start.envelope.task_op = Some(TaskOp::Start);
+        backend
+            .message_store()
+            .save_message(&start)
+            .expect("start task");
+    }
+
+    fn move_task(
+        backend: &SqliteStorageBackend,
+        task: &str,
+        target: MoveTarget,
+    ) -> Result<QueuePosition, AtmError> {
+        match backend
+            .message_store
+            .db
+            .submit_writer_op(crate::writer::WriteOp::TaskMove {
+                team: team(),
+                task_id: task.parse().expect("task"),
+                actor: "lead".parse().expect("actor"),
+                target,
+                at: IsoTimestamp::now(),
+            })? {
+            crate::writer::WriteOpResult::TaskMoved(position) => Ok(position),
+            _ => panic!("wrong writer result"),
+        }
+    }
+
+    fn task_positions(backend: &SqliteStorageBackend, member: &str) -> Vec<(String, u32)> {
+        let key = MemberKey::new(team(), member.parse().expect("member"));
+        let mut rows = backend
+            .task_store()
+            .open_tasks(&key)
+            .expect("open tasks")
+            .into_iter()
+            .map(|row| {
+                (
+                    row.task_id.to_string(),
+                    row.position.expect("position").get(),
+                )
+            })
+            .collect::<Vec<_>>();
+        rows.sort_by_key(|(_, position)| *position);
+        rows
+    }
+
+    #[test]
+    fn move_head_end_before_land_at_expected_positions() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        for task in ["T1", "T2", "T3"] {
+            seed_move_task(&backend, task, "test-agent");
+        }
+        assert_eq!(
+            move_task(&backend, "T3", MoveTarget::Head).unwrap().get(),
+            1
+        );
+        assert_eq!(move_task(&backend, "T3", MoveTarget::End).unwrap().get(), 3);
+        assert_eq!(
+            move_task(
+                &backend,
+                "T3",
+                MoveTarget::Before {
+                    task_id: "T2".parse().unwrap(),
+                },
+            )
+            .unwrap()
+            .get(),
+            2
+        );
+        assert_eq!(
+            task_positions(&backend, "test-agent"),
+            vec![("T1".into(), 1), ("T3".into(), 2), ("T2".into(), 3)]
+        );
+    }
+
+    #[test]
+    fn move_before_target_of_other_member_is_rejected() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        seed_move_task(&backend, "T1", "test-agent");
+        seed_move_task(&backend, "T2", "other-agent");
+        let error = move_task(
+            &backend,
+            "T1",
+            MoveTarget::Before {
+                task_id: "T2".parse().unwrap(),
+            },
+        )
+        .expect_err("foreign member target");
+        assert!(error.message().contains("not an open queued task"));
+        let events = backend
+            .task_store()
+            .list_task_events(&team(), &"T1".parse().unwrap(), None)
+            .unwrap();
+        assert_eq!(events.last().unwrap().event, TaskEventKind::Rejected);
+    }
+
+    #[test]
+    fn move_of_active_task_is_a_noop_with_moved_event() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        seed_move_task(&backend, "T1", "test-agent");
+        let member = MemberKey::new(team(), agent());
+        backend
+            .task_store()
+            .record_reminder(
+                &member,
+                &"T1".parse().unwrap(),
+                IsoTimestamp::now(),
+                atm_storage::ReminderOutcome::Emitted,
+            )
+            .unwrap();
+        let id = AtmMessageId::new();
+        let mut start = message(&format!("atm:{id}"), "start");
+        start.envelope.message_id = Some(id);
+        start.envelope.from = "atm-daemon".parse().unwrap();
+        start.envelope.task_id = Some("T1".parse().unwrap());
+        start.envelope.task_op = Some(TaskOp::Start);
+        backend.message_store().save_message(&start).unwrap();
+        let before = task_positions(&backend, "test-agent");
+        assert_eq!(move_task(&backend, "T1", MoveTarget::End).unwrap().get(), 1);
+        assert_eq!(task_positions(&backend, "test-agent"), before);
+        let events = backend
+            .task_store()
+            .list_task_events(&team(), &"T1".parse().unwrap(), None)
+            .unwrap();
+        assert_eq!(events.last().unwrap().detail.as_deref(), Some("1→1"));
+    }
+
+    #[test]
+    fn renumber_swap_of_positions_one_and_two_never_violates_unique_index() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        for task in ["T1", "T2", "T3", "T4"] {
+            seed_move_task(&backend, task, "test-agent");
+        }
+        move_task(&backend, "T2", MoveTarget::Head).expect("swap positions one and two");
+        move_task(&backend, "T4", MoveTarget::Head).expect("move tail over queue");
+        assert_eq!(
+            task_positions(&backend, "test-agent"),
+            vec![
+                ("T4".into(), 1),
+                ("T2".into(), 2),
+                ("T1".into(), 3),
+                ("T3".into(), 4),
+            ]
+        );
+    }
+
+    #[test]
+    fn close_of_complete_row_delivers_mail_and_returns_already_closed() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        seed_move_task(&backend, "T1", "test-agent");
+
+        let task_id: atm_storage::TaskId = "T1".parse().expect("task id");
+        let mut first_close = message("atm:first-close", "completed");
+        first_close.envelope.from = "lead".parse().expect("lead");
+        first_close.envelope.task_id = Some(task_id.clone());
+        first_close.envelope.task_op = Some(TaskOp::Close {
+            outcome: TaskCloseOutcome::Completed,
+            reason: None,
+        });
+        backend
+            .message_store()
+            .save_message(&first_close)
+            .expect("first close");
+
+        // Complete rows are intercepted by the writer before the state
+        // authority's deliberately unreachable complete-row Start arm.
+        let mut late_start = message("atm:late-start", "start");
+        late_start.envelope.from = "atm-daemon".parse().expect("daemon actor");
+        late_start.envelope.task_id = Some(task_id.clone());
+        late_start.envelope.task_op = Some(TaskOp::Start);
+        let start_error = backend
+            .message_store()
+            .save_message(&late_start)
+            .expect_err("complete task cannot start");
+        assert!(start_error.message().contains("no open task T1"));
+
+        let events_before = backend
+            .task_store()
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("events")
+            .len();
+
+        let mut report = message("atm:already-closed", "late refusal report");
+        report.envelope.from = "lead".parse().expect("lead");
+        report.envelope.task_id = Some(task_id.clone());
+        report.envelope.task_op = Some(TaskOp::Close {
+            outcome: TaskCloseOutcome::Refused,
+            reason: Some("too late".to_owned()),
+        });
+        backend
+            .message_store()
+            .save_message_if_absent_with_provenance(&report, MessageWriteOrigin::Peer)
+            .expect("stage report mail without applying its local task operation");
+
+        let db = Arc::clone(&backend.message_store.db);
+        let target = Arc::clone(&db.target);
+        let already_closed = db
+            .with_connection(|connection| {
+                crate::writer::apply_task_close(
+                    &report,
+                    &task_id,
+                    TaskCloseOutcome::Refused,
+                    Some("too late"),
+                    connection,
+                    &mut crate::writer::WriterStatementCache,
+                    target.as_ref(),
+                )
+            })
+            .expect("already-closed report is ordinary mail");
+
+        assert_eq!(already_closed, Some(TaskCloseOutcome::Completed));
+        assert_eq!(
+            backend
+                .task_store()
+                .list_task_events(&team(), &task_id, Some(&agent()))
+                .expect("events")
+                .len(),
+            events_before
+        );
+        assert_eq!(
+            backend
+                .message_store()
+                .load_message(&report.message_key)
+                .expect("load report")
+                .expect("report")
+                .envelope
+                .task_id,
+            None
+        );
+        assert_eq!(
+            backend
+                .task_store()
+                .load_task(&team(), &task_id)
+                .expect("task row")
+                .expect("task")
+                .state,
+            TaskState::Complete(TaskCloseOutcome::Completed)
+        );
     }
 
     #[test]
@@ -1224,6 +1494,8 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                placement: None,
+                task_op: None,
                 task_complete: None,
                 extra: Map::new(),
             },
@@ -3541,7 +3813,7 @@ mod tests {
         store.save_message(&assignment).expect("assign task");
 
         let assigned = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load assigned task")
             .expect("task row");
         assert_eq!(assigned.state, TaskState::Assigned);
@@ -3554,7 +3826,7 @@ mod tests {
         resend.envelope.task_id = Some(task_id.clone());
         store.save_message(&resend).expect("resend task");
         let refreshed = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load refreshed task")
             .expect("task row");
         assert_eq!(refreshed.state, TaskState::Assigned);
@@ -3563,15 +3835,22 @@ mod tests {
 
         let mut completion = message("atm:complete-task", "completed");
         completion.envelope.from = lead;
-        completion.envelope.task_complete = Some(task_id.clone());
+        completion.envelope.task_id = Some(task_id.clone());
+        completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
         store
             .save_message(&completion)
             .expect("complete task as assigner");
         let completed = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load completed task")
             .expect("task row");
-        assert_eq!(completed.state, TaskState::Complete);
+        assert_eq!(
+            completed.state,
+            TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+        );
         assert!(
             store
                 .load_message(&resend.message_key)
@@ -3584,9 +3863,8 @@ mod tests {
         let events = tasks
             .list_task_events(&team(), &task_id, Some(&agent()))
             .expect("task events");
-        assert_eq!(events.len(), 3);
-        assert_eq!(events[1].event, TaskEventKind::Assigned);
-        assert_eq!(events[2].event, TaskEventKind::Completed);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[1].event, TaskEventKind::Completed);
 
         let peer_task: atm_storage::TaskId = "AX.3-peer".parse().expect("peer task");
         let mut peer = message("atm:peer-task", "peer receipt");
@@ -3596,7 +3874,7 @@ mod tests {
             .expect("persist peer receipt");
         assert!(
             tasks
-                .load_task(&member, &peer_task)
+                .load_task(member.team(), &peer_task)
                 .expect("load peer task")
                 .is_none()
         );
@@ -3608,15 +3886,32 @@ mod tests {
             .iter()
             .filter_map(|event| match event.event {
                 TaskEventKind::Assigned => Some(TaskEvent::Assigned),
-                TaskEventKind::Completed => Some(TaskEvent::Completed),
+                TaskEventKind::Completed => Some(TaskEvent::Completed(
+                    atm_storage::TaskCloseOutcome::Completed,
+                )),
                 TaskEventKind::Acked
+                | TaskEventKind::Started
+                | TaskEventKind::Refused
+                | TaskEventKind::Cancelled
+                | TaskEventKind::Reassigned
+                | TaskEventKind::Reopened
                 | TaskEventKind::Rejected
                 | TaskEventKind::Reminded
-                | TaskEventKind::LeadNotified => None,
+                | TaskEventKind::LeadNotified
+                | TaskEventKind::Moved
+                | TaskEventKind::Migrated => None,
             })
             .try_fold(None, |state, event| {
-                atm_storage::transition(state, event, &task_id, &agent())
-                    .map(|transition| Some(transition.0))
+                let assignee = agent();
+                atm_storage::transition(
+                    state,
+                    event,
+                    &task_id,
+                    &assignee,
+                    state.map(|_| &assignee),
+                    &assignee,
+                )
+                .map(|transition| Some(transition.0))
             })
             .expect("task event replay");
         assert_eq!(replayed, Some(completed.state), "AC5 event replay");
@@ -3638,7 +3933,7 @@ mod tests {
         store.save_message(&assignment).expect("save assignment");
         let member = MemberKey::new(team(), agent());
         let before = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load task")
             .expect("task row");
         let before_events = tasks
@@ -3657,7 +3952,7 @@ mod tests {
             .expect("acknowledge assignment");
 
         let after = tasks
-            .load_task(&member, &task_id)
+            .load_task(member.team(), &task_id)
             .expect("load task after acknowledgement")
             .expect("task row after acknowledgement");
         assert_eq!(after, before);
@@ -3685,22 +3980,15 @@ mod tests {
         assignment.envelope.acknowledged_at = Some(acknowledged_at);
         store.save_message(&assignment).expect("save assignment");
 
-        backend
-            .shared_db_for_test()
-            .with_connection(|connection| {
-                connection
-                    .execute(
-                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-                        params![team().as_str(), task_id.as_str(), agent().as_str()],
-                    )
-                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-                Ok(())
-            })
-            .expect("seed active task");
+        start_task(&backend, &task_id);
 
         let mut completion = message("atm:active-close", "completed");
         completion.envelope.from = "lead".parse().expect("assigner");
-        completion.envelope.task_complete = Some(task_id.clone());
+        completion.envelope.task_id = Some(task_id.clone());
+        completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
         store
             .save_message(&completion)
             .expect("complete active task");
@@ -3708,11 +3996,11 @@ mod tests {
         let member = MemberKey::new(team(), agent());
         assert_eq!(
             tasks
-                .load_task(&member, &task_id)
+                .load_task(member.team(), &task_id)
                 .expect("load completed task")
                 .expect("task row")
                 .state,
-            TaskState::Complete
+            TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
         );
         assert_eq!(
             store
@@ -3739,22 +4027,15 @@ mod tests {
         assignment.envelope.requires_ack = true;
         store.save_message(&assignment).expect("save assignment");
 
-        backend
-            .shared_db_for_test()
-            .with_connection(|connection| {
-                connection
-                    .execute(
-                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-                        params![team().as_str(), task_id.as_str(), agent().as_str()],
-                    )
-                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-                Ok(())
-            })
-            .expect("seed active task");
+        start_task(&backend, &task_id);
 
         let mut completion = message("atm:active-close-unacked", "completed");
         completion.envelope.from = "lead".parse().expect("assigner");
-        completion.envelope.task_complete = Some(task_id.clone());
+        completion.envelope.task_id = Some(task_id.clone());
+        completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
         store
             .save_message(&completion)
             .expect("complete active task");
@@ -3762,11 +4043,11 @@ mod tests {
         let member = MemberKey::new(team(), agent());
         assert_eq!(
             tasks
-                .load_task(&member, &task_id)
+                .load_task(member.team(), &task_id)
                 .expect("load completed task")
                 .expect("task row")
                 .state,
-            TaskState::Complete
+            TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
         );
         assert!(
             store
@@ -3831,18 +4112,10 @@ mod tests {
         let second = assignment(&second_id);
         store.save_message(&first).expect("first assignment");
         store.save_message(&second).expect("second assignment");
-        backend
-            .shared_db_for_test()
-            .with_connection(|connection| {
-                connection
-                    .execute(
-                        "UPDATE tasks SET state = 'active' WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-                        params![team().as_str(), first_id.as_str(), agent().as_str()],
-                    )
-                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-                Ok(())
-            })
-            .expect("seed active task");
+        start_task(&backend, &first_id);
+        let first_events_before_ack = tasks
+            .list_task_events(&team(), &first_id, Some(&agent()))
+            .expect("first events before acknowledgement");
 
         let first_message_id = first.envelope.message_id.expect("first id");
         store
@@ -3857,7 +4130,7 @@ mod tests {
             .expect("first acknowledgement");
         assert_eq!(
             tasks
-                .load_task(&member, &first_id)
+                .load_task(member.team(), &first_id)
                 .expect("first task")
                 .expect("first row")
                 .state,
@@ -3866,15 +4139,15 @@ mod tests {
         let first_events = tasks
             .list_task_events(&team(), &first_id, Some(&agent()))
             .expect("first events");
+        assert_eq!(first_events, first_events_before_ack);
         assert_eq!(
             first_events
                 .iter()
                 .map(|event| event.seq)
                 .collect::<Vec<_>>(),
-            vec![1],
+            (1..=first_events.len() as u64).collect::<Vec<_>>(),
             "task event sequences are gapless per task key"
         );
-        assert_eq!(first_events.len(), 1);
 
         let second_message_id = second.envelope.message_id.expect("second id");
         store
@@ -3889,7 +4162,7 @@ mod tests {
             .expect("second acknowledgement succeeds while another task is active");
         assert_eq!(
             tasks
-                .load_task(&member, &second_id)
+                .load_task(member.team(), &second_id)
                 .expect("second task")
                 .expect("second row")
                 .state,
@@ -3912,7 +4185,11 @@ mod tests {
 
         let mut third_party_completion = message("atm:third-party-completion", "not allowed");
         third_party_completion.envelope.from = "intruder".parse().expect("intruder");
-        third_party_completion.envelope.task_complete = Some(second_id.clone());
+        third_party_completion.envelope.task_id = Some(second_id.clone());
+        third_party_completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
         let third_party_error = store
             .save_message(&third_party_completion)
             .expect_err("G2 rejects a third-party completion");
@@ -3928,7 +4205,11 @@ mod tests {
         let missing_id: atm_storage::TaskId = "AX.3-missing".parse().expect("task");
         let mut unknown_completion = message("atm:unknown-completion", "not a task");
         unknown_completion.envelope.from = "intruder".parse().expect("intruder");
-        unknown_completion.envelope.task_complete = Some(missing_id.clone());
+        unknown_completion.envelope.task_id = Some(missing_id.clone());
+        unknown_completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
         store
             .save_message(&unknown_completion)
             .expect_err("unknown completion must be rejected");
@@ -3957,16 +4238,14 @@ mod tests {
         store
             .save_message(&second_fanout)
             .expect("second fanout task");
-        assert_eq!(
-            tasks
-                .list_tasks(&team(), None)
-                .expect("fanout task rows")
-                .into_iter()
-                .filter(|row| row.task_id == fanout_id)
-                .count(),
-            2,
-            "a task fan-out creates one row per recipient"
-        );
+        let fanout = tasks
+            .list_tasks(&team(), None)
+            .expect("fanout task rows")
+            .into_iter()
+            .filter(|row| row.task_id == fanout_id)
+            .collect::<Vec<_>>();
+        assert_eq!(fanout.len(), 1, "one task id retains one canonical row");
+        assert_eq!(fanout[0].assignee, second_fanout.agent);
     }
 
     #[test]
@@ -3998,7 +4277,7 @@ mod tests {
         assert!(
             backend
                 .task_store()
-                .load_task(&MemberKey::new(team(), agent()), &task_id)
+                .load_task(&team(), &task_id)
                 .expect("load missing task row")
                 .is_none()
         );
@@ -4049,7 +4328,7 @@ mod tests {
             .expect("persist peer receipt");
         assert!(
             tasks
-                .load_task(&MemberKey::new(team(), agent()), &task_id)
+                .load_task(&team(), &task_id)
                 .expect("load peer task")
                 .is_none()
         );

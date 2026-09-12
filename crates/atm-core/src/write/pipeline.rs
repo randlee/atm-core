@@ -499,6 +499,7 @@ fn prepare_atomic_acknowledgement_write<
         requires_ack: false,
         task_id: source_task_id.clone(),
         task_complete: None,
+        already_closed: None,
         summary: reply.envelope.summary.clone(),
         message: Some(reply.envelope.text.clone()),
         warnings: Vec::new(),
@@ -544,7 +545,7 @@ fn prepare_persisted_write<
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &mut request)?;
-    crate::send::validate_task_request(&request)?;
+    crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
@@ -615,7 +616,7 @@ async fn prepare_persisted_write_async(
     source_preflight: WriteSourcePreflight,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &mut request)?;
-    crate::send::validate_task_request(&request)?;
+    crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);

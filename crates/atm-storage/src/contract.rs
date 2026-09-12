@@ -914,6 +914,21 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
 /// storage-owned reader lane and must not enter the ordered writer lane.
 #[async_trait::async_trait]
 pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
+    /// Every open task on the team, ordered by assignee and queue position.
+    async fn open_tasks_for_team(
+        &self,
+        team: TeamName,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError>;
+
+    /// Trailing consecutive-refusal run for one assignee.
+    async fn refusal_run(
+        &self,
+        team: TeamName,
+        assignee: AgentName,
+        deadline: ReadDeadline,
+    ) -> Result<crate::RefusalRun, ReadLaneError>;
+
     async fn list_tasks(
         &self,
         team: TeamName,
@@ -1581,6 +1596,8 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                placement: None,
+                task_op: None,
                 task_complete: None,
                 extra: Map::new(),
             },
@@ -1769,6 +1786,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("AD.99".parse().expect("task")),
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };

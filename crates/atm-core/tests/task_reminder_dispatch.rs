@@ -8,6 +8,7 @@ use atm_storage::{RosterSnapshot, TaskRow, TaskState};
 
 fn task_row(team: &TeamName) -> TaskRow {
     TaskRow {
+        position: None,
         team: team.clone(),
         task_id: "AX5-DISPATCH".parse::<TaskId>().expect("task id"),
         assignee: "recipient".parse::<AgentName>().expect("assignee"),

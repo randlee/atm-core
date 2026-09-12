@@ -203,6 +203,75 @@ impl sealed::Sealed for InMemoryTaskLedgerReader {}
 
 #[async_trait::async_trait]
 impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
+    async fn open_tasks_for_team(
+        &self,
+        team: TeamName,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        let mut rows = self
+            .tasks
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader task lock poisoned".to_owned(),
+            })?
+            .iter()
+            .filter(|task| task.team == team && task.state.is_open())
+            .cloned()
+            .collect::<Vec<_>>();
+        rows.sort_by(|left, right| {
+            (
+                &left.assignee,
+                left.position,
+                left.assigned_at,
+                &left.task_id,
+            )
+                .cmp(&(
+                    &right.assignee,
+                    right.position,
+                    right.assigned_at,
+                    &right.task_id,
+                ))
+        });
+        Ok(rows)
+    }
+
+    async fn refusal_run(
+        &self,
+        team: TeamName,
+        assignee: AgentName,
+        _deadline: ReadDeadline,
+    ) -> Result<crate::RefusalRun, ReadLaneError> {
+        let events = self.events.lock().map_err(|_| ReadLaneError::Unavailable {
+            message: "in-memory task-ledger reader event lock poisoned".to_owned(),
+        })?;
+        let mut relevant = events
+            .iter()
+            .filter(|event| event.team == team && event.assignee == assignee)
+            .filter(|event| {
+                matches!(
+                    event.event,
+                    crate::TaskEventKind::Assigned
+                        | crate::TaskEventKind::Reassigned
+                        | crate::TaskEventKind::Reopened
+                        | crate::TaskEventKind::Completed
+                        | crate::TaskEventKind::Refused
+                        | crate::TaskEventKind::Cancelled
+                )
+            })
+            .collect::<Vec<_>>();
+        relevant.sort_by_key(|event| (event.at, event.seq));
+        let refused = relevant
+            .iter()
+            .rev()
+            .take_while(|event| event.event == crate::TaskEventKind::Refused)
+            .copied()
+            .collect::<Vec<_>>();
+        Ok(crate::RefusalRun {
+            count: u32::try_from(refused.len()).unwrap_or(u32::MAX),
+            started_at: refused.last().map(|event| event.at),
+        })
+    }
+
     async fn list_tasks(
         &self,
         team: TeamName,

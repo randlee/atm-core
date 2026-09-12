@@ -16,7 +16,7 @@ roots = ["atm_runtime::composition::assemble_runtime"]
 
 [ownership]
 io_owns = ["bounded_read_submission", "task_ledger_read_result"]
-io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn"]
+io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process_spawn", "task_body_dereference"]
 
 [dependencies]
 allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
@@ -29,7 +29,7 @@ forbidden = []
 
 [contracts]
 request_types = ["TeamName", "AgentName", "TaskId", "ReadDeadline"]
-response_types = ["TaskRow", "TaskEventRow"]
+response_types = ["TaskRow", "TaskEventRow", "RefusalRun"]
 error_types = ["ReadLaneError"]
 
 [testing]

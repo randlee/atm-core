@@ -3,7 +3,8 @@ use std::sync::Arc;
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{
     AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, ReminderOutcome,
-    TaskActor, TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStore,
+    TaskActor, TaskCloseOutcome, TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState,
+    TaskStateTag, TaskStore,
 };
 use rusqlite::{Connection, Row, params};
 
@@ -12,13 +13,15 @@ use crate::shared_db::SharedDb;
 use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
 use crate::task_sql;
 
-const TASK_SCHEMA_DDL: &str = r#"
+pub(crate) const TASK_TABLES_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS tasks (
     team TEXT NOT NULL,
     task_id TEXT NOT NULL,
     assignee TEXT NOT NULL,
     assigner TEXT NOT NULL,
     state TEXT NOT NULL CHECK(state IN ('assigned', 'active', 'complete')),
+    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled')),
+    position INTEGER NULL CHECK(position IS NULL OR position >= 1),
     assignment_message_id TEXT NOT NULL,
     description TEXT NOT NULL,
     assigned_at TEXT NOT NULL,
@@ -26,17 +29,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     last_reminded_at TEXT NULL,
     reminder_count INTEGER NOT NULL DEFAULT 0,
     lead_notified_count INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (team, task_id, assignee)
-);
-
-CREATE INDEX IF NOT EXISTS tasks_open_by_member
-    ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
-
-CREATE TABLE IF NOT EXISTS escalation_recipients (
-    scope_key TEXT NOT NULL,
-    address TEXT NOT NULL,
-    added_at TEXT NOT NULL,
-    PRIMARY KEY (scope_key, address)
+    PRIMARY KEY (team, task_id),
+    CHECK ((state = 'complete') = (close_outcome IS NOT NULL)),
+    CHECK ((state = 'complete') = (position IS NULL))
 );
 
 CREATE TABLE IF NOT EXISTS task_events (
@@ -48,22 +43,46 @@ CREATE TABLE IF NOT EXISTS task_events (
     event TEXT NOT NULL,
     from_state TEXT NULL,
     to_state TEXT NULL,
+    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled')),
     actor TEXT NOT NULL,
     message_id TEXT NULL,
     outcome TEXT NULL CHECK(outcome IN ('emitted', 'unrenderable', 'blocked')),
     marker TEXT NULL CHECK(marker IN ('resend', 'assignment_missing')),
     detail TEXT NULL,
-    PRIMARY KEY (team, task_id, assignee, seq)
+    PRIMARY KEY (team, task_id, seq)
+);
+"#;
+
+pub(crate) const TASK_INDEX_DDL: &str = r#"
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_agent
+    ON tasks(team, assignee) WHERE state = 'active';
+
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_position_per_member
+    ON tasks(team, assignee, position) WHERE state <> 'complete';
+
+CREATE INDEX IF NOT EXISTS tasks_open_by_member
+    ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
+"#;
+
+const ESCALATION_RECIPIENTS_DDL: &str = r#"
+CREATE TABLE IF NOT EXISTS escalation_recipients (
+    scope_key TEXT NOT NULL,
+    address TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (scope_key, address)
 );
 "#;
 
 /// Initializes the task-ledger schema outside the generic shared DB module.
 pub(crate) fn ensure_schema(
-    connection: &SqliteConnection,
+    connection: &mut SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
+    crate::task_migration::migrate_task_identity(connection, target)?;
     connection
-        .execute_batch(TASK_SCHEMA_DDL)
+        .execute_batch(&format!(
+            "{TASK_TABLES_DDL}{TASK_INDEX_DDL}{ESCALATION_RECIPIENTS_DDL}"
+        ))
         .map_err(|error| sqlite_error(target, "failed to initialize task ledger schema", error))
 }
 
@@ -78,19 +97,22 @@ impl SqliteTaskStore {
         let assignee: String = row.get(2)?;
         let assigner: String = row.get(3)?;
         let state: String = row.get(4)?;
-        let assignment_message_id: String = row.get(5)?;
-        let description: String = row.get(6)?;
-        let assigned_at: String = row.get(7)?;
-        let updated_at: String = row.get(8)?;
-        let last_reminded_at: Option<String> = row.get(9)?;
-        let reminder_count: u32 = row.get(10)?;
-        let lead_notified_count: u32 = row.get(11)?;
+        let close_outcome: Option<String> = row.get(5)?;
+        let position: Option<u32> = row.get(6)?;
+        let assignment_message_id: String = row.get(7)?;
+        let description: String = row.get(8)?;
+        let assigned_at: String = row.get(9)?;
+        let updated_at: String = row.get(10)?;
+        let last_reminded_at: Option<String> = row.get(11)?;
+        let reminder_count: u32 = row.get(12)?;
+        let lead_notified_count: u32 = row.get(13)?;
         Ok(TaskRow {
             team: parse(&team, "task team")?,
             task_id: parse(&task_id, "task id")?,
             assignee: parse(&assignee, "task assignee")?,
             assigner: parse(&assigner, "task assigner")?,
-            state: parse_state(&state)?,
+            state: parse_state(&state, close_outcome.as_deref())?,
+            position: position.and_then(atm_storage::QueuePosition::new),
             assignment_message_id: parse(&assignment_message_id, "assignment message id")?,
             description,
             assigned_at: parse(&assigned_at, "task assigned timestamp")?,
@@ -105,10 +127,11 @@ impl SqliteTaskStore {
     }
 
     pub(crate) fn decode_event_row(row: &Row<'_>) -> rusqlite::Result<TaskEventRow> {
-        let actor: String = row.get(8)?;
-        let message_id: Option<String> = row.get(9)?;
-        let outcome: Option<String> = row.get(10)?;
-        let marker: Option<String> = row.get(11)?;
+        let close_outcome: Option<String> = row.get(8)?;
+        let actor: String = row.get(9)?;
+        let message_id: Option<String> = row.get(10)?;
+        let outcome: Option<String> = row.get(11)?;
+        let marker: Option<String> = row.get(12)?;
         Ok(TaskEventRow {
             team: parse(&row.get::<_, String>(0)?, "event team")?,
             task_id: parse(&row.get::<_, String>(1)?, "event task id")?,
@@ -119,12 +142,30 @@ impl SqliteTaskStore {
             from_state: row
                 .get::<_, Option<String>>(6)?
                 .as_deref()
-                .map(parse_state)
+                .map(|state| {
+                    parse_state(
+                        state,
+                        if state == "complete" {
+                            close_outcome.as_deref()
+                        } else {
+                            None
+                        },
+                    )
+                })
                 .transpose()?,
             to_state: row
                 .get::<_, Option<String>>(7)?
                 .as_deref()
-                .map(parse_state)
+                .map(|state| {
+                    parse_state(
+                        state,
+                        if state == "complete" {
+                            close_outcome.as_deref()
+                        } else {
+                            None
+                        },
+                    )
+                })
                 .transpose()?,
             actor: if actor == atm_storage::DAEMON_ACTOR_NAME {
                 TaskActor::Daemon
@@ -137,7 +178,7 @@ impl SqliteTaskStore {
                 .transpose()?,
             outcome: outcome.as_deref().map(parse_outcome).transpose()?,
             marker: marker.as_deref().map(parse_marker).transpose()?,
-            detail: row.get(12)?,
+            detail: row.get(13)?,
         })
     }
 
@@ -147,7 +188,7 @@ impl SqliteTaskStore {
         member: &MemberKey,
         task_id: &TaskId,
     ) -> Result<Option<TaskRow>, AtmError> {
-        task_sql::select_task_row(connection, member.team(), task_id, member.agent())
+        task_sql::select_task_row(connection, member.team(), task_id)
             .map_err(|error| self.db.error("failed to load task row", error))
     }
 
@@ -167,12 +208,8 @@ impl SqliteTaskStore {
         let seq: u64 = connection
             .query_row(
                 "SELECT COALESCE(MAX(seq), 0) + 1 FROM task_events
-                 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
-                params![
-                    member.team().as_str(),
-                    task_id.as_str(),
-                    member.agent().as_str()
-                ],
+                 WHERE team = ?1 AND task_id = ?2",
+                params![member.team().as_str(), task_id.as_str()],
                 |row| row.get(0),
             )
             .map_err(|error| {
@@ -206,9 +243,11 @@ impl SqliteTaskStore {
 impl atm_storage::contract::sealed::Sealed for SqliteTaskStore {}
 
 impl TaskStore for SqliteTaskStore {
-    fn load_task(&self, member: &MemberKey, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
-        self.db
-            .with_connection(|connection| self.load_row(connection, member, task_id))
+    fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
+        self.db.with_connection(|connection| {
+            task_sql::select_task_row(connection, team, task_id)
+                .map_err(|error| self.db.error("failed to load task row", error))
+        })
     }
 
     fn open_tasks(&self, member: &MemberKey) -> Result<Vec<TaskRow>, AtmError> {
@@ -403,22 +442,39 @@ where
     })
 }
 
-fn parse_state(value: &str) -> rusqlite::Result<TaskState> {
+fn parse_state(value: &str, close_outcome: Option<&str>) -> rusqlite::Result<TaskState> {
+    let tag = match value {
+        "assigned" => TaskStateTag::Assigned,
+        "active" => TaskStateTag::Active,
+        "complete" => TaskStateTag::Complete,
+        _ => return Err(invalid(value, "task state")),
+    };
+    let outcome = close_outcome.map(parse_close_outcome).transpose()?;
+    TaskState::from_parts(tag, outcome).map_err(|error| invalid(error.message(), "task state"))
+}
+fn parse_close_outcome(value: &str) -> rusqlite::Result<TaskCloseOutcome> {
     match value {
-        "assigned" => Ok(TaskState::Assigned),
-        "active" => Ok(TaskState::Active),
-        "complete" => Ok(TaskState::Complete),
-        _ => Err(invalid(value, "task state")),
+        "completed" => Ok(TaskCloseOutcome::Completed),
+        "refused" => Ok(TaskCloseOutcome::Refused),
+        "cancelled" => Ok(TaskCloseOutcome::Cancelled),
+        _ => Err(invalid(value, "task close outcome")),
     }
 }
 fn parse_event(value: &str) -> rusqlite::Result<TaskEventKind> {
     match value {
         "assigned" => Ok(TaskEventKind::Assigned),
         "acked" => Ok(TaskEventKind::Acked),
+        "started" => Ok(TaskEventKind::Started),
         "completed" => Ok(TaskEventKind::Completed),
+        "refused" => Ok(TaskEventKind::Refused),
+        "cancelled" => Ok(TaskEventKind::Cancelled),
+        "reassigned" => Ok(TaskEventKind::Reassigned),
+        "reopened" => Ok(TaskEventKind::Reopened),
         "rejected" => Ok(TaskEventKind::Rejected),
         "reminded" => Ok(TaskEventKind::Reminded),
         "lead_notified" => Ok(TaskEventKind::LeadNotified),
+        "moved" => Ok(TaskEventKind::Moved),
+        "migrated" => Ok(TaskEventKind::Migrated),
         _ => Err(invalid(value, "task event")),
     }
 }
@@ -449,17 +505,24 @@ const fn state_name(value: TaskState) -> &'static str {
     match value {
         TaskState::Assigned => "assigned",
         TaskState::Active => "active",
-        TaskState::Complete => "complete",
+        TaskState::Complete(_) => "complete",
     }
 }
 const fn event_name(value: TaskEventKind) -> &'static str {
     match value {
         TaskEventKind::Assigned => "assigned",
         TaskEventKind::Acked => "acked",
+        TaskEventKind::Started => "started",
         TaskEventKind::Completed => "completed",
+        TaskEventKind::Refused => "refused",
+        TaskEventKind::Cancelled => "cancelled",
+        TaskEventKind::Reassigned => "reassigned",
+        TaskEventKind::Reopened => "reopened",
         TaskEventKind::Rejected => "rejected",
         TaskEventKind::Reminded => "reminded",
         TaskEventKind::LeadNotified => "lead_notified",
+        TaskEventKind::Moved => "moved",
+        TaskEventKind::Migrated => "migrated",
     }
 }
 const fn outcome_name(value: ReminderOutcome) -> &'static str {

@@ -224,7 +224,7 @@ impl<'a> CliComposition<'a> {
         self.async_transport.as_ref()
     }
 
-    async fn execute_request(
+    pub(crate) async fn execute_request(
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
@@ -947,6 +947,8 @@ mod tests {
                 parent_message_id: None,
                 thread_mode: None,
                 task_complete: None,
+                placement: None,
+                task_op: None,
                 expires_at: None,
                 task_id: None,
                 extra: serde_json::Map::new(),
@@ -1034,6 +1036,7 @@ mod tests {
             requires_ack: false,
             task_id: None,
             task_complete: None,
+            already_closed: None,
             summary: None,
             message: None,
             warnings: Vec::new(),

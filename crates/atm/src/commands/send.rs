@@ -5,6 +5,10 @@ use std::str::FromStr;
 use anyhow::Result;
 use atm_core::address::AgentAddress;
 use atm_core::load_atm_config;
+use atm_core::protocol::{
+    CLI_SCHEMA_VERSION, CompatibilityPreflight, CompatibilityVerdict, HttpApiVersion,
+    ReleaseVersion, RequestEnvelope, ResponseEnvelope,
+};
 use atm_core::send::{
     MessageClassification, NudgeMode, SendMessageSource, SendRequest, TemplateSendSource, input,
 };
@@ -17,7 +21,9 @@ use atm_core::send_to::classify_recipient_locality;
 use atm_core::send_to::RecipientLocality;
 use atm_core::types::{AgentIdentity, HostName, TaskId, TeamName};
 use atm_daemon_bootstrap::with_default_peer_address_stores;
-use atm_storage::{AtmError, PeerConfigStore, RosterStore, TrustedPeer};
+use atm_storage::{
+    AtmError, AtmErrorCode, PeerConfigStore, RosterStore, TaskCloseOutcome, TaskOp, TrustedPeer,
+};
 use clap::Args;
 
 use crate::commands::caller_context::{
@@ -214,6 +220,9 @@ impl SendCommand {
         )?;
         let caller_identity = request.caller_identity.clone();
         let caller_team = request.caller_team.clone();
+        if request.task_op.is_some() {
+            preflight_task_op_compatibility(&composition).await?;
+        }
         let mut outcome = composition.send(request).await?;
 
         if let Some(warning) = unrostered_sender_warning(&caller_identity, &caller_team) {
@@ -305,11 +314,14 @@ impl SendCommand {
             self.task_id,
             self.dry_run,
         )
-        .map(|request| {
-            let request = match self.task_complete {
-                Some(task_id) => request.with_task_complete(task_id),
-                None => request,
-            };
+        .map(|mut request| {
+            if let Some(task_id) = self.task_complete {
+                request.task_id = Some(task_id);
+                request.task_op = Some(TaskOp::Close {
+                    outcome: TaskCloseOutcome::Completed,
+                    reason: None,
+                });
+            }
             request
                 .with_caller_chat_id(caller_context.caller_chat_id)
                 .with_activity_observation(caller_context.activity_observation)
@@ -578,6 +590,56 @@ impl SendCommand {
             resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))
                 .map_err(Into::into)
         }
+    }
+}
+
+pub(super) async fn preflight_task_op_compatibility(
+    composition: &CliComposition<'_>,
+) -> Result<(), AtmError> {
+    let response = composition
+        .execute_request(RequestEnvelope::CompatibilityPreflight(
+            CompatibilityPreflight {
+                client_release: ReleaseVersion::current(),
+                cli_schema_version: CLI_SCHEMA_VERSION,
+                http_api_version: HttpApiVersion::current(),
+            },
+        ))
+        .await?;
+    require_task_op_compatibility(response)
+}
+
+fn require_task_op_compatibility(response: ResponseEnvelope) -> Result<(), AtmError> {
+    let required = HttpApiVersion::parse("1.5.0")?;
+    match response {
+        ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_http_api_version,
+            ..
+        }) if daemon_http_api_version >= required => Ok(()),
+        ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_http_api_version,
+            ..
+        }) => Err(AtmError::new(
+            AtmErrorCode::ClientDaemonVersionIncompatible,
+            format!(
+                "task operation requires client HTTP API {} and daemon HTTP API >= 1.5.0; daemon reports {}",
+                HttpApiVersion::current(),
+                daemon_http_api_version
+            ),
+        )),
+        ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Incompatible {
+            client_http_api_version,
+            daemon_http_api_version,
+            code,
+            ..
+        }) => Err(AtmError::new(
+            code,
+            format!(
+                "task operation compatibility mismatch: client HTTP API {client_http_api_version}, daemon HTTP API {daemon_http_api_version}; daemon must support >= 1.5.0"
+            ),
+        )),
+        other => Err(AtmError::daemon_unavailable(format!(
+            "daemon returned an unexpected response for task-operation compatibility preflight: {other:?}"
+        ))),
     }
 }
 
@@ -972,7 +1034,7 @@ mod tests {
     use std::num::NonZeroU16;
     use std::path::{Path, PathBuf};
 
-    use super::{SendCommand, resolve_trusted_ipv4_with_lookup};
+    use super::{SendCommand, require_task_op_compatibility, resolve_trusted_ipv4_with_lookup};
     use crate::commands::send_fan_out::fan_out_result_json;
     // `FanOutRecipient`/`RecipientLocality`/`CliObservability` are consumed
     // only by the real transfer-script fan-out integration test below,
@@ -985,11 +1047,14 @@ mod tests {
     use crate::commands::send_fan_out::FanOutRecipient;
     #[cfg(unix)]
     use crate::observability::CliObservability;
+    use atm_core::protocol::{
+        CompatibilityVerdict, HttpApiVersion, ReleaseVersion, ResponseEnvelope,
+    };
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
-    use atm_core::types::TeamName;
-    use atm_storage::{HostName, TrustedPeer};
+    use atm_core::types::{TaskId, TeamName};
+    use atm_storage::{AtmErrorCode, HostName, TaskCloseOutcome, TaskOp, TrustedPeer};
     use clap::Parser;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -1430,13 +1495,30 @@ mod tests {
             .build_request(".".into(), ".".into())
             .expect("request");
 
+        assert_eq!(request.task_id.as_ref().map(TaskId::as_str), Some("t-42"));
         assert_eq!(
-            request
-                .task_complete
-                .as_ref()
-                .map(|task_id| task_id.as_str()),
-            Some("t-42")
+            request.task_op,
+            Some(TaskOp::Close {
+                outcome: TaskCloseOutcome::Completed,
+                reason: None,
+            })
         );
+        assert_eq!(request.task_complete, None);
+    }
+
+    #[test]
+    fn send_task_complete_refuses_daemon_below_1_5_0() {
+        let verdict = ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::parse("1.5.11").expect("release"),
+            daemon_schema_version: 1,
+            daemon_http_api_version: HttpApiVersion::parse("1.4.0").expect("HTTP API"),
+        });
+
+        let error = require_task_op_compatibility(verdict)
+            .expect_err("a 1.4 daemon cannot decode typed task operations");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(error.message().contains("1.5.0"));
+        assert!(error.message().contains("1.4.0"));
     }
 
     #[test]
