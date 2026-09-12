@@ -272,14 +272,13 @@ fn build_real_task_pump(task_names: &[&str]) -> RealTaskPumpFixture {
         .map(|name| name.parse().expect("task id"))
         .collect();
     for task in &tasks {
-        let message_id = queue_task_message(
+        queue_task_message(
             root.path(),
             &assembly.service_runtime,
             &team,
             key.agent().as_str(),
             task.clone(),
         );
-        acknowledge_task_assignment(root.path(), &assembly.service_runtime, &key, message_id);
     }
     clear_pending_markers(root.path(), &assembly.service_runtime, &key);
     let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
@@ -295,14 +294,6 @@ fn build_real_task_pump(task_names: &[&str]) -> RealTaskPumpFixture {
     )
     .with_daemon_home(root.path().join("home"));
     (root, assembly.service_runtime, fake, pump, key, tasks, now)
-}
-
-fn acknowledge_task_assignment(
-    _root: &std::path::Path,
-    _runtime: &LocalServiceRuntime,
-    _member: &atm_storage::MemberKey,
-    _message_id: AtmMessageId,
-) {
 }
 
 fn close_real_task(
@@ -1342,14 +1333,13 @@ async fn reopen_of_stalled_task_escalates_again_at_threshold() {
         &tasks[0],
         atm_storage::TaskCloseOutcome::Completed,
     );
-    let message_id = queue_task_message(
+    queue_task_message(
         root.path(),
         &runtime,
         key.team(),
         key.agent().as_str(),
         tasks[0].clone(),
     );
-    acknowledge_task_assignment(root.path(), &runtime, &key, message_id);
     let store = runtime.task_store().expect("task store");
     let reopened = store
         .load_task(key.team(), &tasks[0])
@@ -1381,8 +1371,8 @@ async fn reopen_of_stalled_task_escalates_again_at_threshold() {
 
 #[tokio::test]
 async fn task_prompt_records_reminder_without_start_or_receipt() {
-    let (root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
-    let message_id = task_assignment_message_id(&runtime, &key, &task).await;
+    let (_root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
+    task_assignment_message_id(&runtime, &key, &task).await;
     let team = key.team().clone();
 
     pump.tick_once().await;
@@ -1402,7 +1392,6 @@ async fn task_prompt_records_reminder_without_start_or_receipt() {
         TaskState::Assigned,
         "prompt delivery does not start the task"
     );
-    acknowledge_task_assignment(root.path(), &runtime, &key, message_id);
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
     queue_idle_result(&fake, &key);
@@ -1491,11 +1480,10 @@ async fn task_prompt_records_reminder_without_start_or_receipt() {
 
 #[tokio::test]
 async fn repeated_prompt_handoff_sends_no_daemon_task_receipt() {
-    let (root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
-    let message_id = task_assignment_message_id(&runtime, &key, &task).await;
+    let (_root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
+    task_assignment_message_id(&runtime, &key, &task).await;
     let team = key.team().clone();
     pump.tick_once().await;
-    acknowledge_task_assignment(root.path(), &runtime, &key, message_id);
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
     queue_idle_result(&fake, &key);
@@ -1567,9 +1555,8 @@ async fn repeated_prompt_handoff_sends_no_daemon_task_receipt() {
 
 #[tokio::test]
 async fn missing_assigner_does_not_create_an_owed_daemon_start() {
-    let (root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
-    let message_id = task_assignment_message_id(&runtime, &key, &task).await;
-    acknowledge_task_assignment(root.path(), &runtime, &key, message_id);
+    let (_root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
+    task_assignment_message_id(&runtime, &key, &task).await;
     runtime
         .shared_roster_store_arc()
         .save_roster(&RosterSnapshot {
