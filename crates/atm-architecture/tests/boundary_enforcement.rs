@@ -3623,6 +3623,8 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "clear_messages".to_owned(),
         "heartbeat".to_owned(),
         "queue_get_next".to_owned(),
+        // BA.4 (fenix ruling 2026-09-12): message-less TaskMove control op joins the durable control lane.
+        "task_move".to_owned(),
         "graft_receiver_register".to_owned(),
         "graft_receiver_refresh".to_owned(),
         "graft_receiver_unregister".to_owned(),

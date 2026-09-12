@@ -382,6 +382,22 @@ impl SendCommand {
         Ok(request)
     }
 
+    pub(super) fn build_task_close_request(
+        mut self,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        task_id: TaskId,
+        outcome: TaskCloseOutcome,
+        reason: Option<String>,
+    ) -> Result<SendRequest> {
+        self.task_id = Some(task_id);
+        self.task_complete = true;
+        let mut request =
+            self.build_request_with_mode(home_dir, current_dir, NudgeMode::default(), None)?;
+        request.task_op = Some(TaskOp::Close { outcome, reason });
+        Ok(request)
+    }
+
     fn target_with_explicit_host(&self, caller_team: &TeamName) -> Result<String> {
         if !self.requires_peer_authority_lookup(caller_team) {
             return self.legacy_target_with_explicit_host(caller_team);

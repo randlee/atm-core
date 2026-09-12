@@ -235,6 +235,22 @@
           }
         }
       }
+    },
+    "/tasks/move": {
+      "post": {
+        "operation_id": "moveTask",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/TaskMoveOutcome"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
     }
   },
   "schemas": {
@@ -573,6 +589,34 @@
       ],
       "required": [
         "hits"
+      ]
+    },
+    "TaskMoveOutcome": {
+      "properties": [
+        "assignee",
+        "from",
+        "task_id",
+        "to"
+      ],
+      "required": [
+        "assignee",
+        "from",
+        "task_id",
+        "to"
+      ]
+    },
+    "TaskMoveRequest": {
+      "properties": [
+        "caller_identity",
+        "caller_team",
+        "target",
+        "task_id"
+      ],
+      "required": [
+        "caller_identity",
+        "caller_team",
+        "target",
+        "task_id"
       ]
     },
     "WorkflowProjectionRequest": {

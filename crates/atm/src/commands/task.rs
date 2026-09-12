@@ -5,14 +5,20 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use atm_core::address::AgentAddress;
+use atm_core::doctor::DoctorQuery;
 use atm_core::list::{ListQuery, TaskLedgerQuery};
-use atm_core::protocol::{HttpApiVersion, RequestEnvelope, ResponseEnvelope, TaskMoveRequest};
+use atm_core::protocol::{
+    HttpApiVersion, RequestEnvelope, ResponseEnvelope, RuntimeStatusSnapshot, TaskMoveRequest,
+};
 use atm_core::send::NudgeMode;
 use atm_core::task_close::report_recipient;
-use atm_core::task_query::{TaskEventQuery, TaskListQuery, TaskPage};
+use atm_core::task_query::{
+    TaskEventQuery, TaskListQuery, TaskPage, select_task_events, select_task_rows,
+};
 use atm_core::types::{TaskId, TeamName};
 use atm_storage::{
-    DAEMON_ACTOR_NAME, MoveTarget, TaskActor, TaskCloseOutcome, TaskEventRow, TaskOp, TaskRow,
+    DAEMON_ACTOR_NAME, MoveTarget, RuntimeMemberState, TaskActor, TaskCloseOutcome, TaskEventRow,
+    TaskRow,
 };
 use chrono::SecondsFormat;
 use clap::{ArgGroup, Args, Subcommand, ValueEnum};
@@ -294,20 +300,19 @@ impl TaskCloseCommand {
                 vars: None,
             }
         };
-        let mut request = SendCommand::for_task(report.into_send_options(
+        let request = SendCommand::for_task(report.into_send_options(
             recipient.to_string(),
             self.caller,
             None,
             self.json,
         ))
-        .build_request_with_mode(
+        .build_task_close_request(
             home_dir.clone(),
             current_dir.clone(),
-            NudgeMode::Immediate,
-            None,
+            self.task_id.clone(),
+            outcome,
+            reason,
         )?;
-        request.task_id = Some(self.task_id.clone());
-        request.task_op = Some(TaskOp::Close { outcome, reason });
         validate_local_task_target(&request)?;
         let result = composition.send(request).await?;
         if self.json {
@@ -340,12 +345,28 @@ impl TaskListCommand {
             .list(task_list_request(
                 home_dir.clone(),
                 current_dir.clone(),
-                caller.caller_identity,
-                contract.team,
-                contract.assignee,
+                caller.caller_identity.clone(),
+                contract.team.clone(),
+                contract.assignee.clone(),
             )?)
             .await?;
-        print_task_rows(&outcome.task_rows, self.json, self.all)
+        let rows = select_task_rows(outcome.task_rows, &contract);
+        let runtime = if self.all {
+            composition
+                .doctor(DoctorQuery {
+                    home_dir,
+                    current_dir,
+                    team_override: Some(contract.team.clone()),
+                    all_teams: false,
+                    caller_team: Some(contract.team),
+                    caller_identity: Some(caller.caller_identity),
+                })
+                .await?
+                .runtime_status
+        } else {
+            None
+        };
+        print_task_rows(&rows, self.json, self.all, runtime.as_ref())
     }
 }
 
@@ -370,7 +391,7 @@ impl TaskEventsCommand {
             current_dir.clone(),
             caller.caller_identity,
             None,
-            contract.team,
+            contract.team.clone(),
             atm_core::types::ReadSelection::Actionable,
             false,
             None,
@@ -381,7 +402,8 @@ impl TaskEventsCommand {
         )?
         .with_task_ledger(ledger.clone());
         let outcome = composition.list(query).await?;
-        print_task_events(&outcome.task_event_rows, self.json)
+        let rows = select_task_events(outcome.task_event_rows, &contract);
+        print_task_events(&rows, self.json)
     }
 }
 
@@ -477,7 +499,12 @@ fn resolve_task_id(task_id: Option<TaskId>) -> Result<TaskId, atm_core::error::A
     task_id.map_or_else(|| TaskId::from_str(&ulid::Ulid::new().to_string()), Ok)
 }
 
-fn print_task_rows(rows: &[TaskRow], json: bool, grouped: bool) -> Result<()> {
+fn print_task_rows(
+    rows: &[TaskRow],
+    json: bool,
+    grouped: bool,
+    runtime: Option<&RuntimeStatusSnapshot>,
+) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(rows)?);
         return Ok(());
@@ -488,7 +515,15 @@ fn print_task_rows(rows: &[TaskRow], json: bool, grouped: bool) -> Result<()> {
             if current_member.is_some() {
                 println!();
             }
-            println!("{} (state: unknown)", row.assignee);
+            let state = runtime
+                .and_then(|snapshot| {
+                    snapshot
+                        .members
+                        .iter()
+                        .find(|member| member.team == row.team && member.member == row.assignee)
+                })
+                .map_or("unknown", |member| runtime_state_name(member.state));
+            println!("{} (state: {state})", row.assignee);
             println!("pos  state     task_id     assigned_at               reminders assigner");
             current_member = Some(row.assignee.clone());
         } else if !grouped && current_member.is_none() {
@@ -511,6 +546,17 @@ fn print_task_rows(rows: &[TaskRow], json: bool, grouped: bool) -> Result<()> {
         println!("pos  state     task_id     assigned_at               reminders assigner");
     }
     Ok(())
+}
+
+const fn runtime_state_name(state: RuntimeMemberState) -> &'static str {
+    match state {
+        RuntimeMemberState::Unknown => "unknown",
+        RuntimeMemberState::IdentityConflict => "identity_conflict",
+        RuntimeMemberState::Offline => "offline",
+        RuntimeMemberState::Idle => "idle",
+        RuntimeMemberState::Active => "active",
+        RuntimeMemberState::Blocked => "blocked",
+    }
 }
 
 fn print_task_events(rows: &[TaskEventRow], json: bool) -> Result<()> {
