@@ -53,7 +53,7 @@ against a task the prompt was not for.
 | P2 | The handoff record table is named `prompt_handoffs`, not `nudge_handoffs`: `scripts/check-nudge-taxonomy.py` rejects new `nudge`-family identifiers outside its frozen inventory. | this plan; design §4.6 amended |
 | P3 | Scope-review PLAN-SCOPE-001: the logic sprint is split three ways by closure type — BB.4 state machine (`atm task start`), BB.5 assignment write and task pass (deletions), BB.6 `prompt_handoffs` (schema). | this plan §3 |
 | P4 | Scope-review PLAN-SCOPE-002/003/004: test-procedure pages get their own sprint doc as authority (BB.3) with deliverables, acceptance, validation, the evidence-field schema and the index-refusal contract; design.md §10 points to it. | BB.3 doc |
-| P5 | Scope-review PLAN-SCOPE-006: `atm doctor` reporting of stale `task` override rows is a BB.1 deliverable (D6). | BB.1 doc |
+| P5 | Scope-review PLAN-SCOPE-006: `atm doctor` reporting of stale `task` override rows, and of disabled task-kind rows (a disabled `task_reminder` silences nags), is a BB.1 deliverable (D6), together with the store method and the `clear-nudge-template` retired-name path that make the remediation possible. | BB.1 doc; §8 |
 | P6 | Scope-review PLAN-SCOPE-007: `PostSendHookEvent.task_transition` crosses the graft loopback and the `ATM_INTERNAL_NUDGE` envelope (ADR-054 (g) wire-crossing contracts). It is an optional, `#[serde(default)]` field: MINOR, `HTTP_API_VERSION` 1.7.0 → 1.8.0, both receiver crates updated in BB.1, schema-reviewer sign-off on BB.1's PR. | §6 |
 | P7 | Rand 2026-09-12: orchestration templates must match the shipped `atm task` surface. The 1.5.16 fixes (dispatch with `--task-id`, close on final report) cannot wait for the phase to land, so they are BB.2 (wave 1); the `atm task start` step they gain after BB.4 is in BB.7. My call, recorded so Rand can collapse it. | §3 |
 | P9 | `task_queued` is emitted at every position, including head. Design §4.3 said "nothing at head"; one rule (every assignment prints one line) is simpler than a head special case, and the idle agent gets `task_ready` on the next pass anyway. Design §4.3 amended. | this plan; BB.5 D2 |
@@ -123,6 +123,7 @@ one sprint and is in that sprint's deliverables.
 | `docs/requirements.md` | 1368–1383 | "exactly seven named template cases" → the eleven kinds of BB.1 D1; `acknowledge_task` removed; "task-tagged messages select `task`" → transition selects the task kind | BB.1 |
 | `docs/requirements.md` | 4971 | "seven built-in nudge template bodies" → eleven | BB.1 |
 | `docs/adr/ADR-061-…` | D5 | 1.8.0 entry (BB.1); 1.9.0 entry (BB.6) | BB.1, BB.6 |
+| `docs/adr/ADR-061-…` | D6 | storage-schema record: additive `prompt_handoffs` table, MINOR, no approval needed | BB.6 |
 | `docs/adr/ADR-054-…` | (a) Taxonomy; new "Phase-BB amendment" | eleven built-in template kinds; the six task kinds are transition-selected; `task`/`acknowledge_task` retired; `PostSendHookEvent.task_transition` recorded under (g) as the both-sides change | BB.1 |
 | `docs/requirements.md` | 2996–2997 (§15.4 item 4) | "Starting a task MUST move it … and MUST send the assigner a start notification" gains "by `atm task start` from the assignee; the daemon never starts a task" | BB.4 |
 | `docs/requirements.md` | 3010–3013 (§15.4 item 9) | closed set adds `start` | BB.4 |
@@ -144,7 +145,7 @@ Nothing outside this list is added; deletions are listed per sprint.
 
 | sprint | addition |
 | --- | --- |
-| BB.1 | `TaskTransition` enum; `PostSendHookEvent.task_transition`; six `BuiltInNudgeTemplateKind` variants; six default bodies; render values `position`, `attempt`, `assignee`, `outcome`, `by`; `TaskClosedOutcome { Cancelled, Reassigned }`; doctor finding `stale_nudge_template_override`; `HTTP_API_VERSION` 1.8.0 |
+| BB.1 | `TaskTransition` enum; `PostSendHookEvent.task_transition`; six `BuiltInNudgeTemplateKind` variants; six default bodies; render values `position`, `attempt`, `assignee`, `outcome`, `by`; `TaskClosedOutcome { Cancelled, Reassigned }`; doctor findings `stale_nudge_template_override` and `disabled_task_nudge_template`; `NudgeTemplateOverrideStore::list_stale_template_override_kinds`; `clear_template_override(team, kind: &str)` (parameter type change, internal trait); `HTTP_API_VERSION` 1.8.0 |
 | BB.2 | nothing in `crates/`; template steps only |
 | BB.3 | `scripts/procedures/render_procedure_pages.py`; `templates/procedure-report/procedure.html.j2`; `docs/procedures/*.md`; `site/reports/procedures/**`; `source_revision` on two evidence writers; `procedure`/`source_revision` optional envelope fields |
 | BB.4 | clap `TaskSubcommand::Start(TaskStartCommand)`; `SendCommand::build_task_start_request`; writer `admit` arm for `Started` (actor = assignee) |
