@@ -12,7 +12,6 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
-    TaskRow, TaskState,
 };
 use atm_core::delivery_channel::{
     DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
@@ -863,19 +862,6 @@ struct MemberObservation {
     state: RuntimeMemberState,
     #[expect(dead_code, reason = "episode escalation consumes this in task 5")]
     state_changed_at: Option<IsoTimestamp>,
-}
-
-fn select_open_task(mut rows: Vec<TaskRow>) -> Option<TaskRow> {
-    rows.retain(|row| row.state.is_open());
-    rows.sort_by(|left, right| {
-        left.assigned_at
-            .cmp(&right.assigned_at)
-            .then_with(|| left.task_id.as_str().cmp(right.task_id.as_str()))
-    });
-    rows.iter()
-        .find(|row| row.state == TaskState::Active)
-        .or_else(|| rows.iter().find(|row| row.state == TaskState::Assigned))
-        .cloned()
 }
 
 fn herdr_candidates(
