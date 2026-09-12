@@ -19,10 +19,11 @@
   triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T11:18:37Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2APKAD843RB8WK9EVQFHGH6, 2026-09-12T11:38:45Z): BA-SMOKE-EVIDENCE-QA-1789212303 on PR #1428 confirmed SMK-001 fixed by all three reviewers." ;
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T11:18:37Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SMK-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/SMK-001/1>
   a triage:Occurrence ;
