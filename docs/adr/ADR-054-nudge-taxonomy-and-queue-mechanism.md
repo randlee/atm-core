@@ -317,9 +317,11 @@ transition-specific task kinds replace them: `task_queued`, `task_ready`,
 the `atm-graft` loopback receiver and `atm-graft-python` callback adapter decode
 the widened event while leaving the Python callback shape unchanged, satisfying
 the both-sides rule in (g). This amendment also adds the doctor finding codes
-`stale_nudge_template_override` and
-`disabled_task_nudge_template_override` to the frozen identifier inventory;
-they are the operator-facing diagnostics for the override lifecycle above.
+`stale_nudge_template_override` and `disabled_task_nudge_template_override`,
+the typed stale-row projection `StaleNudgeTemplateOverrideKind`, and the
+set-time validation entry point `validate_built_in_nudge_template_body` to the
+frozen identifier inventory. They are the operator-facing diagnostics and
+supporting override-lifecycle identifiers introduced above.
 
 ## Rejected alternatives
 
