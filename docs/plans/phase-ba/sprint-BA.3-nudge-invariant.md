@@ -21,7 +21,7 @@
 7. Add the refusal escalation to the tick — `herdr_queue_wake.rs` (see "Consecutive refusals").
 8. Fold the `map_or(Unknown, …)` fallback into `runtime_state`; add `still_idle` — `herdr_queue_wake.rs:459-463`, `:934`.
 9. Delete the breaker escalation and the paths under "Paths to delete".
-10. Add the architecture test — `crates/atm-architecture/tests/escalation_ownership.rs` (new).
+10. Add the architecture test — `crates/atm-architecture/tests/escalation_ownership.rs` (new). BA3-FIX-R3 adds `queue_drain_eligible` and permits `EscalationState::observe` so the syn guard can keep runtime-state decisions at their owning boundaries.
 11. Write the tests under "Tests".
 
 ## Phase AZ code used
@@ -248,7 +248,7 @@ always succeed.
 
 `TASK_REMINDER_INTERVAL_MS = 60_000` (moved to `atm-storage/src/task_store.rs`,
 `i64`), `TASK_STALLED_REMINDER_THRESHOLD = 10` (unchanged),
-`TASK_CONSECUTIVE_REFUSAL_THRESHOLD = 3` (BA.3). Deleted: `BLOCKED_NOTIFY_MS`,
+`TASK_CONSECUTIVE_REFUSAL_THRESHOLD = 3` (BA.2). Deleted: `BLOCKED_NOTIFY_MS`,
 `BLOCKED_RENOTIFY_MS`. Offline is reported on the first accepted `Offline`
 observation with no debounce.
 
@@ -268,11 +268,6 @@ observation with no debounce.
   `breaker_failure_counts` (`herdr_queue_wake.rs:79-82,112-115,137`); methods
   `breaker_cycle_opened_at`, `maybe_escalate_breaker` (`:301-379`);
   `EscalationKind::BreakerOpened` (`herdr_escalation.rs:34,42`)
-- `HerdrQueueWakePump.last_task_attempt`, `stamp_task_attempt`, and the
-  corresponding `prune_member_state` line; `last_reminded_at` is the sole
-  task-reminder rate-limit record
-- the `u64` copy of `TASK_REMINDER_INTERVAL_MS` in `herdr_queue_wake.rs`; the
-  storage-owned `i64` constant is the sole definition
 - tests `blocked_renotifies_after_cooldown`, `escalates_again_at_twenty`,
   every breaker-escalation test, and any test asserting a second stalled
   escalation (grep `lead_notified_count, 2` / `RENOTIFY` / `BreakerOpened`)
@@ -298,9 +293,6 @@ Pure — `herdr_task_disposition.rs`:
 Runtime — `crates/atm-http-runtime/tests/herdr_nudge_invariant.rs` (new;
 fixture daemons loopback only; roster shapes lead+1, lead+3, two leads, no
 lead; backends Herdr steer, tmux, bare-CLI FIFO):
-
-This file is spliced into `herdr_queue_wake`'s test module with `#[path]`; it
-is not a standalone Cargo integration-test target.
 
 - `idle_member_with_queued_task_is_nudged_once_per_interval` — ticks at t, t+30s, t+61s → 2 prompts.
 - `active_member_is_never_prompted` — 200 ticks Active, Herdr and tmux backends → 0 prompts, 0 mail.
@@ -340,12 +332,12 @@ is not a standalone Cargo integration-test target.
    one function that turns a `RuntimeMemberState` into a decision.
 2. Every test above exists by name and passes under `just test`; the
    disposition table has exactly the 12 arms quoted above.
-3. `grep -rn "BLOCKED_RENOTIFY_MS\|\\bselect_open_task\\b\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation\|HoldReason" crates/` returns nothing.
+3. `grep -rn "BLOCKED_RENOTIFY_MS\|select_open_task\b\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation\|HoldReason" crates/` returns nothing.
 4. `grep -n "DeliveryChannel::HerdrSteer" crates/atm-http-runtime/src/herdr_queue_wake.rs` returns nothing.
 5. `grep -rn "TaskOp::Start" crates/atm-http-runtime/src` → `herdr_task_start.rs` only.
 6. `grep -rn "escalate\b\|escalate_mail" crates/atm-core/src` returns nothing.
 
 ## Required validation
 
-`just lint`, `just test`, `just lint boundaries`, RULE-003
+`just lint`, `just test`, `just lint-boundaries`, RULE-003
 (`herdr_queue_wake.rs` must not grow; target ≤ 3,700 lines after deletions).

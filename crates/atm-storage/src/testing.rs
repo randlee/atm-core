@@ -8,6 +8,8 @@
 //! cross-crate test-only surfaces are shared in this workspace.
 
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::contract::{
     AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncTaskLedgerReader,
@@ -78,11 +80,23 @@ impl AsyncGraftReceiverEndpointStore for NoopGraftReceiverEndpointStore {}
 
 /// Deterministic in-memory double for the sealed async mailbox-read contract.
 /// It is intentionally available only through the `test-utils` feature.
-#[derive(Debug, Default)]
 pub struct InMemoryMailboxReader {
     messages: std::sync::Mutex<Vec<Message>>,
     seen_watermarks:
         std::sync::Mutex<std::collections::BTreeMap<(TeamName, AgentName), IsoTimestamp>>,
+    delegate: Option<Arc<dyn AsyncMailboxReader + Send + Sync>>,
+    list_calls: AtomicUsize,
+}
+
+impl Default for InMemoryMailboxReader {
+    fn default() -> Self {
+        Self {
+            messages: std::sync::Mutex::new(Vec::new()),
+            seen_watermarks: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            delegate: None,
+            list_calls: AtomicUsize::new(0),
+        }
+    }
 }
 
 impl InMemoryMailboxReader {
@@ -91,7 +105,22 @@ impl InMemoryMailboxReader {
         Self {
             messages: std::sync::Mutex::new(messages),
             seen_watermarks: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            delegate: None,
+            list_calls: AtomicUsize::new(0),
         }
+    }
+
+    #[must_use]
+    pub fn delegating(inner: Arc<dyn AsyncMailboxReader + Send + Sync>) -> Self {
+        Self {
+            delegate: Some(inner),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn list_call_count(&self) -> usize {
+        self.list_calls.load(Ordering::SeqCst)
     }
 }
 
@@ -103,8 +132,12 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
         &self,
         scope: MailboxScope,
         query: MessageQuery,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError> {
+        self.list_calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(delegate) = &self.delegate {
+            return delegate.list_messages(scope, query, deadline).await;
+        }
         if !scope.permits(&query) {
             return Err(ReadLaneError::UnauthorizedScope);
         }
@@ -129,8 +162,11 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
         &self,
         scope: MailboxScope,
         key: MessageKey,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Option<Message>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.load_message(scope, key, deadline).await;
+        }
         let messages = self
             .messages
             .lock()
@@ -149,8 +185,11 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
     async fn mailbox_member_exists(
         &self,
         scope: MailboxScope,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<bool, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.mailbox_member_exists(scope, deadline).await;
+        }
         let messages = self
             .messages
             .lock()
@@ -165,8 +204,11 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
     async fn load_seen_watermark(
         &self,
         scope: MailboxScope,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.load_seen_watermark(scope, deadline).await;
+        }
         self.seen_watermarks
             .lock()
             .map_err(|_| ReadLaneError::Unavailable {
@@ -178,10 +220,22 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
 
 /// Deterministic in-memory double for the sealed async task-ledger read
 /// contract. It is intentionally available only through `test-utils`.
-#[derive(Debug, Default)]
 pub struct InMemoryTaskLedgerReader {
     tasks: std::sync::Mutex<Vec<TaskRow>>,
     events: std::sync::Mutex<Vec<TaskEventRow>>,
+    delegate: Option<Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
+    open_tasks_hook: std::sync::Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+}
+
+impl Default for InMemoryTaskLedgerReader {
+    fn default() -> Self {
+        Self {
+            tasks: std::sync::Mutex::new(Vec::new()),
+            events: std::sync::Mutex::new(Vec::new()),
+            delegate: None,
+            open_tasks_hook: std::sync::Mutex::new(None),
+        }
+    }
 }
 
 impl InMemoryTaskLedgerReader {
@@ -190,6 +244,20 @@ impl InMemoryTaskLedgerReader {
         Self {
             tasks: std::sync::Mutex::new(tasks),
             events: std::sync::Mutex::new(events),
+            delegate: None,
+            open_tasks_hook: std::sync::Mutex::new(None),
+        }
+    }
+
+    #[must_use]
+    pub fn delegating_with_open_tasks_hook(
+        inner: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+        hook: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            delegate: Some(inner),
+            open_tasks_hook: std::sync::Mutex::new(Some(Box::new(hook))),
+            ..Self::default()
         }
     }
 
@@ -206,8 +274,21 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
     async fn open_tasks_for_team(
         &self,
         team: TeamName,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        let hook = self
+            .open_tasks_hook
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger hook lock poisoned".to_owned(),
+            })?
+            .take();
+        if let Some(hook) = hook {
+            hook();
+        }
+        if let Some(delegate) = &self.delegate {
+            return delegate.open_tasks_for_team(team, deadline).await;
+        }
         let mut rows = self
             .tasks
             .lock()
@@ -239,8 +320,11 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
         &self,
         team: TeamName,
         assignee: AgentName,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<crate::RefusalRun, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.refusal_run(team, assignee, deadline).await;
+        }
         let events = self.events.lock().map_err(|_| ReadLaneError::Unavailable {
             message: "in-memory task-ledger reader event lock poisoned".to_owned(),
         })?;
@@ -276,8 +360,11 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
         &self,
         team: TeamName,
         member: Option<AgentName>,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.list_tasks(team, member, deadline).await;
+        }
         self.tasks
             .lock()
             .map_err(|_| ReadLaneError::Unavailable {
@@ -300,8 +387,13 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
         team: TeamName,
         task_id: TaskId,
         member: Option<AgentName>,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate
+                .list_task_events(team, task_id, member, deadline)
+                .await;
+        }
         self.events
             .lock()
             .map_err(|_| ReadLaneError::Unavailable {

@@ -19,7 +19,8 @@ use atm_core::nudge_dispatch::{
     load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
 };
 use atm_core::protocol::{
-    RosterRuntimeObservationUpdate, RuntimeMemberState, RuntimeObservationSource,
+    RosterRuntimeObservation, RosterRuntimeObservationUpdate, RuntimeMemberState,
+    RuntimeObservationSource,
 };
 use atm_core::types::IsoTimestamp;
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
@@ -49,7 +50,6 @@ pub(crate) struct HerdrQueueWakeStats {
     pub task_reminders: usize,
     pub task_reminders_failed: usize,
     pub task_reminders_unrenderable: usize,
-    pub task_reminders_blocked: usize,
     pub lead_notifications: usize,
     pub blocked_escalations: usize,
     pub escalation_writes_failed: usize,
@@ -263,7 +263,6 @@ impl HerdrQueueWakePump {
             task_reminders = stats.task_reminders,
             task_reminders_failed = stats.task_reminders_failed,
             task_reminders_unrenderable = stats.task_reminders_unrenderable,
-            task_reminders_blocked = stats.task_reminders_blocked,
             lead_notifications = stats.lead_notifications,
             blocked_escalations = stats.blocked_escalations,
             escalation_writes_failed = stats.escalation_writes_failed,
@@ -298,7 +297,13 @@ impl HerdrQueueWakePump {
                             state: record.runtime.state,
                             state_changed_at: record.runtime.state_changed_at,
                         });
-                        if candidate.pending && record.runtime.state == RuntimeMemberState::Idle {
+                        if candidate.pending
+                            && queue_drain_eligible(&MemberObservation {
+                                member: candidate.key.clone(),
+                                state: record.runtime.state,
+                                state_changed_at: record.runtime.state_changed_at,
+                            })
+                        {
                             eligible.push(candidate);
                         }
                     }
@@ -352,8 +357,54 @@ impl HerdrQueueWakePump {
             .iter()
             .filter_map(|snapshot| snapshot.name.as_deref().map(|name| (name, snapshot)))
             .collect();
+        let accepted = self.apply_herdr_observations(&snapshots, &members, observed_at);
+        for member in members {
+            let CandidateTarget::Herdr(target) = &member.target else {
+                continue;
+            };
+            if !snapshots.contains_key(target.agent.as_str()) {
+                if member.pending {
+                    stats.not_present += 1;
+                    tracing::info!(
+                        event = "herdr_queue_poll_outcome",
+                        member = %member.key,
+                        herdr_agent = %target.agent,
+                        queue_kind = NudgeKind::Queue.as_str(),
+                        outcome = "held_target_not_present",
+                        "Herdr queue target was absent from the poll result"
+                    );
+                }
+                continue;
+            }
+            let Some(observation) = accepted.get(&member.key) else {
+                continue;
+            };
+            task_candidates.push(MemberObservation {
+                member: member.key.clone(),
+                state: observation.state,
+                state_changed_at: observation.state_changed_at,
+            });
+            if member.pending
+                && queue_drain_eligible(&MemberObservation {
+                    member: member.key.clone(),
+                    state: observation.state,
+                    state_changed_at: observation.state_changed_at,
+                })
+            {
+                stats.idle_members += 1;
+                eligible.push(member);
+            }
+        }
+    }
+
+    fn apply_herdr_observations(
+        &self,
+        snapshots: &HashMap<&str, &AgentSnapshot>,
+        members: &[HerdrCandidate],
+        observed_at: IsoTimestamp,
+    ) -> HashMap<MemberKey, RosterRuntimeObservation> {
         let mut updates_by_team = HashMap::new();
-        for member in &members {
+        for member in members {
             let CandidateTarget::Herdr(target) = &member.target else {
                 continue;
             };
@@ -385,37 +436,7 @@ impl HerdrQueueWakePump {
                 );
             }
         }
-        for member in members {
-            let CandidateTarget::Herdr(target) = &member.target else {
-                continue;
-            };
-            if !snapshots.contains_key(target.agent.as_str()) {
-                if member.pending {
-                    stats.not_present += 1;
-                    tracing::info!(
-                        event = "herdr_queue_poll_outcome",
-                        member = %member.key,
-                        herdr_agent = %target.agent,
-                        queue_kind = NudgeKind::Queue.as_str(),
-                        outcome = "held_target_not_present",
-                        "Herdr queue target was absent from the poll result"
-                    );
-                }
-                continue;
-            }
-            let Some(observation) = accepted.get(&member.key) else {
-                continue;
-            };
-            task_candidates.push(MemberObservation {
-                member: member.key.clone(),
-                state: observation.state,
-                state_changed_at: observation.state_changed_at,
-            });
-            if member.pending && observation.state == RuntimeMemberState::Idle {
-                stats.idle_members += 1;
-                eligible.push(member);
-            }
-        }
+        accepted
     }
 
     fn record_unavailable_members(&self, members: &[HerdrCandidate], observed_at: IsoTimestamp) {
@@ -927,6 +948,11 @@ fn still_idle(runtime: &LocalServiceRuntime, member: &MemberKey) -> bool {
     runtime
         .roster_ephemeral_state(member.team(), member.agent())
         .is_some_and(|state| state.runtime.state == RuntimeMemberState::Idle)
+}
+
+/// Queue draining is the sole queue-side interpretation of an observation.
+fn queue_drain_eligible(observation: &MemberObservation) -> bool {
+    observation.state == RuntimeMemberState::Idle
 }
 
 struct ReleasePendingOnDrop {
@@ -1852,27 +1878,22 @@ mod tests {
     }
 
     fn build_task_only_pump_without_delivery_channel() -> TaskOnlyPumpFixture {
-        let fixture = build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = fixture.5[0].team().clone();
-        let agent = fixture.5[0].agent().clone();
-        let mut member = herdr_member(&team, agent.as_str());
-        member.metadata_json.clear();
-        fixture
-            .1
-            .shared_roster_store_arc()
-            .save_roster(&RosterSnapshot {
-                team_name: team,
-                members: vec![member],
-                refreshed_at: None,
-            })
-            .expect("roster without delivery channel");
-        fixture
+        build_task_only_pump_with_channel(vec![HerdrAgentStatus::Idle], false, None, false)
     }
 
     fn build_task_only_pump_with_template(
         statuses: Vec<HerdrAgentStatus>,
         fail_reminders: bool,
         task_template: Option<&str>,
+    ) -> TaskOnlyPumpFixture {
+        build_task_only_pump_with_channel(statuses, fail_reminders, task_template, true)
+    }
+
+    fn build_task_only_pump_with_channel(
+        statuses: Vec<HerdrAgentStatus>,
+        fail_reminders: bool,
+        task_template: Option<&str>,
+        task_channel_available: bool,
     ) -> TaskOnlyPumpFixture {
         let root = tempfile::tempdir().expect("temporary root");
         let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
@@ -1895,15 +1916,22 @@ mod tests {
             .expect("roster");
         let assigned_at = IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp");
         let rows = task_rows(&team, &agents, assigned_at);
-        if let Some(template) = task_template {
+        if task_channel_available {
+            if let Some(template) = task_template {
+                assembly
+                    .nudge_template_override_store
+                    .save_template_override(
+                        &team,
+                        atm_storage::BuiltInNudgeTemplateKind::Task,
+                        template,
+                    )
+                    .expect("task template override");
+            }
+        } else {
             assembly
                 .nudge_template_override_store
-                .save_template_override(
-                    &team,
-                    atm_storage::BuiltInNudgeTemplateKind::Task,
-                    template,
-                )
-                .expect("task template override");
+                .disable_template_override(&team, atm_storage::BuiltInNudgeTemplateKind::Task)
+                .expect("disable task template override");
         }
         let task_store = Arc::new(atm_storage::DummyTaskStore::with_rows(
             rows.clone(),
@@ -1930,12 +1958,79 @@ mod tests {
         }));
         let now = Arc::new(Mutex::new(assigned_at));
         let health = super::RuntimeHealth::default();
-        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now))
+            .with_daemon_home(root.path().join("home"));
         let keys = agents
             .into_iter()
             .map(|agent| atm_storage::MemberKey::new(team.clone(), agent.parse().expect("agent")))
             .collect();
         (root, runtime, fake, pump, task_store, keys, now)
+    }
+
+    fn build_task_handoff_pump() -> (
+        tempfile::TempDir,
+        LocalServiceRuntime,
+        Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+        HerdrQueueWakePump,
+        atm_core::boundary::MemberKey,
+        TaskId,
+        Arc<Mutex<IsoTimestamp>>,
+    ) {
+        let root = tempfile::tempdir().expect("temporary root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+        let team: TeamName = "ax5-handoff".parse().expect("team");
+        let key = atm_core::boundary::MemberKey::new(
+            team.clone(),
+            "ax5-agent-00".parse().expect("agent"),
+        );
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![
+                    herdr_member(&team, key.agent().as_str()),
+                    herdr_member(&team, "sender"),
+                ],
+                refreshed_at: None,
+            })
+            .expect("roster");
+        let task_id: TaskId = "AX5-HANDOFF".parse().expect("task");
+        queue_task_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team,
+            key.agent().as_str(),
+            task_id.clone(),
+        );
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        fake.queue_list_result(Ok(HerdrListOutcome {
+            agents: vec![AgentSnapshot {
+                name: Some(key.agent().to_string()),
+                pane_id: None,
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            }],
+        }));
+        let now = Arc::new(Mutex::new(
+            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp"),
+        ));
+        let pump = pump_with_clock(
+            assembly.service_runtime.clone(),
+            fake.clone(),
+            super::RuntimeHealth::default(),
+            Arc::clone(&now),
+        )
+        .with_daemon_home(root.path().join("home"));
+        (
+            root,
+            assembly.service_runtime,
+            fake,
+            pump,
+            key,
+            task_id,
+            now,
+        )
     }
 
     fn task_rows(team: &TeamName, agents: &[String], assigned_at: IsoTimestamp) -> Vec<TaskRow> {
