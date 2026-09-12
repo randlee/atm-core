@@ -127,7 +127,7 @@ the first thing the eye lands on after the task id.
 
 | Kind | Trigger | Recipient | Mode | Default body |
 |---|---|---|---|---|
-| `task_queued` | assignment written and NOT at head, or reassign/reopen into a non-head position | assignee | immediate, informational | `<atm task="{{task_id}}" queued="{{position}}" message="{{message_id}}" from="{{from}}"/>` |
+| `task_queued` | assignment written (any position), reassign/reopen | assignee | immediate, informational | `<atm task="{{task_id}}" queued="{{position}}" message="{{message_id}}" from="{{from}}"/>` |
 | `task_ready` | task at head and assignee idle, first prompt | assignee | task pass (BA invariant) | `<atm task="{{task_id}}" ready message="{{message_id}}" from="{{from}}">`<br>`  <action>atm read --message-id {{message_id}}</action>`<br>`  <action>atm task start {{task_id}}</action>`<br>`  <action>execute the assigned task</action>`<br>`  <console announce="concise" pause="false"/>`<br>`</atm>` |
 | `task_reminder` | task open, assignee idle, ≥60 s since last prompt | assignee | task pass | `<atm task="{{task_id}}" reminder="{{attempt}}" message="{{message_id}}" from="{{from}}">` + the same three actions + console |
 | `task_started` | assignee runs `atm task start` (R8) | assigner | immediate, informational | `<atm task="{{task_id}}" started agent="{{assignee}}" message="{{message_id}}"/>` |
@@ -147,7 +147,7 @@ deferred, so they cannot arrive after the fact (fixes SMK-004).
 
 | Operation | Old assignee | New assignee |
 |---|---|---|
-| reassign open task | `task_closed outcome="reassigned"` | `task_queued` or, if head and idle, `task_ready` on the next task pass |
+| reassign open task | `task_closed outcome="reassigned"` | `task_queued`, then `task_ready` on the next task pass if head and idle |
 | reopen closed task | — | `task_queued` / `task_ready` |
 | move (`--head`, `--end`, `--before`) | nothing. `atm task list` shows position; a move to head while idle becomes `task_ready` on the next pass | — |
 | cancel by assigner | `task_closed outcome="cancelled"` | — |
@@ -210,7 +210,7 @@ retired-kind error `delivery_task` gets today
 (`crates/atm-storage/src/contract.rs:157-178`), with the hint naming
 `task_ready`. Existing `task` override rows are reported by `atm doctor` and
 ignored (never silently re-mapped: an override written for "execute the
-assigned task" would be wrong on an informational kind).
+assigned task" would be wrong on an informational kind). Owned by BB.1 D6.
 
 Render values gain `position`, `attempt`, `assignee`, `outcome`, `by`
 (`nudge_template.rs:60-75`); unknown placeholders stay a validation error.
@@ -220,10 +220,10 @@ Render values gain `position`, `attempt`, `assignee`, `outcome`, `by`
 Today the assignment is a deferred write whose pending mail marker the queue
 pump claims in message-id order (the SMK-006 root cause). Change: the
 assignment write creates NO pending mail marker. At write time it emits
-`task_queued` (immediate, informational) when the row lands at a non-head
-position, and nothing when it lands at head: the task pass owns `task_ready`
-on the next tick, for every backend, rebuilt from the task row exactly as
-reminders are today. `queue_prompt_is_head_assignment` and
+`task_queued` (immediate, informational) with the landed position, at every
+position including head (plan P9: one rule, one line per assignment); the
+task pass owns `task_ready` on the next tick, for every backend, rebuilt
+from the task row exactly as reminders are today. `queue_prompt_is_head_assignment` and
 `record_queue_prompt_reminders` go away; the task pass records
 `reminded` with the attempt it emitted, against the task it emitted for.
 
@@ -240,10 +240,15 @@ New verb, same shape as `close`:
 Caller must be the row's assignee; the row must be `assigned` (any position:
 starting a non-head task is allowed and simply reorders it to head, so the
 queue reflects what the agent is actually doing; R11). One writer op: the message
-to the assigner with `task_op = Start`, the `assigned → active` transition,
-the `Started` event, and the `task_started` receipt rendered from the same
-message (immediate, informational). Idempotent on `active` ("already
-started; message delivered"). Rejected on `complete`.
+to the assigner with `task_op = Start` — the existing `TaskOp::Start` on the
+ordinary write route, so no new route, envelope arm or wire field (plan P1) —
+the `assigned → active` transition, the `Started` event, and the
+`task_started` line rendered from the same message (immediate,
+informational). Idempotent on `active` (the CLI prints "already started;
+message delivered" from its preflight read of the row; the writer applies
+nothing and writes no event). Rejected on `complete`, and rejected while
+another task is `active` for the assignee (BA's one-active index: "already
+has an active task"); the agent closes the active one first.
 
 The daemon-written receipt (`herdr_task_start.rs`) and the
 `assigned → active` transition on prompt delivery are deleted;
@@ -269,14 +274,16 @@ report message id (R7). A close on an already-closed task keeps today's
 One durable record per emitted nudge, written by whichever path emitted it:
 
 ```
-nudge_handoffs(team, agent, message_key, kind, task_id NULL, attempt NULL,
-               trigger, at)
+prompt_handoffs(team, agent, message_key, kind, task_id NULL, attempt NULL,
+                trigger, at)
 trigger ∈ steer | queue_claim | task_pass | recovery_sweep
 ```
 
-Surfaced by `atm log filter --task <id>` and `atm task events <id>`
-(reminders show attempt; started shows the acking message). With this table
-the 15:27–15:35Z test reads as one query.
+Surfaced by `atm task events <id>`, interleaved with the task events by
+time (prompts show kind, attempt and trigger). Named `prompt_handoffs`, not
+`nudge_handoffs`: `scripts/check-nudge-taxonomy.py` rejects new
+`nudge`-family identifiers outside its frozen inventory (plan P2). With this
+table the 15:27–15:35Z test reads as one query.
 
 ### 4.7 Ack and task independent (R9)
 
@@ -320,8 +327,8 @@ and contains no `<action>` for the four informational kinds; `"task"` parse
 error names `task_ready`.
 
 Integration (colima, one fixture, every roster shape): assign three tasks to
-an idle agent → terminal shows exactly one `queued="2"`, one `queued="3"`,
-one `ready` for task 1, no `execute` line for tasks 2 and 3; `atm read` header
+an idle agent → terminal shows exactly one `queued="1"`, one `queued="2"`,
+one `queued="3"`, one `ready` for task 1, no `execute` line for tasks 2 and 3; `atm read` header
 shows Unread 3 / Pending-Ack 0 throughout; `atm task start` on task 1 →
 assigner sees `started` with the start message id and task 1 goes `active`; close → assigner sees `complete` with the report id
 and the agent sees `ready` for task 2 within one pass; task events show
@@ -372,20 +379,37 @@ Sprint 2, logic, each a deletion or a small addition:
   prompt-time `assigned → active` transition (§4.4);
 - deletion of `queue_prompt_is_head_assignment` and
   `record_queue_prompt_reminders`; the task pass records what it emitted;
-- `nudge_handoffs` (§4.6);
+- `prompt_handoffs` (§4.6);
 - colima integration tests of §6.
 
 Sprint 1 can be dogfooded on the live team immediately after it lands via
 the normal prerelease path.
 
-### 9.1 Proposed Phase BB shape (for scope review; plan doc follows approval)
+### 9.1 Phase BB plan
 
-| Sprint | Scope | Wave | Owner |
-|---|---|---|---|
-| BB.1 templates | sprint 1 above | 1 | one dev |
-| BB.2 logic | sprint 2 above; needs schema-reviewer (new HTTP verb, `nudge_handoffs` table = minor bumps) | 2, after BB.1's prerelease has run on the live team | one dev |
-| BB.3 docs | team-protocol, CLAUDE.md quick reference, agent-conventions: `atm task start`, one-line receipts, retired `task` kind | 2 | one dev |
-| BB.4 test-procedure pages | documentation plus one provenance field, no test rewrites (Rand: "I am not asking you to rewrite tests, I just want info to help me understand exactly what procedure is done"). One procedure doc per report family (smoke, colima integration, read/send benchmarks, fuzz) written from the runner as it is: mermaid flow diagram + ordered step table; rendered to html by the existing `docs/reports/generate_diagram_pages.py` pipeline at one page per runner revision that changed its steps. Runners that lack it (smoke, colima) gain a `source_revision` field in their evidence JSON (benchmarks and fuzz already carry one). Every report header links the procedure page for its revision; the report index (`.just/generate_report_index.py`, which already validates every envelope) refuses a report whose revision maps to no page. Historical smoke/colima reports, which carry no revision, are mapped by run date to the runner revision in effect and confirmed by the case names in their JSON; pages are backfilled from git history for those revisions (smoke runner: 20 revisions, expected ~5–6 step-changing ones). Existing evidence bytes untouched. No file overlap with BB.1/BB.2. |
+The delivery plan above is expanded, with the round-1 scope-review split
+applied, in [`../phase-bb/phase-bb-plan.md`](../phase-bb/phase-bb-plan.md):
+seven sprints, three in the first wave. Sprint 1 above is BB.1; sprint 2
+above is split by closure type into BB.4 (`atm task start`), BB.5
+(assignment write and task pass) and BB.6 (`prompt_handoffs`). BB.2
+(orchestration templates at 1.5.16) and BB.3 (test-procedure pages, §10)
+run in parallel with BB.1. BB.7 is documentation. The plan's §1 table is
+the single state-machine statement for the phase; §7 there lists every
+requirements and ADR edit by owning sprint.
 
 Triage seed: PR #1431 (SMK-004/005/006), held, becomes the phase's first
 `.triage` records rather than a fix branch.
+
+## 10. Adjacent scope: test-procedure pages (BB.3)
+
+Rand 2026-09-12, while reviewing the nudge-test reports: "there is no way
+for me to see what the test did. i.e. every test has a test procedure and
+that procedure should be linked from the test … I am not asking you to
+rewrite tests, I just want info to help me understand exactly what
+procedure is done." This is reporting work with no file in common with
+§3–§4.7 and no ruling above; its authority is its own sprint doc,
+[`../phase-bb/sprint-BB.3-test-procedure-pages.md`](../phase-bb/sprint-BB.3-test-procedure-pages.md),
+which carries the rulings, the evidence-field schema, the index-refusal
+contract, deliverables, acceptance and validation. It is scheduled in
+Phase BB only so that cipher runs it in parallel with BB.1 (plan §3, §4);
+it is not a consequence of R1–R12.
