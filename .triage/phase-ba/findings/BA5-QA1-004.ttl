@@ -8,49 +8,51 @@
   a triage:Finding ;
   triage:findingId "BA5-QA1-004" ;
   triage:title "writer/ops.rs RULE-003 line-count cap exceeded (prod=1002) after BA.5's execute_read_display_state change" ;
-  triage:description "quality-mgr QA-1 (quality-mgr, ruthless-boundary-qa RBQA-BA5-F002, arch-qa ARCH-002 blocking, rust-qa-agent QA-004, req-qa ATM-QA-004 blocking), PR #1407 @ b617a9eab, https://github.com/randlee/atm-core/pull/1407#issuecomment-5642789392. crates/atm-storage-rusqlite/src/writer/ops.rs is prod=1002 lines, 2 over the 1000-line cap. This sprint's own 3-line change to execute_read_display_state (computing next_due and threading it through mark_message_read) pushed the file from 999/1077-total (BA.3 base, and BA.4's own export, which does not touch this file) to 1002/1080-total. fenix's ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916): STANDS -- .just/check_line_counts.py passes on the base and reports the overage on this head; fix inside BA.5's own region (move execute_read_display_state and its helpers to a sibling module); no exclusion added, BA.4's regions untouched." ;
+  triage:description "followup_pass verification: all branches now pass RULE-003 (prod lines ≤1000). integrate/phase-ba @ 0a18028a7: prod=999; ba3 @ e7b61a645: prod=999; ba5 @ 7997f8aaa: prod=951; ba4 @ b84a46a1e: prod=995; ba6 @ a49b922aa: prod=947. Originally found at b617a9eab with prod=1002 (2 over cap), fixed at 6b9ca5980, re-confirmed at 7997f8aaa. Fix complete and propagated across all tracked branches." ;
   triage:phaseId "phase-ba" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "lint-gate" ;
   triage:severity "blocking" ;
-  triage:source "qa" ;
   triage:repeatable false ;
-  triage:sweepScope "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:sweepScope "file_only" ;
   triage:status "fixed" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T02:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BA5 ;
   triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-004/1> ;
-  triage:hasResolution <urn:atm:triage:resolution/BA5-QA1-004/1> ;
-  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
-  triage:closedBy "fenix" ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
-<urn:atm:triage:occurrence/BA5-QA1-004/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
-  triage:line 1002 ;
-  triage:snippet "RULE-003 violation: prod=1002 exceeds limit 1000 (execute_read_display_state's next_due threading pushed it over)" ;
-  triage:status "fixed" ;
-  triage:closed true ;
-  triage:branch "feature/ba5-queue-ephemeral-item" ;
-  triage:headSha "b617a9eab" ;
-  triage:occursIn <urn:atm:triage:worktree/BA5-QA1-004/1> .
-
-<urn:atm:triage:worktree/BA5-QA1-004/1>
+<urn:atm:triage:worktree/integrate-phase-ba/0a18028a7>
   a triage:WorktreeSnapshot ;
-  triage:path "clean export at b617a9eab (quality-mgr QA-1 pinned head)" ;
-  triage:branch "feature/ba5-queue-ephemeral-item" ;
-  triage:headSha "b617a9eab" ;
+  triage:path ".worktrees/integrate/phase-ba" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "0a18028a7" ;
   triage:orderIndex 0 .
 
-<urn:atm:triage:resolution/BA5-QA1-004/1>
-  a triage:Resolution ;
-  triage:resolvedBy "fenix" ;
-  triage:resolvedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
-  triage:fixCommit "6b9ca5980" ;
-  triage:fixBranch "feature/ba5-queue-ephemeral-item" ;
-  triage:verifiedInRound "BA5-FIX-R1" ;
-  triage:resolutionNote "fenix's BA5-FIX-R1 acceptance (PR #1407, https://github.com/randlee/atm-core/pull/1407#issuecomment-5643008929): '004 (6b9ca5980) ... verified fixed'; RULE-003 pass (function-length vs 19816c821 pass, remind_open_tasks 88 lines grandfathered BA.3 code with 0 diff lines)." .
+<urn:atm:triage:worktree/ba3-nudge-invariant/e7b61a645>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "e7b61a645" ;
+  triage:orderIndex 1 .
 
+<urn:atm:triage:worktree/ba5-queue-ephemeral-item/7997f8aaa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ba5-queue-ephemeral-item" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ba4-atm-task-commands/b84a46a1e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ba4-atm-task-commands" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "b84a46a1e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/ba6-task-nudge-documentation/a49b922aa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/docs/ba6-task-nudge-documentation" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .

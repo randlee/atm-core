@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA2-101>
+  a triage:Finding ;
+  triage:findingId "BA5-QA2-101" ;
+  triage:title "retry backoff on the queue re-arm path has no jitter (REJECTED by design ruling, no fix)" ;
+  triage:description "quality-mgr QA-2 (rust-service-hardening-agent), PR #1407 @ 7997f8aaa. Retry backoff on the queue re-arm path has no jitter. fenix's ruling (PR #1407, issuecomment-5643452062): REJECTED -- the design specifies a fixed re-arm interval with attempt back-off; jitter is not in the contract and adding it would be unrequested behaviour. Not carried to BA.6. No fix scheduled, no dispatch. Record this as correlated evidence only; the finding is closed by team-lead ruling, not by a code fix." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "dismissed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T04:35:17Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "REJECTED by design ruling (PR #1407, issuecomment-5643452062): fixed re-arm interval with attempt back-off is the specified design; jitter is not in the contract. Not carried forward to BA.6. No fix, no dispatch." ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T04:30:00Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:worktree/integrate-phase-ba/0a18028a7>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ba" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "0a18028a7" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/ba3-nudge-invariant/e7b61a645>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "e7b61a645" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ba5-queue-ephemeral-item/7997f8aaa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba5-queue-ephemeral-item" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ba4-atm-task-commands/b84a46a1e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba4-atm-task-commands" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "b84a46a1e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/ba6-task-nudge-documentation/a49b922aa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba6-task-nudge-documentation" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .

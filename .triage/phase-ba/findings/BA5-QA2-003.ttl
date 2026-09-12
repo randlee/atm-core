@@ -1,0 +1,94 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA2-003>
+  a triage:Finding ;
+  triage:findingId "BA5-QA2-003" ;
+  triage:title "sprint doc cites MAX_NUDGE_ATTEMPTS at contract.rs:1238; actual location at 7997f8aaa is contract.rs:1253" ;
+  triage:description "quality-mgr QA-2 (req-qa), PR #1407 @ 7997f8aaa. Sprint doc cites MAX_NUDGE_ATTEMPTS at contract.rs:1238; actual location at 7997f8aaa is contract.rs:1253 -- pure line-number drift, name/type/value match. fenix's ruling (PR #1407, issuecomment-5643452062): STANDS (minor), fix the line number in BA5-FIX-R2-1789187300 (cipher)." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T04:35:00Z"^^xsd:dateTime ;
+  triage:deferredNote "feature/ba5-queue-ephemeral-item frozen by fenix's ruling (2026-09-12T04:37:03Z, per Rand: a branch is not touched again once its minimum functionality for closure is complete); BA5-FIX-R2 cancelled, cipher told not to push. Fix promoted to docs/ba6-task-nudge-documentation, folded into arch-ctm's consolidated cleanup dispatch there." ;
+  triage:promoteTo triage:BA6 ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T04:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-003/BA5-doc-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-003/BA6-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BA5-QA2-003/BA5-doc-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md" ;
+  triage:line 51 ;
+  triage:snippet "MAX_NUDGE_ATTEMPTS = 5 (contract.rs:1238)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:37:03Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "branch frozen before fix landed; promoted to docs/ba6-task-nudge-documentation, not fixed in place" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:occursIn <urn:atm:triage:worktree/ba5/7997f8aaa> .
+
+<urn:atm:triage:occurrence/BA5-QA2-003/BA6-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md" ;
+  triage:line 51 ;
+  triage:snippet "MAX_NUDGE_ATTEMPTS = 5 (contract.rs:1238)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:occursIn <urn:atm:triage:worktree/ba6/a49b922aa-2> .
+
+<urn:atm:triage:worktree/ba6/a49b922aa-2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba6-task-nudge-documentation" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/ba0/0a18028a7>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ba" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "0a18028a7" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/ba3/e7b61a645>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "e7b61a645" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ba5/7997f8aaa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba5-queue-ephemeral-item" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ba4/b84a46a1e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba4-atm-task-commands" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "b84a46a1e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/ba6/a49b922aa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba6-task-nudge-documentation" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .

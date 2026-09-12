@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA2-004>
+  a triage:Finding ;
+  triage:findingId "BA5-QA2-004" ;
+  triage:title "requeue_and_release_keep_closed_items_closed's assertion is non-discriminating; would pass under a subtly wrong implementation" ;
+  triage:description "quality-mgr QA-2 (schema-reviewer), PR #1407 @ 7997f8aaa. requeue_and_release_keep_closed_items_closed's assertion is non-discriminating -- it would pass even under a subtly wrong implementation that re-opens a closed item. Minor test-quality nit. fenix's ruling (PR #1407, issuecomment-5643452062): STANDS (minor), tighten in BA5-FIX-R2-1789187300 (cipher) so it fails on a closed item being re-opened." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T04:35:00Z"^^xsd:dateTime ;
+  triage:deferredNote "feature/ba5-queue-ephemeral-item frozen by fenix's ruling (2026-09-12T04:37:03Z, per Rand: a branch is not touched again once its minimum functionality for closure is complete); BA5-FIX-R2 cancelled, cipher told not to push. Fix promoted to docs/ba6-task-nudge-documentation, folded into arch-ctm's consolidated cleanup dispatch there." ;
+  triage:promoteTo triage:BA6 ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T04:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-004/BA5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-004/BA6-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BA5-QA2-004/BA5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/pending_nudge_store.rs" ;
+  triage:line 646 ;
+  triage:snippet "async fn requeue_and_release_keep_closed_items_closed()" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:37:03Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "branch frozen before fix landed; promoted to docs/ba6-task-nudge-documentation, not fixed in place" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:occursIn <urn:atm:triage:worktree/BA5/7997f8aaa> .
+
+<urn:atm:triage:occurrence/BA5-QA2-004/BA6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/pending_nudge_store.rs" ;
+  triage:line 646 ;
+  triage:snippet "async fn requeue_and_release_keep_closed_items_closed()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:occursIn <urn:atm:triage:worktree/BA6/a49b922aa> .
+
+<urn:atm:triage:worktree/BA6/a49b922aa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba6-task-nudge-documentation" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/BA5/7997f8aaa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/BA5" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .

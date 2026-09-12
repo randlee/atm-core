@@ -1,0 +1,83 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA2-005>
+  a triage:Finding ;
+  triage:findingId "BA5-QA2-005" ;
+  triage:title "sprint doc's 'Runtime test file' phrasing implies a standalone integration target for herdr_queue_ephemeral.rs that doesn't literally exist (doc classification, BA.6 fold-in)" ;
+  triage:description "quality-mgr QA-2 (converged: ruthless-boundary-qa, arch-qa, req-qa, rust-qa-agent), PR #1407 @ 7997f8aaa. crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs (655 lines, the doc-named 'Runtime' test file) is spliced into herdr_queue_wake.rs's internal #[cfg(test)] mod tests via #[path = ...], using super::*, rather than compiling as an independent Cargo integration-test target -- cargo test -p atm-http-runtime --test herdr_queue_ephemeral finds no such target. Confirmed as: (a) an exact continuation of the pattern BA.3 already established for herdr_nudge_invariant, not a BA.5 regression; (b) unchanged from the already-accepted BA5-FIX-R1 state; (c) all 13 relocated tests exercise real behavior exclusively through the genuine public tick_once() entrypoint, not private production-logic shortcuts. Consensus: documentation/classification issue (the sprint doc's phrasing implies a standalone integration target that doesn't literally exist), not a functional defect. fenix's ruling (PR #1407, issuecomment-5643452062): settled by earlier ruling; the doc phrasing ('Runtime test file') goes to BA.6 as a one-line classification note. Not a code change -- BA.6 fold-in, same treatment as RBP-F001/RBP-F002/RSH-001/BA3-QA1-007: this was actually observed during BA.5's QA-2 pass on feature/ba5-queue-ephemeral-item, but true ownership belongs to BA.6 (docs/ba6-task-nudge-documentation), which now has a real branch. Close the BA.5-observed occurrence by re-scope (not fixed -- a resolutionNote/closedBy directly on the occurrence, citing fenix's ruling), and open a second occurrence on docs/ba6-task-nudge-documentation at its current head so arch-ctm's BA6-DOCS-1789187406 task picks it up; do NOT leave the interim tracking occurrence on integrate/phase-ba now that BA.6 has a real branch (unlike the earlier RBP-F001/RBP-F002/RSH-001/BA3-QA1-007 records, which predate BA.6 having a branch)." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T04:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T04:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-005/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-005/2> ;
+  triage:deferredNote "fenix's BA.5 QA-2 ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5643452062) folds this into BA.6 fold-in task (arch-ctm BA6-DOCS-1789187406). Occurrence #1 closed on feature/ba5-queue-ephemeral-item where observed during QA-2; real ownership moved to docs/ba6-task-nudge-documentation branch (BA.6 now has real branch, no interim tracking)." ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BA5-QA2-005/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md" ;
+  triage:line 114 ;
+  triage:snippet "Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new): spliced via #[path] into cfg(test) mod, not standalone" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:occursIn <urn:atm:triage:worktree/BA5/7997f8aaa> .
+
+<urn:atm:triage:occurrence/BA5-QA2-005/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.6-docs.md" ;
+  triage:line 1 ;
+  triage:snippet "Classification note for herdr_queue_ephemeral.rs test file (BA.6 fold-in)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:occursIn <urn:atm:triage:worktree/BA6-DOCS/a49b922aa> .
+
+<urn:atm:triage:worktree/INTEGRATE/0a18028a7>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ba" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "0a18028a7" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/BA3/e7b61a645>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "e7b61a645" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/BA5/7997f8aaa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ba5-queue-ephemeral-item" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/BA4/b84a46a1e>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ba4-atm-task-commands" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "b84a46a1e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/BA6-DOCS/a49b922aa>
+  a triage:WorktreeSnapshot ;
+  triage:path "docs/ba6-task-nudge-documentation" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .

@@ -16,22 +16,26 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm/tests/cli_surface_baseline.json, crates/atm/tests/cli_surface.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
-  triage:devFixNote "dev-fixed at b84a46a1e (BA4-FIX-R2, fenix-verified from the dev side); left open pending QA-3, deferred to one delta pass after the BA.3 R3 merge-forward lands -- fenix's explicit call, per team-lead convention of not marking a finding fixed until an independent QA round confirms it, not just dev/fenix's own read." ;
+  triage:devFixNote "dev-fixed at b84a46a1e (BA4-FIX-R2, fenix-verified from the dev side)." ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "marked fixed at b84a46a1e per fenix's explicit instruction (ATM 2026-09-12T04:39:18Z): QA verifies on docs/ba6-task-nudge-documentation (BA.6 = BA.4 b84a46a1e + merge BA.5 7997f8aaa), not via a separate BA4-QA3 delta pass -- feature/ba4-atm-task-commands is now frozen." ;
   triage:foundIn triage:BA4 ;
   triage:foundAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA2-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BA4-QA2-001/1>
   a triage:Occurrence ;
   triage:file "crates/atm/tests/cli_surface_baseline.json" ;
   triage:line 1 ;
   triage:snippet "cli_surface_matches_committed_baseline fails: atm list --member/--task_events/--tasks removed; queue/send --task_complete arity changed; atm task subcommand tree absent from baseline" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:39:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:branch "feature/ba4-atm-task-commands" ;
   triage:headSha "85da7db99" ;
   triage:occursIn <urn:atm:triage:worktree/BA4-QA2-001/1> .

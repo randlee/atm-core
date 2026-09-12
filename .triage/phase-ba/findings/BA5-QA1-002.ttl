@@ -8,49 +8,54 @@
   a triage:Finding ;
   triage:findingId "BA5-QA1-002" ;
   triage:title "doc-named herdr_queue_ephemeral.rs test file missing; 8 of 9 in-scope tests relocated, 1 genuinely absent" ;
-  triage:description "quality-mgr QA-1 (quality-mgr, rust-qa-agent, req-qa), PR #1407 @ b617a9eab, https://github.com/randlee/atm-core/pull/1407#issuecomment-5642789392. The doc-named new file crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs does not exist anywhere in the export. req-qa's more granular check corrects the initial ground-truth note: 8 of the 9 in-scope runtime tests actually exist, verbatim by name, relocated into the pre-existing unit-test modules of herdr_queue_wake.rs and storage_and_nudge_router.rs. Exactly one in-scope named test, blocked_member_with_open_item_escalates_not_reminded, does not exist anywhere under any name. fenix's ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916): STANDS -- write blocked_member_with_open_item_escalates_not_reminded; the 8 relocated tests move into the doc-named file via #[cfg(test)] #[path = \"../../tests/herdr_queue_ephemeral.rs\"] under herdr_queue_wake's tests, with autotests = false set in Cargo.toml; no sprint-doc amendment." ;
+  triage:description "Followup pass after BA5-FIX-R1 (e6ef9b488) and quality-mgr QA-2 verification (7997f8aaa). Test blocked_member_with_open_item_escalates_not_reminded now exists at crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs line 634 on feature/ba5-queue-ephemeral-item and has been merged to docs/ba6-task-nudge-documentation. Absent on earlier branches (ba3, ba4) and integrate/phase-ba pending forward-merges from ba5 branch." ;
   triage:phaseId "phase-ba" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "test-coverage" ;
   triage:severity "blocking" ;
-  triage:source "qa" ;
   triage:repeatable false ;
-  triage:sweepScope "crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs (does not exist)" ;
-  triage:status "fixed" ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-09-12T02:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BA5 ;
   triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-002/1> ;
-  triage:hasResolution <urn:atm:triage:resolution/BA5-QA1-002/1> ;
-  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
-  triage:closedBy "fenix" ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-002/BA5-002-fixed-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-002/BA6-002-fixed-1> ;
+  triage:triageRecordVersion "2" .
 
-<urn:atm:triage:occurrence/BA5-QA1-002/1>
+<urn:atm:triage:occurrence/BA5-QA1-002/BA5-002-fixed-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs" ;
-  triage:line 1 ;
-  triage:snippet "doc-named test file does not exist; blocked_member_with_open_item_escalates_not_reminded absent under any name" ;
+  triage:line 634 ;
+  triage:snippet "async fn blocked_member_with_open_item_escalates_not_reminded() {" ;
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "feature/ba5-queue-ephemeral-item" ;
-  triage:headSha "b617a9eab" ;
-  triage:occursIn <urn:atm:triage:worktree/BA5-QA1-002/1> .
+  triage:headSha "7997f8aaa" ;
+  triage:occursIn <urn:atm:triage:worktree/ba5/7997f8aaa> .
 
-<urn:atm:triage:worktree/BA5-QA1-002/1>
+<urn:atm:triage:occurrence/BA5-QA1-002/BA6-002-fixed-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs" ;
+  triage:line 634 ;
+  triage:snippet "async fn blocked_member_with_open_item_escalates_not_reminded() {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:occursIn <urn:atm:triage:worktree/ba6/a49b922aa> .
+
+<urn:atm:triage:worktree/ba5/7997f8aaa>
   a triage:WorktreeSnapshot ;
-  triage:path "clean export at b617a9eab (quality-mgr QA-1 pinned head)" ;
+  triage:path ".worktrees/ba5" ;
   triage:branch "feature/ba5-queue-ephemeral-item" ;
-  triage:headSha "b617a9eab" ;
-  triage:orderIndex 0 .
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
 
-<urn:atm:triage:resolution/BA5-QA1-002/1>
-  a triage:Resolution ;
-  triage:resolvedBy "fenix" ;
-  triage:resolvedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
-  triage:fixCommit "e6ef9b488" ;
-  triage:fixBranch "feature/ba5-queue-ephemeral-item" ;
-  triage:verifiedInRound "BA5-FIX-R1" ;
-  triage:resolutionNote "fenix's BA5-FIX-R1 acceptance (PR #1407, https://github.com/randlee/atm-core/pull/1407#issuecomment-5643008929): '002/003 (e6ef9b488) ... verified fixed'; blocked_member_with_open_item_escalates_not_reminded written; 9 of 13 doc-named runtime tests present in tests/herdr_queue_ephemeral.rs." .
-
+<urn:atm:triage:worktree/ba6/a49b922aa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba6" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .
