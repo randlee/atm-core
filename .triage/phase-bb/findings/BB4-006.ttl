@@ -19,7 +19,7 @@
   triage:status "open" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T22:19:10Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add a Phase-BB amendment note under the existing Phase-BA amendment (after line 2918) and correct the active/Started cell to state the reject-with-ATM_TASK_ALREADY_ACTIVE contract, mirroring ADR-062's corrected wording (see BB4-005). Owner named by quality-mgr: solar (fix round R2, same worktree stack). Not routed; Phase BB is cancelled and the code now lives on feature/bb-collapsed (PR #1452). Nothing to record or dispatch until Rand decides the BB.5 disposition." ;
+  triage:deferredNote "Fix: add a Phase-BB amendment note under the existing Phase-BA amendment (after line 2918) and correct the active/Started cell to state the reject-with-ATM_TASK_ALREADY_ACTIVE contract, mirroring ADR-062's corrected wording (see BB4-005). Correction (fenix, 2026-09-12T22:27:39Z): not solar's -- Phase BB resumed in collapsed form and fenix fixed this directly on the bottom feature/bb-collapsed @ b74f0d6ef (docs commit); routed to fenix, fixed-pending-QA. Solar has no open BB task; do not route anything to him." ;
   triage:foundIn triage:BB4 ;
   triage:foundAt "2026-09-12T22:19:10Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB4-006/1> ;

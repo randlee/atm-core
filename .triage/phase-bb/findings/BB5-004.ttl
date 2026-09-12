@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB5-004>
+  a triage:Finding ;
+  triage:findingId "BB5-004" ;
+  triage:title "None of the seven named colima integration scenarios for BB.5 exist as script, test, or evidence" ;
+  triage:description "fenix BB.5 completeness review of feature/bb-collapsed @ b74f0d6ef, 2026-09-12T22:27:39Z. None of the seven colima integration scenarios required by the BB.5 sprint doc exist as a script, a test, or committed evidence; site/reports/ contains only the unrelated bb4-task-start colima evidence. Same class of gap as BB4-001 (colima integration evidence required, not narrowed by an in-process fixture substitute)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:source "fenix completeness review" ;
+  triage:repeatable true ;
+  triage:sweepScope "site/reports/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: run the seven named colima integration scenarios against the colima hermes testbed and commit runner-written evidence under site/reports/, per the BB4-001 precedent ruling (three colima smoke scenarios, CLI-driven, evidence committed), or obtain an explicit lead ruling narrowing this requirement. Routed to cipher on fix/bb5-colima-r1 (BB5-COLIMA-R1-1789258000, queued behind cipher's BB.3 round)." ;
+  triage:foundIn triage:BB5 ;
+  triage:foundAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-004/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB5-004/1>
+  a triage:Occurrence ;
+  triage:file "site/reports/" ;
+  triage:line 1 ;
+  triage:snippet "no colima-testbed evidence artifact exists for any of the seven named BB.5 integration scenarios; site/reports/ contains only unrelated bb4-task-start evidence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb-collapsed" ;
+  triage:headSha "b74f0d6ef" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-004/1> .
+
+<urn:atm:triage:worktree/BB5-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1452, feature/bb-collapsed" ;
+  triage:branch "feature/bb-collapsed" ;
+  triage:headSha "b74f0d6ef" ;
+  triage:orderIndex 1 .
