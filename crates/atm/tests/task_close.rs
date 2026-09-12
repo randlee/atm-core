@@ -186,10 +186,9 @@ async fn close_by_third_party_sends_nothing_and_exits_one() {
     assert_eq!(f.inbox_contents(TEST_SENDER).len(), sender_before);
     assert_eq!(f.inbox_contents("recipient").len(), recipient_before);
     assert_eq!(store.list_tasks(&team, None).unwrap().len(), rows_before);
-    assert_eq!(
-        store.list_task_events(&team, &task, None).unwrap().len(),
-        events_before
-    );
+    let events = store.list_task_events(&team, &task, None).unwrap();
+    assert_eq!(events.len(), events_before + 1);
+    assert_eq!(events.last().unwrap().event.as_str(), "rejected");
 }
 
 #[tokio::test]
