@@ -167,7 +167,6 @@ impl EscalationState {
 }
 
 /// The durable key shared by all escalation writers and mailbox suppression.
-#[expect(dead_code, reason = "the runtime escalation path lands in task 5")]
 pub(crate) fn escalation_summary(
     kind: EscalationKind,
     member: &MemberKey,
@@ -208,7 +207,6 @@ pub(crate) async fn episode_already_reported(
     clippy::too_many_arguments,
     reason = "the escalation boundary keeps routing and durable-suppression context explicit"
 )]
-#[expect(dead_code, reason = "the runtime escalation path lands in task 5")]
 pub(crate) async fn escalate_mail(
     runtime: &LocalServiceRuntime,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,

@@ -1851,6 +1851,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "superseded by terminal mail-only stalled escalation"]
     async fn ax6_01_task_threshold_uses_separate_fixed_herdr_notification() {
         let (root, runtime, fake, pump, task_store, keys, now) =
             build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
@@ -1903,6 +1904,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "superseded by terminal mail-only stalled escalation"]
     async fn ax6_01_task_threshold_doubles_after_each_lead_notification() {
         let (root, runtime, fake, pump, task_store, keys, now) =
             build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
@@ -1978,6 +1980,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "superseded by terminal mail-only stalled escalation"]
     async fn ax6_01_failed_lead_write_retries_at_next_reminder() {
         let (root, runtime, fake, pump, task_store, keys, now) =
             build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
@@ -2044,6 +2047,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "superseded by terminal mail-only stalled escalation"]
     async fn ax6_01_no_lead_or_multiple_leads_still_notify_herdr() {
         let (root, runtime, fake, pump, task_store, keys, now) =
             build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
@@ -2563,7 +2567,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ax5_09_generic_emit_failure_counts_and_respects_cooldown() {
+    async fn ax5_09_generic_emit_failure_retries_until_durable_rate_limit() {
         let (_root, _runtime, fake, pump, store, keys, now) =
             build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
         fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentPromptStalled));
@@ -2577,9 +2581,15 @@ mod tests {
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:00:05Z").expect("test timestamp");
+        fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentPromptStalled));
         queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
         pump.tick_once().await;
-        assert_eq!(prompt_texts(&fake).len(), 1, "cooldown suppresses a retry");
+        assert_eq!(
+            prompt_texts(&fake).len(),
+            2,
+            "failed emit retries next tick"
+        );
+        assert_eq!(pump.stats().task_reminders_failed, 1);
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
@@ -2588,10 +2598,16 @@ mod tests {
         assert_eq!(pump.stats().task_reminders, 1);
         assert_eq!(
             prompt_texts(&fake).len(),
-            2,
-            "cooldown expires after one minute"
+            3,
+            "the next successful emit is recorded"
         );
         assert_eq!(store.row(&keys[0], &task_id).reminder_count, 1);
+
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("test timestamp");
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+        pump.tick_once().await;
+        assert_eq!(prompt_texts(&fake).len(), 3, "durable reminder rate-limits");
     }
 
     #[tokio::test]

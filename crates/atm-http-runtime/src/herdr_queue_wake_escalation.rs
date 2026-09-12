@@ -12,7 +12,7 @@ use atm_core::types::IsoTimestamp;
 
 use crate::herdr_escalation::{
     BLOCKED_NOTIFY_MS, EscalationKind, EscalationNotification, MAX_BLOCKED_ESCALATIONS_PER_TICK,
-    escalate,
+    escalate, escalate_mail, escalation_summary,
 };
 use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, run_blocking};
 
@@ -21,12 +21,11 @@ const MAX_BLOCKED_TASKS_IN_BODY: usize = 8;
 const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 
 pub(crate) struct TaskReminderContext<'a> {
-    pub(crate) reader: &'a (dyn AsyncTaskLedgerReader + Send + Sync),
     pub(crate) task_store: &'a Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     pub(crate) member: &'a MemberKey,
 }
 
-pub(crate) async fn maybe_escalate_task(
+pub(crate) async fn escalate_stalled_task(
     pump: &HerdrQueueWakePump,
     reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
@@ -34,13 +33,6 @@ pub(crate) async fn maybe_escalate_task(
     now: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
-    let threshold = row
-        .lead_notified_count
-        .saturating_add(1)
-        .saturating_mul(atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD);
-    if row.reminder_count < threshold {
-        return;
-    }
     let events = match reminder_events(reader, row).await {
         Ok(events) => events,
         Err(error) => {
@@ -56,22 +48,37 @@ pub(crate) async fn maybe_escalate_task(
         }
     };
     let body = task_escalation_body(row, now, &events);
-    let notification = task_escalation_notification(row, now);
-    let outcome = escalate(
+    let outcome = escalate_mail(
         &pump.service_runtime,
-        pump.herdr_process.as_ref(),
         Some(task_store),
         &pump.daemon_home,
         &row.team,
+        &escalation_summary(
+            EscalationKind::TaskStalled,
+            &MemberKey::new(row.team.clone(), row.assignee.clone()),
+            Some(&row.task_id),
+        ),
         &body,
-        &notification,
         EscalationKind::TaskStalled,
+        None,
     )
     .await;
     record_escalation_stats(stats, &outcome);
     if let (Some(lead), Some(message_id)) = (outcome.lead, outcome.lead_write) {
         record_lead_audit(task_store, row, now, lead, message_id, stats).await;
     }
+}
+
+#[cfg(test)]
+pub(crate) async fn maybe_escalate_task(
+    pump: &HerdrQueueWakePump,
+    reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
+    task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+    row: &TaskRow,
+    now: IsoTimestamp,
+    stats: &mut HerdrQueueWakeStats,
+) {
+    escalate_stalled_task(pump, reader, task_store, row, now, stats).await;
 }
 
 async fn reminder_events(
@@ -116,21 +123,6 @@ fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow
         row.task_id,
         row.assignee,
     )
-}
-
-fn task_escalation_notification(row: &TaskRow, now: IsoTimestamp) -> EscalationNotification {
-    EscalationNotification {
-        title: "ATM task escalation".to_owned(),
-        body: format!(
-            "reason=lead_notified task_id={} member={} reminder_count={} last_reminded_at={} remediation=atm list --task-events {} --member {}",
-            row.task_id,
-            row.assignee,
-            row.reminder_count,
-            row.last_reminded_at.unwrap_or(now),
-            row.task_id,
-            row.assignee,
-        ),
-    }
 }
 
 async fn record_lead_audit(

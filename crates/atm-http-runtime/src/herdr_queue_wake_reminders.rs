@@ -85,6 +85,20 @@ impl HerdrQueueWakePump {
                     }
                     continue;
                 }
+                if matches!(disposition, TaskDisposition::EscalateStalled) {
+                    if let Some(row) = head {
+                        crate::herdr_queue_wake_escalation::escalate_stalled_task(
+                            self,
+                            reader.as_ref(),
+                            task_store,
+                            row,
+                            now,
+                            stats,
+                        )
+                        .await;
+                    }
+                    continue;
+                }
                 let TaskDisposition::Nudge = disposition else {
                     continue;
                 };
@@ -144,7 +158,7 @@ impl HerdrQueueWakePump {
 
     async fn emit_task_reminder(
         &self,
-        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
+        _reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
         candidate: MemberObservation,
         row: TaskRow,
@@ -152,7 +166,6 @@ impl HerdrQueueWakePump {
         stats: &mut HerdrQueueWakeStats,
     ) {
         let context = crate::herdr_queue_wake_escalation::TaskReminderContext {
-            reader,
             task_store,
             member: &candidate.member,
         };
@@ -229,17 +242,7 @@ impl HerdrQueueWakePump {
             ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
             ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
         }
-        if let Ok(recorded_row) = recorded_row {
-            crate::herdr_queue_wake_escalation::maybe_escalate_task(
-                self,
-                context.reader,
-                context.task_store,
-                &recorded_row,
-                now,
-                stats,
-            )
-            .await;
-        }
+        let _ = recorded_row;
     }
 
     async fn record_task_reminder(
