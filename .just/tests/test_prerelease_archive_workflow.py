@@ -259,6 +259,43 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertEqual(patch_bump("1.4.5"), "1.4.6")
         self.assertEqual(patch_bump("9.99.0"), "9.99.1")
 
+    def test_prerelease_tag_dry_run_rejects_remote_tag_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
+            with (
+                mock.patch.object(prerelease_tag, "current_branch", return_value="fixture"),
+                mock.patch.object(prerelease_tag, "require_clean_tree"),
+                mock.patch.object(prerelease_tag, "workspace_version", return_value="1.5.14"),
+                mock.patch.object(prerelease_tag, "remote_tag_exists", return_value=True),
+                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
+            ):
+                with self.assertRaisesRegex(SystemExit, "tag already exists on origin"):
+                    prerelease_tag.execute(repo, dry_run=True)
+            verify_lockstep.assert_not_called()
+
+    def test_publish_and_dry_run_share_tag_availability_preflight(self) -> None:
+        root = discover_repo_root()
+        for dry_run in (True, False):
+            with (
+                self.subTest(dry_run=dry_run),
+                mock.patch.object(prerelease_tag, "current_branch", return_value="fixture"),
+                mock.patch.object(prerelease_tag, "require_clean_tree"),
+                mock.patch.object(prerelease_tag, "workspace_version", return_value="1.5.14"),
+                mock.patch.object(
+                    prerelease_tag,
+                    "require_available_tag",
+                    side_effect=SystemExit("collision"),
+                ) as require_available_tag,
+                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
+                mock.patch.object(prerelease_tag, "candidate_changes") as candidate_changes,
+            ):
+                with self.assertRaisesRegex(SystemExit, "collision"):
+                    prerelease_tag.execute(root, dry_run=dry_run)
+            require_available_tag.assert_called_once_with(root, "prerelease/v1.5.15")
+            verify_lockstep.assert_not_called()
+            candidate_changes.assert_not_called()
+
     def test_candidate_bump_updates_actual_lockfile_collision_safely(self) -> None:
         root = discover_repo_root()
         old_version = workspace_version(root)
