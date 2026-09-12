@@ -19,12 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T16:10:17Z"^^xsd:dateTime ;
-  triage:deferredNote "Not blocking; direct input to Rand's per-transition nudge-granularity design discussion (see SMK-004, SMK-005). dispatchReady left false pending that ruling; fix shape (position-gate the mail claim, and/or attribute reminders to the correct task) follows from it. Hold #1431 as the landing vehicle per fenix's instruction." ;
+  triage:deferredNote "Not blocking; direct input to Rand's per-transition nudge-granularity design discussion (see SMK-004, SMK-005). dispatchReady left false pending that ruling; fix shape (position-gate the mail claim, and/or attribute reminders to the correct task) follows from it. Hold #1431 as the landing vehicle per fenix's instruction. fenix (ATM 01M2B6TBESXVSRCSZS2Q14PBFX, 2026-09-12T16:22:12Z): design landed for review, no dispatch yet -- PR #1432 (docs-only, develop) docs/plans/nudge-transition-templates/design.md proposes assignment writes create no pending mail marker at all (task pass alone owns the ready/reminder decision), which removes the position-blind mail claim this finding is about; task_reminder becomes its own kind tied to the correct task rather than folded into whichever mail delivery happened to fire. Issue #1433 tracks it. This is SMK-006's resolution pointer; #1431 stays held pending Rand's approval of the design." ;
   triage:relatedFinding "SMK-004" ;
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T16:10:17Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SMK-006/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/SMK-006/1>
   a triage:Occurrence ;
