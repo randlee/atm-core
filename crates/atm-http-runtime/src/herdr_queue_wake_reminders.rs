@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TASK_REMINDER_INTERVAL_MS,
-    TaskRow,
+    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskRow,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
@@ -69,13 +68,6 @@ impl HerdrQueueWakePump {
                         .observe(&candidate.member, candidate.state),
                     0,
                 );
-                let disposition = if matches!(disposition, TaskDisposition::Nudge)
-                    && head.is_some_and(|row| !self.reminder_due(&candidate.member, row, now))
-                {
-                    TaskDisposition::Hold("rate limited")
-                } else {
-                    disposition
-                };
                 if matches!(
                     disposition,
                     TaskDisposition::EscalateEpisode(EpisodeKind::Blocked)
@@ -213,7 +205,6 @@ impl HerdrQueueWakePump {
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {
                 stats.task_reminders_failed += 1;
-                self.stamp_task_attempt(&candidate.member, now);
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_emit", outcome = "failed", error = %error, error_code = ?error.code(), member = %candidate.member, "Herdr task reminder emission failed")
             }
         }
@@ -238,7 +229,6 @@ impl HerdrQueueWakePump {
             ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
             ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
         }
-        self.stamp_task_attempt(context.member, now);
         if let Ok(recorded_row) = recorded_row {
             crate::herdr_queue_wake_escalation::maybe_escalate_task(
                 self,
@@ -295,30 +285,6 @@ impl HerdrQueueWakePump {
             stats,
         )
         .await;
-    }
-
-    fn stamp_task_attempt(&self, member: &MemberKey, now: IsoTimestamp) {
-        self.last_task_attempt
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(member.clone(), now);
-    }
-
-    fn reminder_due(&self, member: &MemberKey, row: &TaskRow, now: IsoTimestamp) -> bool {
-        let due = |then: IsoTimestamp| {
-            now.into_inner()
-                .signed_duration_since(then.into_inner())
-                .num_milliseconds()
-                >= TASK_REMINDER_INTERVAL_MS
-        };
-        row.last_reminded_at.is_none_or(due)
-            && self
-                .last_task_attempt
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .get(member)
-                .copied()
-                .is_none_or(due)
     }
 
     fn note_task_step_availability(&self, available: bool, error: Option<&AtmError>) {
