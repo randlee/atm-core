@@ -19,18 +19,23 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 2026-09-12T05:04:25Z): feature/ba3-nudge-invariant complete and FROZEN at c462c6977 (solar, BA3-FIX-R3B closed). BA3-QA2 dispatched to quality-mgr on c462c6977 (merge-base with integrate fd242df7a); this finding is expected to close on that pass -- not yet confirmed, status held open pending BA3-QA2 verdict." ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-003/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-003/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BA3-QA1-003/1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
   triage:line 318 ;
   triage:snippet "let _ = recorded_row; -- complete_task_handoff's Result silently discarded; handoff_applies_start_and_sends_receipt_to_assigner asserts state stays Assigned, contradicting R1" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:04:25Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "feature/ba3-nudge-invariant frozen at c462c6977 (BA3-FIX-R3B closed); superseded by occurrence/2 pending BA3-QA2 verification" ;
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "c13f9bddf" ;
   triage:occursIn <urn:atm:triage:worktree/BA3-QA1-003/1> .
@@ -41,3 +46,21 @@
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "c13f9bddf" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:occurrence/BA3-QA1-003/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 318 ;
+  triage:snippet "let _ = recorded_row; -- complete_task_handoff's Result silently discarded; handoff_applies_start_and_sends_receipt_to_assigner asserts state stays Assigned, contradicting R1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-003/2> .
+
+<urn:atm:triage:worktree/BA3-QA1-003/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "frozen head after BA3-FIX-R3B (solar); BA3-QA2 dispatched to quality-mgr, merge-base with integrate fd242df7a" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:orderIndex 1 .
