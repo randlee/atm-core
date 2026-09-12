@@ -108,6 +108,31 @@
       "minor": 2,
       "count_basis": "headline/reviewer",
       "evidence": "Sprint BB.3 QA-2 (Final Quality Report): FAIL (1 blocking / 4 important / 2 minor), PR #1436 @ d2c69e9f6 (code fix at 791680c2ae8155bced4fd5fd2888c5a607228f01; head then moved to d2c69e9f6 via a generated-report-only commit, no code change). https://github.com/randlee/atm-core/pull/1436#issuecomment-5648444629. Deliverables 11/12 (92%). Blocking B1 (test_two_revisions_render_distinct_step_tables compares a non-discriminating revision pair, still hollow post-fix). Important I1 (BB3-003's ancestor-fallback path has zero regression-test coverage), I2 (colima-hermes-skills.md front-matter/body revision mismatch), I3 (compose()/source_revision() duplication across 4+ files, pre-existing, not a regression), I4 (pages.yml's mermaid-cli invocation still lacks Chromium/Puppeteer provisioning, partially closed). Minor M1 (test_check_mode_detects_stale_page still doesn't exercise its named branch), M2 (BB3-012's relocated sibling-JSON pattern persists, no live effect, left open by design). BB3-002,004,006,007,008,010,011,012 confirmed fixed and closed. BB3-001 downgraded blocking->important (fixed_partial, residual I2). BB3-003 downgraded blocking->important (fixed_partial, residual I1). BB3-005 reopened as Blocking (B1). BB3-009 marked fixed_partial (Chromium provisioning residual, I4). Not merge-ready. Fix layer: fix/bb3-qa2-r2 (cipher, off feature/bb4-task-start, per fenix's fix-round-worktree ruling 2026-09-12T20:24:40Z -- lower stack layers frozen from here). See .triage/phase-bb/findings/BB3-001..012.ttl."
+    },
+    {
+      "run_id": "BB4-QA1",
+      "aich_sprint": "BB4",
+      "phase_sprint": "BB.4",
+      "pass": null,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-12T20:21:42Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2BMGWCZA55PFBWCD51RSFJ9",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB4-QA1-1789246000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1441, base feature/bb1-transition-templates -- BB.4 task-start QA-1 pass. Pin updated twice as arch-ctm's push progressed (head-update message 01M2BMSYTQ69NGSV29N6VPZG53, review d2c9c2aff); BB4-TASK-START-1789241000 closed by arch-ctm 2026-09-12T20:37:14Z at e9731c06e, so quality-mgr reviews at that final head.",
+      "result_time_utc": null,
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": null,
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PENDING",
+      "blockers": null,
+      "important": null,
+      "minor": null,
+      "count_basis": "headline/reviewer",
+      "evidence": "QA-1 assigned to quality-mgr; PR #1441, reviewed head e9731c06e; result pending."
     }
   ]
 }

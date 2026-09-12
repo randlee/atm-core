@@ -35,6 +35,11 @@ triage:a5 a triage:Assignment ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-09-12T19:49:50Z"^^xsd:dateTime .
 
+triage:a6 a triage:Assignment ;
+    triage:ofSprint triage:BB5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-12T20:28:11Z"^^xsd:dateTime .
+
 triage:c1 a triage:Completion ;
     triage:ofSprint triage:BB1 ;
     triage:at "2026-09-12T19:56:26Z"^^xsd:dateTime .
@@ -42,3 +47,7 @@ triage:c1 a triage:Completion ;
 triage:c2 a triage:Completion ;
     triage:ofSprint triage:BB2 ;
     triage:at "2026-09-12T19:57:39Z"^^xsd:dateTime .
+
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:BB4 ;
+    triage:at "2026-09-12T20:37:14Z"^^xsd:dateTime .
