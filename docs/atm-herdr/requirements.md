@@ -31,12 +31,10 @@ document cites it by decision id (`D1`-`D10.1`).
 `atm-herdr` owns:
 
 - the `HerdrProcessAdapter` trait: the async `prompt` / `wait` / `get` /
-  `list` / `notify` contract consumed by immediate steer, the AQ2.7
-  queue-tick pump, and lead escalation notification paths
+  `list` contract consumed by immediate steer and the queue-tick pump
 - `HerdrProcessInvoker`, the concrete `tokio::process`-backed
   implementation: argv construction for every `herdr agent ...` shape this
-  crate emits (`prompt`, `wait`, `get`, `list`) and the `notification show`
-  shape emitted by `notify`, `HERDR_SESSION` set on the
+  crate emits (`prompt`, `wait`, `get`, `list`), with `HERDR_SESSION` set on the
   **child process environment, per invocation**, only when the calling
   member's roster row (or, for `list`, the caller-supplied session)
   carries a `Some` session (ADR-058 D1's per-member model; the daemon's
@@ -110,8 +108,7 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
 ### 3.1 Functional Requirements
 
 - `HR-CORE-001` `atm-herdr` owns the `HerdrProcessAdapter` trait with
-  `prompt`, `wait`, `get`, `list`, and `notify` methods. The agent methods
-  return typed outcomes and `notify` returns `()` or `HerdrError`, all over
+  `prompt`, `wait`, `get`, and `list` methods. They return typed outcomes over
   an injected external deadline. This is the only cross-crate contract
   point; no consumer constructs `herdr` argv itself.
 - `HR-CORE-002` `HerdrProcessInvoker::prompt` emits exactly
@@ -150,11 +147,10 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
   (`src/api/schema/agents.rs:184-208` in the pinned Herdr checkout),
   returned under `ResponseResult::AgentList`
   (`src/app/api/agents.rs:19`); no other `AgentInfo` field is read.
-- `HR-CORE-010` `HerdrProcessAdapter::notify` emits exactly
-  `herdr notification show <title> --body <body> --sound request`, preserves
-  title and body as separate argv values, and applies the caller-supplied
-  external deadline. It is a notification operation only; it never targets a
-  pane or sends keystrokes.
+- `HR-CORE-010` is retired by Phase BA.3. ATM no longer owns or invokes a
+  Herdr desktop-notification operation; blocked/offline/stalled escalation is
+  durable ATM mail owned by `atm-http-runtime`. The former AY.4 breaker
+  escalation and its `HerdrProcessAdapter::notify` caller were deleted.
 - `HR-CORE-006` `HERDR_SESSION` is set on the spawned child's environment,
   per invocation, if and only if the caller passes a non-empty session
   string; when the caller passes none, the child inherits the ambient
@@ -307,8 +303,7 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
 
 - `HR-TEST-001` A fake `HerdrProcessAdapter` implementation, gated behind
   the `test-utils` Cargo feature, records every `prompt` / `wait` / `get` /
-  `list` / `notify` call (agent/session for agent calls, title/body for
-  `notify`, and — for `wait` — the requested `--until` set and timeout) for
+  `list` call (agent/session and, for `wait`, the requested `--until` set and timeout) for
   assertion and is configurable to return any
   `HerdrError` variant or outcome. It is the sole test double any
   consumer crate uses below the adapter boundary (precedent: AQ2.6/AQ2.7's
@@ -317,8 +312,7 @@ The `atm-herdr` crate uses the `HR-*` namespace, grouped by category:
 - `HR-TEST-002` Argv-construction tests assert byte-for-byte equality
   against `herdr-cli-contract-fixture.md`'s F1/F2/F3 argv rows for every
   emitted agent shape (`prompt`, `wait`, `get`, `list`), including the
-  `--until` ordering and the millisecond `--timeout` value; `notify` is
-  asserted against HR-CORE-010's notification argv. A future refactor
+  `--until` ordering and the millisecond `--timeout` value. A future refactor
   cannot silently drift from the contract.
 - `HR-TEST-003` Stderr-parsing tests cover every row of ADR-058 D8's
   error-code table plus F1.8/F2.8/F3.5's argv-construction-bug rows
@@ -426,15 +420,14 @@ The `atm-herdr` crate docs must remain aligned with:
 
 `req-qa` should treat these as fail-closed presence checks:
 
-- `HR-CORE-001`–`HR-CORE-005`, `HR-CORE-010`
-  - `HerdrProcessAdapter` exists with `prompt`, `wait`, `get`, `list`, and
-    `notify` methods; a grep for `herdr` argv literals or Herdr JSON field
+- `HR-CORE-001`–`HR-CORE-005`
+  - `HerdrProcessAdapter` exists with `prompt`, `wait`, `get`, and `list`
+    methods; a grep for `herdr` argv literals or Herdr JSON field
     names (`agent_status`, `error.code`, `agent_blocked`, …) outside
     `crates/atm-herdr` fails the source-audit gate (see
     `boundaries.md`)
-  - argv-equality tests exist for all four agent shapes and the notification
-    shape, matching `herdr-cli-contract-fixture.md` and HR-CORE-010
-    respectively
+  - argv-equality tests exist for all four agent shapes, matching
+    `herdr-cli-contract-fixture.md`
   - a grep of `atm-http-runtime`'s `HerdrQueueWakePump` confirms it calls
     `list` and `prompt`, never `wait`, in Phase AQ
 - `HR-CORE-006`

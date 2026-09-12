@@ -134,7 +134,7 @@ state machines beyond §1. Everything this phase adds:
 A sprint that needs an entry not on this list stops and amends this table
 first. Phase acceptance 10 gates on it.
 
-## 8. Task-subsystem boundary tightening (BA.2, with a written ruling)
+## 8. Task-subsystem boundary tightening (BA.1, with a written ruling)
 
 `boundaries/atm-storage/task-store.toml` already forbids `task_state_transition`
 outside the writer transaction. BA.2 tightens it and this plan's approval is
@@ -146,7 +146,9 @@ the written ruling those edits require:
   `no_task_state_write_outside_task_ops` (the only writers of `tasks.state`
   are the `TaskOp` arms in `writer/task_ops.rs`, plus
   `task_migration.rs::migrate_task_identity` at schema-ensure time).
-- `[ownership].io_forbidden` += `task_body_dereference` (design §3).
+- `[contracts].notes` records `task_body_dereference` as forbidden (design
+  §3); it is not an `io_forbidden` tag because every such tag requires a
+  source-detection pattern.
 - Same edits mirrored in `boundaries/atm-storage-rusqlite/task-store-sqlite.toml`
   and `async-task-ledger-reader*.toml` (`open_tasks_for_team`, `refusal_run`
   added to the read surface).

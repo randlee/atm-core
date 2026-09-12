@@ -153,9 +153,9 @@ existing file that houses ack tests):
    nothing outside `TaskEventKind`.
 2. Every test above passes; no test in the workspace asserts that an ack
    changes `tasks.state`.
-3. `just lint-boundaries` passes with the D5 manifest edits.
+3. `just lint boundaries` passes with the D5 manifest edits.
 
 ## Required validation
 
-`just lint`, `just test`, `just lint-boundaries`; RULE-003 via
+`just lint`, `just test`, `just lint boundaries`; RULE-003 via
 `.just/check_line_counts.py`.

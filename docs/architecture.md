@@ -2935,6 +2935,21 @@ prompt time. Handoff re-arms that marker; read, acknowledgement when required,
 or task close discharges it. The queue item is considered before the next task
 and never appears in `atm task list`.
 
+Current inherited boundary limitations recorded during Phase BA review:
+
+- `RBP-F001`: the `TaskStore` escalation-recipient methods still expose raw
+  `String` / `&str` values. `AgentAddress` validation occurs at the runtime
+  use site, not at the storage trait boundary.
+- `RBP-F002`: `load_escalation_targets` currently maps roster-store read
+  failures to `Result<_, ()>`, so the helper does not retain the underlying
+  error context.
+- `RSH-001`: the queue pump's `run_blocking` helper awaits `spawn_blocking`
+  without its own timeout. Its current closures are local SQLite operations,
+  not network calls.
+- `RBQA-BA5-F004`: the six-method `PendingNudgeStore` test surface is
+  reimplemented by four hand-written doubles across consumer crates; there is
+  no shared configurable double yet.
+
 #### RosterStore
 
 Dispatch model:

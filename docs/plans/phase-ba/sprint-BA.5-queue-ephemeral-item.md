@@ -113,6 +113,9 @@ Storage — `pending_nudge_store.rs` tests (existing module):
 
 Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
 
+This file is spliced into `herdr_queue_wake`'s test module with `#[path]`; it
+is not a standalone Cargo integration-test target.
+
 - `task_prompt_waits_while_queue_item_open_across_ticks` — item prompted at t0; ticks at +5 s, +10 s, +55 s → 0 task prompts; read at +58 s; tick at +60 s → task prompt.
 - `open_mail_set_is_read_each_tick_not_cached`.
 - `unread_queue_item_is_reprompted_every_interval` — t, t+60, t+120; `atm read` at t+130 → silence for 100 ticks.
@@ -138,4 +141,4 @@ Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
 
 ## Required validation
 
-`just lint`, `just test`, RULE-003, `just lint-boundaries`.
+`just lint`, `just test`, RULE-003, `just lint boundaries`.

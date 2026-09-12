@@ -248,7 +248,7 @@ always succeed.
 
 `TASK_REMINDER_INTERVAL_MS = 60_000` (moved to `atm-storage/src/task_store.rs`,
 `i64`), `TASK_STALLED_REMINDER_THRESHOLD = 10` (unchanged),
-`TASK_CONSECUTIVE_REFUSAL_THRESHOLD = 3` (BA.2). Deleted: `BLOCKED_NOTIFY_MS`,
+`TASK_CONSECUTIVE_REFUSAL_THRESHOLD = 3` (BA.3). Deleted: `BLOCKED_NOTIFY_MS`,
 `BLOCKED_RENOTIFY_MS`. Offline is reported on the first accepted `Offline`
 observation with no debounce.
 
@@ -268,6 +268,11 @@ observation with no debounce.
   `breaker_failure_counts` (`herdr_queue_wake.rs:79-82,112-115,137`); methods
   `breaker_cycle_opened_at`, `maybe_escalate_breaker` (`:301-379`);
   `EscalationKind::BreakerOpened` (`herdr_escalation.rs:34,42`)
+- `HerdrQueueWakePump.last_task_attempt`, `stamp_task_attempt`, and the
+  corresponding `prune_member_state` line; `last_reminded_at` is the sole
+  task-reminder rate-limit record
+- the `u64` copy of `TASK_REMINDER_INTERVAL_MS` in `herdr_queue_wake.rs`; the
+  storage-owned `i64` constant is the sole definition
 - tests `blocked_renotifies_after_cooldown`, `escalates_again_at_twenty`,
   every breaker-escalation test, and any test asserting a second stalled
   escalation (grep `lead_notified_count, 2` / `RENOTIFY` / `BreakerOpened`)
@@ -293,6 +298,9 @@ Pure — `herdr_task_disposition.rs`:
 Runtime — `crates/atm-http-runtime/tests/herdr_nudge_invariant.rs` (new;
 fixture daemons loopback only; roster shapes lead+1, lead+3, two leads, no
 lead; backends Herdr steer, tmux, bare-CLI FIFO):
+
+This file is spliced into `herdr_queue_wake`'s test module with `#[path]`; it
+is not a standalone Cargo integration-test target.
 
 - `idle_member_with_queued_task_is_nudged_once_per_interval` — ticks at t, t+30s, t+61s → 2 prompts.
 - `active_member_is_never_prompted` — 200 ticks Active, Herdr and tmux backends → 0 prompts, 0 mail.
@@ -339,5 +347,5 @@ lead; backends Herdr steer, tmux, bare-CLI FIFO):
 
 ## Required validation
 
-`just lint`, `just test`, `just lint-boundaries`, RULE-003
+`just lint`, `just test`, `just lint boundaries`, RULE-003
 (`herdr_queue_wake.rs` must not grow; target ≤ 3,700 lines after deletions).
