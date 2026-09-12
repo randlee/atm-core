@@ -16,15 +16,16 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md" ;
-  triage:status "fixed" ;
-  triage:dispatchReady false ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
-  triage:deferredNote "fenix (ATM 01M2A821M48VWSZ0JGXMA4WWZ7, 2026-09-12T07:24:38Z): fixed by cipher at 0e9c8266b (docs bundle)." ;
+  triage:deferredNote "fenix (ATM 01M2A821M48VWSZ0JGXMA4WWZ7, 2026-09-12T07:24:38Z): fixed by cipher at 0e9c8266b (docs bundle). quality-mgr consolidated QA (BA-REVIEW-QA-1789194730, PR #1425 comment 5645308114, 2026-09-12T10:24:25Z) re-verified at landed head 9774e113c and found the doc fix incomplete: sprint-BA.2-task-identity-queue.md line 468 still reads \"Start sets reminder_count = 0, lead_notified_count = 0\", contradicting the shipped preserve-reminder_count behavior; only the doc-named test was renamed (line 558/634), the prose line was not amended. Team-lead independently confirmed via git show 9774e113c:docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md. Reopened as a doc-only post-landing backlog item (Important per QA)." ;
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CPR-008/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CPR-008/2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-008/3> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/CPR-008/1>
   a triage:Occurrence ;
@@ -60,6 +61,25 @@
   triage:branch "fix/phase-ba-review-1" ;
   triage:headSha "0e9c8266b" ;
   triage:orderIndex 7 .
+
+<urn:atm:triage:occurrence/CPR-008/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md" ;
+  triage:line 468 ;
+  triage:snippet "\"Start sets reminder_count = 0, lead_notified_count = 0\" -- prose line not amended; only the doc-named test at line 558/634 was renamed to ..._preserves_reminder_count" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:resolutionNote "quality-mgr consolidated QA re-verified independently in code at 9774e113c; doc-only fix still needed on line 468. Not blocking; routed to post-landing backlog." ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9774e113c" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-008/3> .
+
+<urn:atm:triage:worktree/CPR-008/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "post-landing backlog: integrate/phase-ba @ 9774e113c, doc-only fix pending" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9774e113c" ;
+  triage:orderIndex 11 .
 
 <urn:atm:triage:worktree/CPR-008/review1>
   a triage:WorktreeSnapshot ;
