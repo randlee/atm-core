@@ -1759,6 +1759,20 @@ mod tests {
         )
     }
 
+    fn task_only_reader(
+        rows: Vec<TaskRow>,
+        task_store: &Arc<atm_storage::DummyTaskStore>,
+        refusal_error: Option<atm_storage::ReadLaneError>,
+    ) -> Arc<dyn atm_core::boundary::AsyncTaskLedgerReader + Send + Sync> {
+        match refusal_error {
+            Some(error) => Arc::new(
+                atm_storage::testing::InMemoryTaskLedgerReader::with_rows(rows, Vec::new())
+                    .with_refusal_error(error),
+            ),
+            None => task_store.clone(),
+        }
+    }
+
     fn build_task_only_pump_with_channel(
         statuses: Vec<HerdrAgentStatus>,
         fail_reminders: bool,
@@ -1808,14 +1822,7 @@ mod tests {
             rows.clone(),
             fail_reminders,
         ));
-        let reader: Arc<dyn atm_core::boundary::AsyncTaskLedgerReader + Send + Sync> =
-            match refusal_error {
-                Some(error) => Arc::new(
-                    atm_storage::testing::InMemoryTaskLedgerReader::with_rows(rows, Vec::new())
-                        .with_refusal_error(error),
-                ),
-                None => task_store.clone(),
-            };
+        let reader = task_only_reader(rows, &task_store, refusal_error);
         let runtime = assembly
             .service_runtime
             .with_task_store(task_store.clone())

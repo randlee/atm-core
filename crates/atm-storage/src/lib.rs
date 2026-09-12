@@ -82,10 +82,12 @@ pub use task_state::{
     TaskEventKind, TaskEventMarker, TaskEventRow, TaskRejected, TaskRow, TaskState, TaskStateTag,
     Transition, admit, transition,
 };
+#[cfg(any(test, feature = "test-utils"))]
+pub use task_store::DummyTaskStore;
 pub use task_store::{
-    DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,
-    ReminderOutcome, TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS,
-    TASK_STALLED_REMINDER_THRESHOLD, TaskStore, next_reminder_due,
+    EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin, ReminderOutcome,
+    TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS, TASK_STALLED_REMINDER_THRESHOLD,
+    TaskStore, next_reminder_due,
 };
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,

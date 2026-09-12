@@ -1,11 +1,15 @@
 //! Storage-neutral task ledger capability.
 
+#[cfg(any(test, feature = "test-utils"))]
 use std::collections::HashMap;
+#[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use crate::contract::{AsyncTaskLedgerReader, ReadDeadline, ReadLaneError, sealed};
+use crate::contract::sealed;
+#[cfg(any(test, feature = "test-utils"))]
+use crate::contract::{AsyncTaskLedgerReader, ReadDeadline, ReadLaneError};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::task_state::{QueuePosition, TaskEventRow, TaskRow};
@@ -155,6 +159,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
 }
 
 /// Minimal in-memory implementation for composition and contract tests.
+#[cfg(any(test, feature = "test-utils"))]
 #[derive(Debug, Default)]
 pub struct DummyTaskStore {
     rows: Mutex<HashMap<(TeamName, TaskId), TaskRow>>,
@@ -162,6 +167,7 @@ pub struct DummyTaskStore {
     fail_reminders: bool,
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 impl DummyTaskStore {
     #[must_use]
     pub fn with_rows(rows: Vec<TaskRow>, fail_reminders: bool) -> Self {
@@ -186,8 +192,10 @@ impl DummyTaskStore {
     }
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 impl sealed::Sealed for DummyTaskStore {}
 
+#[cfg(any(test, feature = "test-utils"))]
 #[async_trait::async_trait]
 impl AsyncTaskLedgerReader for DummyTaskStore {
     async fn open_tasks_for_team(
@@ -260,6 +268,7 @@ impl AsyncTaskLedgerReader for DummyTaskStore {
     }
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 impl TaskStore for DummyTaskStore {
     fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
         Ok(self
