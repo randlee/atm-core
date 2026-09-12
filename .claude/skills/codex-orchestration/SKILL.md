@@ -68,8 +68,9 @@ Before starting a sprint:
 7. `quality-mgr` must also read:
    - `.claude/skills/quality-management-gh/SKILL.md`
 8. Every ATM assignment is sent with
-   `atm send <agent> --template <template> --vars <json>`; never render a
-   template yourself and send the output as message text or via `--stdin`.
+   `atm send <agent> --task-id "$TASK_ID" --template <template> --vars <json>`;
+   the same `TASK_ID` is supplied as the template's `task_id` variable. Never
+   render a template yourself and send the output as message text or via `--stdin`.
    To view or validate the exact body before sending, use
    `atm compose --template <template> --vars <json>` (same renderer, same
    vars). The template path goes through the daemon-owned admission path
@@ -199,8 +200,24 @@ Do not assume ATM-specific PR monitoring commands exist.
 Dispatch form (mandatory for every assignment below):
 
 ```bash
-atm send <agent> --template <path/to/template.j2> --vars <vars.json>
+TASK_ID="<task-id>"
+atm send <agent> \
+  --task-id "$TASK_ID" \
+  --template <path/to/template.j2> \
+  --vars <vars.json> \
+  --var task_id="$TASK_ID"
 ```
+
+Install the repository templates on the daemon host after this change merges:
+
+```bash
+mkdir -p ~/.atm/templates/codex-orchestration && cp .claude/skills/codex-orchestration/*.j2 ~/.atm/templates/codex-orchestration/
+```
+
+On atm 1.5.16, closing an assignee task with its final report also closes the
+assigner's mirror task. The lead must not issue a second `--task-complete` for
+that mirror; it reads the assignee's close report and proceeds with QA or the
+next orchestration step.
 
 Use the templates in this skill directory:
 - `dev-template.xml.j2`

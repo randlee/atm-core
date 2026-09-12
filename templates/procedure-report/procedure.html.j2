@@ -1,0 +1,21 @@
+---
+metadata:
+  name: procedure-report
+  description: Revision-addressed ATM test procedure
+required_variables:
+  - title
+  - procedure
+  - revision_short
+  - date
+  - flow_svg
+  - steps_html
+  - body_html
+defaults:
+  note: ""
+---
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ title | e }}</title>
+<style>body{font:16px system-ui,sans-serif;max-width:72rem;margin:2rem auto;padding:0 1rem;line-height:1.5}header{border-bottom:1px solid #cbd5e1;margin-bottom:1.5rem}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #cbd5e1;padding:.5rem;text-align:left;vertical-align:top}th{background:#f1f5f9}.flow svg{max-width:100%;height:auto}.meta{color:#475569}.mermaid-source{display:none}</style></head><body>
+<header><h1>{{ title | e }}</h1><p class="meta">Procedure <code>{{ procedure | e }}</code> · revision <code>{{ revision_short | e }}</code> · {{ date | e }}</p></header>
+<main>{{ body_html | safe }}<section class="flow"><h2>Flow</h2>{{ flow_svg | safe }}</section><section><h2>Steps</h2>{{ steps_html | safe }}</section><p class="meta">Revision note: {{ note | e }}</p></main>
+</body></html>

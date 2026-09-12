@@ -178,6 +178,9 @@ fuzz *args:
     {{python_cmd}} .just/run_fuzz.py {{args}}
 
 # Generate or verify the durable public verification-report index.
+procedures *args:
+    {{python_cmd}} scripts/procedures/render_procedure_pages.py {{args}}
+
 reports-index *args:
     {{python_cmd}} .just/generate_report_index.py {{args}}
 

@@ -1,0 +1,563 @@
+{
+  "schema_version": 1,
+  "procedures": [
+    {
+      "procedure": "colima-hermes-skills",
+      "family": "smoke",
+      "runner": "scripts/smoke/colima_skill_report.py",
+      "revisions": [
+        {
+          "rev": "6040ecf36a3ac43d40207869d281114c719533ea",
+          "date": "2026-09-08",
+          "note": "render colima run in the smoke-report shape",
+          "html": "procedures/colima-hermes-skills/6040ecf3.html"
+        }
+      ]
+    },
+    {
+      "procedure": "fuzz-atm-template-checked-emission",
+      "family": "fuzz",
+      "runner": ".just/run_fuzz.py",
+      "revisions": [
+        {
+          "rev": "daae4065642f3602d16687ce8b50908db3ca0781",
+          "date": "2026-08-14",
+          "note": "current runner revision",
+          "html": "procedures/fuzz-atm-template-checked-emission/daae4065.html"
+        },
+        {
+          "rev": "4c1dada21c60f26dd5c90beeb192370b92707b5d",
+          "date": "2026-08-14",
+          "note": "test(fuzz): add deterministic HTTP campaign",
+          "html": "procedures/fuzz-atm-template-checked-emission/4c1dada2.html"
+        },
+        {
+          "rev": "2f40a3a785cb9eedf50a439c5b85bf9571bac62e",
+          "date": "2026-07-31",
+          "note": "feat: add bounded fuzz tooling contract",
+          "html": "procedures/fuzz-atm-template-checked-emission/2f40a3a7.html"
+        }
+      ]
+    },
+    {
+      "procedure": "fuzz-full",
+      "family": "fuzz",
+      "runner": ".just/run_fuzz.py",
+      "revisions": [
+        {
+          "rev": "daae4065642f3602d16687ce8b50908db3ca0781",
+          "date": "2026-08-14",
+          "note": "current runner revision",
+          "html": "procedures/fuzz-full/daae4065.html"
+        },
+        {
+          "rev": "4c1dada21c60f26dd5c90beeb192370b92707b5d",
+          "date": "2026-08-14",
+          "note": "test(fuzz): add deterministic HTTP campaign",
+          "html": "procedures/fuzz-full/4c1dada2.html"
+        },
+        {
+          "rev": "2f40a3a785cb9eedf50a439c5b85bf9571bac62e",
+          "date": "2026-07-31",
+          "note": "feat: add bounded fuzz tooling contract",
+          "html": "procedures/fuzz-full/2f40a3a7.html"
+        }
+      ]
+    },
+    {
+      "procedure": "fuzz-local-http-framing",
+      "family": "fuzz",
+      "runner": ".just/run_fuzz.py",
+      "revisions": [
+        {
+          "rev": "daae4065642f3602d16687ce8b50908db3ca0781",
+          "date": "2026-08-14",
+          "note": "current runner revision",
+          "html": "procedures/fuzz-local-http-framing/daae4065.html"
+        },
+        {
+          "rev": "4c1dada21c60f26dd5c90beeb192370b92707b5d",
+          "date": "2026-08-14",
+          "note": "test(fuzz): add deterministic HTTP campaign",
+          "html": "procedures/fuzz-local-http-framing/4c1dada2.html"
+        },
+        {
+          "rev": "2f40a3a785cb9eedf50a439c5b85bf9571bac62e",
+          "date": "2026-07-31",
+          "note": "feat: add bounded fuzz tooling contract",
+          "html": "procedures/fuzz-local-http-framing/2f40a3a7.html"
+        }
+      ]
+    },
+    {
+      "procedure": "graft-hermes",
+      "family": "smoke",
+      "runner": "scripts/phase-ai/run_hermes_graft_live.py",
+      "revisions": [
+        {
+          "rev": "b08b24983306e1897b86ce33ea4ebf4c3ee49be9",
+          "date": "2026-08-11",
+          "note": "current runner revision",
+          "html": "procedures/graft-hermes/b08b2498.html"
+        }
+      ]
+    },
+    {
+      "procedure": "read-query-benchmark",
+      "family": "benchmark",
+      "runner": "scripts/smoke/benchmark_report.py",
+      "revisions": [
+        {
+          "rev": "875b7d1759974771861ab49a9b6a105f3cd13562",
+          "date": "2026-08-31",
+          "note": "current runner revision",
+          "html": "procedures/read-query-benchmark/875b7d17.html"
+        },
+        {
+          "rev": "3b61103b8a0604c60a29ca215206e8df5ffc27ad",
+          "date": "2026-08-23",
+          "note": "feat(benchmark): define v4 data contract",
+          "html": "procedures/read-query-benchmark/3b61103b.html"
+        },
+        {
+          "rev": "bedcb4b85af06a00ed527adff0e2817d2fca7b90",
+          "date": "2026-07-31",
+          "note": "feat: add durable benchmark report pipeline",
+          "html": "procedures/read-query-benchmark/bedcb4b8.html"
+        }
+      ]
+    },
+    {
+      "procedure": "send-message-benchmark",
+      "family": "benchmark",
+      "runner": "scripts/smoke/benchmark_report.py",
+      "revisions": [
+        {
+          "rev": "875b7d1759974771861ab49a9b6a105f3cd13562",
+          "date": "2026-08-31",
+          "note": "current runner revision",
+          "html": "procedures/send-message-benchmark/875b7d17.html"
+        },
+        {
+          "rev": "3b61103b8a0604c60a29ca215206e8df5ffc27ad",
+          "date": "2026-08-23",
+          "note": "feat(benchmark): define v4 data contract",
+          "html": "procedures/send-message-benchmark/3b61103b.html"
+        },
+        {
+          "rev": "bedcb4b85af06a00ed527adff0e2817d2fca7b90",
+          "date": "2026-07-31",
+          "note": "feat: add durable benchmark report pipeline",
+          "html": "procedures/send-message-benchmark/bedcb4b8.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-admission-capacity",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "8ee8a3910057255b13a7ef153e01d54f90b99824",
+          "date": "2026-09-07",
+          "note": "current admission boundary runner",
+          "html": "procedures/smoke-admission-capacity/8ee8a391.html"
+        },
+        {
+          "rev": "b193b950fad78b1780b54bc8e4cab6cc9582a975",
+          "date": "2026-09-06",
+          "note": "check doctor after roster setup",
+          "html": "procedures/smoke-admission-capacity/b193b950.html"
+        },
+        {
+          "rev": "0817d87bc2e43480fa3763bf12ce89388da4d599",
+          "date": "2026-09-04",
+          "note": "probe the launched daemon runtime",
+          "html": "procedures/smoke-admission-capacity/0817d87b.html"
+        },
+        {
+          "rev": "d3a601ab039a58b4cc0b31dde4d915554d609bfc",
+          "date": "2026-09-04",
+          "note": "rebuild sqlite writer probe per run",
+          "html": "procedures/smoke-admission-capacity/d3a601ab.html"
+        },
+        {
+          "rev": "0656b8a28d6cf0128c6349379c0def1015f8a5d0",
+          "date": "2026-09-03",
+          "note": "cover invariant lane publication",
+          "html": "procedures/smoke-admission-capacity/0656b8a2.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-crosshost-ack",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-crosshost-ack/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-crosshost-ack/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-crosshost-ack/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-crosshost-ack/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-crosshost-ack/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-crosshost-curl-plain",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-crosshost-curl-plain/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-crosshost-curl-plain/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-crosshost-curl-plain/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-crosshost-curl-plain/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-crosshost-curl-plain/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-crosshost-curl-tls",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-crosshost-curl-tls/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-crosshost-curl-tls/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-crosshost-curl-tls/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-crosshost-curl-tls/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-crosshost-curl-tls/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-crosshost-send",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-crosshost-send/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-crosshost-send/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-crosshost-send/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-crosshost-send/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-crosshost-send/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-fast",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-fast/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-fast/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-fast/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-fast/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-fast/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-local-ip",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-local-ip/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-local-ip/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-local-ip/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-local-ip/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-local-ip/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-localhost",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-localhost/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-localhost/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-localhost/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-localhost/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-localhost/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-normal",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-normal/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-normal/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-normal/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-normal/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-normal/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-peer-preflight",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-peer-preflight/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-peer-preflight/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-peer-preflight/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-peer-preflight/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-peer-preflight/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-thorough",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "7475fed9e2a341232f71afba61d8c21685789610",
+          "date": "2026-09-04",
+          "note": "current runner revision",
+          "html": "procedures/smoke-thorough/7475fed9.html"
+        },
+        {
+          "rev": "934586917b61bb521635c5678fe87b5acb3f612c",
+          "date": "2026-08-20",
+          "note": "test: prove mTLS rejects unauthenticated clients",
+          "html": "procedures/smoke-thorough/93458691.html"
+        },
+        {
+          "rev": "513b33745edda8e38e694f6d2867d3b4de8fb2f0",
+          "date": "2026-08-07",
+          "note": "fix(smoke): index every hardware smoke run",
+          "html": "procedures/smoke-thorough/513b3374.html"
+        },
+        {
+          "rev": "8043ce649c92cb78cff038a003acc76c599f4dc7",
+          "date": "2026-08-07",
+          "note": "fix(al9): discover same-host smoke address at runtime",
+          "html": "procedures/smoke-thorough/8043ce64.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "feat(smoke): add progressive live daemon features",
+          "html": "procedures/smoke-thorough/c355f382.html"
+        }
+      ]
+    }
+  ]
+}

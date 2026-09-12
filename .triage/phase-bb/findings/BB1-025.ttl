@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-025>
+  a triage:Finding ;
+  triage:findingId "BB1-025" ;
+  triage:title "Sprint doc's own D3 code sample contradicts its corrected prose" ;
+  triage:description "quality-mgr BB1-QA1-1789242600 (Final Quality Report, FAIL, https://github.com/randlee/atm-core/pull/1438#issuecomment-5648365789, 2026-09-12T20:06:37Z), reviewed at b06b3e262. QA1-M1 (code-sample half; the test-naming half of QA1-M1 duplicates fenix's BB1-CR-M1, recorded as BB1-015): docs/plans/phase-bb/sprint-BB.1-transition-templates.md (~line 103 vs 118-124): the doc's D3 code sample shows a stale 5-tuple including event.task_id.is_some(), while its own prose two paragraphs later correctly rules that column out (4-tuple, matching the actual shipped code at boundary/mod.rs:150-173). Doc-accuracy issue only; the underlying implementation is correct." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-bb/sprint-BB.1-transition-templates.md (D3 code sample, ~line 103)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
+  triage:deferredNote "Recommend fixing the doc's code sample to the 4-tuple shape used in the prose and the shipped code. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates." ;
+  triage:relatedFinding "BB1-015" ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-025/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-025/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/sprint-BB.1-transition-templates.md" ;
+  triage:line 103 ;
+  triage:snippet "D3 code sample in the sprint doc shows a stale 5-tuple match signature that the doc's own later prose already corrects to 4 columns" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-025/1> .
+
+<urn:atm:triage:worktree/BB1-025/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

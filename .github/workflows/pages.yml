@@ -30,6 +30,14 @@ jobs:
       - name: Install just
         uses: taiki-e/install-action@just
 
+      - name: Set up Node.js for Mermaid rendering
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify generated procedure pages
+        run: just procedures --check
+
       - name: Verify generated report index
         run: just reports-index --check
 
