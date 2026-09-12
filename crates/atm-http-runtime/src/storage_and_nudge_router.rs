@@ -1092,7 +1092,7 @@ mod tests {
     use atm_core::protocol::{
         GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
         QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
-        RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+        RuntimeReadinessState, SendResponseEnvelope, TaskMoveRequest, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
@@ -1111,7 +1111,7 @@ mod tests {
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
     use atm_storage::{
-        AsyncTaskLedgerReader, MessageKey, MessageQuery, MessageStore, RosterSnapshot,
+        AsyncTaskLedgerReader, MessageKey, MessageQuery, MessageStore, MoveTarget, RosterSnapshot,
         RosterStore as StorageRosterStore, TaskStore, TemplateFrontmatter, TemplateSha,
     };
     use axum::body::{Body, to_bytes};
@@ -1501,6 +1501,38 @@ mod tests {
                 })
             },
         )
+    }
+
+    #[tokio::test]
+    async fn peer_ingress_rejects_task_move_explicitly() {
+        let fixture = fixture(true, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        let task_id = "T1".parse().expect("task id");
+        let before = fixture
+            .task_store
+            .list_task_events(&team, &task_id, None)
+            .expect("events before");
+        let error = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::TaskMove(TaskMoveRequest {
+                    caller_identity: "sender-a".parse().expect("agent"),
+                    caller_team: team.clone(),
+                    task_id: task_id.clone(),
+                    target: MoveTarget::Head,
+                })),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("peer ingress must reject task move");
+        assert!(error.message().contains("authenticated local HTTP"));
+        let after = fixture
+            .task_store
+            .list_task_events(&team, &task_id, None)
+            .expect("events after");
+        assert_eq!(after, before, "rejection must occur before the writer lane");
     }
 
     fn fixture_with_selector<F>(

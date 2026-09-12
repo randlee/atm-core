@@ -1149,7 +1149,10 @@ mod tests {
     use std::num::NonZeroU16;
     use std::path::{Path, PathBuf};
 
-    use super::{SendCommand, require_task_op_compatibility, resolve_trusted_ipv4_with_lookup};
+    use super::{
+        SendCommand, TaskSendOptions, require_task_op_compatibility,
+        resolve_trusted_ipv4_with_lookup, validate_local_task_target,
+    };
     use crate::commands::send_fan_out::fan_out_result_json;
     // `FanOutRecipient`/`RecipientLocality`/`CliObservability` are consumed
     // only by the real transfer-script fan-out integration test below,
@@ -1166,7 +1169,7 @@ mod tests {
         CompatibilityVerdict, HttpApiVersion, ReleaseVersion, ResponseEnvelope,
     };
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::send::{SendMessageSource, input};
+    use atm_core::send::{NudgeMode, SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
     use atm_core::types::{TaskId, TeamName};
     use atm_storage::{AtmErrorCode, HostName, TaskCloseOutcome, TaskOp, TrustedPeer};
@@ -1617,6 +1620,94 @@ mod tests {
             })
         );
         assert_eq!(request.task_complete, None);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn send_alias_builds_identical_write_request_to_task_command() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(ROLE_TEAM_LEAD)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let task_id: TaskId = "T1".parse().expect("task id");
+
+        let mut assign_alias = send_command("recipient-a@test-team", None);
+        assign_alias.task_id = Some(task_id.clone());
+        let alias_assign = assign_alias
+            .build_request_with_mode(".".into(), ".".into(), NudgeMode::Immediate, None)
+            .expect("alias assignment");
+        let task_assign = SendCommand::for_task(TaskSendOptions {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("hello".to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            template: None,
+            vars: None,
+            task_id: Some(task_id.clone()),
+            json: false,
+        })
+        .build_request_with_mode(".".into(), ".".into(), NudgeMode::Deferred, None)
+        .expect("task assignment");
+        assert_eq!(
+            serde_json::to_vec(&alias_assign).expect("serialize alias assignment"),
+            serde_json::to_vec(&task_assign).expect("serialize task assignment")
+        );
+
+        let mut close_alias = send_command("recipient-a@test-team", None);
+        close_alias.task_id = Some(task_id.clone());
+        close_alias.task_complete = true;
+        let alias_close = close_alias
+            .build_request(".".into(), ".".into())
+            .expect("alias close");
+        let task_close = SendCommand::for_task(TaskSendOptions {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("hello".to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            template: None,
+            vars: None,
+            task_id: None,
+            json: false,
+        })
+        .build_task_close_request(
+            ".".into(),
+            ".".into(),
+            task_id,
+            TaskCloseOutcome::Completed,
+            None,
+        )
+        .expect("task close");
+        assert_eq!(
+            serde_json::to_vec(&alias_close).expect("serialize alias close"),
+            serde_json::to_vec(&task_close).expect("serialize task close")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn task_target_on_other_team_or_host_is_rejected_before_send() {
+        for target in ["recipient-a@other-team", "recipient-a@test-team.127.0.0.1"] {
+            let request = atm_core::send::SendRequest::new(
+                ".".into(),
+                ".".into(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                target,
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("task".to_string()),
+                None,
+                true,
+                Some("T1".parse().expect("task id")),
+                false,
+            )
+            .expect("request shape");
+            let error = validate_local_task_target(&request)
+                .expect_err("non-local task target must fail before execution");
+            assert!(error.to_string().contains("local-team only"), "{error:#}");
+        }
     }
 
     #[test]

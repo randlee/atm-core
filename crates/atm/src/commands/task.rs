@@ -15,7 +15,7 @@ use atm_core::task_close::report_recipient;
 use atm_core::task_query::{
     TaskEventQuery, TaskListQuery, TaskPage, select_task_events, select_task_rows,
 };
-use atm_core::types::{TaskId, TeamName};
+use atm_core::types::{AgentName, TaskId, TeamName};
 use atm_storage::{
     DAEMON_ACTOR_NAME, MoveTarget, RuntimeMemberState, TaskActor, TaskCloseOutcome, TaskEventRow,
     TaskRow,
@@ -408,15 +408,21 @@ impl TaskEventsCommand {
 }
 
 impl TaskMoveCommand {
+    fn target(&self) -> MoveTarget {
+        match (&self.before, self.head, self.end) {
+            (None, true, false) => MoveTarget::Head,
+            (None, false, true) => MoveTarget::End,
+            (Some(task_id), false, false) => MoveTarget::Before {
+                task_id: task_id.clone(),
+            },
+            _ => unreachable!("clap target group"),
+        }
+    }
+
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("task move")?;
         let caller = resolve_context(&self.caller)?;
-        let target = match (self.head, self.end, self.before) {
-            (true, false, None) => MoveTarget::Head,
-            (false, true, None) => MoveTarget::End,
-            (false, false, Some(task_id)) => MoveTarget::Before { task_id },
-            _ => unreachable!("clap target group"),
-        };
+        let target = self.target();
         let composition = composition("task move", observability, &home_dir, &current_dir)?;
         preflight_daemon_api(&composition, HttpApiVersion::parse("1.6.0")?, "task move").await?;
         let response = composition
@@ -523,7 +529,7 @@ fn print_task_rows(
                         .find(|member| member.team == row.team && member.member == row.assignee)
                 })
                 .map_or("unknown", |member| runtime_state_name(member.state));
-            println!("{} (state: {state})", row.assignee);
+            println!("{}", member_state_header(&row.assignee, state));
             println!("pos  state     task_id     assigned_at               reminders assigner");
             current_member = Some(row.assignee.clone());
         } else if !grouped && current_member.is_none() {
@@ -557,6 +563,10 @@ const fn runtime_state_name(state: RuntimeMemberState) -> &'static str {
         RuntimeMemberState::Active => "active",
         RuntimeMemberState::Blocked => "blocked",
     }
+}
+
+fn member_state_header(member: &AgentName, state: &str) -> String {
+    format!("{member} (state: {state})")
 }
 
 fn print_task_events(rows: &[TaskEventRow], json: bool) -> Result<()> {
@@ -700,6 +710,17 @@ mod tests {
     }
 
     #[test]
+    fn list_all_shows_every_member_grouped_with_state_header() {
+        let alice: AgentName = "alice".parse().expect("agent");
+        let bob: AgentName = "bob".parse().expect("agent");
+        assert_eq!(
+            member_state_header(&alice, "active"),
+            "alice (state: active)"
+        );
+        assert_eq!(member_state_header(&bob, "idle"), "bob (state: idle)");
+    }
+
+    #[test]
     fn require_daemon_api_refuses_older_daemon() {
         let verdict = |version: &str| CompatibilityVerdict::Compatible {
             daemon_release: ReleaseVersion::parse("1.5.14").expect("release"),
@@ -712,5 +733,48 @@ mod tests {
         assert!(require_daemon_api(&verdict("1.5.0"), min_15, "task list").is_ok());
         assert!(require_daemon_api(&verdict("1.5.0"), min_16.clone(), "task move").is_err());
         assert!(require_daemon_api(&verdict("1.6.0"), min_16, "task move").is_ok());
+    }
+
+    #[test]
+    fn task_move_to_pre_1_6_0_daemon_is_refused_before_send() {
+        let verdict = CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::parse("1.5.14").expect("release"),
+            daemon_schema_version: 1,
+            daemon_http_api_version: HttpApiVersion::parse("1.5.0").expect("HTTP API"),
+        };
+        let error = require_daemon_api(
+            &verdict,
+            HttpApiVersion::parse("1.6.0").expect("minimum"),
+            "task move",
+        )
+        .expect_err("preflight must reject before request execution");
+        assert!(error.message().contains("1.5.0"));
+        assert!(error.message().contains("1.6.0"));
+    }
+
+    #[test]
+    fn move_head_end_before_via_cli() {
+        let cases = [
+            (vec!["--head"], MoveTarget::Head),
+            (vec!["--end"], MoveTarget::End),
+            (
+                vec!["--before", "T2"],
+                MoveTarget::Before {
+                    task_id: "T2".parse().expect("task id"),
+                },
+            ),
+        ];
+        for (flags, expected) in cases {
+            let mut args = vec!["atm", "task", "move", "T1"];
+            args.extend(flags);
+            let cli = Cli::try_parse_from(args).expect("valid task move");
+            let Command::Task(TaskCommand {
+                command: TaskSubcommand::Move(command),
+            }) = cli.command
+            else {
+                panic!("expected task move");
+            };
+            assert_eq!(command.target(), expected);
+        }
     }
 }
