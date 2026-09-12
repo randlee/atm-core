@@ -20,13 +20,15 @@
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:deferredNote "fenix's BA.4 QA-1 ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5642738654) folds this into BA.6, not BA.4. Further promoted by fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z): worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer) -- arch-ctm's BA6-CLEANUP task is cancelled; fix lands once on the cleanup layer, not on docs/ba6." ;
-  triage:promoteTo "fix/phase-ba-cleanup" ;
+  triage:promoteTo "fix/phase-ba-cleanup-b" ;
+  triage:deferredNote "further re-promoted (ATM 2026-09-12T04:51:28Z): docs/ba6-task-nudge-documentation complete and FROZEN at 03c623717 (PR #1412); new layer 6, fix/phase-ba-cleanup-b (arch-ctm single writer), above fix/phase-ba-cleanup (cipher). Rebase-at-task-start is now the rule on every layer -- headSha values in these records are snapshots, not live pointers." ;
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/3> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/4> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/RBP-F001/1>
   a triage:Occurrence ;
@@ -75,8 +77,11 @@
   triage:file "crates/atm-storage/src/task_store.rs" ;
   triage:line 117 ;
   triage:snippet "list_escalation_recipients/add_escalation_recipient/remove_escalation_recipient/effective_escalation_recipients -- raw String/&str, no validation at trait boundary" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:51:28Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "promoted to fix/phase-ba-cleanup-b (layer 6, arch-ctm); fix/phase-ba-cleanup (layer 5, cipher) keeps only the nine records fenix confirmed stay there" ;
   triage:branch "fix/phase-ba-cleanup" ;
   triage:headSha "dfd47edca" ;
   triage:occursIn <urn:atm:triage:worktree/RBP-F001/3> .
@@ -87,4 +92,22 @@
   triage:branch "fix/phase-ba-cleanup" ;
   triage:headSha "dfd47edca" ;
   triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/RBP-F001/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/task_store.rs" ;
+  triage:line 117 ;
+  triage:snippet "list_escalation_recipients/add_escalation_recipient/remove_escalation_recipient/effective_escalation_recipients -- raw String/&str, no validation at trait boundary" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "5b68d42bf" ;
+  triage:occursIn <urn:atm:triage:worktree/RBP-F001/4> .
+
+<urn:atm:triage:worktree/RBP-F001/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 6, arch-ctm single writer" ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "5b68d42bf" ;
+  triage:orderIndex 6 .
 
