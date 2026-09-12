@@ -44,7 +44,7 @@ Not used: `Start`, `Block`, `Unblock`, `Reassign`, `Reopen`, `Fail`, `Abort`,
 Design §5, verbatim contract:
 
 ```
-atm task assign <agent> [message] --template <j2> --vars <json> [--task-id <id>] [--before <other-task-id> | --head]
+atm task assign <agent> [message | --template <j2> --vars <json>] [--task-id <id>] [--before <other-task-id> | --head]
 atm task close  <task-id> <outcome> [reason] [message]
 atm task move   <task-id> --before <other> | --head | --end
 atm task list [--all]

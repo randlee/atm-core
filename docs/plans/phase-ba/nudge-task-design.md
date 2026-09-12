@@ -309,9 +309,9 @@ Task is managed by a CLOSED SET of `atm task` subcommands. A clap subcommand
 enum is closed by construction, so this lints under ADR-001/RBP-003 with no
 extra machinery. No `atm task` namespace exists today.
 
-    atm task assign <agent> [message] --template <j2> --vars <json> [--task-id <id>]
+    atm task assign <agent> --template <j2> --vars <json> [--task-id <id>]
                         [--before <other-task-id> | --head]   # placement, default END
-    atm task close  <task-id> <outcome> [reason] [message]
+    atm task close  <task-id> <outcome> [reason]
     atm task move   <task-id> --before <other> | --head | --end
     atm task list                      # oversight, section 7
     atm task events <task-id>          # history
