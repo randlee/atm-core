@@ -463,8 +463,8 @@ impl HerdrQueueWakePump {
         pending_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         eligible: Vec<HerdrCandidate>,
         stats: &mut HerdrQueueWakeStats,
-    ) -> HashSet<MemberKey> {
-        let mut prompted = HashSet::new();
+    ) -> HashMap<MemberKey, atm_core::schema::AtmMessageId> {
+        let mut prompted = HashMap::new();
         if eligible.is_empty() {
             return prompted;
         }
@@ -479,7 +479,7 @@ impl HerdrQueueWakePump {
                 break;
             }
             visited += 1;
-            if self
+            if let Some(message_id) = self
                 .process_candidate(
                     &pending_store,
                     &eligible[(start + offset) % eligible.len()],
@@ -487,7 +487,10 @@ impl HerdrQueueWakePump {
                 )
                 .await
             {
-                prompted.insert(eligible[(start + offset) % eligible.len()].key.clone());
+                prompted.insert(
+                    eligible[(start + offset) % eligible.len()].key.clone(),
+                    message_id,
+                );
             }
         }
         *self
@@ -513,10 +516,8 @@ impl HerdrQueueWakePump {
         pending_store: &Arc<dyn PendingNudgeStore + Send + Sync>,
         member: &HerdrCandidate,
         stats: &mut HerdrQueueWakeStats,
-    ) -> bool {
-        let Some(claim) = self.claim_next_pending(pending_store, member).await else {
-            return false;
-        };
+    ) -> Option<atm_core::schema::AtmMessageId> {
+        let claim = self.claim_next_pending(pending_store, member).await?;
         // A claimed nudge is now a real, in-flight Herdr wake attempt for this
         // member: mark the ephemeral roster state pending. `ReleasePendingOnDrop`
         // clears it unconditionally when the attempt concludes below.
@@ -547,7 +548,7 @@ impl HerdrQueueWakePump {
                     outcome = "dispatch_failed_released",
                     "Herdr queue dispatch could not be rebuilt"
                 );
-                return false;
+                return None;
             }
         };
         if !still_idle(&self.service_runtime, &member.key) {
@@ -561,7 +562,7 @@ impl HerdrQueueWakePump {
                 outcome = "held_not_idle",
                 "Herdr queue prompt skipped after the live idle recheck"
             );
-            return false;
+            return None;
         }
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
             release.release_without_input().await;
@@ -574,7 +575,7 @@ impl HerdrQueueWakePump {
                 outcome = "held_target_not_present",
                 "Herdr queue selector returned no emitter"
             );
-            return false;
+            return None;
         };
         self.emit_claim(emitter, dispatch, member, claim, &mut release, stats)
             .await
@@ -629,7 +630,7 @@ impl HerdrQueueWakePump {
         claim: atm_core::boundary::NudgeClaim,
         release: &mut ReleasePendingOnDrop,
         stats: &mut HerdrQueueWakeStats,
-    ) -> bool {
+    ) -> Option<atm_core::schema::AtmMessageId> {
         #[cfg(test)]
         self.notify_prompt_started_test_gate();
         match emitter
@@ -637,9 +638,10 @@ impl HerdrQueueWakePump {
             .await
         {
             Ok(_) => {
+                let message_id = claim.msg;
                 self.complete_successful_claim(member, claim, release, stats)
                     .await;
-                true
+                Some(message_id)
             }
             Err(error) => {
                 if error.code() == AtmErrorCode::HerdrUnavailable {
@@ -673,7 +675,7 @@ impl HerdrQueueWakePump {
                     error_code = ?error.code(),
                     "Herdr queue prompt failed"
                 );
-                false
+                None
             }
         }
     }

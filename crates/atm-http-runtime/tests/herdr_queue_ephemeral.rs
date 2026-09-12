@@ -521,6 +521,44 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
 }
 
 #[tokio::test]
+async fn unrelated_mail_prompt_does_not_start_the_assigned_head_task() {
+    let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let _plain = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+    let task_id: TaskId = "BA5-UNSEEN-HEAD".parse().expect("task id");
+    let _assignment = queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        task_id.clone(),
+    );
+    add_roster_member(&runtime, key.team(), "sender");
+    let now = Arc::new(Mutex::new(
+        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
+    ));
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, now);
+
+    pump.tick_once().await;
+
+    let store = runtime.task_store().expect("task store");
+    let head = store
+        .load_task(key.team(), &task_id)
+        .expect("load head")
+        .expect("head task");
+    assert_eq!(head.state, TaskState::Assigned);
+    assert_eq!(head.reminder_count, 1, "plain mail still counts as a reminder");
+    assert!(
+        store
+            .list_task_events(key.team(), &task_id, Some(key.agent()))
+            .expect("task events")
+            .iter()
+            .all(|event| event.event != atm_storage::TaskEventKind::Started)
+    );
+    assert_eq!(task_started_receipt_count(&runtime, key.team(), &task_id).await, 0);
+}
+
+#[tokio::test]
 async fn deferred_assignment_handoff_starts_head_task_once() {
     let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
     clear_pending_markers(root.path(), &runtime, &key);

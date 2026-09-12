@@ -84,11 +84,11 @@ impl HerdrQueueWakePump {
     pub(super) async fn record_queue_prompt_reminders(
         &self,
         prepared: &PreparedTaskPass,
-        prompted: &HashSet<MemberKey>,
+        prompted: &HashMap<MemberKey, atm_core::schema::AtmMessageId>,
         stats: &mut HerdrQueueWakeStats,
     ) {
         let now = (self.clock)();
-        for member in prompted {
+        for (member, message_id) in prompted {
             let Some(row) = prepared.queue_reminder_head(member) else {
                 continue;
             };
@@ -96,9 +96,55 @@ impl HerdrQueueWakePump {
                 task_store: &prepared.task_store,
                 member,
             };
-            self.record_task_outcome(&context, row, now, ReminderOutcome::Emitted, true, stats)
-                .await;
+            let recorded_row = if self
+                .queue_prompt_is_head_assignment(member, *message_id, row)
+                .await
+            {
+                crate::herdr_task_start::complete_task_handoff(
+                    self,
+                    context.task_store,
+                    &self.daemon_home,
+                    context.member,
+                    row,
+                    now,
+                )
+                .await
+            } else {
+                self.record_task_reminder(
+                    context.task_store,
+                    context.member,
+                    row,
+                    now,
+                    ReminderOutcome::Emitted,
+                )
+                .await
+            };
+            stats.task_reminders += 1;
+            self.warn_failed_reminder_record(&context, row, recorded_row);
         }
+    }
+
+    async fn queue_prompt_is_head_assignment(
+        &self,
+        member: &MemberKey,
+        message_id: atm_core::schema::AtmMessageId,
+        row: &TaskRow,
+    ) -> bool {
+        if row.state != atm_core::boundary::TaskState::Assigned
+            || row.position.is_none_or(|position| position.get() != 1)
+        {
+            return false;
+        }
+        let runtime = self.service_runtime.clone();
+        let member = member.clone();
+        matches!(
+            self.blocking_bridge
+                .run(super::herdr_request_deadline(), move || {
+                    super::load_received_hook_dispatch_message(&runtime, &member, message_id)
+                })
+                .await,
+            Ok(Some(message)) if message.envelope.task_id.as_ref() == Some(&row.task_id)
+        )
     }
 
     pub(super) fn collect_idle_members(
@@ -445,6 +491,15 @@ impl HerdrQueueWakePump {
             // runtime no longer produces a blocked reminder outcome.
             ReminderOutcome::Blocked => {}
         }
+        self.warn_failed_reminder_record(context, row, recorded_row);
+    }
+
+    fn warn_failed_reminder_record(
+        &self,
+        context: &crate::herdr_queue_wake_escalation::TaskReminderContext<'_>,
+        row: &TaskRow,
+        recorded_row: Result<TaskRow, AtmError>,
+    ) {
         if let Err(error) = recorded_row {
             tracing::warn!(
                 subsystem = "herdr_queue_wake",
