@@ -95,7 +95,7 @@
       "assignment_message_id": "01M2BKCBMM0WQ5XN0T28N5CBP7",
       "assignment_from": "fenix",
       "assignment_shared_path": null,
-      "assignment_summary": "BB3-QA2-1789244000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1436, fix-round head 8a8b29640 (cipher's BB3-FIX-R1 push, rebased on integrate/phase-bb @ b051d3417) -- BB.3 test-procedure-pages QA-2 follow-up pass.",
+      "assignment_summary": "BB3-QA2-1789244000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1436, fix-round head 8a8b29640 at assignment time (cipher's BB3-FIX-R1 push, rebased on integrate/phase-bb @ b051d3417) -- BB.3 test-procedure-pages QA-2 follow-up pass.",
       "result_time_utc": null,
       "result_time_pst": null,
       "result_message_id": null,
@@ -107,7 +107,7 @@
       "important": null,
       "minor": null,
       "count_basis": "headline/reviewer",
-      "evidence": "QA-2 assigned to quality-mgr; PR #1436 fix-round head 8a8b29640; cipher's own validation still running; result pending."
+      "evidence": "QA-2 assigned to quality-mgr; PR #1436 fix-round; cipher's BB3-FIX-R1 closed at 791680c2a with all 12 BB3-001..012 claimed implemented (message 01M2BKSDXSRBP86B9RYM7NXNSM) -- reviewed head moved to 791680c2a per fenix. BB3-001..012 held open until QA-2 confirms fixed. Result pending."
     }
   ]
 }
