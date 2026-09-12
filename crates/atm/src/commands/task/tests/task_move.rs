@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM};
+use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
 use atm_http_runtime::CanonicalWriteHandler;
 use atm_storage::{
     MemberKey, MoveTarget, QueuePosition, ReminderOutcome, TaskEventKind, TaskOp, TaskRow,
@@ -27,8 +27,8 @@ fn assign(task: &str) -> TaskAssignCommand {
         task_id: Some(task.parse().unwrap()),
         before: None,
         head: false,
-        message: MessageSourceArgs {
-            text: Some(format!("assign {task}")),
+        message: Some(format!("assign {task}")),
+        source: MessageSourceArgs {
             file: None,
             stdin: false,
             template: None,
@@ -119,8 +119,8 @@ async fn move_head_end_before_via_cli() {
     let mut start = atm_core::send::SendRequest::new(
         f.home_dir.clone(),
         f.current_dir.clone(),
-        "atm-daemon".parse().unwrap(),
-        TEST_RECIPIENT_ADDRESS,
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
         TEST_TEAM.parse().unwrap(),
         atm_core::send::SendMessageSource::Inline("start T1".into()),
         None,

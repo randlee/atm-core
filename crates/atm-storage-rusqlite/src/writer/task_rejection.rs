@@ -10,6 +10,10 @@ pub(super) fn task_already_closed(detail: impl std::fmt::Display) -> AtmError {
     AtmError::new(AtmErrorCode::TaskAlreadyClosed, detail.to_string())
 }
 
+pub(super) fn task_already_active(detail: impl std::fmt::Display) -> AtmError {
+    AtmError::new(AtmErrorCode::TaskAlreadyActive, detail.to_string())
+}
+
 pub(super) fn task_not_counterparty(detail: impl std::fmt::Display) -> AtmError {
     AtmError::new(AtmErrorCode::TaskNotCounterparty, detail.to_string())
 }
@@ -26,6 +30,7 @@ pub(super) fn is_task_rejection(code: AtmErrorCode) -> bool {
     matches!(
         code,
         AtmErrorCode::TaskNotFound
+            | AtmErrorCode::TaskAlreadyActive
             | AtmErrorCode::TaskAlreadyClosed
             | AtmErrorCode::TaskNotCounterparty
             | AtmErrorCode::TaskStaleCounterparty

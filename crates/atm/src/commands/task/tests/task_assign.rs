@@ -20,8 +20,8 @@ fn assign(task: &str, assignee: &str, actor: &str) -> TaskAssignCommand {
         task_id: Some(task.parse().expect("task id")),
         before: None,
         head: false,
-        message: MessageSourceArgs {
-            text: Some(format!("assignment {task}")),
+        message: Some(format!("assignment {task}")),
+        source: MessageSourceArgs {
             file: None,
             stdin: false,
             template: None,
@@ -68,8 +68,8 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
     let mut start_active = atm_core::send::SendRequest::new(
         fixture.home_dir.clone(),
         fixture.current_dir.clone(),
-        "atm-daemon".parse().unwrap(),
-        TEST_RECIPIENT_ADDRESS,
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
         team.clone(),
         atm_core::send::SendMessageSource::Inline("start ACTIVE".into()),
         None,
@@ -133,8 +133,8 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
     let mut start = atm_core::send::SendRequest::new(
         fixture.home_dir.clone(),
         fixture.current_dir.clone(),
-        "atm-daemon".parse().unwrap(),
-        TEST_RECIPIENT_ADDRESS,
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
         team.clone(),
         atm_core::send::SendMessageSource::Inline("start".into()),
         None,
@@ -192,7 +192,6 @@ async fn assign_closed_id_reopens_same_row() {
         outcome: OutcomeArg::Refused,
         reason: Some("no capacity".into()),
         report: MessageSourceArgs {
-            text: None,
             file: None,
             stdin: false,
             template: None,

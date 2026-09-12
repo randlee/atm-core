@@ -24,7 +24,6 @@ fn close(task: &str, actor: &str, outcome: OutcomeArg) -> TaskCloseCommand {
         outcome,
         reason: Some("report".into()),
         report: MessageSourceArgs {
-            text: None,
             file: None,
             stdin: false,
             template: None,
@@ -288,8 +287,8 @@ async fn task_target_on_other_team_or_host_is_rejected_before_send() {
             task_id: Some("T1".parse().unwrap()),
             before: None,
             head: false,
-            message: MessageSourceArgs {
-                text: Some("message".into()),
+            message: Some("message".into()),
+            source: MessageSourceArgs {
                 file: None,
                 stdin: false,
                 template: None,

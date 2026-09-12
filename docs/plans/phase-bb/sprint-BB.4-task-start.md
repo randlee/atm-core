@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 branch: feature/bb4-task-start
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb4-task-start
 ---
@@ -61,8 +61,10 @@ struct TaskStartCommand {
   Output: `started {id}` on an applied start; on a writer rejection the
   write fails and the CLI prints the daemon's error (`ATM_TASK_ALREADY_ACTIVE`
   `task {id} is already active`, `… is already complete`,
-  `… already has an active task`, `… is not assigned to …`) and exits 1,
-  exactly as any failed `atm send` does. Nothing is delivered on rejection.
+  `… already has an active task`, `… is not assigned to …`) and fails exactly
+  as a failed `atm send` does: the same typed error code and the exit status
+  `main.rs` already assigns to that code (lead ruling, fenix,
+  BB4-TASK-START). Nothing is delivered on rejection.
   The preflight row is used only for the fast-fail above; it never decides
   idempotency (plan P12). JSON: the `SendResult`.
 
@@ -157,7 +159,10 @@ CLI — `crates/atm/src/commands/task/tests`:
 - `task_start_sends_to_assigner_with_start_op`.
 - `task_start_defaults_message_when_omitted`.
 - `task_start_by_non_assignee_fails_before_sending`.
-- `task_start_prints_writer_error_for_active_task` — the daemon's `ATM_TASK_ALREADY_ACTIVE` error is printed verbatim, exit 1; no preflight-derived wording exists in the command.
+- `task_start_prints_writer_error_for_active_task` — the daemon's
+  `ATM_TASK_ALREADY_ACTIVE` error is printed verbatim with the same typed code
+  and exit status 1 assigned by `main.rs`; no preflight-derived wording exists
+  in the command (lead ruling, fenix, BB4-TASK-START).
 
 Integration (colima, every roster shape):
 

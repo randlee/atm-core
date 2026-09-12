@@ -103,8 +103,9 @@ migration functions directly.
 - **2026-09-12 — Phase BB.1:** `HTTP_API_VERSION` moves from `1.7.0` to
   `1.8.0`. `PostSendHookEvent` gains additive optional `task_transition`
   metadata; omitted values default to `None`, older consumers ignore the
-  field, and both graft receivers decode it without changing the Python
-  callback shape. This is a minor, backward-compatible bump.
+  field, both graft receivers decode it without changing the Python callback
+  shape, and the stable error-code surface gains additive
+  `ATM_TASK_ALREADY_ACTIVE`. This is a minor, backward-compatible bump.
 - **2026-09-12 — Phase BA closure review:** `HTTP_API_VERSION` moves from
   `1.6.0` to `1.7.0`. Task-operation rejections gain additive, stable error
   codes for not-found, already-closed, third-party, stale-counterparty, and

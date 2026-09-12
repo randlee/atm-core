@@ -276,7 +276,7 @@ components:
       description: Privacy-safe operator diagnostic.
       properties:
         severity: { type: string }
-        code: { type: string }
+        code: { type: string, description: Stable ATM_* code; HTTP API 1.8.0 adds ATM_TASK_ALREADY_ACTIVE. }
         message: { type: string }
         remediation: { type: string }
     HerdrMemberPresence:

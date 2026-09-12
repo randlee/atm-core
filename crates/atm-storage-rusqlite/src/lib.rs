@@ -1072,21 +1072,11 @@ mod tests {
     }
 
     fn start_task(backend: &SqliteStorageBackend, task_id: &atm_storage::TaskId) {
-        let member = MemberKey::new(team(), agent());
-        backend
-            .task_store()
-            .record_reminder(
-                &member,
-                task_id,
-                IsoTimestamp::now(),
-                atm_storage::ReminderOutcome::Emitted,
-            )
-            .expect("record reminder");
-
         let message_id = AtmMessageId::new();
         let mut start = message(&format!("atm:{message_id}"), "start");
         start.envelope.message_id = Some(message_id);
-        start.envelope.from = "atm-daemon".parse().expect("daemon actor");
+        start.envelope.from = agent();
+        start.agent = "lead".parse().expect("assigner");
         start.envelope.task_id = Some(task_id.clone());
         start.envelope.task_op = Some(TaskOp::Start);
         let admission = backend
@@ -1199,20 +1189,11 @@ mod tests {
     fn move_of_active_task_is_a_noop_with_moved_event() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         seed_move_task(&backend, "T1", "test-agent");
-        let member = MemberKey::new(team(), agent());
-        backend
-            .task_store()
-            .record_reminder(
-                &member,
-                &"T1".parse().unwrap(),
-                IsoTimestamp::now(),
-                atm_storage::ReminderOutcome::Emitted,
-            )
-            .unwrap();
         let id = AtmMessageId::new();
         let mut start = message(&format!("atm:{id}"), "start");
         start.envelope.message_id = Some(id);
-        start.envelope.from = "atm-daemon".parse().unwrap();
+        start.envelope.from = agent();
+        start.agent = "lead".parse().unwrap();
         start.envelope.task_id = Some("T1".parse().unwrap());
         start.envelope.task_op = Some(TaskOp::Start);
         backend.message_store().save_message(&start).unwrap();
@@ -1274,7 +1255,8 @@ mod tests {
         // Complete rows are intercepted by the writer before the state
         // authority's deliberately unreachable complete-row Start arm.
         let mut late_start = message("atm:late-start", "start");
-        late_start.envelope.from = "atm-daemon".parse().expect("daemon actor");
+        late_start.envelope.from = agent();
+        late_start.agent = "lead".parse().expect("assigner");
         late_start.envelope.task_id = Some(task_id.clone());
         late_start.envelope.task_op = Some(TaskOp::Start);
         let start_error = backend

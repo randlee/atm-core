@@ -1181,7 +1181,8 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
             .expect("load first task")
             .expect("first task")
             .state,
-        TaskState::Active
+        TaskState::Assigned,
+        "prompting does not start the first task"
     );
     assert_eq!(
         runtime
@@ -1213,7 +1214,8 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
             .expect("load second task")
             .expect("second task")
             .state,
-        TaskState::Active
+        TaskState::Assigned,
+        "prompting does not start the next task after queue advancement"
     );
 }
 
