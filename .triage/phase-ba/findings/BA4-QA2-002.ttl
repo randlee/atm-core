@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA4-QA2-002>
+  a triage:Finding ;
+  triage:findingId "BA4-QA2-002" ;
+  triage:title "protocol_1_5_0_fixtures_decode_on_1_6_0 (task_move.rs) doesn't test its documented negative path; the real assertion lives under a different name in protocol.rs" ;
+  triage:description "quality-mgr QA-2 (req-qa, confirmed by quality-mgr's own independent read of both test bodies to resolve a conflict with schema-reviewer's characterization), PR #1408 @ 85da7db99, https://github.com/randlee/atm-core/pull/1408#issuecomment-5643235732. The sprint doc requires protocol_1_5_0_fixtures_decode_on_1_6_0 (crates/atm/tests/task_move.rs:153-176) to prove 'a TaskMove fixture fails on the pinned 1.5.0 enum copy with an unknown-variant error.' The test only round-trips QueueGetNext/ReloadRuntimeView fixtures -- never constructs a TaskMove fixture, never asserts the unknown-variant failure. codec_preserves_protocol_1_5_0_fixtures (crates/atm-core/src/protocol.rs:907-942) does everything the doc-named test should do, including the exact TaskMove/unknown-variant assertion (lines 932-941), but under an unrelated name in a different crate/file. The behavior the acceptance criterion cares about is genuinely covered and passing somewhere in the tree -- not a functional defect -- but the doc-named test in the doc-named location does not itself prove what its name and the sprint doc claim (same pattern flagged as a lesson from BA.3's QA-1 round: doc-named test presence is not coverage). fenix's ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5643246196): STANDS, important. protocol_1_5_0_fixtures_decode_on_1_6_0 in task_move.rs round-trips only the 1.5.0 fixtures; the TaskMove unknown-variant assertion the doc line requires lives in codec_preserves_protocol_1_5_0_fixtures in protocol.rs. Keep the protocol.rs test; add the TaskMove fixture + 'unknown variant `TaskMove`' assertion to the doc-named one. Routed to solar (single-writer worktree); folded into BA4-FIX-R2-1789184679." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/tests/task_move.rs (protocol_1_5_0_fixtures_decode_on_1_6_0), crates/atm-core/src/protocol.rs (codec_preserves_protocol_1_5_0_fixtures)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA4 ;
+  triage:foundAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA2-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA4-QA2-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/task_move.rs" ;
+  triage:line 153 ;
+  triage:snippet "protocol_1_5_0_fixtures_decode_on_1_6_0 only round-trips QueueGetNext/ReloadRuntimeView; TaskMove unknown-variant assertion lives instead in protocol.rs's codec_preserves_protocol_1_5_0_fixtures (lines 932-941)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "85da7db99" ;
+  triage:occursIn <urn:atm:triage:worktree/BA4-QA2-002/1> .
+
+<urn:atm:triage:worktree/BA4-QA2-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at 85da7db99 (quality-mgr QA-2 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "85da7db99" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA4-QA2-001>
+  a triage:Finding ;
+  triage:findingId "BA4-QA2-001" ;
+  triage:title "cli_surface_baseline.json was not regenerated for BA.4's intentional CLI-surface changes; cli_surface_matches_committed_baseline fails deterministically" ;
+  triage:description "quality-mgr QA-2 (converged: req-qa, arch-qa, ruthless-boundary-qa, rust-qa-agent, plus quality-mgr's own independent reproduction -- 5 of 6 dispatched reviewers plus quality-mgr), PR #1408 @ 85da7db99, https://github.com/randlee/atm-core/pull/1408#issuecomment-5643235732. crates/atm/tests/cli_surface_baseline.json was not regenerated for this sprint's intentional CLI-surface changes. cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface's cli_surface_matches_committed_baseline fails deterministically: atm list 'member'/'task_events'/'tasks' arguments removed or renamed; atm queue/send 'task_complete' num_args changed {max:1,min:1}->{max:0,min:0} and has_default false->true; no top-level 'task' subcommand entry at all despite atm task (5 subcommands) being new surface added by this sprint. Not flaky -- fully deterministic, root-caused, reproduced independently by quality-mgr (local, fresh CARGO_TARGET_DIR), ruthless-boundary-qa, arch-qa, req-qa, and rust-qa-agent. Confirmed live on CI identically on ubuntu-latest and macos-latest (run https://github.com/randlee/atm-core/actions/runs/34669585703). Expected fallout of the sprint's own 'Paths to delete' work; the change itself is correct and intentional, only the checked-in baseline snapshot was never regenerated. fenix's ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5643246196): STANDS. Reproduced at 85da7db99 with the same seven breaking entries plus the missing task subcommand tree. Regenerate the baseline with the gen_cli_docs example (also refreshes the version-suffixed CLI reference), commit, re-run clean. Routed to solar (not cipher) because feature/ba4-atm-task-commands is solar's single-writer worktree and a second writer on a live branch breaks the single-writer rule; folded into BA4-FIX-R2-1789184679." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-gate" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/tests/cli_surface_baseline.json, crates/atm/tests/cli_surface.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA4 ;
+  triage:foundAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA2-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA4-QA2-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/cli_surface_baseline.json" ;
+  triage:line 1 ;
+  triage:snippet "cli_surface_matches_committed_baseline fails: atm list --member/--task_events/--tasks removed; queue/send --task_complete arity changed; atm task subcommand tree absent from baseline" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "85da7db99" ;
+  triage:occursIn <urn:atm:triage:worktree/BA4-QA2-001/1> .
+
+<urn:atm:triage:worktree/BA4-QA2-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at 85da7db99 (quality-mgr QA-2 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "85da7db99" ;
+  triage:orderIndex 0 .

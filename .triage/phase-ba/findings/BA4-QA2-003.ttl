@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA4-QA2-003>
+  a triage:Finding ;
+  triage:findingId "BA4-QA2-003" ;
+  triage:title "preflight_close signature deviates from the documented contract (stale-doc-read false positive)" ;
+  triage:description "quality-mgr QA-2 (req-qa), PR #1408 @ 85da7db99, https://github.com/randlee/atm-core/pull/1408#issuecomment-5643235732. req-qa reported the sprint doc specifies pub async fn preflight_close(reader: &dyn AsyncTaskLedgerReader, team: TeamName, task_id: &TaskId, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>, while the shipped function (crates/atm-core/src/task_close.rs) is pub fn preflight_close(rows: Vec<TaskRow>, task_id: &TaskId) -> ClosePreflight -- synchronous, no reader/team/deadline/Result. fenix's ruling (https://github.com/randlee/atm-core/pull/1408#issuecomment-5643246196): REJECTED, stale read. At the PR head the sprint doc's Close section already records the shipped pure signature: pub fn preflight_close(rows: Vec<TaskRow>, task_id: &TaskId) -> ClosePreflight; with the note 'BA4-FIX-R1: CLI reads through daemon List; pure projection.' (sprint-BA.4 line 195-196), and no AsyncTaskLedgerReader/async fn preflight_close text remains anywhere in the doc. The exactness gate is met; req-qa read an older copy of the doc. No fix scheduled." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/task_close.rs (preflight_close), docs/plans/phase-ba/sprint-BA.4-atm-task-commands.md (Close section)" ;
+  triage:status "dismissed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "fenix's ruling (PR #1408, https://github.com/randlee/atm-core/pull/1408#issuecomment-5643246196): rejected, stale doc read -- the doc at the PR head already records the shipped pure signature (sprint-BA.4 line 195-196); no async reader/deadline/Result text remains in the doc. Exactness gate is met." ;
+  triage:foundIn triage:BA4 ;
+  triage:foundAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA2-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA4-QA2-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_close.rs" ;
+  triage:line 1 ;
+  triage:snippet "preflight_close signature reported as deviating from the doc; doc at PR head already matches the shipped signature -- stale read" ;
+  triage:status "dismissed" ;
+  triage:closed true ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "85da7db99" ;
+  triage:occursIn <urn:atm:triage:worktree/BA4-QA2-003/1> .
+
+<urn:atm:triage:worktree/BA4-QA2-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at 85da7db99 (quality-mgr QA-2 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "85da7db99" ;
+  triage:orderIndex 0 .
