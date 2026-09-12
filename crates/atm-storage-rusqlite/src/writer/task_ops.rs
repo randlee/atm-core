@@ -567,7 +567,25 @@ pub(crate) fn apply_task_close(
             record.agent
         )));
     }
-    acknowledge_assignment(connection, cache, target, record, &row)?;
+    persist_task_close(
+        record, task_id, outcome, reason, &row, next_state, connection, cache, target,
+    )?;
+    Ok(None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn persist_task_close(
+    record: &Message,
+    task_id: &TaskId,
+    outcome: TaskCloseOutcome,
+    reason: Option<&str>,
+    row: &TaskRow,
+    next_state: TaskState,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    acknowledge_assignment(connection, cache, target, record, row)?;
     connection
         .execute(
             "UPDATE tasks SET state=?3, close_outcome=?4, position=NULL, updated_at=?5
@@ -599,8 +617,7 @@ pub(crate) fn apply_task_close(
         None,
         None,
         reason,
-    )?;
-    Ok(None)
+    )
 }
 
 fn drop_task_link_from_mail(
@@ -649,25 +666,28 @@ pub(super) fn apply_task_move(
     )
     .map_err(|error| error.into_atm_error())?;
     if row.state == TaskState::Active {
-        append_task_event(
-            connection,
-            target,
-            team,
-            task_id,
-            &row.assignee,
-            &at,
-            TaskEventKind::Moved,
-            Some(row.state.tag()),
-            Some(next_state.tag()),
-            None,
-            actor,
-            None,
-            None,
-            None,
-            Some("1→1"),
+        append_active_task_move(
+            team, task_id, actor, &at, &row, next_state, connection, target,
         )?;
         return Ok(QueuePosition::HEAD);
     }
+    apply_queued_task_move(
+        team, task_id, actor, target_pos, &at, &row, next_state, connection, target,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_queued_task_move(
+    team: &TeamName,
+    task_id: &TaskId,
+    actor: &AgentName,
+    target_pos: &MoveTarget,
+    at: &IsoTimestamp,
+    row: &TaskRow,
+    next_state: TaskState,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<QueuePosition, AtmError> {
     let from = row
         .position
         .ok_or_else(|| task_rejected("open task has no queue position"))?;
@@ -697,7 +717,7 @@ pub(super) fn apply_task_move(
         team,
         task_id,
         &row.assignee,
-        &at,
+        at,
         TaskEventKind::Moved,
         Some(row.state.tag()),
         Some(next_state.tag()),
@@ -709,6 +729,36 @@ pub(super) fn apply_task_move(
         Some(&detail),
     )?;
     Ok(to)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_active_task_move(
+    team: &TeamName,
+    task_id: &TaskId,
+    actor: &AgentName,
+    at: &IsoTimestamp,
+    row: &TaskRow,
+    next_state: TaskState,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    append_task_event(
+        connection,
+        target,
+        team,
+        task_id,
+        &row.assignee,
+        at,
+        TaskEventKind::Moved,
+        Some(row.state.tag()),
+        Some(next_state.tag()),
+        None,
+        actor,
+        None,
+        None,
+        None,
+        Some("1→1"),
+    )
 }
 
 fn queue_order(
