@@ -31,6 +31,7 @@ rusqlite = { version = "0.33.0", features = ["bundled", "hooks"] }
 rusqlite = { version = "0.33.0", features = ["bundled-windows", "modern_sqlite", "hooks"] }
 
 [dev-dependencies]
+atm-storage = { workspace = true, features = ["test-utils"] }
 serde.workspace = true
 serde_json.workspace = true
 tempfile = "3"

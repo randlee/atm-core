@@ -1,9 +1,10 @@
 use std::time::Duration;
 
+use atm_storage::testing::InMemoryTaskLedgerReader;
 use atm_storage::{
-    AgentName, AtmErrorCode, AtmMessageId, BuiltInNudgeTemplateKind, IsoTimestamp, Message,
-    MessageEnvelope, MessageKey, PromptHandoff, PromptTrigger, ReadDeadline, ReadLaneError,
-    TaskCloseOutcome, TaskId, TaskOp, TaskState, TeamName,
+    AgentName, AsyncTaskLedgerReader, AtmErrorCode, AtmMessageId, BuiltInNudgeTemplateKind,
+    IsoTimestamp, Message, MessageEnvelope, MessageKey, PromptHandoff, PromptTrigger, ReadDeadline,
+    ReadLaneError, TaskCloseOutcome, TaskId, TaskOp, TaskState, TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 use chrono::{DateTime, Utc};
@@ -105,6 +106,37 @@ async fn record_prompt_handoff_round_trips_every_trigger() {
         .record_prompt_handoff(&task_pass)
         .expect("task pass");
     assert_eq!(harness.list().await, vec![steer, task_pass]);
+}
+
+#[tokio::test]
+async fn in_memory_task_ledger_reader_returns_seeded_handoffs_for_task() {
+    let harness = Harness::new();
+    let wanted = harness.handoff(
+        "atm:01M2BB60000000000000000101",
+        0,
+        PromptTrigger::TaskPass,
+        "2026-09-12T15:27:34Z",
+    );
+    let mut other = harness.handoff(
+        "atm:01M2BB60000000000000000102",
+        0,
+        PromptTrigger::TaskPass,
+        "2026-09-12T15:27:34Z",
+    );
+    other.task_id = "BB6-OTHER".parse().expect("other task id");
+    let reader = InMemoryTaskLedgerReader::with_rows(Vec::new(), Vec::new())
+        .with_prompt_handoffs(vec![wanted.clone(), other]);
+
+    let rows = reader
+        .list_prompt_handoffs(
+            harness.team,
+            harness.task_id,
+            ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+        )
+        .await
+        .expect("list prompt handoffs");
+
+    assert_eq!(rows, vec![wanted]);
 }
 
 #[tokio::test]
