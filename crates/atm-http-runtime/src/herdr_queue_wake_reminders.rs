@@ -231,11 +231,6 @@ impl HerdrQueueWakePump {
             task_store,
             member: &candidate.member,
         };
-        if candidate.state == atm_core::protocol::RuntimeMemberState::Blocked {
-            self.record_task_outcome(&context, &row, now, ReminderOutcome::Blocked, stats)
-                .await;
-            return;
-        }
         if stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
             return;
         }
@@ -248,7 +243,10 @@ impl HerdrQueueWakePump {
         .await;
         let dispatch = match dispatch {
             Ok(Some(dispatch)) => dispatch,
-            Ok(None) => return,
+            Ok(None) => {
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_dispatch", outcome = "no_delivery_channel", member = %candidate.member, "Task reminder held because the member has no delivery channel");
+                return;
+            }
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member, "Herdr task reminder could not render");
                 self.record_task_outcome(&context, &row, now, ReminderOutcome::Unrenderable, stats)
@@ -315,7 +313,17 @@ impl HerdrQueueWakePump {
             ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
             ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
         }
-        let _ = recorded_row;
+        if let Err(error) = recorded_row {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "task_reminder_handoff",
+                outcome = "failed",
+                member = %context.member,
+                task_id = %row.task_id,
+                error = %error,
+                "Task reminder was emitted but its durable handoff failed"
+            );
+        }
     }
 
     async fn record_task_reminder(

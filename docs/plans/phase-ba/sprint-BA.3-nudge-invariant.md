@@ -21,7 +21,7 @@
 7. Add the refusal escalation to the tick — `herdr_queue_wake.rs` (see "Consecutive refusals").
 8. Fold the `map_or(Unknown, …)` fallback into `runtime_state`; add `still_idle` — `herdr_queue_wake.rs:459-463`, `:934`.
 9. Delete the breaker escalation and the paths under "Paths to delete".
-10. Add the architecture test — `crates/atm-architecture/tests/escalation_ownership.rs` (new).
+10. Add the architecture test — `crates/atm-architecture/tests/escalation_ownership.rs` (new). BA3-FIX-R3 adds `queue_drain_eligible` and permits `EscalationState::observe` so the syn guard can keep runtime-state decisions at their owning boundaries.
 11. Write the tests under "Tests".
 
 ## Phase AZ code used
@@ -332,7 +332,7 @@ lead; backends Herdr steer, tmux, bare-CLI FIFO):
    one function that turns a `RuntimeMemberState` into a decision.
 2. Every test above exists by name and passes under `just test`; the
    disposition table has exactly the 12 arms quoted above.
-3. `grep -rn "BLOCKED_RENOTIFY_MS\|select_open_task\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation\|HoldReason" crates/` returns nothing.
+3. `grep -rn "BLOCKED_RENOTIFY_MS\|select_open_task\b\|breaker_escalation_gates\|breaker_cycle_opened_at\|breaker_failure_counts\|HerdrBreakerEscalationGate\|escalate_breaker_cycle\|BreakerOpened\|herdr_breaker_escalation\|HoldReason" crates/` returns nothing.
 4. `grep -n "DeliveryChannel::HerdrSteer" crates/atm-http-runtime/src/herdr_queue_wake.rs` returns nothing.
 5. `grep -rn "TaskOp::Start" crates/atm-http-runtime/src` → `herdr_task_start.rs` only.
 6. `grep -rn "escalate\b\|escalate_mail" crates/atm-core/src` returns nothing.

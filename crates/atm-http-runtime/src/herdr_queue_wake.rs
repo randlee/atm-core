@@ -292,7 +292,13 @@ impl HerdrQueueWakePump {
                             state: record.runtime.state,
                             state_changed_at: record.runtime.state_changed_at,
                         });
-                        if candidate.pending && record.runtime.state == RuntimeMemberState::Idle {
+                        if candidate.pending
+                            && queue_drain_eligible(&MemberObservation {
+                                member: candidate.key.clone(),
+                                state: record.runtime.state,
+                                state_changed_at: record.runtime.state_changed_at,
+                            })
+                        {
                             eligible.push(candidate);
                         }
                     }
@@ -406,7 +412,13 @@ impl HerdrQueueWakePump {
                 state: observation.state,
                 state_changed_at: observation.state_changed_at,
             });
-            if member.pending && observation.state == RuntimeMemberState::Idle {
+            if member.pending
+                && queue_drain_eligible(&MemberObservation {
+                    member: member.key.clone(),
+                    state: observation.state,
+                    state_changed_at: observation.state_changed_at,
+                })
+            {
                 stats.idle_members += 1;
                 eligible.push(member);
             }
@@ -846,6 +858,11 @@ fn still_idle(runtime: &LocalServiceRuntime, member: &MemberKey) -> bool {
     runtime
         .roster_ephemeral_state(member.team(), member.agent())
         .is_some_and(|state| state.runtime.state == RuntimeMemberState::Idle)
+}
+
+/// Queue draining is the sole queue-side interpretation of an observation.
+fn queue_drain_eligible(observation: &MemberObservation) -> bool {
+    observation.state == RuntimeMemberState::Idle
 }
 
 struct ReleasePendingOnDrop {
