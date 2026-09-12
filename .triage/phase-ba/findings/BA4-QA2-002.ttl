@@ -19,6 +19,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
+  triage:devFixNote "dev-fixed at b84a46a1e (BA4-FIX-R2, fenix-verified from the dev side); left open pending QA-3, deferred to one delta pass after the BA.3 R3 merge-forward lands -- fenix's explicit call, per team-lead convention of not marking a finding fixed until an independent QA round confirms it, not just dev/fenix's own read." ;
   triage:foundIn triage:BA4 ;
   triage:foundAt "2026-09-12T03:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA2-002/1> ;
