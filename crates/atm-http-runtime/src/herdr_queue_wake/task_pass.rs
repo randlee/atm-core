@@ -195,7 +195,21 @@ impl HerdrQueueWakePump {
         stats: &mut HerdrQueueWakeStats,
     ) {
         let head = heads.get(&candidate.member);
-        let (refusal_count, refusal_started_at) = self.refusal_run(reader, &candidate.member).await;
+        let (refusal_count, refusal_started_at) =
+            match self.refusal_run(reader, &candidate.member).await {
+                Ok(run) => run,
+                Err(error) => {
+                    tracing::warn!(
+                        subsystem = "herdr_queue_wake",
+                        action = "refusal_history_read",
+                        outcome = "failed",
+                        member = %candidate.member,
+                        error = %error,
+                        "Task disposition held because refusal history is unavailable"
+                    );
+                    return;
+                }
+            };
         if refusal_count >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD
             && let Some(since) = refusal_started_at
         {
@@ -253,17 +267,13 @@ impl HerdrQueueWakePump {
         &self,
         reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         member: &MemberKey,
-    ) -> (u32, Option<IsoTimestamp>) {
-        let Ok(deadline) = ReadDeadline::new(HERDR_REQUEST_BUDGET) else {
-            return (0, None);
-        };
-        let Ok(run) = reader
+    ) -> Result<(u32, Option<IsoTimestamp>), AtmError> {
+        let deadline = ReadDeadline::new(HERDR_REQUEST_BUDGET)?;
+        reader
             .refusal_run(member.team().clone(), member.agent().clone(), deadline)
             .await
-        else {
-            return (0, None);
-        };
-        (run.count, run.started_at)
+            .map(|run| (run.count, run.started_at))
+            .map_err(Into::into)
     }
 
     async fn open_task_heads(

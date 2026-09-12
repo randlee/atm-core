@@ -1309,6 +1309,43 @@ async fn idle_member_with_open_mail_holds_mail_pending() {
     );
 }
 
+async fn assert_refusal_read_failure_holds(error: atm_storage::ReadLaneError) {
+    let (_root, _runtime, fake, pump, store, keys, _now) =
+        build_task_only_pump_with_refusal_error(error);
+    let warnings = WarningLayer::default();
+    let subscriber = tracing_subscriber::Registry::default().with(warnings.clone());
+
+    pump.tick_once().with_subscriber(subscriber).await;
+
+    let task: TaskId = "AX5-TASK-00".parse().expect("task");
+    assert!(prompt_texts(&fake).is_empty(), "an unknown refusal run must fail closed");
+    assert_eq!(store.row(&keys[0], &task).reminder_count, 0);
+    let refusal_warnings = warnings
+        .events
+        .lock()
+        .expect("warning events")
+        .iter()
+        .filter(|(action, outcome)| action == "refusal_history_read" && outcome == "failed")
+        .count();
+    assert_eq!(refusal_warnings, 1, "the failed read emits one warning per tick");
+}
+
+#[tokio::test]
+async fn refusal_reader_error_holds_before_disposition() {
+    assert_refusal_read_failure_holds(atm_storage::ReadLaneError::Unavailable {
+        message: "injected refusal reader failure".to_owned(),
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn refusal_reader_deadline_timeout_holds_before_disposition() {
+    assert_refusal_read_failure_holds(atm_storage::ReadLaneError::DeadlineExpired {
+        stage: "reading refusal history",
+    })
+    .await;
+}
+
 #[tokio::test]
 async fn third_refusal_holds_and_escalates_once() {
     let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&[

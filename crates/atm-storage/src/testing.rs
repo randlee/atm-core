@@ -229,6 +229,7 @@ pub struct InMemoryTaskLedgerReader {
     events: std::sync::Mutex<Vec<TaskEventRow>>,
     delegate: Option<Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
     open_tasks_hook: std::sync::Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+    refusal_error: std::sync::Mutex<Option<ReadLaneError>>,
 }
 
 impl Default for InMemoryTaskLedgerReader {
@@ -238,6 +239,7 @@ impl Default for InMemoryTaskLedgerReader {
             events: std::sync::Mutex::new(Vec::new()),
             delegate: None,
             open_tasks_hook: std::sync::Mutex::new(None),
+            refusal_error: std::sync::Mutex::new(None),
         }
     }
 }
@@ -250,6 +252,7 @@ impl InMemoryTaskLedgerReader {
             events: std::sync::Mutex::new(events),
             delegate: None,
             open_tasks_hook: std::sync::Mutex::new(None),
+            refusal_error: std::sync::Mutex::new(None),
         }
     }
 
@@ -268,6 +271,17 @@ impl InMemoryTaskLedgerReader {
     pub fn replace_rows(&self, tasks: Vec<TaskRow>, events: Vec<TaskEventRow>) {
         *self.tasks.lock().expect("in-memory task rows lock") = tasks;
         *self.events.lock().expect("in-memory task events lock") = events;
+    }
+
+    /// Injects a refusal-history read outcome without affecting the other
+    /// task-ledger reads exercised by a runtime invariant test.
+    #[must_use]
+    pub fn with_refusal_error(self, error: ReadLaneError) -> Self {
+        *self
+            .refusal_error
+            .lock()
+            .expect("in-memory refusal error lock") = Some(error);
+        self
     }
 }
 
@@ -326,6 +340,16 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
         assignee: AgentName,
         deadline: ReadDeadline,
     ) -> Result<crate::RefusalRun, ReadLaneError> {
+        if let Some(error) = self
+            .refusal_error
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory refusal error lock poisoned".to_owned(),
+            })?
+            .clone()
+        {
+            return Err(error);
+        }
         if let Some(delegate) = &self.delegate {
             return delegate.refusal_run(team, assignee, deadline).await;
         }

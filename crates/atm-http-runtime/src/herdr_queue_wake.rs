@@ -1736,7 +1736,7 @@ mod tests {
     }
 
     fn build_task_only_pump_without_delivery_channel() -> TaskOnlyPumpFixture {
-        build_task_only_pump_with_channel(vec![HerdrAgentStatus::Idle], false, None, false)
+        build_task_only_pump_with_channel(vec![HerdrAgentStatus::Idle], false, None, false, None)
     }
 
     fn build_task_only_pump_with_template(
@@ -1744,7 +1744,19 @@ mod tests {
         fail_reminders: bool,
         task_template: Option<&str>,
     ) -> TaskOnlyPumpFixture {
-        build_task_only_pump_with_channel(statuses, fail_reminders, task_template, true)
+        build_task_only_pump_with_channel(statuses, fail_reminders, task_template, true, None)
+    }
+
+    fn build_task_only_pump_with_refusal_error(
+        error: atm_storage::ReadLaneError,
+    ) -> TaskOnlyPumpFixture {
+        build_task_only_pump_with_channel(
+            vec![HerdrAgentStatus::Idle],
+            false,
+            None,
+            true,
+            Some(error),
+        )
     }
 
     fn build_task_only_pump_with_channel(
@@ -1752,6 +1764,7 @@ mod tests {
         fail_reminders: bool,
         task_template: Option<&str>,
         task_channel_available: bool,
+        refusal_error: Option<atm_storage::ReadLaneError>,
     ) -> TaskOnlyPumpFixture {
         let root = tempfile::tempdir().expect("temporary root");
         let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
@@ -1796,7 +1809,13 @@ mod tests {
             fail_reminders,
         ));
         let reader: Arc<dyn atm_core::boundary::AsyncTaskLedgerReader + Send + Sync> =
-            task_store.clone();
+            match refusal_error {
+                Some(error) => Arc::new(
+                    atm_storage::testing::InMemoryTaskLedgerReader::with_rows(rows, Vec::new())
+                        .with_refusal_error(error),
+                ),
+                None => task_store.clone(),
+            };
         let runtime = assembly
             .service_runtime
             .with_task_store(task_store.clone())
