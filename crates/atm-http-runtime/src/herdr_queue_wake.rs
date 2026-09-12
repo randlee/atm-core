@@ -259,16 +259,10 @@ impl HerdrQueueWakePump {
 
         let (eligible, task_candidates, list_complete) =
             self.list_eligible(candidates, &mut stats).await;
-        let prompted_by_drain = self
-            .drain_eligible(pending_store, eligible, &mut stats)
+        self.drain_eligible(pending_store, eligible, &mut stats)
             .await;
-        self.remind_open_tasks(
-            task_candidates,
-            &prompted_by_drain,
-            list_complete,
-            &mut stats,
-        )
-        .await;
+        self.remind_open_tasks(task_candidates, &pending_set, list_complete, &mut stats)
+            .await;
         self.finish_tick(stats);
     }
 
