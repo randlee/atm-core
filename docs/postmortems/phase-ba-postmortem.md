@@ -56,7 +56,7 @@ layer.
 | schema-reviewer (ADR-061) | pass, 1 note | SCH-001 `STORAGE_SCHEMA_VERSION` still planned debt (pre-existing) |
 | arch-ctm `BA-PHASE-REVIEW` (design-fit read of BA.3–BA.5 against the sprint docs) | 4 findings | ACR-001 `refusal_run` error swallowed into "no refusal" → arch-ctm review-2; ACR-002 pump shutdown drain has no deadline → arch-ctm review-2; ACR-003 test-double `cfg` gating → in place, no TOML edit; ACR-004 design-doc excerpts drifted from shipped code → cipher docs item |
 | solar `BA-READINESS` Part A (release, build, security, migration) | **DO NOT SHIP until RDY-001..004 resolved**; release build, `just validate`, `cargo deny`, `cargo audit` (0 vulns), migration 12/12, identity 22/22 pass | RDY-001 `prerelease/v1.5.15` already exists from the BA.2 dogfood lineage and the tagger's dry-run skips the collision preflight → version ruling **1.5.16** + solar review-3 B2; RDY-002 older-daemon refusal → dismissed, the approved contract is backup restore + CHECK failure (sprint-BA.2 :426-430); RDY-003 = ACR-002; RDY-004 doctor printed the retired `--task-complete` remediation → cipher (`1ceb92d35`); RDY-005 stale plan/frontmatter/design status → this layer; RDY-006 stale pump diagram in `architecture.md` → cipher; RDY-007 yanked `chacha20` lock entry → cipher |
-| hostile closure review (general-purpose, opus) | pending | — |
+| hostile closure review (general-purpose opus, four audit threads, every claim verified at `9f5aef2fe`) | **26 findings, 2 blocking** (CPR-001..026) | CPR-001 stalled-task escalation is terminal only on a single-lead roster (zero or two+ leads → one escalation mail per recipient per tick, the §6 failure) and CPR-002 `SendOutcome.already_closed` has no producer so `atm task close` on a closed task prints a false success → arch-ctm review-2; runtime: CPR-003 escalation mail is a Deferred queue item, CPR-016/005 unbounded "mail pending" hold, CPR-007 recipient read fails open to an empty list, CPR-010 close rejections destroy the report (§5.2), CPR-009 a crashed agent is never Offline, CPR-018 oldest-200 truncation of the oversight log, CPR-026, CPR-023 → arch-ctm review-2; CLI: CPR-017 assign alias skips the daemon-version preflight, CPR-020 task-path errors flattened to exit 1, CPR-019 undocumented MESSAGE positional, CPR-004 Immediate receipt → cipher review-1; ~20 doc-named tests that cannot fail (CPR-011..015, CPR-024) → solar review-3 B3; doc drift CPR-006/008/021/022/025 → cipher |
 | quality-mgr `BA-PHASE-END-QA` (report on PR #1418) | pending | — |
 
 Schema review (ADR-061, all three governed interfaces): **no unapproved
@@ -77,7 +77,13 @@ Classification vocabulary is the post-mortem reference's
 
 ### F1 — Hollow doc-named tests
 - **Ids**: BA3-QA1-001/002/003, BA3-QA1-004 (test half), BA4-QA2-002,
-  BA5-QA2-004 (closed-row requeue test without the negative).
+  BA5-QA2-004 (closed-row requeue test without the negative); at phase end
+  the hostile closure review found roughly twenty more across BA.2, BA.4 and
+  BA.5 (CPR-011..015, CPR-024): fixtures that satisfy their own assertions,
+  a restart test that overwrites the state it observes, a 2-of-16-variant
+  "pinned 1.5.0" enum stub, and a BA.5 interval family that compares an
+  injected pump clock against the real storage wall clock. Two runtime
+  defects (CPR-001, CPR-002) hid behind green doc-named tests.
 - **Pattern**: a dev under "make the N named tests exist" pressure aliases
   helpers, asserts nothing, or asserts the opposite of the design; the
   orchestrator accepted on name presence.
@@ -86,7 +92,8 @@ Classification vocabulary is the post-mortem reference's
 - **Classification**: `qa_process_improvement`, `test_hardening`, `new_lint`
   (candidate).
 - **Action**: acceptance reads every test body against its doc line and
-  proves a guard test can fail (done: BA.3 R3, cipher T7). Lint candidate:
+  proves a guard test can fail (done: BA.3 R3, cipher T7; every CPR test
+  rewrite ships with a negation proof). Lint candidate:
   flag `#[test]`/`#[tokio::test]` bodies that contain no `assert`/`?`-error
   path and consist of one helper call.
 - **Owner / target**: fenix (acceptance rule, in
