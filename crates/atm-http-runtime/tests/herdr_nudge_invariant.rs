@@ -206,10 +206,13 @@ fn install_escalation_targets(
         })
         .expect("roster with escalation lead");
     for recipient in recipients {
+        let recipient = recipient
+            .parse::<atm_core::address::AgentAddress>()
+            .expect("recipient address");
         store
             .add_escalation_recipient(
                 &atm_storage::EscalationScope::Team(team.clone()),
-                recipient,
+                &recipient,
                 IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp"),
             )
             .expect("escalation recipient");
@@ -812,10 +815,13 @@ async fn recipients_only_episode_is_not_duplicated_after_restart() {
             refreshed_at: None,
         })
         .expect("ambiguous-lead roster");
+    let observer = "observer@ax5-task-only"
+        .parse::<atm_core::address::AgentAddress>()
+        .expect("observer address");
     store
         .add_escalation_recipient(
             &atm_storage::EscalationScope::Team(keys[0].team().clone()),
-            "observer@ax5-task-only",
+            &observer,
             *now.lock().expect("clock"),
         )
         .expect("recipient");

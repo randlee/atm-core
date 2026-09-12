@@ -163,7 +163,12 @@ pub(crate) async fn escalate_mail(
     });
     let mut recipients = targets.recipients;
     if let Some(lead) = targets.lead {
-        recipients.insert(0, format!("{lead}@{team}"));
+        recipients.insert(
+            0,
+            format!("{lead}@{team}")
+                .parse()
+                .expect("validated lead and team form a valid local address"),
+        );
     }
     for recipient in recipients {
         if should_suppress(reader.as_deref(), &recipient, team, summary, suppress_since).await {
@@ -181,7 +186,7 @@ pub(crate) async fn escalate_mail(
         {
             Ok(message_id)
                 if outcome.lead_write.is_none()
-                    && recipient
+                    && recipient.to_string()
                         == outcome
                             .lead
                             .as_ref()
@@ -193,7 +198,7 @@ pub(crate) async fn escalate_mail(
             Ok(_) => outcome.recipients_written = outcome.recipients_written.saturating_add(1),
             Err(error) => {
                 outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_write", outcome = "failed", kind = kind.as_str(), recipient, error = %error, "Escalation mail write failed");
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_write", outcome = "failed", kind = kind.as_str(), recipient = %recipient, error = %error, "Escalation mail write failed");
             }
         }
     }
@@ -202,15 +207,12 @@ pub(crate) async fn escalate_mail(
 
 async fn should_suppress(
     reader: Option<&(dyn AsyncMailboxReader + Send + Sync)>,
-    recipient: &str,
+    address: &atm_core::address::AgentAddress,
     team: &TeamName,
     summary: &str,
     since: Option<IsoTimestamp>,
 ) -> bool {
     let (Some(reader), Some(since)) = (reader, since) else {
-        return false;
-    };
-    let Ok(address) = recipient.parse::<atm_core::address::AgentAddress>() else {
         return false;
     };
     if address.host().is_some() {
@@ -226,7 +228,7 @@ async fn should_suppress(
     match episode_already_reported(reader, &scope, summary, since, deadline).await {
         Ok(reported) => reported,
         Err(error) => {
-            tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_read", outcome = "failed", recipient, error = %error, "Escalation mailbox suppression read failed");
+            tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_read", outcome = "failed", recipient = %address, error = %error, "Escalation mailbox suppression read failed");
             false
         }
     }
@@ -249,7 +251,7 @@ impl EscalationOutcome {
 
 struct EscalationTargets {
     lead: Option<AgentName>,
-    recipients: Vec<String>,
+    recipients: Vec<atm_core::address::AgentAddress>,
 }
 
 async fn load_escalation_targets(
@@ -292,7 +294,7 @@ async fn load_escalation_targets(
 async fn load_escalation_recipients(
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     team: &TeamName,
-) -> Vec<String> {
+) -> Vec<atm_core::address::AgentAddress> {
     let recipients = match task_store {
         Some(store) => match run_blocking({
             let store = Arc::clone(store);
@@ -336,14 +338,14 @@ async fn write_escalation_mail_with_summary(
     runtime: &LocalServiceRuntime,
     daemon_home: &Path,
     team: &TeamName,
-    recipient: &str,
+    recipient: &atm_core::address::AgentAddress,
     body: &str,
     summary: &str,
 ) -> Result<atm_core::schema::AtmMessageId, AtmError> {
     let runtime = runtime.clone();
     let body = body.to_owned();
     let daemon_home = daemon_home.to_path_buf();
-    let recipient = recipient.to_owned();
+    let recipient = recipient.to_string();
     let team = team.clone();
     let summary = summary.to_owned();
     run_blocking(move || {

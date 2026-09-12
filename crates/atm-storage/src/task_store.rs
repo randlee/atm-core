@@ -5,12 +5,12 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use crate::MoveTarget;
 use crate::contract::{AsyncTaskLedgerReader, ReadDeadline, ReadLaneError, sealed};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::task_state::{QueuePosition, TaskEventRow, TaskRow};
 use crate::types::{AgentName, IsoTimestamp, MemberKey, TaskId, TeamName};
+use crate::{AgentAddress, MoveTarget};
 
 /// Selects the daemon-wide or team-specific escalation recipient list.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,22 +122,28 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         message_id: &AtmMessageId,
     ) -> Result<(), AtmError>;
 
-    fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError>;
+    fn list_escalation_recipients(
+        &self,
+        scope: &EscalationScope,
+    ) -> Result<Vec<AgentAddress>, AtmError>;
 
     fn add_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &AgentAddress,
         at: IsoTimestamp,
     ) -> Result<bool, AtmError>;
 
     fn remove_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &AgentAddress,
     ) -> Result<bool, AtmError>;
 
-    fn effective_escalation_recipients(&self, team: &TeamName) -> Result<Vec<String>, AtmError> {
+    fn effective_escalation_recipients(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<AgentAddress>, AtmError> {
         let team_recipients =
             self.list_escalation_recipients(&EscalationScope::Team(team.clone()))?;
         if team_recipients.is_empty() {
@@ -152,7 +158,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
 #[derive(Debug, Default)]
 pub struct DummyTaskStore {
     rows: Mutex<HashMap<(TeamName, TaskId), TaskRow>>,
-    escalation_recipients: Mutex<HashMap<String, Vec<String>>>,
+    escalation_recipients: Mutex<HashMap<String, Vec<AgentAddress>>>,
     fail_reminders: bool,
 }
 
@@ -334,7 +340,10 @@ impl TaskStore for DummyTaskStore {
         Ok(())
     }
 
-    fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError> {
+    fn list_escalation_recipients(
+        &self,
+        scope: &EscalationScope,
+    ) -> Result<Vec<AgentAddress>, AtmError> {
         Ok(self
             .escalation_recipients
             .lock()
@@ -347,7 +356,7 @@ impl TaskStore for DummyTaskStore {
     fn add_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &AgentAddress,
         _at: IsoTimestamp,
     ) -> Result<bool, AtmError> {
         let mut recipients = self
@@ -363,14 +372,14 @@ impl TaskStore for DummyTaskStore {
                 "escalation recipient scope already has the maximum of {MAX_ESCALATION_RECIPIENTS} recipients"
             )));
         }
-        list.push(address.to_owned());
+        list.push(address.clone());
         Ok(true)
     }
 
     fn remove_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &AgentAddress,
     ) -> Result<bool, AtmError> {
         let mut recipients = self
             .escalation_recipients

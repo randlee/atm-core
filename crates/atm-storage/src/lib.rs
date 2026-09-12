@@ -1,6 +1,7 @@
 //! Shared audited storage contract and canonical storage-facing domain types
 //! for ATM backends and their callers.
 
+pub mod address;
 pub mod analyst_query;
 pub mod contract;
 pub mod diagnostics;
@@ -34,6 +35,7 @@ pub mod roles {
     pub const ROLE_WORKER: &str = "worker";
 }
 
+pub use address::AgentAddress;
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,

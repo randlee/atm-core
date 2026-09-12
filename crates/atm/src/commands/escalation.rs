@@ -48,7 +48,7 @@ impl EscalationCommand {
             EscalationSubcommand::Add(command) => (
                 escalation_admin::scope(command.team.as_deref())?,
                 command.json,
-                Action::Add(command.address),
+                Action::Add(escalation_admin::validate_address(&command.address)?),
             ),
             EscalationSubcommand::Remove(command) => (
                 escalation_admin::scope(command.team.as_deref())?,
@@ -61,16 +61,12 @@ impl EscalationCommand {
                 Action::List,
             ),
         };
-        let action = match action {
-            Action::Add(address) => Action::Add(escalation_admin::validate_address(&address)?),
-            action => action,
-        };
         Ok((target, json, action))
     }
 }
 
 enum Action {
-    Add(String),
+    Add(atm_core::address::AgentAddress),
     Remove(String),
     List,
 }
@@ -85,7 +81,7 @@ fn execute(
         Action::Add(address) => {
             let inserted =
                 store.add_escalation_recipient(&target, &address, IsoTimestamp::now())?;
-            print_mutation("add", &target, &address, inserted, json)?;
+            print_mutation("add", &target, &address.to_string(), inserted, json)?;
         }
         Action::Remove(address) => {
             let removed = escalation_admin::remove(store, &target, &address)?;
