@@ -158,6 +158,31 @@
       "minor": null,
       "count_basis": "headline/reviewer",
       "evidence": "QA-2 assigned to quality-mgr; PR #1444, fix/bb2-qa1-r1 (fenix's BB2-001..003 fix layer), pinned head ef7572fd0; result pending."
+    },
+    {
+      "run_id": "BB3-QA3",
+      "aich_sprint": "BB3",
+      "phase_sprint": "BB.3",
+      "pass": null,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-12T20:50:08Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2BP4YPSEFQGW5TEP1CTT2GP",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB3-QA3-1789250000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1445, pinned head 66be1d012 (fix/bb3-qa2-r2, cipher's BB3-FIX-R2 final push, PR retargeted to fix/bb2-qa1-r1, MERGEABLE) -- BB.3 test-procedure-pages QA-3 follow-up pass.",
+      "result_time_utc": null,
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": null,
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PENDING",
+      "blockers": null,
+      "important": null,
+      "minor": null,
+      "count_basis": "headline/reviewer",
+      "evidence": "QA-3 assigned to quality-mgr; PR #1445, fix/bb3-qa2-r2 (cipher's BB3-005/001/003/009 residual fix layer), pinned head 66be1d012; result pending."
     }
   ]
 }
