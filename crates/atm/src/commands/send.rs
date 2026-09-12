@@ -1721,7 +1721,9 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn send_task_id_alias_refuses_daemon_below_1_5_0() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
         let task_id: TaskId = "T1".parse().expect("task id");
         let request = SendCommand::for_task(TaskSendOptions {
             to: "recipient-a@test-team".to_string(),
