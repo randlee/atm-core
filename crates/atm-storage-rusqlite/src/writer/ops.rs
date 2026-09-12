@@ -167,44 +167,6 @@ pub(crate) enum WriteOpResult {
     DiagnosticsPruned(u64),
 }
 
-pub(super) enum TaskMessageResult {
-    Applied {
-        already_closed: Option<TaskCloseOutcome>,
-        task_assignee: Option<AgentName>,
-        queued_position: Option<u32>,
-        reassign_notice: Option<Box<Message>>,
-    },
-    RejectedReportDelivered(AtmError),
-}
-
-type TaskAdmissionParts = (
-    Option<TaskCloseOutcome>,
-    Option<AgentName>,
-    Option<u32>,
-    Option<Box<Message>>,
-    Option<AtmError>,
-);
-
-impl TaskMessageResult {
-    pub(super) fn into_admission_parts(self) -> TaskAdmissionParts {
-        match self {
-            Self::Applied {
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-            } => (
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-                None,
-            ),
-            Self::RejectedReportDelivered(error) => (None, None, None, None, Some(error)),
-        }
-    }
-}
-
 pub(crate) fn execute(
     op: &WriteOp,
     connection: &Connection,

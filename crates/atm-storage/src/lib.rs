@@ -50,10 +50,10 @@ pub use contract::{
     RosterMemberKind, RosterRuntimeIdentity, RosterRuntimeMirror, RosterRuntimeMutationOutcome,
     RosterRuntimeObservation, RosterRuntimeObservationUpdate, RosterSnapshot, RosterStateRevision,
     RosterStore, RosterUniqueName, RuntimeMemberState, RuntimeObservationAvailability,
-    RuntimeObservationSource, StorageNotifier, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow, TrustedPeer, derive_ack_requirement,
-    roster_unique_name_collision_error, roster_unique_name_collisions, roster_write_delta,
-    team_scoped_roster_unique_name_collisions,
+    RuntimeObservationSource, StaleNudgeTemplateOverrideKind, StorageNotifier,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+    derive_ack_requirement, roster_unique_name_collision_error, roster_unique_name_collisions,
+    roster_write_delta, team_scoped_roster_unique_name_collisions,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
@@ -110,4 +110,5 @@ pub use types::{
     LocalCapability, MemberKey, ModelName, OwnerGeneration, PaneId, TaskId, TeamName,
     TemplateFrontmatter, TemplateSha,
 };
+pub use validation::RETIRED_TEMPLATE_KINDS;
 pub use validation::{validate_agent_at_team, validate_path_segment};

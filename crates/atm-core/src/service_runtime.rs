@@ -1120,7 +1120,16 @@ mod tests {
         fn list_stale_template_override_kinds(
             &self,
             _team: &TeamName,
-        ) -> Result<Vec<(String, crate::types::IsoTimestamp)>, crate::error::AtmError> {
+        ) -> Result<Vec<crate::boundary::StaleNudgeTemplateOverrideKind>, crate::error::AtmError>
+        {
+            Ok(Vec::new())
+        }
+
+        fn list_template_overrides(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
+        {
             Ok(Vec::new())
         }
 

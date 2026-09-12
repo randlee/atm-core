@@ -351,37 +351,37 @@ mod tests {
         let mut event = base_event();
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
-            Ok(BuiltInNudgeTemplateKind::Delivery)
+            BuiltInNudgeTemplateKind::Delivery
         );
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Queue),
-            Ok(BuiltInNudgeTemplateKind::Queue)
+            BuiltInNudgeTemplateKind::Queue
         );
         event.requires_ack = true;
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
-            Ok(BuiltInNudgeTemplateKind::DeliveryAck)
+            BuiltInNudgeTemplateKind::DeliveryAck
         );
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Queue),
-            Ok(BuiltInNudgeTemplateKind::QueueAck)
+            BuiltInNudgeTemplateKind::QueueAck
         );
         event.requires_ack = false;
         event.task_id = Some("AD.21".parse().expect("task"));
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Queue),
-            Ok(BuiltInNudgeTemplateKind::Queue)
+            BuiltInNudgeTemplateKind::Queue
         );
         event.is_ack = true;
         event.requires_ack = false;
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
-            Ok(BuiltInNudgeTemplateKind::Acknowledge)
+            BuiltInNudgeTemplateKind::Acknowledge
         );
         event.task_id = None;
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
-            Ok(BuiltInNudgeTemplateKind::Acknowledge)
+            BuiltInNudgeTemplateKind::Acknowledge
         );
     }
 

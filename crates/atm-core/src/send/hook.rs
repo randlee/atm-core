@@ -143,7 +143,7 @@ fn render_built_in_nudge_for_dispatch<R>(
 where
     R: RetainedServiceRuntime + ?Sized,
 {
-    let kind = built_in_nudge_template_kind_from_post_send_event(event, delivery_kind)?;
+    let kind = built_in_nudge_template_kind_from_post_send_event(event, delivery_kind);
     let override_row = match runtime.load_nudge_template_override(&event.recipient_team, kind) {
         Ok(row) => row,
         Err(error) => {
@@ -297,7 +297,7 @@ mod tests {
         };
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
-            Ok(BuiltInNudgeTemplateKind::Delivery)
+            BuiltInNudgeTemplateKind::Delivery
         );
     }
 }

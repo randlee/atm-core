@@ -684,7 +684,7 @@ fn assert_local_matrix(herdr: bool) {
                 &dispatches[0].event,
                 dispatches[0].kind,
             ),
-            Ok(expected_kind),
+            expected_kind,
         );
         prepared
             .finish(&runtime, &NullObservability)
@@ -748,9 +748,11 @@ fn assert_local_matrix(herdr: bool) {
             assert_herdr_rendered_default(&dispatch, expected_kind);
         }
         assert_eq!(dispatch.kind, NudgeKind::Queue);
+        assert!(dispatch.event.task_id.is_none());
+        assert_eq!(dispatch.event.task_transition, None);
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
-            Ok(expected_kind),
+            expected_kind,
         );
     };
     queued(false, atm_core::boundary::BuiltInNudgeTemplateKind::Queue);
@@ -807,9 +809,11 @@ fn assert_local_matrix(herdr: bool) {
         .expect("task dispatch");
         assert_local_target(&dispatch, herdr);
         assert_eq!(dispatch.kind, NudgeKind::Queue);
+        assert!(dispatch.event.task_id.is_some());
+        assert_eq!(dispatch.event.task_transition, None);
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
-            Ok(atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck),
+            atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck,
         );
     };
     task(NudgeMode::Immediate);
@@ -883,7 +887,7 @@ fn assert_graft_task_dispatch(async_path: bool) {
     assert_eq!(dispatches[0].kind, NudgeKind::Queue);
     assert_eq!(
         built_in_nudge_template_kind_from_post_send_event(&dispatches[0].event, dispatches[0].kind,),
-        Ok(atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck),
+        atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck,
     );
     prepared
         .finish(&runtime, &NullObservability)

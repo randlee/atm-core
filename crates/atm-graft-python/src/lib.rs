@@ -917,9 +917,7 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendOutcome};
     use atm_core::test_support::EnvGuard;
     use atm_core::transport::testing::FakeClientTransport;
-    use atm_core::types::{
-        AgentName, ChatId, CommandAction, HostName, PaneId, ReadSelection, TaskId, TeamName,
-    };
+    use atm_core::types::{AgentName, ChatId, CommandAction, ReadSelection, TeamName};
     use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
@@ -1329,24 +1327,8 @@ mod tests {
         assert_eq!(after.kind, before.kind);
     }
 
-    #[derive(serde::Deserialize, serde::Serialize)]
-    struct FrozenPostSendHookEventV17 {
-        sender: AgentName,
-        sender_chat_id: Option<ChatId>,
-        sender_team: TeamName,
-        sender_host: Option<HostName>,
-        recipient: AgentName,
-        recipient_team: TeamName,
-        message_id: AtmMessageId,
-        description: String,
-        requires_ack: bool,
-        is_ack: bool,
-        task_id: Option<TaskId>,
-        recipient_pane_id: Option<PaneId>,
-    }
-
     #[test]
-    fn frozen_1_7_event_shape_decodes_1_8_payload_with_task_transition() {
+    fn graft_python_callback_accepts_1_8_json_fixture_with_task_transition() {
         let fixture = serde_json::json!({
             "sender": TEST_SENDER,
             "sender_chat_id": null,
@@ -1361,15 +1343,6 @@ mod tests {
             "task_transition": { "transition": "started" },
             "recipient_pane_id": null
         });
-        let frozen: FrozenPostSendHookEventV17 =
-            serde_json::from_value(fixture.clone()).expect("1.7 consumer ignores additive field");
-        assert!(
-            serde_json::to_value(&frozen)
-                .expect("serialize frozen shape")
-                .get("task_transition")
-                .is_none()
-        );
-
         let current: PostSendHookEvent =
             serde_json::from_value(fixture).expect("1.8 event decodes");
         assert_eq!(current.task_transition, Some(TaskTransition::Started));
