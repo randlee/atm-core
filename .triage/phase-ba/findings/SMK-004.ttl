@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SMK-004>
+  a triage:Finding ;
+  triage:findingId "SMK-004" ;
+  triage:title "Task-start receipt to the assigner renders through the Task nudge template with assignee-style ack/execute instructions" ;
+  triage:description "fenix (ATM 01M2B4CC8CHFPPR7DR5CYSTV3E, 2026-09-12T15:39:37Z), found investigating Rand's live nudge-test-1/2/3 exercise against cipher (2026-09-12T15:27-15:30Z, on the 1.5.16 prerelease). Not a bug: the apparent 'rogue' re-delivery of the nudge-test-2 task_started message to team-lead is the correct NudgeMode::Deferred receipt sent to the assigner (herdr_task_start.rs:53-68) -- it is written onto the task's `started` event at the instant the assignee is nudged, but its delivery to the assigner is deferred until the assigner goes idle, so it can arrive well after the fact and read as a surprise repeat. Sequencing verified clean across all three tasks (one head-nudged-at-a-time, no duplicate receipts). The minor wording defect: because the receipt carries a task_id, it renders through BuiltInNudgeTemplateKind::Task (nudge_template.rs:91), which is written for an actual task assignment -- so the assigner is told \"ack the message\" and \"execute the assigned task\" for a task that is not theirs to execute, and the underlying WriteRequest sets requires_ack=false, making the ack instruction actively wrong. Suggested fix: a receipt-specific built-in nudge kind (read + <task id> + description, no ack/execute action lines). fenix's estimate: cipher-sized fix, pending Rand's go-ahead." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_task_start.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T15:39:37Z"^^xsd:dateTime ;
+  triage:deferredNote "Not a product defect in delivery correctness -- confirmed working as designed (deferred receipt semantics). Wording-only fix; dispatchReady left false pending Rand's go-ahead per fenix's note." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T15:39:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SMK-004/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SMK-004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/nudge_template.rs" ;
+  triage:line 91 ;
+  triage:snippet "BuiltInNudgeTemplateKind::Task renders \"ack the message\" / \"execute the assigned task\" for an assigner's task-start receipt (herdr_task_start.rs:53-68, NudgeMode::Deferred), which is not an assignment and has requires_ack=false on its WriteRequest -- instructions are misleading for the receiving assigner" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "11b6fcf0f" ;
+  triage:occursIn <urn:atm:triage:worktree/SMK-004/1> .
+
+<urn:atm:triage:worktree/SMK-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "post-landing backlog: develop @ 11b6fcf0f (Phase BA merged)" ;
+  triage:branch "develop" ;
+  triage:headSha "11b6fcf0f" ;
+  triage:orderIndex 12 .
