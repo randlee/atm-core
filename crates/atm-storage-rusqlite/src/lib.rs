@@ -3970,7 +3970,7 @@ mod tests {
     }
 
     #[test]
-    fn ack_of_assignment_message_leaves_task_row_and_events_untouched() {
+    fn ack_of_assignment_writes_no_task_event() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.message_store();
         let tasks = backend.task_store();

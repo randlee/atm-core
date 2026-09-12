@@ -3,9 +3,10 @@ use std::collections::BTreeMap;
 use atm_storage::contract::{Message, MessageKey};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope};
 use atm_storage::{
-    AgentName, AtmErrorCode, IsoTimestamp, MemberKey, MessageAdmissionOutcome, MessageWriteOrigin,
-    MoveTarget, QueuePosition, TaskCloseOutcome, TaskEventKind, TaskId, TaskOp, TaskState,
-    TeamName,
+    AgentName, AtmErrorCode, IsoTimestamp, MailboxScope, MemberKey, MessageAdmissionOutcome,
+    MessageQuery, MessageSearchQuery, MessageWriteOrigin, MoveTarget, QueuePosition, ReadDeadline,
+    ReminderOutcome, SearchAtom, SearchExpression, SearchMatchField, TaskCloseOutcome,
+    TaskEventKind, TaskId, TaskOp, TaskState, TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 use chrono::Utc;
@@ -191,12 +192,71 @@ fn assignment_at_every_position_emits_task_queued_with_position() {
 }
 
 #[test]
-fn assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues() {
+fn assignment_write_leaves_requires_ack_false_and_pending_ack_null() {
+    let h = Harness::new();
+    let assignment = h.assign("T1", "alice", "lead", None);
+    let stored = h
+        .backend
+        .message_store()
+        .load_message(&assignment.message_key)
+        .unwrap()
+        .expect("stored assignment");
+    assert!(!stored.envelope.requires_ack);
+    assert!(stored.envelope.pending_ack_at.is_none());
+}
+
+#[test]
+fn assignment_write_creates_no_pending_marker() {
+    let h = Harness::new();
+    let assignment = h.assign("T1", "alice", "lead", None);
+    let nudge_pending_at: Option<String> = Connection::open(&h.path)
+        .unwrap()
+        .query_row(
+            "SELECT nudge_pending_at FROM mail_message_states WHERE message_key = ?1",
+            params![assignment.message_key.as_str()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(nudge_pending_at.is_none());
+}
+
+#[test]
+pub(crate) fn assignee_task_report_is_plain_message_and_leaves_task_unchanged() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.backend
+        .task_store()
+        .record_reminder(
+            &MemberKey::new(h.team.clone(), "alice".parse().unwrap()),
+            &"T1".parse().unwrap(),
+            IsoTimestamp::now(),
+            ReminderOutcome::Emitted,
+        )
+        .expect("record reminder");
+    let before = h.row("T1");
+    let event_count = h.events("T1").len();
+    let mut report = h.message("lead", "alice", "progress report");
+    report.envelope.task_id = Some("T1".parse().unwrap());
+
+    let outcome = h
+        .backend
+        .message_store()
+        .admit_message_with_provenance(&report, MessageWriteOrigin::Local)
+        .expect("admit task-linked report");
+
+    assert_eq!(h.row("T1"), before);
+    assert_eq!(h.events("T1").len(), event_count);
+    assert!(outcome.queued_position.is_none());
+    assert!(outcome.reassign_notice.is_none());
+}
+
+#[test]
+fn reassign_inserts_closed_reassigned_message_to_old_assignee_in_same_transaction() {
     let h = Harness::new();
     let old = h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
     h.assign("T3", "bob", "lead", None);
-    let (_, outcome) = h.assign_with_outcome("T1", "bob", "new-lead", Some(MoveTarget::Head));
+    let (_, outcome) = h.assign_with_outcome("T1", "bob", "lead", Some(MoveTarget::Head));
     let row = h.row("T1");
     assert_eq!(row.assignee.as_str(), "bob");
     assert_eq!(h.positions("alice")["T2"], 1);
@@ -235,7 +295,7 @@ fn assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_
         .iter()
         .find(|message| message.envelope.summary.as_deref() == Some("task_closed:T1"))
         .expect("reassignment notice to old assignee");
-    assert_eq!(notice.envelope.from.as_str(), "new-lead");
+    assert_eq!(notice.envelope.from.as_str(), "lead");
     assert_eq!(notice.envelope.text, "task T1 was reassigned to bob");
     assert!(!notice.envelope.requires_ack);
     assert!(notice.envelope.task_op.is_none());
@@ -249,18 +309,163 @@ fn assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_
         .unwrap();
     assert_eq!(state_rows, 1);
     assert!(!h.positions("alice").contains_key("T1"));
+
+    let rollback = Harness::new();
+    rollback.assign("T1", "alice", "lead", None);
+    let before_row = rollback.row("T1");
+    let before_events = rollback.events("T1");
+    Connection::open(&rollback.path)
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER fail_reassign_notice_state
+             BEFORE INSERT ON mail_message_states
+             WHEN EXISTS (
+                 SELECT 1 FROM mail_messages
+                  WHERE message_key = NEW.message_key
+                    AND summary = 'task_closed:T1'
+             )
+             BEGIN SELECT RAISE(ABORT, 'forced notice state failure'); END;",
+        )
+        .unwrap();
+    let mut reassignment = rollback.message("bob", "lead", "reassign T1");
+    reassignment.envelope.task_id = Some("T1".parse().unwrap());
+    let error = rollback.save(&reassignment).expect_err("forced rollback");
+    assert!(error.message().contains("message state"));
+    assert_eq!(rollback.row("T1"), before_row);
+    assert_eq!(rollback.events("T1"), before_events);
+    let connection = Connection::open(&rollback.path).unwrap();
+    for table in ["mail_messages", "mail_message_states"] {
+        let count: u32 = connection
+            .query_row(
+                &format!(
+                    "SELECT COUNT(*) FROM {table} WHERE message_key = ?1 OR message_key IN (SELECT message_key FROM mail_messages WHERE summary = 'task_closed:T1')"
+                ),
+                params![reassignment.message_key.as_str()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0, "{table} retained rolled-back reassignment");
+    }
 }
 
 #[test]
-fn assign_closed_id_reopens_in_place_clearing_outcome_and_counters() {
+fn reassign_notice_row_is_never_admitted_as_an_assignment() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.assign("T1", "bob", "lead", None);
+    assert!(!h.positions("alice").contains_key("T1"));
+    assert_eq!(h.positions("bob")["T1"], 1);
+    let assigned_events = h
+        .events("T1")
+        .into_iter()
+        .filter(|event| event.event == TaskEventKind::Assigned)
+        .count();
+    assert_eq!(assigned_events, 1);
+}
+
+#[tokio::test]
+async fn reassign_notice_has_state_row_and_projection() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let (_, outcome) = h.assign_with_outcome("T1", "bob", "lead", None);
+    let notice = outcome.reassign_notice.expect("reassignment notice");
+    let scope = MailboxScope::new(h.team.clone(), "alice".parse().unwrap());
+    let listed = h
+        .backend
+        .async_mailbox_reader()
+        .list_messages(
+            scope.clone(),
+            MessageQuery {
+                team: h.team.clone(),
+                agent: "alice".parse().unwrap(),
+                sender: None,
+                task_id: Some("T1".parse().unwrap()),
+                limit: None,
+            },
+            ReadDeadline::new(std::time::Duration::from_secs(1)).unwrap(),
+        )
+        .await
+        .expect("read reassignment notice");
+    assert_eq!(
+        listed
+            .iter()
+            .filter(|message| message.message_key == notice.message_key)
+            .count(),
+        1
+    );
+    h.backend
+        .async_message_store()
+        .apply_read_display_state_async(scope, vec![notice.message_key.clone()], None)
+        .await
+        .expect("mark notice read");
+    let read: bool = Connection::open(&h.path)
+        .unwrap()
+        .query_row(
+            "SELECT read FROM mail_message_states WHERE message_key = ?1",
+            params![notice.message_key.as_str()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(read);
+    let search = h
+        .backend
+        .message_search_store()
+        .search(&MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::phrase("task T1 was reassigned to bob").unwrap(),
+            )),
+            ..MessageSearchQuery::default()
+        })
+        .expect("search projection");
+    assert!(
+        search
+            .matches
+            .iter()
+            .any(|matched| matched.key.message_key == notice.message_key
+                && matched.match_fields.contains(&SearchMatchField::BodyText))
+    );
+}
+
+#[test]
+fn insert_message_canonical_is_the_only_insert_path() {
+    let h = Harness::new();
+    let assignment = h.assign("T1", "alice", "lead", None);
+    let before_events = h.events("T1");
+    let duplicate = h
+        .backend
+        .message_store()
+        .save_message_if_absent(&assignment)
+        .expect("duplicate admission");
+    assert!(duplicate.is_some());
+    assert_eq!(h.events("T1"), before_events);
+    let connection = Connection::open(&h.path).unwrap();
+    for table in [
+        "mail_messages",
+        "mail_message_states",
+        "mail_message_search_documents",
+    ] {
+        let count: u32 = connection
+            .query_row(
+                &format!("SELECT COUNT(*) FROM {table} WHERE message_key = ?1"),
+                params![assignment.message_key.as_str()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "duplicate inserted another {table} row");
+    }
+}
+
+#[test]
+fn reopen_complete_task_emits_task_queued() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.close("T1", "lead", "alice", TaskCloseOutcome::Refused)
         .unwrap();
-    h.assign("T1", "bob", "lead2", None);
+    let (_, admission) = h.assign_with_outcome("T1", "bob", "lead", None);
     let row = h.row("T1");
     assert_eq!(row.state, TaskState::Assigned);
     assert_eq!(row.reminder_count, 0);
+    assert_eq!(admission.queued_position, Some(1));
     assert_eq!(
         h.events("T1").last().unwrap().event,
         TaskEventKind::Reopened
@@ -279,16 +484,17 @@ fn reassign_releases_old_active_slot_in_same_transaction() {
 }
 
 #[test]
-fn same_agent_resend_refreshes_message_link_without_event() {
+fn same_assignee_reassign_refreshes_row_and_emits_task_queued() {
     let h = Harness::new();
     let first = h.assign("T1", "alice", "lead", None);
     let before = h.row("T1");
     let event_count = h.events("T1").len();
-    let second = h.assign("T1", "alice", "lead2", Some(MoveTarget::Head));
+    let (second, admission) = h.assign_with_outcome("T1", "alice", "lead", Some(MoveTarget::Head));
     let after = h.row("T1");
     assert_eq!(event_count, h.events("T1").len());
     assert_eq!(before.position, after.position);
     assert_eq!(before.assigned_at, after.assigned_at);
+    assert_eq!(admission.queued_position, Some(1));
     assert_eq!(
         after.assignment_message_id,
         second.envelope.message_id.unwrap()
@@ -761,8 +967,13 @@ pub(crate) fn close_by_non_party_is_rejected_and_retained() {
 fn close_by_stale_counterparty_is_rejected_atomically() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
-    h.assign("T1", "bob", "interim-lead", None);
-    h.assign("T1", "alice", "new-lead", None);
+    Connection::open(&h.path)
+        .unwrap()
+        .execute(
+            "UPDATE tasks SET assigner = 'new-lead' WHERE team = ?1 AND task_id = 'T1'",
+            params![h.team.as_str()],
+        )
+        .unwrap();
     let before = h.row("T1");
     let before_events = h.events("T1");
     let mut report = h.message("lead", "alice", "stale close report");
@@ -831,18 +1042,18 @@ fn assigned_at_set_only_by_assignment() {
     h.start("T1", "alice").unwrap();
     assert_eq!(h.row("T1").assigned_at, assigned);
 
-    h.assign("T1", "bob", "new-lead", None);
+    h.assign("T1", "bob", "lead", None);
     let reassigned = h.row("T1");
     let reassigned_event = h.events("T1").last().cloned().expect("reassigned event");
     assert_eq!(reassigned_event.event, TaskEventKind::Reassigned);
     assert_eq!(reassigned.assigned_at, reassigned_event.at);
     assert_eq!(reassigned.last_reminded_at, None);
 
-    h.close("T1", "new-lead", "bob", TaskCloseOutcome::Completed)
+    h.close("T1", "lead", "bob", TaskCloseOutcome::Completed)
         .unwrap();
     assert_eq!(h.row("T1").assigned_at, reassigned.assigned_at);
 
-    h.assign("T1", "alice", "reopen-lead", None);
+    h.assign("T1", "alice", "lead", None);
     let reopened = h.row("T1");
     let reopened_event = h.events("T1").last().cloned().expect("reopened event");
     assert_eq!(reopened_event.event, TaskEventKind::Reopened);
