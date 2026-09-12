@@ -1645,7 +1645,8 @@ mod tests {
         }));
         let now = Arc::new(Mutex::new(assigned_at));
         let health = super::RuntimeHealth::default();
-        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now))
+            .with_daemon_home(root.path().join("home"));
         let keys = agents
             .into_iter()
             .map(|agent| atm_storage::MemberKey::new(team.clone(), agent.parse().expect("agent")))
