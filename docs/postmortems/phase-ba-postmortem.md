@@ -41,10 +41,23 @@
 ## 2. Required integration review (post-mortem.md)
 
 <!-- PHASE_END_RESULTS -->
-Pending: quality-mgr `BA-PHASE-END-QA-1789194730` on `9f5aef2fe` (report on
-PR #1418), fenix critical review (ruthless-boundary-qa, arch-qa,
-flaky-test-qa, boundary-guard, schema-reviewer, hostile closure review),
-arch-ctm `BA-PHASE-REVIEW-1789194730`, solar `BA-READINESS-1789194730`.
+Reviewed head: `integrate/phase-ba` @ `9f5aef2fe` (landing merge of PR #1414).
+Every finding below is closed on the review-findings stack above the landing
+head (`fix/phase-ba-review-1` cipher → `-2` arch-ctm → `-3` solar →
+`docs/phase-ba-post-mortem` fenix); none required a change to a frozen sprint
+layer.
+
+| Review | Result | Findings → owner |
+|---|---|---|
+| arch-qa (RULE-001..013, sprint-doc fit) | **PASS**, 0 blocking / 0 important, `merge_ready: true` | none; seven stale-`open` triage occurrences verified fixed in tree (BA5-QA2-001/002/003/004, BA3-QA1-004/006/007) → occurrence closure records |
+| ruthless-boundary-qa | 2 findings | RBQA-F010 unbounded `spawn_blocking` in the pump/release path → arch-ctm review-2; RBQA-F011 escalation CLI bypassed `escalation_admin::add` → cipher review-1 (`04ad51873`) |
+| boundary-guard | 2 findings | BG-001 `DummyPendingNudgeStore` allowlisted by physical path (pre-existing, TOML is Rand's) → TOML-002; BG-002 `atm-daemon` release build pulled `atm-core/test-utils` → cipher review-1 (`c614f23f9`) |
+| flaky-test-qa | 2 findings | FTQ-101 shared-cache in-memory SQLite race in a concurrency test → cipher (`92b34d11f`); FTQ-102 unbounded test `block_on` → cipher (`7354f6fd0`) |
+| schema-reviewer (ADR-061) | pass, 1 note | SCH-001 `STORAGE_SCHEMA_VERSION` still planned debt (pre-existing) |
+| arch-ctm `BA-PHASE-REVIEW` (design-fit read of BA.3–BA.5 against the sprint docs) | 4 findings | ACR-001 `refusal_run` error swallowed into "no refusal" → arch-ctm review-2; ACR-002 pump shutdown drain has no deadline → arch-ctm review-2; ACR-003 test-double `cfg` gating → in place, no TOML edit; ACR-004 design-doc excerpts drifted from shipped code → cipher docs item |
+| solar `BA-READINESS` Part A (release, build, security, migration) | **DO NOT SHIP until RDY-001..004 resolved**; release build, `just validate`, `cargo deny`, `cargo audit` (0 vulns), migration 12/12, identity 22/22 pass | RDY-001 `prerelease/v1.5.15` already exists from the BA.2 dogfood lineage and the tagger's dry-run skips the collision preflight → version ruling **1.5.16** + solar review-3 B2; RDY-002 older-daemon refusal → dismissed, the approved contract is backup restore + CHECK failure (sprint-BA.2 :426-430); RDY-003 = ACR-002; RDY-004 doctor printed the retired `--task-complete` remediation → cipher (`1ceb92d35`); RDY-005 stale plan/frontmatter/design status → this layer; RDY-006 stale pump diagram in `architecture.md` → cipher; RDY-007 yanked `chacha20` lock entry → cipher |
+| hostile closure review (general-purpose, opus) | pending | — |
+| quality-mgr `BA-PHASE-END-QA` (report on PR #1418) | pending | — |
 
 Schema review (ADR-061, all three governed interfaces): **no unapproved
 breaking change**. SQLite MAJOR approval recorded at
@@ -215,11 +228,13 @@ Pending the required integration review (`integration_review_passed` /
 | 2 | Acceptance reads test bodies; guard tests proven to fail | qa_process_improvement | fenix | guidelines §21 |
 | 3 | Local gate list derived from `just validate`/CI, not memory | qa_process_improvement | fenix | `justfile`, guidelines §14 |
 | 4 | Test doubles live in `testing.rs`; allowlist by public path | boundary_update | Rand (TOML), solar | `boundaries/atm-storage/pending-nudge-store.toml`, TOML-001 |
-| 5 | Tests as physical `src/<mod>/tests/` submodules, counted as test scope | boundary_update / new_lint | solar | `fix/phase-ba-review-2`, `.just/check_line_counts.py` |
+| 5 | Tests as physical `src/<mod>/tests/` submodules with `#![cfg(test)]`, counted as test scope | boundary_update | solar | `fix/phase-ba-review-3` (RBQA-F001); counter unchanged |
 | 6 | `herdr_queue_wake.rs` production split | test_hardening (RULE-003 margin) | cipher | `fix/phase-ba-review-1` |
 | 7 | Lint candidates: assertion-less test bodies; unbounded `spawn_blocking` | new_lint | follow-up issue | `.just/` |
 | 8 | `STORAGE_SCHEMA_VERSION` constant (ADR-061 D1) | architecture_update (pre-existing) | future phase | `crates/atm-storage-rusqlite` |
 | 9 | Planning: one-hour docs → parallel reviews → QA → start | planning_process_improvement | fenix | `.claude/skills/plan-hardening/` |
+| 10 | Prerelease tagger dry-run performs the same tag-collision preflight as publish | new_lint (tooling) | solar | `.just/prerelease_tag.py` (RDY-001) |
+| 11 | Readiness checklist cites the approved rollback contract, not an invented refusal | qa_process_improvement | fenix | readiness vars template (RDY-002) |
 
 Decision rule applied: lint or static enforcement first (3, 5, 7), boundary
-enforcement second (4), process last (1, 2, 9).
+enforcement second (4), process last (1, 2, 9, 11).
