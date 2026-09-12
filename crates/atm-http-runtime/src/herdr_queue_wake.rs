@@ -1085,8 +1085,12 @@ impl Drop for ReleasePendingOnDrop {
 
 #[cfg(test)]
 mod tests {
-    #[path = "../tests/herdr_queue_ephemeral.rs"]
-    mod herdr_queue_ephemeral;
+    mod herdr_queue_ephemeral {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/herdr_queue_ephemeral.rs"
+        ));
+    }
 
     mod herdr_nudge_invariant {
         include!(concat!(
