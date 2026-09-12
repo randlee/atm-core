@@ -3,7 +3,6 @@
 use atm_storage::{AtmError, AtmMessageId, Message, QueuePosition, TaskId, TaskRow};
 use rusqlite::{Connection, params};
 
-use super::stmt_cache::WriterStatementCache;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 
 #[allow(clippy::too_many_arguments)]
@@ -13,13 +12,11 @@ pub(super) fn refresh_same_assignment(
     row: Option<&TaskRow>,
     message_id: AtmMessageId,
     connection: &Connection,
-    cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<Option<u32>, AtmError> {
     let Some(row) = row.filter(|row| row.state.is_open() && row.assignee == record.agent) else {
         return Ok(None);
     };
-    super::task_ops::acknowledge_assignment(connection, cache, target, record, row)?;
     connection
         .execute(
             "UPDATE tasks SET assignment_message_id=?3, description=?4, updated_at=?5
