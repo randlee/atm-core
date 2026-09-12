@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-004>
+  a triage:Finding ;
+  triage:findingId "BB6-004" ;
+  triage:title "BB6-002's InMemoryTaskLedgerReader test adds tokio as an atm-storage dev-dependency, violating the crate's manifest-dependency-allowlist boundary" ;
+  triage:description "CI on PR #1459 (fix/bb6-storage-qa1 @ 0c09c62b0), run 34726244032, job 103640739342: 'just lint' fails on the boundaries check (.just/logs/20260912234715-boundaries.log): 'crates/atm-storage/Cargo.toml [manifest-dependency-allowlist]: Cargo dependency 'tokio' is not allowlisted'. .just/lint-config.toml's manifest_dependency_allowlists for crates/atm-storage/Cargo.toml (allowed_dependencies = [async-trait, atm-error, base64, chrono, getrandom, rustls, serde, serde_json, sha2, toml, ulid, x509-parser, zeroize]) deliberately excludes tokio -- every sibling storage-adjacent crate (atm-storage-rusqlite, atm-runtime, atm-daemon-bootstrap, atm-graft, atm-herdr, peer-tls) explicitly allowlists tokio, but atm-storage (the sync trait/domain-type crate) never has. Solar's BB6-002 fix (list_prompt_handoffs backing-field fix) added a #[cfg(test)] mod with a #[tokio::test] async fn in crates/atm-storage/src/testing.rs, requiring `tokio.workspace = true` under a new [dev-dependencies] section in crates/atm-storage/Cargo.toml. This is a capability-adding change to a boundary-fenced crate (first async-runtime dependency of any kind, even dev-only) discovered directly by team-lead from CI, not from a quality-mgr QA pass. Self-discovered; independently confirmed by omega-prime's CI-failure alert (incident, 2026-09-12T23:51Z)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:source "team-lead CI investigation, PR #1459 run 34726244032" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/Cargo.toml;crates/atm-storage/src/testing.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T23:56:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Per design-ruling-before-capability-adding-fix: do not allowlist tokio for atm-storage (a policy relaxation on a deliberately sync/runtime-free crate) without a ruling. Recommended fix avoiding any new dependency: replace the #[tokio::test] with a minimal hand-rolled poll-to-completion helper (a no-op RawWaker driving the boxed async-trait future once, since the non-delegate list_prompt_handoffs path never actually awaits) instead of pulling in a runtime; drop the [dev-dependencies] tokio line and its workspace entry from crates/atm-storage/Cargo.toml. Reported to fenix for ruling/dispatch, 2026-09-12T23:56Z." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-12T23:51:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-004/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/Cargo.toml" ;
+  triage:line 29 ;
+  triage:snippet "[dev-dependencies]\ntokio.workspace = true  -- not allowlisted for crates/atm-storage/Cargo.toml in .just/lint-config.toml" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "0c09c62b0" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-004/1> .
+
+<urn:atm:triage:worktree/BB6-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1459, fix/bb6-storage-qa1" ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "0c09c62b0" ;
+  triage:orderIndex 1 .
