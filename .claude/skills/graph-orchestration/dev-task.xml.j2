@@ -23,6 +23,18 @@ defaults:
   test_command: "just test"
   references: ""
   finding_ids: ""
+metadata:
+  type: dev-task
+  tags:
+    - stage:dev
+    - orchestration:graph
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: dev-start
+    stage: dev
+    transition: start
 ---
 <atm-task id="{{ task_id }}" sprint="{{ sprint }}" node="{{ node_id }}" order="{{ node_order }}" assignee="{{ assignee }}">
   <description>Implement sprint node {{ node_id }} (order {{ node_order }}) in {{ sprint }}.</description>

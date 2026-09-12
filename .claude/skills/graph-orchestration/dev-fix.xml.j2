@@ -22,6 +22,18 @@ defaults:
   test_command: "just test"
   references: ""
   cleanup_mode: "false"
+metadata:
+  type: fix-task
+  tags:
+    - stage:fix
+    - orchestration:graph
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: fix-start
+    stage: fix
+    transition: start
 ---
 <atm-task id="{{ task_id }}" sprint="{{ sprint }}" node="{{ node_id }}" order="{{ node_order }}" assignee="{{ assignee }}" mode="fix"{% if cleanup_mode == "true" %} phase="CLEANUP"{% endif %}>
   {# When cleanup_mode == "true": this is a CONSOLIDATED phase cleanup on the highest sprint's merged branch.
