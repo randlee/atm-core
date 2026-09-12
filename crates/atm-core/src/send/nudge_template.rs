@@ -232,7 +232,7 @@ mod tests {
     fn task_started_template_populates_task_and_assignee() {
         assert_eq!(
             render_task_started_template("task-9", TEST_ARCH_CTM).expect("render receipt"),
-            "ATM recorded that task task-9 was started by arch-ctm.\n"
+            format!("ATM recorded that task task-9 was started by {TEST_ARCH_CTM}.\n")
         );
     }
 
