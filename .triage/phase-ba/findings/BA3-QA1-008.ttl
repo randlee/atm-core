@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-008>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-008" ;
+  triage:title "tick_once runs queue-drain before owed-task-starts, the reverse of the sprint doc's documented tick order" ;
+  triage:description "quality-mgr QA-1 (req-qa), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. Tick order in tick_once runs queue-drain before owed-task-starts, the reverse of the sprint doc's documented sequence (observations -> owed starts -> drain -> dispose). The two passes touch disjoint populations so this is likely benign, but doc and code should agree. fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): STANDS, minor -- code must follow the doc's tick order; reorder in BA3-FIX-R3-1789183410, or state why the doc is wrong before touching it." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ordering-defect" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs (tick_once)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-008/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-QA1-008/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "tick_once runs queue-drain before owed-task-starts, reverse of the doc's documented sequence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-008/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-008/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .

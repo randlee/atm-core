@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-006>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-006" ;
+  triage:title "AC3's literal grep pattern select_open_task substring-matches BA.2's legitimate select_open_tasks_for_member/_for_team" ;
+  triage:description "quality-mgr QA-1 (req-qa), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. Acceptance criterion 3's literal grep pattern (select_open_task) substring-matches BA.2's legitimate select_open_tasks_for_member/select_open_tasks_for_team (4 occurrences, 3 files). Intent satisfied, letter of AC3 not; the criterion's wording needs anchoring (\\bselect_open_task\\b or similar) so future mechanical re-checks are accurate. fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): STANDS, minor -- anchor AC3's pattern in the sprint doc (one-line edit). Folded into BA3-FIX-R3-1789183410." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md (AC3 wording)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-006/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-QA1-006/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md" ;
+  triage:line 1 ;
+  triage:snippet "AC3 grep pattern select_open_task substring-matches select_open_tasks_for_member/_for_team (4 occurrences, 3 files)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-006/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .

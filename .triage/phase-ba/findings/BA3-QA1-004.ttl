@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-004>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-004" ;
+  triage:title "Task 4's documented no-delivery-channel Hold behavior is not implemented anywhere; its only test is one of the hollow BA3-QA1-002 aliases" ;
+  triage:description "quality-mgr QA-1 (req-qa), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. Task 4's documented behavior (Hold(\"no delivery channel\"), one warn per tick) is not implemented anywhere: build_task_reminder_dispatch's Ok(None) case is a bare return with no disposition or log line, and no \"no delivery channel\" string exists in the crate. Its supposed test, member_without_dispatchable_backend_holds_and_logs_once, is one of the hollow aliases from BA3-QA1-002, so this gap shipped undetected. fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): STANDS; folded into BA3-FIX-R3-1789183410 with its test." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs (build_task_reminder_dispatch)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:relatedFinding "BA3-QA1-002" ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-QA1-004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 1 ;
+  triage:snippet "build_task_reminder_dispatch's Ok(None) case is a bare return -- no Hold(\"no delivery channel\") disposition or log line" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-004/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .

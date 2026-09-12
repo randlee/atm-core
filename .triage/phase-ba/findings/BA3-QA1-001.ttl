@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-001>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-001" ;
+  triage:title "escalation_ownership_architecture_test implements only 2 of 3 AC1(b)/Task 10 checks; the invariant it's supposed to prove is not true today" ;
+  triage:description "quality-mgr QA-1 (converged: ruthless-boundary-qa, arch-qa, req-qa, rust-qa-agent -- 4 of 7 reviewers), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. The sprint doc specifies escalation_ownership_architecture_test as three checks: (a) no escalate/escalate_mail/escalation_summary identifier under crates/atm-core/src; (b) a syn-AST visitor over crates/atm-http-runtime/src/herdr_*.rs asserting every RuntimeMemberState path lies inside dispose/runtime_state/still_idle; (c) grep -c PickerMemberStatus == 0. The landed test (crates/atm-architecture/tests/escalation_ownership.rs:27-42) is 43 lines with two plain .contains() checks; (b) and (c) are entirely absent. Real residual RuntimeMemberState inspection sites shipped undetected: a dead Blocked branch in emit_task_reminder (herdr_queue_wake_reminders.rs:234-238, unreachable), EscalationState::observe (herdr_escalation.rs:69-90), and list_eligible/collect_idle_members (herdr_queue_wake.rs:295,409). fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): STANDS. Visitor allow-list = dispose, runtime_state, still_idle, EscalationState::observe (feeds dispose's new_episode input), plus a new queue_drain_eligible(&MemberObservation)->bool replacing the two inline Idle comparisons at :295/:409 (mail-claim delivery gating predates BA.3, not a task disposition). Everything else outside the allow-list is a violation. Delete the dead Blocked branch (and ReminderOutcome::Blocked/task_reminders_blocked if then unused). (c) PickerMemberStatus count==0 asserted by the same test. Sprint doc gets the allow-list amendment as a one-line note under Task 10. Fix task BA3-FIX-R3-1789183410 dispatched to arch-ctm." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-guard" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-architecture/tests/escalation_ownership.rs, crates/atm-http-runtime/src/herdr_*.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-QA1-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/escalation_ownership.rs" ;
+  triage:line 27 ;
+  triage:snippet "landed test is 43 lines with two .contains() checks -- syn-AST visitor and PickerMemberStatus check absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-001/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .

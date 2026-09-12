@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-007>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-007" ;
+  triage:title "Herdr docs still document notification show as a live capability after BA.3 removes its only caller (HerdrOp::Notify)" ;
+  triage:description "quality-mgr QA-1 (schema-reviewer, doc-drift, non-blocking per schema-reviewer itself), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. docs/atm-herdr/requirements.md (HR-CORE-010) and docs/atm-herdr/herdr-versions.md still document notification show as a live Herdr capability ATM issues; this PR removes the only caller (HerdrOp::Notify). fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): BA.6 fold-in, not a BA.3 blocker -- recorded here as foundIn BA.3 (BA.3's own diff is what created the drift) with a promotion to BA.6 for the doc fix itself, per fenix's ATM instruction to team-lead distinguishing this from the pre-existing-debt BA.6 fold-ins (RBP-F001/002, RSH-001)." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/atm-herdr/requirements.md (HR-CORE-010), docs/atm-herdr/herdr-versions.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:promoteTo triage:BA6 ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-007/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-QA1-007/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-herdr/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "HR-CORE-010 and herdr-versions.md still document notification show as live; BA.3 removes the only caller (HerdrOp::Notify)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-007/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-007/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .

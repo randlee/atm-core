@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-003>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-003" ;
+  triage:title "Task 6/R1 task-start handoff is unverified and possibly broken: record_task_outcome discards complete_task_handoff's Result, and the one test asserts the opposite of the documented design" ;
+  triage:description "quality-mgr QA-1 (quality-mgr direct read, originally surfaced by req-qa), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. record_task_outcome (herdr_queue_wake_reminders.rs:288-319) calls complete_task_handoff(...).await and unconditionally discards its Result via let _ = recorded_row; (:318) -- no stat increment, no tracing::warn!, unlike the sibling error-handling branch three lines above it in the same file (:280-285) which does log/track failures. Any failure inside complete_task_handoff (including the start_assigned_task write meant to apply TaskOp::Start and send the assigner receipt per R1/Task 6) is silently swallowed. The only runtime test, handoff_applies_start_and_sends_receipt_to_assigner (herdr_nudge_invariant.rs:185-202), does one tick and asserts the task state is still TaskState::Assigned, with a code comment 'a reminder does not synthesize a task-start operation' -- the literal opposite of R1 ('first emitted nudge -> active, started actor atm-daemon, one receipt') -- and never checks that any receipt was sent. The test's fixture uses an assigner value ('sender') never registered as a roster member, a plausible reason the Start-write silently fails. fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): STANDS, and it is a product defect until proven otherwise. arch-ctm must find the root cause (assigner not a roster member -> receipt fails -> Start not applied is the leading hypothesis), fix it so the first emitted nudge applies TaskOp::Start (actor atm-daemon) and sends exactly one receipt, log every failure, and rewrite the test to the doc's exact description. Fix task BA3-FIX-R3-1789183410 dispatched to arch-ctm." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs (record_task_outcome), crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-QA1-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 318 ;
+  triage:snippet "let _ = recorded_row; -- complete_task_handoff's Result silently discarded; handoff_applies_start_and_sends_receipt_to_assigner asserts state stays Assigned, contradicting R1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-003/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .
