@@ -139,9 +139,9 @@ pub struct SendCommand {
     #[arg(long = "task-id")]
     pub(super) task_id: Option<TaskId>,
 
-    /// Complete a previously assigned task as its assigner or assignee.
-    #[arg(long = "task-complete", conflicts_with = "task_id")]
-    pub(super) task_complete: Option<TaskId>,
+    /// Close `--task-id` as completed after delivering this message as the report.
+    #[arg(long = "task-complete", requires = "task_id")]
+    pub(super) task_complete: bool,
 
     #[arg(long)]
     pub(super) dry_run: bool,
@@ -150,7 +150,51 @@ pub struct SendCommand {
     pub(super) json: bool,
 }
 
+/// Narrow construction input shared by the closed `atm task` command set and
+/// the `send`/`queue` aliases. Message parsing remains owned by this module so
+/// every task entry point produces the same canonical `WriteRequest`.
+pub(super) struct TaskSendOptions {
+    pub to: String,
+    pub message: Option<String>,
+    pub team: Option<String>,
+    pub actor: Option<String>,
+    pub file: Option<PathBuf>,
+    pub stdin: bool,
+    pub template: Option<PathBuf>,
+    pub vars: Option<String>,
+    pub task_id: Option<TaskId>,
+    pub json: bool,
+}
+
 impl SendCommand {
+    pub(super) fn for_task(options: TaskSendOptions) -> Self {
+        Self {
+            to: Some(options.to),
+            message: options.message,
+            team: options.team,
+            host: None,
+            chat_id: None,
+            actor: options.actor,
+            file: options.file,
+            stdin: options.stdin,
+            template: options.template,
+            vars: options.vars,
+            var: Vec::new(),
+            env_prefix: None,
+            attach: Vec::new(),
+            from_json: false,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
+            summary: None,
+            requires_ack: false,
+            task_id: options.task_id,
+            task_complete: false,
+            dry_run: false,
+            json: options.json,
+        }
+    }
+
     fn message_validation_error(
         message: impl Into<String>,
         recovery: impl Into<String>,
@@ -274,7 +318,7 @@ impl SendCommand {
         self.build_request_with_mode(home_dir, current_dir, NudgeMode::Immediate, None)
     }
 
-    fn build_request_with_mode(
+    pub(super) fn build_request_with_mode(
         self,
         home_dir: PathBuf,
         current_dir: PathBuf,
@@ -302,7 +346,8 @@ impl SendCommand {
         let classification = self.build_classification()?;
         let message_source =
             self.build_message_source(max_message_bytes, &current_dir, attachment_note.as_deref())?;
-        SendRequest::new(
+        let assigning_task = self.task_id.is_some() && !self.task_complete;
+        let request = SendRequest::new(
             home_dir,
             current_dir,
             caller_context.caller_identity,
@@ -310,13 +355,12 @@ impl SendCommand {
             caller_context.caller_team,
             message_source,
             self.summary,
-            self.requires_ack,
+            self.requires_ack || assigning_task,
             self.task_id,
             self.dry_run,
         )
         .map(|mut request| {
-            if let Some(task_id) = self.task_complete {
-                request.task_id = Some(task_id);
+            if self.task_complete {
                 request.task_op = Some(TaskOp::Close {
                     outcome: TaskCloseOutcome::Completed,
                     reason: None,
@@ -327,9 +371,15 @@ impl SendCommand {
                 .with_activity_observation(caller_context.activity_observation)
                 .with_max_message_bytes(max_message_bytes)
                 .with_classification(classification)
-                .with_nudge_mode(nudge_mode)
+                .with_nudge_mode(if assigning_task {
+                    NudgeMode::Deferred
+                } else {
+                    nudge_mode
+                })
         })
-        .map_err(Into::into)
+        .map_err(anyhow::Error::from)?;
+        validate_local_task_target(&request)?;
+        Ok(request)
     }
 
     fn target_with_explicit_host(&self, caller_team: &TeamName) -> Result<String> {
@@ -593,8 +643,39 @@ impl SendCommand {
     }
 }
 
+pub(super) fn validate_local_task_target(request: &SendRequest) -> Result<()> {
+    if (request.task_id.is_some() || request.task_op.is_some())
+        && request.to.as_ref().is_some_and(|target| {
+            target.host().is_some()
+                || target
+                    .team()
+                    .is_some_and(|team| team != &request.caller_team)
+        })
+    {
+        let target = request.to.as_ref().expect("checked task target");
+        return Err(AtmError::validation(format!(
+            "task commands are local-team only; {target} resolves to another team or host — send a plain message or assign the local alias"
+        ))
+        .into());
+    }
+    Ok(())
+}
+
 pub(super) async fn preflight_task_op_compatibility(
     composition: &CliComposition<'_>,
+) -> Result<(), AtmError> {
+    preflight_daemon_api(
+        composition,
+        HttpApiVersion::parse("1.5.0")?,
+        "task operation",
+    )
+    .await
+}
+
+pub(super) async fn preflight_daemon_api(
+    composition: &CliComposition<'_>,
+    minimum: HttpApiVersion,
+    verb: &str,
 ) -> Result<(), AtmError> {
     let response = composition
         .execute_request(RequestEnvelope::CompatibilityPreflight(
@@ -605,41 +686,58 @@ pub(super) async fn preflight_task_op_compatibility(
             },
         ))
         .await?;
-    require_task_op_compatibility(response)
+    match response {
+        ResponseEnvelope::CompatibilityVerdict(verdict) => {
+            require_daemon_api(&verdict, minimum, verb)
+        }
+        other => Err(AtmError::daemon_unavailable(format!(
+            "daemon returned an unexpected response for {verb} compatibility preflight: {other:?}"
+        ))),
+    }
 }
 
 fn require_task_op_compatibility(response: ResponseEnvelope) -> Result<(), AtmError> {
-    let required = HttpApiVersion::parse("1.5.0")?;
     match response {
-        ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+        ResponseEnvelope::CompatibilityVerdict(verdict) => {
+            require_daemon_api(&verdict, HttpApiVersion::parse("1.5.0")?, "task operation")
+        }
+        other => Err(AtmError::daemon_unavailable(format!(
+            "daemon returned an unexpected response for task-operation compatibility preflight: {other:?}"
+        ))),
+    }
+}
+
+pub(super) fn require_daemon_api(
+    verdict: &CompatibilityVerdict,
+    minimum: HttpApiVersion,
+    verb: &str,
+) -> Result<(), AtmError> {
+    match verdict {
+        CompatibilityVerdict::Compatible {
             daemon_http_api_version,
             ..
-        }) if daemon_http_api_version >= required => Ok(()),
-        ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+        } if daemon_http_api_version >= &minimum => Ok(()),
+        CompatibilityVerdict::Compatible {
             daemon_http_api_version,
             ..
-        }) => Err(AtmError::new(
+        } => Err(AtmError::new(
             AtmErrorCode::ClientDaemonVersionIncompatible,
             format!(
-                "task operation requires client HTTP API {} and daemon HTTP API >= 1.5.0; daemon reports {}",
+                "{verb} requires client HTTP API {} and daemon HTTP API >= {minimum}; daemon reports {daemon_http_api_version}",
                 HttpApiVersion::current(),
-                daemon_http_api_version
             ),
         )),
-        ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Incompatible {
+        CompatibilityVerdict::Incompatible {
             client_http_api_version,
             daemon_http_api_version,
             code,
             ..
-        }) => Err(AtmError::new(
-            code,
+        } => Err(AtmError::new(
+            *code,
             format!(
-                "task operation compatibility mismatch: client HTTP API {client_http_api_version}, daemon HTTP API {daemon_http_api_version}; daemon must support >= 1.5.0"
+                "{verb} compatibility mismatch: client HTTP API {client_http_api_version}, daemon HTTP API {daemon_http_api_version}; daemon must support >= {minimum}"
             ),
         )),
-        other => Err(AtmError::daemon_unavailable(format!(
-            "daemon returned an unexpected response for task-operation compatibility preflight: {other:?}"
-        ))),
     }
 }
 
@@ -1081,7 +1179,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1467,18 +1565,15 @@ mod tests {
     }
 
     #[test]
-    fn cli_rejects_task_complete_with_task_id() {
+    fn send_task_complete_requires_task_id() {
         crate::commands::Cli::try_parse_from([
             "atm",
             "send",
             "recipient-a@test-team",
-            "--task-id",
-            "t-1",
             "--task-complete",
-            "t-2",
             "--stdin",
         ])
-        .expect_err("task assignment and completion are mutually exclusive");
+        .expect_err("task completion requires a task id");
     }
 
     #[test]
@@ -1489,7 +1584,8 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
         let mut command = send_command("recipient-a@test-team", None);
-        command.task_complete = Some("t-42".parse().expect("task id"));
+        command.task_id = Some("t-42".parse().expect("task id"));
+        command.task_complete = true;
 
         let request = command
             .build_request(".".into(), ".".into())
@@ -1544,7 +1640,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1579,7 +1675,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1620,7 +1716,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1645,7 +1741,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1696,7 +1792,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1927,7 +2023,7 @@ mod tests {
             summary: Some("summary".to_string()),
             requires_ack: true,
             task_id: Some("TASK-42".parse().expect("task id")),
-            task_complete: None,
+            task_complete: false,
             dry_run: true,
             json: true,
             attach: Vec::new(),
@@ -1984,7 +2080,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -2025,7 +2121,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -2056,7 +2152,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -2099,7 +2195,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -2138,7 +2234,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -2176,7 +2272,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),

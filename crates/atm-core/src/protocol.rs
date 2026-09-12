@@ -24,6 +24,7 @@ use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::schema::AtmMessageId;
 use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
+use crate::types::TaskId;
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
 pub use atm_storage::{
@@ -32,6 +33,7 @@ pub use atm_storage::{
     RosterRuntimeObservationUpdate, RosterStateRevision, RuntimeMemberState,
     RuntimeObservationAvailability, RuntimeObservationSource,
 };
+use atm_storage::{MoveTarget, QueuePosition};
 
 /// Body representation for the local graft receiver lookup route.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -54,6 +56,7 @@ pub enum SendResponseEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
     Write(Box<WriteRequest>),
+    TaskMove(TaskMoveRequest),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     QueueGetNext(QueueGetNextRequest),
@@ -78,6 +81,7 @@ pub enum RequestEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
+    TaskMove(TaskMoveOutcome),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
     QueueGetNext(QueueGetNextResponse),
@@ -96,7 +100,23 @@ pub enum ResponseEnvelope {
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.5.0";
+pub const HTTP_API_VERSION: &str = "1.6.0";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskMoveRequest {
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
+    pub task_id: TaskId,
+    pub target: MoveTarget,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskMoveOutcome {
+    pub task_id: TaskId,
+    pub assignee: AgentName,
+    pub from: QueuePosition,
+    pub to: QueuePosition,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]

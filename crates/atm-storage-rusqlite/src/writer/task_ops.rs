@@ -596,7 +596,7 @@ pub(super) fn apply_task_move(
     at: IsoTimestamp,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<QueuePosition, AtmError> {
+) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
     let Some(row) = load_task_row(connection, target, team, task_id)? else {
         return Err(task_rejected(format!("no open task {task_id} for {actor}")));
     };
@@ -621,7 +621,11 @@ pub(super) fn apply_task_move(
             None,
             Some("1→1"),
         )?;
-        return Ok(QueuePosition::HEAD);
+        return Ok((
+            row.assignee,
+            QueuePosition::HEAD,
+            QueuePosition::HEAD,
+        ));
     }
     let from = row
         .position
@@ -663,7 +667,7 @@ pub(super) fn apply_task_move(
         None,
         Some(&detail),
     )?;
-    Ok(to)
+    Ok((row.assignee, from, to))
 }
 
 fn queue_order(

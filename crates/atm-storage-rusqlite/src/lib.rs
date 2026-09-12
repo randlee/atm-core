@@ -1092,7 +1092,7 @@ mod tests {
                 target,
                 at: IsoTimestamp::now(),
             })? {
-            crate::writer::WriteOpResult::TaskMoved(position) => Ok(position),
+            crate::writer::WriteOpResult::TaskMoved((_, _, position)) => Ok(position),
             _ => panic!("wrong writer result"),
         }
     }

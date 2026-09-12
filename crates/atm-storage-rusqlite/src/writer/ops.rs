@@ -147,7 +147,7 @@ pub(crate) enum WriteOpResult {
     },
     UpsertMessages,
     Acknowledged(Box<AcknowledgementCommit>),
-    TaskMoved(QueuePosition),
+    TaskMoved((AgentName, QueuePosition, QueuePosition)),
     TemplateRegistration(TemplateRegistrationOutcome),
     DecomposedMessageAdmission(DecomposedMessageAdmissionOutcome),
     TemplateMessageAdmission {

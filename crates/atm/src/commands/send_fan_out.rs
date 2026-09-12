@@ -74,7 +74,7 @@ impl SendCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        if self.task_complete.is_some() {
+        if self.task_complete {
             preflight_task_op_compatibility(&composition).await?;
         }
 
@@ -210,8 +210,7 @@ impl SendCommand {
             self.task_id.clone(),
             self.dry_run,
         )?;
-        if let Some(task_id) = self.task_complete.clone() {
-            request.task_id = Some(task_id);
+        if self.task_complete {
             request.task_op = Some(TaskOp::Close {
                 outcome: TaskCloseOutcome::Completed,
                 reason: None,

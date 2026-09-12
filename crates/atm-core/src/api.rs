@@ -14,7 +14,7 @@ use crate::error::AtmError;
 use crate::list::ListQuery;
 use crate::protocol::{
     CompatibilityPreflight, QueueGetNextRequest, RequestEnvelope, ResponseEnvelope,
-    TeamMemberHeartbeatRequest,
+    TaskMoveRequest, TeamMemberHeartbeatRequest,
 };
 use crate::read::{PeekQuery, ReadQuery};
 use crate::search::SearchRequest;
@@ -36,6 +36,7 @@ const DOCTOR_PATH: &str = "/v1/atm/doctor";
 const COMPATIBILITY_PATH: &str = "/v1/atm/compatibility";
 const HEARTBEAT_PATH: &str = "/v1/atm/heartbeat";
 const QUEUE_GET_NEXT_PATH: &str = "/v1/atm/queue/get-next";
+const TASK_MOVE_PATH: &str = "/v1/atm/tasks/move";
 const GRAFT_RECEIVER_REGISTER_PATH: &str = "/v1/atm/graft/receiver/register";
 const GRAFT_RECEIVER_REFRESH_PATH: &str = "/v1/atm/graft/receiver/refresh";
 const GRAFT_RECEIVER_UNREGISTER_PATH: &str = "/v1/atm/graft/receiver/unregister";
@@ -62,6 +63,7 @@ pub enum HttpRouteKind {
     Compatibility,
     Heartbeat,
     QueueGetNext,
+    TaskMove,
     GraftReceiverRegister,
     GraftReceiverRefresh,
     GraftReceiverUnregister,
@@ -183,6 +185,13 @@ const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
             path_template: GRAFT_RECEIVER_REFRESH_PATH,
         },
     },
+    HttpRouteSpec {
+        kind: HttpRouteKind::TaskMove,
+        route: HttpRoute {
+            method: "POST",
+            path_template: TASK_MOVE_PATH,
+        },
+    },
 ];
 
 /// Registered HTTP route inventory for documentation conformance tests.
@@ -209,12 +218,14 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
         HttpRouteKind::GraftReceiverUnregister => &HTTP_ROUTE_SPECS[12],
         HttpRouteKind::GraftReceiverLookup => &HTTP_ROUTE_SPECS[13],
         HttpRouteKind::GraftReceiverRefresh => &HTTP_ROUTE_SPECS[14],
+        HttpRouteKind::TaskMove => &HTTP_ROUTE_SPECS[15],
     }
 }
 
 fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
     match request {
         RequestEnvelope::Write(_) => HttpRouteKind::Write,
+        RequestEnvelope::TaskMove(_) => HttpRouteKind::TaskMove,
         RequestEnvelope::List(_) => HttpRouteKind::List,
         RequestEnvelope::Peek(_) => HttpRouteKind::Inspect,
         RequestEnvelope::Receive(_) => HttpRouteKind::Receive,
@@ -353,6 +364,7 @@ fn decode_no_content_response(
 fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
     match request {
         RequestEnvelope::Write(value) => serde_json::to_vec(value),
+        RequestEnvelope::TaskMove(value) => serde_json::to_vec(value),
         RequestEnvelope::CompatibilityPreflight(value) => serde_json::to_vec(value),
         RequestEnvelope::Heartbeat(value) => serde_json::to_vec(value),
         RequestEnvelope::QueueGetNext(value) => serde_json::to_vec(value),
@@ -403,6 +415,9 @@ fn decode_success_response(
         RequestEnvelope::Write(_) => decode_response_body(body, "write").map(|value| {
             ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value))
         }),
+        RequestEnvelope::TaskMove(_) => {
+            decode_response_body(body, "task move").map(ResponseEnvelope::TaskMove)
+        }
         RequestEnvelope::CompatibilityPreflight(_) => {
             decode_response_body(body, "compatibility").map(ResponseEnvelope::CompatibilityVerdict)
         }
@@ -459,6 +474,7 @@ fn http_header<'a>(headers: &'a [String], name: &str) -> Option<&'a str> {
 pub enum ApiRequest {
     Messages(Box<MessageCollectionRequest>),
     Write(Box<WriteRequest>),
+    TaskMove(TaskMoveRequest),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     Search(Box<SearchRequest>),
@@ -495,6 +511,7 @@ impl ApiRequest {
                 MessageCollectionRequest::Receive(query) => RequestEnvelope::Receive(query),
             },
             Self::Write(request) => RequestEnvelope::Write(request),
+            Self::TaskMove(request) => RequestEnvelope::TaskMove(request),
             Self::Clear(query) => RequestEnvelope::Clear(query),
             Self::Doctor(query) => RequestEnvelope::Doctor(query),
             Self::Search(query) => RequestEnvelope::Search(query),
@@ -520,6 +537,7 @@ impl From<RequestEnvelope> for ApiRequest {
     fn from(request: RequestEnvelope) -> Self {
         match request {
             RequestEnvelope::Write(request) => Self::Write(request),
+            RequestEnvelope::TaskMove(request) => Self::TaskMove(request),
             RequestEnvelope::List(query) => {
                 Self::Messages(Box::new(MessageCollectionRequest::List(query)))
             }
