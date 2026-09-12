@@ -25,6 +25,6 @@ metadata:
   </head>
   <body>
     <header><strong>{{ title }}</strong><p>Generated {{ generated_at }}</p></header>
-    <main>{{ pane_html }}</main>
+    <main>{{ pane_html | safe }}</main>
   </body>
 </html>
