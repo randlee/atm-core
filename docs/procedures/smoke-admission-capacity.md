@@ -53,6 +53,31 @@ The admission runner leaves its bounded campaign JSON and rendered report under 
 ## Changes
 The revision sections below preserve the admission runner history. Each section names the implementation change that established its procedure order.
 
+## Revision 8ee8a391 (2026-09-07)
+The runner change `fix: scope daemon singleton per account` is the source for this revision's procedure order.
+
+```mermaid
+flowchart LR
+  setup[Setup smoke-admission-capacity]
+  case1[group1: clean daemon preflight]
+  case2[group2: durability after restart]
+  teardown[Validate and close]
+  evidence[Write immutable evidence]
+  setup --> case1
+  case1 --> case2
+  case2 --> teardown
+  teardown --> evidence
+  note[runner revision 8ee8a391]:::revision
+```
+
+## Steps
+| step | action | observable | evidence |
+| --- | --- | --- | --- |
+| 1 | Execute `clean daemon preflight` | The named check reports PASS or FAIL at revision `8ee8a391` | `smoke-admission-capacity.json` cases |
+| 2 | Execute `bounded admission writes` | The named check reports PASS or FAIL at revision `8ee8a391` | `smoke-admission-capacity.json` cases |
+| 3 | Execute `durability after restart` | The named check reports PASS or FAIL at revision `8ee8a391` | `smoke-admission-capacity.json` cases |
+| 4 | Execute `throughput verdict` | The named check reports PASS or FAIL at revision `8ee8a391` | `smoke-admission-capacity.json` cases |
+
 ## Revision b193b950 (2026-09-06)
 The runner checks the daemon doctor result after roster setup before measuring the admission lanes.
 
@@ -124,34 +149,3 @@ flowchart LR
 | 2 | Execute `bounded admission writes` | The bounded write rate is recorded | `smoke-admission-capacity.json` cases |
 | 3 | Execute `durability after restart` | Restart preserves the durable rows | `smoke-admission-capacity.json` cases |
 | 4 | Execute `throughput verdict` | The reviewed threshold verdict is recorded | `smoke-admission-capacity.json` cases |
-
-## Evidence layout
-The runner writes immutable evidence for `smoke-admission-capacity` beneath `site/reports/`. The JSON payload is the source for case or worker outcomes; the rendered report and envelope provide the public navigation entry.
-
-## Changes
-The revision sections below are the retained runner-history backfill. Each section records the source revision and its own ordered procedure description.
-
-## Revision 8ee8a391 (2026-09-07)
-The runner change `fix: scope daemon singleton per account` is the source for this revision's procedure order.
-
-```mermaid
-flowchart LR
-  setup[Setup smoke-admission-capacity]
-  case1[group1: clean daemon preflight]
-  case2[group2: durability after restart]
-  teardown[Validate and close]
-  evidence[Write immutable evidence]
-  setup --> case1
-  case1 --> case2
-  case2 --> teardown
-  teardown --> evidence
-  note[runner revision 8ee8a391]:::revision
-```
-
-## Steps
-| step | action | observable | evidence |
-| --- | --- | --- | --- |
-| 1 | Execute `clean daemon preflight` | The named check reports PASS or FAIL at revision `8ee8a391` | `smoke-admission-capacity.json` cases |
-| 2 | Execute `bounded admission writes` | The named check reports PASS or FAIL at revision `8ee8a391` | `smoke-admission-capacity.json` cases |
-| 3 | Execute `durability after restart` | The named check reports PASS or FAIL at revision `8ee8a391` | `smoke-admission-capacity.json` cases |
-| 4 | Execute `throughput verdict` | The named check reports PASS or FAIL at revision `8ee8a391` | `smoke-admission-capacity.json` cases |

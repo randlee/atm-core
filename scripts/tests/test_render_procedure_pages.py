@@ -121,6 +121,17 @@ class ProcedurePageTests(unittest.TestCase):
             metadata, body, sections = MODULE.parse_document(path)
             MODULE.validate_revision_stamps(path, metadata, body, sections)
 
+    def test_revision_sections_appear_in_front_matter_order(self):
+        for path in sorted((ROOT / "docs/procedures").glob("*.md")):
+            metadata, _body, sections = MODULE.parse_document(path)
+            MODULE.validate_revision_order(path, metadata, sections)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            path = Path(tempdir) / "reversed.md"
+            metadata = {"revisions": [{"rev": "a" * 40}, {"rev": "b" * 40}]}
+            with self.assertRaisesRegex(MODULE.ProcedureRenderError, "front matter order"):
+                MODULE.validate_revision_order(path, metadata, {"bbbbbbbb": "", "aaaaaaaa": ""})
+
     def test_check_mode_detects_stale_page(self):
         with mock.patch.object(MODULE, "mermaid_svg", side_effect=AssertionError("check mode rendered Mermaid")):
             self.assertEqual(MODULE.render(ROOT, check=True), 0)

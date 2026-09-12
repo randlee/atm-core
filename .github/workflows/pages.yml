@@ -35,14 +35,18 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Resolve Puppeteer version
+        id: puppeteer
+        run: echo "version=$(npm view puppeteer version)" >> "$GITHUB_OUTPUT"
+
       - name: Cache Puppeteer Chromium
         uses: actions/cache@v4
         with:
           path: ~/.cache/puppeteer
-          key: ${{ runner.os }}-puppeteer-chrome-v1
+          key: ${{ runner.os }}-puppeteer-chrome-${{ steps.puppeteer.outputs.version }}
 
       - name: Provision Puppeteer Chromium
-        run: npx -y puppeteer browsers install chrome
+        run: npx -y puppeteer@${{ steps.puppeteer.outputs.version }} browsers install chrome
 
       - name: Verify generated procedure pages
         run: just procedures --check

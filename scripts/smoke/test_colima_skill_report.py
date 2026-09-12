@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 from unittest import mock
 import unittest
 
@@ -74,8 +75,14 @@ class RenderTests(unittest.TestCase):
             (run_dir / "report-1.txt").write_text(REPORT, encoding="utf-8")
             (run_dir / "herdr-doctor.json").write_text("{}", encoding="utf-8")
             out_dir = Path(tmp) / "site" / "reports" / "smoke" / "linux" / MODULE.HOST / "out"
+            procedure = Path(tmp) / "site/reports/procedures/colima-hermes-skills/selected.html"
+            procedure.parent.mkdir(parents=True)
+            procedure.write_text("<html>procedure</html>\n", encoding="utf-8")
             with mock.patch.object(MODULE, "_source_revision", return_value="b" * 40), mock.patch.object(MODULE, "compose"), \
-                    mock.patch.object(MODULE, "update_master_report_index"), mock.patch.object(MODULE, "REPO_ROOT", Path(tmp)):
+                    mock.patch.object(MODULE, "_resolve_procedure_page", return_value=SimpleNamespace(
+                        revision="a" * 40, html="procedures/colima-hermes-skills/selected.html"
+                    )), mock.patch.object(MODULE, "update_master_report_index"), \
+                    mock.patch.object(MODULE, "REPO_ROOT", Path(tmp)):
                 report = MODULE.render(run_dir, out_dir)
             payload = json.loads(report.read_text())
             envelope = json.loads((out_dir / "smoke.envelope.json").read_text())
@@ -98,6 +105,7 @@ class RenderTests(unittest.TestCase):
                 output.write_text(variables.get("body_html", variables.get("pane_src", variables.get("pane_html", ""))), encoding="utf-8")
 
             with mock.patch.object(MODULE, "compose", side_effect=fake_compose), \
+                    mock.patch.object(MODULE, "_resolve_procedure_page", return_value=None), \
                     mock.patch.object(MODULE, "update_master_report_index") as index, \
                     mock.patch.object(MODULE, "REPO_ROOT", Path(tmp)):
                 report = MODULE.render(run_dir, out_dir)
@@ -115,6 +123,23 @@ class RenderTests(unittest.TestCase):
             for name in ("result.txt", "report-1.txt", "herdr-doctor.json"):
                 self.assertEqual((out_dir / name).read_bytes(), (run_dir / name).read_bytes())
             index.assert_called_once()
+
+    def test_documented_steps_match_the_runner_case_order(self):
+        root = Path(__file__).resolve().parents[2]
+        header_names = [item["name"] for item in MODULE.header_cases(RESULT, MODULE.parse_report(REPORT))]
+
+        source = (root / "docs/procedures/colima-hermes-skills.md").read_text(encoding="utf-8")
+        sections = source.split("## Steps\n")[1:]
+        self.assertEqual(len(sections), 2)
+        for section in sections:
+            table = section.split("\n## ", 1)[0]
+            documented = [
+                line.split("`", 2)[1]
+                for line in table.splitlines()
+                if line.startswith("| ") and "Execute `" in line
+            ]
+            self.assertEqual(len(documented), 49)
+            self.assertEqual(documented[: len(header_names)], header_names)
 
 
 if __name__ == "__main__":

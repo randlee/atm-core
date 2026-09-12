@@ -4,7 +4,7 @@
   "platform": "macos",
   "run_id": "20260912T204119754750Z",
   "status": "PASS",
-  "source_revision": "fe5dac5cb48953915e99f84937c63c58eb58fa66",
+  "source_revision": "aa4d9b67fe81e34cf37b9f8635893c9df998eff6",
   "cases": [
     {
       "name": "AD11-CMD-SEND-001",
