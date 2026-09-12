@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T15:39:37Z"^^xsd:dateTime ;
-  triage:deferredNote "Not a product defect in delivery correctness -- confirmed working as designed (deferred receipt semantics). Wording-only fix; dispatchReady left false pending Rand's go-ahead per fenix's note." ;
+  triage:deferredNote "Not a product defect in delivery correctness -- confirmed working as designed (deferred receipt semantics). Wording-only fix; dispatchReady left false pending Rand's go-ahead per fenix's note. fenix (ATM 01M2B4STTJ43RE7XY9WA1FRHM4, 2026-09-12T15:46:58Z), root-cause follow-up with Rand's exact timing (rogue nudge arrived >=1 min after all three closes): the BA.5 queue-item rule, not a defect -- the task_started receipt (NudgeMode::Deferred) is an open queue item while unread, and each successful handoff re-arms nudge_pending_at = now + 60s (TASK_REMINDER_INTERVAL_MS); the pump re-prompts once per interval while the item stays open. mail_message_states confirms: receipt-1 read at 15:27:59 (25s, no re-prompt needed); receipt-2 (written 15:29:39) not read until 15:32:03 -- team-lead read receipt-3 and close-3 first at 15:31:11 -- so receipt-2 was re-prompted at the next idle tick after its 60s re-arm. The close-2 report (an immediate send, not a deferred marker) sat unread until 15:34:40 and was never re-nudged, confirming only deferred items re-prompt. So SMK-004 is two compounding wording/design issues on the same receipt: (a) Task-template ack/execute wording is wrong for a receipt, and (b) the receipt re-prompts every 60s until read, which amplifies (a)'s confusion each time it re-fires. Rand is opening a broader nudge-granularity design discussion; the fix shape (receipt-specific nudge kind, and whether receipts should be deferred/re-prompted at all) will come out of that. Keep dispatchReady false and #1431 held pending that discussion." ;
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T15:39:37Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SMK-004/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/SMK-004/1>
   a triage:Occurrence ;
