@@ -377,3 +377,15 @@ Sprint 2, logic, each a deletion or a small addition:
 
 Sprint 1 can be dogfooded on the live team immediately after it lands via
 the normal prerelease path.
+
+### 9.1 Proposed Phase BB shape (for scope review; plan doc follows approval)
+
+| Sprint | Scope | Wave | Owner |
+|---|---|---|---|
+| BB.1 templates | sprint 1 above | 1 | one dev |
+| BB.2 logic | sprint 2 above; needs schema-reviewer (new HTTP verb, `nudge_handoffs` table = minor bumps) | 2, after BB.1's prerelease has run on the live team | one dev |
+| BB.3 docs | team-protocol, CLAUDE.md quick reference, agent-conventions: `atm task start`, one-line receipts, retired `task` kind | 2 | one dev |
+| BB.4 test-procedure pages | one procedure file per test family (`docs/procedures/<family>.md`: front matter id+version, prose + mermaid, one fenced block of ordered steps as data); runners load the file, execute its steps, and write step ids + procedure id/version/sha256 into the runner-written evidence JSON; sc-compose renders the same file to `site/reports/procedures/<id>/<version>-<sha8>.html`; every smoke/benchmark/fuzz/integration report header links its procedure; a lint gate checks evidence ↔ page hash and step-id equality, mismatch fails CI and renders a banner. Families: smoke + benchmarks first (python runners already write evidence JSON), fuzz second, colima integration with the testbed harness. Existing evidence untouched. No file overlap with BB.1/BB.2. | 1, parallel | one dev (procedure schema first) |
+
+Triage seed: PR #1431 (SMK-004/005/006), held, becomes the phase's first
+`.triage` records rather than a fix branch.
