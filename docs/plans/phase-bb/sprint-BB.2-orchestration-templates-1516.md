@@ -9,7 +9,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb2-orchest
 | Field | Value |
 | --- | --- |
 | Schedule | **PARALLEL. Wave 1, starts with BB.1.** `parallel_safe` with BB.1 and BB.3 (plan §4) |
-| Owner | cipher |
+| Owner | solar (reassigned from cipher 2026-09-12T19:47Z, fenix ruling: run now rather than wait on BB3-FIX-R1) |
 | Ruling | Rand 2026-09-12: "do we need to update the /graph-orchestration templates or prompts at all to handle the 'atm task' changes we are running now at atm v1.5.16? i.e. we want the tasks to be closed by dev and qa agents when the final report is sent. also when tasks are assigned, we should update fenced commands used to match v1.5.16." Plan P7 splits the 1.5.16 part (this sprint) from the post-BB.4 `atm task start` step (BB.7). |
 | Depends on | nothing in `crates/`; the shipped host pair is prerelease 1.5.16 (`develop` 281e6f546) |
 | Worktree | `feature/bb2-orchestration-templates-1516` off `integrate/phase-bb` |

@@ -102,7 +102,7 @@ against a task the prompt was not for.
 | sprint | doc | wave | parallel | recommended |
 | --- | --- | --- | --- | --- |
 | BB.1 | [Transition templates and kind decision](./sprint-BB.1-transition-templates.md) | 1 | with BB.2, BB.3 | arch-ctm / deep-reasoning |
-| BB.2 | [Orchestration templates at 1.5.16](./sprint-BB.2-orchestration-templates-1516.md) | 1 | **PARALLEL with BB.1** | cipher / fast |
+| BB.2 | [Orchestration templates at 1.5.16](./sprint-BB.2-orchestration-templates-1516.md) | 1 | **PARALLEL with BB.1** | solar / fast |
 | BB.3 | [Test-procedure pages](./sprint-BB.3-test-procedure-pages.md) | 1 | **PARALLEL with BB.1** (starts with BB.1) | cipher / fast |
 | BB.4 | [`atm task start`](./sprint-BB.4-task-start.md) | 2 | — | arch-ctm / deep-reasoning |
 | BB.5 | [Assignment write and task pass](./sprint-BB.5-assignment-write-task-pass.md) | 3 | — | arch-ctm / deep-reasoning |
