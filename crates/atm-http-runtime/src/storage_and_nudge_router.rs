@@ -1033,7 +1033,7 @@ pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Resu
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
@@ -2294,8 +2294,7 @@ mod tests {
 
     /// A bare-CLI pull drains the in-memory FIFO while preserving the leased
     /// durable marker; the member's subsequent read closes that marker.
-    #[tokio::test]
-    async fn bare_cli_pull_closes_item() {
+    pub(crate) async fn assert_bare_cli_pull_closes_item() {
         let fixture = fixture(true, None, None);
         let member = MemberKey::new(
             "test-team".parse().expect("team"),

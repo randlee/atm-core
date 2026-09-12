@@ -223,6 +223,11 @@ async fn requires_ack_message_reminded_until_acked() {
 }
 
 #[tokio::test]
+async fn bare_cli_pull_closes_item() {
+    crate::storage_and_nudge_router::tests::assert_bare_cli_pull_closes_item().await;
+}
+
+#[tokio::test]
 async fn immediate_send_is_never_reminded() {
     let (root, runtime, fake, pump, _health, key) = build_test_pump();
     clear_pending_markers(root.path(), &runtime, &key);
@@ -385,14 +390,10 @@ async fn no_mailbox_list_read_in_the_queue_pass() {
 
 #[tokio::test]
 async fn blocked_member_with_open_item_escalates_not_reminded() {
-    let (root, runtime, fake, _old_pump, health, key) =
-        build_test_pump_with_agents(vec![AgentSnapshot {
-            name: Some("aq27-agent".to_owned()),
-            pane_id: None,
-            status: HerdrAgentStatus::Blocked,
-            workspace_id: None,
-        }]);
-    let task_id: TaskId = "BA5-BLOCKED-OPEN".parse().expect("task id");
+    let (root, runtime, fake, pump, task_store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    let key = keys[0].clone();
+    let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
     let message_id = queue_task_message(
         root.path(),
         &runtime,
@@ -400,25 +401,11 @@ async fn blocked_member_with_open_item_escalates_not_reminded() {
         key.agent().as_str(),
         task_id.clone(),
     );
-    let now = Arc::new(Mutex::new(
-        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
-    ));
-    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, now);
-
-    queue_idle_result(&fake, &key);
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
     pump.tick_once().await;
 
     assert_eq!(pump.stats().task_reminders_blocked, 1);
     assert!(prompt_texts(&fake).is_empty());
     assert!(pending_state(root.path(), &key, message_id).0.is_some());
-    assert_eq!(
-        runtime
-            .task_store()
-            .expect("task store")
-            .load_task(key.team(), &task_id)
-            .expect("load task")
-            .expect("task row")
-            .state,
-        TaskState::Assigned
-    );
+    assert_eq!(task_store.row(&key, &task_id).state, TaskState::Assigned);
 }

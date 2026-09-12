@@ -37,9 +37,10 @@ use crate::types::{AgentName, CommandAction, IsoTimestamp, PaneId, TaskId, TeamN
 
 #[test]
 fn writer_rejects_task_op_on_foreign_team_or_host_recipient() {
+    let temporary = std::env::temp_dir();
     let mut request = SendRequest::new(
-        PathBuf::from("/tmp"),
-        PathBuf::from("/tmp"),
+        temporary.clone(),
+        temporary,
         "sender".parse().unwrap(),
         "recipient@other-team",
         "local-team".parse().unwrap(),
@@ -69,20 +70,21 @@ fn writer_rejects_task_op_on_foreign_team_or_host_recipient() {
 
 #[test]
 fn legacy_task_complete_request_closes_the_task() {
-    let producer_1_4_json = r#"{
-        "home_dir":"/tmp",
-        "current_dir":"/tmp",
-        "caller_identity":"sender",
-        "caller_team":"local-team",
-        "to":{"agent":"recipient"},
-        "message_source":{"Inline":"task"},
-        "summary_override":null,
-        "requires_ack":false,
-        "task_complete":"T1",
-        "dry_run":false
-    }"#;
+    let temporary = std::env::temp_dir();
+    let producer_1_4_json = serde_json::json!({
+        "home_dir": temporary,
+        "current_dir": std::env::temp_dir(),
+        "caller_identity": "sender",
+        "caller_team": "local-team",
+        "to": {"agent": "recipient"},
+        "message_source": {"Inline": "task"},
+        "summary_override": null,
+        "requires_ack": false,
+        "task_complete": "T1",
+        "dry_run": false
+    });
     let mut request_1_4: SendRequest =
-        serde_json::from_str(producer_1_4_json).expect("1.4.0 request");
+        serde_json::from_value(producer_1_4_json).expect("1.4.0 request");
     super::validate_task_request(&mut request_1_4).expect("legacy close normalizes");
     assert_eq!(request_1_4.task_id.as_ref().map(TaskId::as_str), Some("T1"));
     assert_eq!(

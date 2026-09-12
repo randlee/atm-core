@@ -105,6 +105,31 @@ fn fresh_and_already_migrated_databases_skip_migration() {
 }
 
 #[test]
+fn unrecognized_assignee_primary_key_state_fails_migration() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let path = root.path().join("mail.db");
+    let connection = Connection::open(&path).expect("database");
+    connection
+        .execute_batch(
+            "CREATE TABLE tasks (
+                team TEXT NOT NULL,
+                assignee TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                PRIMARY KEY (team, assignee)
+            );",
+        )
+        .expect("unrecognized task schema");
+    drop(connection);
+
+    let error = SqliteStorageBackend::new(&path).expect_err("schema must fail closed");
+    assert!(
+        error
+            .message()
+            .contains("assignee primary-key position is 2; expected 0 or 3")
+    );
+}
+
+#[test]
 fn single_row_tasks_migrate_with_positions_by_assigned_at() {
     let (_root, path, connection) = fixture();
     task(&connection, "T2", "a", "assigned", "2026-01-02T00:00:00Z");
