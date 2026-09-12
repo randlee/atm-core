@@ -36,7 +36,7 @@ static DAEMON_ACTOR: LazyLock<AgentName> =
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum EscalationKind {
     BreakerOpened,
-    LeadNotified,
+    TaskStalled,
     BlockedEscalated,
     OfflineEscalated,
     #[expect(dead_code, reason = "the runtime refusal path lands in task 7")]
@@ -47,7 +47,7 @@ impl EscalationKind {
     const fn as_str(self) -> &'static str {
         match self {
             Self::BreakerOpened => "breaker_opened",
-            Self::LeadNotified => "lead_notified",
+            Self::TaskStalled => "lead_notified",
             Self::BlockedEscalated => "blocked_escalated",
             Self::OfflineEscalated => "offline_escalated",
             Self::RefusalsEscalated => "refusals_escalated",
@@ -227,7 +227,19 @@ pub(crate) async fn escalate_mail(
         lead: targets.lead.clone(),
         ..Default::default()
     };
-    let reader = suppress_since.and_then(|_| runtime.async_mailbox_reader().ok());
+    let reader = suppress_since.and_then(|_| match runtime.async_mailbox_reader() {
+        Ok(reader) => Some(reader),
+        Err(error) => {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "escalation_mail_reader",
+                outcome = "unavailable",
+                error = %error,
+                "Escalation mailbox suppression is unavailable"
+            );
+            None
+        }
+    });
     let mut recipients = targets.recipients;
     if let Some(lead) = targets.lead {
         recipients.insert(0, format!("{lead}@{team}"));
