@@ -13,10 +13,7 @@ use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
 };
-use atm_core::delivery_channel::{
-    DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
-    local_message_received_backend,
-};
+use atm_core::delivery_channel::{HerdrAgentName, HerdrSession, local_message_received_backend};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::{
     load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
@@ -276,15 +273,29 @@ impl HerdrQueueWakePump {
         stats: &mut HerdrQueueWakeStats,
     ) -> (Vec<HerdrCandidate>, Vec<MemberObservation>, bool) {
         let mut by_session: HashMap<Option<HerdrSession>, Vec<HerdrCandidate>> = HashMap::new();
-        for candidate in candidates {
-            by_session
-                .entry(candidate.session.clone())
-                .or_default()
-                .push(candidate);
-        }
         let mut eligible = Vec::new();
         let mut task_candidates = Vec::new();
         let mut complete = true;
+        for candidate in candidates {
+            if candidate.herdr_agent.is_some() {
+                by_session
+                    .entry(candidate.session.clone())
+                    .or_default()
+                    .push(candidate);
+            } else if let Some(record) = self
+                .service_runtime
+                .roster_ephemeral_state(candidate.key.team(), candidate.key.agent())
+            {
+                task_candidates.push(MemberObservation {
+                    member: candidate.key.clone(),
+                    state: record.runtime.state,
+                    state_changed_at: record.runtime.state_changed_at,
+                });
+                if candidate.pending && record.runtime.state == RuntimeMemberState::Idle {
+                    eligible.push(candidate);
+                }
+            }
+        }
         for (session, members) in by_session {
             stats.listed_sessions += 1;
             match self
@@ -335,9 +346,13 @@ impl HerdrQueueWakePump {
             .collect();
         let mut updates_by_team = HashMap::new();
         for member in &members {
+            let herdr_agent = member
+                .herdr_agent
+                .as_ref()
+                .expect("Herdr poll candidates always have an Herdr target");
             let state = runtime_state(
                 snapshots
-                    .get(member.herdr_agent.as_str())
+                    .get(herdr_agent.as_str())
                     .map(|snapshot| snapshot.status),
             );
             updates_by_team
@@ -364,13 +379,17 @@ impl HerdrQueueWakePump {
             }
         }
         for member in members {
-            if !snapshots.contains_key(member.herdr_agent.as_str()) {
+            let herdr_agent = member
+                .herdr_agent
+                .as_ref()
+                .expect("Herdr poll candidates always have an Herdr target");
+            if !snapshots.contains_key(herdr_agent.as_str()) {
                 if member.pending {
                     stats.not_present += 1;
                     tracing::info!(
                         event = "herdr_queue_poll_outcome",
                         member = %member.key,
-                        herdr_agent = %member.herdr_agent,
+                        herdr_agent = %herdr_agent,
                         queue_kind = NudgeKind::Queue.as_str(),
                         outcome = "held_target_not_present",
                         "Herdr queue target was absent from the poll result"
@@ -725,7 +744,7 @@ impl crate::RuntimeMaintenance for HerdrQueueWakePump {
 #[derive(Clone)]
 struct HerdrCandidate {
     key: MemberKey,
-    herdr_agent: HerdrAgentName,
+    herdr_agent: Option<HerdrAgentName>,
     session: Option<HerdrSession>,
     pending: bool,
 }
@@ -753,29 +772,34 @@ fn herdr_candidates(
             let Some(backend) = local_message_received_backend(&member) else {
                 continue;
             };
-            if classify_delivery_channel(Some(&backend), GraftLeaseState::Absent)
-                != DeliveryChannel::HerdrSteer
-            {
-                continue;
-            }
             let (configured_agent, session) = match backend {
                 atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr {
                     session,
                     agent,
-                } => (agent, session),
-                atm_core::delivery_channel::LocalMessageReceivedBackend::Tmux { .. } => continue,
+                } => (Some(agent), session),
+                atm_core::delivery_channel::LocalMessageReceivedBackend::Tmux { .. } => {
+                    candidates.push(HerdrCandidate {
+                        pending: pending.contains(&key),
+                        key,
+                        herdr_agent: None,
+                        session: None,
+                    });
+                    continue;
+                }
             };
-            let Some(herdr_agent) = atm_core::delivery_channel::resolve_herdr_agent_target(
-                key.agent(),
-                configured_agent,
-                "herdr_queue_wake",
-            ) else {
+            let Some(herdr_agent) = configured_agent.and_then(|configured_agent| {
+                atm_core::delivery_channel::resolve_herdr_agent_target(
+                    key.agent(),
+                    configured_agent,
+                    "herdr_queue_wake",
+                )
+            }) else {
                 continue;
             };
             candidates.push(HerdrCandidate {
                 pending: pending.contains(&key),
                 key,
-                herdr_agent,
+                herdr_agent: Some(herdr_agent),
                 session,
             });
         }
