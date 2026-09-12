@@ -1097,7 +1097,7 @@ impl Drop for ReleasePendingOnDrop {
 
 #[cfg(test)]
 mod tests {
-    #[path = "../../../tests/herdr_queue_ephemeral.rs"]
+    #[path = "../tests/herdr_queue_ephemeral.rs"]
     mod herdr_queue_ephemeral;
 
     use super::{
@@ -1409,7 +1409,7 @@ mod tests {
         key: &atm_core::boundary::MemberKey,
         message_id: AtmMessageId,
     ) -> (Option<String>, u32) {
-        atm_runtime_test_support::inspect_pending_nudge_state_for_test(
+        atm_runtime_test_support::inspect_pending_marker_state_for_test(
             root.join("runtime/mail.sqlite3"),
             key.team().as_str(),
             key.agent().as_str(),
@@ -1530,6 +1530,20 @@ mod tests {
             atm_core::read::read_mail_with_runtime(query, &NullObservability, runtime)
                 .expect("close pending marker message");
         }
+    }
+
+    fn make_failed_attempt_due(
+        store: &dyn atm_core::boundary::PendingNudgeStore,
+        key: &atm_core::boundary::MemberKey,
+        message_id: &AtmMessageId,
+    ) {
+        store
+            .rearm_pending_after_handoff(
+                key,
+                message_id,
+                IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+            )
+            .expect("make the next failed claim due");
     }
 
     fn close_message(

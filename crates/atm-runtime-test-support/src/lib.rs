@@ -346,13 +346,13 @@ pub fn inspect_template_admission_for_test(
 
 /// Inspects the durable pending marker without exposing SQLite to a runtime
 /// crate's behavior test.
-pub fn inspect_pending_nudge_state_for_test(
+pub fn inspect_pending_marker_state_for_test(
     path: impl AsRef<Path>,
     team: &str,
     agent: &str,
     message_key: &str,
 ) -> Result<(Option<String>, u32), AtmError> {
-    atm_storage_rusqlite::inspect_pending_nudge_state_for_test(path, team, agent, message_key)
+    atm_storage_rusqlite::inspect_pending_marker_state_for_test(path, team, agent, message_key)
 }
 
 /// Inspects the durable mailbox-state schema through the test-support crate.

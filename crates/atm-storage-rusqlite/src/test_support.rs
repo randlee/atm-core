@@ -76,7 +76,7 @@ pub fn inspect_template_admission_for_test(
 
 /// Reads the durable pending marker used by black-box queue tests.
 #[doc(hidden)]
-pub fn inspect_pending_nudge_state_for_test(
+pub fn inspect_pending_marker_state_for_test(
     path: impl AsRef<Path>,
     team: &str,
     agent: &str,

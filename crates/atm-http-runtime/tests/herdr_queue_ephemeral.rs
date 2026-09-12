@@ -1,4 +1,4 @@
-//! Behavioral coverage for the BA.5 ephemeral queue contract.
+// Behavioral coverage for the BA.5 ephemeral queue contract.
 
 use super::*;
 
@@ -263,13 +263,7 @@ async fn failed_dispatch_backs_off_after_max_attempts_and_still_closes_on_read()
             "failed attempt {failure} is released"
         );
         if failure + 1 < atm_storage::MAX_NUDGE_ATTEMPTS {
-            pending_store
-                .rearm_pending_after_handoff(
-                    &key,
-                    &message_id,
-                    IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
-                )
-                .expect("make the next failed claim due");
+            make_failed_attempt_due(pending_store.as_ref(), &key, &message_id);
         }
     }
     let (marker, attempts) = pending_state(root.path(), &key, message_id);
