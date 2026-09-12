@@ -284,7 +284,7 @@ impl HerdrQueueWakePump {
             .escalation_state
             .observe(&candidate.member, candidate.state);
         let provisional = dispose(mail_pending, candidate.state, head, now, new_episode, 0);
-        if provisional != TaskDisposition::Nudge {
+        if candidate.state != RuntimeMemberState::Idle || head.is_none() {
             self.apply_task_disposition(
                 task_store,
                 reader,

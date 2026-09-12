@@ -1785,6 +1785,77 @@ async fn third_refusal_holds_and_escalates_once() {
 }
 
 #[tokio::test]
+async fn refusal_threshold_precedes_mail_pending_hold() {
+    let (root, runtime, _fake, pump, key, tasks, now) = build_real_task_pump(&[
+        "OVERLAP-01",
+        "OVERLAP-02",
+        "OVERLAP-03",
+        "OVERLAP-04",
+    ]);
+    for task in &tasks[..3] {
+        close_real_task(
+            root.path(),
+            &runtime,
+            &key,
+            task,
+            atm_storage::TaskCloseOutcome::Refused,
+        );
+    }
+    queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+    let refusal_run = runtime
+        .async_task_ledger_reader()
+        .expect("task reader")
+        .refusal_run(
+            key.team().clone(),
+            key.agent().clone(),
+            atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+        )
+        .await
+        .expect("refusal run");
+    assert_eq!(
+        refusal_run.count,
+        atm_storage::TASK_CONSECUTIVE_REFUSAL_THRESHOLD
+    );
+    let head = runtime
+        .task_store()
+        .expect("task store")
+        .load_task(key.team(), &tasks[3])
+        .expect("task row")
+        .expect("open head");
+    assert_eq!(
+        crate::herdr_task_disposition::dispose(
+            true,
+            RuntimeMemberState::Idle,
+            Some(&head),
+            *now.lock().expect("clock"),
+            false,
+            refusal_run.count,
+        ),
+        crate::herdr_task_disposition::TaskDisposition::Hold("refusals escalated")
+    );
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty(),
+        "the pump owns refusal escalation"
+    );
+
+    pump.tick_once().await;
+
+    let mail = daemon_mail_for(
+        &runtime,
+        key.team(),
+        atm_storage::roles::ROLE_TEAM_LEAD,
+    )
+    .await;
+    assert_eq!(mail.len(), 1, "refusal threshold outranks mail pending");
+    assert_eq!(
+        mail[0].envelope.summary.as_deref(),
+        Some("escalation:refusals_escalated:worker@lifecycle-team")
+    );
+}
+
+#[tokio::test]
 async fn non_refused_close_releases_refusal_hold() {
     let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&[
         "RELEASE-01",
