@@ -20,8 +20,8 @@ fn assign(task: &str, assignee: &str, actor: &str) -> TaskAssignCommand {
         task_id: Some(task.parse().expect("task id")),
         before: None,
         head: false,
-        message: Some(format!("assignment {task}")),
-        source: MessageSourceArgs {
+        message: MessageSourceArgs {
+            text: Some(format!("assignment {task}")),
             file: None,
             stdin: false,
             template: None,
@@ -192,6 +192,7 @@ async fn assign_closed_id_reopens_same_row() {
         outcome: OutcomeArg::Refused,
         reason: Some("no capacity".into()),
         report: MessageSourceArgs {
+            text: None,
             file: None,
             stdin: false,
             template: None,
