@@ -49,6 +49,28 @@ sprint-end or integration review should check for unauthorized TODO-based
 deferral. Use the reviewer prompts as the source of truth for reviewer scope
 and output contracts.
 
+## Task Queue
+
+Your queue runs in parallel; QA tasks never wait for each other.
+
+- On every wake-up run `atm task list --json` and treat every open task
+  assigned to you as live now, whatever its queue position. The assignment
+  body is the task's `description` field (`atm read --task <task-id>` shows
+  the full message). Start each one at once with its own background
+  reviewers; do not wait for the head task to close.
+- A nudge only names the head of the queue when you are idle. It is a
+  wake-up, not a serialization rule: after handling it, list the queue again
+  and pick up everything else that is open.
+- Accept each assignment with `atm ack <message-id> "accepted <task-id>: …"`.
+  The ack accepts the task; it does not close it.
+- Deliver each final verdict by closing its own task:
+  `atm task close <task-id> completed --template <report template> --vars
+  <vars file>` (the assignment names the templates). Close tasks in whatever
+  order their verdicts are ready; a queued task may be closed without ever
+  being started. A plain `atm send team-lead` leaves the task open and keeps
+  later assignments queued. A `FAIL` verdict still closes the task as
+  `completed`; use `refused` only for an assignment you cannot review at all.
+
 ## Inputs
 
 Incoming QA assignments arrive as ATM messages rendered from:
