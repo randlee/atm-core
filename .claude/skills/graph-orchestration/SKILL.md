@@ -85,16 +85,13 @@ The lead may set `cc` to an empty string to switch copies off.
 
 ## Stack Discipline
 
-A phase runs as one append-only `gh stack` above `integrate/phase-N`
-([`docs/development/gh-stack-guidelines.md`](../../../docs/development/gh-stack-guidelines.md) §0).
-Every dispatch in this skill — `dev-task`, `dev-fix`, the CLEANUP pass — is a
-new worktree cut from the current top of the stack, with its PR opened on
-the first push (base = the layer below) and linked into the stack. Nothing
-below the top is ever edited; a layer freezes when its task closes. The
-lead never waits for a layer's QA or CI before cutting the next layer, and
-the dev's next node starts on a layer cut from their just-pushed head. Every
-QA finding, at every severity, goes through `/triaging-findings` the same
-way and is fixed on a new top layer; none is deferred.
+Every phase runs as one append-only `gh stack` above `integrate/phase-N`.
+The rule is defined once, in
+[`docs/development/gh-stack-guidelines.md`](../../../docs/development/gh-stack-guidelines.md)
+§0, and is not restated here. What it means for this skill: every dispatch
+— `dev-task`, `dev-fix`, the CLEANUP pass — is a new worktree cut from the
+current top of the stack, and the `<stack-discipline>` element every
+template carries is the dev-facing copy of §0.
 
 ## Defaults
 
@@ -422,10 +419,11 @@ Completion, the Completion is invalidated:
    does not block — dev has sent a Completion, so the sprint is not in-flight;
    a new Assignment is required for re-dispatch)
 2. Team-lead appends a new Assignment event to events.ttl for the sprint
-3. Dev fixes the blocker and sends an ATM task-close report; the lead
-   appends a new Completion
-4. Dev merges forward into the next sprint's worktree, picking up any
-   important/minor findings on the way (Step 4 in the j2 template)
+3. The lead dispatches the fix as a new top-of-stack layer with
+   `dev-fix.xml.j2` (Fix Dispatch); the invalidated sprint's own layer stays
+   frozen, and any open important/minor findings ride the same fix layer
+4. Dev closes that task with an ATM task-close report; the lead appends a
+   new Completion for the sprint
 
 This guarantees QA always has the final word. A sprint is never permanently
 "done" while a blocking finding exists postdating its Completion.
@@ -556,13 +554,7 @@ QA assignment uses the existing `quality-mgr` prompt directly — no new templat
 
 ## Required Message Sequence
 
-Every ATM task assignment follows:
-1. ACK — `atm ack <message-id> "accepted <task-id>: …"`; accepts the task, does not close it.
-2. Work — a plain `atm send <lead> --stdin` push report (branch + SHA) on the first push.
-3. Task close — `atm task close <task-id> completed --stdin <<'EOF' … EOF` with the
-   completion report as the body, or `atm task close <task-id> refused "<reason>"`
-   when the whole assignment cannot be done. The close is the terminal step: it
-   frees the assignee's queue and there is no completion ACK by the receiver.
-   The lead reads the daemon's close receipt (`atm read --message-id`) and
-   closes the mirror task on its own side; a plain reply is not part of the
-   sequence.
+The sequence for every ATM task assignment — ack, work, task close; the
+receiver never acks a close — is defined once in
+[`docs/team-protocol.md`](../../../docs/team-protocol.md) (Required Flow).
+This skill adds nothing to it and restates none of it.

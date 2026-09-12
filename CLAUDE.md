@@ -133,9 +133,8 @@ main
 
 **Rules:**
 - Always merge PRs with a merge commit (`gh pr merge --merge`); never squash
-- Sprint PRs target `integrate/phase-N` (not `develop` directly)
-- After each sprint merges to the integration branch, subsequent sprints merge latest `integrate/phase-N` into their feature branch before creating their PR
-- When all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
+- The phase's sprint and fix PRs form one append-only `gh stack` above `integrate/phase-N`: every unit of work is a new worktree cut from the current top of the stack, its PR opens on the first push with base = the layer below, nothing below the top is ever edited again, and nobody waits for a lower layer's QA or CI. The single definition is [`docs/development/gh-stack-guidelines.md`](./docs/development/gh-stack-guidelines.md) §0.
+- The stack lands into `integrate/phase-N` once, from the top; when all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
 - Phase integration branch is then cleaned up
 
 ### Worktree Cleanup Policy

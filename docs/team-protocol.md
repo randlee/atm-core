@@ -12,7 +12,9 @@ This protocol is mandatory for all ATM team communications.
    or its alias, `atm send <assigner> --task-id <task-id> --task-complete
    --stdin`, to deliver the completion report and close the task atomically.
 - Example: `task complete: <summary>`
-4. Receiver immediately acknowledges completion if it requires ack.
+4. A task close is terminal. The assigner does not acknowledge it; the
+   daemon's close receipt is the record, and the assigner closes the mirror
+   task on its own side. Only plain requires-ack messages get an ack.
 5. No silent processing. Every requires-ack message must receive a response.
 
 An acknowledgement is message hygiene only: an ack never changes task state.
@@ -84,8 +86,9 @@ mailbox/query surface, unrelated to queue-kind nudges) because the sender set
   - `ack, working on PR #159 conflict resolution now.`
 - Completion sent:
   - `task complete: rebased on integrate/phase-E, resolved socket.rs conflict, tests passed, pushed 2f190f3.`
-- Completion acknowledged:
-  - `received. QA pass starting now.`
+- Close received (assigner side, no message back):
+  - `atm read --message-id <receipt>` then `atm task close <task-id> completed`
+    on the mirror task.
 
 ## Bad Patterns
 
