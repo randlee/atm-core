@@ -654,7 +654,13 @@ mod tests {
     fn concurrent_recipient_adds_do_not_exceed_scope_cap() {
         use std::sync::{Arc, Barrier};
 
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        // A real on-disk (WAL) database, not the in-memory shared-cache
+        // fixture: shared-cache in-memory SQLite raises SQLITE_LOCKED for
+        // cross-connection table contention, which busy_timeout does not
+        // retry, unlike the file-locking WAL uses in production (and here).
+        let tempdir = tempfile::tempdir().expect("temporary database directory");
+        let backend = SqliteStorageBackend::new(tempdir.path().join("recipient-add-race.db"))
+            .expect("backend");
         let store = backend.task_store();
         let scope = EscalationScope::Daemon;
         let now = IsoTimestamp::now();
