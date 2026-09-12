@@ -4,7 +4,7 @@ use atm_storage::contract::{MessageKey, NudgeClaim};
 use atm_storage::error::AtmError;
 use atm_storage::schema::AtmMessageId;
 use atm_storage::types::{IsoTimestamp, MemberKey};
-use atm_storage::{MAX_NUDGE_ATTEMPTS, PendingNudgeStore};
+use atm_storage::{MAX_NUDGE_ATTEMPTS, PendingNudgeStore, next_reminder_due};
 use rusqlite::{OptionalExtension, params};
 use std::sync::Arc;
 
@@ -55,11 +55,7 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
     fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
         let now = IsoTimestamp::now();
         let at_raw = now.to_string();
-        let next_due = IsoTimestamp::from_datetime(
-            now.into_inner()
-                + chrono::Duration::milliseconds(atm_storage::TASK_REMINDER_INTERVAL_MS),
-        )
-        .to_string();
+        let next_due = next_reminder_due(now).to_string();
         // THE at-most-once mechanism: an IMMEDIATE transaction acquires the
         // write lock up front so a second concurrent claimant blocks under
         // busy_timeout and observes the first claimant's committed row
@@ -101,11 +97,7 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
         let message_key = MessageKey::from(claim.msg);
         let now = IsoTimestamp::now();
         let at_raw = now.to_string();
-        let next_due = IsoTimestamp::from_datetime(
-            now.into_inner()
-                + chrono::Duration::milliseconds(atm_storage::TASK_REMINDER_INTERVAL_MS),
-        )
-        .to_string();
+        let next_due = next_reminder_due(now).to_string();
         let next_attempt = claim.attempt + 1;
         self.db.with_transaction(|connection| {
             connection
@@ -855,9 +847,7 @@ mod tests {
 
         // Hand off the newest (last-FIFO) message directly, leaving the
         // oldest still marked and still claimable.
-        let next_due = IsoTimestamp::from_datetime(
-            Utc::now() + chrono::Duration::milliseconds(atm_storage::TASK_REMINDER_INTERVAL_MS),
-        );
+        let next_due = atm_storage::next_reminder_due(IsoTimestamp::from_datetime(Utc::now()));
         store
             .rearm_pending_after_handoff(&member, &ids[2], next_due)
             .expect("rearm handoff");

@@ -418,10 +418,7 @@ fn clear_delivered_marker<'a>(
                 &runtime_for_clear,
                 &member_for_clear,
                 &message_id,
-                atm_core::types::IsoTimestamp::from_datetime(
-                    atm_core::types::IsoTimestamp::now().into_inner()
-                        + chrono::Duration::milliseconds(atm_storage::TASK_REMINDER_INTERVAL_MS),
-                ),
+                atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
                 || health_for_clear.record_graft_queue_marker_clear_failure(),
             );
             Ok(())

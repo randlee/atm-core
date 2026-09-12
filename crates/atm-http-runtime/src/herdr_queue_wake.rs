@@ -757,10 +757,7 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message_id = claim.msg;
-        let next_due = IsoTimestamp::from_datetime(
-            (self.clock)().into_inner()
-                + chrono::Duration::milliseconds(atm_core::boundary::TASK_REMINDER_INTERVAL_MS),
-        );
+        let next_due = atm_core::boundary::next_reminder_due((self.clock)());
         let health = self.runtime_health.clone();
         let _ = run_blocking(move || {
             atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(

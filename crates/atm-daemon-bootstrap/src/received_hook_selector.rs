@@ -618,10 +618,7 @@ async fn deliver_published_graft_hook(
                 &service_runtime,
                 &member,
                 &message_id,
-                atm_core::types::IsoTimestamp::from_datetime(
-                    atm_core::types::IsoTimestamp::now().into_inner()
-                        + chrono::Duration::milliseconds(atm_storage::TASK_REMINDER_INTERVAL_MS),
-                ),
+                atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
                 || runtime_health.record_graft_queue_marker_clear_failure(),
             );
         }
@@ -706,12 +703,7 @@ impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
                         &service_runtime,
                         &member,
                         &target.msg_id,
-                        atm_core::types::IsoTimestamp::from_datetime(
-                            atm_core::types::IsoTimestamp::now().into_inner()
-                                + chrono::Duration::milliseconds(
-                                    atm_storage::TASK_REMINDER_INTERVAL_MS,
-                                ),
-                        ),
+                        atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
                         || runtime_health.record_graft_queue_marker_clear_failure(),
                     );
                 }

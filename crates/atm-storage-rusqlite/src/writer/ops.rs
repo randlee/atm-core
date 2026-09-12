@@ -307,10 +307,7 @@ fn execute_read_display_state(
 ) -> Result<WriteOpResult, AtmError> {
     let now = IsoTimestamp::now();
     let updated_at = now.to_string();
-    let next_due = IsoTimestamp::from_datetime(
-        now.into_inner() + chrono::Duration::milliseconds(atm_storage::TASK_REMINDER_INTERVAL_MS),
-    )
-    .to_string();
+    let next_due = atm_storage::next_reminder_due(now).to_string();
     for message_key in message_ids {
         let updated = cache
             .mark_message_read(
