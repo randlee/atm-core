@@ -141,8 +141,12 @@ pub(crate) async fn escalate_mail(
     kind: EscalationKind,
     suppress_since: Option<IsoTimestamp>,
 ) -> EscalationOutcome {
-    let Ok(targets) = load_escalation_targets(runtime, task_store, team).await else {
-        return EscalationOutcome::default();
+    let targets = match load_escalation_targets(runtime, task_store, team).await {
+        Ok(targets) => targets,
+        Err(error) => {
+            log_target_load_error(team, &error);
+            return EscalationOutcome::default();
+        }
     };
     let mut outcome = EscalationOutcome {
         lead: targets.lead.clone(),
@@ -205,6 +209,17 @@ pub(crate) async fn escalate_mail(
     outcome
 }
 
+fn log_target_load_error(team: &TeamName, error: &AtmError) {
+    tracing::warn!(
+        subsystem = "herdr_queue_wake",
+        action = "escalation_target_load",
+        outcome = "failed",
+        team = %team,
+        error = %error,
+        "Escalation target load failed"
+    );
+}
+
 async fn should_suppress(
     reader: Option<&(dyn AsyncMailboxReader + Send + Sync)>,
     address: &atm_core::address::AgentAddress,
@@ -258,28 +273,14 @@ async fn load_escalation_targets(
     runtime: &LocalServiceRuntime,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     team: &TeamName,
-) -> Result<EscalationTargets, ()> {
+) -> Result<EscalationTargets, AtmError> {
     let roster_store = runtime.shared_roster_store_arc();
-    let roster = match run_blocking({
+    let roster = run_blocking({
         let roster_store = Arc::clone(&roster_store);
         let team = team.clone();
         move || roster_store.load_roster(&team)
     })
-    .await
-    {
-        Ok(roster) => roster,
-        Err(error) => {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "escalation_roster_read",
-                outcome = "failed",
-                team = %team,
-                error = %error,
-                "Escalation roster read failed"
-            );
-            return Err(());
-        }
-    };
+    .await?;
     let leads: Vec<_> = roster
         .members
         .iter()
