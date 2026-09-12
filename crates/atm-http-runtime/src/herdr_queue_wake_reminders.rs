@@ -13,13 +13,13 @@ use atm_core::types::IsoTimestamp;
 
 use super::{
     HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats,
-    TASK_REMINDER_INTERVAL_MS, TaskCandidate, run_blocking, select_open_task,
+    MemberObservation, TASK_REMINDER_INTERVAL_MS, run_blocking, select_open_task,
 };
 
 impl HerdrQueueWakePump {
     pub(super) async fn remind_open_tasks(
         &self,
-        candidates: Vec<TaskCandidate>,
+        candidates: Vec<MemberObservation>,
         prompted_by_drain: &HashSet<MemberKey>,
         list_complete: bool,
         stats: &mut HerdrQueueWakeStats,
@@ -46,8 +46,8 @@ impl HerdrQueueWakePump {
         let now = (self.clock)();
         let blocked_members: HashSet<_> = candidates
             .iter()
-            .filter(|candidate| candidate.blocked)
-            .map(|candidate| candidate.member.key.clone())
+            .filter(|candidate| candidate.state == atm_core::protocol::RuntimeMemberState::Blocked)
+            .map(|candidate| candidate.member.clone())
             .collect();
         if list_complete {
             self.escalation_state.prune_blocked(&blocked_members);
@@ -55,11 +55,13 @@ impl HerdrQueueWakePump {
 
         if let (Some(reader), Some(task_store)) = (reader.as_ref(), task_store.as_ref()) {
             for candidate in candidates {
-                if !candidate.blocked && stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
+                if candidate.state != atm_core::protocol::RuntimeMemberState::Blocked
+                    && stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK
+                {
                     continue;
                 }
-                if prompted_by_drain.contains(&candidate.member.key) {
-                    self.stamp_task_attempt(&candidate.member.key, now);
+                if prompted_by_drain.contains(&candidate.member) {
+                    self.stamp_task_attempt(&candidate.member, now);
                     continue;
                 }
                 let Some(row) = self.read_due_task(reader.as_ref(), &candidate, now).await else {
@@ -82,32 +84,32 @@ impl HerdrQueueWakePump {
     async fn read_due_task(
         &self,
         reader: &dyn AsyncTaskLedgerReader,
-        candidate: &TaskCandidate,
+        candidate: &MemberObservation,
         now: IsoTimestamp,
     ) -> Option<TaskRow> {
         let deadline = match ReadDeadline::new(HERDR_REQUEST_DEADLINE) {
             Ok(deadline) => deadline,
             Err(error) => {
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "deadline_invalid", error = %error, member = %candidate.member.key, "Herdr task reminder read skipped");
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "deadline_invalid", error = %error, member = %candidate.member, "Herdr task reminder read skipped");
                 return None;
             }
         };
         let rows = match reader
             .list_tasks(
-                candidate.member.key.team().clone(),
-                Some(candidate.member.key.agent().clone()),
+                candidate.member.team().clone(),
+                Some(candidate.member.agent().clone()),
                 deadline,
             )
             .await
         {
             Ok(rows) => rows,
             Err(error) => {
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "failed", error = %error, member = %candidate.member.key, "Herdr task reminder read failed");
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "failed", error = %error, member = %candidate.member, "Herdr task reminder read failed");
                 return None;
             }
         };
         let row = select_open_task(rows)?;
-        self.reminder_due(&candidate.member.key, &row, now)
+        self.reminder_due(&candidate.member, &row, now)
             .then_some(row)
     }
 
@@ -115,7 +117,7 @@ impl HerdrQueueWakePump {
         &self,
         reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-        candidate: TaskCandidate,
+        candidate: MemberObservation,
         row: TaskRow,
         now: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
@@ -123,9 +125,9 @@ impl HerdrQueueWakePump {
         let context = crate::herdr_queue_wake_escalation::TaskReminderContext {
             reader,
             task_store,
-            member: &candidate.member.key,
+            member: &candidate.member,
         };
-        if candidate.blocked {
+        if candidate.state == atm_core::protocol::RuntimeMemberState::Blocked {
             self.record_task_outcome(&context, &row, now, ReminderOutcome::Blocked, stats)
                 .await;
             return;
@@ -134,7 +136,7 @@ impl HerdrQueueWakePump {
             return;
         }
         let runtime = self.service_runtime.clone();
-        let member = candidate.member.key.clone();
+        let member = candidate.member.clone();
         let row_for_dispatch = row.clone();
         let dispatch = run_blocking(move || {
             build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch)
@@ -144,23 +146,23 @@ impl HerdrQueueWakePump {
             Ok(Some(dispatch)) => dispatch,
             Ok(None) => return,
             Err(error) => {
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member.key, "Herdr task reminder could not render");
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member, "Herdr task reminder could not render");
                 self.record_task_outcome(&context, &row, now, ReminderOutcome::Unrenderable, stats)
                     .await;
                 return;
             }
         };
-        if !super::still_idle(&self.service_runtime, &candidate.member.key) {
+        if !super::still_idle(&self.service_runtime, &candidate.member) {
             tracing::info!(
                 event = "herdr_queue_poll_outcome",
-                member = %candidate.member.key,
+                member = %candidate.member,
                 outcome = "reminder_held_not_idle",
                 "Herdr task reminder skipped after the live idle recheck"
             );
             return;
         }
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
-            tracing::info!(event = "herdr_queue_poll_outcome", member = %candidate.member.key, outcome = "reminder_target_not_present", "Herdr task reminder selector returned no emitter");
+            tracing::info!(event = "herdr_queue_poll_outcome", member = %candidate.member, outcome = "reminder_target_not_present", "Herdr task reminder selector returned no emitter");
             return;
         };
         match emitter
@@ -174,8 +176,8 @@ impl HerdrQueueWakePump {
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {
                 stats.task_reminders_failed += 1;
-                self.stamp_task_attempt(&candidate.member.key, now);
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_emit", outcome = "failed", error = %error, error_code = ?error.code(), member = %candidate.member.key, "Herdr task reminder emission failed")
+                self.stamp_task_attempt(&candidate.member, now);
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_emit", outcome = "failed", error = %error, error_code = ?error.code(), member = %candidate.member, "Herdr task reminder emission failed")
             }
         }
     }

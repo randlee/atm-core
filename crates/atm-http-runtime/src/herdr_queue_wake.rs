@@ -389,7 +389,7 @@ impl HerdrQueueWakePump {
         &self,
         candidates: Vec<HerdrCandidate>,
         stats: &mut HerdrQueueWakeStats,
-    ) -> (Vec<HerdrCandidate>, Vec<TaskCandidate>, bool) {
+    ) -> (Vec<HerdrCandidate>, Vec<MemberObservation>, bool) {
         let mut by_session: HashMap<Option<HerdrSession>, Vec<HerdrCandidate>> = HashMap::new();
         for candidate in candidates {
             by_session
@@ -437,7 +437,7 @@ impl HerdrQueueWakePump {
             }
         }
         eligible.sort_by(|left, right| member_order(&left.key, &right.key));
-        task_candidates.sort_by(|left, right| member_order(&left.member.key, &right.member.key));
+        task_candidates.sort_by(|left, right| member_order(&left.member, &right.member));
         (eligible, task_candidates, complete)
     }
 
@@ -448,7 +448,7 @@ impl HerdrQueueWakePump {
         observed_at: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
         eligible: &mut Vec<HerdrCandidate>,
-        task_candidates: &mut Vec<TaskCandidate>,
+        task_candidates: &mut Vec<MemberObservation>,
     ) {
         let snapshots: HashMap<&str, &AgentSnapshot> = agents
             .iter()
@@ -502,15 +502,11 @@ impl HerdrQueueWakePump {
             let Some(observation) = accepted.get(&member.key) else {
                 continue;
             };
-            if matches!(
-                observation.state,
-                RuntimeMemberState::Idle | RuntimeMemberState::Blocked
-            ) {
-                task_candidates.push(TaskCandidate {
-                    member: member.clone(),
-                    blocked: observation.state == RuntimeMemberState::Blocked,
-                });
-            }
+            task_candidates.push(MemberObservation {
+                member: member.key.clone(),
+                state: observation.state,
+                state_changed_at: observation.state_changed_at,
+            });
             if member.pending && observation.state == RuntimeMemberState::Idle {
                 stats.idle_members += 1;
                 eligible.push(member);
@@ -859,22 +855,13 @@ struct HerdrCandidate {
     pending: bool,
 }
 
-#[derive(Clone)]
-struct TaskCandidate {
-    member: HerdrCandidate,
-    blocked: bool,
-}
-
 /// One accepted runtime observation. The task-disposition pass consumes this
 /// rather than making eligibility decisions from a poll snapshot.
 #[derive(Clone)]
-#[expect(
-    dead_code,
-    reason = "the disposition-driven task pass is wired in task 4"
-)]
 struct MemberObservation {
     member: MemberKey,
     state: RuntimeMemberState,
+    #[expect(dead_code, reason = "episode escalation consumes this in task 5")]
     state_changed_at: Option<IsoTimestamp>,
 }
 
