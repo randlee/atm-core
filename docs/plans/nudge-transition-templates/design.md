@@ -84,20 +84,27 @@ R6. The first ready nudge and the subsequent reminders are separate templates
     even though they carry the same information: "the subsequent 'nag' nudges
     are important, but they are also a symptom of a problem."
 R7. A completion carries the message id of the completion report.
-R8. (fenix's call, recorded, Rand may veto) "started" means ACKNOWLEDGED, not
-    delivered: the assignee's `atm ack` of the ready nudge writes the `Acked`
-    and `Started` events and triggers the started receipt. Delivery of the
-    ready nudge stays recorded as `reminded` attempt 0. An unacked task then
-    shows as reminders with no started line, which is exactly the symptom R6
-    wants visible.
-
-R9. A queued task's ACK REQUIREMENT and NUDGE are deferred until it is ready.
-    Rand: "we don't want the worker agent to be distracted by anything other
-    than the head-of-queue task … the queued task messages do not need to be
-    hidden, they can show up as unread messages. however if they do require
-    ack, the ack requirement should be deferred. i.e. telling an agent he
-    needs to ack task-1/2/3 immediately is not beneficial and is at worst
-    distracting." The ack requirement belongs to readiness, not to the send.
+R8. Started is an explicit act by the assignee: `atm task start <task-id>
+    [message]`. Rand: "we need the agent to acknowledge the start of a task.
+    if he doesn't acknowledge, we need to infer from events/herdr state
+    instead of the agent simply saying I am starting task-1. if 'ack' is the
+    mechanism to do this, it complicates ack logic a lot. I think it would be
+    easier to drop ack, and simply have the agent send 'atm task start
+    <task-id> <message>'." (Supersedes fenix's earlier started-on-ack call and
+    amends BA design §5 "deliberately absent: start".)
+R9. Ack and task are mutually independent. Rand: "Since queued task and
+    --ack-required need to have different behavior, it seems they should
+    simply be mutually independent so ack logic doesn't drive nudge state
+    behavior." An assignment never carries an ack requirement; the queued
+    message stays an ordinary unread message ("the queued task messages do
+    not need to be hidden … telling an agent he needs to ack task-1/2/3
+    immediately is not beneficial and is at worst distracting"). The nudge
+    waits for readiness.
+R10. Templates first. Rand: "the work you are planning should focus on
+    template updates first. I think those are safe and we can start testing
+    w/ a set of templates immediately. The logic changes should be small and
+    if anything attempt to simplify things, not make them more complicated."
+    Delivery plan in §9.
 
 ## 3. Transitions and templates
 
@@ -112,16 +119,16 @@ the first thing the eye lands on after the task id.
 | Kind | Trigger | Recipient | Mode | Default body |
 |---|---|---|---|---|
 | `task_queued` | assignment written and NOT at head, or reassign/reopen into a non-head position | assignee | immediate, informational | `<atm task="{{task_id}}" queued="{{position}}" message="{{message_id}}" from="{{from}}"/>` |
-| `task_ready` | task at head and assignee idle, first prompt | assignee | task pass (BA invariant) | `<atm task="{{task_id}}" ready message="{{message_id}}" from="{{from}}">`<br>`  <action>atm read --message-id {{message_id}}</action>`<br>`  <action>ack the message</action>`<br>`  <action>execute the assigned task</action>`<br>`  <console announce="concise" pause="false"/>`<br>`</atm>` |
+| `task_ready` | task at head and assignee idle, first prompt | assignee | task pass (BA invariant) | `<atm task="{{task_id}}" ready message="{{message_id}}" from="{{from}}">`<br>`  <action>atm read --message-id {{message_id}}</action>`<br>`  <action>atm task start {{task_id}}</action>`<br>`  <action>execute the assigned task</action>`<br>`  <console announce="concise" pause="false"/>`<br>`</atm>` |
 | `task_reminder` | task open, assignee idle, ≥60 s since last prompt | assignee | task pass | `<atm task="{{task_id}}" reminder="{{attempt}}" message="{{message_id}}" from="{{from}}">` + the same three actions + console |
-| `task_started` | assignee acks the ready/reminder message (R8) | assigner | immediate, informational | `<atm task="{{task_id}}" started agent="{{assignee}}" message="{{message_id}}"/>` |
+| `task_started` | assignee runs `atm task start` (R8) | assigner | immediate, informational | `<atm task="{{task_id}}" started agent="{{assignee}}" message="{{message_id}}"/>` |
 | `task_complete` | assignee closes (completed or refused) | assigner | immediate, informational | `<atm task="{{task_id}}" complete agent="{{assignee}}" outcome="{{outcome}}" message="{{message_id}}"/>` |
 | `task_closed` | assigner closes (cancelled, or reassign away) | assignee | immediate, informational | `<atm task="{{task_id}}" closed by="{{from}}" outcome="{{outcome}}" message="{{message_id}}"/>` |
 
 `message` on `task_ready`/`task_reminder` is the assignment message, so the
 read action stays one command. On `task_complete`/`task_closed` it is the
-close report (R7). On `task_started` it is the assignment message the ack
-resolved. On `task_queued` it is the assignment message.
+close report (R7). On `task_started` it is the assignee's start message (its body is the
+optional `[message]`, e.g. what the agent intends to do first). On `task_queued` it is the assignment message.
 
 Informational kinds carry no `<action>`; the mailbox row is the record and
 `atm read --message-id` works on every `message` attribute. They are never
@@ -166,15 +173,14 @@ pub enum TaskTransition {
 Populated by the writer's post-write snapshot for Queued/Started/Complete/
 Closed (the writer knows `task_op` and the placement result) and by the task
 pass for Ready/Reminder (`nudge_dispatch.rs:158-189` already rebuilds from the
-task row; it adds the transition and the attempt). `task_id` stays, so
-`AcknowledgeTask` and the legacy `Task` fallback below remain typed.
+task row; it adds the transition and the attempt). `task_id` stays for the
+validation arm below and for `atm read --task-id`.
 
 ### 4.2 Kind decision
 
 ```rust
 match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requires_ack, delivery_kind) {
-    (true, _, true, _, _)                          => K::AcknowledgeTask,
-    (true, _, false, _, _)                         => K::Acknowledge,
+    (true, _, _, _, _)                             => K::Acknowledge,
     (false, Some(Queued{..}), _, _, _)             => K::TaskQueued,
     (false, Some(Ready), _, _, _)                  => K::TaskReady,
     (false, Some(Reminder{..}), _, _, _)           => K::TaskReminder,
@@ -189,7 +195,8 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
 }
 ```
 
-`BuiltInNudgeTemplateKind` gains the six kinds; `"task"` parses to the same
+`BuiltInNudgeTemplateKind` gains the six kinds and drops `AcknowledgeTask`;
+`"task"` and `"acknowledge_task"` parse to the same
 retired-kind error `delivery_task` gets today
 (`crates/atm-storage/src/contract.rs:157-178`), with the hint naming
 `task_ready`. Existing `task` override rows are reported by `atm doctor` and
@@ -215,18 +222,30 @@ reminders are today. `queue_prompt_is_head_assignment` and
 `SendCommand::for_task` (`atm/src/commands/send.rs`, `task.rs:259-268`); both
 get this behavior.
 
-### 4.4 Started on ack (R8)
+### 4.4 `atm task start` (R8)
 
-`atm ack` of a message whose envelope carries `task_id` writes, in the same
-transaction: `Acked` task event; if the task is `assigned`, the
-`assigned → active` transition and `Started`; then the `task_started` receipt
-to the assigner, immediate. The ack reply envelope carries `task_id`, which
-makes `AcknowledgeTask` reachable for the first time. The daemon-written
-receipt in `herdr_task_start.rs` is deleted; `complete_task_handoff` records
-only the reminder.
+New verb, same shape as `close`:
 
-An assignee that never acks stays `assigned`, keeps receiving
-`task_reminder` with a rising attempt, and never produces a started line.
+    atm task start <task-id> [message | --stdin | --file | --template]
+
+Caller must be the row's assignee; the row must be `assigned` (any position:
+starting a non-head task is allowed and simply reorders it to head, so the
+queue reflects what the agent is actually doing). One writer op: the message
+to the assigner with `task_op = Start`, the `assigned → active` transition,
+the `Started` event, and the `task_started` receipt rendered from the same
+message (immediate, informational). Idempotent on `active` ("already
+started; message delivered"). Rejected on `complete`.
+
+The daemon-written receipt (`herdr_task_start.rs`) and the
+`assigned → active` transition on prompt delivery are deleted;
+`complete_task_handoff` records only the reminder. A task that is prompted
+but never started stays `assigned`, keeps receiving `task_reminder` with a
+rising attempt, and never produces a started line: the state is inferred
+from events and herdr state, never from an ack.
+
+Ack is untouched. `atm ack` stays message hygiene, writes no task event, and
+`AcknowledgeTask` is deleted along with its unreachable arm rather than made
+reachable.
 
 ### 4.5 Close report
 
@@ -250,7 +269,7 @@ Surfaced by `atm log filter --task <id>` and `atm task events <id>`
 (reminders show attempt; started shows the acking message). With this table
 the 15:27–15:35Z test reads as one query.
 
-### 4.7 Deferred ack requirement (R9)
+### 4.7 Ack and task independent (R9)
 
 Today, verified: `atm send --task-id` and `atm task assign` force
 `requires_ack = true` at write (`atm/src/commands/send.rs:367`; BA.4 doc:
@@ -259,31 +278,21 @@ flag"). `pending_ack_at` is set at write. The pending-ack predicate
 (`pending_nudge_store.rs:13`, `lib.rs:504-509`) has no notion of task
 position, so every queued assignment is pending-ack, shown in the
 `Pending-Ack:` header and listing, and claimed by the pump (SMK-006) from the
-moment it is written. BA design §5.1 made ack and task mutually exclusive
-*under the hood* (ack never gates task state); the flags were never made
-exclusive. The opposite shipped: ack forced on for every assignment.
+moment it is written. The BA-era decision to make the flags mutually
+exclusive was lost with phase AZ; the opposite shipped.
 
-Rule: a queued assignment is an ordinary unread message; its ack requirement
-and its nudge wait for readiness.
+Rule, and it is a deletion: the assignment write never sets `requires_ack`
+and never sets `pending_ack_at`. The queued assignment is an ordinary unread
+message; an early read marks it read normally; nothing is hidden and nothing
+is deferred, because there is no ack requirement to defer. `--requires-ack`
+with `--task-id` is a CLI conflict (`conflicts_with`): acknowledging a task
+is `atm task start`, not `atm ack`. `atm task assign` keeps having no such
+flag. No pending nudge marker is created at write (§4.3), so the pump never
+claims a queued assignment; the only prompts for a task are `task_queued`
+(informational) and, at head + idle, `task_ready` / `task_reminder`.
 
-- The assignment message is written unread with `pending_ack_at = NULL`. It
-  appears in the unread count and in `atm read` like any message; an early
-  read marks it read normally. Nothing is hidden.
-- No pending nudge marker is created at write (§4.3), so the pump never
-  claims it; the only prompts for a task are `task_queued` (informational,
-  §3) and, at head + idle, `task_ready`.
-- Readiness is the task pass emitting `task_ready`. In the same writer op it
-  sets `pending_ack_at = now` on the assignment message; from that moment the
-  message is pending-ack and "ack the message" in the ready body is true. The
-  ack is the start (R8). A message read early still becomes pending-ack at
-  ready, because readiness is keyed on the task row, not on read state.
-- The write no longer forces `requires_ack`. `--requires-ack` together with
-  `--task-id` is a CLI conflict (`conflicts_with`); `atm task assign` keeps
-  having no such flag.
-- Reassign and move change `position`; nothing is migrated. A task moved to
-  head while the agent is busy waits for the pass (it prompts idle members
-  only).
-- `atm queue` ephemeral items are not tasks and are unchanged (BA §9).
+Reassign and move change `position`; nothing is migrated. `atm queue`
+ephemeral items are not tasks and are unchanged (BA §9).
 
 ## 5. Findings resolved
 
@@ -292,11 +301,11 @@ and its nudge wait for readiness.
 | SMK-004 receipt as Task, delivered late | §3 `task_started` informational + immediate; §4.4 |
 | SMK-005 no handoff record | §4.6 |
 | SMK-006 non-head call-to-action + misattributed reminders | §4.3, §4.7 |
-| untriaged: `AcknowledgeTask` unreachable, `Acked` never written | §4.4 |
+| untriaged: `AcknowledgeTask` unreachable, `Acked` never written | §4.4 deletes both |
 
 ## 6. Tests
 
-Unit: an assignment write leaves `pending_ack_at` NULL and creates no pending nudge marker; the ready emission sets `pending_ack_at`; `--requires-ack --task-id` rejected by clap; kind decision covers every arm of §4.2 including the `(false, None,
+Unit: an assignment write leaves `requires_ack` false and `pending_ack_at` NULL and creates no pending nudge marker; `--requires-ack --task-id` rejected by clap; `atm task start` by a non-assignee, on `complete`, and twice on the same task; `--requires-ack --task-id` rejected by clap; kind decision covers every arm of §4.2 including the `(false, None,
 true, ..)` validation error; every default body renders with its placeholders
 and contains no `<action>` for the four informational kinds; `"task"` parse
 error names `task_ready`.
@@ -304,13 +313,13 @@ error names `task_ready`.
 Integration (colima, one fixture, every roster shape): assign three tasks to
 an idle agent → terminal shows exactly one `queued="2"`, one `queued="3"`,
 one `ready` for task 1, no `execute` line for tasks 2 and 3; `atm read` header
-shows Unread 3 / Pending-Ack 0 before the pass and Unread 3 / Pending-Ack 1
-after ready, the pending one being task 1's message; ack of task 1 →
-assigner sees `started`; close → assigner sees `complete` with the report id
+shows Unread 3 / Pending-Ack 0 throughout; `atm task start` on task 1 →
+assigner sees `started` with the start message id and task 1 goes `active`; close → assigner sees `complete` with the report id
 and the agent sees `ready` for task 2 within one pass; task events show
 `reminded attempt=0`, `acked`, `started`, `completed` on the right task ids
-and nothing on the others; unacked ready → `reminder="1"`, `reminder="2"` at
-≥60 s and no `started`; reassign → old assignee `closed outcome="reassigned"`,
+and nothing on the others; ready never followed by `atm task start` → `reminder="1"`, `reminder="2"` at
+≥60 s, task stays `assigned`, no `started`; start of a non-head task → it
+becomes head and `active`, previous head stays `assigned`; reassign → old assignee `closed outcome="reassigned"`,
 new assignee `queued` or `ready`; move to head while idle → `ready` next pass
 and no extra line; assigner cancel → assignee `closed outcome="cancelled"`;
 disabled `task_reminder` override → no nag, handoff record absent, `doctor`
@@ -328,6 +337,37 @@ reports it; busy assigner across an entire assign→close cycle → receives
 
 ## 8. Open for Rand
 
-- R8 started = acknowledged (fenix's call). Veto → started on delivery, and
-  §4.4 shrinks to writing `Acked` only.
+- Starting a non-head task reorders it to head (§4.4). Alternative: reject
+  with "not head of queue; use `atm task move`". I chose reorder because the
+  queue must reflect what the agent is doing.
 - `reassigned` as a closed outcome on the old assignee's line (§3.1).
+
+## 9. Delivery plan (R10)
+
+Sprint 1, templates only, no behavior change in WHEN anything fires:
+
+- six kinds in `BuiltInNudgeTemplateKind`, default bodies from §3, `"task"`
+  retired with a hint, `AcknowledgeTask` deleted;
+- `TaskTransition` on `PostSendHookEvent`, filled from what each emit site
+  already knows: the writer's task op and placement (Queued with position,
+  Started for the daemon receipt until §4.4 lands, Complete/Closed from the
+  close actor), the task pass (Ready when `reminder_count == 0`, else
+  Reminder with the count);
+- the kind decision of §4.2 and the render values;
+- unit tests of §6. The ready/reminder bodies name `atm task start` from day
+  one; until sprint 2 lands that verb is absent and the action line is
+  advisory, which is acceptable for testing the templates.
+
+Sprint 2, logic, each a deletion or a small addition:
+
+- assignment write: no forced `requires_ack`, no `pending_ack_at`, no pending
+  nudge marker; `--requires-ack` conflicts with `--task-id` (§4.3, §4.7);
+- `atm task start` and deletion of the daemon receipt and the
+  prompt-time `assigned → active` transition (§4.4);
+- deletion of `queue_prompt_is_head_assignment` and
+  `record_queue_prompt_reminders`; the task pass records what it emitted;
+- `nudge_handoffs` (§4.6);
+- colima integration tests of §6.
+
+Sprint 1 can be dogfooded on the live team immediately after it lands via
+the normal prerelease path.
