@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-021>
+  a triage:Finding ;
+  triage:findingId "BB3-021" ;
+  triage:title "Puppeteer Chromium CI cache key is a static string, not scoped to a resolved puppeteer/chromium version" ;
+  triage:description "quality-mgr BB3-QA3-1789250000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1445#issuecomment-5648698551, 2026-09-12T21:08:20Z; BB3-QA3-M5), reviewed at 66be1d012. .github/workflows/pages.yml:38-42's new Puppeteer Chromium cache key is a static string (v1), not scoped to a resolved puppeteer/chromium version, so it won't self-invalidate on a puppeteer version bump; relatedly, the ad-hoc npx puppeteer browsers install chrome may resolve a Chrome build-id that doesn't exactly match mermaid-cli's own bundled puppeteer's expected cache lookup -- a CI/functional risk, not structural." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".github/workflows/pages.yml" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:deferredNote "Scope the Chromium cache key to a resolved puppeteer/chromium version rather than a static v1 string. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1)." ;
+  triage:relatedFinding "BB3-009" ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-021/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-021/1>
+  a triage:Occurrence ;
+  triage:file ".github/workflows/pages.yml" ;
+  triage:line 38 ;
+  triage:snippet "Puppeteer Chromium cache key is a static v1 string, not scoped to a resolved puppeteer/chromium version; won't self-invalidate on a version bump" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-021/1> .
+
+<urn:atm:triage:worktree/BB3-021/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1445, fix/bb3-qa2-r2" ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:orderIndex 1 .

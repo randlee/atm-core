@@ -12,7 +12,7 @@ triage:PhaseBB a triage:Phase .
 # the actual must_follow/parallel_safe edges.
 triage:BB1 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 1 ; triage:branch "feature/bb1-transition-templates" ; triage:criteria "docs/plans/phase-bb/sprint-BB.1-transition-templates.md" .
 triage:BB2 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 2 ; triage:branch "feature/bb2-orchestration-templates-1516" ; triage:criteria "docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md" .
-triage:BB3 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 3 ; triage:branch "feature/bb3-test-procedure-pages" ; triage:criteria "docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md" .
+triage:BB3 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 3 ; triage:branch "fix/bb3-qa2-r2" ; triage:criteria "docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md" .
 triage:BB4 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 4 ; triage:branch "feature/bb4-task-start" ; triage:criteria "docs/plans/phase-bb/sprint-BB.4-task-start.md" .
 triage:BB5 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 5 ; triage:branch "feature/bb5-assignment-write-task-pass" ; triage:criteria "docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md" .
 triage:BB6 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 6 ; triage:branch "feature/bb6-prompt-handoffs" ; triage:criteria "docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md" .

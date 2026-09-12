@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB5-001>
+  a triage:Finding ;
+  triage:findingId "BB5-001" ;
+  triage:title "An assignee-side --task-id report send is misinterpreted as a reassignment, re-parenting the task onto the sender's own queue" ;
+  triage:description "fenix ops incident, observed live on BB5-ASSIGNMENT-WRITE-1789247000, 2026-09-12T21:05:59Z. arch-ctm's BB.5 first-push report was sent with `--task-id BB5-ASSIGNMENT-WRITE-1789247000`; the daemon recorded it as a `reassigned` event (assigner->arch-ctm, assignee->fenix), started it active on fenix's own queue, and reminded fenix three times, while arch-ctm's own queue lost the task entirely. Event chain per `atm task events BB5-ASSIGNMENT-WRITE-1789247000`: seq1 assigned (fenix->arch-ctm, 20:28:11Z); seq2 reassigned assigned->assigned (arch-ctm, 21:01:10Z); seq3 reminded (atm-daemon, 21:01:14Z); seq4 started assigned->active (atm-daemon, 21:01:14Z); seq5-6 reminded active->active (atm-daemon, 21:02:19Z, 21:05:24Z); seq7 reassigned active->assigned (fenix, 21:05:59Z, manual correction back to arch-ctm via `atm task assign arch-ctm --task-id ... --head`). Root cause is the pre-BB.5 assignment-write path treating an assignee-side `--task-id` send as an assign action -- squarely BB.5's own subject matter (the assignment-write task-pass feature this sprint implements). Checked BB1-FIX-R1-1789244400 and BB4-FIX-R1-1789249000 from team-lead's view: neither shows a `reassigned` event in its chain (BB1-FIX-R1: assigned/reminded/started only; BB4-FIX-R1: assigned only, no further events yet) -- no evidence either of solar's or cipher's --task-id push reports triggered the same defect so far." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "ops incident (fenix)" ;
+  triage:repeatable true ;
+  triage:sweepScope "assignment-write task-pass path (BB.5 deliverable)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:05:59Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: an assignee-side report send carrying --task-id must not be interpreted as a reassign action; only an explicit assign/reassign command (or the assigner's own --task-id send) should trigger a reassigned event. This is BB.5's own subject -- routing pending fenix's/arch-ctm's ruling on whether to fix in the current BB.5 push or as a follow-up. RECURRED (fenix, 2026-09-12T21:13:38Z): arch-ctm's second --task-id push hit the identical pattern -- seq8 reassigned assigned->assigned (arch-ctm, 21:12:07Z), seq9 reminded, seq10 started assigned->active (atm-daemon, 21:13:09Z), seq11 reassigned active->assigned (fenix, 21:13:38Z, manual correction back). Confirms the defect is deterministic on every arch-ctm --task-id push on this task, not a one-off." ;
+  triage:foundIn triage:BB5 ;
+  triage:foundAt "2026-09-12T21:05:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-001/1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB5-001/1>
+  a triage:Occurrence ;
+  triage:file "assignment-write task-pass path" ;
+  triage:line 1 ;
+  triage:snippet "assignee-side --task-id send on BB5-ASSIGNMENT-WRITE-1789247000 recorded as reassigned (arch-ctm as actor, assignee flips to fenix), started active on the wrong queue, reminded three times before manual correction" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb5-assignment-write-task-pass" ;
+  triage:headSha "70adbf12d" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-001/1> .
+
+<urn:atm:triage:worktree/BB5-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1448, feature/bb5-assignment-write-task-pass" ;
+  triage:branch "feature/bb5-assignment-write-task-pass" ;
+  triage:headSha "70adbf12d" ;
+  triage:orderIndex 1 .

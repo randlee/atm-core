@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-013>
+  a triage:Finding ;
+  triage:findingId "BB3-013" ;
+  triage:title "colima_skill_report write_report/render never wired to the ancestor-fallback rule -- live 404 in committed evidence" ;
+  triage:description "quality-mgr BB3-QA3-1789250000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1445#issuecomment-5648698551, 2026-09-12T21:08:20Z; BB3-QA3-B1), reviewed at 66be1d012. write_report/colima_skill_report.render (scripts/smoke/run_feature_smoke.py:822-827, scripts/smoke/colima_skill_report.py:90-104) build procedure_href from the exact source_revision() short SHA with no ancestor fallback, unlike .just/generate_report_index.py's resolve_procedures/_revision_is_ancestor. Confirmed as a live 404 in currently-committed evidence: site/reports/smoke/macos/rand-m5.local/20260912T204119754750Z-pid87697-fast/index.html:18 links to procedures/smoke-fast/fe5dac5c.html, which does not exist (site/reports/procedures/smoke-fast/ has only 513b3374, 7475fed9, 8043ce64, 93458691, c355f382, index). Verified this file is tracked and committed in d938673e4, not stale/uncommitted output. Violates AC2 and D5's report-header contract. A regression adjacent to BB3-003's fix: the index-generator's own ancestor resolution is genuinely fixed and tested, but the per-run report's self-embedded link was never wired to the same rule." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/run_feature_smoke.py,scripts/smoke/colima_skill_report.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: resolve procedure_href via the same exact-then-ancestor rule (or a shared helper) in both write_report and colima_skill_report.render, with a regression test asserting the linked file exists on disk. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1)." ;
+  triage:relatedFinding "BB3-003" ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-013/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/colima_skill_report.py" ;
+  triage:line 90 ;
+  triage:snippet "procedure_href built from the exact source_revision() short SHA with no ancestor fallback; live 404 in committed evidence site/reports/smoke/macos/rand-m5.local/20260912T204119754750Z-pid87697-fast/index.html:18 -> procedures/smoke-fast/fe5dac5c.html (does not exist)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-013/1> .
+
+<urn:atm:triage:worktree/BB3-013/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1445, fix/bb3-qa2-r2" ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:orderIndex 1 .

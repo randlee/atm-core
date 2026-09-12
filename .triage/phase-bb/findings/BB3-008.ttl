@@ -16,13 +16,16 @@
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/smoke/run_feature_smoke.py" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
   triage:deferredNote "Routed to cipher's BB3-FIX-R1: write procedure into graft-hermes.json itself, add the two graft tests to run_pytests.py discovery, and repoint the diff-gate test at the develop merge base." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-008/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB3-008/1> ;
+  triage:closedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/BB3-008/1>
@@ -30,8 +33,8 @@
   triage:file "scripts/smoke/run_feature_smoke.py" ;
   triage:line 899 ;
   triage:snippet "procedure field written only into smoke.envelope.json, never into graft-hermes.json; phase-ai graft tests not discovered by .just/run_pytests.py; diff-gate test pinned to origin/integrate/phase-bb instead of the develop merge base" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-008/1> .
@@ -42,3 +45,12 @@
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB3-008/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:fixCommit "791680c2ae8155bced4fd5fd2888c5a607228f01" ;
+  triage:fixBranch "feature/bb3-test-procedure-pages" ;
+  triage:verifiedInRound "BB3-FIX-R1" ;
+  triage:resolutionNote "Confirmed fixed in BB3-QA2 (11/12 deliverables): procedure field now written into graft-hermes.json, the two graft tests are discovered by run_pytests.py, and the diff-gate test targets the develop merge base." .

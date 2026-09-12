@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-017>
+  a triage:Finding ;
+  triage:findingId "BB2-017" ;
+  triage:title "test_dispatch_template_parity.py's SEQUENCE_DOCS is a hardcoded tuple that keeps missing newly added protocol-describing files" ;
+  triage:description "quality-mgr BB2-QA3-1789251000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1447#issuecomment-5648745882, 2026-09-12T21:17:10Z; BB2-QA3-M1), reviewed at d2a9b6cc5. .just/tests/test_dispatch_template_parity.py:23-28's SEQUENCE_DOCS is a hardcoded 4-file tuple that missed both AGENTS.md and CLAUDE.md (and now quality-management-gh/SKILL.md) this round -- exactly the same class of miss (a first pass claiming 'no other file carries it') that BB2-QA2's ARCH-001 already demonstrated once." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".just/tests/test_dispatch_template_parity.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:deferredNote "Recommend replacing the hardcoded tuple with a repo-wide sweep (glob all tracked *.md/*.j2, excluding the test itself) so newly added protocol-describing files are covered automatically rather than requiring a human to remember to append them each round. Routed to fenix on fix/bb2-qa3-r3 (fenix, new top layer, cut from BB.5 @ f232a104c)." ;
+  triage:relatedFinding "BB2-004" ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-017/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB2-017/1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_dispatch_template_parity.py" ;
+  triage:line 23 ;
+  triage:snippet "SEQUENCE_DOCS is a hardcoded 4-file tuple that missed AGENTS.md, CLAUDE.md, and quality-management-gh/SKILL.md this round -- same failure class as BB2-QA2's ARCH-001" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-017/1> .
+
+<urn:atm:triage:worktree/BB2-017/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1447, fix/bb2-qa2-r2" ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:orderIndex 1 .

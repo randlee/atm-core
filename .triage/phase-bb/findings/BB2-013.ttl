@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-013>
+  a triage:Finding ;
+  triage:findingId "BB2-013" ;
+  triage:title "quality-mgr's own governing protocol doc still documents the retired 4-step ATM Coordination Protocol ending in receiver acknowledgement" ;
+  triage:description "quality-mgr BB2-QA3-1789251000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1447#issuecomment-5648745882, 2026-09-12T21:17:10Z; BB2-QA3-B2), reviewed at d2a9b6cc5. .claude/skills/quality-management-gh/SKILL.md:160-166's 'ATM Coordination Protocol' section still documents the retired 4-step flow ending in 'receiver acknowledgement,' directly contradicting docs/team-protocol.md's Required Flow and this same file's own correct atm task close <task-id> completed --template ... verdict commands a few lines above (129/145). Confirmed via direct read: genuine and unmodified. This is quality-mgr's own governing protocol document -- left in place, it would cause quality-mgr to wait for or expect a receiver ack on task-close, reproducing the exact stall pattern the standing memory feedback_qa_verdict_needs_task_complete was written to prevent. Not in SEQUENCE_DOCS either." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".claude/skills/quality-management-gh/SKILL.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: replace the section with a reference to docs/team-protocol.md's Required Flow (matching the pattern the other four sequence docs now use), and add this file to SEQUENCE_DOCS. Routed to fenix on fix/bb2-qa3-r3 (fenix, new top layer, cut from BB.5 @ f232a104c)." ;
+  triage:relatedFinding "BB2-002" ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-013/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB2-013/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/quality-management-gh/SKILL.md" ;
+  triage:line 160 ;
+  triage:snippet "ATM Coordination Protocol section still documents the retired 4-step flow ending in 'receiver acknowledgement,' contradicting this same file's own correct verdict commands a few lines above" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-013/1> .
+
+<urn:atm:triage:worktree/BB2-013/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1447, fix/bb2-qa2-r2" ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:orderIndex 1 .

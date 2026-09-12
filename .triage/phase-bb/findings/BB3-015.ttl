@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-015>
+  a triage:Finding ;
+  triage:findingId "BB3-015" ;
+  triage:title "report_runtime.py's shared compose()/source_revision() module has no direct unit test" ;
+  triage:description "quality-mgr BB3-QA3-1789250000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1445#issuecomment-5648698551, 2026-09-12T21:08:20Z; BB3-QA3-I1, confirmed independently by arch-qa and ruthless-boundary-qa), reviewed at 66be1d012. This round's new shared compose()/source_revision() module (scripts/smoke/report_runtime.py) has no direct test file. All 7 consumers (colima_skill_report.py, run_feature_smoke.py, benchmark_report.py, read_benchmark.py, run_admission_capacity.py, run_inbound_peer_smoke.py, scripts/fuzz/render_report.py) mock the wrapper in their own tests, so the module's real behavior (GIT_REVISION full-match validation, subprocess failure path, tempfile cleanup in finally, per-caller error_type substitution) is never exercised end-to-end." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/report_runtime.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: add scripts/smoke/test_report_runtime.py with direct unit coverage of GIT_REVISION validation, the subprocess failure path, tempfile cleanup in finally, and per-caller error_type substitution. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1)." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-015/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-015/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/report_runtime.py" ;
+  triage:line 1 ;
+  triage:snippet "no direct test file; all 7 consumers mock the wrapper in their own tests, so real GIT_REVISION validation / subprocess failure / tempfile cleanup / error_type behavior is never exercised end-to-end" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-015/1> .
+
+<urn:atm:triage:worktree/BB3-015/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1445, fix/bb3-qa2-r2" ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:orderIndex 1 .

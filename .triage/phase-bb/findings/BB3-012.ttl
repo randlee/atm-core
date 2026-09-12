@@ -16,7 +16,7 @@
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/procedures/render_procedure_pages.py" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
   triage:deferredNote "Low priority cosmetic cleanup bundle for a later pass; not required for BB3-FIX-R1 to land." ;
@@ -24,6 +24,9 @@
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-012/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB3-012/1> ;
+  triage:closedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/BB3-012/1>
@@ -31,8 +34,8 @@
   triage:file "scripts/procedures/render_procedure_pages.py" ;
   triage:line 173 ;
   triage:snippet "page body repeats the Flow/Steps content already shown in the revision section (double render); compose omits --output; _procedure_for reads sibling JSONs instead of the result's own feature; template's note field is undeclared/undefaulted" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-012/1> .
@@ -43,3 +46,12 @@
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB3-012/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:fixCommit "791680c2ae8155bced4fd5fd2888c5a607228f01" ;
+  triage:fixBranch "feature/bb3-test-procedure-pages" ;
+  triage:verifiedInRound "BB3-FIX-R1" ;
+  triage:resolutionNote "Confirmed fixed (M1/M2/M4/M5 sub-items) in BB3-QA2 -- QA-2's own M2 finding is a distinct, deliberately-left-open remnant of the original M4 sub-item (sibling-JSON read pattern relocated into build_inventory, no live effect per this record's own deferredNote), recorded separately; the other three sub-items (double render, missing --output, undeclared note field) are resolved." .
