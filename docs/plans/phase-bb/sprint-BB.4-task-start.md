@@ -8,7 +8,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb4-task-st
 
 | Field | Value |
 | --- | --- |
-| Design | [`design.md`](../nudge-transition-templates/design.md) §4.4 (R8, R11); plan §1 rows 4, 5, 11, 12, 13; plan P1 |
+| Design | [`design.md`](../nudge-transition-templates/design.md) §4.4 (R8, R11); plan §1 rows 4, 5, 11, 12, 13, 16–20; plan P1, P12 |
 | Recommended | arch-ctm / deep-reasoning |
 | Depends on | `must_follow` BB.1 (dev push) — emits `TaskTransition::Started`; stacks on `feature/bb1-transition-templates` |
 | Worktree | `feature/bb4-task-start` |
@@ -58,21 +58,37 @@ struct TaskStartCommand {
   (`crates/atm/src/commands/send.rs`, beside `build_task_close_request`
   `:394-408`: sets `task_id`, `task_op = Some(TaskOp::Start)`,
   `NudgeMode::default()`); `validate_task_request`; `composition.send`.
-  Output: `started {id}` or, when the preflight row was already `active`,
-  `task {id} already started; message delivered`. JSON: the `SendResult`.
+  Output: `started {id}` on an applied start; on a writer rejection the
+  CLI prints the rejection text the daemon returned (`task {id} is already
+  active`, `… is already complete`, `… already has an active task`,
+  `… is not assigned to …`) and exits 1, exactly as `task close` surfaces
+  `task_rejection` today. The preflight row is used only for the fast-fail
+  above; it never decides idempotency (plan P12). JSON: the `SendResult`.
 
 - [ ] D2 — `crates/atm-storage-rusqlite/src/writer/task_ops.rs`:
   - `load_startable_task` (`:454-478`): replace the `DAEMON_ACTOR_NAME`
     check (`:472-476`) with
     `if record.envelope.from != row.assignee { return Err(task_not_counterparty(format!("task {task_id} is not assigned to {}", record.envelope.from))); }`.
   - `apply_task_start` (`:396-452`): delete the
-    `start_reminder_was_emitted` call (`:412`); the guard becomes
-    `if row.state == TaskState::Active { return Ok(()); }` (idempotent, no
-    event). `reject_concurrent_active_task` (`:417`) and the move-to-head
-    (`:419-421`) stay. The `started` event row keeps `actor =
-    TaskActor::Member(assignee)` and `message_id = record.envelope.message_id`.
+    `start_reminder_was_emitted` call (`:412`); the silent
+    `row.state == TaskState::Active` early return becomes
+    `return Err(task_already_active(format!("task {task_id} is already active")));`
+    where `task_already_active` is a new constructor in
+    `writer/task_rejection.rs` beside `task_already_closed`, using the same
+    error code those constructors share so `is_task_rejection` (`task_ops.rs:48`)
+    routes it to `TaskMessageResult::RejectedReportDelivered` (`ops.rs:751`):
+    report retained as ordinary mail, link stripped, a `rejected` event row,
+    no `started` row (plan P12). `reject_concurrent_active_task` (`:417`) and
+    the move-to-head (`:419-421`) stay. The `started` event row keeps
+    `actor = TaskActor::Member(assignee)` and
+    `message_id = record.envelope.message_id`. Because admission is
+    serialized in the writer transaction, two concurrent starts of one task
+    yield exactly one `started` row and one rejection; a start that races a
+    reassign to another agent fails the assignee check (row 13); a start
+    that races a close fails on `complete` (row 11).
   - `transition()` in `crates/atm-storage/src/task_state.rs` is unchanged:
-    `(assigned, Started) → active`, `(active, Started) → active`,
+    `(assigned, Started) → active`, `(active, Started) → active` (the
+    rejection above fires before `transition` is consulted),
     `(complete, Started) → reject "task {id} is already complete"`.
 
 - [ ] D3 — delete `start_assigned_task` and the call in
@@ -114,7 +130,12 @@ Writer — `crates/atm-storage-rusqlite/tests/task_ledger_writer.rs`:
 - `start_by_non_assignee_is_rejected` — assigner and third party.
 - `start_on_complete_task_is_rejected`.
 - `start_while_another_task_is_active_is_rejected` — `already has an active task`.
-- `start_of_active_task_is_idempotent_and_writes_no_event`.
+- `duplicate_start_is_rejected_report_retained_no_event` — second start: `RejectedReportDelivered`, the report row exists with `task_id = NULL`, one `rejected` row, still one `started` row (plan §1 row 5).
+- `concurrent_starts_admit_exactly_one_started_event` — two writer transactions for the same start interleaved through the serialized writer: one `started`, one rejection.
+- `start_racing_reassign_is_rejected_as_not_counterparty` — reassign to B commits first; A's start is row 13.
+- `start_of_missing_task_is_rejected_without_event` (row 18).
+- `move_of_active_task_appends_moved_head_to_head` (row 16, existing behaviour pinned).
+- `close_of_complete_task_retains_report_and_strips_link` (row 17) and `close_by_non_party_is_rejected_and_retained` (row 19), `move_of_complete_task_errors` (row 20) — existing behaviour pinned so plan §1 is closed.
 - `start_without_prior_reminder_succeeds` — the removed gate.
 - `daemon_actor_can_no_longer_start_a_task`.
 
@@ -123,7 +144,7 @@ CLI — `crates/atm/src/commands/task/tests`:
 - `task_start_sends_to_assigner_with_start_op`.
 - `task_start_defaults_message_when_omitted`.
 - `task_start_by_non_assignee_fails_before_sending`.
-- `task_start_reports_already_started_from_preflight_row`.
+- `task_start_prints_writer_rejection_for_active_task` — the daemon's `task_rejection` text is printed verbatim, exit 1; no preflight-derived wording exists in the command.
 
 Integration (colima, every roster shape):
 

@@ -68,12 +68,19 @@ task pass is the only source of `task_ready`/`task_reminder`, and every
 - [ ] D4 — `crates/atm-storage-rusqlite/src/writer/task_ops.rs::apply_task_assignment`
   (`:151+`), reassign branch (existing open row, different assignee): inside
   the same transaction, after the `reassigned` event, insert one message to
-  the old assignee through `WriterStatementCache::insert_message_row`
-  (`writer/stmt_cache.rs:7`): from `record.envelope.from` (the assigner),
-  summary `task_closed:{task_id}`, body `task {task_id} was reassigned to
-  {new_assignee}`, `task_id` set, `task_op = None`, `requires_ack = false`.
-  The row is inserted directly, so `apply_task_message` never runs on it
-  (it runs only on the incoming record). `MessageAdmissionOutcome` gains
+  the old assignee through a writer-internal primitive
+  `insert_message_canonical(record, connection, cache, target) -> Result<bool, AtmError>`
+  extracted from `execute_upsert_message` (`writer/ops.rs:686-745`): it is
+  exactly the existing `insert_message_row` + `sync_inserted_message_projection`
+  + `insert_initial_message_state` sequence, and `execute_upsert_message`
+  becomes that call followed by task admission. The notice therefore gets
+  its `mail_message_states` row and search projection like every other
+  message (read marks it read; `atm list`/search see it); it bypasses only
+  `apply_task_message`, which runs on the incoming record alone. Notice
+  fields: from `record.envelope.from` (the assigner), summary
+  `task_closed:{task_id}`, body `task {task_id} was reassigned to
+  {new_assignee}`, `task_id` set, `task_op = None`, `requires_ack = false`,
+  a fresh message id and key. `MessageAdmissionOutcome` gains
   `pub reassign_notice: Option<Message>`; the router dispatches one extra
   immediate built-in nudge for it with `TaskTransition::Closed { outcome:
   Reassigned }` (the router already dispatches for the admitted record; this
@@ -108,8 +115,13 @@ Unit / writer:
 - `assignment_write_creates_no_pending_marker` — `nudge_pending_at IS NULL`.
 - `requires_ack_conflicts_with_task_id` — clap.
 - `assignment_at_every_position_emits_task_queued_with_position` — positions 1, 2, 3.
-- `reassign_inserts_closed_reassigned_message_to_old_assignee_in_same_transaction`.
-- `reassign_notice_row_is_never_admitted_as_an_assignment`.
+- `reassign_inserts_closed_reassigned_message_to_old_assignee_in_same_transaction` — and a forced failure after the notice insert rolls back the `reassigned` event, the notice and its state row together.
+- `reassign_notice_row_is_never_admitted_as_an_assignment` — the old assignee's task list has no row for the id; only one `assigned` row for the new assignee.
+- `reassign_notice_has_state_row_and_projection` — `atm read` returns it once, mark-read persists in `mail_message_states`, message search finds its body.
+- `insert_message_canonical_is_the_only_insert_path` — `execute_upsert_message` and the notice both go through it; a duplicate message key returns `false` and inserts nothing.
+- `same_assignee_reassign_refreshes_row_and_emits_task_queued` (plan §1 row 15).
+- `reopen_complete_task_emits_task_queued` (row 9).
+- `ack_of_assignment_writes_no_task_event` (row 14).
 
 Runtime — `crates/atm-http-runtime/src/herdr_queue_wake/`:
 

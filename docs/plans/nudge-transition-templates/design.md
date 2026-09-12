@@ -244,11 +244,16 @@ to the assigner with `task_op = Start` — the existing `TaskOp::Start` on the
 ordinary write route, so no new route, envelope arm or wire field (plan P1) —
 the `assigned → active` transition, the `Started` event, and the
 `task_started` line rendered from the same message (immediate,
-informational). Idempotent on `active` (the CLI prints "already started;
-message delivered" from its preflight read of the row; the writer applies
-nothing and writes no event). Rejected on `complete`, and rejected while
-another task is `active` for the assignee (BA's one-active index: "already
-has an active task"); the agent closes the active one first.
+informational). A second start of an `active` task is a writer rejection
+("task <id> is already active"): the report is retained as ordinary mail
+with the task link stripped, exactly like every other task rejection
+(`with_task_rejection`, `delivery_persistence.rs:82-95`), so no `started`
+event is written, the assigner sees a plain `delivery` line, and the CLI
+prints the writer's rejection text. The CLI's preflight read is a courtesy
+fast-fail only; the serialized writer is the sole authority (plan P12).
+Rejected on `complete`, and rejected while another task is `active` for the
+assignee (BA's one-active index: "already has an active task"); the agent
+closes the active one first.
 
 The daemon-written receipt (`herdr_task_start.rs`) and the
 `assigned → active` transition on prompt delivery are deleted;
@@ -271,16 +276,26 @@ report message id (R7). A close on an already-closed task keeps today's
 
 ### 4.6 Observability (SMK-005, ruling (a))
 
-One durable record per emitted nudge, written by whichever path emitted it:
+One durable record per emitted **task-linked** prompt, written by whichever
+path emitted it, after the sink reported success:
 
 ```
-prompt_handoffs(team, agent, message_key, kind, task_id NULL, attempt NULL,
-                trigger, at)
-trigger ∈ steer | queue_claim | task_pass | recovery_sweep
+prompt_handoffs(team, agent, message_key TEXT, kind, task_id NOT NULL,
+                attempt NOT NULL DEFAULT 0, trigger, at)
+UNIQUE (team, agent, message_key, attempt)
+trigger ∈ steer | queue_claim | idle_drain | recovery_sweep | task_pass
 ```
+
+Only task-linked prompts are recorded: the one reader is `atm task events`,
+and a row nobody reads is unused code (plan P10). The record is an
+observation, not a second phase of the emission: a storage failure after a
+successful emission logs one `prompt_handoff_record_failed` line (message
+id, kind, trigger) and never fails or retries the emission; the unique key
+makes a repeated record of the same prompt a no-op (plan P11).
 
 Surfaced by `atm task events <id>`, interleaved with the task events by
-time (prompts show kind, attempt and trigger). Named `prompt_handoffs`, not
+time (prompts show kind, attempt and trigger); ties on `at` order task
+events before prompts, then by rowid. Named `prompt_handoffs`, not
 `nudge_handoffs`: `scripts/check-nudge-taxonomy.py` rejects new
 `nudge`-family identifiers outside its frozen inventory (plan P2). With this
 table the 15:27–15:35Z test reads as one query.

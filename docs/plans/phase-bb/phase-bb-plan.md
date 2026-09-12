@@ -14,11 +14,15 @@
 
 ## 1. Task state machine — one table, every transition observable
 
-States stay `assigned`, `active`, `complete(outcome)` (ADR-062). Events stay
-`Assigned`, `Started`, `Completed(outcome)`. What changes is **who** applies
-`Started` and **what each transition prints**. Every row below names the
-actor, the resulting state, the durable event, and the one line the
-counterparty sees. Nothing else moves a task.
+States stay `assigned`, `active`, `complete(outcome)` (ADR-062). The
+transition inputs stay `TaskEvent::{Assigned, Started, Completed(outcome)}`
+(`task_state.rs`). The durable row kinds stay the existing `TaskEventKind`
+set — `assigned, acked, started, completed, refused, cancelled, reassigned,
+reopened, rejected, reminded, lead_notified, moved, migrated` — and no kind
+is added (P8). What changes is **who** applies `Started` and **what each
+transition prints**. Every row below names the actor, the resulting state,
+the durable row, and the one line the counterparty sees; §1.1 names the
+test that exercises it. Nothing else moves a task.
 
 | # | From | Command / trigger | Actor | To | Event row | Counterparty sees (kind) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -26,7 +30,7 @@ counterparty sees. Nothing else moves a task.
 | 2 | `assigned`, head, assignee `Idle`, `reminder_count = 0` | task pass | daemon | `assigned` (unchanged) | `reminded` outcome `emitted` | assignee: `task_ready` |
 | 3 | `assigned`, head, assignee `Idle`, ≥ 60 s since row 2 or 3 | task pass | daemon | `assigned` (unchanged) | `reminded` | assignee: `task_reminder` attempt n |
 | 4 | `assigned`, any position | `atm task start <id> [message]` | assignee | `active`, moved to head | `started` | assigner: `task_started` |
-| 5 | `active` | `atm task start` again | assignee | `active` (no change) | none | caller: `already started; message delivered` |
+| 5 | `active` | `atm task start` again | assignee | rejected `task <id> is already active`; report retained as ordinary mail, task link stripped | `rejected` | assigner: `delivery`; caller: the rejection text (P12) |
 | 6 | `assigned` \| `active` | `atm task close <id> completed\|refused` / `--task-complete` | assignee | `complete(o)` | `completed` \| `refused` | assigner: `task_complete outcome=o` |
 | 7 | `assigned` \| `active` | `atm task close <id> cancelled` | assigner | `complete(cancelled)` | `cancelled` | assignee: `task_closed outcome=cancelled` |
 | 8 | `assigned` \| `active` | `atm task assign <other>` same id | assigner | `assigned` under `<other>` | `reassigned` | old assignee: `task_closed outcome=reassigned`; new assignee: row 1's column |
@@ -36,6 +40,32 @@ counterparty sees. Nothing else moves a task.
 | 12 | `assigned` with another task `active` | `atm task start` | assignee | rejected `<assignee> already has an active task` | `rejected` | caller error |
 | 13 | any | `atm task start` by non-assignee | — | rejected `task <id> is not assigned to <caller>` | `rejected` | caller error |
 | 14 | `assigned` \| `active` | `atm ack` of any message | anyone | no change | none | nothing task-related (ADR-062: ack is mail hygiene) |
+| 15 | `assigned` \| `active` | `atm task assign` same id, same assignee | assigner | unchanged; `description` and `assignment_message_id` refreshed (`refresh_same_assignment`) | none | assignee: `task_queued` at the current position |
+| 16 | `active` | `atm task move` | assigner | `active`, head (unchanged) | `moved` head→head (`append_active_task_move`) | nothing |
+| 17 | `complete` | `atm task close` / `--task-complete` | either party | unchanged; report retained, task link stripped (`already_closed`) | none | recipient: `delivery`; caller: `already closed` |
+| 18 | ∅ (unknown id) | `atm task start` / `close` / `move` | — | rejected `task <id> does not exist` | none (no row to append to) | caller error |
+| 19 | `assigned` \| `active` | `atm task close` by a non-party | — | rejected `not counterparty`; report retained, link stripped | `rejected` | recipient: `delivery`; caller error |
+| 20 | `complete` | `atm task move` | — | error `no open task <id>` | none | caller error |
+
+Rows 15–20 exist in the writer today (`task_ops.rs`); they are listed so the
+table is closed, not because this phase changes them.
+
+### 1.1 Row-to-test map
+
+| rows | test (sprint) |
+| --- | --- |
+| 1, 15 | `assignment_at_every_position_emits_task_queued_with_position`, `same_assignee_reassign_refreshes_row_and_emits_task_queued` (BB.5) |
+| 2, 3 | `task_pass_first_prompt_is_ready_then_reminder_with_attempt` (BB.5) |
+| 4 | `start_by_assignee_moves_assigned_task_to_head_and_active`, `task_start_line_reaches_assigner_at_write_time` (BB.4) |
+| 5 | `duplicate_start_is_rejected_report_retained_no_event`, `concurrent_starts_admit_exactly_one_started_event` (BB.4) |
+| 6, 7 | `close_by_assignee_renders_task_complete`, `cancel_shows_closed_cancelled_to_assignee` (BB.1 D5 unit, BB.5 colima) |
+| 8 | `reassign_inserts_closed_reassigned_message_to_old_assignee_in_same_transaction` (BB.5) |
+| 9 | `reopen_complete_task_emits_task_queued` (BB.5) |
+| 10, 16 | `move_to_head_while_idle_shows_ready_next_pass_and_no_extra_line` (BB.5), `move_of_active_task_appends_moved_head_to_head` (BB.4) |
+| 11, 12, 13 | `start_on_complete_task_is_rejected`, `start_while_another_task_is_active_is_rejected`, `start_by_non_assignee_is_rejected` (BB.4) |
+| 14 | `ack_of_assignment_writes_no_task_event` (BB.5) |
+| 17, 19 | `close_of_complete_task_retains_report_and_strips_link`, `close_by_non_party_is_rejected_and_retained` (BB.4) |
+| 18, 20 | `start_of_missing_task_is_rejected_without_event`, `move_of_complete_task_errors` (BB.4) |
 
 Retired by this phase: the daemon-authored `Started` on prompt delivery
 (BA R1), the `task_started` receipt written as deferred mail, the
@@ -58,6 +88,10 @@ against a task the prompt was not for.
 | P7 | Rand 2026-09-12: orchestration templates must match the shipped `atm task` surface. The 1.5.16 fixes (dispatch with `--task-id`, close on final report) cannot wait for the phase to land, so they are BB.2 (wave 1); the `atm task start` step they gain after BB.4 is in BB.7. My call, recorded so Rand can collapse it. | §3 |
 | P9 | `task_queued` is emitted at every position, including head. Design §4.3 said "nothing at head"; one rule (every assignment prints one line) is simpler than a head special case, and the idle agent gets `task_ready` on the next pass anyway. Design §4.3 amended. | this plan; BB.5 D2 |
 | P8 | State machine rule for this phase: no new state, no new event kind, no new counter. A sprint that needs one is a plan defect (Rand: "all state machines stay simple w/ clear observable transitions"). | §1 |
+| P10 | Critical review PLAN-CRIT-003: `prompt_handoffs` records **task-linked prompts only** (`task_id NOT NULL`). Its only reader is `atm task events`; a row for a plain steer prompt would be unread data. It therefore stays a task-ledger audit record owned by `TaskStore` (doc comment widened to say so); no seventh optional storage capability, so ADR-054's capability count is untouched. | BB.6 D2 |
+| P11 | Critical review PLAN-CRIT-001: the handoff row is an observation written after sink success, not a second phase of the emission. A record failure logs `prompt_handoff_record_failed` and never fails or retries the emission; the unique key `(team, agent, message_key, attempt)` makes a repeat a no-op. No outbox, no recovery protocol (P8). The colima acceptance counts rows against terminal lines **and** asserts zero `prompt_handoff_record_failed` lines. | BB.6 D1/D3; design §4.6 |
+| P12 | Critical review PLAN-CRIT-006: a second `atm task start` of an `active` task is a writer rejection (`task <id> is already active`) on the existing `task_rejection` path — report retained as ordinary mail, task link stripped, no event, assigner sees `delivery`. The CLI never decides idempotency from its preflight read. | BB.4 D2; design §4.4 |
+| P13 | Critical review PLAN-CRIT-002: the prompt emit paths are five — steer (`storage_and_nudge_router.rs:487`), herdr queue claim (`herdr_queue_wake.rs:646`), bootstrap idle-transition drain and recovery sweep (both through `queue_drain.rs::drain_one`, `:321`), task pass (`task_pass.rs:483`). `drain_one` gains a `PromptTrigger` parameter so the two bootstrap callers are distinguishable. The recorder is a `pub fn` in `atm-core` (both `atm-http-runtime` and `atm-daemon-bootstrap` already depend on it). | BB.6 D3 |
 
 ## 3. Sprint sequence
 
@@ -106,7 +140,7 @@ BB.6 and BB.2 have merged.
 | BB.4 | HTTP/peer API | none — `TaskOp::Start` already exists on `WriteRequest` (P1) | none |
 | BB.4 | SQLite | none | none |
 | BB.5 | all three | none — deletions on the write path and the task pass | none |
-| BB.6 | SQLite | new table `prompt_handoffs` via `CREATE TABLE IF NOT EXISTS` in `TASK_TABLES_DDL`; additive, a pre-BB binary ignores it | MINOR |
+| BB.6 | SQLite | new table `prompt_handoffs` (unique key on `team, agent, message_key, attempt`) via `CREATE TABLE IF NOT EXISTS` in `TASK_TABLES_DDL`; additive, a pre-BB binary ignores it; previous-consumer proof `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created` | MINOR |
 | BB.6 | HTTP/peer API | `TaskEventRow` gains no field; handoffs are read by `atm task events` through a new optional `handoffs` array on the existing task-events list response | MINOR, `HTTP_API_VERSION` 1.8.0 → 1.9.0 |
 | BB.3 | none | evidence JSON and the report index are not governed interfaces; BB.3 pins their contract in its own doc | n/a |
 
@@ -133,7 +167,9 @@ one sprint and is in that sprint's deliverables.
 | `docs/requirements.md` | §15.4 item 15 | unchanged (Idle with open task nudged ≤ once per 60 s); add "the first prompt is `task_ready`, later ones `task_reminder`" | BB.5 |
 | `docs/adr/ADR-062-…` | "Reminder and escalation" table | reminders are recorded against the task prompted for (never the queue head by position) | BB.5 |
 | `docs/adr/ADR-054-…` | "Phase-BA amendment" | an assignment carries no pending-nudge marker; the task pass owns every task prompt | BB.5 |
-| `docs/adr/ADR-062-…` | new subsection | `prompt_handoffs` is the durable record of every emitted prompt; `task_events.reminded` stays the task-side counter | BB.6 |
+| `docs/adr/ADR-062-…` | new subsection | `prompt_handoffs` is the best-effort emission record of every task-linked prompt (P10, P11); `task_events.reminded` stays the task-side counter | BB.6 |
+| `docs/adr/ADR-061-…` | D3 (older consumer keeps working) | evidence rows for the previous-consumer proofs: a frozen 1.7 `PostSendHookEvent` shape decodes a 1.8 payload (BB.1); a frozen 1.8 task-events response shape decodes a 1.9 payload and the pre-BB DDL set reads and writes a database that has `prompt_handoffs` (BB.6) | BB.1, BB.6 |
+| `docs/adr/ADR-054-…` | capability count (L280) | no edit: BB.6 adds no optional storage capability (P10); the sprint states this in its PR body | BB.6 |
 | `docs/team-protocol.md` | 24–41 "Task Commands"; 42–60 message classes | `atm task start`; task assignments are informational until `task_ready`; never `atm ack` a task assignment | BB.7 |
 | `CLAUDE.md` | 239–247 quick reference | `Start a task` row; alias note | BB.7 |
 | `docs/agent-conventions.md` | nudge section | six task lines and what each asks of the reader | BB.7 |
@@ -148,9 +184,9 @@ Nothing outside this list is added; deletions are listed per sprint.
 | BB.1 | `TaskTransition` enum; `PostSendHookEvent.task_transition`; six `BuiltInNudgeTemplateKind` variants; six default bodies; render values `position`, `attempt`, `assignee`, `outcome`, `by`; `TaskClosedOutcome { Cancelled, Reassigned }`; doctor findings `stale_nudge_template_override` and `disabled_task_nudge_template`; `NudgeTemplateOverrideStore::list_stale_template_override_kinds`; `clear_template_override(team, kind: &str)` (parameter type change, internal trait); `HTTP_API_VERSION` 1.8.0 |
 | BB.2 | nothing in `crates/`; template steps only |
 | BB.3 | `scripts/procedures/render_procedure_pages.py`; `templates/procedure-report/procedure.html.j2`; `docs/procedures/*.md`; `site/reports/procedures/**`; `source_revision` on two evidence writers; `procedure`/`source_revision` optional envelope fields |
-| BB.4 | clap `TaskSubcommand::Start(TaskStartCommand)`; `SendCommand::build_task_start_request`; writer `admit` arm for `Started` (actor = assignee) |
-| BB.5 | `conflicts_with = "task_id"` on `--requires-ack`; `MessageAdmissionOutcome.{queued_position, reassign_notice}` (internal); `task_queued` emission in the writer post-write; the reassign notice row; `TaskTransition::{Ready, Reminder}` set by the task pass |
-| BB.6 | table `prompt_handoffs`; `PromptHandoff`, `PromptTrigger` types; `TaskStore::record_prompt_handoff`, `AsyncTaskLedgerReader::list_prompt_handoffs`; `handoffs` on the task-events list response; `HTTP_API_VERSION` 1.9.0 |
+| BB.4 | clap `TaskSubcommand::Start(TaskStartCommand)`; `SendCommand::build_task_start_request`; writer `admit` arm for `Started` (actor = assignee); `task_rejection.rs::task_already_active` (same error-code family as the existing rejections) |
+| BB.5 | `conflicts_with = "task_id"` on `--requires-ack`; `MessageAdmissionOutcome.{queued_position, reassign_notice}` (internal); `task_queued` emission in the writer post-write; writer-internal `insert_message_canonical` extracted from `execute_upsert_message` (row + projection + initial state, no task admission) and the reassign notice written through it; `TaskTransition::{Ready, Reminder}` set by the task pass |
+| BB.6 | table `prompt_handoffs` (unique key, task-linked only); `PromptHandoff`, `PromptTrigger` (five variants) types; `TaskStore::record_prompt_handoff`, `AsyncTaskLedgerReader::list_prompt_handoffs`; `atm_core::prompt_handoff_record::record_prompt_handoff` (`pub`); a `trigger: PromptTrigger` parameter on `queue_drain.rs::drain_one`; `handoffs` on the task-events list response; `HTTP_API_VERSION` 1.9.0 |
 | BB.7 | nothing |
 
 ## 9. Phase acceptance
@@ -161,7 +197,8 @@ Nothing outside this list is added; deletions are listed per sprint.
 3. A three-task assignment to an idle agent on the live team shows exactly
    one `queued="2"`, one `queued="3"`, one `ready` (SMK-006 closed).
 4. `atm task events <id>` shows every prompt for that task with its kind,
-   attempt and trigger (SMK-005 closed).
+   attempt and trigger, and the colima run logs zero
+   `prompt_handoff_record_failed` lines (SMK-005 closed; P11).
 5. The `started` line reaches the assigner at write time, never later
    (SMK-004 closed).
 6. Every §7 edit landed; `just lint spell`, `just lint nudge-taxonomy`,

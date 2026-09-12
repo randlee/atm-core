@@ -40,11 +40,30 @@ the runner read the page (Rand: no test rewrites).
 
 | Procedure id | Runner | Evidence JSON | Envelope writer | Revision in evidence today |
 | --- | --- | --- | --- | --- |
-| `smoke-fast`, `smoke-normal`, `smoke-thorough` | `scripts/smoke/run_feature_smoke.py` (`FIXTURE_FEATURES`, L49; `add_case` L527; `write_report` L806) | `<run>/<feature>.json` (`feature, platform, host, run_id, status, cases[]`) | `write_report` L868–880 → `smoke.envelope.json` | **none** |
+| `smoke-<feature>` for every feature the runner accepts: `fast`, `normal`, `thorough` (`FIXTURE_FEATURES` L49), `localhost`, `local-ip` (alias `local-up` maps to it), `peer-preflight`, `crosshost-send`, `crosshost-ack`, `crosshost-curl-plain`, `crosshost-curl-tls`, `admission-capacity` (constants L50–61) | `scripts/smoke/run_feature_smoke.py` (`add_case` L527; `write_report` L806) | `<run>/<feature>.json` (`feature, platform, host, run_id, status, cases[]`) | `write_report` L868–880 → `smoke.envelope.json` | **none** |
+| `graft-hermes` | `scripts/phase-ai/run_hermes_graft_live.py` (four committed envelopes under `site/reports/smoke/macos/rand-m5.local/*-graft-hermes`) | same shape | its own envelope writer | **none** |
 | `colima-hermes-skills` | `scripts/smoke/colima_skill_report.py` (`render` L71) rendering `atm-hermes-testbed ./test.sh` output | `<run>/colima-hermes-skills.json` (same shape) | L99–103 | **none** |
 | `read-query-benchmark` | `scripts/smoke/read_benchmark.py` (`_report_variables` L709; campaign payload L775–793) | `<campaign>.json` | `scripts/smoke/benchmark_report.py::render_envelope` L392 | `source_revision` L793 |
 | `send-message-benchmark` | `scripts/smoke/benchmark_report.py` (30 revisions) | `<campaign>.json` | same | `source_revision` where the producer wrote it (index comment L32–36) |
 | `fuzz-<campaign-target>` | `.just/run_fuzz.py` (`validate_campaign` L316; `CAMPAIGN_OPTIONAL_FIELDS` L160) + `scripts/fuzz/render_report.py` | `site/reports/fuzz/<campaign>.json` | `scripts/fuzz/render_report.py` | optional `source_revision` (L337–339) |
+
+### 1.1 Closed inventory
+
+The procedure-id set is not hand-picked: `scripts/procedures/inventory_reports.py`
+(new, D2) walks every committed `*.envelope.json` and campaign JSON under
+`site/reports/` plus every feature/benchmark/fuzz target the runners accept
+at `281e6f546`, derives each one's procedure id by the D5 rule, and writes
+`docs/procedures/inventory.json` (`{"procedures": [{"id", "family", "runner",
+"sources": [paths]}]}`). Ids with no committed evidence (e.g.
+`smoke-admission-capacity`) still get a page. Ids seen at `281e6f546`:
+`smoke-{fast,normal,thorough,localhost,local-ip,peer-preflight,crosshost-send,crosshost-ack,crosshost-curl-plain,crosshost-curl-tls,admission-capacity}`,
+`graft-hermes`, `colima-hermes-skills`, `read-query-benchmark`,
+`send-message-benchmark`, and one `fuzz-<target>` per distinct campaign
+target under `site/reports/fuzz/` and the four `site/reports/2026*-fuzz-report`
+directories (`an15-checked-emission`, `an15-http-framing`, `an15-sc-compose`,
+and the 2026-08-01 campaign targets read from their JSON). Where two ids
+share byte-identical steps the doc says so and links; there is no
+many-to-one mapping in the manifest.
 
 Runner history for backfill sizing (`git log --follow`): `run_feature_smoke.py`
 20 commits since 2026-07-26; `run_fuzz.py` 14 since 2026-07-31;
@@ -55,8 +74,9 @@ Runner history for backfill sizing (`git log --follow`): `run_feature_smoke.py`
 
 ### D1 Procedure documents — `docs/procedures/<procedure-id>.md`
 
-One markdown file per procedure id in §1 (seven files). Markdown is the
-source; nobody edits html. Each file has exactly these parts, in order:
+One markdown file per procedure id in the closed inventory (§1.1). Markdown
+is the source; nobody edits html. Each file has exactly these parts, in
+order:
 
 1. YAML front matter:
 
@@ -74,9 +94,12 @@ source; nobody edits html. Each file has exactly these parts, in order:
        note: "added mTLS rejection cases"
    ```
 
-   `revisions` is the backfill (§2 D4). The first entry is the revision the
-   document describes; older entries carry a one-line note of what the steps
-   were before that change, read from `git show <rev>:<runner>`.
+   `revisions` is the backfill (§2 D4). Every entry has its own
+   `## Revision <rev8> (<date>)` section further down containing that
+   revision's `Flow` fence and `Steps` table, authored from
+   `git show <rev>:<runner>`; the first entry is the head revision. A
+   revision page is rendered per entry (D2), so a historical report lands
+   on the steps that produced it, not on a change note.
 
 2. `## What this test proves` — three to eight sentences for a reviewer.
 3. `## Flow` — one ` ```mermaid ` flowchart of the run: setup, each case
@@ -108,11 +131,12 @@ New script, modelled on `docs/reports/generate_diagram_pages.py`:
   emitted with `| safe`; scalars (`title`, `procedure`, `rev`) stay escaped.
   See `docs/plans/phase-ba/…` SMK-004's sibling finding and PR #1430: sc-compose
   ≥1.6 HTML-autoescapes every variable on `.html` outputs;
-- writes `site/reports/procedures/<procedure-id>/<rev8>.html` for the head
-  revision, and `site/reports/procedures/<procedure-id>/index.html` listing
-  every revision in `revisions` with its note (older revisions link to the
-  head page's `#changes` anchor; no page is fabricated for a revision whose
-  runner was not documented at the time);
+- writes one immutable `site/reports/procedures/<procedure-id>/<rev8>.html`
+  per `revisions` entry from that entry's `## Revision` section (its own
+  flow SVG and step table), plus
+  `site/reports/procedures/<procedure-id>/index.html` listing every
+  revision with its note. A `revisions` entry without a matching section,
+  or a section without an entry, is a render error; no page is fabricated;
 - writes `site/reports/procedures/manifest.json`:
 
   ```json
@@ -171,8 +195,9 @@ Record the command output in the PR body so QA can re-run it.
      whose `rev` equals `source_revision` (if present) else the newest entry
      dated ≤ `generated_at`; no entry ⇒ `ReportIndexError`.
   2. no `procedure` field → derive it: `report_type == "smoke"` ⇒
-     `smoke-<feature>` for `run_feature_smoke` runs and `colima-hermes-skills`
-     for that feature name (feature is in the result JSON, L201–226);
+     `smoke-<feature>` for `run_feature_smoke` runs (`local-up` ⇒
+     `local-ip`), `graft-hermes` and `colima-hermes-skills` for those feature
+     names (feature is in the result JSON, L201–226);
      `benchmark` ⇒ by evidence directory name; `fuzz` ⇒ `fuzz-<campaign
      target>` from the campaign JSON. Then the same revision/date rule, and
      the entry is flagged `inferred: true`.
@@ -200,7 +225,10 @@ Record the command output in the PR body so QA can re-run it.
 CI must have it — `pages.yml` already runs the diagram pipeline's
 dependencies or gains them in this sprint):
 
-- `test_renders_every_procedure_to_head_revision_page`
+- `test_renders_one_page_per_revision_entry`
+- `test_two_revisions_render_distinct_step_tables`
+- `test_revision_entry_without_section_is_a_render_error`
+- `test_inventory_matches_committed_reports_and_runner_targets` — regenerating `docs/procedures/inventory.json` at the PR head changes nothing
 - `test_flow_svg_and_steps_table_are_markup_not_text` (the `| safe`
   regression class from PR #1430: parse the output with `xml.dom.minidom`
   and assert an `<svg>` and a `<table>` element)
@@ -213,6 +241,8 @@ L62–330):
 
 - `test_links_report_to_procedure_by_source_revision`
 - `test_links_historical_smoke_result_by_run_date_and_marks_inferred`
+- `test_dated_report_resolves_to_revision_in_effect_not_head`
+- `test_every_committed_report_resolves_to_a_manifest_page` — runs the real index over `site/reports/` at the PR head
 - `test_rejects_report_whose_procedure_has_no_page`
 - `test_rejects_site_without_procedure_manifest`
 - `test_accepts_source_revision_and_procedure_envelope_fields`

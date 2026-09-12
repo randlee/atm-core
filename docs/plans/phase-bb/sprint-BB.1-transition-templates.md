@@ -144,8 +144,15 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
      `queue_prompt_is_head_assignment` makes today, `task_pass.rs:148-169`),
      else `Queued { position }` from the task row (`TaskStore::load_task`);
      `task_op = Some(Start)` →
-     `Started`; `task_op = Some(Close { outcome, .. })` → `Complete` when
-     `envelope.from == row.assignee`, else `Closed { Cancelled }`.
+     `Started` — this builder only ever sees a start the writer applied: a
+     rejected start (duplicate, non-assignee, complete, another task
+     active) is retained with `task_id = None` and `task_op = None` by
+     `with_task_rejection` (`crates/atm-core/src/send/delivery_persistence.rs:82-95`)
+     before post-write routing, so it reaches the kind decision as a plain
+     `delivery` (plan P12); `task_op = Some(Close { outcome, .. })` →
+     `Complete` when `envelope.from == row.assignee`, else
+     `Closed { Cancelled }`; an `already_closed` admission is likewise
+     retained with the link stripped and renders `delivery` (plan §1 row 17).
   2. Task pass, `nudge_dispatch.rs:157-189` `build_task_reminder_dispatch`:
      `Ready` when `row.reminder_count == 0`, else
      `Reminder { attempt: row.reminder_count }`.
@@ -235,6 +242,12 @@ Compatibility — `crates/atm-graft/tests/` and `crates/atm-graft-python`:
 
 - `graft_decodes_pre_1_8_event_without_task_transition`.
 - `graft_python_callback_shape_unchanged_with_task_transition_present`.
+- `frozen_1_7_event_shape_decodes_1_8_payload_with_task_transition` — the
+  ADR-061 D3 direction: a test-local struct that copies the 1.7
+  `PostSendHookEvent` field set verbatim (no `task_transition`, no
+  `deny_unknown_fields`) decodes a 1.8 JSON fixture that carries
+  `task_transition`; the same fixture is fed to the `atm-graft-python`
+  callback path. Recorded as the D5 evidence for 1.8.0 (plan §7).
 
 Storage — `crates/atm-storage-rusqlite/tests/`:
 
