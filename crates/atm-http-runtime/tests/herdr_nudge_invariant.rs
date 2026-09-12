@@ -33,6 +33,8 @@ async fn active_member_is_never_prompted() {
         }
         pump.tick_once().await;
     }
+    assert!(prompt_texts(&fake).is_empty(), "active members are never prompted");
+    assert_eq!(pump.stats().task_reminders, 0);
     assert_eq!(pump.stats().blocked_escalations, 0);
 }
 
@@ -81,10 +83,46 @@ async fn member_turning_active_between_dispose_and_emit_is_not_prompted() {
     queue_status_result(&fake, &keys, HerdrAgentStatus::Working);
     pump.tick_once().await;
     assert!(prompt_texts(&fake).is_empty());
+    assert_eq!(pump.stats().task_reminders, 0);
+}
+
+#[tokio::test]
+async fn blocked_member_gets_one_message_zero_nudges_per_episode() {
+    let (_root, _runtime, fake, pump, _store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    for _ in 0..50 {
+        pump.tick_once().await;
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
+    }
+    assert!(prompt_texts(&fake).is_empty(), "blocked members receive no task nudges");
+    assert_eq!(pump.stats().task_reminders, 0);
+}
+
+#[tokio::test]
+async fn offline_member_gets_one_message_zero_nudges_per_episode() {
+    let (_root, _runtime, fake, pump, _store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Unknown], false);
+    pump.tick_once().await;
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Unknown);
+    pump.tick_once().await;
+    assert!(prompt_texts(&fake).is_empty(), "an offline/unobserved member is not nudged");
+    assert_eq!(pump.stats().task_reminders, 0);
+}
+
+#[tokio::test]
+async fn daemon_restart_does_not_reescalate_ongoing_episode() {
+    let (_root, _runtime, fake, pump, _store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    pump.tick_once().await;
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
+    pump.tick_once().await;
+    assert!(prompt_texts(&fake).is_empty());
+    assert_eq!(pump.stats().task_reminders, 0);
 }
 
 async fn assert_non_idle_status_never_prompts(status: HerdrAgentStatus) {
-    let (_root, _runtime, fake, pump, _store, keys, _now) = build_task_only_pump(vec![status], false);
+    let (_root, _runtime, fake, pump, _store, keys, _now) =
+        build_task_only_pump(vec![status], false);
     pump.tick_once().await;
     queue_status_result(&fake, &keys, status);
     pump.tick_once().await;
@@ -96,21 +134,6 @@ async fn assert_idle_task_is_nudged() {
         build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
     pump.tick_once().await;
     assert_eq!(prompt_texts(&fake).len(), 1);
-}
-
-#[tokio::test]
-async fn blocked_member_gets_one_message_zero_nudges_per_episode() {
-    assert_non_idle_status_never_prompts(HerdrAgentStatus::Blocked).await;
-}
-
-#[tokio::test]
-async fn offline_member_gets_one_message_zero_nudges_per_episode() {
-    assert_non_idle_status_never_prompts(HerdrAgentStatus::Unknown).await;
-}
-
-#[tokio::test]
-async fn daemon_restart_does_not_reescalate_ongoing_episode() {
-    assert_non_idle_status_never_prompts(HerdrAgentStatus::Blocked).await;
 }
 
 #[tokio::test]
@@ -178,7 +201,10 @@ async fn close_of_stalled_task_resumes_nudging_on_next_task() {
 
 #[tokio::test]
 async fn reopen_of_stalled_task_escalates_again_at_threshold() {
-    assert_idle_task_is_nudged().await;
+    let (_root, _runtime, fake, pump, _store, _keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1);
 }
 
 #[tokio::test]
@@ -187,10 +213,23 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
     let team = key.team().clone();
 
     pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1, "the queued assignment wakes once");
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("store")
+            .load_task(&team, &task)
+            .expect("task")
+            .expect("row")
+            .state,
+        TaskState::Assigned,
+        "queue-drain delivery is not the task-reminder handoff"
+    );
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 2, "the due task reminder is emitted once");
     let store = runtime.task_store().expect("store");
     assert_eq!(
         store
@@ -240,9 +279,14 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
     );
 
     *now.lock().expect("clock") =
-        IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
+        IsoTimestamp::from_str("2030-01-01T00:02:02Z").expect("timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        3,
+        "a genuinely due active-task reminder is emitted"
+    );
     let events_after = store
         .list_task_events(&team, &task, None)
         .expect("task events after retry");
@@ -277,7 +321,10 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
 
 #[tokio::test]
 async fn head_already_active_handoff_sends_no_receipt() {
-    assert_idle_task_is_nudged().await;
+    let (_root, _runtime, fake, pump, _store, _keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Working], false);
+    pump.tick_once().await;
+    assert!(prompt_texts(&fake).is_empty());
 }
 
 #[tokio::test]

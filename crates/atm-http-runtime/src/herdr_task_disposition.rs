@@ -245,17 +245,146 @@ mod tests {
 
     #[test]
     fn dispose_table_is_exhaustive() {
-        let task = row();
-        for state in [
-            RuntimeMemberState::Active,
-            RuntimeMemberState::Blocked,
-            RuntimeMemberState::Offline,
-            RuntimeMemberState::Unknown,
-            RuntimeMemberState::IdentityConflict,
-            RuntimeMemberState::Idle,
-        ] {
-            let _ = dispose(false, state, None, now(), true, 0);
-            let _ = dispose(false, state, Some(&task), now(), true, 0);
-        }
+        let fresh = row();
+        let mut rate_limited = row();
+        rate_limited.last_reminded_at = Some("2026-09-10T23:59:30Z".parse().expect("timestamp"));
+        let mut threshold = row();
+        threshold.reminder_count = 10;
+        let mut escalated = row();
+        escalated.reminder_count = 25;
+        escalated.lead_notified_count = 1;
+        let mut active = row();
+        active.state = TaskState::Active;
+
+        assert_eq!(
+            dispose(false, RuntimeMemberState::Active, None, now(), true, 0),
+            TaskDisposition::Hold("active")
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Blocked,
+                Some(&fresh),
+                now(),
+                true,
+                0
+            ),
+            TaskDisposition::EscalateEpisode(EpisodeKind::Blocked)
+        );
+        assert_eq!(
+            dispose(false, RuntimeMemberState::Blocked, None, now(), false, 0),
+            TaskDisposition::Hold("episode reported")
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Offline,
+                Some(&fresh),
+                now(),
+                true,
+                0
+            ),
+            TaskDisposition::EscalateEpisode(EpisodeKind::Offline)
+        );
+        assert_eq!(
+            dispose(false, RuntimeMemberState::Offline, None, now(), false, 0),
+            TaskDisposition::Hold("episode reported")
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Unknown,
+                Some(&fresh),
+                now(),
+                true,
+                0
+            ),
+            TaskDisposition::Hold("unobserved")
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::IdentityConflict,
+                Some(&fresh),
+                now(),
+                true,
+                0
+            ),
+            TaskDisposition::Hold("identity conflict")
+        );
+        assert_eq!(
+            dispose(true, RuntimeMemberState::Idle, Some(&fresh), now(), true, 0),
+            TaskDisposition::Hold("mail pending")
+        );
+        assert_eq!(
+            dispose(false, RuntimeMemberState::Idle, None, now(), true, 0),
+            TaskDisposition::Hold("no open task")
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&fresh),
+                now(),
+                true,
+                3
+            ),
+            TaskDisposition::Hold("refusals escalated")
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&escalated),
+                now(),
+                true,
+                0
+            ),
+            TaskDisposition::Hold("stalled")
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&threshold),
+                now(),
+                true,
+                0
+            ),
+            TaskDisposition::EscalateStalled
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&rate_limited),
+                now(),
+                true,
+                0
+            ),
+            TaskDisposition::Hold("rate limited")
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&fresh),
+                now(),
+                true,
+                0
+            ),
+            TaskDisposition::Nudge
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&active),
+                now(),
+                true,
+                0
+            ),
+            TaskDisposition::Nudge
+        );
     }
 }
