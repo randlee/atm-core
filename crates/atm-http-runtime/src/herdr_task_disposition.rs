@@ -21,10 +21,6 @@ pub(crate) enum EpisodeKind {
     Offline,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "episode escalation uses this in task 5")
-)]
 impl EpisodeKind {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {

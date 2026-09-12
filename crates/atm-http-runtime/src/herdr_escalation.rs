@@ -1,12 +1,9 @@
 //! Shared lead, recipient, and Herdr notification escalation behavior.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
-
-#[cfg(test)]
-use std::cell::Cell;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
@@ -26,7 +23,6 @@ use crate::herdr_task_disposition::EpisodeKind;
 
 pub(crate) const HERDR_NOTIFY_DEADLINE: Duration = Duration::from_secs(5);
 pub(crate) const ESCALATION_RECIPIENT_CAP: usize = MAX_ESCALATION_RECIPIENTS;
-pub(crate) const MAX_BLOCKED_ESCALATIONS_PER_TICK: usize = 8;
 
 /// Typed daemon identity for escalation mail; the constant is a valid agent
 /// name, so it is constructed once instead of reparsed for every write.
@@ -63,18 +59,6 @@ impl From<EpisodeKind> for EscalationKind {
         }
     }
 }
-pub(crate) const BLOCKED_NOTIFY_MS: u64 = 60_000;
-pub(crate) const BLOCKED_RENOTIFY_MS: u64 = 600_000;
-
-#[cfg(test)]
-std::thread_local! {
-    static FAIL_NEXT_ESCALATION_MAIL_WRITE: Cell<bool> = const { Cell::new(false) };
-}
-
-#[cfg(test)]
-pub(crate) fn fail_next_escalation_mail_write() {
-    FAIL_NEXT_ESCALATION_MAIL_WRITE.with(|fail| fail.set(true));
-}
 
 /// Pump-owned blocked episode state. Keeping this state with the escalation
 /// policy prevents the queue-wake file from becoming the owner of D6 data.
@@ -83,10 +67,6 @@ pub(crate) struct EscalationState {
     /// The process-local view of currently-open Blocked/Offline episodes.
     /// Durable duplicate suppression lives in each escalation target's mailbox.
     episodes: Arc<Mutex<HashMap<MemberKey, EpisodeKind>>>,
-    // Retained until the old blocked escalation path is replaced in task 5.
-    pub(crate) blocked_since: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
-    pub(crate) last_blocked_notice: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
-    blocked_cursor: Arc<Mutex<usize>>,
 }
 
 impl EscalationState {
@@ -112,57 +92,6 @@ impl EscalationState {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         episodes.insert(member.clone(), episode) != Some(episode)
-    }
-
-    pub(crate) fn prune_blocked(&self, members: &HashSet<MemberKey>) {
-        self.blocked_since
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .retain(|member, _| members.contains(member));
-        self.last_blocked_notice
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .retain(|member, _| members.contains(member));
-    }
-
-    pub(crate) fn blocked_start(&self, member: &MemberKey, now: IsoTimestamp) -> IsoTimestamp {
-        let mut blocked_since = self
-            .blocked_since
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        *blocked_since.entry(member.clone()).or_insert(now)
-    }
-
-    pub(crate) fn blocked_cooldown(&self, member: &MemberKey, now: IsoTimestamp) -> bool {
-        self.last_blocked_notice
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .get(member)
-            .is_some_and(|last| elapsed_millis(now, *last) < BLOCKED_RENOTIFY_MS)
-    }
-
-    pub(crate) fn stamp_blocked_notice(&self, member: &MemberKey, now: IsoTimestamp) {
-        self.last_blocked_notice
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(member.clone(), now);
-    }
-
-    pub(crate) fn next_blocked_batch(&self, members: &[MemberKey]) -> Vec<MemberKey> {
-        if members.is_empty() {
-            return Vec::new();
-        }
-        let mut cursor = self
-            .blocked_cursor
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let start = *cursor % members.len();
-        let count = members.len().min(MAX_BLOCKED_ESCALATIONS_PER_TICK);
-        let batch = (0..count)
-            .map(|offset| members[(start + offset) % members.len()].clone())
-            .collect();
-        *cursor = (start + count) % members.len();
-        batch
     }
 }
 
@@ -222,6 +151,8 @@ pub(crate) async fn escalate_mail(
     };
     let mut outcome = EscalationOutcome {
         lead: targets.lead.clone(),
+        // Mail-only escalation deliberately does not invoke Herdr notification.
+        notify_ok: true,
         ..Default::default()
     };
     let reader = suppress_since.and_then(|_| match runtime.async_mailbox_reader() {
@@ -316,26 +247,22 @@ pub(crate) struct EscalationNotification {
     pub(crate) body: String,
 }
 
-fn elapsed_millis(now: IsoTimestamp, since: IsoTimestamp) -> u64 {
-    now.into_inner()
-        .signed_duration_since(since.into_inner())
-        .num_milliseconds()
-        .max(0) as u64
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct EscalationOutcome {
     pub lead: Option<AgentName>,
     pub lead_write: Option<atm_core::schema::AtmMessageId>,
     pub recipients_written: u32,
     pub recipients_failed: u32,
+    pub notify_attempted: bool,
     pub notify_ok: bool,
 }
 
 impl EscalationOutcome {
     #[must_use]
     pub fn reached_anyone(&self) -> bool {
-        self.lead_write.is_some() || self.recipients_written > 0 || self.notify_ok
+        self.lead_write.is_some()
+            || self.recipients_written > 0
+            || (self.notify_attempted && self.notify_ok)
     }
 }
 
@@ -373,6 +300,7 @@ pub(crate) async fn escalate(
         &mut outcome,
     )
     .await;
+    outcome.notify_attempted = true;
     outcome.notify_ok = notify(herdr_process, notification).await;
     tracing::info!(
         event = "herdr_queue_poll_outcome",
@@ -536,6 +464,7 @@ async fn notify_only(
         "Herdr escalation completed without roster data"
     );
     EscalationOutcome {
+        notify_attempted: true,
         notify_ok,
         ..Default::default()
     }
@@ -585,13 +514,6 @@ async fn write_escalation_mail_with_summary(
     body: &str,
     summary: &str,
 ) -> Result<atm_core::schema::AtmMessageId, AtmError> {
-    #[cfg(test)]
-    if FAIL_NEXT_ESCALATION_MAIL_WRITE.with(|fail| fail.replace(false)) {
-        return Err(AtmError::new(
-            atm_core::error_codes::AtmErrorCode::InternalError,
-            "injected escalation mail write failure",
-        ));
-    }
     let runtime = runtime.clone();
     let body = body.to_owned();
     let daemon_home = daemon_home.to_path_buf();

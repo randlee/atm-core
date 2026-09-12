@@ -11,7 +11,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
 use atm_core::types::IsoTimestamp;
 
-use crate::herdr_task_disposition::{EpisodeKind, TaskDisposition, dispose};
+use crate::herdr_task_disposition::{TaskDisposition, dispose};
 
 use super::{
     HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats,
@@ -46,14 +46,7 @@ impl HerdrQueueWakePump {
             self.note_task_step_availability(true, None);
         }
         let now = (self.clock)();
-        let blocked_members: HashSet<_> = candidates
-            .iter()
-            .filter(|candidate| candidate.state == atm_core::protocol::RuntimeMemberState::Blocked)
-            .map(|candidate| candidate.member.clone())
-            .collect();
-        if list_complete {
-            self.escalation_state.prune_blocked(&blocked_members);
-        }
+        let _ = list_complete;
 
         if let (Some(reader), Some(task_store)) = (reader.as_ref(), task_store.as_ref()) {
             let heads = self.open_task_heads(reader.as_ref(), &candidates).await;
@@ -68,21 +61,16 @@ impl HerdrQueueWakePump {
                         .observe(&candidate.member, candidate.state),
                     0,
                 );
-                if matches!(
-                    disposition,
-                    TaskDisposition::EscalateEpisode(EpisodeKind::Blocked)
-                ) {
-                    if let Some(row) = head {
-                        self.emit_task_reminder(
-                            reader.as_ref(),
-                            task_store,
-                            candidate,
-                            row.clone(),
-                            now,
-                            stats,
-                        )
-                        .await;
-                    }
+                if let TaskDisposition::EscalateEpisode(kind) = disposition {
+                    crate::herdr_queue_wake_escalation::escalate_episode(
+                        self,
+                        task_store,
+                        &candidate.member,
+                        kind,
+                        candidate.state_changed_at.unwrap_or(now),
+                        stats,
+                    )
+                    .await;
                     continue;
                 }
                 if matches!(disposition, TaskDisposition::EscalateStalled) {
@@ -108,18 +96,10 @@ impl HerdrQueueWakePump {
                 let Some(row) = head.cloned() else {
                     continue;
                 };
-                self.emit_task_reminder(reader.as_ref(), task_store, candidate, row, now, stats)
+                self.emit_task_reminder(task_store, candidate, row, now, stats)
                     .await;
             }
         }
-        self.escalate_blocked(
-            &blocked_members,
-            reader.as_ref().map(Arc::as_ref),
-            task_store.as_ref(),
-            now,
-            stats,
-        )
-        .await;
     }
 
     async fn open_task_heads(
@@ -158,7 +138,6 @@ impl HerdrQueueWakePump {
 
     async fn emit_task_reminder(
         &self,
-        _reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
         candidate: MemberObservation,
         row: TaskRow,
@@ -269,25 +248,6 @@ impl HerdrQueueWakePump {
                 Err(error)
             }
         }
-    }
-
-    async fn escalate_blocked(
-        &self,
-        blocked_members: &HashSet<MemberKey>,
-        reader: Option<&(dyn AsyncTaskLedgerReader + Send + Sync)>,
-        task_store: Option<&Arc<dyn atm_core::boundary::TaskStore + Send + Sync>>,
-        now: IsoTimestamp,
-        stats: &mut HerdrQueueWakeStats,
-    ) {
-        crate::herdr_queue_wake_escalation::escalate_blocked(
-            self,
-            blocked_members,
-            reader,
-            task_store,
-            now,
-            stats,
-        )
-        .await;
     }
 
     fn note_task_step_availability(&self, available: bool, error: Option<&AtmError>) {

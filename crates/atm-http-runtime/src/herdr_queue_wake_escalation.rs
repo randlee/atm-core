@@ -1,6 +1,5 @@
 //! Task and blocked-runtime escalation for the Herdr queue wake pump.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,14 +9,11 @@ use atm_core::boundary::{
 };
 use atm_core::types::IsoTimestamp;
 
-use crate::herdr_escalation::{
-    BLOCKED_NOTIFY_MS, EscalationKind, EscalationNotification, MAX_BLOCKED_ESCALATIONS_PER_TICK,
-    escalate, escalate_mail, escalation_summary,
-};
+use crate::herdr_escalation::{EscalationKind, escalate_mail, escalation_summary};
 use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, run_blocking};
+use crate::herdr_task_disposition::EpisodeKind;
 
 const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
-const MAX_BLOCKED_TASKS_IN_BODY: usize = 8;
 const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 
 pub(crate) struct TaskReminderContext<'a> {
@@ -67,18 +63,6 @@ pub(crate) async fn escalate_stalled_task(
     if let (Some(lead), Some(message_id)) = (outcome.lead, outcome.lead_write) {
         record_lead_audit(task_store, row, now, lead, message_id, stats).await;
     }
-}
-
-#[cfg(test)]
-pub(crate) async fn maybe_escalate_task(
-    pump: &HerdrQueueWakePump,
-    reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
-    task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-    row: &TaskRow,
-    now: IsoTimestamp,
-    stats: &mut HerdrQueueWakeStats,
-) {
-    escalate_stalled_task(pump, reader, task_store, row, now, stats).await;
 }
 
 async fn reminder_events(
@@ -162,167 +146,41 @@ fn record_escalation_stats(
         .saturating_add(outcome.recipients_failed as usize);
     stats.notifications_failed = stats
         .notifications_failed
-        .saturating_add(usize::from(!outcome.notify_ok));
+        .saturating_add(usize::from(outcome.notify_attempted && !outcome.notify_ok));
 }
 
-pub(crate) async fn escalate_blocked(
+pub(crate) async fn escalate_episode(
     pump: &HerdrQueueWakePump,
-    blocked_members: &HashSet<MemberKey>,
-    reader: Option<&(dyn AsyncTaskLedgerReader + Send + Sync)>,
-    task_store: Option<&Arc<dyn atm_core::boundary::TaskStore + Send + Sync>>,
-    now: IsoTimestamp,
-    stats: &mut HerdrQueueWakeStats,
-) {
-    let mut members: Vec<_> = blocked_members.iter().cloned().collect();
-    members.sort_by(|left, right| {
-        left.team()
-            .as_str()
-            .cmp(right.team().as_str())
-            .then_with(|| left.agent().as_str().cmp(right.agent().as_str()))
-    });
-    for member in pump
-        .escalation_state
-        .next_blocked_batch(&members)
-        .into_iter()
-        .take(MAX_BLOCKED_ESCALATIONS_PER_TICK)
-    {
-        escalate_one_blocked(pump, &member, reader, task_store, now, stats).await;
-    }
-}
-
-async fn escalate_one_blocked(
-    pump: &HerdrQueueWakePump,
+    task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     member: &MemberKey,
-    reader: Option<&(dyn AsyncTaskLedgerReader + Send + Sync)>,
-    task_store: Option<&Arc<dyn atm_core::boundary::TaskStore + Send + Sync>>,
-    now: IsoTimestamp,
+    kind: EpisodeKind,
+    since: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
-    let since = pump.escalation_state.blocked_start(member, now);
-    if elapsed_millis(now, since) < BLOCKED_NOTIFY_MS
-        || pump.escalation_state.blocked_cooldown(member, now)
-    {
-        return;
-    }
-    let open_tasks = blocked_tasks(reader, member).await;
-    let body = blocked_body(member, since, now, &open_tasks);
-    let notification = blocked_notification(member, since, now, &open_tasks);
-    let outcome = escalate(
+    let body = episode_body(member, kind, since);
+    let outcome = escalate_mail(
         &pump.service_runtime,
-        pump.herdr_process.as_ref(),
-        task_store,
+        Some(task_store),
         &pump.daemon_home,
         member.team(),
+        &escalation_summary(kind.into(), member, None),
         &body,
-        &notification,
-        EscalationKind::BlockedEscalated,
+        kind.into(),
+        Some(since),
     )
     .await;
     record_escalation_stats(stats, &outcome);
-    if outcome.reached_anyone() {
-        pump.escalation_state.stamp_blocked_notice(member, now);
-        stats.blocked_escalations += 1;
-    }
+    stats.blocked_escalations += usize::from(outcome.reached_anyone());
 }
 
-async fn blocked_tasks(
-    reader: Option<&(dyn AsyncTaskLedgerReader + Send + Sync)>,
-    member: &MemberKey,
-) -> Vec<TaskRow> {
-    let Some(reader) = reader else {
-        return Vec::new();
-    };
-    let Ok(deadline) = ReadDeadline::new(TASK_READ_DEADLINE) else {
-        return Vec::new();
-    };
-    match reader
-        .list_tasks(
-            member.team().clone(),
-            Some(member.agent().clone()),
-            deadline,
-        )
-        .await
-    {
-        Ok(rows) => rows.into_iter().filter(|row| row.state.is_open()).collect(),
-        Err(error) => {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "blocked_escalation_tasks",
-                outcome = "failed",
-                member = %member,
-                error = %error,
-                "Blocked escalation task read failed"
-            );
-            Vec::new()
-        }
-    }
-}
-
-fn elapsed_millis(now: IsoTimestamp, since: IsoTimestamp) -> u64 {
-    now.into_inner()
-        .signed_duration_since(since.into_inner())
-        .num_milliseconds()
-        .max(0) as u64
-}
-
-fn blocked_body(
-    member: &MemberKey,
-    since: IsoTimestamp,
-    now: IsoTimestamp,
-    open_tasks: &[TaskRow],
-) -> String {
-    let tasks = if open_tasks.is_empty() {
-        "none".to_owned()
-    } else {
-        open_tasks
-            .iter()
-            .take(MAX_BLOCKED_TASKS_IN_BODY)
-            .map(|row| {
-                format!(
-                    "{} (assigned by {}, {} reminders)",
-                    row.task_id, row.assigner, row.reminder_count
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(" | ")
-    };
+fn episode_body(member: &MemberKey, kind: EpisodeKind, since: IsoTimestamp) -> String {
     truncate_body(format!(
-        "{} has been waiting for interactive input since {} ({})\nopen tasks: {}\nAttach to its Herdr agent and answer the prompt. Run: atm members --team {}",
+        "{} member {} has been in this state since {}\nRun: atm members --team {}",
+        kind.as_str(),
         member.agent(),
         since,
-        format_age(elapsed_millis(now, since)),
-        tasks,
         member.team(),
     ))
-}
-
-fn blocked_notification(
-    member: &MemberKey,
-    since: IsoTimestamp,
-    now: IsoTimestamp,
-    open_tasks: &[TaskRow],
-) -> EscalationNotification {
-    let task_ids = open_tasks
-        .iter()
-        .take(MAX_BLOCKED_TASKS_IN_BODY)
-        .map(|row| row.task_id.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-    EscalationNotification {
-        title: "ATM blocked member escalation".to_owned(),
-        body: format!(
-            "reason=blocked member={} age={} since={} task_ids={} remediation=atm members --team {}",
-            member.agent(),
-            format_age(elapsed_millis(now, since)),
-            since,
-            if task_ids.is_empty() {
-                "none"
-            } else {
-                &task_ids
-            },
-            member.team(),
-        ),
-    }
 }
 
 fn truncate_body(mut body: String) -> String {
@@ -335,8 +193,4 @@ fn truncate_body(mut body: String) -> String {
         body.push('…');
     }
     body
-}
-
-fn format_age(milliseconds: u64) -> String {
-    format!("{}s", milliseconds / 1_000)
 }
