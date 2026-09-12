@@ -456,11 +456,11 @@ impl HerdrQueueWakePump {
             .collect();
         let mut updates_by_team = HashMap::new();
         for member in &members {
-            let state = snapshots
-                .get(member.herdr_agent.as_str())
-                .map_or(RuntimeMemberState::Unknown, |snapshot| {
-                    runtime_state(snapshot.status)
-                });
+            let state = runtime_state(
+                snapshots
+                    .get(member.herdr_agent.as_str())
+                    .map(|snapshot| snapshot.status),
+            );
             updates_by_team
                 .entry(member.key.team().clone())
                 .or_insert_with(Vec::new)
@@ -639,6 +639,19 @@ impl HerdrQueueWakePump {
                 return false;
             }
         };
+        if !still_idle(&self.service_runtime, &member.key) {
+            release.release_without_input().await;
+            stats.released += 1;
+            tracing::info!(
+                event = "herdr_queue_poll_outcome",
+                member = %member.key,
+                msg_id = %claim.msg,
+                queue_kind = NudgeKind::Queue.as_str(),
+                outcome = "held_not_idle",
+                "Herdr queue prompt skipped after the live idle recheck"
+            );
+            return false;
+        }
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
             release.release_without_input().await;
             stats.released += 1;
@@ -857,6 +870,19 @@ struct TaskCandidate {
     blocked: bool,
 }
 
+/// One accepted runtime observation. The task-disposition pass consumes this
+/// rather than making eligibility decisions from a poll snapshot.
+#[derive(Clone)]
+#[expect(
+    dead_code,
+    reason = "the disposition-driven task pass is wired in task 4"
+)]
+struct MemberObservation {
+    member: MemberKey,
+    state: RuntimeMemberState,
+    state_changed_at: Option<IsoTimestamp>,
+}
+
 fn select_open_task(mut rows: Vec<TaskRow>) -> Option<TaskRow> {
     rows.retain(|row| row.state.is_open());
     rows.sort_by(|left, right| {
@@ -936,13 +962,22 @@ fn member_order(left: &MemberKey, right: &MemberKey) -> std::cmp::Ordering {
         .then_with(|| left.agent().as_str().cmp(right.agent().as_str()))
 }
 
-fn runtime_state(status: HerdrAgentStatus) -> RuntimeMemberState {
+fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
     match status {
-        HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
-        HerdrAgentStatus::Working => RuntimeMemberState::Active,
-        HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
-        HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        None => RuntimeMemberState::Unknown,
+        Some(status) => match status {
+            HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
+            HerdrAgentStatus::Working => RuntimeMemberState::Active,
+            HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
+            HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        },
     }
+}
+
+fn still_idle(runtime: &LocalServiceRuntime, member: &MemberKey) -> bool {
+    runtime
+        .roster_ephemeral_state(member.team(), member.agent())
+        .is_some_and(|state| state.runtime.state == RuntimeMemberState::Idle)
 }
 
 struct ReleasePendingOnDrop {
@@ -2302,7 +2337,7 @@ mod tests {
             &team,
             "mail body is separate",
             &notification,
-            crate::herdr_escalation::EscalationKind::LeadNotified,
+            crate::herdr_escalation::EscalationKind::TaskStalled,
         )
         .await;
         assert_eq!(outcome.recipients_written, 1);
@@ -3751,19 +3786,19 @@ mod tests {
     #[test]
     fn herdr_statuses_project_to_runtime_states() {
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Idle),
+            runtime_state(Some(HerdrAgentStatus::Idle)),
             RuntimeMemberState::Idle
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Done),
+            runtime_state(Some(HerdrAgentStatus::Done)),
             RuntimeMemberState::Idle
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Working),
+            runtime_state(Some(HerdrAgentStatus::Working)),
             RuntimeMemberState::Active
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Unknown),
+            runtime_state(Some(HerdrAgentStatus::Unknown)),
             RuntimeMemberState::Unknown
         );
     }
