@@ -16,7 +16,7 @@ roots = []
 
 [ownership]
 io_owns = ["task_event_audit_append", "task_row_read"]
-io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn", "task_state_transition"]
+io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn", "task_state_transition", "task_body_dereference"]
 
 [dependencies]
 allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
@@ -32,10 +32,10 @@ request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "Mess
 response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<String>", "bool"]
 error_types = ["AtmError"]
 notes = [
-  "state change: only the message writer transaction applies Assigned/Acked/Completed; no TaskStore method changes tasks.state",
+  "state change: only the message writer transaction applies Assigned/Started/Reassigned/Reopened/Completed; no TaskStore method changes tasks.state",
   "audit: task_events is append-only; every accepted transition, rejection, reminder, and lead notification is one row in the acting transaction",
-  "replay: per (team, task_id, assignee) the Assigned/Acked/Completed rows replayed through transition reproduce tasks.state; latest Assigned.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at; count(LeadNotified) == lead_notified_count; description is not replayable",
-  "provenance: transitions apply only to MessageWriteOrigin::Local inserts and to the acknowledgement op",
+  "replay: per (team, task_id) the Assigned/Started/Reassigned/Reopened/Completed rows replayed through transition reproduce tasks.state; latest Assigned/Reassigned/Reopened.message_id == assignment_message_id; count(Reminded) == reminder_count; max(Reminded.at) == last_reminded_at; count(LeadNotified) == lead_notified_count; description is not replayable",
+  "task rows carry assignment_message_id only; nothing in this store dereferences the message body (design §3)",
   "CLI (atm) reads TaskRow/TaskEventRow through atm_storage::contract; daemon crates import through atm_core::boundary",
   "escalation recipients: list_escalation_recipients, add_escalation_recipient and remove_escalation_recipient store daemon or team-scoped ADR-040 addresses; team resolution falls back to the daemon list only when the team list is empty",
 ]
@@ -48,7 +48,7 @@ forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-TASK-STORE-REFERENCES"]
-review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_task_store", "no_task_state_write_outside_writer_transaction"]
+review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_task_store", "no_task_state_write_outside_writer_transaction", "no_ack_task_coupling", "no_task_state_write_outside_task_ops"]
 
 [status]
 state = "concrete_landed"

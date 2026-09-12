@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-103>
+  a triage:Finding ;
+  triage:findingId "FTQ-103" ;
+  triage:title "transport_fixture.rs success-path tests bind a fake-herdr child spawn on a 1-second RequestDeadline, flaky under cold full-workspace runs" ;
+  triage:description "fenix (ATM 01M2A89GAPJJR9GKPFJSQ3RADN, 2026-09-12T07:28:43Z), found during Phase BA closeout. crates/atm-herdr/tests/transport_fixture.rs success-path tests (every_manifest_drives_its_declared_mode_and_delta, replay_runs_twice_through_one_production_invoker, production_transport_tolerates_unknown_fields_and_crlf, production_transport_round_trips_argv_and_two_sessions, every_manifest_is_equivalent_over_cli_and_socket_transports) bind a fake-herdr child spawn on a 1-second RequestDeadline; five failed (Timeout / AgentPromptStalled) on cipher's first cold full-workspace run at 5a00502ee, then 0/3 reruns and 10/10 standalone. Pre-existing (file untouched between develop and integrate/phase-ba; Phase AY lineage). Evidence: cipher message 01M2A87XZZ58HZEKK33WHC94B3. Fix routed to cipher on a new layer fix/phase-ba-review-4, above fix/phase-ba-review-3." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-herdr/tests/transport_fixture.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:28:43Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A8MZRBR51PDNSSS1HAV6NK, 2026-09-12T07:34:59Z): second evidence -- the same five transport_fixture tests failed on fenix's host in the e615755f7 (CPR-001) gate run, concurrent with another workspace test run; standalone 10/10 afterwards. Fix pushed by cipher at review-4 ee039b949, PR #1424, linked as layer 4 of stack #1423. fenix (ATM 01M2A8R0Y0CJW524FQRHFVKTAN, 2026-09-12T07:36:39Z): gate confirmation -- ee039b949 is gate-green on fenix's host, full workspace tests included. Status fixed at ee039b949 stands, no longer pending. fenix (ATM 01M2AAV9D2RG4BKNKG34W732RE, 2026-09-12T08:13:23Z): sha remap -- cipher rebased fix/phase-ba-review-4 onto aadcc172a; ee039b949 -> 88c7a289b (PR #1424, merge-base verified aadcc172a, single commit, file content unchanged). Gate-green confirmed (ATM 01M2AAY3HQ28F98J0J04Q76EST, 2026-09-12T08:14:55Z): 13-gate-green on fenix's host (cli_surface 2/2). fenix (ATM 01M2AGHZ7NJK8XZX56TAPRWV9B, 2026-09-12T09:53:09Z): REVIEW-3/REVIEW-4 REMAP -- review-3 rebased onto review-2 0b4911c5a (new tip aadcc172a); review-4 (#1424) rebased onto that, 63bcd3ed3 -> 88c7a289b (patch byte-identical). docs/phase-ba-post-mortem pushed at 6ae99da75 on top of review-4, PR #1425; gate run on 6ae99da75 in flight, covers review-4 code including this fix -- status fixed pending that gate confirmation. fenix (ATM 01M2AGP4Q435R13VYYDMW91Q9A, 2026-09-12T09:55:26Z): gate confirmation -- docs tip 6ae99da75 (PR #1425, includes review-4 88c7a289b) is 13-gate-green on fenix's host. CI-trigger draft PR #1426 (6ae99da75 -> integrate/phase-ba) running full matrix; consolidated QA dispatched to quality-mgr as BA-REVIEW-QA-1789194730, report to PR #1425. No longer pending; status fixed at 88c7a289b stands." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:28:43Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-103/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-103/2> ;
+  triage:triageRecordVersion "7" .
+
+<urn:atm:triage:occurrence/FTQ-103/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/transport_fixture.rs" ;
+  triage:line 1 ;
+  triage:snippet "fake-herdr child spawn bound on a 1-second RequestDeadline; five success-path tests timed out (Timeout / AgentPromptStalled) on the first cold full-workspace run, 0/3 reruns and 10/10 standalone -- pre-existing, Phase AY lineage, file untouched between develop and integrate/phase-ba" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:34:59Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-4 @ ee039b949, PR #1424)." ;
+  triage:branch "fix/phase-ba-review-4" ;
+  triage:headSha "5a00502ee" ;
+  triage:occursIn <urn:atm:triage:worktree/FTQ-103/1> .
+
+<urn:atm:triage:occurrence/FTQ-103/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/transport_fixture.rs" ;
+  triage:line 1 ;
+  triage:snippet "second flake evidence collected (same five tests, concurrent-workspace-load reproduction) on fenix's host during the CPR-001 gate run at e615755f7; fix confirmed gate-green" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:36:39Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-4 @ 88c7a289b (rebased onto aadcc172a, was ee039b949; PR #1424, merge-base verified, single commit, file content unchanged), linked as layer 4 of stack #1423; 13-gate-green confirmed on fenix's host (cli_surface 2/2). docs/phase-ba-post-mortem tip 6ae99da75 (PR #1425) is 13-gate-green on fenix's host, covers this fix; no longer pending." ;
+  triage:branch "fix/phase-ba-review-4" ;
+  triage:headSha "88c7a289b" ;
+  triage:occursIn <urn:atm:triage:worktree/FTQ-103/2> .
+
+<urn:atm:triage:worktree/FTQ-103/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-4 (cipher), PR #1424, layer 4 of stack #1423, rebased onto aadcc172a, gate cover via docs tip 6ae99da75 (PR #1425) 13-gate-green" ;
+  triage:branch "fix/phase-ba-review-4" ;
+  triage:headSha "88c7a289b" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/FTQ-103/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-4 (cipher, new layer), above fix/phase-ba-review-3" ;
+  triage:branch "fix/phase-ba-review-4" ;
+  triage:headSha "5a00502ee" ;
+  triage:orderIndex 10 .

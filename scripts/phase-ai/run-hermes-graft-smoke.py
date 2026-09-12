@@ -145,7 +145,7 @@ def main() -> None:
         )
 
         marker = f"hermes-graft-smoke-{uuid.uuid4()}"
-        sender_session.send(receiver, marker)
+        sender_session.send(receiver, marker, requires_ack=True)
         print(f"PASS send: marker={marker}")
 
         if not nudge_ready.wait(args.timeout):

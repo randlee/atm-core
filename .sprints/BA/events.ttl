@@ -1,0 +1,8 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Phase BA was orchestrated with plain ATM sends (codex-orchestration), not
+# the graph-orchestration Assignment/Completion event workflow, so this file
+# is intentionally empty. Append real events here only if Phase BA ever
+# switches to graph-orchestration dispatch; do not backfill historical
+# assignments/completions from memory.

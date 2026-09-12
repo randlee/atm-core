@@ -16,8 +16,11 @@ use atm_core::send::{NudgeMode, SendMessageSource, SendRequest};
 use atm_core::send_to::{PickerOutput, RecipientLocality, classify_recipient_locality};
 use atm_core::types::HostName;
 use atm_daemon_bootstrap::with_default_peer_address_stores;
+use atm_storage::{TaskCloseOutcome, TaskOp};
 
-use crate::commands::send::{SendCommand, combine_message_with_attachment_note};
+use crate::commands::send::{
+    SendCommand, combine_message_with_attachment_note, preflight_task_op_compatibility,
+};
 use crate::commands::send_to::{land_attachments, resolve_atm_temp_for_cli};
 use crate::composition::{AtmHomePath, CliComposition, InvocationDir};
 use crate::observability::CliObservability;
@@ -71,6 +74,9 @@ impl SendCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
+        if self.task_complete {
+            preflight_task_op_compatibility(&composition).await?;
+        }
 
         let (delivered, not_delivered, failure) = self
             .send_fan_out_recipients(
@@ -192,7 +198,7 @@ impl SendCommand {
         )
         .unwrap_or_default();
 
-        let request = SendRequest::new(
+        let mut request = SendRequest::new(
             home_dir,
             current_dir.to_path_buf(),
             caller_context.caller_identity.clone(),
@@ -203,11 +209,17 @@ impl SendCommand {
             self.requires_ack,
             self.task_id.clone(),
             self.dry_run,
-        )?
-        .with_task_complete(self.task_complete.clone())
-        .with_caller_chat_id(caller_context.caller_chat_id.clone())
-        .with_activity_observation(caller_context.activity_observation.clone())
-        .with_nudge_mode(nudge_mode);
+        )?;
+        if self.task_complete {
+            request.task_op = Some(TaskOp::Close {
+                outcome: TaskCloseOutcome::Completed,
+                reason: None,
+            });
+        }
+        let request = request
+            .with_caller_chat_id(caller_context.caller_chat_id.clone())
+            .with_activity_observation(caller_context.activity_observation.clone())
+            .with_nudge_mode(nudge_mode);
 
         composition.send(request).await?;
         Ok(())

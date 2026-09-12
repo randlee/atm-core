@@ -1,13 +1,13 @@
 //! Crate-private task-ledger read projections shared by every SQLite lane.
 
 use atm_storage::types::{AgentName, TaskId, TeamName};
-use atm_storage::{TaskEventRow, TaskRow};
+use atm_storage::{RefusalRun, TaskEventRow, TaskRow};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::SqliteTaskStore;
 
-pub(crate) const TASK_COLUMNS: &str = "team, task_id, assignee, assigner, state, assignment_message_id, description, assigned_at, updated_at, last_reminded_at, reminder_count, lead_notified_count";
-pub(crate) const TASK_EVENT_COLUMNS: &str = "team, task_id, assignee, seq, at, event, from_state, to_state, actor, message_id, outcome, marker, detail";
+pub(crate) const TASK_COLUMNS: &str = "team, task_id, assignee, assigner, state, close_outcome, position, assignment_message_id, description, assigned_at, updated_at, last_reminded_at, reminder_count, lead_notified_count";
+pub(crate) const TASK_EVENT_COLUMNS: &str = "team, task_id, assignee, seq, at, event, from_state, to_state, close_outcome, actor, message_id, outcome, marker, detail";
 
 pub(crate) fn select_tasks_for_team_sql() -> String {
     format!(
@@ -25,12 +25,11 @@ pub(crate) fn select_task_row(
     connection: &Connection,
     team: &TeamName,
     task_id: &TaskId,
-    assignee: &AgentName,
 ) -> rusqlite::Result<Option<TaskRow>> {
     connection
         .query_row(
-            &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND task_id = ?2 AND assignee = ?3"),
-            params![team.as_str(), task_id.as_str(), assignee.as_str()],
+            &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND task_id = ?2"),
+            params![team.as_str(), task_id.as_str()],
             SqliteTaskStore::decode_row,
         )
         .optional()
@@ -42,7 +41,7 @@ pub(crate) fn select_open_tasks_for_member(
     assignee: &AgentName,
 ) -> rusqlite::Result<Vec<TaskRow>> {
     let mut statement = connection.prepare(&format!(
-        "SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND assignee = ?2 AND state <> 'complete' ORDER BY assigned_at ASC, task_id ASC"
+        "SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND assignee = ?2 AND state <> 'complete' ORDER BY position ASC, assigned_at ASC, task_id ASC"
     ))?;
     statement
         .query_map(
@@ -50,6 +49,55 @@ pub(crate) fn select_open_tasks_for_member(
             SqliteTaskStore::decode_row,
         )?
         .collect()
+}
+
+pub(crate) fn select_open_tasks_for_team(
+    connection: &Connection,
+    team: &TeamName,
+) -> rusqlite::Result<Vec<TaskRow>> {
+    let mut statement = connection.prepare(&format!(
+        "SELECT {TASK_COLUMNS} FROM tasks WHERE team=?1 AND state<>'complete' ORDER BY assignee, position, assigned_at, task_id"
+    ))?;
+    statement
+        .query_map(params![team.as_str()], SqliteTaskStore::decode_row)?
+        .collect()
+}
+
+pub(crate) fn trailing_refusal_run(
+    connection: &Connection,
+    team: &TeamName,
+    assignee: &AgentName,
+) -> rusqlite::Result<RefusalRun> {
+    let mut statement = connection.prepare(
+        "SELECT event, at FROM task_events WHERE team=?1 AND assignee=?2
+         AND event IN ('assigned','reassigned','reopened','completed','refused','cancelled')
+         ORDER BY rowid DESC",
+    )?;
+    let rows = statement
+        .query_map(params![team.as_str(), assignee.as_str()], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let refused = rows
+        .iter()
+        .take_while(|(event, _)| event == "refused")
+        .collect::<Vec<_>>();
+    let started_at = refused
+        .last()
+        .map(|(_, at)| {
+            at.parse().map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    Box::new(error),
+                )
+            })
+        })
+        .transpose()?;
+    Ok(RefusalRun {
+        count: u32::try_from(refused.len()).unwrap_or(u32::MAX),
+        started_at,
+    })
 }
 
 pub(crate) fn select_tasks_for_team(

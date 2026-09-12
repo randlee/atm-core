@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::error_codes::AtmErrorCode;
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, CommandAction, TaskId, TeamName};
+use atm_storage::TaskCloseOutcome;
 
 fn is_false(value: &bool) -> bool {
     !*value
@@ -24,6 +25,8 @@ pub struct SendOutcome {
     pub task_id: Option<TaskId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_complete: Option<TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub already_closed: Option<TaskCloseOutcome>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

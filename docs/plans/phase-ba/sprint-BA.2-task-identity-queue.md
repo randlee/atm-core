@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba2-task-identity-queue
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba2-task-identity-queue
+---
+
 # BA.2 — Task identity, queue position, typed outcome, migration
 
 | Field | Value |
@@ -14,7 +20,7 @@
 2. Add `task_op`, `placement`, `task_op_normalized()` to `WriteRequest` and the envelope — `crates/atm-core/src/send/mod.rs:127`, `inbox_message.rs:187-193` (see "Wire").
 3. Add `SendOutcome.already_closed`; `HTTP_API_VERSION = "1.5.0"` — `crates/atm-core/src/send/outcome.rs`, `protocol.rs:99`.
 4. Add `open_tasks_for_team`, `refusal_run`; rekey `load_task(team, task_id)` — `crates/atm-storage/src/contract.rs:916`, `task_store.rs:66`.
-5. Rebuild `TASK_SCHEMA_DDL` — `crates/atm-storage-rusqlite/src/task_store.rs:15-58` (see "Schema").
+5. Rebuild `TASK_TABLES_DDL` and `TASK_INDEX_DDL` — `crates/atm-storage-rusqlite/src/task_store.rs` (see "Schema").
 6. Write `migrate_task_identity` — `crates/atm-storage-rusqlite/src/task_migration.rs` (new) (see "Migration").
 7. Rewrite the writer ops — `crates/atm-storage-rusqlite/src/writer/task_ops.rs` (see "Writer").
 8. Add `trailing_refusal_run` — `crates/atm-storage-rusqlite/src/task_sql.rs` (see "Writer").
@@ -135,7 +141,7 @@ pub fn transition(
 pub struct TaskRejected { pub detail: String }
 ```
 
-The five rejection messages, exactly:
+The six rejection messages, exactly:
 
 | cause | `detail` |
 | --- | --- |
@@ -144,10 +150,11 @@ The five rejection messages, exactly:
 | `one_active_task_per_agent` hit on Start | `task <id>: <assignee> already has an active task` |
 | `--before` target unknown, not open, active, or another member's | `task <id>: placement target <other> is not an open queued task of <assignee>` |
 | close recipient is no longer the current counterparty | `task <id>: <recipient> is no longer the counterparty — re-run the command` |
+| Start actor is not the daemon | `task <id> start requires atm-daemon` |
 
 ```rust
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "TaskRowWire", into = "TaskRowWire")]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "TaskRowWire")]
 pub struct TaskRow {
     pub team: TeamName,
     pub task_id: TaskId,
@@ -172,8 +179,8 @@ pub enum TaskEventKind {
     Migrated /* written only by the BA.2 migration */,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "TaskEventRowWire", into = "TaskEventRowWire")]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "TaskEventRowWire")]
 pub struct TaskEventRow {
     pub team: TeamName,
     pub task_id: TaskId,
@@ -197,7 +204,9 @@ wire), `#[serde(default, skip_serializing_if = "Option::is_none")]`. `TryFrom`
 uses `from_parts`; a `complete` tag with no `close_outcome` (1.4.0 producer)
 decodes as `Completed`; a complete row carrying `position` is rejected. On an
 event row `close_outcome` is the outcome of whichever side is `Complete`
-(`from_state` for `reopened`). SQLite decode uses the same helpers.
+(`from_state` for `reopened`). The public rows use serde `try_from` only and
+implement `Serialize` manually through their private Wire types. SQLite decode
+uses the same helpers.
 
 ```rust
 // crates/atm-storage/src/task_op.rs  (new; re-exported from lib.rs and atm_core::boundary)
@@ -220,7 +229,11 @@ pub enum MoveTarget {
     End,
     Before { task_id: TaskId },
 }
+```
 
+`RefusalRun` is defined in `crates/atm-storage/src/task_state.rs`:
+
+```rust
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RefusalRun { pub count: u32, pub started_at: Option<IsoTimestamp> }
 ```
@@ -275,7 +288,7 @@ write, naming both versions.
     async fn refusal_run(&self, team: TeamName, assignee: AgentName, deadline: ReadDeadline) -> Result<RefusalRun, ReadLaneError>;
 ```
 
-## Schema — exactly as it lands (`crates/atm-storage-rusqlite/src/task_store.rs::TASK_SCHEMA_DDL`)
+## Schema — exactly as it lands (`crates/atm-storage-rusqlite/src/task_store.rs::{TASK_TABLES_DDL,TASK_INDEX_DDL}`)
 
 ```sql
 CREATE TABLE IF NOT EXISTS tasks (
@@ -335,7 +348,7 @@ checked error after every renumber and by the tests.
 
 Trigger: `SELECT pk FROM pragma_table_info('tasks') WHERE name = 'assignee'`
 = `3` → migrate; `0` → done; table absent → fresh DDL. Runs inside
-`shared_db::ensure_schema` before `TASK_SCHEMA_DDL`.
+`shared_db::ensure_schema` before `TASK_TABLES_DDL` / `TASK_INDEX_DDL`.
 
 ```rust
 pub(crate) fn migrate_task_identity(connection: &mut SqliteConnection, target: &SharedDbTarget) -> Result<TaskMigrationReport, AtmError>;
@@ -438,7 +451,7 @@ fn apply_task_close(record: &Message, task_id: &TaskId, outcome: TaskCloseOutcom
 pub(super) fn apply_task_move(team: &TeamName, task_id: &TaskId, actor: &AgentName, target_pos: &MoveTarget, at: IsoTimestamp, connection: &Connection, target: &SharedDbTarget) -> Result<QueuePosition, AtmError>;
 /// Renumbers one member's open queue to 1..=n in `order`, in two phases so the
 /// immediate `tasks_position_per_member` index never sees a transient duplicate:
-///   1. `UPDATE tasks SET position = position + ?3 WHERE team = ?1 AND assignee = ?2 AND state <> 'complete'` with ?3 = order.len();
+///   1. `UPDATE tasks SET position = position + ?3 WHERE team = ?1 AND assignee = ?2 AND state <> 'complete'` with ?3 = MAX(position) + order.len();
 ///   2. one `UPDATE tasks SET position = ?3 WHERE team = ?1 AND task_id = ?2` per entry of `order`, ?3 = 1..=n.
 fn renumber_queue(team: &TeamName, assignee: &AgentName, order: &[TaskId], connection: &Connection, target: &SharedDbTarget) -> Result<(), AtmError>;
 ```
@@ -450,7 +463,8 @@ Rules:
 - `Start` requires actor `atm-daemon` and the latest `reminded` event since the
   last `assigned`/`reassigned`/`reopened` to have `outcome = 'emitted'`
   (`SELECT outcome FROM task_events WHERE team = ?1 AND task_id = ?2 AND event = 'reminded' AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team = ?1 AND task_id = ?2 AND event IN ('assigned','reassigned','reopened')) ORDER BY rowid DESC LIMIT 1`);
-  otherwise it is a silent no-op. On `active` it is idempotent (no event).
+  a non-daemon actor is rejected; a latest reminder outcome other than
+  `emitted` is a silent no-op. On `active` it is idempotent (no event).
 - `Start` sets `reminder_count = 0, lead_notified_count = 0`, moves the row to
   position 1 (renumber), and leaves `last_reminded_at` as the handoff audit
   wrote it. The `one_active_task_per_agent` violation maps to the "already
@@ -461,8 +475,10 @@ Rules:
   `active` rows (BA.1).
 - `Close` on a row that is already `complete`: the report is written as
   ordinary mail in the same transaction with the `task_id` link dropped, no
-  event, row unchanged, and `Some(outcome)` is returned as
-  `SendOutcome.already_closed`.
+  event, row unchanged, and `Some(outcome)` is returned to writer dispatch.
+  This value is writer-internal and does not cross a sealed storage trait;
+  command dispatch derives `SendOutcome.already_closed` from
+  `ClosePreflight::Proceed { row }` when that row is already complete.
 - `Close` whose recipient is not the row's other party (reassigned between
   preflight and write) is the stale-counterparty rejection; nothing written.
 - Assign and Move check nothing about the caller. The sender of an assign
@@ -522,7 +538,8 @@ Pure — `task_state.rs`:
   (`"task_complete":"T1"`) → `Close{Completed}` on T1; `task_id = T1` with
   `task_complete = T2` fails validation; both keys present → `task_op` wins.
 
-Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
+Writer — primarily `crates/atm-storage-rusqlite/tests/task_identity.rs` (new);
+the six exceptions are labeled with their actual source file:
 
 - `assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues`
   — one id; the superseded assignment message is acknowledged; `reassigned`
@@ -538,31 +555,37 @@ Writer — `crates/atm-storage-rusqlite/tests/task_identity.rs` (new):
   another member's → rejection, one `rejected` event, no row change.
 - `start_when_another_task_active_is_rejected_active_elsewhere` — row stays
   `assigned`; one `rejected` event.
-- `start_moves_task_to_position_one_and_resets_counters_preserving_last_reminded_at`.
+- `start_moves_task_to_position_one_and_resets_counters_preserves_reminder_count`.
 - `start_gate_rejects_member_actor_and_unrenderable_reminder` — actor not
   `atm-daemon` → rejected; latest `reminded` outcome `unrenderable` → no-op,
   zero `started` events.
 - `close_renumbers_remaining_queue_contiguously` — T1..T4; close T2 →
   T1,T3,T4 at 1,2,3; T2 `position IS NULL`, `close_outcome` set.
 - `close_each_outcome_persists_column_and_event` — 3 cases.
-- `close_of_complete_row_delivers_mail_and_returns_already_closed` — no event,
+- `close_of_complete_row_delivers_mail_and_returns_already_closed`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) — no event,
   row unchanged, mail row has no `task_id`.
 - `close_by_third_party_is_not_authorized` — rejected event audits the
   canonical holder.
 - `close_by_stale_counterparty_is_rejected_atomically` — reassign between
   preflight and write → rejection, nothing written.
-- `move_head_end_before_land_at_expected_positions` — head with an active
+- `move_head_end_before_land_at_expected_positions`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) — head with an active
   task → 2; head without → 1; end; before.
-- `move_before_target_of_other_member_is_rejected` — one rejected event,
+- `move_before_target_of_other_member_is_rejected`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) — one rejected event,
   state unchanged.
-- `move_of_active_task_is_a_noop_with_moved_event` — `detail = "1→1"`, every
+- `move_of_active_task_is_a_noop_with_moved_event`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) — `detail = "1→1"`, every
   other row byte-equal.
-- `renumber_swap_of_positions_one_and_two_never_violates_unique_index` —
+- `renumber_swap_of_positions_one_and_two_never_violates_unique_index`
+  (`crates/atm-storage-rusqlite/src/lib.rs`) —
   swap T2 over T1; move T4 `--head` over T1..T3; no `SQLITE_CONSTRAINT`.
 - `assigned_at_set_only_by_assignment` — start, move, close leave
   `assigned_at` byte-equal; reassign and reopen set it to the event's `at`
   and `last_reminded_at` to `NULL`.
-- `writer_rejects_task_op_on_foreign_team_or_host_recipient`.
+- `writer_rejects_task_op_on_foreign_team_or_host_recipient`
+  (`crates/atm-core/src/send/tests.rs`).
 - `trailing_refusal_run_counts_raw_stored_event_values` — refused, refused,
   completed, refused, refused, refused → 3; then `completed` → 0; then
   `refused` → 1.
@@ -607,17 +630,18 @@ Reader:
 ## Acceptance criteria
 
 1. Code quoted in this document matches the source byte-for-byte (QA diffs it).
-2. Every test above exists by name and passes under `just test`.
+2. Every test above exists by name and passes under `just test`, including
+   `start_moves_task_to_position_one_and_resets_counters_preserves_reminder_count`.
 3. `sqlite3 <fixture> "SELECT sql FROM sqlite_master WHERE name IN ('tasks','task_events','one_active_task_per_agent','tasks_position_per_member')"` matches the DDL section.
 4. `grep -n "assigned_at" crates/atm-storage-rusqlite/src/writer/task_ops.rs` shows it only in `apply_task_assignment` (insert, reassign, reopen); never in `apply_task_move` or `apply_task_start`.
 5. `grep -rn "TaskRejectionKind\|TaskQueueGap" crates/` → nothing.
 6. `schema-reviewer` sign-off recorded on the PR citing the ADR-061 D6 Phase BA entry.
-7. `just lint-boundaries` passes with the manifest edits.
+7. `just lint boundaries` passes with the manifest edits.
 8. `HTTP_API_VERSION == "1.5.0"`; the ADR-061 version table records the bump.
 9. `send_task_complete_refuses_daemon_below_1_5_0` (CLI test, stub verdict) passes.
 
 ## Required validation
 
-`just lint`, `just test`, `just lint-boundaries`, RULE-003; migration tests run
-under both `--features bundled` and the system SQLite (window functions
-require SQLite ≥ 3.25 — assert `sqlite_version()` in the test and fail loudly).
+`just lint`, `just test`, `just lint boundaries`, RULE-003; migration tests use
+the unconditional bundled SQLite and assert `sqlite_version()` ≥ 3.25 for
+window-function support.

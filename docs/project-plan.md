@@ -1786,6 +1786,29 @@ child development/fix round, and parent PRs merge first. No Phase AZ sprint
 touches the frozen synchronous daemon or uses live daemon/test-daemon, release,
 tag, publish, or installation evidence.
 
+## 59. Phase BA — One Invariant, One Queue, One Task Command Set [LANDED ON integrate/phase-ba 2026-09-12 — review-findings closeout in progress]
+
+Phase BA replaces the retired Phase AZ task work with the simpler design in
+[the Phase BA plan](./plans/phase-ba/phase-ba-plan.md). BA.1 and BA.2 form the
+initial stack; BA.3 follows BA.2, BA.4 and BA.5 then run in parallel, and BA.6
+closes the phase documentation. The six sprints plus three consolidated cleanup
+layers landed on `integrate/phase-ba` at `9f5aef2fe` (2026-09-12) through the
+top PR #1414; the phase PR to `develop` is #1418 (draft until the
+review-findings stack below lands). Post-mortem:
+[`docs/postmortems/phase-ba-postmortem.md`](./postmortems/phase-ba-postmortem.md);
+stack practice: [`docs/development/gh-stack-guidelines.md`](./development/gh-stack-guidelines.md).
+
+| Sprint | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- |
+| `BA.1` | `merged` (into BA.2 stack) | `feature/ba1-ack-task-separation` | `docs/plans/phase-ba/sprint-BA.1-ack-task-separation.md` |
+| `BA.2` | `merged` (#1400) | `feature/ba2-task-identity-queue` | `docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md` |
+| `BA.3` | `merged` (#1402) | `feature/ba3-nudge-invariant` | `docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md` |
+| `BA.4` | `merged` (#1408) | `feature/ba4-atm-task-commands` | `docs/plans/phase-ba/sprint-BA.4-atm-task-commands.md` |
+| `BA.5` | `merged` (#1407) | `feature/ba5-queue-ephemeral-item` | `docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md` |
+| `BA.6` | `merged` (#1412) | `docs/ba6-task-nudge-documentation` | `docs/plans/phase-ba/sprint-BA.6-docs.md` |
+| cleanup | `merged` (#1413, #1414, #1415) | `fix/phase-ba-cleanup`, `fix/phase-ba-cleanup-b`, `fix/phase-ba-merge-fix` | consolidated non-blocking findings, bounded blocking, BA.3 fixtures under merged tick order |
+| review-findings | `in progress` (#1419 …) | `fix/phase-ba-review-1` → `-2` → `-3`, `docs/phase-ba-post-mortem` | phase-ending review, production readiness review, post-mortem — stacked above `integrate/phase-ba` |
+
 ## Daemon-Switch Scope Reduction
 
 Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:

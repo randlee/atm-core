@@ -173,13 +173,13 @@ fn task_row(
     runtime
         .task_store()
         .expect("installed task store")
-        .load_task(&member, task_id)
+        .load_task(member.team(), task_id)
         .expect("load task")
         .expect("task row")
 }
 
 #[test]
-fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_store() {
+fn legacy_task_complete_request_closes_existing_task_end_to_end() {
     let (root, runtime, team) = setup(RosterHarness::ClaudeCode);
     let home = root.path().join("home");
     std::fs::create_dir_all(&home).expect("home");
@@ -198,7 +198,10 @@ fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_sto
         &runtime,
     )
     .expect("task acknowledgement");
-    assert_eq!(task_row(&runtime, &team, &task_id).state, TaskState::Active);
+    assert_eq!(
+        task_row(&runtime, &team, &task_id).state,
+        TaskState::Assigned
+    );
 
     let (mut completion, _) = task_write_request(&home, &team, "sender", task_id.clone());
     completion.task_id = None;
@@ -206,7 +209,10 @@ fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_sto
     write_mail_with_runtime(completion, &NullObservability, &runtime).expect("task completion");
 
     let row = task_row(&runtime, &team, &task_id);
-    assert_eq!(row.state, TaskState::Complete);
+    assert_eq!(
+        row.state,
+        TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+    );
     let events = runtime
         .task_store()
         .expect("installed task store")
@@ -217,8 +223,8 @@ fn synchronous_tmux_task_write_acknowledgement_and_completion_reach_the_task_sto
             .iter()
             .filter(|event| event.event == TaskEventKind::Acked)
             .count(),
-        1,
-        "one successful acknowledgement appends exactly one Acked event"
+        0,
+        "acknowledgement does not append a task event"
     );
 }
 
@@ -259,7 +265,10 @@ fn deferred_herdr_prepare_persists_the_same_task_assignment() {
         &runtime,
     )
     .expect("task acknowledgement");
-    assert_eq!(task_row(&runtime, &team, &task_id).state, TaskState::Active);
+    assert_eq!(
+        task_row(&runtime, &team, &task_id).state,
+        TaskState::Assigned
+    );
 }
 
 #[test]

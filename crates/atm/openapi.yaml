@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: 1.4.0
+  version: 1.7.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
@@ -87,6 +87,14 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/QueueGetNextRequest' } } } }
       responses:
         '200': { description: Queue messages, content: { application/json: { schema: { $ref: '#/components/schemas/QueueGetNextResponse' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /tasks/move:
+    post:
+      operationId: moveTask
+      description: Local-ingress-only reorder of an open task in its assignee's queue.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveRequest' } } } }
+      responses:
+        '200': { description: Task move result, content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveOutcome' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /graft/receiver/register:
     post:
@@ -353,6 +361,32 @@ components:
       required: [messages]
       properties:
         messages: { type: array, items: { $ref: '#/components/schemas/QueuedNudgeMessage' } }
+    TaskMoveRequest:
+      type: object
+      required: [caller_identity, caller_team, task_id, target]
+      properties:
+        caller_identity: { type: string }
+        caller_team: { type: string }
+        task_id: { type: string }
+        target:
+          oneOf:
+            - type: object
+              required: [to]
+              properties:
+                to: { type: string, enum: [head, end] }
+            - type: object
+              required: [to, task_id]
+              properties:
+                to: { type: string, enum: [before] }
+                task_id: { type: string }
+    TaskMoveOutcome:
+      type: object
+      required: [task_id, assignee, from, to]
+      properties:
+        task_id: { type: string }
+        assignee: { type: string }
+        from: { type: integer, minimum: 1 }
+        to: { type: integer, minimum: 1 }
     QueuedNudgeMessage:
       type: object
       required: [kind, msg_id, body]

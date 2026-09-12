@@ -24,6 +24,7 @@ use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::schema::AtmMessageId;
 use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
+use crate::types::TaskId;
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
 pub use atm_storage::{
@@ -32,6 +33,7 @@ pub use atm_storage::{
     RosterRuntimeObservationUpdate, RosterStateRevision, RuntimeMemberState,
     RuntimeObservationAvailability, RuntimeObservationSource,
 };
+use atm_storage::{MoveTarget, QueuePosition};
 
 /// Body representation for the local graft receiver lookup route.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -54,6 +56,7 @@ pub enum SendResponseEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
     Write(Box<WriteRequest>),
+    TaskMove(TaskMoveRequest),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     QueueGetNext(QueueGetNextRequest),
@@ -78,6 +81,7 @@ pub enum RequestEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
+    TaskMove(TaskMoveOutcome),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
     QueueGetNext(QueueGetNextResponse),
@@ -96,7 +100,23 @@ pub enum ResponseEnvelope {
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.4.0";
+pub const HTTP_API_VERSION: &str = "1.7.0";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskMoveRequest {
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
+    pub task_id: TaskId,
+    pub target: MoveTarget,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskMoveOutcome {
+    pub task_id: TaskId,
+    pub assignee: AgentName,
+    pub from: QueuePosition,
+    pub to: QueuePosition,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
@@ -118,7 +138,7 @@ impl fmt::Display for ReleaseVersion {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct HttpApiVersion(Version);
 
@@ -537,11 +557,11 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
-        RosterStateRevision, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
-        RuntimeObservationAvailability, RuntimeReadinessState, RuntimeStatusCounts,
-        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_path, daemon_socket_path_from_home,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, QueueGetNextRequest, RequestEnvelope,
+        ResponseEnvelope, RosterStateRevision, RuntimeLivenessState, RuntimeMemberObservation,
+        RuntimeMemberState, RuntimeObservationAvailability, RuntimeReadinessState,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TaskMoveRequest, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -550,6 +570,7 @@ mod tests {
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, SessionId, TeamName};
+    use atm_storage::MoveTarget;
     use serde::Deserialize;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -880,6 +901,44 @@ mod tests {
             }
             other => panic!("expected send request, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn codec_preserves_protocol_1_5_0_fixtures() {
+        #[derive(Debug, Deserialize)]
+        enum RequestEnvelope15 {
+            QueueGetNext(serde_json::Value),
+            ReloadRuntimeView,
+        }
+
+        let fixtures = [
+            serde_json::to_vec(&RequestEnvelope::QueueGetNext(QueueGetNextRequest {
+                team: TeamName::from_validated(TEST_TEAM),
+                member: AgentName::from_validated(TEST_SENDER),
+            }))
+            .expect("queue fixture"),
+            serde_json::to_vec(&RequestEnvelope::ReloadRuntimeView).expect("reload fixture"),
+        ];
+        for fixture in fixtures {
+            serde_json::from_slice::<RequestEnvelope>(&fixture).expect("1.6 decodes 1.5 fixture");
+            match serde_json::from_slice::<RequestEnvelope15>(&fixture)
+                .expect("pinned 1.5 enum decodes fixture")
+            {
+                RequestEnvelope15::QueueGetNext(value) => assert!(value.is_object()),
+                RequestEnvelope15::ReloadRuntimeView => {}
+            }
+        }
+
+        let task_move = serde_json::to_vec(&RequestEnvelope::TaskMove(TaskMoveRequest {
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
+            task_id: "T1".parse().expect("task id"),
+            target: MoveTarget::Head,
+        }))
+        .expect("task move fixture");
+        let error = serde_json::from_slice::<RequestEnvelope15>(&task_move)
+            .expect_err("1.5 enum must reject the 1.6-only variant");
+        assert!(error.to_string().contains("unknown variant `TaskMove`"));
     }
 
     #[test]

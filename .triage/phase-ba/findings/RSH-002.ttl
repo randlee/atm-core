@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-002>
+  a triage:Finding ;
+  triage:findingId "RSH-002" ;
+  triage:title "queue_drain.rs run_blocking is the last remaining unbounded blocking site after RBQA-F010's fix" ;
+  triage:description "quality-mgr BA-PHASE-END-QA @ 9f5aef2fe (report PR #1418 comment 5644355381). Finding: crates/atm-daemon-bootstrap/src/queue_drain.rs's use of run_blocking will be the only remaining unbounded blocking site once RBQA-F010's BoundedBlockingBridge migration lands elsewhere. fenix's ruling: folded into arch-ctm fix/phase-ba-review-2 item 1 (the same RBQA-F010 bounded-bridge work covers this site too) -- tracked as a separate finding ID for closure bookkeeping, not a separate fix." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A821M48VWSZ0JGXMA4WWZ7, 2026-09-12T07:24:38Z): fixed by the same review-2 bridge migration that closed RBQA-BA-F010 (formerly RBQA-F010, renamed for an id collision); review-2 rebased frozen head 984da6c6c, gate-green. fenix (ATM 01M2AFXE4KCRFRNQ60NDKCD4BN, 2026-09-12T09:41:56Z): REVIEW-2 FINAL REMAP (frozen) -- 1544920a7 -> 3c2304c05; branch FROZEN, all 13 gates green at review-2 tip 0b4911c5a." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/2> ;
+  triage:relatedFinding "RBQA-BA-F010" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/RSH-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/queue_drain.rs" ;
+  triage:line 1 ;
+  triage:snippet "queue_drain.rs run_blocking, folded into RBQA-BA-F010's fix" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ 984da6c6c)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/RSH-002/1> .
+
+<urn:atm:triage:occurrence/RSH-002/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/queue_drain.rs" ;
+  triage:line 1 ;
+  triage:snippet "queue_drain.rs run_blocking migrated to the BoundedBlockingBridge alongside RBQA-BA-F010" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm review-2, rebased frozen head 984da6c6c (gate-green); review-2 final remap 1544920a7 -> 3c2304c05 onto frozen review-1 5a00502ee (tip 0b4911c5a), 13-gate-green." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "3c2304c05" ;
+  triage:occursIn <urn:atm:triage:worktree/RSH-002/2> .
+
+<urn:atm:triage:worktree/RSH-002/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), rebased and frozen onto review-1 5a00502ee (13-gate-green)" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "3c2304c05" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/RSH-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

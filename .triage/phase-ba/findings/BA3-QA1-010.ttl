@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+#
+# Stub record: BA3-QA1-010 is a duplicate observation of RBP-F002 (BA.6),
+# independently surfaced during BA.3's QA-1 pass. Recorded here as closed/
+# duplicate rather than as a new open BA.3 finding, per fenix's ruling. The
+# substantive finding stays tracked solely under RBP-F002.
+
+<urn:atm:triage:finding/BA3-QA1-010>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-010" ;
+  triage:title "load_escalation_targets returns Result<EscalationTargets, ()>, discarding roster-store read failure context (duplicate of RBP-F002)" ;
+  triage:description "quality-mgr QA-1 (rust-best-practices-agent), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. Independently re-surfaced during BA.3's QA-1 pass; same defect as RBP-F002 (crates/atm-http-runtime/src/herdr_escalation.rs:399-434, Result<EscalationTargets, ()> discards error context), already open and tracked under BA.6. fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): duplicate of RBP-F002, not a new BA.3 finding -- record as duplicate/re-scope, no separate fix dispatch." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-12T03:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "duplicate of RBP-F002 per fenix's ruling (PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050); tracked solely under RBP-F002 (BA.6)." ;
+  triage:relatedFinding "RBP-F002" ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-010/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-QA1-010/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 399 ;
+  triage:snippet "duplicate observation of RBP-F002 during BA.3 QA-1; substantive finding tracked under RBP-F002 (BA.6)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T03:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "duplicate of RBP-F002; no separate BA.3 fix dispatch" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-010/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-010/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .

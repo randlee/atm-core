@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-010>
+  a triage:Finding ;
+  triage:findingId "CPR-010" ;
+  triage:title "Design section 5.2's ORDERING RULE is violated for close rejections: the completion report is destroyed" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. Design §5.2's ORDERING RULE is violated for close rejections: the completion report is destroyed. Doc says: nudge-task-design.md §5.2: 'ORDERING RULE: deliver the message first, then apply the close. A close that fails must never destroy the report.' Code does: Message insert and close run in one savepoint (crates/atm-storage-rusqlite/src/writer/ops.rs:704-735 — `apply_task_message(record, ...)?` aborts the whole op). On rejection, batch.rs drops the savepoint, rolling back the mail row. Two rejection modes hit this: third-party close (crates/atm-storage/src/task_state.rs:297-304) and stale counterparty (task_ops.rs:564-569). Recommendation: Give the authorization and staleness rejections a deliver-plain fallback like the already-complete arm's drop_task_link_from_mail, or record an explicit amendment narrowing §5.2's rule to the two enumerated dispositions. Do not leave the absolute rule and the narrowed implementation both standing. fenix's ruling: give the two rejection paths (third-party close, stale counterparty) a deliver-plain fallback like the already-complete arm's drop_task_link_from_mail, per design section 5.2's ordering rule." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/writer/batch.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2ABSS6Y9SF66MQ1R5JSRQPH, 2026-09-12T08:30:02Z): pushed by arch-ctm at review-2 1dcfcdf32 (fix(tasks): retain rejected close reports as plain mail). Recorded fixed-pending-correction: two corrections requested (dead duplicate template-admission method; rejected template report must still persist its decomposition). Final headSha will be the correction commit, not 1dcfcdf32. Gates on 1dcfcdf32 in flight. fenix (ATM 01M2AC0XJT9PJWSGDYE220SD7R, 2026-09-12T08:33:56Z): remap -- correction commit 6096429ee accepted on review; status fixed-pending-gate at 6096429ee, fenix's gate run in flight. Gate-green confirmed (ATM 01M2AC6DXZ4Q9FBGQQ14EG9MM7, 2026-09-12T08:36:56Z): 13-gate-green on fenix's host (cli_surface 2/2); CPR-010 closed at 6096429ee." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-010/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-010/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-010/3> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/CPR-010/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/batch.rs" ;
+  triage:line 414 ;
+  triage:snippet "message insert and close run in one savepoint; on third-party or stale-counterparty rejection the savepoint rolls back the mail row, destroying the operator's report with exit 1 and no retry" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:30:02Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ 1dcfcdf32, pending correction)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-010/review2> .
+
+<urn:atm:triage:occurrence/CPR-010/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/batch.rs" ;
+  triage:line 414 ;
+  triage:snippet "third-party and stale-counterparty close rejections now deliver-plain fallback like drop_task_link_from_mail, per design section 5.2's ordering rule" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:33:56Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; correction commit accepted, tracked at occurrence/3 (fix/phase-ba-review-2 @ 6096429ee)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "1dcfcdf32" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-010/2> .
+
+<urn:atm:triage:worktree/CPR-010/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), pending correction, gates in flight" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "1dcfcdf32" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:occurrence/CPR-010/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/batch.rs" ;
+  triage:line 414 ;
+  triage:snippet "third-party and stale-counterparty close rejections deliver-plain fallback, correction commit removes the dead duplicate template-admission method and persists the rejected template report's decomposition" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:33:56Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm fix/phase-ba-review-2 @ 6096429ee (correction commit, accepted on review); 13-gate-green confirmed on fenix's host (cli_surface 2/2)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "6096429ee" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-010/3> .
+
+<urn:atm:triage:worktree/CPR-010/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), correction commit accepted, gate-green" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "6096429ee" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/CPR-010/review2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm, bounded bridge + CPR items 4-14), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

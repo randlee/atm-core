@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba5-queue-ephemeral-item
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba5-queue-ephemeral-item
+---
+
 # BA.5 — `atm queue` as an ephemeral item
 
 | Field | Value |
@@ -48,13 +54,13 @@ const OPEN_ITEM_SQL: &str =
 | --- | --- | --- |
 | `mark_pending` (`:35-36`) | `SET nudge_pending_at = now, nudge_attempts = 0 … WHERE read = 0 AND deleted_at IS NULL` | unchanged — due now |
 | `claim_next_pending` (`:60-66`) | `WHERE … nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL AND nudge_attempts < ?max … RETURNING`; `SET nudge_pending_at = NULL` | `WHERE … nudge_pending_at IS NOT NULL AND nudge_pending_at <= ?now AND {OPEN_ITEM_SQL} AND nudge_attempts < ?max`; `SET nudge_pending_at = ?now + TASK_REMINDER_INTERVAL_MS` — a one-interval lease, never `NULL`: a daemon exit between claim and re-arm delays the item by at most one interval and never drops it. At-most-once claiming is unchanged (one conditional `UPDATE … RETURNING`) |
-| `requeue_pending` (`:94-97`, failed dispatch) | `SET nudge_pending_at = now, nudge_attempts = attempt + 1` | `SET nudge_pending_at = CASE WHEN ?next_attempt >= ?max THEN ?next_due ELSE ?now END, nudge_attempts = CASE WHEN ?next_attempt >= ?max THEN 0 ELSE ?next_attempt END … AND {OPEN_ITEM_SQL}` — five immediate retries, then one per interval while open. `MAX_NUDGE_ATTEMPTS = 5` (`contract.rs:1238`) keeps its value |
+| `requeue_pending` (`:94-97`, failed dispatch) | `SET nudge_pending_at = now, nudge_attempts = attempt + 1` | `SET nudge_pending_at = CASE WHEN ?next_attempt >= ?max THEN ?next_due ELSE ?now END, nudge_attempts = CASE WHEN ?next_attempt >= ?max THEN 0 ELSE ?next_attempt END … AND {OPEN_ITEM_SQL}` — five immediate retries, then one per interval while open. `MAX_NUDGE_ATTEMPTS = 5` (`contract.rs:1253`) keeps its value |
 | `release_pending` (`:118-121`) | unchanged | `… AND {OPEN_ITEM_SQL}` |
 | `clear_pending_on_handoff` (`:143-148`) | `SET nudge_pending_at = NULL` | **renamed `rearm_pending_after_handoff(member, msg, next_due)`**: `SET nudge_pending_at = ?next_due, updated_at = now WHERE … AND {OPEN_ITEM_SQL}`; a message read between claim and handoff stays `NULL` |
 | `clear_pending_on_read` (`:135-140`) | `SET nudge_pending_at = NULL` | **deleted** — no production caller; the read transition is `mark_message_read` |
 | `mark_message_read` (`writer/stmt_cache.rs:44-53`, run by `execute_read_display_state`, `writer/ops.rs:264-284`) | `SET read = 1, updated_at = ?4, nudge_pending_at = NULL` | `SET read = 1, updated_at = ?4, nudge_pending_at = CASE WHEN nudge_pending_at IS NOT NULL AND pending_ack_at IS NOT NULL AND acknowledged_at IS NULL THEN ?5 ELSE NULL END`, `?5 = next_due` computed by the writer op — closed on read, or re-armed until the ack. The `IS NOT NULL` guard keeps immediate sends unmarked |
 | `list_pending_members` (`:151-158`) | `WHERE nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL` | `WHERE nudge_pending_at IS NOT NULL AND {OPEN_ITEM_SQL}` |
-| ack (`mark_source_acknowledged`, `writer/ops.rs:529-533` + upsert `stmt_cache.rs:28-39`) | sets `read = 1`, `acknowledged_at`; the upsert sets `nudge_pending_at = NULL` because `excluded.read = 1` | **unchanged** — the item closes on ack with no new code; pinned by a test |
+| ack (`mark_source_acknowledged`, `writer/ops.rs:529-533` + `upsert_message_state`, `stmt_cache.rs:28-39`) | sets `read = 1`, `acknowledged_at` | the `upsert_message_state` `CASE` branch clears `nudge_pending_at` when `excluded.read = 1`; the item closes on ack, pinned by a test |
 
 `next_due = now + TASK_REMINDER_INTERVAL_MS` (BA.3 moved the constant to
 `atm-storage/src/task_store.rs`). `nudge_attempts` keeps its meaning (failed
@@ -113,6 +119,12 @@ Storage — `pending_nudge_store.rs` tests (existing module):
 
 Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
 
+This file is spliced into `herdr_queue_wake`'s test module with `#[path]`; it
+is not a standalone Cargo integration-test target.
+It is a standalone Runtime test file in the plan's classification, included
+into `herdr_queue_wake.rs`'s `cfg(test)` module via `include!`; run it with
+`cargo test -p atm-http-runtime --lib herdr_queue_ephemeral`.
+
 - `task_prompt_waits_while_queue_item_open_across_ticks` — item prompted at t0; ticks at +5 s, +10 s, +55 s → 0 task prompts; read at +58 s; tick at +60 s → task prompt.
 - `open_mail_set_is_read_each_tick_not_cached`.
 - `unread_queue_item_is_reprompted_every_interval` — t, t+60, t+120; `atm read` at t+130 → silence for 100 ticks.
@@ -138,4 +150,4 @@ Runtime — `crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs` (new):
 
 ## Required validation
 
-`just lint`, `just test`, RULE-003, `just lint-boundaries`.
+`just lint`, `just test`, RULE-003, `just lint boundaries`.

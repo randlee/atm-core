@@ -299,6 +299,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("TASK-123".parse().expect("task id")),
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };
@@ -452,6 +454,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("TASK-123".parse().expect("task id")),
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };
@@ -497,6 +501,8 @@ mod tests {
             thread_mode: Some(ThreadMode::AddDetails),
             expires_at: None,
             task_id: None,
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };
@@ -543,6 +549,8 @@ mod tests {
                     .expect("timestamp"),
             )),
             task_id: None,
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };
@@ -584,6 +592,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };
@@ -619,6 +629,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };
@@ -665,6 +677,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };
@@ -706,6 +720,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };
@@ -748,6 +764,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };
@@ -795,6 +813,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra,
         };

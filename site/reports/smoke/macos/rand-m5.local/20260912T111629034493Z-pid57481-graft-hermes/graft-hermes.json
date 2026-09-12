@@ -1,0 +1,23 @@
+{
+  "feature": "graft-hermes",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20260912T111629034493Z",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.5.16",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "graft outbound durable write and receiver round trip",
+      "status": "FAIL",
+      "detail": "Traceback (most recent call last):\n  File \"/private/tmp/claude-501/-Users-randlee-Documents-github-atm-core/b1aa23a5-1a84-4302-a8c8-adc2837d3f0b/scratchpad/integrate-landing/scripts/phase-ai/run-hermes-graft-smoke.py\", line 204, in <module>\n    main()\n    ~~~~^^\n  File \"/private/tmp/claude-501/-Users-randlee-Documents-github-atm-core/b1aa23a5-1a84-4302-a8c8-adc2837d3f0b/scratchpad/integrate-landing/scripts/phase-ai/run-hermes-graft-smoke.py\", line 180, in main\n    acknowledge_via_cli(args, message.message_id, acknowledgement)\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/claude-501/-Users-randlee-Documents-github-atm-core/b1aa23a5-1a84-4302-a8c8-adc2837d3f0b/scratchpad/integrate-landing/scripts/phase-ai/run-hermes-graft-smoke.py\", line 88, in acknowledge_via_cli\n    raise RuntimeError(f\"native atm ack failed: {detail}\")\nRuntimeError: native atm ack failed: message 01M2ANAG8X5XQAG838KR23TMV5 is not pending acknowledgement\n  Recovery: only messages with a pending acknowledgement can be acknowledged; use `atm read --pending-ack` to inspect them",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    }
+  ]
+}

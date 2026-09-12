@@ -4,11 +4,11 @@
 //! pre-AQ1 dispatch; a duplicate (idempotent) write never sets a second
 //! marker.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use atm_core::boundary::{
-    MemberKey, NudgeClaim, NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, RosterHarness,
-    RosterMemberKind, built_in_nudge_template_kind_from_post_send_event,
+    MemberKey, NudgeKind, PostSendBuiltInTarget, RosterHarness, RosterMemberKind,
+    built_in_nudge_template_kind_from_post_send_event,
 };
 use atm_core::error::AtmError;
 use atm_core::nudge_dispatch::{
@@ -20,6 +20,7 @@ use atm_core::send::{
     NudgeMode, SendMessageSource, WriteRequest, prepare_write_with_runtime, write_mail_with_runtime,
 };
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+use atm_storage::testing::DummyPendingNudgeStore;
 
 #[derive(Default)]
 struct InMemoryAsyncStore;
@@ -60,92 +61,23 @@ impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {}
 /// Minimal executor matching the core's async admission tests. This fixture's
 /// in-memory async store never yields, so no Tokio runtime is needed.
 fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    const MAX_POLLS: usize = 1_000;
     let waker = std::task::Waker::noop();
     let mut context = std::task::Context::from_waker(waker);
     let mut future = std::pin::pin!(future);
-    loop {
+    for _ in 0..MAX_POLLS {
         match future.as_mut().poll(&mut context) {
             std::task::Poll::Ready(output) => return output,
             std::task::Poll::Pending => std::thread::yield_now(),
         }
     }
-}
-
-/// Records every `mark_pending` call; every other method is a trivial no-op
-/// since this suite never exercises the durable claim/requeue lifecycle.
-#[derive(Default)]
-struct RecordingPendingNudgeStore {
-    mark_pending_calls: Mutex<Vec<(MemberKey, AtmMessageId)>>,
-    fail_mark_pending: bool,
-}
-
-impl RecordingPendingNudgeStore {
-    fn mark_pending_call_count(&self) -> usize {
-        self.mark_pending_calls
-            .lock()
-            .expect("mark_pending calls lock")
-            .len()
-    }
-}
-
-impl atm_storage::contract::sealed::Sealed for RecordingPendingNudgeStore {}
-
-impl PendingNudgeStore for RecordingPendingNudgeStore {
-    fn mark_pending(
-        &self,
-        member: &MemberKey,
-        msg: &AtmMessageId,
-        _at: IsoTimestamp,
-    ) -> Result<bool, AtmError> {
-        self.mark_pending_calls
-            .lock()
-            .expect("mark_pending calls lock")
-            .push((member.clone(), *msg));
-        if self.fail_mark_pending {
-            return Err(AtmError::mailbox_write(
-                "pending nudge test store rejected marker",
-            ));
-        }
-        Ok(true)
-    }
-
-    fn claim_next_pending(&self, _member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-        Ok(None)
-    }
-
-    fn requeue_pending(&self, _member: &MemberKey, _claim: &NudgeClaim) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn release_pending(&self, _member: &MemberKey, _claim: &NudgeClaim) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn clear_pending_on_read(
-        &self,
-        _member: &MemberKey,
-        _msg: &AtmMessageId,
-    ) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn clear_pending_on_handoff(
-        &self,
-        _member: &MemberKey,
-        _msg: &AtmMessageId,
-    ) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-        Ok(Vec::new())
-    }
+    panic!("future did not resolve synchronously within {MAX_POLLS} polls");
 }
 
 fn setup() -> (
     tempfile::TempDir,
     atm_core::LocalServiceRuntime,
-    Arc<RecordingPendingNudgeStore>,
+    Arc<DummyPendingNudgeStore>,
     TeamName,
 ) {
     setup_with_store(false)
@@ -156,7 +88,7 @@ fn setup_with_store(
 ) -> (
     tempfile::TempDir,
     atm_core::LocalServiceRuntime,
-    Arc<RecordingPendingNudgeStore>,
+    Arc<DummyPendingNudgeStore>,
     TeamName,
 ) {
     let team: TeamName = "test-team".parse().expect("team");
@@ -181,17 +113,23 @@ fn setup_with_roster(
 ) -> (
     tempfile::TempDir,
     atm_core::LocalServiceRuntime,
-    Arc<RecordingPendingNudgeStore>,
+    Arc<DummyPendingNudgeStore>,
     TeamName,
 ) {
     let root = tempfile::tempdir().expect("temp root");
     let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(root.path())
         .expect("sqlite runtime");
     let async_store = Arc::new(InMemoryAsyncStore);
-    let recording_store = Arc::new(RecordingPendingNudgeStore {
-        fail_mark_pending,
-        ..RecordingPendingNudgeStore::default()
-    });
+    let recording_store = DummyPendingNudgeStore::default();
+    let recording_store = if fail_mark_pending {
+        recording_store.with_mark_failure(
+            AtmError::mailbox_write("pending nudge test store rejected marker"),
+            usize::MAX,
+        )
+    } else {
+        recording_store
+    };
+    let recording_store = Arc::new(recording_store);
     let mut runtime = assembly
         .service_runtime
         .with_async_message_store(async_store)

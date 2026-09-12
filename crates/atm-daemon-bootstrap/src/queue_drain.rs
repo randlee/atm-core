@@ -4,6 +4,7 @@
 //! through its sealed boundary; this module performs the storage claim and
 //! routes the rebuilt dispatch through the ordinary receiver selector.
 
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -18,7 +19,9 @@ use atm_core::nudge_dispatch::{
     load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
 };
 use atm_core::protocol::RuntimeMemberState;
-use atm_http_runtime::{MemberStateTransitionSink, RuntimeHealth};
+use atm_http_runtime::{
+    BoundedBlockingBridge, HERDR_MAX_PROMPTS_PER_TICK, MemberStateTransitionSink, RuntimeHealth,
+};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
@@ -100,12 +103,19 @@ impl MemberStateTransitionSink for DrainOnTransitionSink {
         let runtime = self.runtime.clone();
         let selector = Arc::clone(&self.selector);
         let health = self.runtime_health.clone();
+        let blocking_bridge = self.tracker.blocking_bridge.clone();
         let member = member.clone();
         let mut cancelled = self.tracker.subscribe();
         let join = tokio::spawn(async move {
             tokio::select! {
                 _ = cancelled.changed() => {}
-                result = drain_one(&runtime, &selector, &health, &member) => {
+                result = drain_one(
+                    &runtime,
+                    &selector,
+                    &health,
+                    &blocking_bridge,
+                    &member,
+                ) => {
                     if let Err(error) = result {
                         health.record_queue_drain_failure();
                         tracing::warn!(
@@ -128,14 +138,20 @@ impl MemberStateTransitionSink for DrainOnTransitionSink {
 pub(crate) struct TransitionDrainTracker {
     cancel: watch::Sender<bool>,
     joins: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    blocking_bridge: BoundedBlockingBridge,
 }
 
 impl TransitionDrainTracker {
-    fn new() -> Self {
+    fn new(runtime_health: RuntimeHealth) -> Self {
         let (cancel, _) = watch::channel(false);
         Self {
             cancel,
             joins: Arc::new(Mutex::new(Vec::new())),
+            blocking_bridge: BoundedBlockingBridge::new(
+                NonZeroUsize::new(HERDR_MAX_PROMPTS_PER_TICK)
+                    .expect("queue-drain blocking capacity is non-zero"),
+                runtime_health,
+            ),
         }
     }
 
@@ -190,7 +206,8 @@ pub(crate) fn spawn_recovery_sweep(
     selector: Arc<dyn MessageReceivedHookSelector>,
     runtime_health: RuntimeHealth,
 ) -> RecoverySweepHandle {
-    let tracker = TransitionDrainTracker::new();
+    let tracker = TransitionDrainTracker::new(runtime_health.clone());
+    let blocking_bridge = tracker.blocking_bridge.clone();
     let mut cancelled = tracker.subscribe();
     let join = tokio::spawn(async move {
         let mut interval = tokio::time::interval_at(
@@ -200,7 +217,12 @@ pub(crate) fn spawn_recovery_sweep(
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    if let Err(error) = run_recovery_sweep_once(&runtime, &selector, &runtime_health).await {
+                    if let Err(error) = run_recovery_sweep_once(
+                        &runtime,
+                        &selector,
+                        &runtime_health,
+                        &blocking_bridge,
+                    ).await {
                         runtime_health.record_queue_drain_failure();
                         tracing::warn!(
                             subsystem = "atm_core.queue",
@@ -235,18 +257,20 @@ pub(crate) async fn run_recovery_sweep_once(
     runtime: &LocalServiceRuntime,
     selector: &Arc<dyn MessageReceivedHookSelector>,
     runtime_health: &RuntimeHealth,
+    blocking_bridge: &BoundedBlockingBridge,
 ) -> Result<(), AtmError> {
     let runtime_for_list = runtime.clone();
-    let members = run_blocking("list pending queue members", move || {
-        runtime_for_list
-            .pending_nudge_store()?
-            .list_pending_members()
-    })
-    .await?;
+    let members = blocking_bridge
+        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+            runtime_for_list
+                .pending_nudge_store()?
+                .list_pending_members()
+        })
+        .await?;
     let candidate_count = members.len();
     let mut drained = 0usize;
     for member in members {
-        match drain_one(runtime, selector, runtime_health, &member).await {
+        match drain_one(runtime, selector, runtime_health, blocking_bridge, &member).await {
             Ok(true) => drained += 1,
             Ok(false) => {}
             Err(error) => {
@@ -277,9 +301,12 @@ async fn drain_one(
     runtime: &LocalServiceRuntime,
     selector: &Arc<dyn MessageReceivedHookSelector>,
     runtime_health: &RuntimeHealth,
+    blocking_bridge: &BoundedBlockingBridge,
     member: &MemberKey,
 ) -> Result<bool, AtmError> {
-    let Some((mut claim_guard, dispatch)) = claim_next_dispatch(runtime, member).await? else {
+    let Some((mut claim_guard, dispatch)) =
+        claim_next_dispatch(runtime, blocking_bridge, member).await?
+    else {
         return Ok(false);
     };
     let message_id = claim_guard.message_id();
@@ -300,7 +327,7 @@ async fn drain_one(
         )),
     };
     if let Err(error) = emit_result {
-        requeue_claim(runtime, member, &claim_guard).await?;
+        requeue_claim(runtime, blocking_bridge, member, &claim_guard).await?;
         claim_guard.disarm();
         tracing::warn!(
             subsystem = "atm_core.queue",
@@ -314,7 +341,7 @@ async fn drain_one(
         return Err(error);
     }
     if tmux_marker {
-        clear_delivered_marker(runtime, runtime_health, member, message_id).await;
+        clear_delivered_marker(runtime, runtime_health, blocking_bridge, member, message_id).await;
     }
     claim_guard.disarm();
     runtime_health.record_queue_message_drained();
@@ -331,6 +358,7 @@ async fn drain_one(
 
 async fn claim_next_dispatch(
     runtime: &LocalServiceRuntime,
+    blocking_bridge: &BoundedBlockingBridge,
     member: &MemberKey,
 ) -> Result<
     Option<(
@@ -341,21 +369,23 @@ async fn claim_next_dispatch(
 > {
     let runtime_for_channel = runtime.clone();
     let member_for_channel = member.clone();
-    let channel_allowed = run_blocking("classify queue delivery channel", move || {
-        queue_drain_channel_allowed(&runtime_for_channel, &member_for_channel)
-    })
-    .await?;
+    let channel_allowed = blocking_bridge
+        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+            queue_drain_channel_allowed(&runtime_for_channel, &member_for_channel)
+        })
+        .await?;
     if !channel_allowed {
         return Ok(None);
     }
 
     let runtime_for_claim = runtime.clone();
     let member_for_claim = member.clone();
-    let claim = run_blocking("claim pending queue message", move || {
-        let store = runtime_for_claim.pending_nudge_store()?;
-        store.claim_next_pending(&member_for_claim)
-    })
-    .await?;
+    let claim = blocking_bridge
+        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+            let store = runtime_for_claim.pending_nudge_store()?;
+            store.claim_next_pending(&member_for_claim)
+        })
+        .await?;
     let Some(claim) = claim else {
         return Ok(None);
     };
@@ -364,22 +394,26 @@ async fn claim_next_dispatch(
     let message_id = claim_guard.message_id();
     let runtime_for_load = runtime.clone();
     let member_for_load = member.clone();
-    let message = run_blocking("load queued message dispatch", move || {
-        load_received_hook_dispatch_message(&runtime_for_load, &member_for_load, message_id)
-    })
-    .await;
+    let message = blocking_bridge
+        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+            load_received_hook_dispatch_message(&runtime_for_load, &member_for_load, message_id)
+        })
+        .await;
     match message {
         Ok(Some(message)) => {
             rebuild_received_hook_dispatch(runtime, member, message_id, NudgeKind::Queue, &message)
                 .map(|dispatch| dispatch.map(|dispatch| (claim_guard, dispatch)))
         }
         Ok(None) => {
-            requeue_claim(runtime, member, &claim_guard).await?;
+            requeue_claim(runtime, blocking_bridge, member, &claim_guard).await?;
             claim_guard.disarm();
             Ok(None)
         }
         Err(error) => {
-            if requeue_claim(runtime, member, &claim_guard).await.is_ok() {
+            if requeue_claim(runtime, blocking_bridge, member, &claim_guard)
+                .await
+                .is_ok()
+            {
                 claim_guard.disarm();
             }
             Err(error)
@@ -389,23 +423,26 @@ async fn claim_next_dispatch(
 
 async fn requeue_claim(
     runtime: &LocalServiceRuntime,
+    blocking_bridge: &BoundedBlockingBridge,
     member: &MemberKey,
     claim_guard: &ClaimedPendingMessage,
 ) -> Result<(), AtmError> {
     let runtime_for_requeue = runtime.clone();
     let member_for_requeue = member.clone();
     let claim_for_requeue = claim_guard.claim().clone();
-    run_blocking("requeue failed queue message", move || {
-        runtime_for_requeue
-            .pending_nudge_store()?
-            .requeue_pending(&member_for_requeue, &claim_for_requeue)
-    })
-    .await
+    blocking_bridge
+        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+            runtime_for_requeue
+                .pending_nudge_store()?
+                .requeue_pending(&member_for_requeue, &claim_for_requeue)
+        })
+        .await
 }
 
 fn clear_delivered_marker<'a>(
     runtime: &'a LocalServiceRuntime,
     runtime_health: &'a RuntimeHealth,
+    blocking_bridge: &'a BoundedBlockingBridge,
     member: &'a MemberKey,
     message_id: atm_core::schema::AtmMessageId,
 ) -> impl std::future::Future<Output = ()> + 'a {
@@ -413,16 +450,18 @@ fn clear_delivered_marker<'a>(
     let member_for_clear = member.clone();
     let health_for_clear = runtime_health.clone();
     async move {
-        if let Err(error) = run_blocking("clear delivered queue marker", move || {
-            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
-                &runtime_for_clear,
-                &member_for_clear,
-                &message_id,
-                || health_for_clear.record_graft_queue_marker_clear_failure(),
-            );
-            Ok(())
-        })
-        .await
+        if let Err(error) = blocking_bridge
+            .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+                atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
+                    &runtime_for_clear,
+                    &member_for_clear,
+                    &message_id,
+                    atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
+                    || health_for_clear.record_graft_queue_marker_clear_failure(),
+                );
+                Ok(())
+            })
+            .await
         {
             runtime_health.record_queue_drain_failure();
             tracing::warn!(
@@ -477,22 +516,6 @@ impl Drop for ClaimedPendingMessage {
     }
 }
 
-async fn run_blocking<T, F>(description: &'static str, operation: F) -> Result<T, AtmError>
-where
-    T: Send + 'static,
-    F: FnOnce() -> Result<T, AtmError> + Send + 'static,
-{
-    tokio::task::spawn_blocking(operation)
-        .await
-        .map_err(|source| {
-            AtmError::new(
-                AtmErrorCode::InternalError,
-                format!("{description} task ended unexpectedly"),
-            )
-            .with_cause(source)
-        })?
-}
-
 impl RecoverySweepHandle {
     pub(crate) async fn shutdown(mut self, deadline: Duration) {
         let deadline_at = tokio::time::Instant::now() + deadline;
@@ -540,6 +563,12 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::Notify;
+
+    fn test_blocking_bridge(
+        runtime_health: &RuntimeHealth,
+    ) -> atm_http_runtime::BoundedBlockingBridge {
+        TransitionDrainTracker::new(runtime_health.clone()).blocking_bridge
+    }
 
     #[test]
     fn shared_channel_precheck_skips_herdr_and_bare_cli_members() {
@@ -618,14 +647,15 @@ mod tests {
             },
         });
         let health = RuntimeHealth::default();
+        let blocking_bridge = test_blocking_bridge(&health);
 
         assert!(
-            drain_one(&runtime, &selector, &health, &member)
+            drain_one(&runtime, &selector, &health, &blocking_bridge, &member)
                 .await
                 .expect("first drain")
         );
         assert!(
-            drain_one(&runtime, &selector, &health, &member)
+            drain_one(&runtime, &selector, &health, &blocking_bridge, &member)
                 .await
                 .expect("second drain")
         );
@@ -636,7 +666,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&member),
+            "successful handoff rearms the open queue marker"
         );
         assert_eq!(health.snapshot().queue_messages_drained_total, 2);
     }
@@ -675,9 +706,10 @@ mod tests {
             },
         });
         let health = RuntimeHealth::default();
+        let blocking_bridge = test_blocking_bridge(&health);
         let (left, right) = tokio::join!(
-            drain_one(&runtime, &selector, &health, &member),
-            drain_one(&runtime, &selector, &health, &member),
+            drain_one(&runtime, &selector, &health, &blocking_bridge, &member),
+            drain_one(&runtime, &selector, &health, &blocking_bridge, &member),
         );
         assert_eq!(
             [left.expect("transition drain"), right.expect("sweep drain")]
@@ -693,7 +725,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&member),
+            "the one successful concurrent handoff leaves its marker rearmed"
         );
     }
 
@@ -731,7 +764,7 @@ mod tests {
             },
         });
         let health = RuntimeHealth::default();
-        let tracker = TransitionDrainTracker::new();
+        let tracker = TransitionDrainTracker::new(health.clone());
         let sink = DrainOnTransitionSink::new(runtime.clone(), selector, health, tracker.clone());
 
         sink.on_transition(
@@ -785,7 +818,9 @@ mod tests {
                 seen: Arc::clone(&seen),
             },
         });
-        run_recovery_sweep_once(&runtime, &selector, &RuntimeHealth::default())
+        let health = RuntimeHealth::default();
+        let blocking_bridge = test_blocking_bridge(&health);
+        run_recovery_sweep_once(&runtime, &selector, &health, &blocking_bridge)
             .await
             .expect("recovery sweep");
         assert_eq!(*seen.lock().expect("recording lock"), vec![message_id]);
@@ -842,8 +877,9 @@ mod tests {
             },
         });
         let health = RuntimeHealth::default();
+        let blocking_bridge = test_blocking_bridge(&health);
 
-        run_recovery_sweep_once(&runtime, &selector, &health)
+        run_recovery_sweep_once(&runtime, &selector, &health, &blocking_bridge)
             .await
             .expect("member-isolated recovery sweep");
 
@@ -858,7 +894,11 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members"),
-            vec![failed_member]
+            vec![
+                failed_member,
+                MemberKey::new(team.clone(), first),
+                MemberKey::new(team, third),
+            ]
         );
         assert_ne!(failed_id, first_id);
     }

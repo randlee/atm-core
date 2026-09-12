@@ -96,6 +96,16 @@ Before starting a sprint:
    `sprint_doc`, and the sprint document remains authoritative if the task
    summary omits or compresses details.
 
+## Stacked Phases
+
+When a phase runs as a `gh stack` of sprint and fix layers above
+`integrate/phase-N`, the stack rules in
+[`docs/development/gh-stack-guidelines.md`](../../../docs/development/gh-stack-guidelines.md)
+govern layer ownership, rebase-at-task-start, freezing, PR-on-first-push,
+the CI-trigger PR, and the landing sequence. The orchestrator owns the stack;
+each dev owns exactly one layer. Fix and cleanup work goes to a new top layer
+with one QA pass, never to a frozen layer.
+
 ## Plan Review Flow
 
 1. `team-lead` completes `/plan-hardening` steps 1 through 5.
@@ -129,6 +139,9 @@ Before starting a sprint:
 
 For extraction-readiness or phase-close reviews, use `review-template.xml.j2`
 to assign a read-only review to `arch-ctm`.
+After the phase lands, run the `triaging-findings` post-mortem
+(`.claude/skills/triaging-findings/references/post-mortem.md`); the write-up
+lives in `docs/postmortems/` and feeds the stack guidelines above.
 
 For phase-ending QA routed through `quality-mgr`, the reviewer set is
 mandatory:

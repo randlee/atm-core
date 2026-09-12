@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/TOML-001>
+  a triage:Finding ;
+  triage:findingId "TOML-001" ;
+  triage:title "Boundary TOML allowlists feature-gated test double; stale entries remain" ;
+  triage:description "boundaries/atm-storage/pending-nudge-store.toml allowlist entry 'crate::contract::DummyPendingNudgeStore' references the feature-gated struct inside contract.rs instead of the public testing.rs path. Additionally, three stale allowlist entries (RecordingPendingNudgeStore, FailingClearPendingStore, FailingMarkPendingStore) no longer exist after consolidation and must be removed. Remediation: move DummyPendingNudgeStore struct and its Sealed/PendingNudgeStore impls into testing.rs, update the allowlist entry to crate::testing::DummyPendingNudgeStore, and remove the three stale entries." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-guard" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T06:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T05:41:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/TOML-001/BA-CLEANUP-B-1> ;
+  triage:deferredNote "Boundary TOML decision deferred per fenix ruling: awaits Rand's approval before dispatch. This is a design choice about public-testing surface, not a fix-routine blocker." ;
+  triage:deferredNote "fenix (ATM 01M2A25E8T4QXDAG7FH85MCWF8, 2026-09-12T05:41:38Z): minor, post-landing review-findings stack, Rand's call -- agents never edit boundary TOML, so this waits for Rand. No live gh-stack layer target; promoteTo intentionally unset." ;
+  triage:deferredNote "PHASE BA CLOSEOUT (fenix, ATM 01M2A7443Z9R020ABEPJFJHAJC, 2026-09-12T07:08:18Z): boundary-guard's phase-ending critical review at 9f5aef2fe independently confirmed this description complete and accurate. Still Rand-owned, still open, promoteTo remains unset." ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/TOML-001/BA-CLEANUP-B-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/pending-nudge-store.toml" ;
+  triage:line 38 ;
+  triage:snippet "allowlist entry crate::contract::DummyPendingNudgeStore" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "6d94b3c45f398ab185bbc9f9aef35b7ed2fbcee2" ;
+  triage:occursIn <urn:atm:triage:worktree/ba-cleanup-b/6d94b3c45> .
+
+<urn:atm:triage:worktree/ba-cleanup-b/6d94b3c45>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/phase-ba-cleanup-b" ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "6d94b3c45f398ab185bbc9f9aef35b7ed2fbcee2" ;
+  triage:orderIndex 6 .

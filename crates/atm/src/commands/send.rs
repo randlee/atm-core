@@ -5,6 +5,10 @@ use std::str::FromStr;
 use anyhow::Result;
 use atm_core::address::AgentAddress;
 use atm_core::load_atm_config;
+use atm_core::protocol::{
+    CLI_SCHEMA_VERSION, CompatibilityPreflight, CompatibilityVerdict, HttpApiVersion,
+    ReleaseVersion, RequestEnvelope, ResponseEnvelope,
+};
 use atm_core::send::{
     MessageClassification, NudgeMode, SendMessageSource, SendRequest, TemplateSendSource, input,
 };
@@ -17,7 +21,9 @@ use atm_core::send_to::classify_recipient_locality;
 use atm_core::send_to::RecipientLocality;
 use atm_core::types::{AgentIdentity, HostName, TaskId, TeamName};
 use atm_daemon_bootstrap::with_default_peer_address_stores;
-use atm_storage::{AtmError, PeerConfigStore, RosterStore, TrustedPeer};
+use atm_storage::{
+    AtmError, AtmErrorCode, PeerConfigStore, RosterStore, TaskCloseOutcome, TaskOp, TrustedPeer,
+};
 use clap::Args;
 
 use crate::commands::caller_context::{
@@ -133,9 +139,9 @@ pub struct SendCommand {
     #[arg(long = "task-id")]
     pub(super) task_id: Option<TaskId>,
 
-    /// Complete a previously assigned task as its assigner or assignee.
-    #[arg(long = "task-complete", conflicts_with = "task_id")]
-    pub(super) task_complete: Option<TaskId>,
+    /// Close `--task-id` as completed after delivering this message as the report.
+    #[arg(long = "task-complete", requires = "task_id")]
+    pub(super) task_complete: bool,
 
     #[arg(long)]
     pub(super) dry_run: bool,
@@ -144,7 +150,51 @@ pub struct SendCommand {
     pub(super) json: bool,
 }
 
+/// Narrow construction input shared by the closed `atm task` command set and
+/// the `send`/`queue` aliases. Message parsing remains owned by this module so
+/// every task entry point produces the same canonical `WriteRequest`.
+pub(super) struct TaskSendOptions {
+    pub to: String,
+    pub message: Option<String>,
+    pub team: Option<String>,
+    pub actor: Option<String>,
+    pub file: Option<PathBuf>,
+    pub stdin: bool,
+    pub template: Option<PathBuf>,
+    pub vars: Option<String>,
+    pub task_id: Option<TaskId>,
+    pub json: bool,
+}
+
 impl SendCommand {
+    pub(super) fn for_task(options: TaskSendOptions) -> Self {
+        Self {
+            to: Some(options.to),
+            message: options.message,
+            team: options.team,
+            host: None,
+            chat_id: None,
+            actor: options.actor,
+            file: options.file,
+            stdin: options.stdin,
+            template: options.template,
+            vars: options.vars,
+            var: Vec::new(),
+            env_prefix: None,
+            attach: Vec::new(),
+            from_json: false,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
+            summary: None,
+            requires_ack: false,
+            task_id: options.task_id,
+            task_complete: false,
+            dry_run: false,
+            json: options.json,
+        }
+    }
+
     fn message_validation_error(
         message: impl Into<String>,
         recovery: impl Into<String>,
@@ -194,13 +244,22 @@ impl SendCommand {
                 .await;
         }
         let json = self.json;
+        let task_alias = self.task_id.is_some() || self.task_complete;
         let attachment_note = self.land_attach_files_if_any(&current_dir).await?;
-        let request = self.build_request_with_mode(
-            home_dir.clone(),
-            current_dir.clone(),
-            nudge_mode,
-            attachment_note,
-        )?;
+        let request = self
+            .build_request_with_mode(
+                home_dir.clone(),
+                current_dir.clone(),
+                nudge_mode,
+                attachment_note,
+            )
+            .map_err(|error| {
+                if task_alias {
+                    anyhow::anyhow!(error.to_string())
+                } else {
+                    error
+                }
+            })?;
         let peer_host = request
             .to
             .as_ref()
@@ -214,6 +273,9 @@ impl SendCommand {
         )?;
         let caller_identity = request.caller_identity.clone();
         let caller_team = request.caller_team.clone();
+        if request.task_id.is_some() || request.task_op.is_some() {
+            preflight_task_op_compatibility(&composition).await?;
+        }
         let mut outcome = composition.send(request).await?;
 
         if let Some(warning) = unrostered_sender_warning(&caller_identity, &caller_team) {
@@ -265,7 +327,7 @@ impl SendCommand {
         self.build_request_with_mode(home_dir, current_dir, NudgeMode::Immediate, None)
     }
 
-    fn build_request_with_mode(
+    pub(super) fn build_request_with_mode(
         self,
         home_dir: PathBuf,
         current_dir: PathBuf,
@@ -293,7 +355,8 @@ impl SendCommand {
         let classification = self.build_classification()?;
         let message_source =
             self.build_message_source(max_message_bytes, &current_dir, attachment_note.as_deref())?;
-        SendRequest::new(
+        let assigning_task = self.task_id.is_some() && !self.task_complete;
+        let mut request = SendRequest::new(
             home_dir,
             current_dir,
             caller_context.caller_identity,
@@ -301,23 +364,47 @@ impl SendCommand {
             caller_context.caller_team,
             message_source,
             self.summary,
-            self.requires_ack,
+            self.requires_ack || assigning_task,
             self.task_id,
             self.dry_run,
         )
-        .map(|request| {
-            let request = match self.task_complete {
-                Some(task_id) => request.with_task_complete(task_id),
-                None => request,
-            };
+        .map(|mut request| {
+            if self.task_complete {
+                request.task_op = Some(TaskOp::Close {
+                    outcome: TaskCloseOutcome::Completed,
+                    reason: None,
+                });
+            }
             request
                 .with_caller_chat_id(caller_context.caller_chat_id)
                 .with_activity_observation(caller_context.activity_observation)
                 .with_max_message_bytes(max_message_bytes)
                 .with_classification(classification)
-                .with_nudge_mode(nudge_mode)
+                .with_nudge_mode(if assigning_task {
+                    NudgeMode::Deferred
+                } else {
+                    nudge_mode
+                })
         })
-        .map_err(Into::into)
+        .map_err(anyhow::Error::from)?;
+        atm_core::send::validate_task_request(&mut request)?;
+        Ok(request)
+    }
+
+    pub(super) fn build_task_close_request(
+        mut self,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        task_id: TaskId,
+        outcome: TaskCloseOutcome,
+        reason: Option<String>,
+    ) -> Result<SendRequest> {
+        self.task_id = Some(task_id);
+        self.task_complete = true;
+        let mut request =
+            self.build_request_with_mode(home_dir, current_dir, NudgeMode::default(), None)?;
+        request.task_op = Some(TaskOp::Close { outcome, reason });
+        Ok(request)
     }
 
     fn target_with_explicit_host(&self, caller_team: &TeamName) -> Result<String> {
@@ -578,6 +665,87 @@ impl SendCommand {
             resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))
                 .map_err(Into::into)
         }
+    }
+}
+
+pub(super) async fn preflight_task_op_compatibility(
+    composition: &CliComposition<'_>,
+) -> Result<(), AtmError> {
+    preflight_daemon_api(
+        composition,
+        HttpApiVersion::parse("1.5.0")?,
+        "task operation",
+    )
+    .await
+}
+
+pub(super) async fn preflight_daemon_api(
+    composition: &CliComposition<'_>,
+    minimum: HttpApiVersion,
+    verb: &str,
+) -> Result<(), AtmError> {
+    let response = composition
+        .execute_request(RequestEnvelope::CompatibilityPreflight(
+            CompatibilityPreflight {
+                client_release: ReleaseVersion::current(),
+                cli_schema_version: CLI_SCHEMA_VERSION,
+                http_api_version: HttpApiVersion::current(),
+            },
+        ))
+        .await?;
+    match response {
+        ResponseEnvelope::CompatibilityVerdict(verdict) => {
+            require_daemon_api(&verdict, minimum, verb)
+        }
+        other => Err(AtmError::daemon_unavailable(format!(
+            "daemon returned an unexpected response for {verb} compatibility preflight: {other:?}"
+        ))),
+    }
+}
+
+#[cfg(test)]
+fn require_task_op_compatibility(response: ResponseEnvelope) -> Result<(), AtmError> {
+    match response {
+        ResponseEnvelope::CompatibilityVerdict(verdict) => {
+            require_daemon_api(&verdict, HttpApiVersion::parse("1.5.0")?, "task operation")
+        }
+        other => Err(AtmError::daemon_unavailable(format!(
+            "daemon returned an unexpected response for task-operation compatibility preflight: {other:?}"
+        ))),
+    }
+}
+
+pub(super) fn require_daemon_api(
+    verdict: &CompatibilityVerdict,
+    minimum: HttpApiVersion,
+    verb: &str,
+) -> Result<(), AtmError> {
+    match verdict {
+        CompatibilityVerdict::Compatible {
+            daemon_http_api_version,
+            ..
+        } if daemon_http_api_version >= &minimum => Ok(()),
+        CompatibilityVerdict::Compatible {
+            daemon_http_api_version,
+            ..
+        } => Err(AtmError::new(
+            AtmErrorCode::ClientDaemonVersionIncompatible,
+            format!(
+                "{verb} requires client HTTP API {} and daemon HTTP API >= {minimum}; daemon reports {daemon_http_api_version}",
+                HttpApiVersion::current(),
+            ),
+        )),
+        CompatibilityVerdict::Incompatible {
+            client_http_api_version,
+            daemon_http_api_version,
+            code,
+            ..
+        } => Err(AtmError::new(
+            *code,
+            format!(
+                "{verb} compatibility mismatch: client HTTP API {client_http_api_version}, daemon HTTP API {daemon_http_api_version}; daemon must support >= {minimum}"
+            ),
+        )),
     }
 }
 
@@ -972,7 +1140,10 @@ mod tests {
     use std::num::NonZeroU16;
     use std::path::{Path, PathBuf};
 
-    use super::{SendCommand, resolve_trusted_ipv4_with_lookup};
+    use super::{
+        SendCommand, TaskSendOptions, require_task_op_compatibility,
+        resolve_trusted_ipv4_with_lookup,
+    };
     use crate::commands::send_fan_out::fan_out_result_json;
     // `FanOutRecipient`/`RecipientLocality`/`CliObservability` are consumed
     // only by the real transfer-script fan-out integration test below,
@@ -985,11 +1156,14 @@ mod tests {
     use crate::commands::send_fan_out::FanOutRecipient;
     #[cfg(unix)]
     use crate::observability::CliObservability;
+    use atm_core::protocol::{
+        CompatibilityVerdict, HttpApiVersion, ReleaseVersion, ResponseEnvelope,
+    };
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::send::{SendMessageSource, input};
+    use atm_core::send::{NudgeMode, SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
-    use atm_core::types::TeamName;
-    use atm_storage::{HostName, TrustedPeer};
+    use atm_core::types::{TaskId, TeamName};
+    use atm_storage::{AtmErrorCode, HostName, TaskCloseOutcome, TaskOp, TrustedPeer};
     use clap::Parser;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -1016,7 +1190,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1402,18 +1576,15 @@ mod tests {
     }
 
     #[test]
-    fn cli_rejects_task_complete_with_task_id() {
+    fn send_task_complete_requires_task_id() {
         crate::commands::Cli::try_parse_from([
             "atm",
             "send",
             "recipient-a@test-team",
-            "--task-id",
-            "t-1",
             "--task-complete",
-            "t-2",
             "--stdin",
         ])
-        .expect_err("task assignment and completion are mutually exclusive");
+        .expect_err("task completion requires a task id");
     }
 
     #[test]
@@ -1424,19 +1595,161 @@ mod tests {
             ("ATM_TEAM", Some(TEST_TEAM)),
         ]);
         let mut command = send_command("recipient-a@test-team", None);
-        command.task_complete = Some("t-42".parse().expect("task id"));
+        command.task_id = Some("t-42".parse().expect("task id"));
+        command.task_complete = true;
 
         let request = command
             .build_request(".".into(), ".".into())
             .expect("request");
 
+        assert_eq!(request.task_id.as_ref().map(TaskId::as_str), Some("t-42"));
         assert_eq!(
-            request
-                .task_complete
-                .as_ref()
-                .map(|task_id| task_id.as_str()),
-            Some("t-42")
+            request.task_op,
+            Some(TaskOp::Close {
+                outcome: TaskCloseOutcome::Completed,
+                reason: None,
+            })
         );
+        assert_eq!(request.task_complete, None);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn send_alias_builds_identical_write_request_to_task_command() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(ROLE_TEAM_LEAD)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let task_id: TaskId = "T1".parse().expect("task id");
+
+        let mut assign_alias = send_command("recipient-a@test-team", None);
+        assign_alias.task_id = Some(task_id.clone());
+        let alias_assign = assign_alias
+            .build_request_with_mode(".".into(), ".".into(), NudgeMode::Immediate, None)
+            .expect("alias assignment");
+        let task_assign = SendCommand::for_task(TaskSendOptions {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("hello".to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            template: None,
+            vars: None,
+            task_id: Some(task_id.clone()),
+            json: false,
+        })
+        .build_request_with_mode(".".into(), ".".into(), NudgeMode::Deferred, None)
+        .expect("task assignment");
+        assert_eq!(alias_assign.nudge_mode, NudgeMode::Deferred);
+        assert_eq!(task_assign.nudge_mode, NudgeMode::Deferred);
+        assert_eq!(
+            serde_json::to_vec(&alias_assign).expect("serialize alias assignment"),
+            serde_json::to_vec(&task_assign).expect("serialize task assignment")
+        );
+
+        let mut close_alias = send_command("recipient-a@test-team", None);
+        close_alias.task_id = Some(task_id.clone());
+        close_alias.task_complete = true;
+        let alias_close = close_alias
+            .build_request(".".into(), ".".into())
+            .expect("alias close");
+        let task_close = SendCommand::for_task(TaskSendOptions {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("hello".to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            template: None,
+            vars: None,
+            task_id: None,
+            json: false,
+        })
+        .build_task_close_request(
+            ".".into(),
+            ".".into(),
+            task_id,
+            TaskCloseOutcome::Completed,
+            None,
+        )
+        .expect("task close");
+        assert_eq!(alias_close.nudge_mode, NudgeMode::Immediate);
+        assert_eq!(task_close.nudge_mode, NudgeMode::Immediate);
+        assert_eq!(
+            serde_json::to_vec(&alias_close).expect("serialize alias close"),
+            serde_json::to_vec(&task_close).expect("serialize task close")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn send_builder_rejects_nonlocal_task_target() {
+        for target in ["recipient-a@other-team", "recipient-a@test-team.127.0.0.1"] {
+            let mut request = atm_core::send::SendRequest::new(
+                ".".into(),
+                ".".into(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                target,
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("task".to_string()),
+                None,
+                true,
+                Some("T1".parse().expect("task id")),
+                false,
+            )
+            .expect("request shape");
+            let error = atm_core::send::validate_task_request(&mut request)
+                .expect_err("non-local task target must fail before execution");
+            assert!(error.to_string().contains("local-team only"), "{error:#}");
+        }
+    }
+
+    #[test]
+    fn send_task_complete_refuses_daemon_below_1_5_0() {
+        let verdict = ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::parse("1.5.11").expect("release"),
+            daemon_schema_version: 1,
+            daemon_http_api_version: HttpApiVersion::parse("1.4.0").expect("HTTP API"),
+        });
+
+        let error = require_task_op_compatibility(verdict)
+            .expect_err("a 1.4 daemon cannot decode typed task operations");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(error.message().contains("1.5.0"));
+        assert!(error.message().contains("1.4.0"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn send_task_id_alias_refuses_daemon_below_1_5_0() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
+        let task_id: TaskId = "T1".parse().expect("task id");
+        let request = SendCommand::for_task(TaskSendOptions {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("assignment".to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            template: None,
+            vars: None,
+            task_id: Some(task_id),
+            json: false,
+        })
+        .build_request_with_mode(".".into(), ".".into(), NudgeMode::Deferred, None)
+        .expect("task assignment request");
+
+        assert!(request.task_id.is_some());
+        let verdict = ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::parse("1.5.11").expect("release"),
+            daemon_schema_version: 1,
+            daemon_http_api_version: HttpApiVersion::parse("1.4.0").expect("HTTP API"),
+        });
+        let error = require_task_op_compatibility(verdict)
+            .expect_err("a 1.4 daemon cannot decode task-id alias assignments");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(error.message().contains("1.5.0"));
     }
 
     #[test]
@@ -1462,7 +1775,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1497,7 +1810,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1538,7 +1851,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1563,7 +1876,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1614,7 +1927,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1845,7 +2158,7 @@ mod tests {
             summary: Some("summary".to_string()),
             requires_ack: true,
             task_id: Some("TASK-42".parse().expect("task id")),
-            task_complete: None,
+            task_complete: false,
             dry_run: true,
             json: true,
             attach: Vec::new(),
@@ -1902,7 +2215,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1943,7 +2256,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -1974,7 +2287,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -2017,7 +2330,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -2056,7 +2369,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),
@@ -2094,7 +2407,7 @@ mod tests {
             summary: None,
             requires_ack: false,
             task_id: None,
-            task_complete: None,
+            task_complete: false,
             dry_run: false,
             json: false,
             attach: Vec::new(),

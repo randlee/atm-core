@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA1-001>
+  a triage:Finding ;
+  triage:findingId "BA5-QA1-001" ;
+  triage:title "13 pre-existing tests broken by BA.5's own PendingNudgeStore R3 semantics change (11 of 13 BA.5-owned, 2 of 13 shared BA.3 artifact)" ;
+  triage:description "Originally found QA-1 @ b617a9eab. 10 tests in herdr_queue_wake.rs (ac01/ac02/ax5_01-07/ax5_09) and 3 in queue_drain.rs asserted the old 'handoff clears the marker' semantics BA.5 deliberately overturns under decision R3. fenix's BA5-FIX-R1 acceptance (PR #1407, issuecomment-5643008929) verified fixed at ef5c6c7ea for the 11 BA.5-owned tests; ac02_seventeen_due_reminders_split_across_ticks_at_sixteen and ax5_09_generic_emit_failure_counts_and_respects_cooldown are the shared BA.3-owned artifact (relatedFinding BA4-QA1-001). quality-mgr's BA.5 QA-2 report (PR #1407, issuecomment-5643436355) re-confirms all four BA5-QA1 findings fixed at 7997f8aaa, no re-raised findings. This is a followup_pass to re-verify the fix still holds at the current branch head and to record promotion per Rand's triage-first ordering correction. Followup verification at 2026-09-12T02:14:00Z confirms both ac02_seventeen_due_reminders_split_across_ticks_at_sixteen and ax5_09_generic_emit_failure_counts_and_respects_cooldown continue to pass on all worktrees (integrate/phase-ba, feature/ba5-queue-ephemeral-item, feature/ba3-nudge-invariant, feature/ba4-atm-task-commands, docs/ba6-task-nudge-documentation). No regression detected." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "test-failure" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs, crates/atm-daemon-bootstrap/src/queue_drain.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:worktree/integrate-ba/0a18028a7>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-ba" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "0a18028a7" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/ba3-nudge-invariant/e7b61a645>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "e7b61a645" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ba5-queue-ephemeral-item/7997f8aaa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba5-queue-ephemeral-item" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ba4-atm-task-commands/b84a46a1e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba4-atm-task-commands" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "b84a46a1e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/ba6-task-nudge-documentation/a49b922aa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba6-task-nudge-documentation" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .

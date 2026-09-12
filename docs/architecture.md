@@ -2891,7 +2891,7 @@ Scope rule:
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains
 
-#### Task Storage (Deferred)
+#### Task Storage
 
 Phase `AC` closeout note:
 - speculative `TaskStore` and `TaskStoreDoctor` surfaces were deleted in
@@ -2915,6 +2915,46 @@ Phase-BA amendment (2026-09-11): the task ledger keys one row per
 database unique index, and orders each agent's queue by
 `(position, assigned_at, task_id)` with `assigned_at` reset only by reassign/reopen and never by move; see
 requirements Sections 15.4 and 22.1.
+
+| state | `Assigned` | `Started` | `Completed(outcome)` |
+| --- | --- | --- | --- |
+| none | → `assigned` | reject: no open task | reject: no open task |
+| `assigned` | same agent: resend with no event; other agent: reassign in place → `assigned` | → `active`; reject when the assignee already has an active task | → `complete(outcome)` |
+| `active` | same agent: resend with no event; other agent: reassign in place → `assigned` and free the old active slot | idempotent → `active` | → `complete(outcome)` |
+| `complete` | reopen the same id → `assigned` | ordinary mail write reports `already_closed` | ordinary mail write reports `already_closed` |
+
+The runtime's pure disposition function combines the canonical roster state,
+the head open task, pending mail, the reminder threshold, and the consecutive
+refusal run. It nudges only an `Idle` assignee, never diverts an `Active`
+assignee, and turns `Blocked`, `Offline`, stalled, and refusal-threshold states
+into terminal escalation/hold decisions without a parallel task state machine.
+
+An `atm queue` message is an ephemeral scheduling item, not a task row. Its own
+unread or pending-ack state is the lifecycle, and `nudge_pending_at` is the next
+prompt time. Handoff re-arms that marker; read, acknowledgement when required,
+or task close discharges it. The queue item is considered before the next task
+and never appears in `atm task list`.
+
+Historical inherited boundary limitations recorded during the pre-BA review
+(all four were fixed at the Phase BA shipped head `9f5aef2fe`):
+
+- `RBP-F001`: the `TaskStore` escalation-recipient methods still expose raw
+  `String` / `&str` values. `AgentAddress` validation occurs at the runtime
+  use site, not at the storage trait boundary.
+- `RBP-F002`: `load_escalation_targets` currently maps roster-store read
+  failures to `Result<_, ()>`, so the helper does not retain the underlying
+  error context.
+- `RSH-001`: the queue pump's `run_blocking` helper awaits `spawn_blocking`
+  without its own timeout. Its current closures are local SQLite operations,
+  not network calls.
+- `RBQA-BA5-F004`: the six-method `PendingNudgeStore` test surface is
+  reimplemented by four hand-written doubles across consumer crates; there is
+  no shared configurable double yet.
+
+Phase BA closeout — shipped state (2026-09-12): `RBP-F001`, `RBP-F002`,
+`RSH-001`, and `RBQA-BA5-F004` are historical finding labels, not open
+limitations. The shipped storage-boundary validation, error propagation,
+bounded blocking work, and shared test surface are the current contract.
 
 #### RosterStore
 

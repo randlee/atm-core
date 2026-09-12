@@ -1,0 +1,115 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA2-001>
+  a triage:Finding ;
+  triage:findingId "BA5-QA2-001" ;
+  triage:title "code_mask() in .just/rust_source.py treats every lifetime tick as a char-literal opener, masking list_messages from the read-concurrency-gates CI check" ;
+  triage:description "quality-mgr QA-2, PR #1407 @ 7997f8aaa. read-concurrency-gates CI check fails: 'AV.3 read-concurrency gate could not inspect source: read handler list_messages is missing.' Root cause in .just/rust_source.py's code_mask(): it lexes Rust with a naive single-quote scanner with no concept of lifetime syntax, treating the ' in '+ Send + '_>>' as opening a char literal and masking everything until the next literal quote. Pre-existing bug, newly exposed because BA.5 added a new pub(crate) fn dispatch(...) inherent method (reusing the same lifetime pattern) positioned before list_messages in crates/atm-http-runtime/src/storage_and_nudge_router.rs, so the masking span now swallows list_messages's definition. list_messages itself is present, correct, unchanged, and correctly read-only -- this is a lint-tool defect, not a BA.5 code defect, but it currently blocks CI green. fenix's ruling (PR #1407, issuecomment-5643452062): STANDS, fix on this branch (BA5-FIX-R2-1789187300, cipher). Fix the lexer: a ' followed by an identifier-start char and not closed by a matching ' two characters later (and not a backslash escape) is a lifetime/label and must not be masked. Add a .just/tests case for '_>> / 'a / 'x' / '\n'. Do not just reorder dispatch below list_messages -- that leaves the bug for the next file. fenix classifies this important (not minor) because it currently blocks merge." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T04:35:00Z"^^xsd:dateTime ;
+  triage:deferredNote "feature/ba5-queue-ephemeral-item frozen by fenix's ruling (2026-09-12T04:37:03Z, per Rand: a branch is not touched again once its minimum functionality for closure is complete); BA5-FIX-R2 cancelled, cipher told not to push. Further promoted by fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z): worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer) -- arch-ctm's BA6-CLEANUP task is cancelled; fix lands once on the cleanup layer, not on docs/ba6." ;
+  triage:deferredNote "fenix (ATM 01M2A4DWXYME20KRNTBXHQS534, 2026-09-12T06:21:13Z): BA-TOP-QA-1789192584 PASS on PR #1414 @ a2da4a570 (base 03c623717), report https://github.com/randlee/atm-core/pull/1414#issuecomment-5644152591, five reviewers, 0 blocking. Close as FIXED @ a2da4a570 (verified by quality-mgr reading code at that head)." ;
+  triage:promoteTo "fix/phase-ba-cleanup" ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T04:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-001/BA5-QA2-001-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-001/BA6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-001/CLEANUP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-001/CLEANUPB-1> ;
+  triage:deferredNote "PHASE BA CLOSEOUT (fenix, ATM 01M2A7443Z9R020ABEPJFJHAJC, 2026-09-12T07:08:18Z): arch-qa phase-ending review (ARCH-001) + quality-mgr BA-PHASE-END-QA independently live-verified fixed in tree at 9f5aef2fe. No status change; occurrences already closed by team-lead's prior batch (d32345d4c)." ;
+  triage:triageRecordVersion "5" .
+
+<urn:atm:triage:occurrence/BA5-QA2-001/BA5-QA2-001-1>
+  a triage:Occurrence ;
+  triage:file ".just/rust_source.py" ;
+  triage:line 12 ;
+  triage:snippet "def code_mask(source: str) -> str:" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:37:03Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "branch frozen before fix landed; promoted to docs/ba6-task-nudge-documentation, not fixed in place" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:occursIn <urn:atm:triage:worktree/ba5-qa2-001-1> .
+
+<urn:atm:triage:worktree/ba5-qa2-001-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba5-queue-ephemeral-item" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BA5-QA2-001/BA6-1>
+  a triage:Occurrence ;
+  triage:file ".just/rust_source.py" ;
+  triage:line 12 ;
+  triage:snippet "def code_mask(source: str) -> str:" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:44:29Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "promoted to fix/phase-ba-cleanup; arch-ctm's BA6-CLEANUP task cancelled" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:occursIn <urn:atm:triage:worktree/ba5-qa2-001-ba6-1> .
+
+<urn:atm:triage:worktree/ba5-qa2-001-ba6-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba6-task-nudge-documentation" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:occurrence/BA5-QA2-001/CLEANUP-1>
+  a triage:Occurrence ;
+  triage:file ".just/rust_source.py" ;
+  triage:line 12 ;
+  triage:snippet "def code_mask(source: str) -> str:" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T06:21:13Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/CLEANUPB-1 (fix/phase-ba-cleanup-b @ a2da4a570, BA-TOP-QA-1789192584 PASS)" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:occursIn <urn:atm:triage:worktree/ba5-qa2-001-cleanup-1> .
+
+<urn:atm:triage:worktree/ba5-qa2-001-cleanup-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 5, cipher single writer" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/BA5-QA2-001/CLEANUPB-1>
+  a triage:Occurrence ;
+  triage:file ".just/rust_source.py" ;
+  triage:line 12 ;
+  triage:snippet "def code_mask(source: str) -> str: -- lifetime-tick lexer fix landed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T06:21:13Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "BA-TOP-QA-1789192584 PASS on PR #1414 @ a2da4a570 (base 03c623717), report https://github.com/randlee/atm-core/pull/1414#issuecomment-5644152591; five reviewers, 0 blocking; verified by quality-mgr reading code at that head." ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "a2da4a570" ;
+  triage:occursIn <urn:atm:triage:worktree/ba5-qa2-001-cleanupb-1> .
+
+<urn:atm:triage:worktree/ba5-qa2-001-cleanupb-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 6 (post-rebase, frozen), PR #1414 landing head" ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "a2da4a570" ;
+  triage:orderIndex 6 .

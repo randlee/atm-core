@@ -1,32 +1,27 @@
 //! Task and blocked-runtime escalation for the Herdr queue wake pump.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::boundary::{
     AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventKind, TaskEventRow,
-    TaskRow, TaskState,
+    TaskRow,
 };
 use atm_core::types::IsoTimestamp;
 
-use crate::herdr_escalation::{
-    BLOCKED_NOTIFY_MS, EscalationKind, EscalationNotification, MAX_BLOCKED_ESCALATIONS_PER_TICK,
-    escalate,
-};
-use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, run_blocking};
+use crate::herdr_escalation::{EscalationKind, escalate_mail, escalation_summary};
+use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, herdr_request_deadline};
+use crate::herdr_task_disposition::EpisodeKind;
 
 const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
-const MAX_BLOCKED_TASKS_IN_BODY: usize = 8;
 const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
 
 pub(crate) struct TaskReminderContext<'a> {
-    pub(crate) reader: &'a (dyn AsyncTaskLedgerReader + Send + Sync),
     pub(crate) task_store: &'a Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     pub(crate) member: &'a MemberKey,
 }
 
-pub(crate) async fn maybe_escalate_task(
+pub(crate) async fn escalate_stalled_task(
     pump: &HerdrQueueWakePump,
     reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
@@ -34,13 +29,6 @@ pub(crate) async fn maybe_escalate_task(
     now: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
-    let threshold = row
-        .lead_notified_count
-        .saturating_add(1)
-        .saturating_mul(atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD);
-    if row.reminder_count < threshold {
-        return;
-    }
     let events = match reminder_events(reader, row).await {
         Ok(events) => events,
         Err(error) => {
@@ -56,22 +44,33 @@ pub(crate) async fn maybe_escalate_task(
         }
     };
     let body = task_escalation_body(row, now, &events);
-    let notification = task_escalation_notification(row, now);
-    let outcome = escalate(
+    let Ok(outcome) = escalate_mail(
+        &pump.blocking_bridge,
         &pump.service_runtime,
-        pump.herdr_process.as_ref(),
         Some(task_store),
         &pump.daemon_home,
         &row.team,
+        &escalation_summary(
+            EscalationKind::TaskStalled,
+            &MemberKey::new(row.team.clone(), row.assignee.clone()),
+            Some(&row.task_id),
+        ),
         &body,
-        &notification,
-        EscalationKind::LeadNotified,
+        EscalationKind::TaskStalled,
+        None,
     )
-    .await;
+    .await
+    else {
+        return;
+    };
     record_escalation_stats(stats, &outcome);
-    if let (Some(lead), Some(message_id)) = (outcome.lead, outcome.lead_write) {
-        record_lead_audit(task_store, row, now, lead, message_id, stats).await;
-    }
+    let (audit_actor, message_id) = outcome.audit_delivery.unwrap_or_else(|| {
+        (
+            atm_core::types::AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME),
+            atm_core::schema::AtmMessageId::new(),
+        )
+    });
+    record_stall_audit(pump, task_store, row, now, audit_actor, message_id, stats).await;
 }
 
 async fn reminder_events(
@@ -118,22 +117,8 @@ fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow
     )
 }
 
-fn task_escalation_notification(row: &TaskRow, now: IsoTimestamp) -> EscalationNotification {
-    EscalationNotification {
-        title: "ATM task escalation".to_owned(),
-        body: format!(
-            "reason=lead_notified task_id={} member={} reminder_count={} last_reminded_at={} remediation=atm list --task-events {} --member {}",
-            row.task_id,
-            row.assignee,
-            row.reminder_count,
-            row.last_reminded_at.unwrap_or(now),
-            row.task_id,
-            row.assignee,
-        ),
-    }
-}
-
-async fn record_lead_audit(
+async fn record_stall_audit(
+    pump: &HerdrQueueWakePump,
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     row: &TaskRow,
     now: IsoTimestamp,
@@ -144,9 +129,12 @@ async fn record_lead_audit(
     let store = Arc::clone(task_store);
     let member = MemberKey::new(row.team.clone(), row.assignee.clone());
     let task_id = row.task_id.clone();
-    if let Err(error) =
-        run_blocking(move || store.record_lead_notified(&member, &task_id, now, &lead, &message_id))
-            .await
+    if let Err(error) = pump
+        .blocking_bridge
+        .run(herdr_request_deadline(), move || {
+            store.record_lead_notified(&member, &task_id, now, &lead, &message_id)
+        })
+        .await
     {
         tracing::warn!(
             subsystem = "herdr_queue_wake",
@@ -168,172 +156,77 @@ fn record_escalation_stats(
     stats.escalation_writes_failed = stats
         .escalation_writes_failed
         .saturating_add(outcome.recipients_failed as usize);
-    stats.notifications_failed = stats
-        .notifications_failed
-        .saturating_add(usize::from(!outcome.notify_ok));
 }
 
-pub(crate) async fn escalate_blocked(
+pub(crate) async fn escalate_episode(
     pump: &HerdrQueueWakePump,
-    blocked_members: &HashSet<MemberKey>,
-    reader: Option<&(dyn AsyncTaskLedgerReader + Send + Sync)>,
-    task_store: Option<&Arc<dyn atm_core::boundary::TaskStore + Send + Sync>>,
-    now: IsoTimestamp,
-    stats: &mut HerdrQueueWakeStats,
-) {
-    let mut members: Vec<_> = blocked_members.iter().cloned().collect();
-    members.sort_by(|left, right| {
-        left.team()
-            .as_str()
-            .cmp(right.team().as_str())
-            .then_with(|| left.agent().as_str().cmp(right.agent().as_str()))
-    });
-    for member in pump
-        .escalation_state
-        .next_blocked_batch(&members)
-        .into_iter()
-        .take(MAX_BLOCKED_ESCALATIONS_PER_TICK)
-    {
-        escalate_one_blocked(pump, &member, reader, task_store, now, stats).await;
-    }
-}
-
-async fn escalate_one_blocked(
-    pump: &HerdrQueueWakePump,
+    task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     member: &MemberKey,
-    reader: Option<&(dyn AsyncTaskLedgerReader + Send + Sync)>,
-    task_store: Option<&Arc<dyn atm_core::boundary::TaskStore + Send + Sync>>,
-    now: IsoTimestamp,
+    kind: EpisodeKind,
+    since: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
-    let since = pump.escalation_state.blocked_start(member, now);
-    if elapsed_millis(now, since) < BLOCKED_NOTIFY_MS
-        || pump.escalation_state.blocked_cooldown(member, now)
-    {
-        return;
-    }
-    let open_tasks = blocked_tasks(reader, member).await;
-    let body = blocked_body(member, since, now, &open_tasks);
-    let notification = blocked_notification(member, since, now, &open_tasks);
-    let outcome = escalate(
+    let body = episode_body(member, kind, since);
+    let Ok(outcome) = escalate_mail(
+        &pump.blocking_bridge,
         &pump.service_runtime,
-        pump.herdr_process.as_ref(),
-        task_store,
+        Some(task_store),
         &pump.daemon_home,
         member.team(),
+        &escalation_summary(kind.into(), member, None),
         &body,
-        &notification,
-        EscalationKind::BlockedEscalated,
+        kind.into(),
+        Some(since),
     )
-    .await;
+    .await
+    else {
+        pump.escalation_state.hold_targets_unavailable(member);
+        return;
+    };
     record_escalation_stats(stats, &outcome);
-    if outcome.reached_anyone() {
-        pump.escalation_state.stamp_blocked_notice(member, now);
-        stats.blocked_escalations += 1;
-    }
+    stats.blocked_escalations += usize::from(outcome.reached_anyone());
 }
 
-async fn blocked_tasks(
-    reader: Option<&(dyn AsyncTaskLedgerReader + Send + Sync)>,
-    member: &MemberKey,
-) -> Vec<TaskRow> {
-    let Some(reader) = reader else {
-        return Vec::new();
-    };
-    let Ok(deadline) = ReadDeadline::new(TASK_READ_DEADLINE) else {
-        return Vec::new();
-    };
-    match reader
-        .list_tasks(
-            member.team().clone(),
-            Some(member.agent().clone()),
-            deadline,
-        )
-        .await
-    {
-        Ok(rows) => rows
-            .into_iter()
-            .filter(|row| row.state != TaskState::Complete)
-            .collect(),
-        Err(error) => {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "blocked_escalation_tasks",
-                outcome = "failed",
-                member = %member,
-                error = %error,
-                "Blocked escalation task read failed"
-            );
-            Vec::new()
-        }
-    }
-}
-
-fn elapsed_millis(now: IsoTimestamp, since: IsoTimestamp) -> u64 {
-    now.into_inner()
-        .signed_duration_since(since.into_inner())
-        .num_milliseconds()
-        .max(0) as u64
-}
-
-fn blocked_body(
+pub(crate) async fn escalate_refusals(
+    pump: &HerdrQueueWakePump,
+    task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     member: &MemberKey,
     since: IsoTimestamp,
-    now: IsoTimestamp,
-    open_tasks: &[TaskRow],
-) -> String {
-    let tasks = if open_tasks.is_empty() {
-        "none".to_owned()
-    } else {
-        open_tasks
-            .iter()
-            .take(MAX_BLOCKED_TASKS_IN_BODY)
-            .map(|row| {
-                format!(
-                    "{} (assigned by {}, {} reminders)",
-                    row.task_id, row.assigner, row.reminder_count
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(" | ")
-    };
-    truncate_body(format!(
-        "{} has been waiting for interactive input since {} ({})\nopen tasks: {}\nAttach to its Herdr agent and answer the prompt. Run: atm members --team {}",
+    stats: &mut HerdrQueueWakeStats,
+) {
+    let body = format!(
+        "member {} has refused three consecutive task handoffs since {}\nRun: atm list --task-events --member {}",
         member.agent(),
         since,
-        format_age(elapsed_millis(now, since)),
-        tasks,
+        member.agent(),
+    );
+    let Ok(outcome) = escalate_mail(
+        &pump.blocking_bridge,
+        &pump.service_runtime,
+        Some(task_store),
+        &pump.daemon_home,
         member.team(),
-    ))
+        &escalation_summary(EscalationKind::RefusalsEscalated, member, None),
+        &body,
+        EscalationKind::RefusalsEscalated,
+        Some(since),
+    )
+    .await
+    else {
+        return;
+    };
+    record_escalation_stats(stats, &outcome);
+    stats.blocked_escalations += usize::from(outcome.reached_anyone());
 }
 
-fn blocked_notification(
-    member: &MemberKey,
-    since: IsoTimestamp,
-    now: IsoTimestamp,
-    open_tasks: &[TaskRow],
-) -> EscalationNotification {
-    let task_ids = open_tasks
-        .iter()
-        .take(MAX_BLOCKED_TASKS_IN_BODY)
-        .map(|row| row.task_id.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-    EscalationNotification {
-        title: "ATM blocked member escalation".to_owned(),
-        body: format!(
-            "reason=blocked member={} age={} since={} task_ids={} remediation=atm members --team {}",
-            member.agent(),
-            format_age(elapsed_millis(now, since)),
-            since,
-            if task_ids.is_empty() {
-                "none"
-            } else {
-                &task_ids
-            },
-            member.team(),
-        ),
-    }
+fn episode_body(member: &MemberKey, kind: EpisodeKind, since: IsoTimestamp) -> String {
+    truncate_body(format!(
+        "{} member {} has been in this state since {}\nRun: atm members --team {}",
+        kind.as_str(),
+        member.agent(),
+        since,
+        member.team(),
+    ))
 }
 
 fn truncate_body(mut body: String) -> String {
@@ -346,8 +239,4 @@ fn truncate_body(mut body: String) -> String {
         body.push('…');
     }
     body
-}
-
-fn format_age(milliseconds: u64) -> String {
-    format!("{}s", milliseconds / 1_000)
 }

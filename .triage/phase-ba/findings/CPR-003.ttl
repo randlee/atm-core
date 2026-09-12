@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-003>
+  a triage:Finding ;
+  triage:findingId "CPR-003" ;
+  triage:title "Escalation mail is a Deferred write, so it becomes an open queue item that re-prompts the lead every 60s" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. Escalation mail is a Deferred write, so it becomes an open queue item that re-prompts the lead every 60s. Doc says: nudge-task-design.md §6.1: 'Do NOT persistently nudge lead -- that recreates the 587 problem one level up.' sprint-BA.5 claims 'Nothing outside `atm queue` carries the marker.' Code does: escalate_mail builds its write `.with_nudge_mode(NudgeMode::Deferred)`. Deferred writes set the durable queue marker via PreparedWrite::mark_pending_if_deferred (crates/atm-core/src/write/pipeline.rs:119, 317-329). Recommendation: Send escalation mail with NudgeMode::Immediate (one prompt, no marker), and assert the absence of the marker in a test alongside immediate_send_never_carries_marker. fenix's ruling: send escalation mail with NudgeMode::Immediate instead of Deferred." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A9DXDG2VQCBZCZ3VDFQTDR, 2026-09-12T07:48:36Z): fixed by arch-ctm at review-2 756015b72 (escalation mail now NudgeMode::Immediate with a real-escalation no-marker test); gate-green on fenix's host." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-003/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-003/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CPR-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 365 ;
+  triage:snippet "escalate_mail builds its write .with_nudge_mode(NudgeMode::Deferred), setting the durable queue marker and recreating the section-6.1 587 problem one level up at the lead" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:48:36Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ 756015b72)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-003/review2> .
+
+<urn:atm:triage:occurrence/CPR-003/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 365 ;
+  triage:snippet "escalation mail sent with NudgeMode::Immediate instead of Deferred; real-escalation no-marker test added alongside immediate_send_never_carries_marker" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:48:36Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm fix/phase-ba-review-2 @ 756015b72; gate-green on fenix's host." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "756015b72" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-003/2> .
+
+<urn:atm:triage:worktree/CPR-003/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), gate-green" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "756015b72" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/CPR-003/review2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm, bounded bridge + CPR items 4-14), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

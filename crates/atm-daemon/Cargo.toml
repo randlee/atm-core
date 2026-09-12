@@ -12,5 +12,5 @@ homepage.workspace = true
 
 [dependencies]
 tokio.workspace = true
-atm-core = { workspace = true, features = ["test-utils"] }
+atm-core.workspace = true
 atm-daemon-bootstrap.workspace = true

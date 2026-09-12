@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
+use crate::task_state::TaskCloseOutcome;
 use crate::types::{AgentName, IsoTimestamp, MemberKey, ModelName, PaneId, TaskId, TeamName};
 
 #[doc(hidden)]
@@ -228,6 +229,29 @@ pub struct Message {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
+}
+
+/// Result of admitting one immutable message and applying any governed task
+/// operation carried by that newly inserted local message.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MessageAdmissionOutcome {
+    pub existing: Option<Message>,
+    pub already_closed: Option<TaskCloseOutcome>,
+    /// A governed task operation rejected after its report was retained as
+    /// ordinary mail. Callers must complete ordinary post-write handling
+    /// before surfacing this error to the sender.
+    pub task_rejection: Option<AtmError>,
+}
+
+impl MessageAdmissionOutcome {
+    #[must_use]
+    pub fn passive(existing: Option<Message>) -> Self {
+        Self {
+            existing,
+            already_closed: None,
+            task_rejection: None,
+        }
+    }
 }
 
 /// Aggregate display counts for one mailbox without materializing its messages.
@@ -744,16 +768,16 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         self.save_message(message)?;
         Ok(None)
     }
-    /// Like [`Self::save_message_if_absent`], carrying the write origin so a
-    /// backend can apply task transitions only for local writes. The default
-    /// keeps existing stores as passive message stores.
-    fn save_message_if_absent_with_provenance(
+    /// Provenance-aware admission that also returns the governed task-close
+    /// result produced by a newly inserted local message.
+    fn admit_message_with_provenance(
         &self,
         message: &Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         let _ = provenance;
         self.save_message_if_absent(message)
+            .map(MessageAdmissionOutcome::passive)
     }
     /// Commits related immutable mailbox records as one durable unit.
     ///
@@ -822,14 +846,16 @@ pub trait AsyncMessageStore: MessageStore {
         self.save_message_if_absent(&message)
     }
 
-    /// Async companion to [`MessageStore::save_message_if_absent_with_provenance`].
-    async fn save_message_if_absent_with_provenance_async(
+    /// Async companion to [`MessageStore::admit_message_with_provenance`].
+    async fn admit_message_with_provenance_async(
         &self,
         message: Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         let _ = provenance;
-        self.save_message_if_absent_async(message).await
+        self.save_message_if_absent_async(message)
+            .await
+            .map(MessageAdmissionOutcome::passive)
     }
 
     /// Atomically admits a mailbox record and its template decomposition on
@@ -837,7 +863,7 @@ pub trait AsyncMessageStore: MessageStore {
     async fn admit_template_message_async(
         &self,
         _admission: crate::TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         Err(AtmError::daemon_unavailable(
             "message store does not implement async template-message admission",
         ))
@@ -914,6 +940,28 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
 /// storage-owned reader lane and must not enter the ordered writer lane.
 #[async_trait::async_trait]
 pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
+    async fn load_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Option<TaskRow>, ReadLaneError>;
+
+    /// Every open task on the team, ordered by assignee and queue position.
+    async fn open_tasks_for_team(
+        &self,
+        team: TeamName,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError>;
+
+    /// Trailing consecutive-refusal run for one assignee.
+    async fn refusal_run(
+        &self,
+        team: TeamName,
+        assignee: AgentName,
+        deadline: ReadDeadline,
+    ) -> Result<crate::RefusalRun, ReadLaneError>;
+
     async fn list_tasks(
         &self,
         team: TeamName,
@@ -1299,25 +1347,17 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
     /// Returns [`AtmError`] if the underlying storage operation fails.
     fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError>;
 
-    /// Clears the marker for one message on the read path.
+    /// Re-arms one just-handed-off message at its next due time while it is
+    /// still open. A message read between claim and handoff is not re-armed.
     ///
     /// # Errors
     ///
     /// Returns [`AtmError`] if the underlying storage operation fails.
-    fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
-    -> Result<(), AtmError>;
-
-    /// Clears the marker for exactly one just-handed-off message.
-    ///
-    /// Unconditional and idempotent.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] if the underlying storage operation fails.
-    fn clear_pending_on_handoff(
+    fn rearm_pending_after_handoff(
         &self,
         member: &MemberKey,
         msg: &AtmMessageId,
+        next_due: IsoTimestamp,
     ) -> Result<(), AtmError>;
 
     /// Enumerates members holding at least one eligible pending marker.
@@ -1326,6 +1366,56 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
     ///
     /// Returns [`AtmError`] if the underlying storage operation fails.
     fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError>;
+}
+
+/// One configurable pending-store double shared across workspace tests.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-utils"))]
+pub struct DummyPendingNudgeStore(pub(crate) crate::testing::PendingStoreState);
+
+#[cfg(any(test, feature = "test-utils"))]
+impl sealed::Sealed for DummyPendingNudgeStore {}
+
+#[cfg(any(test, feature = "test-utils"))]
+impl PendingNudgeStore for DummyPendingNudgeStore {
+    fn mark_pending(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        at: IsoTimestamp,
+    ) -> Result<bool, AtmError> {
+        self.mark(member, msg, at)
+    }
+
+    fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+        self.claim(member)
+    }
+
+    fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.requeue(member, claim)
+    }
+
+    fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.release(member, claim)
+    }
+
+    fn rearm_pending_after_handoff(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        next_due: IsoTimestamp,
+    ) -> Result<(), AtmError> {
+        if let Some(failure) = self.rearm_failure() {
+            return Err(failure);
+        }
+        self.inner().map_or(Ok(()), |inner| {
+            inner.rearm_pending_after_handoff(member, msg, next_due)
+        })
+    }
+
+    fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
+        self.list()
+    }
 }
 
 #[cfg(test)]
@@ -1487,69 +1577,14 @@ mod tests {
         }
     }
 
-    #[derive(Default)]
-    struct DummyPendingNudgeStore;
-
-    impl sealed::Sealed for DummyPendingNudgeStore {}
-
-    impl PendingNudgeStore for DummyPendingNudgeStore {
-        fn mark_pending(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-            _at: IsoTimestamp,
-        ) -> Result<bool, AtmError> {
-            Ok(true)
-        }
-
-        fn claim_next_pending(&self, _member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-            Ok(None)
-        }
-
-        fn requeue_pending(
-            &self,
-            _member: &MemberKey,
-            _claim: &NudgeClaim,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn release_pending(
-            &self,
-            _member: &MemberKey,
-            _claim: &NudgeClaim,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn clear_pending_on_read(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-            Ok(Vec::new())
-        }
-    }
-
     #[test]
     fn storage_traits_are_object_safe() {
         let store = DummyStore;
         let message_store: &dyn MessageStore = &store;
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
-        let pending_nudge_store: &dyn PendingNudgeStore = &DummyPendingNudgeStore;
+        let pending_nudge_store: &dyn PendingNudgeStore =
+            &crate::testing::DummyPendingNudgeStore::default();
         let override_store: &dyn NudgeTemplateOverrideStore = &DummyNudgeTemplateOverrideStore;
         let graft_receiver_endpoint_store: &dyn GraftReceiverEndpointStore =
             &DummyGraftReceiverEndpointStore;
@@ -1581,6 +1616,8 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                placement: None,
+                task_op: None,
                 task_complete: None,
                 extra: Map::new(),
             },
@@ -1671,11 +1708,8 @@ mod tests {
             .release_pending(&member, &claim)
             .expect("release pending");
         pending_nudge_store
-            .clear_pending_on_read(&member, &msg)
-            .expect("clear pending on read");
-        pending_nudge_store
-            .clear_pending_on_handoff(&member, &msg)
-            .expect("clear pending on handoff");
+            .rearm_pending_after_handoff(&member, &msg, IsoTimestamp::now())
+            .expect("rearm pending after handoff");
         assert!(
             pending_nudge_store
                 .list_pending_members()
@@ -1769,6 +1803,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("AD.99".parse().expect("task")),
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: Map::new(),
         };

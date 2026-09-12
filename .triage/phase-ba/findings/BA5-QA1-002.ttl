@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA1-002>
+  a triage:Finding ;
+  triage:findingId "BA5-QA1-002" ;
+  triage:title "doc-named herdr_queue_ephemeral.rs test file missing; 8 of 9 in-scope tests relocated, 1 genuinely absent" ;
+  triage:description "Followup pass after BA5-FIX-R1 (e6ef9b488) and quality-mgr QA-2 verification (7997f8aaa). Test blocked_member_with_open_item_escalates_not_reminded now exists at crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs line 634 on feature/ba5-queue-ephemeral-item and has been merged to docs/ba6-task-nudge-documentation. Absent on earlier branches (ba3, ba4) and integrate/phase-ba pending forward-merges from ba5 branch." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-002/BA5-002-fixed-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-002/BA6-002-fixed-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BA5-QA1-002/BA5-002-fixed-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs" ;
+  triage:line 634 ;
+  triage:snippet "async fn blocked_member_with_open_item_escalates_not_reminded() {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:occursIn <urn:atm:triage:worktree/ba5/7997f8aaa> .
+
+<urn:atm:triage:occurrence/BA5-QA1-002/BA6-002-fixed-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs" ;
+  triage:line 634 ;
+  triage:snippet "async fn blocked_member_with_open_item_escalates_not_reminded() {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:occursIn <urn:atm:triage:worktree/ba6/a49b922aa> .
+
+<urn:atm:triage:worktree/ba5/7997f8aaa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba5" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ba6/a49b922aa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba6" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .

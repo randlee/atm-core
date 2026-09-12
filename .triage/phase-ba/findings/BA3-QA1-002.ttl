@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-002>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-002" ;
+  triage:title "herdr_nudge_invariant.rs runtime tests are substantively hollow: most named tests are aliases of two generic stub helpers; no roster-shape/backend variation anywhere" ;
+  triage:description "quality-mgr QA-1 (quality-mgr direct read, converged: req-qa, rust-qa-agent), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. Five named tests (reopen_of_stalled_task_escalates_again_at_threshold, head_already_active_handoff_sends_no_receipt, failed_start_write_then_active_member_still_starts_once, non_refused_close_releases_refusal_hold, non_herdr_idle_member_with_task_is_nudged_through_its_backend) are one-line aliases of assert_idle_task_is_nudged(); three more (third_refusal_holds_and_escalates_once, daemon_restart_does_not_reescalate_ongoing_episode, recipients_only_episode_is_not_duplicated_after_restart) alias assert_non_idle_status_never_prompts(Blocked) -- none simulate the scenario their name claims. offline_member_gets_one_message_zero_nudges_per_episode uses HerdrAgentStatus::Unknown (-> Hold(\"unobserved\")), not Offline (-> EscalateEpisode) -- cannot reach its own claimed code path (herdr_queue_wake.rs:928-935). escalation_mail_does_not_consume_prompt_budget never includes a Blocked member or checks mail count; no test in the file reads a mailbox. All fixtures use RosterMemberKind::Permanent + FakeHerdrProcessAdapter; none of the doc-required roster shapes (lead+1/lead+3/two-leads/no-lead) or backends (tmux/bare-CLI-FIFO) are exercised. dispose_table_is_exhaustive (herdr_task_disposition.rs:246-260) discards every dispose(...) call via let _ = with zero assertions -- can only fail on panic, not on a wrong disposition. This is the same underlying gap as the already-fixed BA3-PRE-002 (missing test names): the names now exist and pass, satisfying the letter of AC2, but the substance (real differentiated coverage) was never delivered -- see triage:relatedFinding. fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): STANDS. Every doc-named runtime test must construct the scenario its own doc line describes and assert what that line says (prompt counts, mail count/recipients, task state/events, receipts); no shared one-line aliases. All doc-named roster shapes and backends must be exercised where named. offline_member_... must reach Offline through the heartbeat/roster path, not HerdrAgentStatus::Unknown. dispose_table_is_exhaustive gets assert_eq! per arm, no wildcard. Fix task BA3-FIX-R3-1789183410 dispatched to arch-ctm; remaining stage 3 (this finding's runtime scenario bodies) re-routed by fenix to solar as BA3-FIX-R3B-1789187055 on the same branch/worktree (single writer transferred) after arch-ctm's codex session went context-saturated (0 tool calls since 04:01, every reminder returning 'Already acknowledged. Continuing' with no further work). Do not re-dispatch to arch-ctm until his session is restarted fresh." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs, crates/atm-http-runtime/src/herdr_task_disposition.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:relatedFinding "BA3-PRE-002" ;
+  triage:deferredNote "fenix (ATM 2026-09-12T05:04:25Z): feature/ba3-nudge-invariant complete and FROZEN at c462c6977 (solar, BA3-FIX-R3B closed). BA3-QA2 dispatched to quality-mgr on c462c6977 (merge-base with integrate fd242df7a); this finding is expected to close on that pass -- not yet confirmed, status held open pending BA3-QA2 verdict." ;
+  triage:deferredNote "fenix (ATM 2026-09-12T05:27:38Z): BA3-QA2-1789189465 verdict PASS (content) at c462c6977, all five reviewers confirm, report https://github.com/randlee/atm-core/pull/1402#issuecomment-5643745166. FIXED." ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-002/2> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/BA3-QA1-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1 ;
+  triage:snippet "most named tests alias assert_idle_task_is_nudged()/assert_non_idle_status_never_prompts(); no roster-shape/backend variation; dispose_table_is_exhaustive discards results via let _ =" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:04:25Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "feature/ba3-nudge-invariant frozen at c462c6977 (BA3-FIX-R3B closed); superseded by occurrence/2 pending BA3-QA2 verification" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-002/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:occurrence/BA3-QA1-002/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1 ;
+  triage:snippet "most named tests alias assert_idle_task_is_nudged()/assert_non_idle_status_never_prompts(); no roster-shape/backend variation; dispose_table_is_exhaustive discards results via let _ =" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "BA3-QA2-1789189465 PASS at c462c6977; all five reviewers confirm (#1402 issuecomment-5643745166)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-002/2> .
+
+<urn:atm:triage:worktree/BA3-QA1-002/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "frozen head after BA3-FIX-R3B (solar); BA3-QA2 dispatched to quality-mgr, merge-base with integrate fd242df7a" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:orderIndex 1 .

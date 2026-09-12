@@ -1,0 +1,119 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-004>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-004" ;
+  triage:title "Task 4's documented no-delivery-channel Hold behavior is not implemented anywhere; its only test is one of the hollow BA3-QA1-002 aliases" ;
+  triage:description "quality-mgr QA-1 (req-qa), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. Task 4's documented behavior (Hold(\"no delivery channel\"), one warn per tick) is not implemented anywhere: build_task_reminder_dispatch's Ok(None) case is a bare return with no disposition or log line, and no \"no delivery channel\" string exists in the crate. Its supposed test, member_without_dispatchable_backend_holds_and_logs_once, is one of the hollow aliases from BA3-QA1-002, so this gap shipped undetected. fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): STANDS; folded into BA3-FIX-R3-1789183410 with its test." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs (build_task_reminder_dispatch)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:relatedFinding "BA3-QA1-002" ;
+  triage:deferredNote "fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z) adds worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer, pushed at BA.6's then-current head a49b922aa; now dfd47edca). No longer folded into BA3-FIX-R3 on feature/ba3-nudge-invariant -- fixed once on fix/phase-ba-cleanup per the O(n^2) fix-multiplication avoidance rule; the ba3 occurrence will close by merge-forward, not a separate fix." ;
+  triage:deferredNote "fenix's disposition settled (ATM 2026-09-12T05:10:27Z): correction to the above -- BA.3 has carried the no-delivery-channel warn since 67ff0420f (herdr_queue_wake_reminders.rs:247, one warn per candidate per tick, bare return), so the production half was already present and is on BA.3 at c462c6977 (BA3-QA2 verifies it, tracked like BA3-QA1-001/002/003). Only the missing test still lands on fix/phase-ba-cleanup (cipher, BA-CLEANUP-FIXUP)." ;
+  triage:deferredNote "fenix (ATM 2026-09-12T05:27:38Z): BA3-QA2-1789189465 verdict PASS (content) at c462c6977, report https://github.com/randlee/atm-core/pull/1402#issuecomment-5643745166 -- production-half occurrence/3 confirmed fixed, same pass as BA3-QA1-001/002/003. Finding stays open overall: the test-only gap (occurrence/2) still lives on fix/phase-ba-cleanup." ;
+  triage:promoteTo "fix/phase-ba-cleanup" ;
+  triage:deferredNote "fenix (ATM 01M2A4DWXYME20KRNTBXHQS534, 2026-09-12T06:21:13Z): BA-TOP-QA-1789192584 PASS on PR #1414 @ a2da4a570 (base 03c623717), report https://github.com/randlee/atm-core/pull/1414#issuecomment-5644152591, five reviewers, 0 blocking. Close as FIXED @ a2da4a570 (test half, verified by quality-mgr reading code at that head)." ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/4> ;
+  triage:deferredNote "PHASE BA CLOSEOUT (fenix, ATM 01M2A7443Z9R020ABEPJFJHAJC, 2026-09-12T07:08:18Z): arch-qa phase-ending review (ARCH-001) + quality-mgr BA-PHASE-END-QA independently live-verified fixed in tree at 9f5aef2fe. No status change; occurrences already closed by team-lead's prior batch (d32345d4c)." ;
+  triage:triageRecordVersion "6" .
+
+<urn:atm:triage:occurrence/BA3-QA1-004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 1 ;
+  triage:snippet "build_task_reminder_dispatch's Ok(None) case is a bare return -- no Hold(\"no delivery channel\") disposition or log line" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:44:29Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "promoted to fix/phase-ba-cleanup; will not be separately fixed on feature/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-004/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:occurrence/BA3-QA1-004/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 1 ;
+  triage:snippet "member_without_dispatchable_backend_holds_and_logs_once is still a hollow BA3-QA1-002 alias -- test-only gap; production warn already exists on BA.3 (see occurrence/3)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T06:21:13Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; test fixed downstream, tracked at occurrence/4 (fix/phase-ba-cleanup-b @ a2da4a570, BA-TOP-QA-1789192584 PASS)" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-004/2> .
+
+<urn:atm:triage:worktree/BA3-QA1-004/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 5, cipher single writer; test-only fix, BA-CLEANUP-FIXUP" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/BA3-QA1-004/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 247 ;
+  triage:snippet "no-delivery-channel warn present since 67ff0420f (one warn per candidate per tick, bare return) -- production half already on BA.3" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "BA3-QA2-1789189465 PASS at c462c6977 confirms the production-half warn (#1402 issuecomment-5643745166); test-only gap remains open on fix/phase-ba-cleanup (occurrence/2)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-004/3> .
+
+<urn:atm:triage:worktree/BA3-QA1-004/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "frozen head after BA3-FIX-R3B (solar); BA3-QA2 dispatched to quality-mgr, merge-base with integrate fd242df7a" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BA3-QA1-004/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 1 ;
+  triage:snippet "member_without_dispatchable_backend_holds_and_logs_once test fixed (no longer a hollow BA3-QA1-002 alias)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T06:21:13Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "BA-TOP-QA-1789192584 PASS on PR #1414 @ a2da4a570 (base 03c623717), report https://github.com/randlee/atm-core/pull/1414#issuecomment-5644152591; five reviewers, 0 blocking; verified by quality-mgr reading code at that head." ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "a2da4a570" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-004/4> .
+
+<urn:atm:triage:worktree/BA3-QA1-004/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 6 (post-rebase, frozen), PR #1414 landing head" ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "a2da4a570" ;
+  triage:orderIndex 6 .

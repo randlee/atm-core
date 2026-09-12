@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ACR-002>
+  a triage:Finding ;
+  triage:findingId "ACR-002" ;
+  triage:title "Release guard uses raw spawn_blocking; shutdown drain is unbounded (= RDY-003)" ;
+  triage:description "arch-ctm BA-PHASE-REVIEW @ 9f5aef2fe, corroborated independently by solar's BA-READINESS Part A as RDY-003. Finding: the release guard's blocking call uses a raw tokio::task::spawn_blocking instead of the BoundedBlockingBridge pattern; the shutdown drain path has no bound; run_blocking (RBQA-F010) only bounds the waiter side, not this path. Routed to arch-ctm fix/phase-ba-review-2 @ 4e621bb4a (item 3, in progress, same layer as RBQA-F010's bounded-bridge work)." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A821M48VWSZ0JGXMA4WWZ7, 2026-09-12T07:24:38Z): fixed on review-2's rebased frozen head 984da6c6c, gate-green (same bridge migration as RBQA-BA-F010). fenix (ATM 01M2AFXE4KCRFRNQ60NDKCD4BN, 2026-09-12T09:41:56Z): REVIEW-2 FINAL REMAP (frozen) -- 32ba10f45 -> 30148d759; branch FROZEN, all 13 gates green at review-2 tip 0b4911c5a." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACR-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ACR-002/2> ;
+  triage:relatedFinding "RDY-003" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/ACR-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "release guard raw spawn_blocking; shutdown drain unbounded" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ 984da6c6c)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/ACR-002/1> .
+
+<urn:atm:triage:occurrence/ACR-002/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "release guard now routes through BoundedBlockingBridge; shutdown drain bounded" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm review-2, rebased frozen head 984da6c6c (gate-green); review-2 final remap 32ba10f45 -> 30148d759 onto frozen review-1 5a00502ee (tip 0b4911c5a), 13-gate-green." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "30148d759" ;
+  triage:occursIn <urn:atm:triage:worktree/ACR-002/2> .
+
+<urn:atm:triage:worktree/ACR-002/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), rebased and frozen onto review-1 5a00502ee (13-gate-green)" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "30148d759" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/ACR-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

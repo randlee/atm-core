@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-024>
+  a triage:Finding ;
+  triage:findingId "CPR-024" ;
+  triage:title "assigned_at_set_only_by_assignment covers only start and close; the documented move case and the positive assertions are absent" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. assigned_at_set_only_by_assignment covers only start and close; the documented move case and the positive assertions are absent. Doc says: sprint-BA.2: assigned_at is set only by assignment — unchanged by start, close, and move; set on reassign and reopen. Code does: The test asserts the start and close cases only. The move case and the positive reassign/reopen assertions are not present. Recommendation: Add the move, reassign and reopen assertions. solar review-3 item B3, with negation proof per test." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/tests/task_identity.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A8SNPSSAS5KTHHN10N9W47, 2026-09-12T07:37:33Z): fixed by solar at review-3 1615e5c09; quality-mgr independently verified the production-path assertions (message 01M2A8SC0M335QZXZSD3E7MA1Q). fenix (ATM 01M2A8WFHE92D0JVN1ZJX0PXXR, 2026-09-12T07:39:05Z): gate confirmation -- 1615e5c09 is gate-green on fenix's host. Sha remap (fenix ATM 01M2A9NY2AEAKS6EAHY0V4ZDYB, 2026-09-12T07:52:59Z): review-3 rebased onto review-2 33754d69d (force-with-lease); 1615e5c09 -> 3f3b54d53. Status fixed at 3f3b54d53 stands, nothing pending." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-024/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-024/2> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/CPR-024/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/tests/task_identity.rs" ;
+  triage:line 1 ;
+  triage:snippet "test asserts start and close cases only; move case and positive reassign/reopen assertions absent (production behavior itself is correct -- coverage gap, not a defect)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:37:33Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-3 @ 3f3b54d53)." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-024/review3> .
+
+<urn:atm:triage:occurrence/CPR-024/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/tests/task_identity.rs" ;
+  triage:line 1 ;
+  triage:snippet "move, reassign, and reopen assertions added" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:39:05Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "solar fix/phase-ba-review-3 @ 3f3b54d53 (rebased onto review-2 33754d69d, was 1615e5c09 pre-rebase); quality-mgr independently verified the production-path assertions (message 01M2A8SC0M335QZXZSD3E7MA1Q); gate-green on fenix's host." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "3f3b54d53" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-024/2> .
+
+<urn:atm:triage:worktree/CPR-024/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar), rebased onto review-2 33754d69d, gate-green" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "3f3b54d53" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/CPR-024/review3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar, B3 negation-proof items), above fix/phase-ba-review-2" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 9 .

@@ -1,0 +1,471 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CI-IDENT-001>
+  a triage:Finding ;
+  triage:findingId "CI-IDENT-001" ;
+  triage:title "identities lint RULE-008/009 violation: 17 literal \"team-lead\" strings in herdr_nudge_invariant.rs" ;
+  triage:description "quality-mgr BA3-QA2-1789189465, PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643745166. crates/atm-http-runtime/tests/herdr_nudge_invariant.rs contains 17 literal occurrences of the string \"team-lead\", violating identities lint RULE-008/009 (agent identity strings must come from the roster/const registry, not be hand-typed literals). Found on frozen feature/ba3-nudge-invariant@c462c6977 and cipher layer fix/phase-ba-cleanup@b9f7c4386. fenix ruling: BLOCKING for top open layer, promote to fix/phase-ba-merge-fix (solar)." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:deferredNote "team-lead addendum (2026-09-12T05:41:00Z): verified all 17 literals are identical, line-for-line, on fix/phase-ba-cleanup@b9f7c4386 (same file); added as occurrences cleanup-1..17. feature/ba3-nudge-invariant occurrences are informational only (frozen, no fix there per Rand's rule). promote_to_branch = fix/phase-ba-merge-fix (solar) per fenix's ruling." ;
+  triage:deferredNote "solar (task BA-MERGE-FIX-1789190857, ATM 01M2A275B1ZFZFH81EXWGJ4X9F, 2026-09-12T05:42:35Z): fix pushed to fix/phase-ba-merge-fix @ c571ae930. team-lead verified via git show: grep -c '\"team-lead\"' on herdr_nudge_invariant.rs at c571ae930 returns 0 (was 17). All ten required gates and three focused suites PASS per solar." ;
+  triage:deferredNote "fenix ACCEPTED (ATM 01M2A2P74PQK7E3TM65K5ZAZQB, 2026-09-12T05:50:48Z): ten-gate run green, 23/23 nudge-invariant; BA-MERGE-FIX-1789190857 closed; layer frozen at c571ae930. FIXED." ;
+  triage:promoteTo "fix/phase-ba-merge-fix" ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/mergefix-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/ba3-17> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-17> ;
+  triage:deferredNote "fenix (ATM 01M2A4DWXYME20KRNTBXHQS534, 2026-09-12T06:21:13Z): BA-TOP-QA-1789192584 PASS on PR #1414 @ a2da4a570, report https://github.com/randlee/atm-core/pull/1414#issuecomment-5644152591 -- confirmed fixed, no change." ;
+  triage:triageRecordVersion "5" .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 157 ;
+  triage:snippet "let mut lead = bare_member(team, \"team-lead\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 203 ;
+  triage:snippet "let mut lead = bare_member(&team, \"team-lead\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 453 ;
+  triage:snippet "daemon_mail_for(&runtime, keys[16].team(), \"team-lead\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 535 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 546 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 606 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 623 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 650 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 670 ;
+  triage:snippet "let mail = daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 740 ;
+  triage:snippet "let mail = daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 780 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 793 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 852 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 891 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1179 ;
+  triage:snippet "let mail = daemon_mail_for(&runtime, key.team(), \"team-lead\").await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1198 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/ba3-17>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1208 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/ba3/c462c6977> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 157 ;
+  triage:snippet "let mut lead = bare_member(team, \"team-lead\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 203 ;
+  triage:snippet "let mut lead = bare_member(&team, \"team-lead\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 453 ;
+  triage:snippet "daemon_mail_for(&runtime, keys[16].team(), \"team-lead\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 535 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 546 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 606 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 623 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 650 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 670 ;
+  triage:snippet "let mail = daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 740 ;
+  triage:snippet "let mail = daemon_mail_for(&runtime, keys[0].team(), \"team-lead\").await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 780 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 793 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 852 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 891 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1179 ;
+  triage:snippet "let mail = daemon_mail_for(&runtime, key.team(), \"team-lead\").await;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1198 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/cleanup-17>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1208 ;
+  triage:snippet "assert_eq!(daemon_mail_for(&runtime, key.team(), \"team-lead\").await.len(), 1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:occursIn <urn:atm:triage:worktree/cleanup/b9f7c4386-ci> .
+
+<urn:atm:triage:worktree/ba3/c462c6977>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/cleanup/b9f7c4386-ci>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/phase-ba-cleanup" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "b9f7c4386" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/CI-IDENT-001/mergefix-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:snippet "grep -c '\"team-lead\"' returns 0 at c571ae930 (was 17 at b9f7c4386); literals replaced with roster/const-derived identity references" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:50:48Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "fenix ACCEPTED at fix/phase-ba-merge-fix @ c571ae930 (ten-gate run green, 23/23 nudge-invariant); BA-MERGE-FIX-1789190857 closed." ;
+  triage:branch "fix/phase-ba-merge-fix" ;
+  triage:headSha "c571ae930" ;
+  triage:occursIn <urn:atm:triage:worktree/merge-fix/c571ae930-ci> .
+
+<urn:atm:triage:worktree/merge-fix/c571ae930-ci>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 6 (inserted), solar single writer" ;
+  triage:branch "fix/phase-ba-merge-fix" ;
+  triage:headSha "c571ae930" ;
+  triage:orderIndex 6 .

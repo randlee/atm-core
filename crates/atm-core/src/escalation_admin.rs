@@ -13,19 +13,16 @@ pub fn scope(team: Option<&str>) -> Result<EscalationScope, AtmError> {
 }
 
 /// Validate and canonicalize an ADR-040 recipient.
-pub fn validate_address(address: &str) -> Result<String, AtmError> {
-    address
-        .parse::<AgentAddress>()
-        .map(|parsed| parsed.to_string())
-        .map_err(|error| {
-            AtmError::new(
-                crate::error_codes::AtmErrorCode::MessageValidationFailed,
-                format!(
-                    "invalid escalation recipient '{address}': {}",
-                    error.message()
-                ),
-            )
-        })
+pub fn validate_address(address: &str) -> Result<AgentAddress, AtmError> {
+    address.parse::<AgentAddress>().map_err(|error| {
+        AtmError::new(
+            crate::error_codes::AtmErrorCode::MessageValidationFailed,
+            format!(
+                "invalid escalation recipient '{address}': {}",
+                error.message()
+            ),
+        )
+    })
 }
 
 pub fn add(
@@ -51,7 +48,12 @@ pub fn list(
     store: &(dyn TaskStore + Send + Sync),
     target: &EscalationScope,
 ) -> Result<Vec<String>, AtmError> {
-    store.list_escalation_recipients(target)
+    store.list_escalation_recipients(target).map(|recipients| {
+        recipients
+            .into_iter()
+            .map(|address| address.to_string())
+            .collect()
+    })
 }
 
 #[must_use]

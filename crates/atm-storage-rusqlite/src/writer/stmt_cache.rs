@@ -34,9 +34,13 @@ impl WriterStatementCache {
                expires_at = excluded.expires_at,
                deleted_at = excluded.deleted_at,
                updated_at = excluded.updated_at,
-               nudge_pending_at = CASE WHEN excluded.read = 1
-                                       THEN NULL
-                                       ELSE mail_message_states.nudge_pending_at END;",
+               nudge_pending_at = CASE
+                   WHEN excluded.read = 1
+                        AND NOT (excluded.pending_ack_at IS NOT NULL
+                                 AND excluded.acknowledged_at IS NULL)
+                   THEN NULL
+                   ELSE mail_message_states.nudge_pending_at
+               END;",
         )?;
         statement.execute(params)
     }
@@ -49,7 +53,14 @@ impl WriterStatementCache {
         let mut statement = cached(
             connection,
             "UPDATE mail_message_states
-             SET read = 1, updated_at = ?4, nudge_pending_at = NULL
+             SET read = 1, updated_at = ?4,
+                 nudge_pending_at = CASE
+                     WHEN nudge_pending_at IS NOT NULL
+                          AND pending_ack_at IS NOT NULL
+                          AND acknowledged_at IS NULL
+                     THEN ?5
+                     ELSE NULL
+                 END
              WHERE team = ?1 AND agent = ?2 AND message_key = ?3 AND deleted_at IS NULL;",
         )?;
         statement.execute(params)

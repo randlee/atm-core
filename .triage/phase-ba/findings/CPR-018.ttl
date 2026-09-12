@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-018>
+  a triage:Finding ;
+  triage:findingId "CPR-018" ;
+  triage:title "atm task events and atm task list silently truncate to the oldest 200 records with no indicator and no override" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. `atm task events` and `atm task list` silently truncate to the oldest 200 records with no indicator and no override. Doc says: nudge-task-design.md §7: 'Oversight must not die as a side effect of an internal refactor.' Rand's ruling (#1411): the task queue is planned work only and oversight reads the event log. Code does: `rows.sort_by_key(|row| row.seq); apply_page(&mut rows, query.page);` where apply_page truncates. TaskPage::default_bounded() is 200 and is hard-wired at task.rs:388 and task.rs:444 — there is no --limit or --all on events. Recommendation: Add --limit/--all, default events to the most recent N rather than the oldest, and print a truncation indicator whenever rows were dropped. fenix's ruling: add --limit/--all to atm task events and atm task list; default events to the most recent N rather than the oldest; print a truncation indicator whenever rows were dropped." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/task_query.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2ACWKQZMWB5JDEQFRH6W5WK, 2026-09-12T08:49:03Z): pushed by arch-ctm at review-2 911133abb (fix(tasks): bound task query output). Recorded fixed-pending-correction: two corrections requested (delete now-uncalled non-paged selector wrappers; document --limit/--all + omission indicator in docs/user-documents/tasks.md). Final headSha will be the correction commit. fenix (ATM 01M2ACZR3BAP24EHM1CQDP2VH8, 2026-09-12T08:50:46Z): GATE FAIL at 911133abb on cli_surface (baseline not regenerated for the new --limit/--all args); other 12 gates green (this also covers CPR-009's 0b34764b9 head, now closed). CPR-018 stays fixed-pending-correction; the correction commit will include the baseline regeneration as a third correction item. fenix (ATM 01M2AD6WHXFQSAT0DB9VNGQ00V, 2026-09-12T08:54:40Z): remap -- correction commit bcfe5575c accepted on review (selector wrappers removed, tasks.md documented, cli_surface baseline regenerated); status fixed-pending-gate at bcfe5575c, fenix's gate run in flight. Gate-green confirmed (ATM 01M2ADBHGHX5R15C4VQFQP4707, 2026-09-12T08:57:12Z): 13-gate-green on fenix's host (cli_surface 2/2); CPR-018 closed at bcfe5575c." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-018/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-018/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-018/3> ;
+  triage:triageRecordVersion "4" .
+
+<urn:atm:triage:occurrence/CPR-018/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_query.rs" ;
+  triage:line 86 ;
+  triage:snippet "apply_page truncates to TaskPage::default_bounded() = 200 hard-wired at task.rs:388/444; no --limit/--all on events; high-reminder-count tasks (the 587 incident) hide their close with no indicator" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:49:03Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ 911133abb, pending correction)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-018/review2> .
+
+<urn:atm:triage:occurrence/CPR-018/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_query.rs" ;
+  triage:line 86 ;
+  triage:snippet "--limit/--all added to atm task events and atm task list; events default to most recent N rather than oldest; truncation indicator printed whenever rows were dropped" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:54:40Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; corrections applied, tracked at occurrence/3 (fix/phase-ba-review-2 @ bcfe5575c)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "911133abb" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-018/2> .
+
+<urn:atm:triage:worktree/CPR-018/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), GATE FAIL (cli_surface baseline), correction pending" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "911133abb" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:occurrence/CPR-018/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/task_query.rs" ;
+  triage:line 86 ;
+  triage:snippet "selector wrappers removed, tasks.md documented with --limit/--all + omission indicator, cli_surface baseline regenerated" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:54:40Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm fix/phase-ba-review-2 @ bcfe5575c (correction commit, accepted on review); 13-gate-green confirmed on fenix's host (cli_surface 2/2)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "bcfe5575c" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-018/3> .
+
+<urn:atm:triage:worktree/CPR-018/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), correction commit accepted, gate-green" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "bcfe5575c" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/CPR-018/review2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm, bounded bridge + CPR items 4-14), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .
