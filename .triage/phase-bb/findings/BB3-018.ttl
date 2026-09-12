@@ -19,12 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Add a test that runs _revision_is_ancestor against real repo history instead of a mocked subprocess.run. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1)." ;
+  triage:deferredNote "Add a test that runs _revision_is_ancestor against real repo history instead of a mocked subprocess.run. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) fixed this on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA; QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1)." ;
   triage:relatedFinding "BB3-003" ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-018/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-018/1>
   a triage:Occurrence ;
@@ -33,13 +33,13 @@
   triage:snippet "test_source_revision_resolves_to_newest_ancestor_without_inference mocks subprocess.run, doesn't itself exercise the real git merge-base --is-ancestor call" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "fix/bb3-qa2-r2" ;
-  triage:headSha "66be1d012" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-018/1> .
 
 <urn:atm:triage:worktree/BB3-018/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1445, fix/bb3-qa2-r2" ;
-  triage:branch "fix/bb3-qa2-r2" ;
-  triage:headSha "66be1d012" ;
+  triage:path "PR #1455, fix/bb3-qa3-r4" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
   triage:orderIndex 1 .

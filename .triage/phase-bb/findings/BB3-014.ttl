@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add a testbed ref row to both Steps tables in the doc, then regenerate via just procedures and re-run scripts/tests/test_render_procedure_pages.py to confirm. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1)." ;
+  triage:deferredNote "Fix: add a testbed ref row to both Steps tables in the doc, then regenerate via just procedures and re-run scripts/tests/test_render_procedure_pages.py to confirm. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) reported this not-reproducible at the current, already-satisfied path on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA (verify-not-reproducible); QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1) to confirm against the record." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-014/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-014/1>
   a triage:Occurrence ;
@@ -32,13 +32,13 @@
   triage:snippet "Steps table jumps from row 3 (herdr transport) straight to row 4 (atm-setup-environment / tester: Start line), missing the testbed ref row header_cases() emits; 48 doc rows vs 49 runner cases" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "fix/bb3-qa2-r2" ;
-  triage:headSha "66be1d012" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-014/1> .
 
 <urn:atm:triage:worktree/BB3-014/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1445, fix/bb3-qa2-r2" ;
-  triage:branch "fix/bb3-qa2-r2" ;
-  triage:headSha "66be1d012" ;
+  triage:path "PR #1455, fix/bb3-qa3-r4" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
   triage:orderIndex 1 .

@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Advisory only -- no gate is failing. Consider decomposition in a future sweep if these files continue to grow. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1) for visibility, not a required fix in this round." ;
+  triage:deferredNote "Advisory only -- no gate is failing. Consider decomposition in a future sweep if these files continue to grow. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1) for visibility, not a required fix in this round. cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) fixed this on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA; QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1)." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-022/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-022/1>
   a triage:Occurrence ;
@@ -32,13 +32,13 @@
   triage:snippet "2444 lines; sibling run_feature_smoke.py is 1110 lines; both exceed 1000 lines but .just/check_line_counts.py's RULE-003 gate only scans Rust crate src/**/*.rs, never Python" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "fix/bb3-qa2-r2" ;
-  triage:headSha "66be1d012" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-022/1> .
 
 <urn:atm:triage:worktree/BB3-022/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1445, fix/bb3-qa2-r2" ;
-  triage:branch "fix/bb3-qa2-r2" ;
-  triage:headSha "66be1d012" ;
+  triage:path "PR #1455, fix/bb3-qa3-r4" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
   triage:orderIndex 1 .
