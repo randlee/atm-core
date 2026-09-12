@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-003>
+  a triage:Finding ;
+  triage:findingId "BB6-003" ;
+  triage:title "task_ledger_reader.rs's read_lane_error discards AtmErrorCode/cause instead of using the crate's existing read_lane_storage_error helper" ;
+  triage:description "rust-best-practices-agent via BB6-QA-L1-1789263000 (PR #1458, feature/bb6-storage-prompt-handoffs @ a7d4664d1), verdict PASS 0/3/0, 2026-09-12T23:33:40Z. task_ledger_reader.rs's read_lane_error (line 207) maps every AtmError to ReadLaneError::Unavailable, discarding the underlying AtmErrorCode and cause, instead of using the crate's pre-existing read_lane_storage_error helper already used by sibling methods for exactly this mapping. The new prompt-handoff read path inherits the same helper's contract but doesn't call it. Independently verified by quality-mgr; ruled genuine by fenix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "rust-best-practices-agent via BB6-QA-L1-1789263000, ruled genuine by fenix" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/task_ledger_reader.rs:207" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T23:34:12Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: replace the ad hoc AtmError -> ReadLaneError::Unavailable mapping at read_lane_error with a call to the crate's existing read_lane_storage_error helper, preserving AtmErrorCode/cause like sibling methods. Routed to one storage-only fix layer above the stack top (branch fix/bb6-storage-qa1), dev to be picked by fenix." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-12T23:33:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_ledger_reader.rs" ;
+  triage:line 207 ;
+  triage:snippet "read_lane_error maps every AtmError to ReadLaneError::Unavailable, discarding AtmErrorCode/cause, instead of using the crate's existing read_lane_storage_error helper used by sibling methods" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-storage-prompt-handoffs" ;
+  triage:headSha "a7d4664d1" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-003/1> .
+
+<urn:atm:triage:worktree/BB6-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1458, feature/bb6-storage-prompt-handoffs" ;
+  triage:branch "feature/bb6-storage-prompt-handoffs" ;
+  triage:headSha "a7d4664d1" ;
+  triage:orderIndex 1 .

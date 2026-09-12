@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-12T19:00:24Z",
-    "end": "2026-09-12T23:25:29Z"
+    "end": "2026-09-12T23:34:12Z"
   },
   "scope": "BB.1 (PR #1438, feature/bb1-transition-templates) and BB.2 (PR #1439, feature/bb2-orchestration-templates-1516) each have one QA-1 round in flight (assigned, no result yet -- verdict/pass/result_* fields are null/empty until quality-mgr reports). BB.3 (PR #1436, feature/bb3-test-procedure-pages) has one QA-1 FAIL round closed and a QA-2 round in flight on the fix-round push (BB3-FIX-R1, cipher, head 8a8b29640). fenix's parallel critical reviews (on BB.1 and BB.3 so far) are not dispatched quality-mgr QA runs; their findings are recorded separately under .triage/phase-bb/findings/ (BB1-001..021, BB3-001..012), correlated with QA findings on the same commit rather than duplicated. Phase BB is orchestrated with plain atm send (codex-orchestration), not graph-orchestration Assignment/Completion events, but .sprints/BB/events.ttl records dev Assignment/Completion events anyway per fenix's ruling so /triage-report's DEV column works.",
   "count_basis": "headline/reviewer",
@@ -333,6 +333,31 @@
       "minor": 4,
       "count_basis": "headline/reviewer",
       "evidence": "9/11 findings genuinely fixed (PR #1455 comment, 2026-09-12T23:24:52Z): BB3-014/015/016/017/018/019/020/021 and BB1-029 confirmed by req-qa/rust-qa-agent with direct line reads and test reruns. 2 still open (blocking): BB3-013 (colima_skill_report now wired to a NEW third ancestor-resolution implementation, scripts/report_runtime.py::resolve_procedure_page, that itself diverges from .just/generate_report_index.py's resolver -- first-match-in-manifest-order + raise-on-nonzero-git vs the other's git-unavailable dated fallback + max-by-date); BB3-022 (RULE-003 split introduced a globals().update()/_PUBLIC_NAMESPACE circular re-export shim instead of a real module boundary, and admission_capacity_support.py at 1659/1473 lines is itself over the 1000-line target). Also corrected cipher's own close-report mislabeling of BB3-015/BB3-017 as 'not-reproducible' (both are genuinely fixed by dedicated commits this round)."
+    },
+    {
+      "run_id": "BB6-QA-L1",
+      "aich_sprint": "BB6",
+      "phase_sprint": "BB.6",
+      "pass": true,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-12T23:23:02Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2BYWXQ71AM8Q49S06DE8493",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB6-QA-L1-1789263000 dispatched by fenix to quality-mgr for PR #1458, pinned head a7d4664d1 (feature/bb6-storage-prompt-handoffs, arch-ctm's BB.6 layer 1 of 4, top of stack #1457). Review scope: D1 (prompt_handoffs DDL), D2 (PromptTrigger/PromptHandoff/record_prompt_handoff/list_prompt_handoffs), 7 named storage tests, schema-reviewer SQLite MINOR sign-off.",
+      "result_time_utc": "2026-09-12T23:33:40Z",
+      "result_time_pst": null,
+      "result_message_id": "01M2BZGSX9NN7TKRAGQ6WMAK88",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 3,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "PASS (PR #1458 comment, 2026-09-12T23:33:40Z): D1/D2 confirmed byte-exact/complete; all 7 named tests pass live (mutation proof reproduced); clippy/fmt/boundaries lint all pass; schema-reviewer confirms SQLite MINOR/additive with no ADR-054 capability-count change. 6 reviewers ran (req-qa, arch-qa, rust-qa-agent, rust-best-practices-agent, ruthless-boundary-qa, schema-reviewer). 0 blocking. 3 important non-blocking findings filed by fenix's ruling as BB6-001 (column-list duplication bypassing task_sql.rs), BB6-002 (InMemoryTaskLedgerReader::list_prompt_handoffs silent no-op stub), BB6-003 (read_lane_error discards AtmErrorCode/cause instead of using read_lane_storage_error) -- all routed to one storage-only fix layer (fix/bb6-storage-qa1) above the stack top. arch-qa's initial RULE-003 concern on contract.rs was refuted by the authoritative gate (.just/check_line_counts.py: 967 prod lines, under cap) -- not a real finding, no record. Ready for BB.6 layer 2."
     }
   ]
 }
