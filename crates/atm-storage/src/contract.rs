@@ -940,6 +940,13 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
 /// storage-owned reader lane and must not enter the ordered writer lane.
 #[async_trait::async_trait]
 pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
+    async fn load_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Option<TaskRow>, ReadLaneError>;
+
     /// Every open task on the team, ordered by assignee and queue position.
     async fn open_tasks_for_team(
         &self,

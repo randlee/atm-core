@@ -44,6 +44,21 @@ impl std::fmt::Debug for TaskLedgerReader {
 
 #[async_trait::async_trait]
 impl AsyncTaskLedgerReader for TaskLedgerReader {
+    async fn load_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Option<TaskRow>, ReadLaneError> {
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                task_sql::select_task_row(connection, &team, &task_id)
+                    .map_err(|error| sqlite_error(target, "failed to load task row", error))
+                    .map_err(read_lane_error)
+            })
+            .await
+    }
+
     async fn open_tasks_for_team(
         &self,
         team: TeamName,
@@ -174,6 +189,17 @@ mod tests {
                 .await
                 .expect("task list")
                 .is_empty()
+        );
+        assert!(
+            reader
+                .load_task(
+                    team.clone(),
+                    "reader-test-task".parse::<TaskId>().expect("task id"),
+                    deadline(),
+                )
+                .await
+                .expect("task load")
+                .is_none()
         );
         assert!(
             reader

@@ -207,6 +207,17 @@ impl sealed::Sealed for DummyTaskStore {}
 #[cfg(any(test, feature = "test-utils"))]
 #[async_trait::async_trait]
 impl AsyncTaskLedgerReader for DummyTaskStore {
+    async fn load_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        _deadline: ReadDeadline,
+    ) -> Result<Option<TaskRow>, ReadLaneError> {
+        TaskStore::load_task(self, &team, &task_id).map_err(|error| ReadLaneError::Unavailable {
+            message: error.to_string(),
+        })
+    }
+
     async fn open_tasks_for_team(
         &self,
         team: TeamName,

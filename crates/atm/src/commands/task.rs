@@ -307,6 +307,7 @@ impl TaskCloseCommand {
             caller.caller_identity.clone(),
             caller.caller_team.clone(),
             None,
+            Some(&self.task_id),
         )?;
         let rows = composition.list(query).await?.task_rows;
         let row = match preflight_close(rows, &self.task_id) {
@@ -407,6 +408,7 @@ impl TaskListCommand {
                 caller.caller_identity.clone(),
                 contract.team.clone(),
                 contract.assignee.clone(),
+                None,
             )?)
             .await?;
         let selected = select_task_rows(outcome.task_rows, &contract);
@@ -582,6 +584,7 @@ fn task_list_request(
     caller_identity: atm_core::types::AgentName,
     caller_team: TeamName,
     member: Option<atm_core::types::AgentName>,
+    task_id: Option<&TaskId>,
 ) -> Result<ListQuery, atm_core::error::AtmError> {
     Ok(ListQuery::new(
         home_dir,
@@ -594,7 +597,7 @@ fn task_list_request(
         None,
         None,
         None,
-        None,
+        task_id.map(TaskId::as_str),
         None,
     )?
     .with_task_ledger(TaskLedgerQuery::Tasks { member }))
@@ -870,6 +873,23 @@ mod tests {
             Cli::try_parse_from(["atm", "task", "events", "T1", "--all", "--limit", "10"]).is_err()
         );
         assert!(Cli::try_parse_from(["atm", "task", "list", "--member", "fenix"]).is_err());
+    }
+
+    #[test]
+    fn close_preflight_query_pushes_down_the_task_id() {
+        let task_id: TaskId = "T1".parse().expect("task id");
+        let home = TempDir::new().expect("home");
+        let current = TempDir::new().expect("current");
+        let query = task_list_request(
+            home.path().to_path_buf(),
+            current.path().to_path_buf(),
+            "alice".parse().expect("agent"),
+            TEST_TEAM.parse().expect("team"),
+            None,
+            Some(&task_id),
+        )
+        .expect("task query");
+        assert_eq!(query.task_filter.as_ref(), Some(&task_id));
     }
 
     #[test]

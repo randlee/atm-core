@@ -289,6 +289,26 @@ impl sealed::Sealed for InMemoryTaskLedgerReader {}
 
 #[async_trait::async_trait]
 impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
+    async fn load_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Option<TaskRow>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.load_task(team, task_id, deadline).await;
+        }
+        Ok(self
+            .tasks
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader task lock poisoned".to_owned(),
+            })?
+            .iter()
+            .find(|task| task.team == team && task.task_id == task_id)
+            .cloned())
+    }
+
     async fn open_tasks_for_team(
         &self,
         team: TeamName,
