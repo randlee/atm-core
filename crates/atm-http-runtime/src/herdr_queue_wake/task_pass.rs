@@ -408,15 +408,8 @@ impl HerdrQueueWakePump {
             }
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member, "Herdr task reminder could not render");
-                self.record_task_outcome(
-                    &context,
-                    &row,
-                    now,
-                    ReminderOutcome::Unrenderable,
-                    false,
-                    stats,
-                )
-                .await;
+                self.record_task_outcome(&context, &row, now, ReminderOutcome::Unrenderable, stats)
+                    .await;
                 return;
             }
         };
@@ -438,15 +431,8 @@ impl HerdrQueueWakePump {
             .await
         {
             Ok(_) => {
-                self.record_task_outcome(
-                    &context,
-                    &row,
-                    now,
-                    ReminderOutcome::Emitted,
-                    false,
-                    stats,
-                )
-                .await
+                self.record_task_outcome(&context, &row, now, ReminderOutcome::Emitted, stats)
+                    .await
             }
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {
@@ -462,7 +448,6 @@ impl HerdrQueueWakePump {
         row: &TaskRow,
         now: IsoTimestamp,
         outcome: ReminderOutcome,
-        prompt_already_counted: bool,
         stats: &mut HerdrQueueWakeStats,
     ) {
         let recorded_row = if outcome == ReminderOutcome::Emitted {
@@ -481,9 +466,7 @@ impl HerdrQueueWakePump {
         };
         match outcome {
             ReminderOutcome::Emitted => {
-                if !prompt_already_counted {
-                    stats.prompted += 1;
-                }
+                stats.prompted += 1;
                 stats.task_reminders += 1;
             }
             ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
