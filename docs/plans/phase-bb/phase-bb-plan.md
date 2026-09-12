@@ -8,7 +8,7 @@
 | Integration branch | `integrate/phase-bb` |
 | Sprints | 7 |
 | Widest parallel wave | 3 (BB.1, BB.2, BB.3) |
-| Status | plan under review (scope review round 1 incorporated; critical review and quality-mgr plan review pending) |
+| Status | plan under review (plan-scope review closed at round 3 on ab1087624; critical review by solar and quality-mgr plan review pending) |
 | Exactness | every enum, struct, signature, SQL statement, template body and test name is written in its sprint doc as it lands; QA diffs source against the doc. |
 | Triage seed | PR #1431 (SMK-004, SMK-005, SMK-006) becomes the phase's first `.triage` records, not a fix branch |
 
