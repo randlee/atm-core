@@ -91,12 +91,13 @@ R8. (fenix's call, recorded, Rand may veto) "started" means ACKNOWLEDGED, not
     shows as reminders with no started line, which is exactly the symptom R6
     wants visible.
 
-R9. A queued task does not materialize to the worker until it is ready.
-    Rand: "a queued task really shouldn't materialize to the consumer until
-    it is head of queue … we don't want the worker agent to be distracted by
-    anything other than the head-of-queue task." Reviewing the queue or
-    reading a future task by id is allowed; the default surfaces are not.
-    The ack requirement belongs to readiness, not to the send.
+R9. A queued task's ACK REQUIREMENT and NUDGE are deferred until it is ready.
+    Rand: "we don't want the worker agent to be distracted by anything other
+    than the head-of-queue task … the queued task messages do not need to be
+    hidden, they can show up as unread messages. however if they do require
+    ack, the ack requirement should be deferred. i.e. telling an agent he
+    needs to ack task-1/2/3 immediately is not beneficial and is at worst
+    distracting." The ack requirement belongs to readiness, not to the send.
 
 ## 3. Transitions and templates
 
@@ -249,41 +250,39 @@ Surfaced by `atm log filter --task <id>` and `atm task events <id>`
 (reminders show attempt; started shows the acking message). With this table
 the 15:27–15:35Z test reads as one query.
 
-### 4.7 Materialization: held until ready (R9)
+### 4.7 Deferred ack requirement (R9)
 
 Today, verified: `atm send --task-id` and `atm task assign` force
 `requires_ack = true` at write (`atm/src/commands/send.rs:367`; BA.4 doc:
 "An assignment message always requires an ack … there is no `--requires-ack`
-flag"). `pending_ack_at` is set at write. The unread/pending-ack predicate
+flag"). `pending_ack_at` is set at write. The pending-ack predicate
 (`pending_nudge_store.rs:13`, `lib.rs:504-509`) has no notion of task
-position, so every queued assignment is counted as unread and pending-ack,
-listed by `atm read`, and claimed by the pump (SMK-006) from the moment it is
-written. BA design §5.1 made ack and task mutually exclusive *under the hood*
-(ack never gates task state); the flags were never made exclusive. The
-opposite shipped: ack forced on for every assignment.
+position, so every queued assignment is pending-ack, shown in the
+`Pending-Ack:` header and listing, and claimed by the pump (SMK-006) from the
+moment it is written. BA design §5.1 made ack and task mutually exclusive
+*under the hood* (ack never gates task state); the flags were never made
+exclusive. The opposite shipped: ack forced on for every assignment.
 
-Rule: an assignment message is HELD until its task is ready.
+Rule: a queued assignment is an ordinary unread message; its ack requirement
+and its nudge wait for readiness.
 
-- Held ≡ task row `state = assigned AND position > 1`. Derived by a join on
-  `tasks` at query time, never stored a second time (BA §9: one authority).
-- While held the message is excluded from: the unread count, the
-  `Pending-Ack:` header, `atm read` default and pending-ack listings, the
-  read-display handoff, and the pump's mail claim (§4.3 already removes the
-  marker). It is included by `atm read --message-id <id>`,
-  `atm read --task-id <id>`, `atm task list`, and `atm task events`.
-- Materialization is the task pass emitting `task_ready`. In the same writer
-  op it sets `pending_ack_at = now` on the assignment message; from that
-  moment the message is unread and pending-ack, and "ack the message" in the
-  ready body is true. The ack is the start (R8).
+- The assignment message is written unread with `pending_ack_at = NULL`. It
+  appears in the unread count and in `atm read` like any message; an early
+  read marks it read normally. Nothing is hidden.
+- No pending nudge marker is created at write (§4.3), so the pump never
+  claims it; the only prompts for a task are `task_queued` (informational,
+  §3) and, at head + idle, `task_ready`.
+- Readiness is the task pass emitting `task_ready`. In the same writer op it
+  sets `pending_ack_at = now` on the assignment message; from that moment the
+  message is pending-ack and "ack the message" in the ready body is true. The
+  ack is the start (R8). A message read early still becomes pending-ack at
+  ready, because readiness is keyed on the task row, not on read state.
 - The write no longer forces `requires_ack`. `--requires-ack` together with
   `--task-id` is a CLI conflict (`conflicts_with`); `atm task assign` keeps
   having no such flag.
-- Reassign and move change `position`; the join follows the row, nothing is
-  migrated. A task moved to head while the agent is busy stays held until the
-  pass prompts it (the pass only prompts idle members). An explicit read of a
-  held message marks it read; when it later becomes ready it still gets
-  `pending_ack_at` and the `task_ready` prompt, because readiness is keyed on
-  the task row.
+- Reassign and move change `position`; nothing is migrated. A task moved to
+  head while the agent is busy waits for the pass (it prompts idle members
+  only).
 - `atm queue` ephemeral items are not tasks and are unchanged (BA §9).
 
 ## 5. Findings resolved
@@ -297,7 +296,7 @@ Rule: an assignment message is HELD until its task is ready.
 
 ## 6. Tests
 
-Unit: the held predicate (assigned + position > 1) on unread count, pending-ack count, default listing, and the pump claim; `--requires-ack --task-id` rejected by clap; kind decision covers every arm of §4.2 including the `(false, None,
+Unit: an assignment write leaves `pending_ack_at` NULL and creates no pending nudge marker; the ready emission sets `pending_ack_at`; `--requires-ack --task-id` rejected by clap; kind decision covers every arm of §4.2 including the `(false, None,
 true, ..)` validation error; every default body renders with its placeholders
 and contains no `<action>` for the four informational kinds; `"task"` parse
 error names `task_ready`.
@@ -305,8 +304,8 @@ error names `task_ready`.
 Integration (colima, one fixture, every roster shape): assign three tasks to
 an idle agent → terminal shows exactly one `queued="2"`, one `queued="3"`,
 one `ready` for task 1, no `execute` line for tasks 2 and 3; `atm read` header
-shows Unread 1 / Pending-Ack 1 after ready and lists only task 1's message;
-`atm read --message-id` of task 3's message still works; ack of task 1 →
+shows Unread 3 / Pending-Ack 0 before the pass and Unread 3 / Pending-Ack 1
+after ready, the pending one being task 1's message; ack of task 1 →
 assigner sees `started`; close → assigner sees `complete` with the report id
 and the agent sees `ready` for task 2 within one pass; task events show
 `reminded attempt=0`, `acked`, `started`, `completed` on the right task ids
