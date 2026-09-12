@@ -80,7 +80,6 @@ async fn task_prompt_waits_while_queue_item_open_across_ticks() {
     );
     close_message(root.path(), &runtime, &key, task_message_id);
     add_roster_member(&runtime, key.team(), "sender");
-    ack_task_assignment(root.path(), &runtime, key.team(), task_message_id);
     let now = Arc::new(Mutex::new(
         IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));
@@ -95,8 +94,8 @@ async fn task_prompt_waits_while_queue_item_open_across_ticks() {
     );
     assert_eq!(
         pump.stats().task_reminders,
-        1,
-        "the delivered queue prompt counts for the open task"
+        0,
+        "a queue prompt does not record a reminder against a task"
     );
 
     for seconds in [5, 10, 55] {
@@ -146,7 +145,6 @@ async fn open_mail_set_is_read_each_tick_not_cached() {
     );
     close_message(root.path(), &runtime, &key, task_message_id);
     add_roster_member(&runtime, key.team(), "sender");
-    ack_task_assignment(root.path(), &runtime, key.team(), task_message_id);
     let now = Arc::new(Mutex::new(
         IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));
@@ -156,8 +154,8 @@ async fn open_mail_set_is_read_each_tick_not_cached() {
     pump.tick_once().await;
     assert_eq!(
         pump.stats().task_reminders,
-        1,
-        "the delivered queue prompt counts for the open task"
+        0,
+        "a queue prompt does not record a reminder against a task"
     );
     close_message(root.path(), &runtime, &key, queue_message_id);
 
@@ -285,7 +283,7 @@ async fn requires_ack_message_reminded_until_acked() {
     );
 
     add_roster_member(&runtime, key.team(), "sender");
-    ack_task_assignment(root.path(), &runtime, key.team(), message_id);
+    ack_message(root.path(), &runtime, key.team(), message_id);
     assert_eq!(pending_state(root.path(), &key, message_id), (None, 0));
     for seconds in 0..100 {
         *now.lock().expect("test clock lock") =
@@ -435,8 +433,8 @@ async fn mail_and_task_share_one_prompt_per_tick() {
     assert_eq!(pump.stats().prompted, 1);
     assert_eq!(
         pump.stats().task_reminders,
-        1,
-        "the mail prompt also counts for the open task"
+        0,
+        "the mail prompt does not count for the open task"
     );
     assert_eq!(prompt_texts(&fake).len(), 1);
     assert!(!prompt_texts(&fake)[0].contains(task_id.as_str()));
@@ -498,7 +496,7 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
     assert_eq!(stalled.reminder_count, 10);
     assert_eq!(stalled.lead_notified_count, 1);
     assert_eq!(prompt_texts(&fake).len(), 10);
-    assert!(pending_state(root.path(), &key, assignment_id).0.is_some());
+    assert!(pending_state(root.path(), &key, assignment_id).0.is_none());
     assert_eq!(
         stalled_escalation_count(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD,).await,
         1
@@ -516,8 +514,8 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
     assert_eq!(terminal.lead_notified_count, 1);
     assert_eq!(
         prompt_texts(&fake).len(),
-        11,
-        "ordinary mail remains deliverable"
+        10,
+        "the assignment itself never enters the queue drain"
     );
     assert_eq!(
         stalled_escalation_count(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD,).await,
@@ -553,8 +551,8 @@ async fn unrelated_mail_prompt_does_not_start_the_assigned_head_task() {
         .expect("head task");
     assert_eq!(head.state, TaskState::Assigned);
     assert_eq!(
-        head.reminder_count, 1,
-        "plain mail still counts as a reminder"
+        head.reminder_count, 0,
+        "plain mail never records a reminder against the task"
     );
     assert!(
         store
@@ -845,6 +843,6 @@ async fn blocked_member_with_open_item_escalates_not_reminded() {
     assert_eq!(pump.stats().task_reminders, 0);
     assert_eq!(pump.stats().blocked_escalations, 1);
     assert!(prompt_texts(&fake).is_empty());
-    assert!(pending_state(root.path(), &key, message_id).0.is_some());
+    assert!(pending_state(root.path(), &key, message_id).0.is_none());
     assert_eq!(task_store.row(&key, &task_id).state, TaskState::Assigned);
 }

@@ -37,6 +37,8 @@ pub(super) fn apply_task_close(
         return Ok(TaskMessageResult::Applied {
             already_closed: Some(already),
             task_assignee: None,
+            queued_position: None,
+            reassign_notice: None,
         });
     }
     if let Err(error) = admit(
@@ -76,6 +78,8 @@ pub(super) fn apply_task_close(
     Ok(TaskMessageResult::Applied {
         already_closed: None,
         task_assignee: Some(row.assignee),
+        queued_position: None,
+        reassign_notice: None,
     })
 }
 

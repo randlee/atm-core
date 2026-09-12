@@ -744,14 +744,14 @@ pub(super) fn insert_message_canonical(
                 from_agent: &values.from_agent,
             },
         )?;
-        let timestamps = initial_state_timestamps(
-            values.pending_ack_at,
-            values.acknowledged_at,
-            values.expires_at,
-            values.recorded_at,
-        );
-        insert_initial_message_state(connection, cache, target, record, timestamps)?;
     }
+    let timestamps = initial_state_timestamps(
+        values.pending_ack_at,
+        values.acknowledged_at,
+        values.expires_at,
+        values.recorded_at,
+    );
+    insert_initial_message_state(connection, cache, target, record, timestamps)?;
     Ok(inserted)
 }
 

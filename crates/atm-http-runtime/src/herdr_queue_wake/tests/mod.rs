@@ -11,6 +11,7 @@ use super::{
     RuntimeHealth, herdr_request_deadline, log_herdr_list_failure,
 };
 use atm_core::LocalServiceRuntime;
+use atm_core::ack::{AckRequest, ack_mail_with_runtime};
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
@@ -544,12 +545,28 @@ fn add_lead_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent:
         .expect("save lead roster member");
 }
 
-fn ack_task_assignment(
-    _root: &std::path::Path,
-    _runtime: &LocalServiceRuntime,
-    _team: &TeamName,
-    _message_id: AtmMessageId,
+fn ack_message(
+    root: &std::path::Path,
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    message_id: AtmMessageId,
 ) {
+    let home = root.join("home");
+    ack_mail_with_runtime(
+        AckRequest {
+            home_dir: home.clone(),
+            current_dir: home,
+            caller_identity: "aq27-agent".parse().expect("agent"),
+            caller_chat_id: None,
+            caller_team: team.clone(),
+            activity_observation: None,
+            message_id,
+            reply_body: "acknowledged".to_owned(),
+        },
+        &NullObservability,
+        runtime,
+    )
+    .expect("message acknowledgement");
 }
 
 fn complete_task(
@@ -1343,7 +1360,7 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
     let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
     let first: TaskId = "AX5-ACTIVE".parse().expect("task id");
     let second: TaskId = "AX5-ASSIGNED-2".parse().expect("task id");
-    let first_message = queue_task_message(
+    queue_task_message(
         root.path(),
         &runtime,
         key.team(),
@@ -1369,7 +1386,6 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
         .shared_roster_store_arc()
         .save_roster(&roster)
         .expect("add task sender to roster");
-    ack_task_assignment(root.path(), &runtime, key.team(), first_message);
     let now = Arc::new(Mutex::new(
         IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));

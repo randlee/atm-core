@@ -231,7 +231,6 @@ fn apply_task_assignment(
         row.as_ref(),
         message_id,
         connection,
-        cache,
         target,
     )? {
         return Ok(TaskAssignmentApplied {
@@ -248,7 +247,7 @@ fn apply_task_assignment(
     let was_closed = row
         .as_ref()
         .is_some_and(|row| matches!(row.state, TaskState::Complete(_)));
-    release_previous_assignment(record, task_id, row.as_ref(), connection, cache, target)?;
+    release_previous_assignment(record, task_id, row.as_ref(), connection, target)?;
 
     let mut order = queue_order(connection, target, &record.team, &record.agent)?;
     order.retain(|id| id != task_id);
@@ -316,13 +315,11 @@ fn release_previous_assignment(
     task_id: &TaskId,
     row: Option<&TaskRow>,
     connection: &Connection,
-    cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     let Some(row) = row.filter(|row| row.state.is_open()) else {
         return Ok(());
     };
-    acknowledge_assignment(connection, cache, target, record, row)?;
     let old_order = queue_order(connection, target, &record.team, &row.assignee)?
         .into_iter()
         .filter(|id| id != task_id)
