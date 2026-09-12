@@ -1,7 +1,7 @@
 use atm_core::schema::AtmMessageId;
 use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 use atm_storage::{
-    Message, MessageEnvelope, MessageKey, QueuePosition, TaskCloseOutcome, TaskState,
+    Message, MessageEnvelope, MessageKey, QueuePosition, TaskActor, TaskCloseOutcome, TaskState,
 };
 use clap::Parser;
 use serial_test::serial;
@@ -188,7 +188,12 @@ async fn close_by_third_party_sends_nothing_and_exits_one() {
     assert_eq!(store.list_tasks(&team, None).unwrap().len(), rows_before);
     let events = store.list_task_events(&team, &task, None).unwrap();
     assert_eq!(events.len(), events_before + 1);
-    assert_eq!(events.last().unwrap().event.as_str(), "rejected");
+    let rejected = events.last().unwrap();
+    assert_eq!(rejected.event.as_str(), "rejected");
+    assert_eq!(
+        rejected.actor,
+        TaskActor::Member("test-lead".parse().unwrap())
+    );
 }
 
 #[tokio::test]
