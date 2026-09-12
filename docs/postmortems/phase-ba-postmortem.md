@@ -43,9 +43,20 @@
 <!-- PHASE_END_RESULTS -->
 Reviewed head: `integrate/phase-ba` @ `9f5aef2fe` (landing merge of PR #1414).
 Every finding below is closed on the review-findings stack above the landing
-head (`fix/phase-ba-review-1` cipher → `-2` arch-ctm → `-3` solar →
-`docs/phase-ba-post-mortem` fenix); none required a change to a frozen sprint
-layer.
+head (`fix/phase-ba-review-1` cipher → `-2` arch-ctm → `-3` solar → `-4`
+cipher → `docs/phase-ba-post-mortem` fenix); none required a change to a
+frozen sprint layer.
+
+Final stack state (gh stack #1423, 2026-09-12): review-1 `5a00502ee` (#1419,
+frozen first) → review-2 `0b4911c5a` (#1422, arch-ctm rebased it onto review-1
+in one pass, 26 commits, no conflicts) → review-3 `aadcc172a` (#1420) →
+review-4 `88c7a289b` (#1424) → this layer. fenix rebased the frozen review-3
+and review-4 heads onto `0b4911c5a` in one pass (guidelines §7): review-3
+took three conflicts, all in tests that review-3 had moved into
+`src/<mod>/tests/` before review-2's CPR-009/010/018/023 and RBP-F101 edits
+reached the old paths, and one port commit (`aadcc172a`) carries those hunks
+onto the moved modules; review-4 replayed byte-identical. Every gate ran
+green on every rebased head before its push.
 
 | Review | Result | Findings → owner |
 |---|---|---|
