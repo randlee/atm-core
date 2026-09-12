@@ -5,8 +5,8 @@
 //! remain owned by the ordered writer transaction in `task_store`.
 
 use atm_storage::{
-    AgentName, AsyncTaskLedgerReader, AtmError, ReadDeadline, ReadLaneError, RefusalRun,
-    TaskEventRow, TaskId, TaskRow, TeamName,
+    AgentName, AsyncTaskLedgerReader, AtmError, PromptHandoff, ReadDeadline, ReadLaneError,
+    RefusalRun, TaskEventRow, TaskId, TaskRow, TeamName,
 };
 use rusqlite::{Connection, params};
 use std::sync::Arc;
@@ -115,6 +115,19 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
             })
             .await
     }
+
+    async fn list_prompt_handoffs(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<PromptHandoff>, ReadLaneError> {
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                list_prompt_handoffs(connection, target, &team, &task_id).map_err(read_lane_error)
+            })
+            .await
+    }
 }
 
 fn list_tasks(
@@ -160,6 +173,33 @@ fn list_task_events(
         .map_err(|error| sqlite_error(target, "failed to list async task events", error))?
         .map(|row| {
             row.map_err(|error| sqlite_error(target, "failed to decode async task event", error))
+        })
+        .collect()
+}
+
+fn list_prompt_handoffs(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    team: &TeamName,
+    task_id: &TaskId,
+) -> Result<Vec<PromptHandoff>, AtmError> {
+    let mut statement = connection
+        .prepare(
+            "SELECT team, agent, message_key, kind, task_id, attempt, trigger, at
+             FROM prompt_handoffs WHERE team = ?1 AND task_id = ?2
+             ORDER BY at ASC, rowid ASC",
+        )
+        .map_err(|error| {
+            sqlite_error(target, "failed to prepare async prompt handoff list", error)
+        })?;
+    statement
+        .query_map(
+            params![team.as_str(), task_id.as_str()],
+            SqliteTaskStore::decode_prompt_handoff,
+        )
+        .map_err(|error| sqlite_error(target, "failed to list async prompt handoffs", error))?
+        .map(|row| {
+            row.map_err(|error| sqlite_error(target, "failed to decode prompt handoff", error))
         })
         .collect()
 }

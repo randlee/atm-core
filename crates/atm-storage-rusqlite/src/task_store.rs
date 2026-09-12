@@ -3,8 +3,8 @@ use std::sync::Arc;
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{
     AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, MoveTarget,
-    QueuePosition, ReminderOutcome, TaskActor, TaskCloseOutcome, TaskEventKind, TaskEventMarker,
-    TaskEventRow, TaskRow, TaskState, TaskStateTag, TaskStore,
+    PromptHandoff, PromptTrigger, QueuePosition, ReminderOutcome, TaskActor, TaskCloseOutcome,
+    TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStateTag, TaskStore,
 };
 use rusqlite::{Connection, Row, params};
 
@@ -51,6 +51,19 @@ CREATE TABLE IF NOT EXISTS task_events (
     detail TEXT NULL,
     PRIMARY KEY (team, task_id, seq)
 );
+
+CREATE TABLE IF NOT EXISTS prompt_handoffs (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    message_key TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
+    trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'task_pass')),
+    at TEXT NOT NULL,
+    UNIQUE (team, agent, message_key, attempt)
+);
+CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id, at);
 "#;
 
 pub(crate) const TASK_INDEX_DDL: &str = r#"
@@ -182,6 +195,19 @@ impl SqliteTaskStore {
         })
     }
 
+    pub(crate) fn decode_prompt_handoff(row: &Row<'_>) -> rusqlite::Result<PromptHandoff> {
+        Ok(PromptHandoff {
+            team: parse(&row.get::<_, String>(0)?, "prompt handoff team")?,
+            agent: parse(&row.get::<_, String>(1)?, "prompt handoff agent")?,
+            message_key: parse(&row.get::<_, String>(2)?, "prompt handoff message key")?,
+            kind: parse(&row.get::<_, String>(3)?, "prompt handoff kind")?,
+            task_id: parse(&row.get::<_, String>(4)?, "prompt handoff task id")?,
+            attempt: row.get(5)?,
+            trigger: parse_prompt_trigger(&row.get::<_, String>(6)?)?,
+            at: parse(&row.get::<_, String>(7)?, "prompt handoff timestamp")?,
+        })
+    }
+
     fn load_row(
         &self,
         connection: &Connection,
@@ -277,6 +303,29 @@ impl TaskStore for SqliteTaskStore {
         self.db.with_connection(|connection| {
             task_sql::select_task_events(connection, team, task_id, assignee)
                 .map_err(|error| self.db.error("failed to list task events", error))
+        })
+    }
+
+    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<(), AtmError> {
+        self.db.with_connection(|connection| {
+            connection
+                .execute(
+                    "INSERT OR IGNORE INTO prompt_handoffs(
+                         team, agent, message_key, kind, task_id, attempt, trigger, at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![
+                        handoff.team.as_str(),
+                        handoff.agent.as_str(),
+                        handoff.message_key.as_str(),
+                        handoff.kind.as_str(),
+                        handoff.task_id.as_str(),
+                        handoff.attempt,
+                        handoff.trigger.as_str(),
+                        handoff.at.to_string(),
+                    ],
+                )
+                .map(|_| ())
+                .map_err(|error| self.db.error("failed to record prompt handoff", error))
         })
     }
 
@@ -531,6 +580,13 @@ fn parse_marker(value: &str) -> rusqlite::Result<TaskEventMarker> {
         "resend" => Ok(TaskEventMarker::Resend),
         "assignment_missing" => Ok(TaskEventMarker::AssignmentMissing),
         _ => Err(invalid(value, "task marker")),
+    }
+}
+fn parse_prompt_trigger(value: &str) -> rusqlite::Result<PromptTrigger> {
+    match value {
+        "steer" => Ok(PromptTrigger::Steer),
+        "task_pass" => Ok(PromptTrigger::TaskPass),
+        _ => Err(invalid(value, "prompt trigger")),
     }
 }
 fn invalid(value: &str, subject: &str) -> rusqlite::Error {

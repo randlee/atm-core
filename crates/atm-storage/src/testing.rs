@@ -459,6 +459,18 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
                     .collect()
             })
     }
+
+    async fn list_prompt_handoffs(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<crate::PromptHandoff>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.list_prompt_handoffs(team, task_id, deadline).await;
+        }
+        Ok(Vec::new())
+    }
 }
 
 pub(crate) struct PendingStoreState {

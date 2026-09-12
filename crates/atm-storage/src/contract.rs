@@ -921,66 +921,19 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Option<Message>, ReadLaneError>;
 
-    /// Bounded roster projection used only to validate an explicitly
-    /// addressed mailbox. It remains on the read-only lane.
+    /// Bounded read-only roster projection for validating an addressed mailbox.
     async fn mailbox_member_exists(
         &self,
         scope: MailboxScope,
         deadline: ReadDeadline,
     ) -> Result<bool, ReadLaneError>;
 
-    /// Bounded durable seen-state projection. The daemon never reads a
-    /// caller-owned seen-state file while servicing an HTTP mailbox request.
+    /// Bounded durable seen state; never reads a caller-owned watermark file.
     async fn load_seen_watermark(
         &self,
         scope: MailboxScope,
         deadline: ReadDeadline,
     ) -> Result<Option<IsoTimestamp>, ReadLaneError>;
-}
-
-/// Tokio-safe, read-only task-ledger capability.
-///
-/// Task rows and their append-only audit events are a separate durable
-/// projection from mailbox messages. Implementations must use a bounded
-/// storage-owned reader lane and must not enter the ordered writer lane.
-#[async_trait::async_trait]
-pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
-    async fn load_task(
-        &self,
-        team: TeamName,
-        task_id: TaskId,
-        deadline: ReadDeadline,
-    ) -> Result<Option<TaskRow>, ReadLaneError>;
-
-    /// Every open task on the team, ordered by assignee and queue position.
-    async fn open_tasks_for_team(
-        &self,
-        team: TeamName,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskRow>, ReadLaneError>;
-
-    /// Trailing consecutive-refusal run for one assignee.
-    async fn refusal_run(
-        &self,
-        team: TeamName,
-        assignee: AgentName,
-        deadline: ReadDeadline,
-    ) -> Result<crate::RefusalRun, ReadLaneError>;
-
-    async fn list_tasks(
-        &self,
-        team: TeamName,
-        member: Option<AgentName>,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskRow>, ReadLaneError>;
-
-    async fn list_task_events(
-        &self,
-        team: TeamName,
-        task_id: TaskId,
-        member: Option<AgentName>,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {
