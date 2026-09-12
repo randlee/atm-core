@@ -12,7 +12,6 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
-    TaskRow, TaskState,
 };
 use atm_core::delivery_channel::{
     DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
@@ -40,8 +39,6 @@ pub const HERDR_POLL_INTERVAL_MS: u64 = 5_000;
 pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
-/// Minimum spacing between task reminders for one Herdr assignee.
-pub const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
 const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -268,6 +265,7 @@ impl HerdrQueueWakePump {
         self.remind_open_tasks(
             task_candidates,
             &prompted_by_drain,
+            &pending_set,
             list_complete,
             &mut stats,
         )
@@ -389,7 +387,7 @@ impl HerdrQueueWakePump {
         &self,
         candidates: Vec<HerdrCandidate>,
         stats: &mut HerdrQueueWakeStats,
-    ) -> (Vec<HerdrCandidate>, Vec<TaskCandidate>, bool) {
+    ) -> (Vec<HerdrCandidate>, Vec<MemberObservation>, bool) {
         let mut by_session: HashMap<Option<HerdrSession>, Vec<HerdrCandidate>> = HashMap::new();
         for candidate in candidates {
             by_session
@@ -437,7 +435,7 @@ impl HerdrQueueWakePump {
             }
         }
         eligible.sort_by(|left, right| member_order(&left.key, &right.key));
-        task_candidates.sort_by(|left, right| member_order(&left.member.key, &right.member.key));
+        task_candidates.sort_by(|left, right| member_order(&left.member, &right.member));
         (eligible, task_candidates, complete)
     }
 
@@ -448,7 +446,7 @@ impl HerdrQueueWakePump {
         observed_at: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
         eligible: &mut Vec<HerdrCandidate>,
-        task_candidates: &mut Vec<TaskCandidate>,
+        task_candidates: &mut Vec<MemberObservation>,
     ) {
         let snapshots: HashMap<&str, &AgentSnapshot> = agents
             .iter()
@@ -456,11 +454,11 @@ impl HerdrQueueWakePump {
             .collect();
         let mut updates_by_team = HashMap::new();
         for member in &members {
-            let state = snapshots
-                .get(member.herdr_agent.as_str())
-                .map_or(RuntimeMemberState::Unknown, |snapshot| {
-                    runtime_state(snapshot.status)
-                });
+            let state = runtime_state(
+                snapshots
+                    .get(member.herdr_agent.as_str())
+                    .map(|snapshot| snapshot.status),
+            );
             updates_by_team
                 .entry(member.key.team().clone())
                 .or_insert_with(Vec::new)
@@ -502,15 +500,11 @@ impl HerdrQueueWakePump {
             let Some(observation) = accepted.get(&member.key) else {
                 continue;
             };
-            if matches!(
-                observation.state,
-                RuntimeMemberState::Idle | RuntimeMemberState::Blocked
-            ) {
-                task_candidates.push(TaskCandidate {
-                    member: member.clone(),
-                    blocked: observation.state == RuntimeMemberState::Blocked,
-                });
-            }
+            task_candidates.push(MemberObservation {
+                member: member.key.clone(),
+                state: observation.state,
+                state_changed_at: observation.state_changed_at,
+            });
             if member.pending && observation.state == RuntimeMemberState::Idle {
                 stats.idle_members += 1;
                 eligible.push(member);
@@ -639,6 +633,19 @@ impl HerdrQueueWakePump {
                 return false;
             }
         };
+        if !still_idle(&self.service_runtime, &member.key) {
+            release.release_without_input().await;
+            stats.released += 1;
+            tracing::info!(
+                event = "herdr_queue_poll_outcome",
+                member = %member.key,
+                msg_id = %claim.msg,
+                queue_kind = NudgeKind::Queue.as_str(),
+                outcome = "held_not_idle",
+                "Herdr queue prompt skipped after the live idle recheck"
+            );
+            return false;
+        }
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
             release.release_without_input().await;
             stats.released += 1;
@@ -846,23 +853,14 @@ struct HerdrCandidate {
     pending: bool,
 }
 
+/// One accepted runtime observation. The task-disposition pass consumes this
+/// rather than making eligibility decisions from a poll snapshot.
 #[derive(Clone)]
-struct TaskCandidate {
-    member: HerdrCandidate,
-    blocked: bool,
-}
-
-fn select_open_task(mut rows: Vec<TaskRow>) -> Option<TaskRow> {
-    rows.retain(|row| row.state.is_open());
-    rows.sort_by(|left, right| {
-        left.assigned_at
-            .cmp(&right.assigned_at)
-            .then_with(|| left.task_id.as_str().cmp(right.task_id.as_str()))
-    });
-    rows.iter()
-        .find(|row| row.state == TaskState::Active)
-        .or_else(|| rows.iter().find(|row| row.state == TaskState::Assigned))
-        .cloned()
+struct MemberObservation {
+    member: MemberKey,
+    state: RuntimeMemberState,
+    #[expect(dead_code, reason = "episode escalation consumes this in task 5")]
+    state_changed_at: Option<IsoTimestamp>,
 }
 
 fn herdr_candidates(
@@ -931,13 +929,22 @@ fn member_order(left: &MemberKey, right: &MemberKey) -> std::cmp::Ordering {
         .then_with(|| left.agent().as_str().cmp(right.agent().as_str()))
 }
 
-fn runtime_state(status: HerdrAgentStatus) -> RuntimeMemberState {
+fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
     match status {
-        HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
-        HerdrAgentStatus::Working => RuntimeMemberState::Active,
-        HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
-        HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        None => RuntimeMemberState::Unknown,
+        Some(status) => match status {
+            HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
+            HerdrAgentStatus::Working => RuntimeMemberState::Active,
+            HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
+            HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        },
     }
+}
+
+fn still_idle(runtime: &LocalServiceRuntime, member: &MemberKey) -> bool {
+    runtime
+        .roster_ephemeral_state(member.team(), member.agent())
+        .is_some_and(|state| state.runtime.state == RuntimeMemberState::Idle)
 }
 
 struct ReleasePendingOnDrop {
@@ -1103,8 +1110,8 @@ impl Drop for ReleasePendingOnDrop {
 mod tests {
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HerdrQueueWakePump, HerdrQueueWakeStats, ReleasePendingOnDrop, TASK_REMINDER_INTERVAL_MS,
-        log_herdr_list_failure, runtime_state,
+        HerdrQueueWakePump, HerdrQueueWakeStats, ReleasePendingOnDrop, log_herdr_list_failure,
+        runtime_state,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -1854,7 +1861,7 @@ mod tests {
     fn poll_contract_uses_fixed_cadence_and_cap() {
         assert_eq!(HERDR_POLL_INTERVAL_MS, 5_000);
         assert_eq!(HERDR_MAX_PROMPTS_PER_TICK, 16);
-        assert_eq!(TASK_REMINDER_INTERVAL_MS, 60_000);
+        assert_eq!(atm_core::boundary::TASK_REMINDER_INTERVAL_MS, 60_000);
     }
 
     #[tokio::test]
@@ -2297,7 +2304,7 @@ mod tests {
             &team,
             "mail body is separate",
             &notification,
-            crate::herdr_escalation::EscalationKind::LeadNotified,
+            crate::herdr_escalation::EscalationKind::TaskStalled,
         )
         .await;
         assert_eq!(outcome.recipients_written, 1);
@@ -3746,19 +3753,19 @@ mod tests {
     #[test]
     fn herdr_statuses_project_to_runtime_states() {
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Idle),
+            runtime_state(Some(HerdrAgentStatus::Idle)),
             RuntimeMemberState::Idle
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Done),
+            runtime_state(Some(HerdrAgentStatus::Done)),
             RuntimeMemberState::Idle
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Working),
+            runtime_state(Some(HerdrAgentStatus::Working)),
             RuntimeMemberState::Active
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Unknown),
+            runtime_state(Some(HerdrAgentStatus::Unknown)),
             RuntimeMemberState::Unknown
         );
     }
