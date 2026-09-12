@@ -235,6 +235,12 @@ Reviewer ownership note:
 - `arch-qa` owns structural and boundary compliance of the code that exists
 - a branch is not merge-ready if req-qa cannot trace planned deliverables to
   concrete repository evidence
+- a branch is not merge-ready unless req-qa's `requirements_ledger` covers
+  every `REQ-*` id in `docs/requirements.md` and
+  `python3 .claude/skills/quality-management-gh/scripts/req_ledger.py check`
+  prints PASS on it (Rand, 2026-09-08: every requirement compared to every
+  change in every sprint); quality-mgr runs that check itself and rejects a
+  req-qa report that omits the ledger or fails the check
 - a branch is not merge-ready if deliverable completion is below `100%`
 - `schema-reviewer` owns governed-interface schema semver: it records minor
   bumps and blocks breaking changes or plan drift that lack Rand's recorded
@@ -267,10 +273,10 @@ For PR updates:
 Use concise ATM summaries to team-lead.
 
 PASS format:
-`Sprint <id> QA: PASS — deliverables <complete>/<total> (100%); req-qa PASS, arch-qa PASS, ruthless-boundary-qa PASS|SKIPPED, rust-qa PASS; rust-best-practices PASS|SKIPPED; rust-service-hardening PASS|SKIPPED; flaky-test-qa PASS|SKIPPED; PR #<n>; worktree <path>`
+`Sprint <id> QA: PASS — deliverables <complete>/<total> (100%); req-ledger <n>/<n> PASS; req-qa PASS, arch-qa PASS, ruthless-boundary-qa PASS|SKIPPED, rust-qa PASS; rust-best-practices PASS|SKIPPED; rust-service-hardening PASS|SKIPPED; flaky-test-qa PASS|SKIPPED; PR #<n>; worktree <path>`
 
 FAIL format:
-`Sprint <id> QA: FAIL — deliverables <complete>/<total> (<percent>%); blockers: <ids>; req-qa=<status>; arch-qa=<status>; ruthless-boundary-qa=<status>; rust-qa=<status>; rust-best-practices=<status>; rust-service-hardening=<status>; flaky-test-qa=<status>; PR #<n>; worktree <path>`
+`Sprint <id> QA: FAIL — deliverables <complete>/<total> (<percent>%); req-ledger <judged>/<total> <PASS|FAIL>; blockers: <ids>; req-qa=<status>; arch-qa=<status>; ruthless-boundary-qa=<status>; rust-qa=<status>; rust-best-practices=<status>; rust-service-hardening=<status>; flaky-test-qa=<status>; PR #<n>; worktree <path>`
 
 After a FAIL verdict, include a short flat list of blocking findings with:
 - finding id

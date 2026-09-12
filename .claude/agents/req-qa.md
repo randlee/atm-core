@@ -43,6 +43,7 @@ with free-form input.
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "optional branch name",
   "commit": "optional commit sha",
+  "diff_base": "optional merge-base sha; default: merge-base of branch and its PR target",
   "review_targets": [
     "optional file/dir paths to inspect for implementation compliance"
   ],
@@ -74,8 +75,24 @@ Rules:
 
 ## Core Responsibilities
 
-1. Requirements Compliance
-   - Validate that in-scope docs and targets conform to `docs/requirements.md`.
+1. Requirements Compliance: every requirement against every change
+   - Rand, 2026-09-08: "I want every requirement compared to every change in
+     every sprint." A sprint document never narrows this: a requirement no
+     sprint cites is still checked.
+   - Build the ledger skeleton with
+     `python3 .claude/skills/quality-management-gh/scripts/req_ledger.py skeleton`
+     (one row per `REQ-*` id in `docs/requirements.md`). Take the change set
+     as `git diff --name-only <merge-base of branch and pr target>..<commit>`
+     plus the sprint's named deliverables.
+   - For every row decide `untouched` (no changed file or deliverable can
+     affect it), `compliant` (affected, evidence cited), or `violated`
+     (affected and broken, evidence cited). `untouched` is a judgement about
+     the diff, not a default; a runtime-scope, lock, socket, port, build-
+     profile, env-var or test-harness change touches every `REQ-P-RUNTIME-*`
+     row.
+   - Every `violated` row is a Blocking finding.
+   - Run `req_ledger.py check <ledger.json>`; the report is invalid until it
+     prints PASS.
    - Flag omissions, contradictions, or requirement drift.
 
 2. Design Compliance
@@ -204,6 +221,21 @@ Return fenced JSON only.
       "notes": "short justification"
     }
   ],
+  "requirements_ledger": {
+    "requirements_source": "docs/requirements.md",
+    "requirement_count": 0,
+    "diff_base": "merge-base sha used for the change set",
+    "rows": [
+      {
+        "id": "REQ-P-RUNTIME-002",
+        "line": 213,
+        "verdict": "untouched | compliant | violated",
+        "evidence_refs": ["crates/example/src/lib.rs:42"],
+        "note": "short justification (required unless untouched)"
+      }
+    ],
+    "check": "output line of req_ledger.py check"
+  },
   "findings": [
     {
       "id": "ATM-QA-001",
@@ -236,6 +268,9 @@ Return fenced JSON only.
 
 Gate policy:
 - `FAIL` if any Blocking finding exists.
+- `FAIL` if `requirements_ledger` is missing, does not cover every `REQ-*` id
+  in `docs/requirements.md` exactly once, or `req_ledger.py check` did not
+  print PASS. `FAIL` if any row is `violated`.
 - `FAIL` if required inputs are missing or invalid.
 - `FAIL` if baseline docs cannot be read.
 - `FAIL` if any named deliverable, required artifact, or acceptance criterion
