@@ -178,13 +178,13 @@ struct CallerArgs {
 
 #[derive(Debug, Args)]
 struct MessageSourceArgs {
-    #[arg(skip)]
+    #[arg(value_name = "MESSAGE", conflicts_with_all = ["file", "stdin", "template"])]
     text: Option<String>,
-    #[arg(long, conflicts_with_all = ["stdin", "template"])]
+    #[arg(long, conflicts_with_all = ["text", "stdin", "template"])]
     file: Option<PathBuf>,
-    #[arg(long, conflicts_with_all = ["file", "template"])]
+    #[arg(long, conflicts_with_all = ["text", "file", "template"])]
     stdin: bool,
-    #[arg(long, conflicts_with_all = ["file", "stdin"])]
+    #[arg(long, conflicts_with_all = ["text", "file", "stdin"])]
     template: Option<PathBuf>,
     #[arg(long, requires = "template")]
     vars: Option<String>,
@@ -732,14 +732,6 @@ mod tests {
         for expected in ["completed", "refused", "cancelled"] {
             assert!(rendered.contains(expected));
         }
-    }
-
-    #[test]
-    fn close_rejects_a_fourth_positional_argument() {
-        assert!(
-            Cli::try_parse_from(["atm", "task", "close", "T1", "completed", "reason", "extra"])
-                .is_err()
-        );
     }
 
     #[test]
