@@ -8,6 +8,8 @@
 //! cross-crate test-only surfaces are shared in this workspace.
 
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::contract::{
     AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncTaskLedgerReader,
@@ -173,6 +175,71 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
                 message: "in-memory mailbox reader seen-state lock poisoned".to_owned(),
             })
             .map(|watermarks| watermarks.get(&(scope.team, scope.agent)).copied())
+    }
+}
+
+/// Delegating mailbox reader that counts suppression-list reads.
+///
+/// Escalation runtime tests use this to prove that restart recovery performs
+/// one durable duplicate check per target, without opening a second reader
+/// implementation outside the crate that owns the sealed boundary.
+pub struct CountingMailboxReader {
+    inner: Arc<dyn AsyncMailboxReader + Send + Sync>,
+    list_calls: AtomicUsize,
+}
+
+impl CountingMailboxReader {
+    #[must_use]
+    pub fn new(inner: Arc<dyn AsyncMailboxReader + Send + Sync>) -> Self {
+        Self {
+            inner,
+            list_calls: AtomicUsize::new(0),
+        }
+    }
+
+    #[must_use]
+    pub fn list_call_count(&self) -> usize {
+        self.list_calls.load(Ordering::SeqCst)
+    }
+}
+
+impl sealed::Sealed for CountingMailboxReader {}
+
+#[async_trait::async_trait]
+impl AsyncMailboxReader for CountingMailboxReader {
+    async fn list_messages(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.list_calls.fetch_add(1, Ordering::SeqCst);
+        self.inner.list_messages(scope, query, deadline).await
+    }
+
+    async fn load_message(
+        &self,
+        scope: MailboxScope,
+        key: MessageKey,
+        deadline: ReadDeadline,
+    ) -> Result<Option<Message>, ReadLaneError> {
+        self.inner.load_message(scope, key, deadline).await
+    }
+
+    async fn mailbox_member_exists(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<bool, ReadLaneError> {
+        self.inner.mailbox_member_exists(scope, deadline).await
+    }
+
+    async fn load_seen_watermark(
+        &self,
+        scope: MailboxScope,
+        deadline: ReadDeadline,
+    ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
+        self.inner.load_seen_watermark(scope, deadline).await
     }
 }
 
