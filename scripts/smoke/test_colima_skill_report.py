@@ -77,7 +77,7 @@ class RenderTests(unittest.TestCase):
 
             def fake_compose(template, variables, output):
                 composed.append((template.name, output))
-                output.write_text(variables.get("body_html", variables.get("pane_src", variables.get("pane_html", ""))))
+                output.write_text(variables.get("body_html", variables.get("pane_src", variables.get("pane_html", ""))), encoding="utf-8")
 
             with mock.patch.object(MODULE, "compose", side_effect=fake_compose), \
                     mock.patch.object(MODULE, "update_master_report_index") as index, \
