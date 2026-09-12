@@ -15,11 +15,12 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
   triage:deferredNote "team-lead addendum (2026-09-12T05:41:00Z): verified all 17 literals are identical, line-for-line, on fix/phase-ba-cleanup@b9f7c4386 (same file); added as occurrences cleanup-1..17. feature/ba3-nudge-invariant occurrences are informational only (frozen, no fix there per Rand's rule). promote_to_branch = fix/phase-ba-merge-fix (solar) per fenix's ruling." ;
-  triage:deferredNote "solar (task BA-MERGE-FIX-1789190857, ATM 01M2A275B1ZFZFH81EXWGJ4X9F, 2026-09-12T05:42:35Z): fix pushed to fix/phase-ba-merge-fix @ c571ae930. team-lead verified via git show: grep -c '\"team-lead\"' on herdr_nudge_invariant.rs at c571ae930 returns 0 (was 17). Awaiting fenix ACCEPTED before solar sends task-complete; not yet formally closed by this record." ;
+  triage:deferredNote "solar (task BA-MERGE-FIX-1789190857, ATM 01M2A275B1ZFZFH81EXWGJ4X9F, 2026-09-12T05:42:35Z): fix pushed to fix/phase-ba-merge-fix @ c571ae930. team-lead verified via git show: grep -c '\"team-lead\"' on herdr_nudge_invariant.rs at c571ae930 returns 0 (was 17). All ten required gates and three focused suites PASS per solar." ;
+  triage:deferredNote "fenix ACCEPTED (ATM 01M2A2P74PQK7E3TM65K5ZAZQB, 2026-09-12T05:50:48Z): ten-gate run green, 23/23 nudge-invariant; BA-MERGE-FIX-1789190857 closed; layer frozen at c571ae930. FIXED." ;
   triage:promoteTo "fix/phase-ba-merge-fix" ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
@@ -58,7 +59,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-15> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-16> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CI-IDENT-001/cleanup-17> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/CI-IDENT-001/ba3-1>
   a triage:Occurrence ;
@@ -452,8 +453,11 @@
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
   triage:snippet "grep -c '\"team-lead\"' returns 0 at c571ae930 (was 17 at b9f7c4386); literals replaced with roster/const-derived identity references" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:50:48Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "fenix ACCEPTED at fix/phase-ba-merge-fix @ c571ae930 (ten-gate run green, 23/23 nudge-invariant); BA-MERGE-FIX-1789190857 closed." ;
   triage:branch "fix/phase-ba-merge-fix" ;
   triage:headSha "c571ae930" ;
   triage:occursIn <urn:atm:triage:worktree/merge-fix/c571ae930-ci> .

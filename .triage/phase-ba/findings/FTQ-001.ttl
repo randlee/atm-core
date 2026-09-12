@@ -15,18 +15,19 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
   triage:deferredNote "team-lead correction (2026-09-12T05:40:00Z): the qa-triage agent's own JSON summary called fix/phase-ba-merge-fix and fix/phase-ba-cleanup-b 'fixed', but that read solar's uncommitted working-tree edits on fix/phase-ba-merge-fix, not its committed HEAD -- git show HEAD:crates/atm-http-runtime/tests/herdr_nudge_invariant.rs at b9f7c4386 still has the IsoTimestamp::now() wall-clock call (identical to fix/phase-ba-cleanup, since it is currently the same commit). fix/phase-ba-cleanup-b@5ea53c28d has no wall-clock call either, but only because it still carries the pre-BA3-FIX-R3B hollow alias version of this test (assert_non_idle_status_never_prompts-style, no IsoTimestamp use at all) -- it has not yet absorbed BA.3's rewritten test body, so the defect is not fixed there, it is simply not yet present. Status held open; promote to fix/phase-ba-merge-fix (solar) per fenix's ruling." ;
   triage:promoteTo "fix/phase-ba-merge-fix" ;
-  triage:deferredNote "solar (task BA-MERGE-FIX-1789190857, ATM 01M2A275B1ZFZFH81EXWGJ4X9F, 2026-09-12T05:42:35Z): fix pushed to fix/phase-ba-merge-fix @ c571ae930. team-lead verified via git show: IsoTimestamp::now() wall-clock call no longer present in herdr_nudge_invariant.rs at this commit. Awaiting fenix ACCEPTED before solar sends task-complete; not yet formally closed by this record." ;
+  triage:deferredNote "solar (task BA-MERGE-FIX-1789190857, ATM 01M2A275B1ZFZFH81EXWGJ4X9F, 2026-09-12T05:42:35Z): fix pushed to fix/phase-ba-merge-fix @ c571ae930. team-lead verified via git show: IsoTimestamp::now() wall-clock call no longer present in herdr_nudge_invariant.rs at this commit." ;
+  triage:deferredNote "fenix ACCEPTED (ATM 01M2A2P74PQK7E3TM65K5ZAZQB, 2026-09-12T05:50:48Z): ten-gate run green, 23/23 nudge-invariant; BA-MERGE-FIX-1789190857 closed; layer frozen at c571ae930. FIXED." ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-mergefix-1> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-1>
   a triage:Occurrence ;
@@ -75,8 +76,11 @@
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
   triage:snippet "IsoTimestamp::now() wall-clock call no longer present (verified via git show at c571ae930)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:50:48Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "fenix ACCEPTED at fix/phase-ba-merge-fix @ c571ae930 (ten-gate run green, 23/23 nudge-invariant); BA-MERGE-FIX-1789190857 closed." ;
   triage:branch "fix/phase-ba-merge-fix" ;
   triage:headSha "c571ae930" ;
   triage:occursIn <urn:atm:triage:worktree/merge-fix/c571ae930> .
