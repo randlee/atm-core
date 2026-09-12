@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn list_default_is_callers_own_queue() {
+    fn selector_default_is_callers_own_queue() {
         let query = TaskListQuery {
             team: "test-team".parse().expect("team"),
             assignee: Some("alice".parse().expect("agent")),
@@ -153,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    fn list_orders_by_position_not_assigned_at() {
+    fn selector_orders_by_position_not_assigned_at() {
         let query = TaskListQuery {
             team: "test-team".parse().expect("team"),
             assignee: Some("alice".parse().expect("agent")),
@@ -177,7 +177,7 @@ mod tests {
     }
 
     #[test]
-    fn events_are_seq_ordered_and_include_moved_and_started() {
+    fn selector_events_are_seq_ordered() {
         let query = TaskEventQuery {
             team: "test-team".parse().expect("team"),
             task_id: "T1".parse().expect("task"),

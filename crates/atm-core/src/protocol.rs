@@ -904,7 +904,7 @@ mod tests {
     }
 
     #[test]
-    fn protocol_1_5_0_fixtures_decode_on_1_6_0() {
+    fn codec_preserves_protocol_1_5_0_fixtures() {
         #[derive(Debug, Deserialize)]
         enum RequestEnvelope15 {
             QueueGetNext(serde_json::Value),

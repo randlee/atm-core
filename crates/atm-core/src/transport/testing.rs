@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::{future::Future, pin::Pin};
 
 use crate::api::{ApiRequest, ApiResponse, DaemonApiClient};
 use crate::boundary;
@@ -60,7 +61,12 @@ impl DaemonApiClient for FakeClientTransport {
 
 pub struct LoopbackClientTransport {
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    async_handler: Option<Arc<AsyncLoopbackHandler>>,
 }
+
+type AsyncLoopbackHandler = dyn Fn(ApiRequest) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send>>
+    + Send
+    + Sync;
 
 impl std::fmt::Debug for LoopbackClientTransport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,7 +77,27 @@ impl std::fmt::Debug for LoopbackClientTransport {
 
 impl LoopbackClientTransport {
     pub fn new(observability: Arc<dyn ObservabilityPort + Send + Sync>) -> Self {
-        Self { observability }
+        Self {
+            observability,
+            async_handler: None,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn with_async_handler<F>(
+        observability: Arc<dyn ObservabilityPort + Send + Sync>,
+        handler: F,
+    ) -> Self
+    where
+        F: Fn(ApiRequest) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self {
+            observability,
+            async_handler: Some(Arc::new(handler)),
+        }
     }
 
     /// Synchronous deterministic dispatch for legacy synchronous test façades.
@@ -142,6 +168,9 @@ impl boundary::sealed::Sealed for LoopbackClientTransport {}
 #[async_trait]
 impl DaemonApiClient for LoopbackClientTransport {
     async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        if let Some(handler) = &self.async_handler {
+            return handler(request).await;
+        }
         self.execute_inner(request)
     }
 }

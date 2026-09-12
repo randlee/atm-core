@@ -91,6 +91,8 @@ pub use atm_storage::TemplateOutputFormat;
 pub use herdr_breaker::HerdrBreakerDoctor;
 pub use herdr_endpoint::HerdrEndpointDoctor;
 pub use mail::*;
+#[cfg(any(test, feature = "test-utils"))]
+pub use message_received_hook_emitter::NoopMessageReceivedHookSelector;
 pub use message_received_hook_emitter::{
     AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter, MessageReceivedHookSelector,
 };

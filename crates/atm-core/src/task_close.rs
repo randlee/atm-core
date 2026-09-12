@@ -1,9 +1,8 @@
 //! Read-lane preflight for the atomic deliver-then-close write.
 
-use atm_storage::{AsyncTaskLedgerReader, ReadDeadline, TaskRow};
+use atm_storage::TaskRow;
 
-use crate::error::AtmError;
-use crate::types::{AgentName, TaskId, TeamName};
+use crate::types::{AgentName, TaskId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClosePreflight {
@@ -13,22 +12,11 @@ pub enum ClosePreflight {
     Unknown,
 }
 
-pub async fn preflight_close(
-    reader: &dyn AsyncTaskLedgerReader,
-    team: TeamName,
-    task_id: &TaskId,
-    deadline: ReadDeadline,
-) -> Result<ClosePreflight, AtmError> {
-    let row = reader
-        .list_tasks(team, None, deadline)
-        .await
-        .map_err(AtmError::from)?
-        .into_iter()
-        .find(|row| &row.task_id == task_id);
-    Ok(match row {
+pub fn preflight_close(rows: Vec<TaskRow>, task_id: &TaskId) -> ClosePreflight {
+    match rows.into_iter().find(|row| &row.task_id == task_id) {
         Some(row) => ClosePreflight::Proceed { row },
         None => ClosePreflight::Unknown,
-    })
+    }
 }
 
 #[must_use]

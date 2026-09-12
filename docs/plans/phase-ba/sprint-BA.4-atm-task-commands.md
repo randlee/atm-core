@@ -192,7 +192,8 @@ pub enum ClosePreflight {
     Unknown,
 }
 
-pub async fn preflight_close(reader: &dyn AsyncTaskLedgerReader, team: TeamName, task_id: &TaskId, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
+pub fn preflight_close(rows: Vec<TaskRow>, task_id: &TaskId) -> ClosePreflight;
+// BA4-FIX-R1: CLI reads through daemon List; pure projection.
 
 /// Who receives the report: the other party. A self-addressed send is invalid
 /// (`send/recipient.rs:13-31`), and `assigner == assignee` cannot exist.

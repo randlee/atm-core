@@ -153,7 +153,7 @@ impl Harness {
 }
 
 #[test]
-fn assign_existing_open_id_to_other_agent_reassigns_in_place() {
+fn writer_assign_existing_open_id_reassigns_in_place() {
     let h = Harness::new();
     let old = h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
@@ -180,7 +180,7 @@ fn assign_existing_open_id_to_other_agent_reassigns_in_place() {
 }
 
 #[test]
-fn assign_closed_id_reopens_same_row() {
+fn writer_assign_closed_id_reopens_same_row() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.close("T1", "lead", "alice", TaskCloseOutcome::Refused)
@@ -347,7 +347,7 @@ fn close_renumbers_remaining_queue_contiguously() {
 }
 
 #[test]
-fn close_open_task_delivers_and_closes_in_one_write() {
+fn writer_close_open_task_delivers_and_closes_in_one_write() {
     let h = Harness::new();
     for (task, outcome) in [
         ("T1", TaskCloseOutcome::Completed),
@@ -365,7 +365,7 @@ fn close_open_task_delivers_and_closes_in_one_write() {
 }
 
 #[test]
-fn close_by_assigner_reports_to_assignee() {
+fn writer_close_by_assigner_reports_to_assignee() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let report = h
@@ -379,7 +379,7 @@ fn close_by_assigner_reports_to_assignee() {
 }
 
 #[test]
-fn close_unknown_task_sends_nothing_and_exits_one() {
+fn writer_close_unknown_task_is_atomic() {
     let h = Harness::new();
     let mut report = h.message("lead", "alice", "unknown close");
     report.envelope.task_id = Some("UNKNOWN".parse().expect("task id"));
@@ -400,7 +400,7 @@ fn close_unknown_task_sends_nothing_and_exits_one() {
 }
 
 #[test]
-fn close_already_closed_delivers_report_without_task_event() {
+fn writer_close_already_closed_omits_task_event() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.close("T1", "lead", "alice", TaskCloseOutcome::Completed)
@@ -424,7 +424,7 @@ fn close_already_closed_delivers_report_without_task_event() {
 }
 
 #[test]
-fn close_by_third_party_sends_nothing_and_exits_one() {
+fn writer_close_by_third_party_is_rejected() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let error = h
@@ -435,7 +435,7 @@ fn close_by_third_party_sends_nothing_and_exits_one() {
 }
 
 #[test]
-fn stale_counterparty_rejection_exits_one_without_retry() {
+fn writer_stale_counterparty_is_rejected() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let error = h
@@ -446,7 +446,7 @@ fn stale_counterparty_rejection_exits_one_without_retry() {
 }
 
 #[test]
-fn refusal_releases_next_queued_task() {
+fn writer_refusal_releases_next_queued_task() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
@@ -456,7 +456,7 @@ fn refusal_releases_next_queued_task() {
 }
 
 #[test]
-fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
+fn writer_assign_to_active_member_stays_queued() {
     let h = Harness::new();
     h.assign("ACTIVE", "alice", "lead", None);
     h.start("ACTIVE", "alice").expect("start active task");

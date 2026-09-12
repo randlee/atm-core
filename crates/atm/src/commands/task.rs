@@ -12,7 +12,7 @@ use atm_core::protocol::{
     HttpApiVersion, RequestEnvelope, ResponseEnvelope, RuntimeStatusSnapshot, TaskMoveRequest,
 };
 use atm_core::send::NudgeMode;
-use atm_core::task_close::report_recipient;
+use atm_core::task_close::{ClosePreflight, preflight_close, report_recipient};
 use atm_core::task_query::{
     TaskEventQuery, TaskListQuery, TaskPage, select_task_events, select_task_rows,
 };
@@ -233,11 +233,25 @@ impl TaskCommand {
 
 impl TaskAssignCommand {
     async fn run(self, observability: &CliObservability) -> Result<()> {
+        let (home_dir, current_dir) = resolve_command_runtime_context("task assign")?;
+        let composition = composition("task assign", observability, &home_dir, &current_dir)?;
+        print!(
+            "{}",
+            self.execute(&composition, home_dir, current_dir).await?
+        );
+        Ok(())
+    }
+
+    async fn execute(
+        self,
+        composition: &CliComposition<'_>,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+    ) -> Result<String> {
         let task_id = resolve_task_id(self.task_id.clone())?;
         let placement = self.placement();
         let json = self.json;
         let assignee = self.assignee.to_string();
-        let (home_dir, current_dir) = resolve_command_runtime_context("task assign")?;
         let mut request = SendCommand::for_task(self.message.into_send_options(
             assignee.clone(),
             self.caller,
@@ -249,17 +263,16 @@ impl TaskAssignCommand {
             current_dir.clone(),
             NudgeMode::Deferred,
             None,
-        )?;
+        )
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         request.placement = placement;
-        let composition = composition("task assign", observability, &home_dir, &current_dir)?;
-        preflight_daemon_api(&composition, HttpApiVersion::parse("1.5.0")?, "task assign").await?;
+        preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task assign").await?;
         composition.send(request).await?;
         if json {
-            println!("{}", serde_json::json!({ "task_id": task_id }));
+            Ok(format!("{}\n", serde_json::json!({ "task_id": task_id })))
         } else {
-            println!("assigned {task_id} to {assignee}");
+            Ok(format!("assigned {task_id} to {assignee}\n"))
         }
-        Ok(())
     }
 }
 
@@ -269,7 +282,22 @@ impl TaskCloseCommand {
         let (home_dir, current_dir) = resolve_command_runtime_context("task close")?;
         let caller = resolve_context(&self.caller)?;
         let composition = composition("task close", observability, &home_dir, &current_dir)?;
-        preflight_daemon_api(&composition, HttpApiVersion::parse("1.5.0")?, "task close").await?;
+        print!(
+            "{}",
+            self.execute(&composition, caller, home_dir, current_dir)
+                .await?
+        );
+        Ok(())
+    }
+
+    async fn execute(
+        self,
+        composition: &CliComposition<'_>,
+        caller: atm_core::caller_context::CallerContext,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+    ) -> Result<String> {
+        preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task close").await?;
         let query = task_list_request(
             home_dir.clone(),
             current_dir.clone(),
@@ -278,15 +306,16 @@ impl TaskCloseCommand {
             None,
         )?;
         let rows = composition.list(query).await?.task_rows;
-        let row = rows
-            .into_iter()
-            .find(|row| row.task_id == self.task_id)
-            .ok_or_else(|| {
-                atm_core::error::AtmError::validation(format!(
+        let row = match preflight_close(rows, &self.task_id) {
+            ClosePreflight::Proceed { row } => row,
+            ClosePreflight::Unknown => {
+                return Err(anyhow::anyhow!(
                     "task {} does not exist on team {}",
-                    self.task_id, caller.caller_team
-                ))
-            })?;
+                    self.task_id,
+                    caller.caller_team
+                ));
+            }
+        };
         let recipient = report_recipient(&row, &caller.caller_identity);
         let outcome: TaskCloseOutcome = self.outcome.into();
         let reason = self.reason.clone();
@@ -315,19 +344,21 @@ impl TaskCloseCommand {
             reason,
         )?;
         validate_local_task_target(&request)?;
-        let result = composition.send(request).await?;
+        let result = composition
+            .send(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         if self.json {
-            println!("{}", serde_json::to_string_pretty(&result)?);
+            Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
         } else if let Some(closed) = result.already_closed {
-            println!(
+            Ok(format!(
                 "task {} was already closed ({}); report delivered",
                 self.task_id,
                 closed.as_str()
-            );
+            ) + "\n")
         } else {
-            println!("closed {} ({})", self.task_id, outcome.as_str());
+            Ok(format!("closed {} ({})\n", self.task_id, outcome.as_str()))
         }
-        Ok(())
     }
 }
 
@@ -335,13 +366,28 @@ impl TaskListCommand {
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("task list")?;
         let caller = resolve_context(&self.caller)?;
+        let composition = composition("task list", observability, &home_dir, &current_dir)?;
+        print!(
+            "{}",
+            self.execute(&composition, caller, home_dir, current_dir)
+                .await?
+        );
+        Ok(())
+    }
+
+    async fn execute(
+        self,
+        composition: &CliComposition<'_>,
+        caller: atm_core::caller_context::CallerContext,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+    ) -> Result<String> {
         let contract = TaskListQuery {
             team: caller.caller_team.clone(),
             assignee: (!self.all).then_some(caller.caller_identity.clone()),
             page: TaskPage::default_bounded(),
         };
-        let composition = composition("task list", observability, &home_dir, &current_dir)?;
-        preflight_daemon_api(&composition, HttpApiVersion::parse("1.5.0")?, "task list").await?;
+        preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task list").await?;
         let outcome = composition
             .list(task_list_request(
                 home_dir.clone(),
@@ -367,7 +413,7 @@ impl TaskListCommand {
         } else {
             None
         };
-        print_task_rows(&rows, self.json, self.all, runtime.as_ref())
+        render_task_rows_output(&rows, self.json, self.all, runtime.as_ref())
     }
 }
 
@@ -375,14 +421,29 @@ impl TaskEventsCommand {
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("task events")?;
         let caller = resolve_context(&self.caller)?;
+        let composition = composition("task events", observability, &home_dir, &current_dir)?;
+        print!(
+            "{}",
+            self.execute(&composition, caller, home_dir, current_dir)
+                .await?
+        );
+        Ok(())
+    }
+
+    async fn execute(
+        self,
+        composition: &CliComposition<'_>,
+        caller: atm_core::caller_context::CallerContext,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+    ) -> Result<String> {
         let contract = TaskEventQuery {
             team: caller.caller_team.clone(),
             task_id: self.task_id.clone(),
             assignee: None,
             page: TaskPage::default_bounded(),
         };
-        let composition = composition("task events", observability, &home_dir, &current_dir)?;
-        preflight_daemon_api(&composition, HttpApiVersion::parse("1.5.0")?, "task events").await?;
+        preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task events").await?;
         let ledger = TaskLedgerQuery::Events {
             task_id: contract.task_id.clone(),
             member: None,
@@ -404,7 +465,7 @@ impl TaskEventsCommand {
         .with_task_ledger(ledger.clone());
         let outcome = composition.list(query).await?;
         let rows = select_task_events(outcome.task_event_rows, &contract);
-        print_task_events(&rows, self.json)
+        render_task_events(&rows, self.json)
     }
 }
 
@@ -423,9 +484,18 @@ impl TaskMoveCommand {
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("task move")?;
         let caller = resolve_context(&self.caller)?;
-        let target = self.target();
         let composition = composition("task move", observability, &home_dir, &current_dir)?;
-        preflight_daemon_api(&composition, HttpApiVersion::parse("1.6.0")?, "task move").await?;
+        print!("{}", self.execute(&composition, caller).await?);
+        Ok(())
+    }
+
+    async fn execute(
+        self,
+        composition: &CliComposition<'_>,
+        caller: atm_core::caller_context::CallerContext,
+    ) -> Result<String> {
+        let target = self.target();
+        preflight_daemon_api(composition, HttpApiVersion::parse("1.6.0")?, "task move").await?;
         let response = composition
             .execute_request(RequestEnvelope::TaskMove(TaskMoveRequest {
                 caller_identity: caller.caller_identity,
@@ -436,19 +506,15 @@ impl TaskMoveCommand {
             .await?;
         match response {
             ResponseEnvelope::TaskMove(outcome) if self.json => {
-                println!("{}", serde_json::to_string_pretty(&outcome)?);
-                Ok(())
+                Ok(format!("{}\n", serde_json::to_string_pretty(&outcome)?))
             }
-            ResponseEnvelope::TaskMove(outcome) => {
-                println!(
-                    "moved {} for {} from {} to {}",
-                    outcome.task_id,
-                    outcome.assignee,
-                    outcome.from.get(),
-                    outcome.to.get()
-                );
-                Ok(())
-            }
+            ResponseEnvelope::TaskMove(outcome) => Ok(format!(
+                "moved {} for {} from {} to {}",
+                outcome.task_id,
+                outcome.assignee,
+                outcome.from.get(),
+                outcome.to.get()
+            ) + "\n"),
             other => Err(atm_daemon_client::unexpected_response("task move", other).into()),
         }
     }
@@ -506,18 +572,16 @@ fn resolve_task_id(task_id: Option<TaskId>) -> Result<TaskId, atm_core::error::A
     task_id.map_or_else(|| TaskId::from_str(&ulid::Ulid::new().to_string()), Ok)
 }
 
-fn print_task_rows(
+fn render_task_rows_output(
     rows: &[TaskRow],
     json: bool,
     grouped: bool,
     runtime: Option<&RuntimeStatusSnapshot>,
-) -> Result<()> {
+) -> Result<String> {
     if json {
-        println!("{}", serde_json::to_string_pretty(rows)?);
-        return Ok(());
+        return Ok(format!("{}\n", serde_json::to_string_pretty(rows)?));
     }
-    print!("{}", render_task_rows(rows, grouped, runtime));
-    Ok(())
+    Ok(render_task_rows(rows, grouped, runtime))
 }
 
 fn render_task_rows(
@@ -595,12 +659,11 @@ fn member_state_header(member: &AgentName, state: &str) -> String {
     format!("{member} (state: {state})")
 }
 
-fn print_task_events(rows: &[TaskEventRow], json: bool) -> Result<()> {
+fn render_task_events(rows: &[TaskEventRow], json: bool) -> Result<String> {
     if json {
-        println!("{}", serde_json::to_string_pretty(rows)?);
-        return Ok(());
+        return Ok(format!("{}\n", serde_json::to_string_pretty(rows)?));
     }
-    println!("seq at event from→to actor detail");
+    let mut output = String::from("seq at event from→to actor detail\n");
     for row in rows {
         let actor = match &row.actor {
             TaskActor::Member(member) => member.as_str(),
@@ -614,7 +677,8 @@ fn print_task_events(rows: &[TaskEventRow], json: bool) -> Result<()> {
             .or_else(|| row.marker.map(|marker| marker.as_str()))
             .or_else(|| row.outcome.map(|outcome| outcome.as_str()))
             .unwrap_or("-");
-        println!(
+        writeln!(
+            output,
             "{} {} {} {}→{} {} {}",
             row.seq,
             row.at
@@ -625,9 +689,9 @@ fn print_task_events(rows: &[TaskEventRow], json: bool) -> Result<()> {
             to,
             actor,
             detail,
-        );
+        )?;
     }
-    Ok(())
+    Ok(output)
 }
 
 #[cfg(test)]
@@ -736,7 +800,7 @@ mod tests {
     }
 
     #[test]
-    fn list_all_shows_every_member_grouped_with_state_header() {
+    fn renderer_groups_every_member_with_state_header() {
         let row = |task_id: &str, assignee: &str, position: u32| -> TaskRow {
             serde_json::from_value(serde_json::json!({
                 "team": "test-team",
@@ -803,7 +867,7 @@ mod tests {
     }
 
     #[test]
-    fn task_move_to_pre_1_6_0_daemon_is_refused_before_send() {
+    fn compatibility_helper_refuses_task_move_below_1_6_0() {
         let verdict = CompatibilityVerdict::Compatible {
             daemon_release: ReleaseVersion::parse("1.5.14").expect("release"),
             daemon_schema_version: 1,
@@ -820,7 +884,7 @@ mod tests {
     }
 
     #[test]
-    fn move_head_end_before_via_cli() {
+    fn parser_accepts_move_head_end_and_before() {
         let cases = [
             (vec!["--head"], MoveTarget::Head),
             (vec!["--end"], MoveTarget::End),
@@ -845,3 +909,19 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/task_close.rs"]
+mod task_close_tests;
+
+#[cfg(test)]
+#[path = "../../tests/task_assign.rs"]
+mod task_assign_tests;
+
+#[cfg(test)]
+#[path = "../../tests/task_move.rs"]
+mod task_move_tests;
+
+#[cfg(test)]
+#[path = "../../tests/task_list_events.rs"]
+mod task_list_events_tests;

@@ -1504,7 +1504,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn peer_ingress_rejects_task_move_explicitly() {
+    async fn router_peer_ingress_rejects_task_move() {
         let fixture = fixture(true, None, None);
         let team: TeamName = "test-team".parse().expect("team");
         let task_id = "T1".parse().expect("task id");

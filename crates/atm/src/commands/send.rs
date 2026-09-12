@@ -244,13 +244,22 @@ impl SendCommand {
                 .await;
         }
         let json = self.json;
+        let task_alias = self.task_id.is_some() || self.task_complete;
         let attachment_note = self.land_attach_files_if_any(&current_dir).await?;
-        let request = self.build_request_with_mode(
-            home_dir.clone(),
-            current_dir.clone(),
-            nudge_mode,
-            attachment_note,
-        )?;
+        let request = self
+            .build_request_with_mode(
+                home_dir.clone(),
+                current_dir.clone(),
+                nudge_mode,
+                attachment_note,
+            )
+            .map_err(|error| {
+                if task_alias {
+                    anyhow::anyhow!(error.to_string())
+                } else {
+                    error
+                }
+            })?;
         let peer_host = request
             .to
             .as_ref()
@@ -1689,7 +1698,7 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn task_target_on_other_team_or_host_is_rejected_before_send() {
+    fn send_builder_rejects_nonlocal_task_target() {
         for target in ["recipient-a@other-team", "recipient-a@test-team.127.0.0.1"] {
             let request = atm_core::send::SendRequest::new(
                 ".".into(),

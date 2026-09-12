@@ -57,10 +57,6 @@ pub(crate) enum WriteOp {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     },
-    #[allow(
-        dead_code,
-        reason = "BA.2 owns the atomic writer operation; BA.4 adds its CLI construction site"
-    )]
     TaskMove {
         team: TeamName,
         task_id: TaskId,

@@ -477,7 +477,7 @@ impl AtmGraftClient for CliComposition<'_> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::fs;
     use std::io;
     use std::io::Write;
@@ -583,26 +583,34 @@ mod tests {
         (result, buffer.contents())
     }
 
-    struct LoopbackFixture {
+    pub(crate) struct LoopbackFixture {
         _env_guard: EnvGuard,
         _runtime_guard: atm_runtime_test_support::SqliteRuntimeGuard,
         _tempdir: TempDir,
-        home_dir: std::path::PathBuf,
-        current_dir: std::path::PathBuf,
+        pub(crate) home_dir: std::path::PathBuf,
+        pub(crate) current_dir: std::path::PathBuf,
     }
 
     impl LoopbackFixture {
-        fn new(recipient: &str) -> Self {
+        pub(crate) fn new(recipient: &str) -> Self {
+            Self::new_with_identity(recipient, TEST_SENDER)
+        }
+
+        pub(crate) fn new_with_identity(recipient: &str, identity: &str) -> Self {
             super::install_retained_runtime_factory();
             let tempdir = tempfile::tempdir().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
             fs::write(current_dir.join(".atm.toml"), "[atm]\n").expect("fixture atm config");
-            let env_guard = EnvGuard::set_many([(
-                "ATM_HOME",
-                Some(home_dir.to_str().expect("utf-8 tempdir path")),
-            )]);
+            let env_guard = EnvGuard::set_many([
+                (
+                    "ATM_HOME",
+                    Some(home_dir.to_str().expect("utf-8 tempdir path")),
+                ),
+                ("ATM_IDENTITY", Some(identity)),
+                ("ATM_TEAM", Some(TEST_TEAM)),
+            ]);
             let runtime_guard = install_isolated_sqlite_runtime(&home_dir);
             let fixture = Self {
                 _env_guard: env_guard,
@@ -613,6 +621,74 @@ mod tests {
             };
             fixture.write_team_config(recipient);
             fixture
+        }
+
+        pub(crate) fn composition<'a>(
+            &self,
+            observability: &'a CliObservability,
+        ) -> CliComposition<'a> {
+            use atm_http_runtime::CanonicalWriteHandler as _;
+
+            let transport_observability: Arc<
+                dyn atm_core::observability::ObservabilityPort + Send + Sync,
+            > = Arc::new(atm_core::observability::NullObservability);
+            let router = self.router(Arc::clone(&transport_observability));
+            let handler_observability = Arc::clone(&transport_observability);
+            let transport = LoopbackClientTransport::with_async_handler(
+                transport_observability,
+                move |request| {
+                    let router = Arc::clone(&router);
+                    let observability = Arc::clone(&handler_observability);
+                    Box::pin(async move {
+                        if let atm_core::api::ApiRequest::Doctor(query) = request {
+                            return atm_core::doctor::run_doctor(query, observability.as_ref())
+                                .map(|report| {
+                                    atm_core::api::ApiResponse::new(ResponseEnvelope::Doctor(
+                                        Box::new(report),
+                                    ))
+                                });
+                        }
+                        router
+                            .dispatch(
+                                request,
+                                atm_core::AuthenticatedIngress::Local,
+                                atm_core::RequestDeadline::after(std::time::Duration::from_secs(2)),
+                            )
+                            .await
+                    })
+                },
+            );
+            CliComposition::from_loopback_transport(Arc::new(transport), observability)
+        }
+
+        pub(crate) fn router(
+            &self,
+            observability: Arc<dyn atm_core::observability::ObservabilityPort + Send + Sync>,
+        ) -> Arc<atm_http_runtime::StorageAndNudgeRouter> {
+            let runtime = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite runtime");
+            Arc::new(
+                atm_http_runtime::StorageAndNudgeRouter::new(
+                    runtime.service_runtime,
+                    observability,
+                    Arc::new(atm_core::boundary::NoopMessageReceivedHookSelector),
+                    self.home_dir.clone(),
+                )
+                .with_async_mailbox_runtime(Arc::new(runtime.async_mailbox_runtime)),
+            )
+        }
+
+        pub(crate) fn task_store(&self) -> Arc<dyn atm_storage::TaskStore + Send + Sync> {
+            open_isolated_sqlite_boundary(&self.home_dir)
+                .expect("sqlite db")
+                .service_runtime
+                .task_store()
+                .expect("task store")
+        }
+
+        pub(crate) fn message_store(&self) -> Arc<dyn atm_storage::MessageStore + Send + Sync> {
+            open_isolated_sqlite_boundary(&self.home_dir)
+                .expect("sqlite db")
+                .message_store_arc()
         }
 
         fn team_dir(&self) -> std::path::PathBuf {
@@ -687,7 +763,7 @@ mod tests {
             self.seed_sqlite_mailbox(agent, &messages);
         }
 
-        fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
+        pub(crate) fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
             if self.home_dir.join("runtime").join("mail.sqlite3").exists() {
                 let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
                 let mail_store = assembly.mail_store_arc();

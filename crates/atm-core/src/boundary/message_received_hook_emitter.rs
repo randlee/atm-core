@@ -59,3 +59,20 @@ pub trait MessageReceivedHookSelector: sealed::Sealed + Send + Sync {
         dispatch: &BuiltInPostSendDispatch,
     ) -> Option<&dyn AsyncMessageReceivedHookEmitter>;
 }
+
+#[cfg(any(test, feature = "test-utils"))]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoopMessageReceivedHookSelector;
+
+#[cfg(any(test, feature = "test-utils"))]
+impl sealed::Sealed for NoopMessageReceivedHookSelector {}
+
+#[cfg(any(test, feature = "test-utils"))]
+impl MessageReceivedHookSelector for NoopMessageReceivedHookSelector {
+    fn select_emitter(
+        &self,
+        _dispatch: &BuiltInPostSendDispatch,
+    ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+        None
+    }
+}
