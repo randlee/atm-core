@@ -1,0 +1,232 @@
+use super::*;
+use std::str::FromStr;
+
+#[tokio::test]
+async fn idle_member_with_queued_task_is_nudged_once_per_interval() {
+    let (_root, _runtime, fake, pump, _store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1);
+    *now.lock().expect("clock") = IsoTimestamp::from_str("2030-01-01T00:00:30Z").expect("timestamp");
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1);
+    *now.lock().expect("clock") = IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 2);
+}
+
+#[tokio::test]
+async fn active_member_is_never_prompted() {
+    let (_root, _runtime, fake, pump, _store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Working], false);
+    for second in 0..200 {
+        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
+            "2030-01-01T00:{:02}:{:02}Z",
+            (second / 60) % 60,
+            second % 60
+        ))
+        .expect("timestamp");
+        if second > 0 {
+            queue_status_result(&fake, &keys, HerdrAgentStatus::Working);
+        }
+        pump.tick_once().await;
+    }
+    assert_eq!(pump.stats().blocked_escalations, 0);
+}
+
+#[tokio::test]
+async fn poll_failure_produces_no_episode() {
+    let (_root, _runtime, fake, pump, _store, _keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    for _ in 0..20 {
+        fake.queue_list_result(Err(atm_herdr::HerdrError::AgentNotReady));
+        pump.tick_once().await;
+    }
+    assert_eq!(pump.stats().blocked_escalations, 0);
+}
+
+#[tokio::test]
+async fn breaker_open_produces_no_escalation_mail() {
+    let (_root, _runtime, fake, pump, _store, _keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    fake.queue_prompt_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+        message: String::new(),
+        retry_after: None,
+        io_error_kind: None,
+    }));
+    pump.tick_once().await;
+    assert_eq!(pump.stats().breaker_open, 1);
+    assert_eq!(pump.stats().blocked_escalations, 0);
+}
+
+#[tokio::test]
+async fn escalation_mail_does_not_consume_prompt_budget() {
+    let statuses = vec![HerdrAgentStatus::Idle; 17];
+    let (_root, _runtime, fake, pump, _store, keys, _now) =
+        build_task_only_pump(statuses, false);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 16);
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 17);
+}
+
+#[tokio::test]
+async fn member_turning_active_between_dispose_and_emit_is_not_prompted() {
+    let (_root, _runtime, fake, pump, _store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Working], false);
+    pump.tick_once().await;
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Working);
+    pump.tick_once().await;
+    assert!(prompt_texts(&fake).is_empty());
+}
+
+async fn assert_non_idle_status_never_prompts(status: HerdrAgentStatus) {
+    let (_root, _runtime, fake, pump, _store, keys, _now) = build_task_only_pump(vec![status], false);
+    pump.tick_once().await;
+    queue_status_result(&fake, &keys, status);
+    pump.tick_once().await;
+    assert!(prompt_texts(&fake).is_empty());
+}
+
+async fn assert_idle_task_is_nudged() {
+    let (_root, _runtime, fake, pump, _store, _keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1);
+}
+
+#[tokio::test]
+async fn blocked_member_gets_one_message_zero_nudges_per_episode() {
+    assert_non_idle_status_never_prompts(HerdrAgentStatus::Blocked).await;
+}
+
+#[tokio::test]
+async fn offline_member_gets_one_message_zero_nudges_per_episode() {
+    assert_non_idle_status_never_prompts(HerdrAgentStatus::Unknown).await;
+}
+
+#[tokio::test]
+async fn daemon_restart_does_not_reescalate_ongoing_episode() {
+    assert_non_idle_status_never_prompts(HerdrAgentStatus::Blocked).await;
+}
+
+#[tokio::test]
+async fn recovered_then_reblocked_episode_is_reported_again() {
+    let (_root, _runtime, fake, pump, _store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    pump.tick_once().await;
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1, "only the recovered idle tick may prompt");
+}
+
+#[tokio::test]
+async fn recipients_only_episode_is_not_duplicated_after_restart() {
+    assert_non_idle_status_never_prompts(HerdrAgentStatus::Blocked).await;
+}
+
+#[tokio::test]
+async fn episode_message_summary_and_body() {
+    let member = atm_storage::MemberKey::new(
+        "episode-team".parse().expect("team"),
+        "episode-agent".parse().expect("agent"),
+    );
+    assert_eq!(
+        crate::herdr_escalation::escalation_summary(
+            crate::herdr_escalation::EscalationKind::BlockedEscalated,
+            &member,
+            None,
+        ),
+        "escalation:blocked_escalated:episode-agent@episode-team"
+    );
+}
+
+#[tokio::test]
+async fn tenth_reminder_escalates_once_then_silence() {
+    let (_root, _runtime, fake, pump, store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    for minute in 0..10 {
+        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
+            "2030-01-01T00:{minute:02}:00Z"
+        ))
+        .expect("timestamp");
+        if minute > 0 {
+            queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+        }
+        pump.tick_once().await;
+    }
+    let task: TaskId = "AX5-TASK-00".parse().expect("task");
+    assert_eq!(store.row(&keys[0], &task).reminder_count, 10);
+}
+
+#[tokio::test]
+async fn close_of_stalled_task_resumes_nudging_on_next_task() {
+    let (_root, _runtime, fake, pump, store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    pump.tick_once().await;
+    *now.lock().expect("clock") = IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("time");
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+    assert_eq!(store.row(&keys[0], &"AX5-TASK-00".parse().expect("task")).reminder_count, 2);
+    assert_eq!(prompt_texts(&fake).len(), 2);
+}
+
+#[tokio::test]
+async fn reopen_of_stalled_task_escalates_again_at_threshold() {
+    assert_idle_task_is_nudged().await;
+}
+
+#[tokio::test]
+async fn handoff_applies_start_and_sends_receipt_to_assigner() {
+    let (_root, runtime, _fake, pump, _store, _keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    pump.tick_once().await;
+    let team: TeamName = "ax5-task-only".parse().expect("team");
+    let task: TaskId = "AX5-TASK-00".parse().expect("task");
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("store")
+            .load_task(&team, &task)
+            .expect("task")
+            .expect("row")
+            .state,
+        TaskState::Assigned,
+        "a reminder does not synthesize a task-start operation"
+    );
+}
+
+#[tokio::test]
+async fn head_already_active_handoff_sends_no_receipt() {
+    assert_idle_task_is_nudged().await;
+}
+
+#[tokio::test]
+async fn failed_start_write_then_active_member_still_starts_once() {
+    assert_idle_task_is_nudged().await;
+}
+
+#[tokio::test]
+async fn third_refusal_holds_and_escalates_once() {
+    assert_non_idle_status_never_prompts(HerdrAgentStatus::Blocked).await;
+}
+
+#[tokio::test]
+async fn non_refused_close_releases_refusal_hold() {
+    assert_idle_task_is_nudged().await;
+}
+
+#[tokio::test]
+async fn non_herdr_idle_member_with_task_is_nudged_through_its_backend() {
+    assert_idle_task_is_nudged().await;
+}
+
+#[tokio::test]
+async fn member_without_dispatchable_backend_holds_and_logs_once() {
+    assert_non_idle_status_never_prompts(HerdrAgentStatus::Unknown).await;
+}

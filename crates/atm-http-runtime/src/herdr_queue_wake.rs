@@ -1009,6 +1009,13 @@ impl Drop for ReleasePendingOnDrop {
 
 #[cfg(test)]
 mod tests {
+    mod herdr_nudge_invariant {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/herdr_nudge_invariant.rs"
+        ));
+    }
+
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
         HerdrQueueWakePump, ReleasePendingOnDrop, log_herdr_list_failure, runtime_state,
