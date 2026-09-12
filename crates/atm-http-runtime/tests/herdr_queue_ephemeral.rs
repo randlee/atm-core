@@ -441,6 +441,16 @@ async fn deferred_assignment_handoff_starts_head_task_once() {
         1,
         "the assigner receives one task_started receipt"
     );
+    assert!(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .list_pending_members()
+            .expect("pending members")
+            .iter()
+            .any(|member| member.agent().as_str() == "sender"),
+        "the task-start receipt uses deferred delivery for the assigner"
+    );
 
     for _ in 0..20 {
         queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);

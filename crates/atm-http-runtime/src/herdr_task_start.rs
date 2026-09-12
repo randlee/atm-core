@@ -61,7 +61,7 @@ pub(crate) async fn start_assigned_task(
             Some(row.task_id.clone()),
             false,
         )?
-        .with_nudge_mode(NudgeMode::Immediate);
+        .with_nudge_mode(NudgeMode::Deferred);
         request.task_op = Some(TaskOp::Start);
         write_mail_with_runtime(request, &NullObservability, &runtime).map(|_| ())
     })
