@@ -150,6 +150,15 @@ impl HerdrQueueWakePump {
                 return;
             }
         };
+        if !super::still_idle(&self.service_runtime, &candidate.member.key) {
+            tracing::info!(
+                event = "herdr_queue_poll_outcome",
+                member = %candidate.member.key,
+                outcome = "reminder_held_not_idle",
+                "Herdr task reminder skipped after the live idle recheck"
+            );
+            return;
+        }
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
             tracing::info!(event = "herdr_queue_poll_outcome", member = %candidate.member.key, outcome = "reminder_target_not_present", "Herdr task reminder selector returned no emitter");
             return;
