@@ -250,6 +250,9 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
             f"{source}: schema_version must be integer {SCHEMA_VERSION}"
         )
     generated_at, generated_at_text = _utc_timestamp(payload["generated_at"], source)
+    procedure = payload.get("procedure")
+    if procedure is not None and (not isinstance(procedure, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", procedure)):
+        raise ReportIndexError(f"{source}: procedure must be a safe procedure id")
     host_label = _safe_host_label(payload["host_label"], source)
     report_html = _safe_relative_html(payload["report_html"], source)
     html_path = reports_root / report_html
@@ -284,7 +287,7 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
         source=source,
         status=_smoke_status(payload["status"], source) if report_type == "smoke" else None,
         source_revision=_source_revision(payload.get("source_revision"), source),
-        procedure=payload.get("procedure"),
+        procedure=procedure,
     )
 
 
