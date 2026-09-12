@@ -99,6 +99,19 @@ vars_path.write_text(json.dumps(data, indent=2) + '\\n')
 PY
 ```
 
+**Record the round in ATM**
+
+A background reviewer generates no ATM traffic, so the round is invisible to
+`atm search` until it is recorded. After the reviewer returns, send one
+`plan-review-notice` (template
+`.claude/skills/plan-hardening/plan-review-notice.xml.j2`, installed under
+`~/.atm/templates/plan-hardening/`) with `reviewer: plan-scope-reviewer`,
+`round_index`, `verdict`, and a one-paragraph `summary`. Send it to
+`team-lead`; when `team-lead` runs the round itself, send it to the plan
+author from Step 1 with `atm queue` so it never interrupts work in progress.
+The template declares `workflow.stage: plan`, which is what makes the round
+discoverable (`atm search --team <team> --workflow-stage plan`).
+
 Update the round table after every Step 2 response:
 
 | Round | Step | Reviewer | reviewed_commit | status | blocking | important | minor | findings_hash | supersedes | Note |

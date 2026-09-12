@@ -61,6 +61,28 @@ and rerun preflight. Do not proceed with a degraded or guessed dependency.
 The reference is intentionally separate so the normal skill entry point stays
 small (progressive disclosure).
 
+## Lead Role
+
+The orchestrator in this skill is the **lead**: the identity that dispatches
+sprint nodes, appends events, and receives completion messages.
+`team-lead` is the default lead; `fenix` or any other identity may hold the role. A lead
+must be appointed for every phase before its first dispatch, recorded in the
+phase status row of `docs/project-plan.md` and the phase ledger, and
+announced to the roster over ATM. Templates address the lead through the
+`lead` variable (default `team-lead`); pass `--var lead=<identity>` or a
+`lead` key in the vars file, never a hard-coded name. The role can be
+transferred mid-phase: the outgoing lead sends the incoming lead a handoff
+message listing open task ids, open PRs, and pending QA rounds, records the
+transfer in the ledger, and announces the new lead. In-flight tasks keep
+their original assigner; tasks dispatched after the transfer name the new
+lead. The events.ttl writer role moves with the lead.
+
+Reports carbon-copy `team-lead` by default. Every template also takes a `cc`
+variable (default `team-lead`): when the lead is another identity, the
+assignee sends a one-line plain copy of each push report and close summary
+to `cc`; when `lead` and `cc` are the same identity, nothing extra is sent.
+The lead may set `cc` to an empty string to switch copies off.
+
 ## Defaults
 
 | Setting | Default |
@@ -245,7 +267,7 @@ triaging-findings to determine template selection.
 ## Appending Events
 
 **Team-lead is the sole writer of TTL events.** Agents (dev, QA) never append to
-`.sprints/` files directly. Dev sends an ATM completion message; team-lead
+`.sprints/` files directly. Dev sends an ATM completion message; the lead
 appends triage:Completion and triage:Resolution events, then validates.
 
 Assignments and Completions go into `events.ttl`. They are file-appended and
@@ -253,7 +275,7 @@ committed immediately. Use UTC timestamps from the local clock — never from
 agent self-report.
 
 ```bash
-# Assignment — append when team-lead dispatches a sprint to a dev agent
+# Assignment — append when the lead dispatches a sprint to a dev agent
 cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:a<N> a triage:Assignment ;
     triage:ofSprint triage:Phase<X>-S<n> ;
@@ -264,7 +286,7 @@ git add .sprints/<PHASE>/events.ttl && git commit -m "event: Assignment <PHASE>-
 # Validate after every append
 .claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
 
-# Completion — append when team-lead receives dev's ATM completion message
+# Completion — append when the lead receives dev's ATM completion message
 cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:c<N> a triage:Completion ;
     triage:ofSprint triage:Phase<X>-S<n> ;
@@ -274,7 +296,7 @@ git add .sprints/<PHASE>/events.ttl && git commit -m "event: Completion <PHASE>-
 # Validate after every append
 .claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
 
-# Resolution — append when team-lead confirms a non-blocking finding is fixed
+# Resolution — append when the lead confirms a non-blocking finding is fixed
 cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:r<N> a triage:Resolution ;
     triage:resolves triage:f<N> ;
@@ -384,7 +406,7 @@ Completion, the Completion is invalidated:
    does not block — dev has sent a Completion, so the sprint is not in-flight;
    a new Assignment is required for re-dispatch)
 2. Team-lead appends a new Assignment event to events.ttl for the sprint
-3. Dev fixes the blocker and sends an ATM completion message; team-lead
+3. Dev fixes the blocker and sends an ATM completion message; the lead
    appends a new Completion
 4. Dev merges forward into the next sprint's worktree, picking up any
    important/minor findings on the way (Step 4 in the j2 template)
@@ -437,13 +459,13 @@ graph-orchestration:
 |---|---|---|
 | `triage:Phase` | — | Phase identity node |
 | `triage:Sprint` | `inPhase`, `order`, `criteria` | One per sprint; `order` is unique within a phase |
-| `triage:Assignment` | `ofSprint`, `assignedTo`, `assignedAt` | Appended by team-lead when dispatching; must be unique per sprint |
-| `triage:Completion` | `ofSprint`, `at` | Appended by team-lead on receipt of dev's ATM completion message; may be invalidated by a later blocking finding |
-| `triage:Resolution` | `resolves`, `resolvedAt` | Appended by team-lead when a non-blocking finding is confirmed fixed; blocking findings need no Resolution |
+| `triage:Assignment` | `ofSprint`, `assignedTo`, `assignedAt` | Appended by the lead when dispatching; must be unique per sprint |
+| `triage:Completion` | `ofSprint`, `at` | Appended by the lead on receipt of dev's ATM completion message; may be invalidated by a later blocking finding |
+| `triage:Resolution` | `resolves`, `resolvedAt` | Appended by the lead when a non-blocking finding is confirmed fixed; blocking findings need no Resolution |
 
 Findings are defined by the triaging-findings skill and live in
 `.triage/*/findings/*.ttl`. Resolution events referencing those findings are
-appended to events.ttl by team-lead.
+appended to events.ttl by the lead.
 
 ## Scripts
 

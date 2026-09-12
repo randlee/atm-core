@@ -108,11 +108,36 @@ Cycle-cap behavior:
   converged`; do not continue launching background reviewers and do not ask
   the user for a decision mid-loop
 
+## Workflow Metadata
+
+Every template in this skill declares ATM template metadata
+(`metadata.type`, `metadata.tags`, `metadata.workflow`; see
+`docs/template-workflow-metadata.md`). The declared stage is `plan`, so any
+message rendered from one of them is discoverable without reading its body:
+
+```sh
+atm search --team atm-dev --workflow-stage plan --since <ISO> --json
+atm search --team atm-dev --type 'plan-*' --since <ISO> --json
+```
+
+Rounds that run a reviewer as a background agent (steps 2 and 4) produce no
+ATM message on their own; the step docs require a `plan-review-notice` send
+after each such round so the run stays observable. Rounds routed to a team
+agent instead of a background agent use `plan-critical-review.xml.j2` (or
+the numbered assignment templates) and are recorded by that dispatch.
+Install the templates before the first send:
+
+```sh
+mkdir -p ~/.atm/templates/plan-hardening && cp .claude/skills/plan-hardening/*.j2 ~/.atm/templates/plan-hardening/
+```
+
 ## Render
 
 - `.claude/skills/plan-hardening/01-plan-scope-review.xml.j2`
 - `.claude/skills/plan-hardening/02-sprint-scope-hardening.xml.j2`
 - `.claude/skills/plan-hardening/03-consistency-hardening.xml.j2`
+- `.claude/skills/plan-hardening/plan-critical-review.xml.j2`
+- `.claude/skills/plan-hardening/plan-review-notice.xml.j2`
 - `.claude/skills/plan-hardening/steps/step-1.md`
 - `.claude/skills/plan-hardening/steps/step-2.md`
 - `.claude/skills/plan-hardening/steps/step-3.md`

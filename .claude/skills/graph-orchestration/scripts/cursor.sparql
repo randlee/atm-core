@@ -10,7 +10,7 @@
 #     → Skip. Dev is still working.
 #   - Assignment + Completion (invalid) + no new Assignment: dev sent a
 #     Completion but QA filed a blocking finding that postdates it. Dev is
-#     done; team-lead must re-dispatch. → Cursor returns this sprint.
+#     done; the lead must re-dispatch. → Cursor returns this sprint.
 #   - Assignment + Completion (invalid) + new Assignment in-flight: re-dispatch
 #     already issued, dev working again. → Skip.
 #

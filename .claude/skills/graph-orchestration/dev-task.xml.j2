@@ -16,13 +16,29 @@ required_variables:
   - phase_local
   - ttl_dir
 optional_variables:
+  - lead
+  - cc
   - finding_ids
   - test_command
   - references
 defaults:
+  lead: team-lead
+  cc: team-lead
   test_command: "just test"
   references: ""
   finding_ids: ""
+metadata:
+  type: dev-task
+  tags:
+    - stage:dev
+    - orchestration:graph
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: dev-start
+    stage: dev
+    transition: start
 ---
 <atm-task id="{{ task_id }}" sprint="{{ sprint }}" node="{{ node_id }}" order="{{ node_order }}" assignee="{{ assignee }}">
   <description>Implement sprint node {{ node_id }} (order {{ node_order }}) in {{ sprint }}.</description>
@@ -39,19 +55,19 @@ defaults:
   {% endif %}
 
   <workflow>
-    <step id="a">ACK this message immediately. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
-    <step id="b">Before reading code or editing, update from `{{ pr_target }}` first (`git fetch origin && git merge origin/{{ pr_target }}`) so `{{ ttl_dir }}/events.ttl` reflects team-lead's latest writes, then run `.claude/skills/graph-orchestration/scripts/next-dev-task {{ phase_local }} {{ ttl_dir }}` and retain its JSON. Note: once team-lead appends this task's Assignment event, `{{ node_id }}` is "in-flight" and the cursor query correctly advances past it — do not expect `vars.sprint` to equal `{{ node_id }}`. Instead confirm directly against `{{ ttl_dir }}/events.ttl` that a `triage:Assignment` exists with `triage:ofSprint triage:{{ node_id }}` and `triage:assignedTo` naming you, and that no `triage:Completion` for `triage:{{ node_id }}` exists yet — that is what makes this a valid, currently-assigned task. With an empty `findings` array this is a new/greenfield sprint. Otherwise, `{{ finding_ids }}` must be non-empty and every listed id must appear in `findings` with severity `blocking`; any other result is an invalid assignment—stop and report it. The array is ordered Blocking, Important, Minor.</step>
+    <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"` (the message id is in the nudge line and the `atm read` header). The ack accepts the task; it does not close it. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="b">Before reading code or editing, update from `{{ pr_target }}` first (`git fetch origin && git merge origin/{{ pr_target }}`) so `{{ ttl_dir }}/events.ttl` reflects {{ lead }}'s latest writes, then run `.claude/skills/graph-orchestration/scripts/next-dev-task {{ phase_local }} {{ ttl_dir }}` and retain its JSON. Note: once {{ lead }} appends this task's Assignment event, `{{ node_id }}` is "in-flight" and the cursor query correctly advances past it — do not expect `vars.sprint` to equal `{{ node_id }}`. Instead confirm directly against `{{ ttl_dir }}/events.ttl` that a `triage:Assignment` exists with `triage:ofSprint triage:{{ node_id }}` and `triage:assignedTo` naming you, and that no `triage:Completion` for `triage:{{ node_id }}` exists yet — that is what makes this a valid, currently-assigned task. With an empty `findings` array this is a new/greenfield sprint. Otherwise, `{{ finding_ids }}` must be non-empty and every listed id must appear in `findings` with severity `blocking`; any other result is an invalid assignment—stop and report it. The array is ordered Blocking, Important, Minor.</step>
     <step id="c">Read `{{ criteria_doc }}` before coding. This is the authoritative acceptance criteria for this node. Satisfy every criterion completely — do not weaken or skip any.</step>
     <step id="d">Update the worktree from `{{ pr_target }}` before any edits: `git fetch origin && git merge origin/{{ pr_target }}`.</step>
     <step id="e">Create a private worktree-local task list for this node (not committed; keep it outside the tracked tree). Derive it from `{{ criteria_doc }}`: the deliverables D1..Dn in order, the acceptance tests, and final validation. Do not add items outside the sprint's scope.</step>
-    <step id="f">Set a `/goal` to complete all items in the task list. Work through the deliverables, acceptance tests, and final validation in order, updating the list as each item is actually verified (implemented, criterion re-read and satisfied, tests passing). Commit incrementally on `{{ branch }}` as items land. Report a real blocker to team-lead rather than dropping items.</step>
+    <step id="f">Set a `/goal` to complete all items in the task list. Work through the deliverables, acceptance tests, and final validation in order, updating the list as each item is actually verified (implemented, criterion re-read and satisfied, tests passing). Commit incrementally on `{{ branch }}` as items land. Report a real blocker to {{ lead }} rather than dropping items.</step>
   </workflow>
 
   <final-actions>
     <step id="0">Critically review the sprint plan and your implementation. Read `{{ criteria_doc }}` again and confirm every acceptance criterion is fully and completely met. Do not proceed if any criterion is unresolved or partially met.</step>
     <step id="1">Run `{{ test_command }}` and confirm it passes with zero failures. Fix any failures before continuing — do not proceed with a failing test suite.</step>
     <step id="2">Commit all remaining changes. Push through the stack, never with plain `git push`: run `git fetch origin && gh stack view --json` (if it reports this branch is not part of a stack, run `gh stack checkout <stack number shown on the PR page>` in this worktree, then repeat), then `gh stack push`. Run `gh stack view --json` again and note the full commit SHA and that `needsRebase` is false for `{{ branch }}`.</step>
-    <step id="3">Send a completion message to team-lead via ATM including: node `{{ node_id }}`, branch `{{ branch }}`, the full final commit SHA from the push, and confirmation that every task-list item is complete. Do NOT append any triage events — team-lead handles all TTL event writes.</step>
+    <step id="3">Close the task with the completion message as the report: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` including node `{{ node_id }}`, branch `{{ branch }}`, the full final commit SHA from the push, and confirmation that every task-list item is complete. Only this close frees your queue: the next assignment stays queued and never starts until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. Do NOT append any triage events — {{ lead }} handles all TTL event writes. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="4">Merge this branch into the next sprint worktree: from within the next sprint's worktree, run `git fetch origin && git merge origin/{{ branch }}`, then `gh stack view --json` there to confirm the layer still reports `needsRebase` false.</step>
   </final-actions>
 </atm-task>

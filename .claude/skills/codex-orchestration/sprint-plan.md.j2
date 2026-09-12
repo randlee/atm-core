@@ -9,6 +9,7 @@ required_variables:
   - branch
   - target
 optional_variables:
+  - lead
   - status
   - worktree
   - recommended_agent
@@ -24,6 +25,7 @@ optional_variables:
   - acceptance_criteria
   - validation
 defaults:
+  lead: team-lead
   status: planned
   worktree: ""
   recommended_agent: ""
@@ -60,7 +62,7 @@ branch: {{ branch }}
 
 {% if recommended_agent %}Recommended agent: {{ recommended_agent }}.
 {% endif %}{% if recommended_model %}Recommended model: {{ recommended_model }}.
-{% endif %}Planning advice; team-lead assigns from the active pool.
+{% endif %}Planning advice; {{ lead }} assigns from the active pool.
 
 {% endif %}## Goal
 
