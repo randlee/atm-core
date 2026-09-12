@@ -303,7 +303,6 @@ dependencies = [
  "hyper",
  "hyper-util",
  "reqwest",
- "rusqlite",
  "serde",
  "serde_json",
  "serde_yaml",

@@ -1,5 +1,6 @@
 [package]
 name = "atm-http-runtime"
+autotests = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -44,4 +45,3 @@ atm-runtime-test-support.workspace = true
 serde_yaml = "0.9"
 tempfile = "3"
 tracing-subscriber.workspace = true
-rusqlite = { version = "0.33.0", features = ["bundled"] }
