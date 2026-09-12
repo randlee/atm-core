@@ -20,12 +20,12 @@
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
   triage:deferredNote "fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z) adds worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer); this tick-order fix moves off feature/ba3-nudge-invariant onto the consolidated cleanup layer per the O(n^2) fix-multiplication avoidance rule." ;
-  triage:promoteTo "fix/phase-ba-cleanup" ;
+  triage:deferredNote "fenix (ATM 01M2A4DWXYME20KRNTBXHQS534, 2026-09-12T06:21:13Z): NON-BLOCKING ruling -- quality-mgr confirmed dispose() reads nothing a same-tick start mutates. Remediation = one-line doc note at docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md:190 (doc-only). Deferred to post-landing review-findings stack, alongside RBQA-F001, TOML-001, SIZE-001; promoteTo unset." ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-008/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-008/2> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BA3-QA1-008/1>
   a triage:Occurrence ;
@@ -55,6 +55,7 @@
   triage:snippet "tick_once runs queue-drain before owed-task-starts, reverse of the doc's documented sequence" ;
   triage:status "open" ;
   triage:closed false ;
+  triage:resolutionNote "layer superseded by rebase to fix/phase-ba-cleanup-b @ a2da4a570; finding stays open, deferred to post-landing review-findings stack per fenix's NON-BLOCKING ruling (not fixed in place)." ;
   triage:branch "fix/phase-ba-cleanup" ;
   triage:headSha "dfd47edca" ;
   triage:occursIn <urn:atm:triage:worktree/BA3-QA1-008/2> .

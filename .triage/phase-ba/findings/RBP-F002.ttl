@@ -32,7 +32,9 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/5> ;
-  triage:triageRecordVersion "6" .
+  triage:deferredNote "fenix (ATM 01M2A4DWXYME20KRNTBXHQS534, 2026-09-12T06:21:13Z): BA-TOP-QA-1789192584 PASS on PR #1414 @ a2da4a570, report https://github.com/randlee/atm-core/pull/1414#issuecomment-5644152591 -- confirmed fixed, no change." ;
+  triage:deferredNote "LANDING EVENT (fenix, ATM 01M2A4YDDVPF2ZD2RMDHED63R5, 2026-09-12T06:30:14Z): integrate/phase-ba = 9f5aef2fe (merge of PR #1414 @ a2da4a570); this fix's frozen head a2da4a570 is an ancestor. `gh stack merge 1416` refused ('PR #1407's branch is not a linear descendant of PR #1402's branch' -- caused by the BA.3 rewrite), so the landing mechanism was PR #1414 merged directly onto integrate/phase-ba after unstacking, not a clean gh-stack merge. Recorded per fenix's explicit request." ;
+  triage:triageRecordVersion "8" .
 
 <urn:atm:triage:occurrence/RBP-F002/1>
   a triage:Occurrence ;

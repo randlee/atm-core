@@ -27,7 +27,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/FTQ-001-mergefix-1> ;
-  triage:triageRecordVersion "4" .
+  triage:deferredNote "fenix (ATM 01M2A4DWXYME20KRNTBXHQS534, 2026-09-12T06:21:13Z): BA-TOP-QA-1789192584 PASS on PR #1414 @ a2da4a570, report https://github.com/randlee/atm-core/pull/1414#issuecomment-5644152591 -- confirmed fixed, no change." ;
+  triage:triageRecordVersion "5" .
 
 <urn:atm:triage:occurrence/FTQ-001/FTQ-001-ba3-1>
   a triage:Occurrence ;

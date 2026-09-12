@@ -26,7 +26,8 @@
   triage:foundAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/MERGE-001/merge-001-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/MERGE-001/merge-001-2> ;
-  triage:triageRecordVersion "3" .
+  triage:deferredNote "fenix (ATM 01M2A4DWXYME20KRNTBXHQS534, 2026-09-12T06:21:13Z): BA-TOP-QA-1789192584 PASS on PR #1414 @ a2da4a570, report https://github.com/randlee/atm-core/pull/1414#issuecomment-5644152591 -- confirmed fixed, no change." ;
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/MERGE-001/merge-001-1>
   a triage:Occurrence ;
