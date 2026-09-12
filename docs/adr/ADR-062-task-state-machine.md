@@ -131,10 +131,14 @@ further reminders) and appends one timestamped event carrying the outcome;
 these are two facts recorded together. A close that fails never discards the
 carried message.
 
-Phase BA R1 is decided: `Started` is applied when the runtime hands the head
-task's deferred assignment or reminder nudge to an `Idle` member. The daemon is
-the actor and sends the `task_started` receipt to the assigner; there is no
-public `start` command.
+**Phase BB amendment (2026-09-xx).** BA R1 is superseded. `Started` is applied
+only by the assignee through `atm task start <id> [message]`
+(`WriteRequest.task_op = Start`, actor = assignee). Any `assigned` position may
+be started; the task moves to the head. A prompt (`task_ready`,
+`task_reminder`) never transitions a task; a task that is prompted and never
+started stays `assigned` and keeps its reminder count. The daemon writes no
+`task_started` receipt; the assigner sees the assignee's start message rendered
+as `task_started`.
 
 ### Reminder and escalation
 

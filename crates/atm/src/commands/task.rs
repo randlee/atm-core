@@ -47,10 +47,27 @@ enum TaskSubcommand {
     Events(TaskEventsCommand),
     /// Assign a task with deferred notification.
     Assign(TaskAssignCommand),
+    /// Start an assigned task: moves it to active and tells the assigner.
+    Start(TaskStartCommand),
     /// Deliver a report and close a task with a typed outcome.
     Close(TaskCloseCommand),
     /// Reorder one member's queue.
     Move(TaskMoveCommand),
+}
+
+/// Start an assigned task: moves it to active and tells the assigner.
+#[derive(Debug, Args)]
+struct TaskStartCommand {
+    task_id: TaskId,
+    /// Optional note to the assigner (what you will do first). Also accepts --stdin/--file/--template.
+    #[arg(conflicts_with_all = ["file", "stdin", "template"])]
+    message: Option<String>,
+    #[command(flatten)]
+    report: MessageSourceArgs,
+    #[arg(long)]
+    json: bool,
+    #[command(flatten)]
+    caller: CallerArgs,
 }
 
 #[derive(Debug, Args)]
@@ -87,8 +104,10 @@ struct TaskAssignCommand {
     before: Option<TaskId>,
     #[arg(long, group = "placement")]
     head: bool,
+    #[arg(value_name = "MESSAGE", conflicts_with_all = ["file", "stdin", "template"])]
+    message: Option<String>,
     #[command(flatten)]
-    message: MessageSourceArgs,
+    source: MessageSourceArgs,
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -184,13 +203,11 @@ struct CallerArgs {
 
 #[derive(Debug, Args)]
 struct MessageSourceArgs {
-    #[arg(value_name = "MESSAGE", conflicts_with_all = ["file", "stdin", "template"])]
-    text: Option<String>,
-    #[arg(long, conflicts_with_all = ["text", "stdin", "template"])]
+    #[arg(long, conflicts_with_all = ["stdin", "template"])]
     file: Option<PathBuf>,
-    #[arg(long, conflicts_with_all = ["text", "file", "template"])]
+    #[arg(long, conflicts_with_all = ["file", "template"])]
     stdin: bool,
-    #[arg(long, conflicts_with_all = ["text", "file", "stdin"])]
+    #[arg(long, conflicts_with_all = ["file", "stdin"])]
     template: Option<PathBuf>,
     #[arg(long, requires = "template")]
     vars: Option<String>,
@@ -198,11 +215,12 @@ struct MessageSourceArgs {
 
 impl MessageSourceArgs {
     fn is_present(&self) -> bool {
-        self.text.is_some() || self.file.is_some() || self.stdin || self.template.is_some()
+        self.file.is_some() || self.stdin || self.template.is_some()
     }
 
     fn into_send_options(
         self,
+        message: Option<String>,
         to: String,
         caller: CallerArgs,
         task_id: Option<TaskId>,
@@ -210,7 +228,7 @@ impl MessageSourceArgs {
     ) -> TaskSendOptions {
         TaskSendOptions {
             to,
-            message: self.text,
+            message,
             team: caller.team,
             actor: caller.actor,
             file: self.file,
@@ -229,8 +247,87 @@ impl TaskCommand {
             TaskSubcommand::List(command) => command.run(observability).await,
             TaskSubcommand::Events(command) => command.run(observability).await,
             TaskSubcommand::Assign(command) => command.run(observability).await,
+            TaskSubcommand::Start(command) => command.run(observability).await,
             TaskSubcommand::Close(command) => command.run(observability).await,
             TaskSubcommand::Move(command) => command.run(observability).await,
+        }
+    }
+}
+
+impl TaskStartCommand {
+    async fn run(self, observability: &CliObservability) -> Result<()> {
+        let (home_dir, current_dir) = resolve_command_runtime_context("task start")?;
+        let caller = resolve_context(&self.caller)?;
+        let composition = composition("task start", observability, &home_dir, &current_dir)?;
+        print!(
+            "{}",
+            self.execute(&composition, caller, home_dir, current_dir)
+                .await?
+        );
+        Ok(())
+    }
+
+    async fn execute(
+        self,
+        composition: &CliComposition<'_>,
+        caller: atm_core::caller_context::CallerContext,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+    ) -> Result<String> {
+        preflight_daemon_api(composition, HttpApiVersion::parse("1.8.0")?, "task start").await?;
+        let query = task_list_request(
+            home_dir.clone(),
+            current_dir.clone(),
+            caller.caller_identity.clone(),
+            caller.caller_team.clone(),
+            None,
+            Some(&self.task_id),
+        )?;
+        let row = composition
+            .list(query)
+            .await?
+            .task_rows
+            .into_iter()
+            .find(|row| row.task_id == self.task_id)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "task {} does not exist on team {}",
+                    self.task_id,
+                    caller.caller_team
+                )
+            })?;
+        if row.assignee != caller.caller_identity {
+            return Err(anyhow::anyhow!(
+                "task {} is not assigned to {}",
+                self.task_id,
+                caller.caller_identity
+            ));
+        }
+        let message = if self.report.is_present() {
+            None
+        } else {
+            Some(
+                self.message
+                    .unwrap_or_else(|| format!("started {}", self.task_id)),
+            )
+        };
+        let mut request = SendCommand::for_task(self.report.into_send_options(
+            message,
+            row.assigner.to_string(),
+            self.caller,
+            None,
+            self.json,
+        ))
+        .build_task_start_request(home_dir, current_dir, self.task_id.clone())?;
+        atm_core::send::validate_task_request(&mut request)?;
+        let result = composition
+            .send(request)
+            .await
+            .map_err(anyhow::Error::from)?;
+        if self.json {
+            Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
+        } else {
+            Ok(format!("started {}\n", self.task_id))
         }
     }
 }
@@ -256,7 +353,8 @@ impl TaskAssignCommand {
         let placement = self.placement();
         let json = self.json;
         let assignee = self.assignee.to_string();
-        let mut request = SendCommand::for_task(self.message.into_send_options(
+        let mut request = SendCommand::for_task(self.source.into_send_options(
+            self.message,
             assignee.clone(),
             self.caller,
             Some(task_id.clone()),
@@ -323,18 +421,11 @@ impl TaskCloseCommand {
         let recipient = report_recipient(&row, &caller.caller_identity);
         let outcome: TaskCloseOutcome = self.outcome.into();
         let reason = self.reason.clone();
-        let report = if self.report.is_present() {
-            self.report
-        } else {
-            MessageSourceArgs {
-                text: self.reason,
-                file: None,
-                stdin: false,
-                template: None,
-                vars: None,
-            }
-        };
+        let has_report_source = self.report.is_present();
+        let report = self.report;
+        let message = (!has_report_source).then_some(self.reason).flatten();
         let mut request = SendCommand::for_task(report.into_send_options(
+            message,
             recipient.to_string(),
             self.caller,
             None,

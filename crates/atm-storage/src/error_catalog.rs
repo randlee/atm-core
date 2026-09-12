@@ -167,6 +167,7 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
         AtmErrorCode::MessageValidationFailed
         | AtmErrorCode::TaskNotFound
+        | AtmErrorCode::TaskAlreadyActive
         | AtmErrorCode::TaskAlreadyClosed
         | AtmErrorCode::TaskNotCounterparty
         | AtmErrorCode::TaskStaleCounterparty

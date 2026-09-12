@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM};
+use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
 use atm_storage::{MoveTarget, QueuePosition, TaskEventKind};
 use serial_test::serial;
 
@@ -22,8 +22,8 @@ fn assign(task: &str, assignee: &str, placement: Option<MoveTarget>) -> TaskAssi
             _ => None,
         },
         head: matches!(placement, Some(MoveTarget::Head)),
-        message: MessageSourceArgs {
-            text: Some(format!("assign {task}")),
+        message: Some(format!("assign {task}")),
+        source: MessageSourceArgs {
             file: None,
             stdin: false,
             template: None,
@@ -159,8 +159,8 @@ async fn events_are_seq_ordered_and_include_moved_and_started() {
     let mut start = atm_core::send::SendRequest::new(
         f.home_dir.clone(),
         f.current_dir.clone(),
-        "atm-daemon".parse().unwrap(),
-        TEST_RECIPIENT_ADDRESS,
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
         TEST_TEAM.parse().unwrap(),
         atm_core::send::SendMessageSource::Inline("start".into()),
         None,

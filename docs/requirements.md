@@ -2996,8 +2996,9 @@ Task lifecycle (Phase BA):
    `assigned → active` move; rejected as `ActiveElsewhere`), never at
    `atm task assign` admission — any number of `assigned` rows may queue
    behind the active one.
-4. Starting a task MUST move it from `assigned` to `active` and MUST send the
-   assigner a start notification.
+4. Starting a task MUST be `atm task start <id>` by the assignee; it MUST move
+   the task from `assigned` to `active`, MUST move it to the head of the queue,
+   and MUST send the assigner a start message. The daemon MUST NOT start a task.
 5. An agent's queue MUST be ordered by `(position, assigned_at, task_id)`;
    `assigned_at` MUST be the time of the current assignment; it is reset only by reassignment or reopen and never by a queue move; a new task's default position MUST be the
    end of the queue.
@@ -3012,8 +3013,8 @@ Task lifecycle (Phase BA):
    neither operation creates a second row or permits simultaneous assignees.
    Every transition MUST append exactly one `task_events` row under that id;
    `reassigned` and `reopened` are event kinds, not outcomes.
-9. `atm task` MUST be the closed subcommand set `assign`, `close`, `move`,
-   `list`, `events`; `atm send <agent> --task-id <id>` MUST alias `assign`
+9. `atm task` MUST be the closed subcommand set `assign`, `start`, `close`,
+   `move`, `list`, `events`; `atm send <agent> --task-id <id>` MUST alias `assign`
    and `atm send <assigner> --task-complete --task-id <id>` MUST alias
    `close <id> completed` with a mandatory report.
 10. Close MUST deliver the report message before applying the close; an

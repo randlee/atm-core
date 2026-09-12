@@ -6,8 +6,8 @@ use super::ops::{
 };
 use super::stmt_cache::WriterStatementCache;
 use super::task_rejection::{
-    is_task_rejection, task_already_closed, task_move_invalid, task_not_counterparty,
-    task_not_found, task_stale_counterparty,
+    is_task_rejection, task_already_active, task_already_closed, task_move_invalid,
+    task_not_counterparty, task_not_found, task_stale_counterparty,
 };
 use super::task_report::drop_task_link_from_mail;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
@@ -15,8 +15,8 @@ use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::AtmMessageId;
 use atm_storage::task_state::{
-    DAEMON_ACTOR_NAME, QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskRow,
-    TaskState, TaskStateTag, Transition, admit, transition,
+    QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskRow, TaskState, TaskStateTag,
+    Transition, admit, transition,
 };
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{MessageWriteOrigin, MoveTarget, TaskOp};
@@ -397,6 +397,11 @@ fn apply_task_start(
     target: &SharedDbTarget,
 ) -> Result<AgentName, AtmError> {
     let row = load_startable_task(record, task_id, connection, target)?;
+    if row.state == TaskState::Active {
+        return Err(task_already_active(format!(
+            "task {task_id} is already active"
+        )));
+    }
     let Transition(next_state) = transition(
         Some(row.state),
         TaskEvent::Started,
@@ -406,11 +411,6 @@ fn apply_task_start(
         &row.assignee,
     )
     .map_err(|error| error.into_atm_error())?;
-    if !start_reminder_was_emitted(record, task_id, connection, target)?
-        || row.state == TaskState::Active
-    {
-        return Ok(row.assignee);
-    }
     reject_concurrent_active_task(record, task_id, &row, connection, target)?;
 
     let mut order = queue_order(connection, target, &record.team, &row.assignee)?;
@@ -467,32 +467,13 @@ fn load_startable_task(
             record.envelope.from
         )));
     }
-    if record.envelope.from.as_str() != DAEMON_ACTOR_NAME {
+    if record.envelope.from != row.assignee {
         return Err(task_not_counterparty(format!(
-            "task {task_id} start requires {DAEMON_ACTOR_NAME}"
+            "task {task_id} is not assigned to {}",
+            record.envelope.from
         )));
     }
     Ok(row)
-}
-
-fn start_reminder_was_emitted(
-    record: &Message,
-    task_id: &TaskId,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<bool, AtmError> {
-    let reminder: Option<String> = connection
-        .query_row(
-            "SELECT outcome FROM task_events WHERE team=?1 AND task_id=?2 AND event='reminded'
-             AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team=?1 AND task_id=?2
-               AND event IN ('assigned','reassigned','reopened'))
-             ORDER BY rowid DESC LIMIT 1",
-            params![record.team.as_str(), task_id.as_str()],
-            |raw| raw.get(0),
-        )
-        .optional()
-        .map_err(|error| sqlite_error(target, "failed to load task reminder gate", error))?;
-    Ok(reminder.as_deref() == Some("emitted"))
 }
 
 fn reject_concurrent_active_task(

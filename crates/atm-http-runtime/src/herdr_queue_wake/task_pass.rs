@@ -72,7 +72,6 @@ impl HerdrQueueWakePump {
         let (reader, task_store) = self.task_capabilities(stats)?;
         self.note_task_step_availability(true, None);
         let heads = self.open_task_heads(reader.as_ref(), candidates).await;
-        self.start_owed_tasks(&heads).await;
         Some(PreparedTaskPass {
             reader,
             task_store,
@@ -124,7 +123,6 @@ impl HerdrQueueWakePump {
                 crate::herdr_task_start::complete_task_handoff(
                     self,
                     context.task_store,
-                    &self.daemon_home,
                     context.member,
                     row,
                     now,
@@ -242,26 +240,6 @@ impl HerdrQueueWakePump {
             }
         };
         Some((reader, task_store))
-    }
-
-    async fn start_owed_tasks(&self, heads: &HashMap<MemberKey, TaskRow>) {
-        for head in heads.values().filter(|head| {
-            head.state == atm_core::boundary::TaskState::Assigned && head.last_reminded_at.is_some()
-        }) {
-            if let Err(error) =
-                crate::herdr_task_start::start_assigned_task(self, &self.daemon_home, head).await
-            {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "task_start_owed",
-                    outcome = "failed",
-                    member = %head.assignee,
-                    task_id = %head.task_id,
-                    error = %error,
-                    "Owed task start could not be completed"
-                );
-            }
-        }
     }
 
     #[expect(
@@ -507,7 +485,6 @@ impl HerdrQueueWakePump {
             crate::herdr_task_start::complete_task_handoff(
                 self,
                 context.task_store,
-                &self.daemon_home,
                 context.member,
                 row,
                 now,

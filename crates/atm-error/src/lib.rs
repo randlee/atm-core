@@ -71,6 +71,7 @@ mod tests {
     fn task_rejection_codes_keep_distinct_stable_wire_spellings() {
         for (code, wire) in [
             (AtmErrorCode::TaskNotFound, "ATM_TASK_NOT_FOUND"),
+            (AtmErrorCode::TaskAlreadyActive, "ATM_TASK_ALREADY_ACTIVE"),
             (AtmErrorCode::TaskAlreadyClosed, "ATM_TASK_ALREADY_CLOSED"),
             (
                 AtmErrorCode::TaskNotCounterparty,

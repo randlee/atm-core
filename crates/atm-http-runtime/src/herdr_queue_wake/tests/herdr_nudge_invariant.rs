@@ -1330,7 +1330,7 @@ async fn close_of_stalled_task_resumes_nudging_on_next_task() {
         .expect("next row");
     assert_eq!(next_after.reminder_count, 1);
     assert_eq!(next_after.lead_notified_count, 0);
-    assert_eq!(next_after.state, TaskState::Active);
+    assert_eq!(next_after.state, TaskState::Assigned);
     assert_eq!(prompt_texts(&fake).len(), 11);
 }
 
@@ -1396,7 +1396,7 @@ async fn reopen_of_stalled_task_escalates_again_at_threshold() {
 }
 
 #[tokio::test]
-async fn handoff_applies_start_and_sends_receipt_to_assigner() {
+async fn task_prompt_records_reminder_without_start_or_receipt() {
     let (root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
     let message_id = task_assignment_message_id(&runtime, &key, &task).await;
     let team = key.team().clone();
@@ -1415,8 +1415,8 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
             .expect("task")
             .expect("row")
             .state,
-        TaskState::Active,
-        "the successful queue-drain delivery completes the first task handoff"
+        TaskState::Assigned,
+        "prompt delivery does not start the task"
     );
     acknowledge_task_assignment(root.path(), &runtime, &key, message_id);
     *now.lock().expect("clock") =
@@ -1435,7 +1435,7 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
             .expect("task")
             .expect("row")
             .state,
-        TaskState::Active
+        TaskState::Assigned
     );
     let events = store
         .list_task_events(&team, &task, None)
@@ -1445,16 +1445,8 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
             .iter()
             .filter(|event| event.event == atm_storage::TaskEventKind::Started)
             .count(),
-        1,
-        "the first emitted nudge starts the assigned task exactly once"
-    );
-    assert_eq!(
-        events
-            .iter()
-            .find(|event| event.event == atm_storage::TaskEventKind::Started)
-            .expect("started event")
-            .actor,
-        atm_storage::TaskActor::Daemon
+        0,
+        "prompt delivery writes no started event"
     );
     let reader = runtime.async_mailbox_reader().expect("mailbox reader");
     let receipts = reader
@@ -1471,11 +1463,7 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
         )
         .await
         .expect("read assigner mailbox");
-    assert_eq!(receipts.len(), 1);
-    assert_eq!(
-        receipts[0].envelope.summary.as_deref(),
-        Some("task_started:AX5-HANDOFF")
-    );
+    assert!(receipts.is_empty());
 
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:02:02Z").expect("timestamp");
@@ -1494,7 +1482,7 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
             .iter()
             .filter(|event| event.event == atm_storage::TaskEventKind::Started)
             .count(),
-        1
+        0
     );
     let receipts_after = reader
         .list_messages(
@@ -1512,13 +1500,13 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
         .expect("read assigner mailbox after retry");
     assert_eq!(
         receipts_after.len(),
-        1,
-        "an active task has no second handoff receipt"
+        0,
+        "a prompted task has no daemon-authored start receipt"
     );
 }
 
 #[tokio::test]
-async fn head_already_active_handoff_sends_no_receipt() {
+async fn repeated_prompt_handoff_sends_no_daemon_task_receipt() {
     let (root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
     let message_id = task_assignment_message_id(&runtime, &key, &task).await;
     let team = key.team().clone();
@@ -1535,7 +1523,7 @@ async fn head_already_active_handoff_sends_no_receipt() {
             .expect("task")
             .expect("row")
             .state,
-        TaskState::Active
+        TaskState::Assigned
     );
     let starts_before = store
         .list_task_events(&team, &task, None)
@@ -1594,7 +1582,7 @@ async fn head_already_active_handoff_sends_no_receipt() {
 }
 
 #[tokio::test]
-async fn failed_start_write_then_active_member_still_starts_once() {
+async fn missing_assigner_does_not_create_an_owed_daemon_start() {
     let (root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
     let message_id = task_assignment_message_id(&runtime, &key, &task).await;
     acknowledge_task_assignment(root.path(), &runtime, &key, message_id);
@@ -1631,16 +1619,16 @@ async fn failed_start_write_then_active_member_still_starts_once() {
         IsoTimestamp::from_str("2030-01-01T00:00:01Z").expect("timestamp");
     queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
     pump.tick_once().await;
-    let started = store
+    let still_assigned = store
         .load_task(key.team(), &task)
         .expect("task")
         .expect("row");
-    assert_eq!(started.state, TaskState::Active);
-    assert_eq!(started.reminder_count, 1);
+    assert_eq!(still_assigned.state, TaskState::Assigned);
+    assert_eq!(still_assigned.reminder_count, 1);
     assert_eq!(
         prompt_texts(&fake).len(),
         1,
-        "owed start emits no second prompt"
+        "an active roster observation emits no second prompt"
     );
     assert_eq!(
         store
@@ -1649,14 +1637,10 @@ async fn failed_start_write_then_active_member_still_starts_once() {
             .iter()
             .filter(|event| event.event == atm_storage::TaskEventKind::Started)
             .count(),
-        1
+        0
     );
     let receipts = daemon_mail_for(&runtime, key.team(), "sender").await;
-    assert_eq!(receipts.len(), 1);
-    assert_eq!(
-        receipts[0].envelope.summary.as_deref(),
-        Some("task_started:AX5-HANDOFF")
-    );
+    assert!(receipts.is_empty());
 }
 
 #[tokio::test]
@@ -1926,7 +1910,7 @@ async fn non_refused_close_releases_refusal_hold() {
         .load_task(key.team(), &tasks[4])
         .expect("task")
         .expect("row");
-    assert_eq!(next.state, TaskState::Active);
+    assert_eq!(next.state, TaskState::Assigned);
     assert_eq!(next.reminder_count, 1);
     assert_eq!(prompt_texts(&fake).len(), 1);
 }

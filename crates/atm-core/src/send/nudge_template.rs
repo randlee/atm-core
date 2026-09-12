@@ -45,18 +45,6 @@ pub fn render_built_in_nudge(
     render_template_body(event, template_body)
 }
 
-/// Renders the durable receipt written when the queue-wake pump starts an
-/// assigned task after emitting its reminder.
-pub fn render_task_started_template(task_id: &str, assignee: &str) -> Result<String, AtmError> {
-    render_template(
-        include_str!("../../templates/task_started.xml"),
-        &BTreeMap::from([
-            ("task_id", task_id.to_owned()),
-            ("assignee", assignee.to_owned()),
-        ]),
-    )
-}
-
 fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
     let (position, attempt, outcome) = match event.task_transition {
         Some(TaskTransition::Queued { position }) => {
@@ -182,8 +170,7 @@ fn render_template(
 #[cfg(test)]
 mod tests {
     use super::{
-        default_template, qualified_sender_identity, render_built_in_nudge,
-        render_task_started_template, resolve_template,
+        default_template, qualified_sender_identity, render_built_in_nudge, resolve_template,
     };
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
@@ -277,14 +264,6 @@ mod tests {
         .expect("rendered template");
         assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
         assert!(rendered.contains("01KX1TEST00000000000000000"));
-    }
-
-    #[test]
-    fn task_started_template_populates_task_and_assignee() {
-        assert_eq!(
-            render_task_started_template("task-9", TEST_ARCH_CTM).expect("render receipt"),
-            format!("ATM recorded that task task-9 was started by {TEST_ARCH_CTM}.\n")
-        );
     }
 
     #[test]

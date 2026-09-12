@@ -4,6 +4,7 @@ mod task_assign;
 mod task_close;
 mod task_list_events;
 mod task_move;
+mod task_start;
 
 use atm_core::protocol::{CompatibilityVerdict, HttpApiVersion, ReleaseVersion};
 use atm_core::test_support::{EnvGuard, TEST_TEAM};
@@ -16,14 +17,17 @@ use crate::commands::send::require_daemon_api;
 use crate::commands::{Cli, Command};
 
 #[test]
-fn task_has_exactly_five_subcommands() {
+fn task_has_exactly_six_subcommands() {
     let command = Cli::command();
     let task = command.find_subcommand("task").expect("task command");
     let names: std::collections::BTreeSet<_> = task
         .get_subcommands()
         .map(clap::Command::get_name)
         .collect();
-    assert_eq!(names, ["assign", "close", "events", "list", "move"].into());
+    assert_eq!(
+        names,
+        ["assign", "close", "events", "list", "move", "start"].into()
+    );
 }
 
 #[test]

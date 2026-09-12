@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use atm_storage::contract::{Message, MessageKey};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope};
 use atm_storage::{
-    AgentName, AtmErrorCode, IsoTimestamp, MemberKey, MoveTarget, QueuePosition, ReminderOutcome,
-    TaskCloseOutcome, TaskEventKind, TaskId, TaskOp, TaskState, TeamName,
+    AgentName, AtmErrorCode, IsoTimestamp, MemberKey, MoveTarget, QueuePosition, TaskCloseOutcome,
+    TaskEventKind, TaskId, TaskOp, TaskState, TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 use chrono::Utc;
@@ -54,18 +54,15 @@ impl Harness {
     }
 
     fn start(&self, task: &str, assignee: &str) -> Result<(), atm_storage::AtmError> {
-        let task_id: TaskId = task.parse().expect("task");
-        let member = MemberKey::new(self.team.clone(), assignee.parse().expect("assignee"));
-        self.backend.task_store().record_reminder(
-            &member,
-            &task_id,
-            IsoTimestamp::now(),
-            ReminderOutcome::Emitted,
-        )?;
-        let mut message = self.message(assignee, "atm-daemon", "start");
-        message.envelope.task_id = Some(task_id);
-        message.envelope.task_op = Some(TaskOp::Start);
+        let message = self.start_message(task, assignee);
         self.save(&message)
+    }
+
+    fn start_message(&self, task: &str, actor: &str) -> Message {
+        let mut message = self.message("lead", actor, &format!("start {task}"));
+        message.envelope.task_id = Some(task.parse().expect("task"));
+        message.envelope.task_op = Some(TaskOp::Start);
+        message
     }
 
     fn close(
@@ -298,7 +295,7 @@ fn assign_before_invalid_target_is_rejected() {
 }
 
 #[test]
-fn start_when_another_task_active_is_rejected_active_elsewhere() {
+pub(crate) fn start_while_another_task_is_active_is_rejected() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
@@ -310,40 +307,261 @@ fn start_when_another_task_active_is_rejected_active_elsewhere() {
 }
 
 #[test]
-fn start_moves_task_to_position_one_and_preserves_reminder_count() {
+pub(crate) fn start_by_assignee_moves_assigned_task_to_head_and_active() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
-    h.start("T2", "alice").unwrap();
-    let row = h.row("T2");
+    h.assign("T3", "alice", "lead", None);
+    let start = h.start_message("T3", "alice");
+    let message_id = start.envelope.message_id;
+    h.save(&start).unwrap();
+    let row = h.row("T3");
     assert_eq!(row.position, Some(QueuePosition::HEAD));
-    assert_eq!(row.reminder_count, 1);
-    assert!(row.last_reminded_at.is_some());
+    assert_eq!(row.state, TaskState::Active);
+    assert_eq!(row.reminder_count, 0);
+    assert!(row.last_reminded_at.is_none());
+    assert_eq!(
+        h.positions("alice"),
+        BTreeMap::from([("T1".into(), 2), ("T2".into(), 3), ("T3".into(), 1)])
+    );
+    let started: Vec<_> = h
+        .events("T3")
+        .into_iter()
+        .filter(|event| event.event == TaskEventKind::Started)
+        .collect();
+    assert_eq!(started.len(), 1);
+    assert_eq!(started[0].message_id, message_id);
 }
 
 #[test]
-fn start_gate_rejects_member_actor_and_unrenderable_reminder() {
+pub(crate) fn start_without_prior_reminder_succeeds() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
-    let mut member_start = h.message("alice", "lead", "start");
-    member_start.envelope.task_id = Some("T1".parse().unwrap());
-    member_start.envelope.task_op = Some(TaskOp::Start);
-    h.save(&member_start).expect_err("member start");
-    let member = MemberKey::new(h.team.clone(), "alice".parse().unwrap());
-    h.backend
-        .task_store()
-        .record_reminder(
-            &member,
-            &"T1".parse().unwrap(),
-            IsoTimestamp::now(),
-            ReminderOutcome::Unrenderable,
-        )
-        .unwrap();
-    let mut daemon_start = h.message("alice", "atm-daemon", "start");
-    daemon_start.envelope.task_id = Some("T1".parse().unwrap());
-    daemon_start.envelope.task_op = Some(TaskOp::Start);
-    h.save(&daemon_start).unwrap();
+    h.start("T1", "alice").expect("assignee start");
+    assert_eq!(h.row("T1").state, TaskState::Active);
+}
+
+#[test]
+pub(crate) fn daemon_actor_can_no_longer_start_a_task() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let daemon_start = h.start_message("T1", "atm-daemon");
+    let error = h.save(&daemon_start).expect_err("daemon cannot start");
+    assert_eq!(error.code(), AtmErrorCode::TaskNotCounterparty);
     assert_eq!(h.row("T1").state, TaskState::Assigned);
+}
+
+#[test]
+pub(crate) fn start_by_non_assignee_is_rejected() {
+    let h = Harness::new();
+    for (task, actor) in [("ASSIGNER", "lead"), ("THIRD", "bob")] {
+        h.assign(task, "alice", "lead", None);
+        let error = h
+            .save(&h.start_message(task, actor))
+            .expect_err("only the assignee starts");
+        assert_eq!(error.code(), AtmErrorCode::TaskNotCounterparty);
+        assert_eq!(h.row(task).state, TaskState::Assigned);
+    }
+}
+
+#[test]
+pub(crate) fn start_on_complete_task_is_rejected() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.close("T1", "lead", "alice", TaskCloseOutcome::Completed)
+        .unwrap();
+    let error = h
+        .save(&h.start_message("T1", "alice"))
+        .expect_err("complete task cannot start");
+    assert_eq!(error.code(), AtmErrorCode::TaskAlreadyClosed);
+    let rejected = h.events("T1").pop().expect("rejected event");
+    assert_eq!(rejected.event, TaskEventKind::Rejected);
+    assert_eq!(
+        rejected.from_state,
+        Some(TaskState::Complete(TaskCloseOutcome::Completed))
+    );
+    assert_eq!(rejected.to_state, rejected.from_state);
+}
+
+#[test]
+pub(crate) fn duplicate_start_is_rejected_nothing_delivered_one_rejected_row() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.start("T1", "alice").expect("first start");
+    let duplicate = h.start_message("T1", "alice");
+    let error = h.save(&duplicate).expect_err("duplicate start");
+    assert_eq!(error.code(), AtmErrorCode::TaskAlreadyActive);
+    assert!(error.message().starts_with("task T1 is already active"));
+    assert!(
+        h.backend
+            .message_store()
+            .load_message(&duplicate.message_key)
+            .unwrap()
+            .is_none()
+    );
+    let events = h.events("T1");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Started)
+            .count(),
+        1
+    );
+    let rejected: Vec<_> = events
+        .iter()
+        .filter(|event| event.event == TaskEventKind::Rejected)
+        .collect();
+    assert_eq!(rejected.len(), 1);
+    assert_eq!(rejected[0].from_state, Some(TaskState::Active));
+    assert_eq!(rejected[0].to_state, Some(TaskState::Active));
+    assert_eq!(rejected[0].message_id, duplicate.envelope.message_id);
+}
+
+#[test]
+pub(crate) fn rejected_start_rolls_back_report_state_and_projection_atomically() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.start("T1", "alice").expect("first start");
+    let duplicate = h.start_message("T1", "alice");
+    h.save(&duplicate).expect_err("duplicate start");
+    let connection = Connection::open(&h.path).expect("open database");
+    for table in [
+        "mail_messages",
+        "mail_message_states",
+        "mail_message_search_documents",
+    ] {
+        let count: u32 = connection
+            .query_row(
+                &format!("SELECT COUNT(*) FROM {table} WHERE message_key=?1"),
+                params![duplicate.message_key.as_str()],
+                |row| row.get(0),
+            )
+            .expect("count rolled-back row");
+        assert_eq!(count, 0, "{table} retained rejected start");
+    }
+    assert_eq!(
+        h.events("T1")
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Rejected)
+            .count(),
+        1
+    );
+}
+
+#[test]
+pub(crate) fn concurrent_starts_admit_exactly_one_started_event() {
+    use std::sync::{Arc, Barrier};
+
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let first = h.start_message("T1", "alice");
+    let second = h.start_message("T1", "alice");
+    let barrier = Arc::new(Barrier::new(3));
+    let handles: Vec<_> = [first, second]
+        .into_iter()
+        .map(|message| {
+            let backend = h.backend.clone();
+            let barrier = Arc::clone(&barrier);
+            std::thread::spawn(move || {
+                barrier.wait();
+                backend.message_store().save_message(&message)
+            })
+        })
+        .collect();
+    barrier.wait();
+    let results: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().expect("writer thread"))
+        .collect();
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(
+        results
+            .iter()
+            .filter_map(|result| result.as_ref().err())
+            .filter(|error| error.code() == AtmErrorCode::TaskAlreadyActive)
+            .count(),
+        1
+    );
+    let events = h.events("T1");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Started)
+            .count(),
+        1
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Rejected)
+            .count(),
+        1
+    );
+}
+
+#[test]
+pub(crate) fn start_racing_reassign_is_rejected_as_not_counterparty() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let stale_start = h.start_message("T1", "alice");
+    h.assign("T1", "bob", "lead", None);
+    let error = h.save(&stale_start).expect_err("stale assignee start");
+    assert_eq!(error.code(), AtmErrorCode::TaskNotCounterparty);
+    assert_eq!(h.row("T1").assignee.as_str(), "bob");
+    assert_eq!(h.row("T1").state, TaskState::Assigned);
+}
+
+#[test]
+pub(crate) fn start_of_missing_task_appends_null_state_rejected_row() {
+    let h = Harness::new();
+    let mut start = h.start_message("MISSING", "alice");
+    start.agent = "alice".parse().expect("requested assignee");
+    let error = h.save(&start).expect_err("missing task");
+    assert_eq!(error.code(), AtmErrorCode::TaskNotFound);
+    let event = h.events("MISSING").pop().expect("rejected event");
+    assert_eq!(event.event, TaskEventKind::Rejected);
+    assert_eq!(event.assignee.as_str(), "alice");
+    assert_eq!(event.from_state, None);
+    assert_eq!(event.to_state, None);
+}
+
+#[test]
+pub(crate) fn move_of_active_task_appends_moved_head_to_head() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.start("T1", "alice").expect("start");
+    h.move_task("T1", "lead", MoveTarget::End);
+    let event = h.events("T1").pop().expect("moved event");
+    assert_eq!(event.event, TaskEventKind::Moved);
+    assert_eq!(event.detail.as_deref(), Some("1→1"));
+    assert_eq!(h.row("T1").position, Some(QueuePosition::HEAD));
+}
+
+#[test]
+pub(crate) fn move_of_complete_task_appends_rejected_row() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.close("T1", "lead", "alice", TaskCloseOutcome::Completed)
+        .unwrap();
+    let error = h
+        .backend
+        .task_store()
+        .move_task(
+            &h.team,
+            &"T1".parse().unwrap(),
+            &"lead".parse().unwrap(),
+            &MoveTarget::Head,
+            IsoTimestamp::now(),
+        )
+        .expect_err("complete task cannot move");
+    assert_eq!(error.code(), AtmErrorCode::TaskAlreadyClosed);
+    let event = h.events("T1").pop().expect("rejected event");
+    assert_eq!(event.event, TaskEventKind::Rejected);
+    assert_eq!(
+        event.from_state,
+        Some(TaskState::Complete(TaskCloseOutcome::Completed))
+    );
+    assert_eq!(event.to_state, event.from_state);
 }
 
 #[test]
@@ -417,7 +635,7 @@ fn writer_close_unknown_task_is_atomic() {
 }
 
 #[test]
-fn close_of_complete_row_delivers_plain_mail_without_new_event() {
+pub(crate) fn close_of_complete_task_retains_report_and_strips_link() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.close("T1", "lead", "alice", TaskCloseOutcome::Completed)
@@ -441,7 +659,7 @@ fn close_of_complete_row_delivers_plain_mail_without_new_event() {
 }
 
 #[test]
-fn close_by_third_party_is_not_authorized() {
+pub(crate) fn close_by_non_party_is_rejected_and_retained() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let before = h.row("T1");
