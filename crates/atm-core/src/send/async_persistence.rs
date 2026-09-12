@@ -249,9 +249,7 @@ async fn admit_verified_template(
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let admission =
         build_template_admission(request, context, &envelope, message_id, timestamp, verified)?;
-    let admission = runtime
-        .admit_template_message_with_outcome_async(admission)
-        .await?;
+    let admission = runtime.admit_template_message_async(admission).await?;
     if let Some(existing) = admission.existing {
         if existing.envelope != envelope {
             return Err(AtmError::message_id_conflict(format!(

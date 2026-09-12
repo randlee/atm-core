@@ -863,21 +863,10 @@ pub trait AsyncMessageStore: MessageStore {
     async fn admit_template_message_async(
         &self,
         _admission: crate::TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         Err(AtmError::daemon_unavailable(
             "message store does not implement async template-message admission",
         ))
-    }
-
-    /// Outcome-preserving companion used when a template-carried task report
-    /// can fall back to ordinary mail after task governance rejects it.
-    async fn admit_template_message_with_outcome_async(
-        &self,
-        admission: crate::TemplateMessageAdmission,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
-        self.admit_template_message_async(admission)
-            .await
-            .map(MessageAdmissionOutcome::passive)
     }
 
     /// Resolves a pending acknowledgement source, persists its reply, and

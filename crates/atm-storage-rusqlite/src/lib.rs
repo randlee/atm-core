@@ -586,20 +586,6 @@ impl AsyncMessageStore for SqliteMessageStore {
     async fn admit_template_message_async(
         &self,
         admission: atm_storage::TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
-        let outcome = self
-            .db
-            .submit_template_message_admission_async(admission)
-            .await?;
-        match outcome.task_rejection {
-            Some(error) => Err(error),
-            None => Ok(outcome.existing),
-        }
-    }
-
-    async fn admit_template_message_with_outcome_async(
-        &self,
-        admission: atm_storage::TemplateMessageAdmission,
     ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
         self.db
             .submit_template_message_admission_async(admission)
@@ -2913,6 +2899,7 @@ mod tests {
                 .admit_template_message_async(admission.clone())
                 .await
                 .expect("first admission")
+                .existing
                 .is_none()
         );
         assert!(
@@ -2921,6 +2908,7 @@ mod tests {
                 .admit_template_message_async(admission)
                 .await
                 .expect("idempotent admission")
+                .existing
                 .is_some()
         );
         backend
@@ -2943,6 +2931,69 @@ mod tests {
                 Ok(())
             })
             .expect("stored decomposed row");
+    }
+
+    #[tokio::test]
+    async fn rejected_template_task_report_retains_ordinary_decomposition() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        seed_move_task(&backend, "T1", "test-agent");
+        let message_id = AtmMessageId::new();
+        let mut report = message(&format!("atm:{message_id}"), "rendered report");
+        report.envelope.message_id = Some(message_id);
+        report.envelope.from = "intruder".parse().expect("intruder");
+        report.envelope.task_id = Some("T1".parse().expect("task"));
+        report.envelope.task_op = Some(TaskOp::Close {
+            outcome: TaskCloseOutcome::Completed,
+            reason: Some("report".to_owned()),
+        });
+        let template = template_registration('c');
+        let outcome = backend
+            .async_message_store()
+            .admit_template_message_async(TemplateMessageAdmission {
+                record: report.clone(),
+                provenance: MessageWriteOrigin::Local,
+                decomposition: DecomposedMessageAdmission {
+                    template: template.clone(),
+                    message: DecomposedMessageRecord {
+                        key: report.message_key.clone(),
+                        template_sha: template.sha.clone(),
+                        vars: MergedVarsJson::from_merged_object(
+                            [("name".to_owned(), serde_json::json!("report"))]
+                                .into_iter()
+                                .collect(),
+                        ),
+                        category: Some("report".to_owned()),
+                        tags: instance_tags(&["phase-ba"]),
+                        content_format: Some("markdown".to_owned()),
+                        workflow: None,
+                    },
+                },
+            })
+            .await
+            .expect("rejected report admission commits");
+        assert!(outcome.task_rejection.is_some());
+
+        let retained = backend
+            .message_store()
+            .load_message(&report.message_key)
+            .expect("load retained report")
+            .expect("retained report");
+        assert_eq!(retained.envelope.task_id, None);
+        assert_eq!(retained.envelope.task_op, None);
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let template_sha: Option<String> = connection
+                    .query_row(
+                        "SELECT template_sha FROM mail_messages WHERE message_key = ?1",
+                        params![report.message_key.as_str()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert_eq!(template_sha.as_deref(), Some(template.sha.as_str()));
+                Ok(())
+            })
+            .expect("template decomposition retained");
     }
 
     #[test]

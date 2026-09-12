@@ -255,16 +255,7 @@ fn execute_admit_template_message(
         }),
         WriteOpResult::UpsertMessage {
             inserted: true,
-            task_rejection: Some(error),
-            ..
-        } => Ok(WriteOpResult::TemplateMessageAdmission {
-            inserted: true,
-            existing: None,
-            task_rejection: Some(error),
-        }),
-        WriteOpResult::UpsertMessage {
-            inserted: true,
-            task_rejection: None,
+            task_rejection,
             ..
         } => {
             let _ =
@@ -272,7 +263,7 @@ fn execute_admit_template_message(
             Ok(WriteOpResult::TemplateMessageAdmission {
                 inserted: true,
                 existing: None,
-                task_rejection: None,
+                task_rejection,
             })
         }
         other => Err(AtmError::daemon_unavailable(format!(
