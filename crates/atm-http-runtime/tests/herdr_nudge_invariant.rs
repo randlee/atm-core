@@ -979,6 +979,52 @@ async fn tenth_reminder_escalates_once_then_silence() {
     );
 }
 
+#[tokio::test]
+async fn escalation_recipient_read_error_holds_and_warns_once_per_tick() {
+    let (_root, runtime, fake, pump, store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
+    for minute in 0..10 {
+        let at = IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z"))
+            .expect("timestamp");
+        store
+            .record_reminder(&keys[0], &task_id, at, atm_storage::ReminderOutcome::Emitted)
+            .expect("seed reminder");
+    }
+    store.set_fail_escalation_recipient_reads(true);
+    let warnings = WarningLayer::default();
+
+    for tick in 0..2 {
+        if tick > 0 {
+            queue_idle_result(&fake, &keys[0]);
+        }
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{}:00Z", tick + 10))
+                .expect("timestamp");
+        pump.tick_once()
+            .with_subscriber(tracing_subscriber::Registry::default().with(warnings.clone()))
+            .await;
+        let row = store.row(&keys[0], &task_id);
+        assert_eq!(row.reminder_count, 10);
+        assert_eq!(row.lead_notified_count, 0, "failed target reads are non-terminal");
+        let target_warnings = warnings
+            .events
+            .lock()
+            .expect("warning events")
+            .iter()
+            .filter(|(action, outcome)| action == "escalation_target_load" && outcome == "failed")
+            .count();
+        assert_eq!(target_warnings, tick + 1, "one target-read warning per tick");
+    }
+    assert!(prompt_texts(&fake).is_empty());
+    assert_eq!(pump.stats().lead_notifications, 0);
+    assert!(
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty()
+    );
+}
+
 async fn drive_task_to_stall(
     pump: &HerdrQueueWakePump,
     fake: &Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,

@@ -4,6 +4,8 @@
 use std::collections::HashMap;
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
+#[cfg(any(test, feature = "test-utils"))]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
@@ -165,6 +167,7 @@ pub struct DummyTaskStore {
     rows: Mutex<HashMap<(TeamName, TaskId), TaskRow>>,
     escalation_recipients: Mutex<HashMap<String, Vec<AgentAddress>>>,
     fail_reminders: bool,
+    fail_escalation_recipient_reads: AtomicBool,
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -179,7 +182,13 @@ impl DummyTaskStore {
             rows: Mutex::new(rows),
             escalation_recipients: Mutex::new(HashMap::new()),
             fail_reminders,
+            fail_escalation_recipient_reads: AtomicBool::new(false),
         }
+    }
+
+    pub fn set_fail_escalation_recipient_reads(&self, fail: bool) {
+        self.fail_escalation_recipient_reads
+            .store(fail, Ordering::SeqCst);
     }
 
     pub fn row(&self, member: &MemberKey, task_id: &TaskId) -> TaskRow {
@@ -353,6 +362,11 @@ impl TaskStore for DummyTaskStore {
         &self,
         scope: &EscalationScope,
     ) -> Result<Vec<AgentAddress>, AtmError> {
+        if self.fail_escalation_recipient_reads.load(Ordering::SeqCst) {
+            return Err(AtmError::daemon_unavailable(
+                "injected escalation recipient read failure",
+            ));
+        }
         Ok(self
             .escalation_recipients
             .lock()

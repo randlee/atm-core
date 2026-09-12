@@ -89,6 +89,13 @@ impl EscalationState {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         episodes.insert(member.clone(), episode) != Some(episode)
     }
+
+    pub(crate) fn hold_targets_unavailable(&self, member: &MemberKey) {
+        self.episodes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(member);
+    }
 }
 
 /// The durable key shared by all escalation writers and mailbox suppression.
@@ -142,12 +149,12 @@ pub(crate) async fn escalate_mail(
     mail_body: &str,
     kind: EscalationKind,
     suppress_since: Option<IsoTimestamp>,
-) -> EscalationOutcome {
+) -> Result<EscalationOutcome, AtmError> {
     let targets = match load_escalation_targets(blocking_bridge, runtime, task_store, team).await {
         Ok(targets) => targets,
         Err(error) => {
             log_target_load_error(team, &error);
-            return EscalationOutcome::default();
+            return Err(error);
         }
     };
     let mut outcome = EscalationOutcome::default();
@@ -204,7 +211,7 @@ pub(crate) async fn escalate_mail(
             }
         }
     }
-    outcome
+    Ok(outcome)
 }
 
 fn log_target_load_error(team: &TeamName, error: &AtmError) {
@@ -286,7 +293,7 @@ async fn load_escalation_targets(
         .filter(|member| member.agent_type == atm_core::schema::AgentType::Lead)
         .map(|member| member.agent_name.clone())
         .collect();
-    let recipients = load_escalation_recipients(blocking_bridge, task_store, team).await;
+    let recipients = load_escalation_recipients(blocking_bridge, task_store, team).await?;
     Ok(EscalationTargets { leads, recipients })
 }
 
@@ -294,29 +301,17 @@ async fn load_escalation_recipients(
     blocking_bridge: &BoundedBlockingBridge,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     team: &TeamName,
-) -> Vec<atm_core::address::AgentAddress> {
+) -> Result<Vec<atm_core::address::AgentAddress>, AtmError> {
     let recipients = match task_store {
-        Some(store) => match blocking_bridge
-            .run(herdr_request_deadline(), {
-                let store = Arc::clone(store);
-                let team = team.clone();
-                move || store.effective_escalation_recipients(&team)
-            })
-            .await
-        {
-            Ok(recipients) => recipients,
-            Err(error) => {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "escalation_recipient_read",
-                    outcome = "failed",
-                    team = %team,
-                    error = %error,
-                    "Escalation recipient read failed"
-                );
-                Vec::new()
-            }
-        },
+        Some(store) => {
+            blocking_bridge
+                .run(herdr_request_deadline(), {
+                    let store = Arc::clone(store);
+                    let team = team.clone();
+                    move || store.effective_escalation_recipients(&team)
+                })
+                .await?
+        }
         None => Vec::new(),
     };
     if recipients.len() > ESCALATION_RECIPIENT_CAP {
@@ -329,9 +324,9 @@ async fn load_escalation_recipients(
             cap = ESCALATION_RECIPIENT_CAP,
             "Escalation recipient list capped for this tick"
         );
-        recipients[..ESCALATION_RECIPIENT_CAP].to_vec()
+        Ok(recipients[..ESCALATION_RECIPIENT_CAP].to_vec())
     } else {
-        recipients
+        Ok(recipients)
     }
 }
 

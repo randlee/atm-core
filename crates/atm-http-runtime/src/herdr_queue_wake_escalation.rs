@@ -44,7 +44,7 @@ pub(crate) async fn escalate_stalled_task(
         }
     };
     let body = task_escalation_body(row, now, &events);
-    let outcome = escalate_mail(
+    let Ok(outcome) = escalate_mail(
         &pump.blocking_bridge,
         &pump.service_runtime,
         Some(task_store),
@@ -59,7 +59,10 @@ pub(crate) async fn escalate_stalled_task(
         EscalationKind::TaskStalled,
         None,
     )
-    .await;
+    .await
+    else {
+        return;
+    };
     record_escalation_stats(stats, &outcome);
     let (audit_actor, message_id) = outcome.audit_delivery.unwrap_or_else(|| {
         (
@@ -164,7 +167,7 @@ pub(crate) async fn escalate_episode(
     stats: &mut HerdrQueueWakeStats,
 ) {
     let body = episode_body(member, kind, since);
-    let outcome = escalate_mail(
+    let Ok(outcome) = escalate_mail(
         &pump.blocking_bridge,
         &pump.service_runtime,
         Some(task_store),
@@ -175,7 +178,11 @@ pub(crate) async fn escalate_episode(
         kind.into(),
         Some(since),
     )
-    .await;
+    .await
+    else {
+        pump.escalation_state.hold_targets_unavailable(member);
+        return;
+    };
     record_escalation_stats(stats, &outcome);
     stats.blocked_escalations += usize::from(outcome.reached_anyone());
 }
@@ -193,7 +200,7 @@ pub(crate) async fn escalate_refusals(
         since,
         member.agent(),
     );
-    let outcome = escalate_mail(
+    let Ok(outcome) = escalate_mail(
         &pump.blocking_bridge,
         &pump.service_runtime,
         Some(task_store),
@@ -204,7 +211,10 @@ pub(crate) async fn escalate_refusals(
         EscalationKind::RefusalsEscalated,
         Some(since),
     )
-    .await;
+    .await
+    else {
+        return;
+    };
     record_escalation_stats(stats, &outcome);
     stats.blocked_escalations += usize::from(outcome.reached_anyone());
 }
