@@ -178,7 +178,7 @@ durable receipt).
 
 | before (develop) | after |
 | --- | --- |
-| `herdr_candidates` (`herdr_queue_wake.rs:868-900`) skips every non-`HerdrSteer` channel and every `Tmux` backend | every roster member is a candidate; the backend is resolved after disposition by the existing `rebuild_received_hook_dispatch` (`:669-677`); a member whose backend yields no dispatch is `Hold("no delivery channel")`, one `warn` per tick |
+| `herdr_candidates` (`herdr_queue_wake.rs:868-900`) skips every non-`HerdrSteer` channel and every `Tmux` backend | every roster member is a candidate; the backend is resolved after disposition by the existing `rebuild_received_hook_dispatch` (`:669-677`); when the Nudge arm finds no delivery channel it emits one post-dispose `warn` per tick — there is no separate `Hold("no delivery channel")` disposition arm |
 | `collect_idle_members` pushes `Idle \| Blocked` only (`:444-518`) | pushes every member with an accepted observation as `MemberObservation { member: MemberKey, state: RuntimeMemberState, state_changed_at: Option<IsoTimestamp> }` built from `apply_roster_runtime_observations(..).current`; `TaskCandidate` deleted |
 | `read_due_task` — one `list_tasks` per candidate (`_reminders.rs:81-113`) | one `open_tasks_for_team(team, deadline)` per team per tick, grouped in memory by assignee (already `position`-ordered); head = `.first()` |
 | `select_open_task` (`:855-866`) | deleted — the queue order is the storage order |
@@ -341,5 +341,5 @@ lead; backends Herdr steer, tmux, bare-CLI FIFO):
 
 ## Required validation
 
-`just lint`, `just test`, `just lint-boundaries`, RULE-003
+`just lint`, `just test`, `just lint boundaries`, RULE-003
 (`herdr_queue_wake.rs` must not grow; target ≤ 3,700 lines after deletions).

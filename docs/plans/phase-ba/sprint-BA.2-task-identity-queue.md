@@ -555,7 +555,7 @@ the six exceptions are labeled with their actual source file:
   another member's → rejection, one `rejected` event, no row change.
 - `start_when_another_task_active_is_rejected_active_elsewhere` — row stays
   `assigned`; one `rejected` event.
-- `start_moves_task_to_position_one_and_resets_counters_preserving_last_reminded_at`.
+- `start_moves_task_to_position_one_and_resets_counters_preserves_reminder_count`.
 - `start_gate_rejects_member_actor_and_unrenderable_reminder` — actor not
   `atm-daemon` → rejected; latest `reminded` outcome `unrenderable` → no-op,
   zero `started` events.
@@ -630,7 +630,8 @@ Reader:
 ## Acceptance criteria
 
 1. Code quoted in this document matches the source byte-for-byte (QA diffs it).
-2. Every test above exists by name and passes under `just test`.
+2. Every test above exists by name and passes under `just test`, including
+   `start_moves_task_to_position_one_and_resets_counters_preserves_reminder_count`.
 3. `sqlite3 <fixture> "SELECT sql FROM sqlite_master WHERE name IN ('tasks','task_events','one_active_task_per_agent','tasks_position_per_member')"` matches the DDL section.
 4. `grep -n "assigned_at" crates/atm-storage-rusqlite/src/writer/task_ops.rs` shows it only in `apply_task_assignment` (insert, reassign, reopen); never in `apply_task_move` or `apply_task_start`.
 5. `grep -rn "TaskRejectionKind\|TaskQueueGap" crates/` → nothing.

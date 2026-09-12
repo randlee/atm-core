@@ -54,7 +54,7 @@ const OPEN_ITEM_SQL: &str =
 | `clear_pending_on_read` (`:135-140`) | `SET nudge_pending_at = NULL` | **deleted** — no production caller; the read transition is `mark_message_read` |
 | `mark_message_read` (`writer/stmt_cache.rs:44-53`, run by `execute_read_display_state`, `writer/ops.rs:264-284`) | `SET read = 1, updated_at = ?4, nudge_pending_at = NULL` | `SET read = 1, updated_at = ?4, nudge_pending_at = CASE WHEN nudge_pending_at IS NOT NULL AND pending_ack_at IS NOT NULL AND acknowledged_at IS NULL THEN ?5 ELSE NULL END`, `?5 = next_due` computed by the writer op — closed on read, or re-armed until the ack. The `IS NOT NULL` guard keeps immediate sends unmarked |
 | `list_pending_members` (`:151-158`) | `WHERE nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL` | `WHERE nudge_pending_at IS NOT NULL AND {OPEN_ITEM_SQL}` |
-| ack (`mark_source_acknowledged`, `writer/ops.rs:529-533` + upsert `stmt_cache.rs:28-39`) | sets `read = 1`, `acknowledged_at`; the upsert sets `nudge_pending_at = NULL` because `excluded.read = 1` | **unchanged** — the item closes on ack with no new code; pinned by a test |
+| ack (`mark_source_acknowledged`, `writer/ops.rs:529-533` + `upsert_message_state`, `stmt_cache.rs:28-39`) | sets `read = 1`, `acknowledged_at` | the `upsert_message_state` `CASE` branch clears `nudge_pending_at` when `excluded.read = 1`; the item closes on ack, pinned by a test |
 
 `next_due = now + TASK_REMINDER_INTERVAL_MS` (BA.3 moved the constant to
 `atm-storage/src/task_store.rs`). `nudge_attempts` keeps its meaning (failed

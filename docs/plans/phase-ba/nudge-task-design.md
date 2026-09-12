@@ -1,6 +1,9 @@
 # Task + Nudge Design — Rand's rulings, consolidated
 
-Status: DRAFT for Rand's review. Work is STOPPED until he approves.
+Status: APPROVED by Rand 2026-09-11 (plan §2 rulings R0–R5); implemented by
+Phase BA and landed on `integrate/phase-ba` at `9f5aef2fe` (2026-09-12). The
+sections below are the approved design; dated "shipped state" notes record
+where the landed code differs.
 Author: fenix. Source: Rand's rulings 2026-09-10, verified against origin/develop
 and origin/integrate/phase-az.
 Amended 2026-09-11 (Rand's rulings, recorded by fenix): §3.1a one id for the
@@ -71,6 +74,10 @@ So arm 4 of the invariant (blocked -> escalate, zero nudges) is substantially
 built. What remains unverified is the escalation's terminal behaviour, not its
 existence. Do not dispatch this as new work, and do not describe it as a gap.
 
+Phase BA closeout — shipped state (2026-09-12): the BA.3 runtime retains the
+exact `RuntimeMemberState` distinction and applies the approved blocked/offline
+zero-nudge policy; the older develop references above are historical evidence.
+
 The one real lossy collapse stands: `picker_projection.rs:76` folds
 Blocked/Offline/Unknown/IdentityConflict into `Dead`. That projection must
 never become the nudge path's eligibility authority. `atm-http-runtime` has
@@ -125,6 +132,10 @@ There is no uniqueness on open tasks per agent on develop -- only the non-unique
 index `tasks_open_by_member`. The sole one-active guard is application-level, in
 `admit()` (`task_state.rs:139-148`), fires only on the `Acked` event, and its
 failure mode is to reject the MESSAGE ack. That is the ack/task conflation.
+
+Phase BA closeout — shipped state (2026-09-12): BA.2 now enforces one row per
+`(team, task_id)` and the `one_active_task_per_agent` database constraint; task
+assignment no longer depends on message acknowledgement.
 
 SALVAGE FROM PHASE AZ -- two DDL lines, not the phase:
 
@@ -253,6 +264,10 @@ types being deleted. Do not cite it as existing behaviour.
 Consequence today: close-and-create can only DEMOTE. A recreated task is the
 newest, so it lands at the back. Lead cannot promote anything.
 
+Phase BA closeout — shipped state (2026-09-12): BA.2 replaces that FIFO-only
+implementation with explicit queue positions and the `--head`, `--before`, and
+`--end` task-move/placement behavior.
+
 DECISION: priority tiers are the wrong primitive -- they express "urgent or not",
 not "position 3 of 5", and having both means two things fight over one sort.
 Replaced by an explicit position. One concept.
@@ -294,9 +309,9 @@ Task is managed by a CLOSED SET of `atm task` subcommands. A clap subcommand
 enum is closed by construction, so this lints under ADR-001/RBP-003 with no
 extra machinery. No `atm task` namespace exists today.
 
-    atm task assign <agent> --template <j2> --vars <json> [--task-id <id>]
-                    [--before <other-task-id> | --head]   # placement, default END
-    atm task close  <task-id> <outcome> [reason]
+    atm task assign <agent> [message] --template <j2> --vars <json> [--task-id <id>]
+                        [--before <other-task-id> | --head]   # placement, default END
+    atm task close  <task-id> <outcome> [reason] [message]
     atm task move   <task-id> --before <other> | --head | --end
     atm task list                      # oversight, section 7
     atm task events <task-id>          # history
@@ -312,6 +327,10 @@ Deliberately absent: start, ack, reassign, reopen, supersede, block. Start is
 implicit in beginning work and produces the receipt. Reassign and reopen are
 `assign` on an existing id (section 3.1a). Ack left the task domain entirely
 (section 5.1).
+
+Phase BA closeout — shipped state (2026-09-12): the optional `MESSAGE`
+positional remains accepted by `assign` and `close`; for `close` it is the
+report body when no `--stdin`, `--file`, or `--template` source is selected.
 
 ### 5.1 ack and task are mutually exclusive, under the hood
 
@@ -368,6 +387,10 @@ Escalation to lead ALSO already exists (`maybe_escalate_task`,
 So it fires at 10, 20, 30 forever and NEVER STOPS THE NUDGING. On the
 587-reminder task, lead was notified ~58 times while nudges continued ~10 hours.
 Escalation is present and built as noise instead of signal.
+
+Phase BA closeout — shipped state (2026-09-12): BA.3 uses the terminal
+threshold: the first stalled escalation stops further reminders until a task
+state change, reassignment, or reopen.
 
 FIX: make the threshold TERMINAL, not multiplicative. At 10, escalate ONCE and
 STOP nudging. Nudging resumes only on a state change or a reassignment. Ten
@@ -448,7 +471,16 @@ remediation) and `RosterMultipleLeads`. Caveat recorded, accepted: the warning
 is pull-based, so a team with no lead swallows escalations silently until
 someone runs doctor.
 
-Three escalation kinds exist: `BreakerOpened`, `LeadNotified`, `BlockedEscalated`.
+Phase BA closeout — shipped state (2026-09-12): lead and configured recipients
+remain independent escalation targets, and the shipped runtime records the
+episode through ordinary mailbox delivery.
+
+Three escalation kinds existed in the pre-BA implementation:
+`BreakerOpened`, `LeadNotified`, `BlockedEscalated`.
+
+Phase BA closeout — shipped state (2026-09-12): BA.3 removed the breaker
+escalation kind and retains only the shipped stalled, blocked/offline, and
+refusal-episode decisions.
 
 FUTURE, EXPLICITLY NOT TODAY: whitelist/blacklist filtering for enterprise
 multi-human oversight. It is a column on this table when wanted; the shape does
@@ -463,6 +495,10 @@ Both are queryable today: `atm members` returns state + age per member;
 `atm list --tasks` returns TASK_ID/STATE/ASSIGNEE/ASSIGNER/ASSIGNED_AT/REMINDERS;
 `atm list --task-events <id>` returns history. These move into `atm task list` /
 `atm task events`.
+
+Phase BA closeout — shipped state (2026-09-12): the closed `atm task list` and
+`atm task events` commands are the shipped query surfaces; the older aliases
+remain the historical pre-BA wording.
 
 REQUIREMENT: queryable is not the same as stored. If task state ever moves to an
 external authority, the query surface is preserved as a READ-THROUGH projection.
@@ -508,6 +544,10 @@ real bug -- these are in-RAM HashMaps, so a daemon restart forgets who it
 already told and re-notifies. With the notice durable in the mailbox, "have I
 reported this episode" is answerable from durable state and the volatility stops
 mattering.
+
+Phase BA closeout — shipped state (2026-09-12): the shipped BA.3 implementation
+uses the mailbox-backed episode policy and has removed the old breaker/cooldown
+artifacts named in this historical correction.
 - the two-lane scheduler (message lane vs task lane) -- see section 9
 - `admit()`'s ack refusal
 - the whole TaskProvider/resolution design (section 3)
