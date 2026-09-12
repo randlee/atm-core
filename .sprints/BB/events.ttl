@@ -66,3 +66,7 @@ triage:c2 a triage:Completion ;
 triage:c3 a triage:Completion ;
     triage:ofSprint triage:BB4 ;
     triage:at "2026-09-12T20:37:14Z"^^xsd:dateTime .
+
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:BB3 ;
+    triage:at "2026-09-12T20:53:29Z"^^xsd:dateTime .
