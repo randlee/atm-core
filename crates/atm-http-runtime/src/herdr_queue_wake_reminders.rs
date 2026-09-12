@@ -12,6 +12,8 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
 use atm_core::types::IsoTimestamp;
 
+use crate::herdr_task_disposition::{EpisodeKind, TaskDisposition, dispose};
+
 use super::{
     HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats,
     MemberObservation, run_blocking,
@@ -22,6 +24,7 @@ impl HerdrQueueWakePump {
         &self,
         candidates: Vec<MemberObservation>,
         prompted_by_drain: &HashSet<MemberKey>,
+        open_mail: &HashSet<MemberKey>,
         list_complete: bool,
         stats: &mut HerdrQueueWakeStats,
     ) {
@@ -57,16 +60,44 @@ impl HerdrQueueWakePump {
         if let (Some(reader), Some(task_store)) = (reader.as_ref(), task_store.as_ref()) {
             let heads = self.open_task_heads(reader.as_ref(), &candidates).await;
             for candidate in candidates {
-                if candidate.state != atm_core::protocol::RuntimeMemberState::Blocked
-                    && stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK
-                {
-                    continue;
-                }
                 if prompted_by_drain.contains(&candidate.member) {
                     self.stamp_task_attempt(&candidate.member, now);
                     continue;
                 }
-                let Some(row) = heads.get(&candidate.member).cloned() else {
+                let head = heads.get(&candidate.member);
+                let disposition = dispose(
+                    open_mail.contains(&candidate.member),
+                    candidate.state,
+                    head,
+                    now,
+                    self.escalation_state
+                        .observe(&candidate.member, candidate.state),
+                    0,
+                );
+                if matches!(
+                    disposition,
+                    TaskDisposition::EscalateEpisode(EpisodeKind::Blocked)
+                ) {
+                    if let Some(row) = head {
+                        self.emit_task_reminder(
+                            reader.as_ref(),
+                            task_store,
+                            candidate,
+                            row.clone(),
+                            now,
+                            stats,
+                        )
+                        .await;
+                    }
+                    continue;
+                }
+                let TaskDisposition::Nudge = disposition else {
+                    continue;
+                };
+                if stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
+                    continue;
+                }
+                let Some(row) = head.cloned() else {
                     continue;
                 };
                 if !self.reminder_due(&candidate.member, &row, now) {

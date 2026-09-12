@@ -91,7 +91,6 @@ pub(crate) struct EscalationState {
 
 impl EscalationState {
     /// Records an episode transition. Recovery clears the local episode entry.
-    #[expect(dead_code, reason = "the runtime disposition path lands in task 4")]
     pub(crate) fn observe(
         &self,
         member: &MemberKey,
