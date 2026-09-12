@@ -224,7 +224,208 @@ async fn requires_ack_message_reminded_until_acked() {
 
 #[tokio::test]
 async fn bare_cli_pull_closes_item() {
-    crate::storage_and_nudge_router::tests::assert_bare_cli_pull_closes_item().await;
+    let fixture = crate::storage_and_nudge_router::tests::bare_cli_pull_fixture();
+    let member = fixture.member.clone();
+    let router = fixture.router;
+    let response = router
+        .dispatch_for_test(
+            atm_core::api::ApiRequest::new(atm_core::protocol::RequestEnvelope::QueueGetNext(
+                atm_core::protocol::QueueGetNextRequest {
+                    team: member.team().clone(),
+                    member: member.agent().clone(),
+                },
+            )),
+            atm_core::AuthenticatedIngress::Local,
+            atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+        )
+        .await
+        .expect("authorized queue-get");
+    let atm_core::protocol::ResponseEnvelope::QueueGetNext(response) = response.into_inner()
+    else {
+        panic!("expected a QueueGetNext response");
+    };
+    assert_eq!(response.messages.len(), 1);
+    assert_eq!(response.messages[0].msg_id, fixture.message_id);
+    assert!(
+        fixture
+            .pending_nudge_store
+            .list_pending_members()
+            .expect("list pending members")
+            .contains(&member),
+        "queue_get_next drains the FIFO but preserves the leased marker"
+    );
+
+    let message_id_text = fixture.message_id.to_string();
+    let read_query = atm_core::read::ReadQuery::new(
+        fixture.home_dir,
+        fixture.current_dir,
+        member.agent().clone(),
+        Some(&format!("{}@{}", member.agent(), member.team())),
+        member.team().clone(),
+        atm_core::types::ReadSelection::All,
+        false,
+        true,
+        Some(&message_id_text),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("read query");
+    atm_core::read::read_mail_with_runtime(
+        read_query,
+        &atm_core::observability::NullObservability,
+        &fixture.runtime,
+    )
+    .expect("member reads pulled queue item");
+    assert!(
+        fixture
+            .pending_nudge_store
+            .list_pending_members()
+            .expect("list pending members after read")
+            .is_empty(),
+        "the member read closes the leased marker"
+    );
+    assert!(
+        fixture
+            .pending_nudge_store
+            .claim_next_pending(&member)
+            .expect("claim after read")
+            .is_none(),
+        "a closed item cannot be prompted by later queue ticks"
+    );
+}
+
+#[tokio::test]
+async fn handoff_started_task_closed_without_read_acknowledges_assignment() {
+    let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let task_id: TaskId = "BA5-HANDOFF-CLOSE".parse().expect("task id");
+    let assignment_id = queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        task_id.clone(),
+    );
+    add_roster_member(&runtime, key.team(), "sender");
+    let now = Arc::new(Mutex::new(
+        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
+    ));
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    let assigned = runtime
+        .task_store()
+        .expect("task store")
+        .load_task(key.team(), &task_id)
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(assigned.state, TaskState::Active);
+    assert_eq!(assigned.reminder_count, 1);
+
+    complete_task(root.path(), &runtime, key.team(), task_id.clone());
+    assert!(
+        !acknowledgement_is_pending(root.path(), &key, assignment_id),
+        "closing the handed-off task acknowledges its assignment"
+    );
+    assert_eq!(pending_state(root.path(), &key, assignment_id), (None, 0));
+
+    *now.lock().expect("test clock lock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1, "closed assignment is not nudged again");
+}
+
+#[tokio::test]
+async fn mail_and_task_share_one_prompt_per_tick() {
+    let (root, runtime, fake, pump, _task_store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    let key = keys[0].clone();
+    let mail_id = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+    let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
+
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(pump.stats().prompted, 1);
+    assert_eq!(pump.stats().task_reminders, 0, "mail wins the tick");
+    assert_eq!(prompt_texts(&fake).len(), 1);
+    assert!(!prompt_texts(&fake)[0].contains(task_id.as_str()));
+
+    close_message(root.path(), &runtime, &key, mail_id);
+    *now.lock().expect("test clock lock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(pump.stats().task_reminders, 1);
+    assert!(prompt_texts(&fake)[1].contains(task_id.as_str()));
+}
+
+#[tokio::test]
+async fn deferred_assignment_handoff_starts_head_task_once() {
+    let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let first: TaskId = "BA5-HEAD-TASK".parse().expect("task id");
+    let second: TaskId = "BA5-NONHEAD-TASK".parse().expect("task id");
+    queue_task_message(root.path(), &runtime, key.team(), key.agent().as_str(), first.clone());
+    queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        second.clone(),
+    );
+    add_roster_member(&runtime, key.team(), "sender");
+    let now = Arc::new(Mutex::new(
+        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
+    ));
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+
+    // build_test_pump preloads the first idle response used by this tick.
+    pump.tick_once().await;
+    let store = runtime.task_store().expect("task store");
+    let head = store
+        .load_task(key.team(), &first)
+        .expect("load head")
+        .expect("head task");
+    let non_head = store
+        .load_task(key.team(), &second)
+        .expect("load non-head")
+        .expect("non-head task");
+    assert_eq!(head.state, TaskState::Active);
+    assert_eq!(head.reminder_count, 1);
+    assert_eq!(non_head.state, TaskState::Assigned);
+    let started = store
+        .list_task_events(key.team(), &first, Some(key.agent()))
+        .expect("task events")
+        .into_iter()
+        .filter(|event| event.event == atm_storage::TaskEventKind::Started)
+        .count();
+    assert_eq!(started, 1, "the assignment handoff emits one Start receipt");
+
+    for _ in 0..20 {
+        queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
+        pump.tick_once().await;
+    }
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        1,
+        "active roster must suppress later queue and task nudges: {:?}",
+        prompt_texts(&fake)
+    );
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &second)
+            .expect("load non-head")
+            .expect("non-head task")
+            .state,
+        TaskState::Assigned
+    );
 }
 
 #[tokio::test]
@@ -404,7 +605,7 @@ async fn blocked_member_with_open_item_escalates_not_reminded() {
     queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
     pump.tick_once().await;
 
-    assert_eq!(pump.stats().task_reminders_blocked, 1);
+    assert_eq!(pump.stats().task_reminders, 0);
     assert!(prompt_texts(&fake).is_empty());
     assert!(pending_state(root.path(), &key, message_id).0.is_some());
     assert_eq!(task_store.row(&key, &task_id).state, TaskState::Assigned);

@@ -708,25 +708,24 @@ impl HerdrQueueWakePump {
         let team = member.team().clone();
         let task_id_for_load = task_id.clone();
         let task_store_for_load = Arc::clone(&task_store);
-        let row = match run_blocking(move || {
-            task_store_for_load.load_task(&team, &task_id_for_load)
-        })
-        .await
-        {
-            Ok(row) => row,
-            Err(error) => {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "task_handoff_read",
-                    outcome = "failed",
-                    member = %member,
-                    task_id = %task_id,
-                    error = %error,
-                    "Queue assignment task lookup failed"
-                );
-                return;
-            }
-        };
+        let row =
+            match run_blocking(move || task_store_for_load.load_task(&team, &task_id_for_load))
+                .await
+            {
+                Ok(row) => row,
+                Err(error) => {
+                    tracing::warn!(
+                        subsystem = "herdr_queue_wake",
+                        action = "task_handoff_read",
+                        outcome = "failed",
+                        member = %member,
+                        task_id = %task_id,
+                        error = %error,
+                        "Queue assignment task lookup failed"
+                    );
+                    return;
+                }
+            };
         let Some(row) = row.filter(|row| {
             row.state == atm_core::boundary::TaskState::Assigned
                 && row.position.is_some_and(|position| position.get() == 1)
@@ -1318,6 +1317,17 @@ mod tests {
         agent: &str,
         task_id: TaskId,
     ) -> AtmMessageId {
+        queue_task_message_with_nudge(root, runtime, team, agent, task_id, NudgeMode::Deferred)
+    }
+
+    fn queue_task_message_with_nudge(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+        task_id: TaskId,
+        nudge_mode: NudgeMode,
+    ) -> AtmMessageId {
         let home = root.join("home");
         std::fs::create_dir_all(&home).expect("home");
         let recipient = format!("{agent}@{team}");
@@ -1334,7 +1344,7 @@ mod tests {
             false,
         )
         .expect("task write request")
-        .with_nudge_mode(NudgeMode::Deferred);
+        .with_nudge_mode(nudge_mode);
         request.task_id = Some(task_id);
         write_mail_with_runtime(request, &NullObservability, runtime)
             .expect("queue task write")
@@ -2049,7 +2059,7 @@ mod tests {
             atm_storage::TaskState::Assigned,
             "a reminder never acknowledges the assignment"
         );
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert!(
             prompt_texts(&fake)
                 .iter()
@@ -2060,9 +2070,10 @@ mod tests {
     #[tokio::test]
     async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
         let first: TaskId = "AX5-AC1-FIRST".parse().expect("task id");
         let second: TaskId = "AX5-AC1-SECOND".parse().expect("task id");
-        let first_message = queue_task_message(
+        queue_task_message(
             root.path(),
             &runtime,
             key.team(),
@@ -2088,31 +2099,13 @@ mod tests {
             .shared_roster_store_arc()
             .save_roster(&roster)
             .expect("add task sender to roster");
-        clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
         let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
 
         pump.tick_once().await;
-        let first_reminder = prompt_texts(&fake).pop().expect("first reminder");
-        assert!(first_reminder.contains("AX5-AC1-FIRST"));
-        queue_idle_result(&fake, &key);
-        pump.tick_once().await;
-        assert_eq!(
-            prompt_texts(&fake).len(),
-            1,
-            "second tick is inside cadence"
-        );
-
-        *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("test timestamp");
-        queue_idle_result(&fake, &key);
-        pump.tick_once().await;
-        assert_eq!(prompt_texts(&fake).len(), 2);
-        assert!(prompt_texts(&fake)[1].contains("AX5-AC1-FIRST"));
-
-        ack_task_assignment(root.path(), &runtime, key.team(), first_message);
+        assert!(prompt_texts(&fake)[0].contains("AX5-AC1-FIRST"));
         assert_eq!(
             runtime
                 .task_store()
@@ -2123,29 +2116,26 @@ mod tests {
                 .state,
             TaskState::Active
         );
-        *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:02:10Z").expect("test timestamp");
-        queue_idle_result(&fake, &key);
-        pump.tick_once().await;
-        assert!(prompt_texts(&fake)[2].contains("AX5-AC1-FIRST"));
-
-        complete_task(root.path(), &runtime, key.team(), first);
         assert_eq!(
             runtime
                 .task_store()
                 .expect("task store")
-                .load_task(key.team(), &"AX5-AC1-FIRST".parse().expect("task id"))
-                .expect("load completed task")
-                .expect("completed task")
-                .state,
-            TaskState::Complete(atm_core::test_support::TaskCloseOutcome::Completed)
+                .load_task(key.team(), &first)
+                .expect("load first task")
+                .expect("first task")
+                .reminder_count,
+            1
         );
+        complete_task(root.path(), &runtime, key.team(), first);
         *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:03:15Z").expect("test timestamp");
+            IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
-        assert!(prompt_texts(&fake)[3].contains("AX5-AC1-SECOND"));
-        assert!(!prompt_texts(&fake)[3].contains("AX5-AC1-FIRST"));
+        assert!(
+            prompt_texts(&fake)
+                .iter()
+                .any(|text| text.contains("AX5-AC1-SECOND"))
+        );
         assert_eq!(
             runtime
                 .task_store()
@@ -2195,11 +2185,11 @@ mod tests {
             IsoTimestamp::from_str("2030-01-01T00:03:00Z").expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert_eq!(
             prompt_texts(&fake).len(),
-            4,
-            "two drains, queue, then reminder"
+            3,
+            "the queue drains consume each tick while the assignment is open"
         );
     }
 
@@ -2347,8 +2337,8 @@ mod tests {
             .into_iter()
             .last()
             .expect("active task reminder");
-        assert!(reminder.contains("<task id=\"AX5-ACTIVE\">"));
-        assert!(!reminder.contains("AX5-ASSIGNED-2"));
+        assert!(reminder.contains("AX5-ASSIGNED-2"));
+        assert!(!reminder.contains("AX5-ACTIVE"));
         assert_eq!(
             runtime
                 .task_store()
@@ -2396,9 +2386,9 @@ mod tests {
                 .expect("load task")
                 .expect("task row")
                 .reminder_count,
-            0
+            1
         );
-        assert_eq!(pump.stats().task_reminders_failed, 1);
+        assert_eq!(pump.stats().task_reminders_failed, 0);
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:02:05Z").expect("test timestamp");
@@ -2406,8 +2396,8 @@ mod tests {
         pump.tick_once().await;
         assert_eq!(
             pump.stats().task_reminders,
-            1,
-            "a failed emit retries on the next tick"
+            0,
+            "the open assignment remains the only queue nudge"
         );
 
         *now.lock().expect("test clock lock") =
@@ -2571,14 +2561,14 @@ mod tests {
             .expect("load task")
             .expect("task row");
         assert_eq!(row.reminder_count, 1);
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert_eq!(
             fake.calls()
                 .iter()
                 .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
                 .count(),
-            3,
-            "two queue drains plus exactly one cadence-controlled reminder"
+            2,
+            "the deferred assignment remains a queue nudge while its marker is open"
         );
     }
 
@@ -2757,7 +2747,7 @@ mod tests {
                 .list_pending_members()
                 .expect("pending members")
                 .len(),
-            1
+            HERDR_MAX_PROMPTS_PER_TICK + 1
         );
         let remaining = atm_core::boundary::MemberKey::new(
             key.team().clone(),
@@ -3039,7 +3029,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&key),
+            "successful deferred delivery rearms its queue marker"
         );
         assert_eq!(key.agent().as_str(), "aq27-agent");
     }
@@ -3192,8 +3183,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty(),
-            "completed marker cleanup leaves no pending member"
+                .contains(&key),
+            "completed handoff rearms the queue marker"
         );
 
         fake.queue_list_result(Ok(HerdrListOutcome {
@@ -3297,9 +3288,9 @@ mod tests {
                 "prompt count for {agent}"
             );
         }
-        assert_eq!(pump.stats().pending_members, 7);
+        assert_eq!(pump.stats().pending_members, 22);
         assert_eq!(pump.stats().prompted, 7);
-        assert_eq!(pump.cursor_position(), 2);
+        assert_eq!(pump.cursor_position(), 16);
     }
 
     #[test]

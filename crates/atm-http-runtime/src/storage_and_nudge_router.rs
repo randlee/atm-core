@@ -75,6 +75,16 @@ pub struct StorageAndNudgeRouter {
 }
 
 impl StorageAndNudgeRouter {
+    #[cfg(test)]
+    pub(crate) fn dispatch_for_test(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.dispatch(request, ingress, deadline)
+    }
+
     pub(super) async fn list_messages(
         &self,
         query: ListQuery,
@@ -1060,7 +1070,6 @@ pub(crate) mod tests {
         QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
         RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
     };
-    use atm_core::read::ReadQuery;
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
@@ -2292,9 +2301,18 @@ pub(crate) mod tests {
         );
     }
 
-    /// A bare-CLI pull drains the in-memory FIFO while preserving the leased
-    /// durable marker; the member's subsequent read closes that marker.
-    pub(crate) async fn assert_bare_cli_pull_closes_item() {
+    pub(crate) struct BareCliPullFixture {
+        pub(crate) _temporary_root: TempDir,
+        pub(crate) router: StorageAndNudgeRouter,
+        pub(crate) runtime: LocalServiceRuntime,
+        pub(crate) pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+        pub(crate) home_dir: PathBuf,
+        pub(crate) current_dir: PathBuf,
+        pub(crate) member: MemberKey,
+        pub(crate) message_id: AtmMessageId,
+    }
+
+    pub(crate) fn bare_cli_pull_fixture() -> BareCliPullFixture {
         let fixture = fixture(true, None, None);
         let member = MemberKey::new(
             "test-team".parse().expect("team"),
@@ -2334,72 +2352,18 @@ pub(crate) mod tests {
             },
         )
         .expect("seed FIFO");
-        let router = fixture.router.clone().with_bare_cli_fifo(fifo, drops);
-        let response = router
-            .dispatch(
-                ApiRequest::new(RequestEnvelope::QueueGetNext(QueueGetNextRequest {
-                    team: member.team().clone(),
-                    member: member.agent().clone(),
-                })),
-                atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .await
-            .expect("authorized queue-get");
-        let ResponseEnvelope::QueueGetNext(response) = response.into_inner() else {
-            panic!("expected a QueueGetNext response");
-        };
-        assert_eq!(response.messages.len(), 1);
-        assert_eq!(response.messages[0].msg_id, message_id);
-        assert!(
-            fixture
-                .pending_nudge_store
-                .list_pending_members()
-                .expect("list pending members")
-                .contains(&member),
-            "queue_get_next drains the FIFO but preserves the leased marker"
-        );
-
-        let message_id_text = message_id.to_string();
-        let read_query = ReadQuery::new(
-            fixture.home_dir.clone(),
-            fixture.current_dir.clone(),
-            member.agent().clone(),
-            Some(&format!("{}@{}", member.agent(), member.team())),
-            member.team().clone(),
-            atm_core::types::ReadSelection::All,
-            false,
-            true,
-            Some(&message_id_text),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("read query");
-        atm_core::read::read_mail_with_runtime(
-            read_query,
-            &NullObservability,
-            &fixture.router.service_runtime,
-        )
-        .expect("member reads pulled queue item");
-        assert!(
-            fixture
-                .pending_nudge_store
-                .list_pending_members()
-                .expect("list pending members after read")
-                .is_empty(),
-            "the member read closes the leased marker"
-        );
-        assert!(
-            fixture
-                .pending_nudge_store
-                .claim_next_pending(&member)
-                .expect("claim after read")
-                .is_none(),
-            "a closed item cannot be prompted by later queue ticks"
-        );
+        let runtime = fixture.router.service_runtime.clone();
+        let router = fixture.router.with_bare_cli_fifo(fifo, drops);
+        BareCliPullFixture {
+            _temporary_root: fixture._temporary_root,
+            router,
+            runtime,
+            pending_nudge_store: fixture.pending_nudge_store,
+            home_dir: fixture.home_dir,
+            current_dir: fixture.current_dir,
+            member,
+            message_id,
+        }
     }
 
     /// AC6 migration case: a stale FIFO entry from an earlier bare-CLI
