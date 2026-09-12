@@ -4,8 +4,8 @@ use atm_storage::contract::{Message, MessageKey};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope};
 use atm_storage::{
     AgentName, AtmErrorCode, IsoTimestamp, MemberKey, MessageAdmissionOutcome, MessageWriteOrigin,
-    MoveTarget, QueuePosition, TaskCloseOutcome, TaskEventKind, TaskId, TaskOp, TaskState,
-    TeamName,
+    MoveTarget, QueuePosition, ReminderOutcome, TaskCloseOutcome, TaskEventKind, TaskId, TaskOp,
+    TaskState, TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 use chrono::Utc;
@@ -188,6 +188,36 @@ fn assignment_at_every_position_emits_task_queued_with_position() {
         assert_eq!(outcome.queued_position, Some(expected));
         assert!(outcome.reassign_notice.is_none());
     }
+}
+
+#[test]
+pub(crate) fn assignee_task_report_is_plain_message_and_leaves_task_unchanged() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.backend
+        .task_store()
+        .record_reminder(
+            &MemberKey::new(h.team.clone(), "alice".parse().unwrap()),
+            &"T1".parse().unwrap(),
+            IsoTimestamp::now(),
+            ReminderOutcome::Emitted,
+        )
+        .expect("record reminder");
+    let before = h.row("T1");
+    let event_count = h.events("T1").len();
+    let mut report = h.message("lead", "alice", "progress report");
+    report.envelope.task_id = Some("T1".parse().unwrap());
+
+    let outcome = h
+        .backend
+        .message_store()
+        .admit_message_with_provenance(&report, MessageWriteOrigin::Local)
+        .expect("admit task-linked report");
+
+    assert_eq!(h.row("T1"), before);
+    assert_eq!(h.events("T1").len(), event_count);
+    assert!(outcome.queued_position.is_none());
+    assert!(outcome.reassign_notice.is_none());
 }
 
 #[test]

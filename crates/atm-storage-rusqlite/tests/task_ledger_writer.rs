@@ -26,3 +26,4 @@ writer_contract_test!(close_by_non_party_is_rejected_and_retained);
 writer_contract_test!(move_of_complete_task_appends_rejected_row);
 writer_contract_test!(start_without_prior_reminder_succeeds);
 writer_contract_test!(daemon_actor_can_no_longer_start_a_task);
+writer_contract_test!(assignee_task_report_is_plain_message_and_leaves_task_unchanged);

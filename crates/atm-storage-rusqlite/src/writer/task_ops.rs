@@ -161,6 +161,14 @@ pub(super) fn apply_task_message(
         });
     };
     match record.envelope.task_op.as_ref() {
+        None if is_non_assigner_report(record, task_id, connection, target)? => {
+            Ok(TaskMessageResult::Applied {
+                already_closed: None,
+                task_assignee: None,
+                queued_position: None,
+                reassign_notice: None,
+            })
+        }
         None => apply_task_assignment(
             record,
             task_id,
@@ -195,6 +203,16 @@ pub(super) fn apply_task_message(
             target,
         ),
     }
+}
+
+fn is_non_assigner_report(
+    record: &Message,
+    task_id: &TaskId,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<bool, AtmError> {
+    Ok(load_task_row(connection, target, &record.team, task_id)?
+        .is_some_and(|row| record.envelope.from != row.assigner))
 }
 
 struct TaskAssignmentApplied {

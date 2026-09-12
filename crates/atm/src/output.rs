@@ -1366,6 +1366,26 @@ mod tests {
     }
 
     #[test]
+    fn assignee_task_report_cli_renders_as_plain_send() {
+        let outcome: atm_core::send::SendOutcome = serde_json::from_value(json!({
+            "action": "send",
+            "team": "test-team",
+            "agent": "assigner",
+            "sender": "assignee",
+            "outcome": "sent",
+            "message_id": "01KX5TEST00000000000000001",
+            "requires_ack": false,
+            "task_id": "T1"
+        }))
+        .expect("task-linked report outcome");
+
+        assert_eq!(
+            render_send_stdout(&outcome, false, None).unwrap(),
+            "Sent to assigner@test-team [message_id: 01KX5TEST00000000000000001]\n"
+        );
+    }
+
+    #[test]
     fn sender_advisory_stays_on_stderr_while_json_stdout_remains_parseable() {
         let outcome: atm_core::send::SendOutcome = serde_json::from_value(json!({
             "action": "send",
