@@ -5,6 +5,10 @@ use super::ops::{
     mark_source_acknowledged,
 };
 use super::stmt_cache::WriterStatementCache;
+use super::task_rejection::{
+    is_task_rejection, task_already_closed, task_move_invalid, task_not_counterparty,
+    task_not_found, task_stale_counterparty,
+};
 use super::task_report::drop_task_link_from_mail;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::contract::Message;
@@ -15,14 +19,10 @@ use atm_storage::task_state::{
     TaskState, TaskStateTag, Transition, admit, transition,
 };
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
-use atm_storage::{AtmErrorCode, MessageWriteOrigin, MoveTarget, TaskOp};
+use atm_storage::{MessageWriteOrigin, MoveTarget, TaskOp};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::task_sql;
-
-fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
-    AtmError::validation(detail.to_string())
-}
 
 pub(super) enum TaskMessageResult {
     Applied(Option<TaskCloseOutcome>),
@@ -45,7 +45,7 @@ pub(super) fn append_rejected_task_event(
     target: &SharedDbTarget,
     error: &AtmError,
 ) -> Result<(), AtmError> {
-    if error.code() != AtmErrorCode::MessageValidationFailed {
+    if !is_task_rejection(error.code()) {
         return Ok(());
     }
     let (team, task_id, requested, actor, message_id) = match op {
@@ -167,7 +167,7 @@ fn apply_task_assignment(
     let message_id = record
         .envelope
         .message_id
-        .ok_or_else(|| task_rejected("task assignment is missing message id"))?;
+        .ok_or_else(|| task_move_invalid("task assignment is missing message id"))?;
 
     if refresh_same_assignment(
         record,
@@ -198,7 +198,7 @@ fn apply_task_assignment(
         &record.agent,
     )?;
     let temporary =
-        u32::try_from(order.len()).map_err(|_| task_rejected("task queue too large"))?;
+        u32::try_from(order.len()).map_err(|_| task_move_invalid("task queue too large"))?;
     apply_task_assignment_row(
         record,
         task_id,
@@ -458,19 +458,19 @@ fn load_startable_task(
     target: &SharedDbTarget,
 ) -> Result<TaskRow, AtmError> {
     let Some(row) = load_task_row(connection, target, &record.team, task_id)? else {
-        return Err(task_rejected(format!(
+        return Err(task_not_found(format!(
             "no open task {task_id} for {}",
             record.envelope.from
         )));
     };
     if !row.state.is_open() {
-        return Err(task_rejected(format!(
+        return Err(task_already_closed(format!(
             "no open task {task_id} for {}",
             record.envelope.from
         )));
     }
     if record.envelope.from.as_str() != DAEMON_ACTOR_NAME {
-        return Err(task_rejected(format!(
+        return Err(task_not_counterparty(format!(
             "task {task_id} start requires {DAEMON_ACTOR_NAME}"
         )));
     }
@@ -518,7 +518,7 @@ fn reject_concurrent_active_task(
         .optional()
         .map_err(|error| sqlite_error(target, "failed to check active task", error))?;
     if active.is_some() {
-        return Err(task_rejected(format!(
+        return Err(task_move_invalid(format!(
             "task {task_id}: {} already has an active task",
             row.assignee
         )));
@@ -537,7 +537,7 @@ pub(crate) fn apply_task_close(
     target: &SharedDbTarget,
 ) -> Result<TaskMessageResult, AtmError> {
     let Some(row) = load_task_row(connection, target, &record.team, task_id)? else {
-        return Err(task_rejected(format!(
+        return Err(task_not_found(format!(
             "no open task {task_id} for {}",
             record.envelope.from
         )));
@@ -571,7 +571,7 @@ pub(crate) fn apply_task_close(
         &row.assignee
     };
     if &record.agent != expected {
-        let error = task_rejected(format!(
+        let error = task_stale_counterparty(format!(
             "task {task_id}: {} is no longer the counterparty — re-run the command",
             record.agent
         ));
@@ -609,9 +609,10 @@ fn deliver_rejected_close_report(
         None,
         Some(error.message()),
     )?;
-    Ok(TaskMessageResult::RejectedReportDelivered(
-        AtmError::validation(format!("{}; report delivered", error.detail())),
-    ))
+    Ok(TaskMessageResult::RejectedReportDelivered(AtmError::new(
+        error.code(),
+        format!("{}; report delivered", error.detail()),
+    )))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -671,10 +672,14 @@ pub(super) fn apply_task_move(
     target: &SharedDbTarget,
 ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
     let Some(row) = load_task_row(connection, target, team, task_id)? else {
-        return Err(task_rejected(format!("no open task {task_id} for {actor}")));
+        return Err(task_not_found(format!(
+            "no open task {task_id} for {actor}"
+        )));
     };
     if !row.state.is_open() {
-        return Err(task_rejected(format!("no open task {task_id} for {actor}")));
+        return Err(task_already_closed(format!(
+            "no open task {task_id} for {actor}"
+        )));
     }
     let Transition(next_state) = transition(
         Some(row.state),
@@ -710,7 +715,7 @@ fn apply_queued_task_move(
 ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
     let from = row
         .position
-        .ok_or_else(|| task_rejected("open task has no queue position"))?;
+        .ok_or_else(|| task_move_invalid("open task has no queue position"))?;
     let mut order = queue_order(connection, target, team, &row.assignee)?;
     order.retain(|id| id != task_id);
     insert_at_placement(
@@ -729,7 +734,7 @@ fn apply_queued_task_move(
         .map(|index| index + 1)
         .and_then(|value| u32::try_from(value).ok())
         .and_then(QueuePosition::new)
-        .ok_or_else(|| task_rejected("task move produced no queue position"))?;
+        .ok_or_else(|| task_move_invalid("task move produced no queue position"))?;
     let detail = format!("{}→{}", from.get(), to.get());
     append_task_event(
         connection,
@@ -802,7 +807,7 @@ fn queue_order(
             value
                 .map_err(|error| sqlite_error(target, "failed to read task queue", error))?
                 .parse()
-                .map_err(|error| task_rejected(format!("invalid queued task id: {error}")))
+                .map_err(|error| task_move_invalid(format!("invalid queued task id: {error}")))
         })
         .collect()
 }
@@ -833,12 +838,12 @@ fn insert_at_placement(
             let valid = load_task_row(connection, target, team, other)?
                 .is_some_and(|row| row.assignee == *assignee && row.state == TaskState::Assigned);
             if !valid {
-                return Err(task_rejected(format!(
+                return Err(task_move_invalid(format!(
                     "task {task_id}: placement target {other} is not an open queued task of {assignee}"
                 )));
             }
             order.iter().position(|id| id == other).ok_or_else(|| {
-                task_rejected(format!(
+                task_move_invalid(format!(
                     "task {task_id}: placement target {other} is not an open queued task of {assignee}"
                 ))
             })?
@@ -866,8 +871,10 @@ fn renumber_queue(
         )
         .map_err(|error| sqlite_error(target, "failed to size task queue offset", error))?;
     let offset = maximum
-        .checked_add(i64::try_from(order.len()).map_err(|_| task_rejected("task queue too large"))?)
-        .ok_or_else(|| task_rejected("task queue too large"))?;
+        .checked_add(
+            i64::try_from(order.len()).map_err(|_| task_move_invalid("task queue too large"))?,
+        )
+        .ok_or_else(|| task_move_invalid("task queue too large"))?;
     connection
         .execute(
             "UPDATE tasks SET position=position+?3 WHERE team=?1 AND assignee=?2 AND state<>'complete'",
@@ -886,7 +893,7 @@ fn renumber_queue(
         .optional()
         .map_err(|error| sqlite_error(target, "failed to verify task queue", error))?;
     if gap.is_some() {
-        return Err(task_rejected(format!(
+        return Err(task_move_invalid(format!(
             "task queue for {assignee} is not contiguous"
         )));
     }
@@ -901,7 +908,7 @@ fn write_queue_positions(
 ) -> Result<(), AtmError> {
     for (index, task_id) in order.iter().enumerate() {
         let position =
-            i64::try_from(index + 1).map_err(|_| task_rejected("task queue too large"))?;
+            i64::try_from(index + 1).map_err(|_| task_move_invalid("task queue too large"))?;
         connection
             .execute(
                 "UPDATE tasks SET position=?3 WHERE team=?1 AND task_id=?2",
@@ -937,9 +944,9 @@ fn acknowledge_assignment(
     let requested = Message {
         team: record.team.clone(),
         agent: row.assignee.clone(),
-        message_key: message_key
-            .parse()
-            .map_err(|error| task_rejected(format!("invalid assignment message key: {error}")))?,
+        message_key: message_key.parse().map_err(|error| {
+            task_move_invalid(format!("invalid assignment message key: {error}"))
+        })?,
         envelope: record.envelope.clone(),
     };
     let mut assignment = load_existing_message(&requested, connection, target)?;

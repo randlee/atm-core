@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use atm_storage::contract::{Message, MessageKey};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope};
 use atm_storage::{
-    AgentName, IsoTimestamp, MemberKey, MoveTarget, QueuePosition, ReminderOutcome,
+    AgentName, AtmErrorCode, IsoTimestamp, MemberKey, MoveTarget, QueuePosition, ReminderOutcome,
     TaskCloseOutcome, TaskEventKind, TaskId, TaskOp, TaskState, TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
@@ -275,6 +275,7 @@ fn assign_before_invalid_target_is_rejected() {
         task_id: "T1".parse().unwrap(),
     });
     let error = h.save(&message).expect_err("invalid target");
+    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
     assert!(error.message().contains("not an open queued task"));
     assert!(
         h.events("T2")
@@ -290,6 +291,7 @@ fn start_when_another_task_active_is_rejected_active_elsewhere() {
     h.assign("T2", "alice", "lead", None);
     h.start("T1", "alice").unwrap();
     let error = h.start("T2", "alice").expect_err("active conflict");
+    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
     assert!(error.message().contains("already has an active task"));
     assert_eq!(h.row("T2").state, TaskState::Assigned);
 }
@@ -388,8 +390,10 @@ fn writer_close_unknown_task_is_atomic() {
         reason: Some("done".to_string()),
     });
     let key = report.message_key.clone();
-    h.save(&report)
+    let error = h
+        .save(&report)
         .expect_err("unknown task must fail atomically");
+    assert_eq!(error.code(), AtmErrorCode::TaskNotFound);
     assert!(
         h.backend
             .message_store()
@@ -436,6 +440,7 @@ fn writer_close_by_third_party_is_rejected() {
         reason: Some("reason".to_owned()),
     });
     let error = h.save(&report).expect_err("third party");
+    assert_eq!(error.code(), AtmErrorCode::TaskNotCounterparty);
     assert!(error.message().contains("not assigned to or by"));
     assert!(error.message().contains("report delivered"));
     assert_eq!(h.row("T1"), before);
@@ -466,6 +471,7 @@ fn writer_stale_counterparty_is_rejected() {
         reason: Some("reason".to_owned()),
     });
     let error = h.save(&report).expect_err("stale recipient");
+    assert_eq!(error.code(), AtmErrorCode::TaskStaleCounterparty);
     assert!(error.message().contains("no longer the counterparty"));
     assert!(error.message().contains("report delivered"));
     assert_eq!(h.row("T1"), before);

@@ -120,6 +120,11 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::TeamNotFound
         | AtmErrorCode::AgentNotFound
         | MessageValidationFailed
+        | AtmErrorCode::TaskNotFound
+        | AtmErrorCode::TaskAlreadyClosed
+        | AtmErrorCode::TaskNotCounterparty
+        | AtmErrorCode::TaskStaleCounterparty
+        | AtmErrorCode::TaskMoveInvalid
         | MessageIdConflict
         | SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
@@ -1074,6 +1079,15 @@ mod adapter_tests {
             exit_code_for_atm_error(&AtmError::validation("bad input")),
             3
         );
+        for code in [
+            AtmErrorCode::TaskNotFound,
+            AtmErrorCode::TaskAlreadyClosed,
+            AtmErrorCode::TaskNotCounterparty,
+            AtmErrorCode::TaskStaleCounterparty,
+            AtmErrorCode::TaskMoveInvalid,
+        ] {
+            assert_eq!(exit_code_for_atm_error(&AtmError::new(code, "rejected")), 3);
+        }
         assert_eq!(
             exit_code_for_atm_error(&AtmError::new(
                 AtmErrorCode::TemplateLoadFailed,

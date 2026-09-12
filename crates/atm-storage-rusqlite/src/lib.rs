@@ -1175,6 +1175,7 @@ mod tests {
             },
         )
         .expect_err("foreign member target");
+        assert_eq!(error.code(), atm_storage::AtmErrorCode::TaskMoveInvalid);
         assert!(error.message().contains("not an open queued task"));
         let events = backend
             .task_store()
@@ -1251,6 +1252,13 @@ mod tests {
             .save_message(&first_close)
             .expect("first close");
 
+        let move_error =
+            move_task(&backend, "T1", MoveTarget::End).expect_err("complete task cannot move");
+        assert_eq!(
+            move_error.code(),
+            atm_storage::AtmErrorCode::TaskAlreadyClosed
+        );
+
         // Complete rows are intercepted by the writer before the state
         // authority's deliberately unreachable complete-row Start arm.
         let mut late_start = message("atm:late-start", "start");
@@ -1261,6 +1269,10 @@ mod tests {
             .message_store()
             .save_message(&late_start)
             .expect_err("complete task cannot start");
+        assert_eq!(
+            start_error.code(),
+            atm_storage::AtmErrorCode::TaskAlreadyClosed
+        );
         assert!(start_error.message().contains("no open task T1"));
 
         let events_before = backend
