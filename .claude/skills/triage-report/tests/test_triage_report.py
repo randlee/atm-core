@@ -673,3 +673,42 @@ def test_github_state_prefers_open_replay_and_retains_merged_history(tmp_path, m
     assert state["AICH-S1"]["merged"] is False
     assert state["AICH-S1"]["ci_status"] == "fail"
     assert [attempt["pr_number"] for attempt in state["AICH-S1"]["delivery_attempts"]] == [631, 640]
+
+
+def test_completed_sprint_awaiting_qa_dispatch_renders_with_a_warning(tmp_path):
+    """Dev complete with no QA run yet is "QA not dispatched": the report still
+    renders (it is the status surface and must never be the thing that fails)
+    and the row carries a warning naming the missing evidence-master row."""
+    root, qa_path = _inputs(tmp_path)
+    runs = json.loads(qa_path.read_text())["runs"]
+    qa_path.write_text(json.dumps({"runs": [run for run in runs if run["aich_sprint"] != "AICH-S1"]}))
+    report = triage_report.build_report(root, "AICH", qa_path)
+    first = report["rows"][0]
+    assert first["dev_status"] == "done"
+    assert first["qa"]["run_id"] is None
+    assert first["qa_icon"] == "—"
+    assert first["data_status"] == "warning"
+    assert [item["code"] for item in first["diagnostics"]] == ["TTL.QA_RUN_MISSING"]
+    assert not any(gap.startswith("AICH-S1:") for gap in report["data_gaps"])
+    assert not any(item["code"] == "TTL.QA_RUN_MISSING" for item in report["remediations"])
+
+
+def test_qa_run_assigned_without_verdict_renders_in_flight(tmp_path):
+    """A QA assignment row appended at dispatch (no result yet) is QA in
+    flight: shown as in progress, never as a failure or a data gap."""
+    root, qa_path = _inputs(tmp_path)
+    master = json.loads(qa_path.read_text())
+    master["runs"] = [run for run in master["runs"] if run["aich_sprint"] != "AICH-S1"] + [
+        {"run_id": "S1-QA2", "aich_sprint": "AICH-S1", "run_type": "qa",
+         "assignment_time_utc": "2026-07-25T06:00:00Z", "result_time_utc": None,
+         "verdict": "", "pass": None, "blockers": None, "important": None, "minor": None},
+    ]
+    qa_path.write_text(json.dumps(master))
+    report = triage_report.build_report(root, "AICH", qa_path)
+    first = report["rows"][0]
+    assert first["qa"]["run_id"] == "S1-QA2"
+    assert first["qa_icon"] == "🌀"
+    assert first["data_status"] == "ok"
+    assert "| AICH-S1 (AI.21-pre) | ✅ | 🌀 | ✅ | #1 🏁 |" in report["table"]
+    assert "QA: 🌀 PENDING" in report["detailed_rows"]
+    assert not any(gap.startswith("AICH-S1:") for gap in report["data_gaps"])
