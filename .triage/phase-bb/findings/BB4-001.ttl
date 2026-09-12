@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB4-001>
+  a triage:Finding ;
+  triage:findingId "BB4-001" ;
+  triage:title "No colima integration evidence for the three named BB.4 integration tests" ;
+  triage:description "quality-mgr BB4-QA1-1789246000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1441#issuecomment-5648574635, 2026-09-12T20:43:40Z; ATM-QA-002, req-qa; independently corroborated by quality-mgr's own search), reviewed at e9731c06e. The sprint doc's Required Validation section requires 'colima fixture run with the three integration tests', naming exactly three: task_start_line_reaches_assigner_at_write_time, task_start_out_of_order_reorders_queue, prompted_task_never_started_stays_assigned_and_keeps_reminding. All three exist as code (crates/atm/src/commands/task/tests/task_start.rs:165,184; crates/atm-http-runtime/src/herdr_queue_wake/tests/herdr_queue_ephemeral.rs:573) and pass, but only as in-process fixture tests, never against the colima hermes testbed. site/reports/ contains no BB.4-specific colima evidence -- the only colima reports present belong to BB.3's unrelated colima-hermes-skills procedure. PR #1441's body makes no claim of a colima run having been performed. Per feedback_integration_tests_cover_every_roster_shape and feedback_integration_evidence_in_site_reports conventions, an in-process fixture substituting for a named colima integration test without an evidence artifact is a gap, not a pass." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "site/reports/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:43:40Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: run the three named tests against the colima hermes testbed and commit the resulting evidence under site/reports/, or obtain an explicit lead ruling narrowing this requirement. Routed to cipher's BB4-FIX-R1-1789249000 (fenix, queued behind BB3-FIX-R2), promote_to_branch fix/bb4-qa1-r1." ;
+  triage:foundIn triage:BB4 ;
+  triage:foundAt "2026-09-12T20:43:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB4-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB4-001/1>
+  a triage:Occurrence ;
+  triage:file "site/reports/" ;
+  triage:line 1 ;
+  triage:snippet "no colima-testbed evidence artifact exists for the three named BB.4 integration tests; they run only as in-process fixture tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb4-task-start" ;
+  triage:headSha "e9731c06e" ;
+  triage:occursIn <urn:atm:triage:worktree/BB4-001/1> .
+
+<urn:atm:triage:worktree/BB4-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1441, feature/bb4-task-start" ;
+  triage:branch "feature/bb4-task-start" ;
+  triage:headSha "e9731c06e" ;
+  triage:orderIndex 1 .

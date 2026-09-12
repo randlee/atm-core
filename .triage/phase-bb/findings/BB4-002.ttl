@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB4-002>
+  a triage:Finding ;
+  triage:findingId "BB4-002" ;
+  triage:title "ADR-062's active x Started transition-table row is stale, still describing the old resend behavior" ;
+  triage:description "quality-mgr BB4-QA1-1789246000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1441#issuecomment-5648574635, 2026-09-12T20:43:40Z; I1, schema-reviewer), reviewed at e9731c06e. docs/adr/ADR-062-task-state-machine.md:122-127's States and events transition table was not updated for this sprint's new hard-reject behavior. The D4 Phase-BB-amendment paragraph (lines 134-141) landed correctly and matches the sprint doc verbatim, but the table above it still shows active x Started -> active (resend) -- no event, which is now stale: actual behavior (per D2 and duplicate_start_is_rejected_nothing_delivered_one_rejected_row) is a hard reject with ATM_TASK_ALREADY_ACTIVE, not a silent resend. Doc-drift within the same ADR, not a functional defect." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/adr/ADR-062-task-state-machine.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:43:40Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB4-FIX-R1-1789249000 (fenix, queued behind BB3-FIX-R2). Fix: update the active x Started transition-table row to state the hard-reject / ATM_TASK_ALREADY_ACTIVE behavior, matching the D4 amendment paragraph already below it." ;
+  triage:foundIn triage:BB4 ;
+  triage:foundAt "2026-09-12T20:43:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB4-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB4-002/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-062-task-state-machine.md" ;
+  triage:line 122 ;
+  triage:snippet "transition table row for active x Started still says 'active (resend) -- no event', contradicting the hard-reject/ATM_TASK_ALREADY_ACTIVE behavior described in the D4 amendment paragraph just below it" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb4-task-start" ;
+  triage:headSha "e9731c06e" ;
+  triage:occursIn <urn:atm:triage:worktree/BB4-002/1> .
+
+<urn:atm:triage:worktree/BB4-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1441, feature/bb4-task-start" ;
+  triage:branch "feature/bb4-task-start" ;
+  triage:headSha "e9731c06e" ;
+  triage:orderIndex 1 .
