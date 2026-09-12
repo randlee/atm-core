@@ -16,8 +16,9 @@ use atm_core::observability::NullObservability;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
-use crate::herdr_queue_wake::run_blocking;
+use crate::herdr_queue_wake::herdr_request_deadline;
 use crate::herdr_task_disposition::EpisodeKind;
+use crate::router_support::BoundedBlockingBridge;
 
 pub(crate) const HERDR_NOTIFY_DEADLINE: Duration = Duration::from_secs(5);
 pub(crate) const ESCALATION_RECIPIENT_CAP: usize = MAX_ESCALATION_RECIPIENTS;
@@ -88,6 +89,13 @@ impl EscalationState {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         episodes.insert(member.clone(), episode) != Some(episode)
     }
+
+    pub(crate) fn hold_targets_unavailable(&self, member: &MemberKey) {
+        self.episodes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(member);
+    }
 }
 
 /// The durable key shared by all escalation writers and mailbox suppression.
@@ -132,6 +140,7 @@ pub(crate) async fn episode_already_reported(
     reason = "the escalation boundary keeps routing and durable-suppression context explicit"
 )]
 pub(crate) async fn escalate_mail(
+    blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     daemon_home: &Path,
@@ -140,18 +149,15 @@ pub(crate) async fn escalate_mail(
     mail_body: &str,
     kind: EscalationKind,
     suppress_since: Option<IsoTimestamp>,
-) -> EscalationOutcome {
-    let targets = match load_escalation_targets(runtime, task_store, team).await {
+) -> Result<EscalationOutcome, AtmError> {
+    let targets = match load_escalation_targets(blocking_bridge, runtime, task_store, team).await {
         Ok(targets) => targets,
         Err(error) => {
             log_target_load_error(team, &error);
-            return EscalationOutcome::default();
+            return Err(error);
         }
     };
-    let mut outcome = EscalationOutcome {
-        lead: targets.lead.clone(),
-        ..Default::default()
-    };
+    let mut outcome = EscalationOutcome::default();
     let reader = suppress_since.and_then(|_| match runtime.async_mailbox_reader() {
         Ok(reader) => Some(reader),
         Err(error) => {
@@ -165,20 +171,25 @@ pub(crate) async fn escalate_mail(
             None
         }
     });
-    let mut recipients = targets.recipients;
-    if let Some(lead) = targets.lead {
-        recipients.insert(
-            0,
+    let leads = match kind {
+        EscalationKind::TaskStalled => targets.leads,
+        _ if targets.leads.len() == 1 => targets.leads,
+        _ => Vec::new(),
+    };
+    let recipients = leads
+        .into_iter()
+        .map(|lead| {
             format!("{lead}@{team}")
                 .parse()
-                .expect("validated lead and team form a valid local address"),
-        );
-    }
+                .expect("validated lead and team form a valid local address")
+        })
+        .chain(targets.recipients);
     for recipient in recipients {
         if should_suppress(reader.as_deref(), &recipient, team, summary, suppress_since).await {
             continue;
         }
         match write_escalation_mail_with_summary(
+            blocking_bridge,
             runtime,
             daemon_home,
             team,
@@ -188,25 +199,19 @@ pub(crate) async fn escalate_mail(
         )
         .await
         {
-            Ok(message_id)
-                if outcome.lead_write.is_none()
-                    && recipient.to_string()
-                        == outcome
-                            .lead
-                            .as_ref()
-                            .map(|lead| format!("{lead}@{team}"))
-                            .unwrap_or_default() =>
-            {
-                outcome.lead_write = Some(message_id)
+            Ok(message_id) => {
+                if outcome.audit_delivery.is_none() {
+                    outcome.audit_delivery = Some((recipient.agent().clone(), message_id));
+                }
+                outcome.recipients_written = outcome.recipients_written.saturating_add(1);
             }
-            Ok(_) => outcome.recipients_written = outcome.recipients_written.saturating_add(1),
             Err(error) => {
                 outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_write", outcome = "failed", kind = kind.as_str(), recipient = %recipient, error = %error, "Escalation mail write failed");
             }
         }
     }
-    outcome
+    Ok(outcome)
 }
 
 fn log_target_load_error(team: &TeamName, error: &AtmError) {
@@ -251,8 +256,7 @@ async fn should_suppress(
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct EscalationOutcome {
-    pub lead: Option<AgentName>,
-    pub lead_write: Option<atm_core::schema::AtmMessageId>,
+    pub audit_delivery: Option<(AgentName, atm_core::schema::AtmMessageId)>,
     pub recipients_written: u32,
     pub recipients_failed: u32,
 }
@@ -260,63 +264,54 @@ pub(crate) struct EscalationOutcome {
 impl EscalationOutcome {
     #[must_use]
     pub fn reached_anyone(&self) -> bool {
-        self.lead_write.is_some() || self.recipients_written > 0
+        self.recipients_written > 0
     }
 }
 
 struct EscalationTargets {
-    lead: Option<AgentName>,
+    leads: Vec<AgentName>,
     recipients: Vec<atm_core::address::AgentAddress>,
 }
 
 async fn load_escalation_targets(
+    blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     team: &TeamName,
 ) -> Result<EscalationTargets, AtmError> {
     let roster_store = runtime.shared_roster_store_arc();
-    let roster = run_blocking({
-        let roster_store = Arc::clone(&roster_store);
-        let team = team.clone();
-        move || roster_store.load_roster(&team)
-    })
-    .await?;
+    let roster = blocking_bridge
+        .run(herdr_request_deadline(), {
+            let roster_store = Arc::clone(&roster_store);
+            let team = team.clone();
+            move || roster_store.load_roster(&team)
+        })
+        .await?;
     let leads: Vec<_> = roster
         .members
         .iter()
         .filter(|member| member.agent_type == atm_core::schema::AgentType::Lead)
         .map(|member| member.agent_name.clone())
         .collect();
-    let lead = (leads.len() == 1).then(|| leads[0].clone());
-    let recipients = load_escalation_recipients(task_store, team).await;
-    Ok(EscalationTargets { lead, recipients })
+    let recipients = load_escalation_recipients(blocking_bridge, task_store, team).await?;
+    Ok(EscalationTargets { leads, recipients })
 }
 
 async fn load_escalation_recipients(
+    blocking_bridge: &BoundedBlockingBridge,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     team: &TeamName,
-) -> Vec<atm_core::address::AgentAddress> {
+) -> Result<Vec<atm_core::address::AgentAddress>, AtmError> {
     let recipients = match task_store {
-        Some(store) => match run_blocking({
-            let store = Arc::clone(store);
-            let team = team.clone();
-            move || store.effective_escalation_recipients(&team)
-        })
-        .await
-        {
-            Ok(recipients) => recipients,
-            Err(error) => {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "escalation_recipient_read",
-                    outcome = "failed",
-                    team = %team,
-                    error = %error,
-                    "Escalation recipient read failed"
-                );
-                Vec::new()
-            }
-        },
+        Some(store) => {
+            blocking_bridge
+                .run(herdr_request_deadline(), {
+                    let store = Arc::clone(store);
+                    let team = team.clone();
+                    move || store.effective_escalation_recipients(&team)
+                })
+                .await?
+        }
         None => Vec::new(),
     };
     if recipients.len() > ESCALATION_RECIPIENT_CAP {
@@ -329,13 +324,14 @@ async fn load_escalation_recipients(
             cap = ESCALATION_RECIPIENT_CAP,
             "Escalation recipient list capped for this tick"
         );
-        recipients[..ESCALATION_RECIPIENT_CAP].to_vec()
+        Ok(recipients[..ESCALATION_RECIPIENT_CAP].to_vec())
     } else {
-        recipients
+        Ok(recipients)
     }
 }
 
 async fn write_escalation_mail_with_summary(
+    blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
     daemon_home: &Path,
     team: &TeamName,
@@ -349,24 +345,25 @@ async fn write_escalation_mail_with_summary(
     let recipient = recipient.to_string();
     let team = team.clone();
     let summary = summary.to_owned();
-    run_blocking(move || {
-        let request = WriteRequest::new(
-            daemon_home.clone(),
-            daemon_home,
-            DAEMON_ACTOR.clone(),
-            &recipient,
-            team,
-            SendMessageSource::Inline(body),
-            Some(summary),
-            false,
-            None,
-            false,
-        )?
-        .with_nudge_mode(NudgeMode::Deferred);
-        write_mail_with_runtime(request, &NullObservability, &runtime)
-            .map(|outcome| outcome.persisted_message_id())
-    })
-    .await
+    blocking_bridge
+        .run(herdr_request_deadline(), move || {
+            let request = WriteRequest::new(
+                daemon_home.clone(),
+                daemon_home,
+                DAEMON_ACTOR.clone(),
+                &recipient,
+                team,
+                SendMessageSource::Inline(body),
+                Some(summary),
+                false,
+                None,
+                false,
+            )?
+            .with_nudge_mode(NudgeMode::Immediate);
+            write_mail_with_runtime(request, &NullObservability, &runtime)
+                .map(|outcome| outcome.persisted_message_id())
+        })
+        .await
 }
 
 #[cfg(test)]

@@ -1,6 +1,44 @@
+#![cfg(test)]
+
 // Behavioral coverage for the BA.5 ephemeral queue contract.
 
 use super::*;
+
+async fn stalled_escalation_count(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &str,
+) -> usize {
+    runtime
+        .async_mailbox_reader()
+        .expect("mailbox reader")
+        .list_messages(
+            atm_core::boundary::MailboxScope::new(
+                team.clone(),
+                agent.parse().expect("mailbox agent"),
+            ),
+            atm_storage::MessageQuery {
+                team: team.clone(),
+                agent: agent.parse().expect("query agent"),
+                sender: Some("atm-daemon".parse().expect("daemon")),
+                task_id: None,
+                limit: None,
+            },
+            atm_core::boundary::ReadDeadline::new(std::time::Duration::from_secs(1))
+                .expect("deadline"),
+        )
+        .await
+        .expect("read escalation mail")
+        .iter()
+        .filter(|message| {
+            message
+                .envelope
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.starts_with("escalation:lead_notified:"))
+        })
+        .count()
+}
 
 async fn task_started_receipt_count(
     runtime: &LocalServiceRuntime,
@@ -8,9 +46,7 @@ async fn task_started_receipt_count(
     task_id: &TaskId,
 ) -> usize {
     let sender: atm_core::types::AgentName = "sender".parse().expect("sender");
-    let reader = runtime
-        .async_mailbox_reader()
-        .expect("mailbox reader");
+    let reader = runtime.async_mailbox_reader().expect("mailbox reader");
     let messages = reader
         .list_messages(
             atm_core::boundary::MailboxScope::new(team.clone(), sender.clone()),
@@ -63,8 +99,8 @@ async fn task_prompt_waits_while_queue_item_open_across_ticks() {
     );
     assert_eq!(
         pump.stats().task_reminders,
-        0,
-        "the open queue item holds the task"
+        1,
+        "the delivered queue prompt counts for the open task"
     );
 
     for seconds in [5, 10, 55] {
@@ -124,19 +160,19 @@ async fn open_mail_set_is_read_each_tick_not_cached() {
     pump.tick_once().await;
     assert_eq!(
         pump.stats().task_reminders,
-        0,
-        "the queue item is still open"
+        1,
+        "the delivered queue prompt counts for the open task"
     );
     close_message(root.path(), &runtime, &key, queue_message_id);
 
     *now.lock().expect("test clock lock") =
-        IsoTimestamp::from_str("2030-01-01T00:00:05Z").expect("test timestamp");
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
     assert_eq!(
         pump.stats().task_reminders,
         1,
-        "the next tick observes the item as read"
+        "the next due tick observes the item as read"
     );
     assert!(
         prompt_texts(&fake)
@@ -156,14 +192,17 @@ async fn unread_queue_item_is_reprompted_every_interval() {
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
     let pending_store = runtime.pending_nudge_store().expect("pending store");
 
-    for (tick, timestamp) in [
-        "2020-01-01T00:00:00Z",
-        "2020-01-01T00:01:00Z",
-        "2020-01-01T00:02:00Z",
+    for (tick, (timestamp, next_due)) in [
+        ("2030-01-01T00:00:00Z", "2030-01-01T00:01:00+00:00"),
+        ("2030-01-01T00:01:00Z", "2030-01-01T00:02:00+00:00"),
+        ("2030-01-01T00:02:00Z", "2030-01-01T00:03:00+00:00"),
     ]
     .into_iter()
     .enumerate()
     {
+        if tick > 0 {
+            make_failed_attempt_due(pending_store.as_ref(), &key, &message_id);
+        }
         *now.lock().expect("test clock lock") = timestamp.parse().expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
@@ -173,10 +212,7 @@ async fn unread_queue_item_is_reprompted_every_interval() {
             "one prompt at tick {tick}"
         );
         let (marker, attempts) = pending_state(root.path(), &key, message_id);
-        assert!(
-            marker.is_some(),
-            "the unread item stays pending after tick {tick}"
-        );
+        assert_eq!(marker.as_deref(), Some(next_due));
         assert_eq!(
             attempts, 0,
             "successful reminders do not consume retry attempts"
@@ -184,7 +220,7 @@ async fn unread_queue_item_is_reprompted_every_interval() {
     }
 
     *now.lock().expect("test clock lock") =
-        IsoTimestamp::from_str("2020-01-01T00:02:10Z").expect("test timestamp");
+        IsoTimestamp::from_str("2030-01-01T00:02:10Z").expect("test timestamp");
     close_message(root.path(), &runtime, &key, message_id);
     assert_eq!(pending_state(root.path(), &key, message_id), (None, 0));
     for _ in 0..100 {
@@ -211,7 +247,7 @@ async fn requires_ack_message_reminded_until_acked() {
     let message_id =
         queue_requires_ack_message(root.path(), &runtime, key.team(), key.agent().as_str());
     let now = Arc::new(Mutex::new(
-        IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
 
@@ -226,8 +262,20 @@ async fn requires_ack_message_reminded_until_acked() {
     close_message(root.path(), &runtime, &key, message_id);
     assert!(pending_state(root.path(), &key, message_id).0.is_some());
 
+    assert_eq!(
+        pending_state(root.path(), &key, message_id).0.as_deref(),
+        Some("2030-01-01T00:01:00+00:00")
+    );
+    make_failed_attempt_due(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .as_ref(),
+        &key,
+        &message_id,
+    );
     *now.lock().expect("test clock lock") =
-        IsoTimestamp::from_str("2020-01-01T00:01:00Z").expect("test timestamp");
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
     assert_eq!(
@@ -235,13 +283,17 @@ async fn requires_ack_message_reminded_until_acked() {
         2,
         "read-but-unacked item is rediscovered"
     );
+    assert_eq!(
+        pending_state(root.path(), &key, message_id).0.as_deref(),
+        Some("2030-01-01T00:02:00+00:00")
+    );
 
     add_roster_member(&runtime, key.team(), "sender");
     ack_task_assignment(root.path(), &runtime, key.team(), message_id);
     assert_eq!(pending_state(root.path(), &key, message_id), (None, 0));
     for seconds in 0..100 {
         *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str(&format!("2020-01-01T00:01:{:02}Z", seconds.min(59)))
+            IsoTimestamp::from_str(&format!("2030-01-01T00:01:{:02}Z", seconds.min(59)))
                 .expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
@@ -254,7 +306,7 @@ async fn requires_ack_message_reminded_until_acked() {
 }
 
 #[tokio::test]
-async fn bare_cli_pull_closes_item() {
+async fn bare_cli_pull_preserves_item_until_member_reads() {
     let fixture = crate::storage_and_nudge_router::tests::bare_cli_pull_fixture();
     let member = fixture.member.clone();
     let router = fixture.router;
@@ -271,8 +323,7 @@ async fn bare_cli_pull_closes_item() {
         )
         .await
         .expect("authorized queue-get");
-    let atm_core::protocol::ResponseEnvelope::QueueGetNext(response) = response.into_inner()
-    else {
+    let atm_core::protocol::ResponseEnvelope::QueueGetNext(response) = response.into_inner() else {
         panic!("expected a QueueGetNext response");
     };
     assert_eq!(response.messages.len(), 1);
@@ -283,7 +334,7 @@ async fn bare_cli_pull_closes_item() {
             .list_pending_members()
             .expect("list pending members")
             .contains(&member),
-        "queue_get_next drains the FIFO but preserves the leased marker"
+        "queue_get_next is transport only and preserves the leased marker"
     );
 
     let message_id_text = fixture.message_id.to_string();
@@ -368,7 +419,11 @@ async fn handoff_started_task_closed_without_read_acknowledges_assignment() {
         IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert_eq!(prompt_texts(&fake).len(), 1, "closed assignment is not nudged again");
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        1,
+        "closed assignment is not nudged again"
+    );
 }
 
 #[tokio::test]
@@ -382,7 +437,11 @@ async fn mail_and_task_share_one_prompt_per_tick() {
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
     assert_eq!(pump.stats().prompted, 1);
-    assert_eq!(pump.stats().task_reminders, 0, "mail wins the tick");
+    assert_eq!(
+        pump.stats().task_reminders,
+        1,
+        "the mail prompt also counts for the open task"
+    );
     assert_eq!(prompt_texts(&fake).len(), 1);
     assert!(!prompt_texts(&fake)[0].contains(task_id.as_str()));
 
@@ -396,12 +455,137 @@ async fn mail_and_task_share_one_prompt_per_tick() {
 }
 
 #[tokio::test]
+async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
+    let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let task_id: TaskId = "BA5-UNREAD-STALL".parse().expect("task id");
+    let assignment_id = queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        task_id.clone(),
+    );
+    add_roster_member(&runtime, key.team(), "sender");
+    add_lead_roster_member(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD);
+    let now = Arc::new(Mutex::new(
+        IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+    ));
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+    let store = runtime.task_store().expect("task store");
+
+    for minute in 0..10 {
+        *now.lock().expect("test clock lock") =
+            IsoTimestamp::from_str(&format!("2020-01-01T00:{minute:02}:00Z"))
+                .expect("test timestamp");
+        if minute > 0 {
+            queue_idle_result(&fake, &key);
+        }
+        pump.tick_once().await;
+        let row = store
+            .load_task(key.team(), &task_id)
+            .expect("load task")
+            .expect("task row");
+        assert_eq!(row.reminder_count, minute + 1);
+        assert_eq!(row.lead_notified_count, 0);
+    }
+    assert_eq!(prompt_texts(&fake).len(), 10);
+
+    *now.lock().expect("test clock lock") =
+        IsoTimestamp::from_str("2020-01-01T00:10:00Z").expect("test timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    let stalled = store
+        .load_task(key.team(), &task_id)
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(stalled.reminder_count, 10);
+    assert_eq!(stalled.lead_notified_count, 1);
+    assert_eq!(prompt_texts(&fake).len(), 10);
+    assert!(pending_state(root.path(), &key, assignment_id).0.is_some());
+    assert_eq!(
+        stalled_escalation_count(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD,).await,
+        1
+    );
+
+    *now.lock().expect("test clock lock") =
+        IsoTimestamp::from_str("2020-01-01T00:11:00Z").expect("test timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    let terminal = store
+        .load_task(key.team(), &task_id)
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(terminal.reminder_count, 10);
+    assert_eq!(terminal.lead_notified_count, 1);
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        11,
+        "ordinary mail remains deliverable"
+    );
+    assert_eq!(
+        stalled_escalation_count(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD,).await,
+        1
+    );
+}
+
+#[tokio::test]
+async fn unrelated_mail_prompt_does_not_start_the_assigned_head_task() {
+    let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let _plain = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+    let task_id: TaskId = "BA5-UNSEEN-HEAD".parse().expect("task id");
+    let _assignment = queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        task_id.clone(),
+    );
+    add_roster_member(&runtime, key.team(), "sender");
+    let now = Arc::new(Mutex::new(
+        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
+    ));
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, now);
+
+    pump.tick_once().await;
+
+    let store = runtime.task_store().expect("task store");
+    let head = store
+        .load_task(key.team(), &task_id)
+        .expect("load head")
+        .expect("head task");
+    assert_eq!(head.state, TaskState::Assigned);
+    assert_eq!(
+        head.reminder_count, 1,
+        "plain mail still counts as a reminder"
+    );
+    assert!(
+        store
+            .list_task_events(key.team(), &task_id, Some(key.agent()))
+            .expect("task events")
+            .iter()
+            .all(|event| event.event != atm_storage::TaskEventKind::Started)
+    );
+    assert_eq!(
+        task_started_receipt_count(&runtime, key.team(), &task_id).await,
+        0
+    );
+}
+
+#[tokio::test]
 async fn deferred_assignment_handoff_starts_head_task_once() {
     let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
     clear_pending_markers(root.path(), &runtime, &key);
     let first: TaskId = "BA5-HEAD-TASK".parse().expect("task id");
     let second: TaskId = "BA5-NONHEAD-TASK".parse().expect("task id");
-    queue_task_message(root.path(), &runtime, key.team(), key.agent().as_str(), first.clone());
+    queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        first.clone(),
+    );
     queue_task_message(
         root.path(),
         &runtime,
@@ -440,6 +624,16 @@ async fn deferred_assignment_handoff_starts_head_task_once() {
         task_started_receipt_count(&runtime, key.team(), &first).await,
         1,
         "the assigner receives one task_started receipt"
+    );
+    assert!(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .list_pending_members()
+            .expect("pending members")
+            .iter()
+            .any(|member| member.agent().as_str() == "sender"),
+        "the task-start receipt uses deferred delivery for the assigner"
     );
 
     for _ in 0..20 {

@@ -27,9 +27,7 @@ use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 use crate::commands::caller_context::{
     CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
 };
-use crate::commands::send::{
-    SendCommand, TaskSendOptions, preflight_daemon_api, validate_local_task_target,
-};
+use crate::commands::send::{SendCommand, TaskSendOptions, preflight_daemon_api};
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
 };
@@ -59,6 +57,8 @@ enum TaskSubcommand {
 struct TaskListCommand {
     #[arg(long)]
     all: bool,
+    #[arg(long, value_name = "N", conflicts_with = "all")]
+    limit: Option<usize>,
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -68,6 +68,10 @@ struct TaskListCommand {
 #[derive(Debug, Args)]
 struct TaskEventsCommand {
     task_id: TaskId,
+    #[arg(long, value_name = "N", conflicts_with = "all")]
+    limit: Option<usize>,
+    #[arg(long)]
+    all: bool,
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -263,8 +267,7 @@ impl TaskAssignCommand {
             current_dir.clone(),
             NudgeMode::Deferred,
             None,
-        )
-        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        )?;
         request.placement = placement;
         preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task assign").await?;
         composition.send(request).await?;
@@ -304,6 +307,7 @@ impl TaskCloseCommand {
             caller.caller_identity.clone(),
             caller.caller_team.clone(),
             None,
+            Some(&self.task_id),
         )?;
         let rows = composition.list(query).await?.task_rows;
         let row = match preflight_close(rows, &self.task_id) {
@@ -330,7 +334,7 @@ impl TaskCloseCommand {
                 vars: None,
             }
         };
-        let request = SendCommand::for_task(report.into_send_options(
+        let mut request = SendCommand::for_task(report.into_send_options(
             recipient.to_string(),
             self.caller,
             None,
@@ -343,11 +347,11 @@ impl TaskCloseCommand {
             outcome,
             reason,
         )?;
-        validate_local_task_target(&request)?;
+        atm_core::send::validate_task_request(&mut request)?;
         let result = composition
             .send(request)
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(anyhow::Error::from)?;
         if self.json {
             Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
         } else if let Some(closed) = result.already_closed {
@@ -363,6 +367,15 @@ impl TaskCloseCommand {
 }
 
 impl TaskListCommand {
+    fn page(&self) -> Result<TaskPage, atm_core::error::AtmError> {
+        if self.all {
+            Ok(TaskPage::All)
+        } else {
+            self.limit
+                .map_or_else(|| Ok(TaskPage::default_bounded()), TaskPage::bounded)
+        }
+    }
+
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("task list")?;
         let caller = resolve_context(&self.caller)?;
@@ -385,7 +398,7 @@ impl TaskListCommand {
         let contract = TaskListQuery {
             team: caller.caller_team.clone(),
             assignee: (!self.all).then_some(caller.caller_identity.clone()),
-            page: TaskPage::default_bounded(),
+            page: self.page()?,
         };
         preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task list").await?;
         let outcome = composition
@@ -395,9 +408,10 @@ impl TaskListCommand {
                 caller.caller_identity.clone(),
                 contract.team.clone(),
                 contract.assignee.clone(),
+                None,
             )?)
             .await?;
-        let rows = select_task_rows(outcome.task_rows, &contract);
+        let selected = select_task_rows(outcome.task_rows, &contract);
         let runtime = if self.all {
             composition
                 .doctor(DoctorQuery {
@@ -413,11 +427,23 @@ impl TaskListCommand {
         } else {
             None
         };
-        render_task_rows_output(&rows, self.json, self.all, runtime.as_ref())
+        let output =
+            render_task_rows_output(&selected.rows, self.json, self.all, runtime.as_ref())?;
+        print_omitted_rows(selected.omitted);
+        Ok(output)
     }
 }
 
 impl TaskEventsCommand {
+    fn page(&self) -> Result<TaskPage, atm_core::error::AtmError> {
+        if self.all {
+            Ok(TaskPage::All)
+        } else {
+            self.limit
+                .map_or_else(|| Ok(TaskPage::default_bounded()), TaskPage::bounded)
+        }
+    }
+
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("task events")?;
         let caller = resolve_context(&self.caller)?;
@@ -441,7 +467,7 @@ impl TaskEventsCommand {
             team: caller.caller_team.clone(),
             task_id: self.task_id.clone(),
             assignee: None,
-            page: TaskPage::default_bounded(),
+            page: self.page()?,
         };
         preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task events").await?;
         let ledger = TaskLedgerQuery::Events {
@@ -464,8 +490,16 @@ impl TaskEventsCommand {
         )?
         .with_task_ledger(ledger.clone());
         let outcome = composition.list(query).await?;
-        let rows = select_task_events(outcome.task_event_rows, &contract);
-        render_task_events(&rows, self.json)
+        let selected = select_task_events(outcome.task_event_rows, &contract);
+        let output = render_task_events(&selected.rows, self.json)?;
+        print_omitted_rows(selected.omitted);
+        Ok(output)
+    }
+}
+
+fn print_omitted_rows(omitted: usize) {
+    if omitted > 0 {
+        eprintln!("{omitted} more rows omitted (--all)");
     }
 }
 
@@ -550,6 +584,7 @@ fn task_list_request(
     caller_identity: atm_core::types::AgentName,
     caller_team: TeamName,
     member: Option<atm_core::types::AgentName>,
+    task_id: Option<&TaskId>,
 ) -> Result<ListQuery, atm_core::error::AtmError> {
     Ok(ListQuery::new(
         home_dir,
@@ -562,7 +597,7 @@ fn task_list_request(
         None,
         None,
         None,
-        None,
+        task_id.map(TaskId::as_str),
         None,
     )?
     .with_task_ledger(TaskLedgerQuery::Tasks { member }))
@@ -695,233 +730,4 @@ fn render_task_events(rows: &[TaskEventRow], json: bool) -> Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use atm_core::protocol::{CompatibilityVerdict, HttpApiVersion, ReleaseVersion};
-    use clap::{CommandFactory, Parser};
-
-    use super::*;
-    use crate::commands::send::require_daemon_api;
-    use crate::commands::{Cli, Command};
-
-    #[test]
-    fn task_has_exactly_five_subcommands() {
-        let command = Cli::command();
-        let task = command.find_subcommand("task").expect("task command");
-        let names: std::collections::BTreeSet<_> = task
-            .get_subcommands()
-            .map(clap::Command::get_name)
-            .collect();
-        assert_eq!(names, ["assign", "close", "events", "list", "move"].into());
-    }
-
-    #[test]
-    fn close_parses_positional_outcome_and_reason() {
-        let cli = Cli::try_parse_from(["atm", "task", "close", "T1", "refused", "no capacity"])
-            .expect("valid close");
-        let Command::Task(TaskCommand {
-            command: TaskSubcommand::Close(close),
-        }) = cli.command
-        else {
-            panic!("expected task close");
-        };
-        assert!(matches!(close.outcome, OutcomeArg::Refused));
-        assert_eq!(close.reason.as_deref(), Some("no capacity"));
-        let error = Cli::try_parse_from(["atm", "task", "close", "T1", "bogus"])
-            .expect_err("invalid outcome");
-        let rendered = error.to_string();
-        for expected in ["completed", "refused", "cancelled"] {
-            assert!(rendered.contains(expected));
-        }
-    }
-
-    #[test]
-    fn close_without_reason_or_report_source_is_rejected() {
-        let cli =
-            Cli::try_parse_from(["atm", "task", "close", "T1", "refused"]).expect("clap shape");
-        let Command::Task(TaskCommand {
-            command: TaskSubcommand::Close(close),
-        }) = cli.command
-        else {
-            panic!("expected task close");
-        };
-        assert!(close.validate().is_err());
-    }
-
-    #[test]
-    fn close_with_source_and_no_reason_is_accepted() {
-        for source in [
-            vec!["--stdin"],
-            vec!["--template", "report.j2", "--vars", "report.json"],
-        ] {
-            let mut args = vec!["atm", "task", "close", "T1", "completed"];
-            args.extend(source);
-            let cli = Cli::try_parse_from(args).expect("close report source");
-            let Command::Task(TaskCommand {
-                command: TaskSubcommand::Close(close),
-            }) = cli.command
-            else {
-                panic!("expected task close");
-            };
-            assert!(close.reason.is_none());
-            close.validate().expect("source makes close valid");
-        }
-    }
-
-    #[test]
-    fn move_requires_exactly_one_target() {
-        assert!(Cli::try_parse_from(["atm", "task", "move", "T1"]).is_err());
-        assert!(Cli::try_parse_from(["atm", "task", "move", "T1", "--head", "--end"]).is_err());
-        for target in [vec!["--head"], vec!["--end"], vec!["--before", "T2"]] {
-            let mut args = vec!["atm", "task", "move", "T1"];
-            args.extend(target);
-            Cli::try_parse_from(args).expect("one move target");
-        }
-    }
-
-    #[test]
-    fn assign_without_task_id_mints_ulid() {
-        let minted = resolve_task_id(None).expect("generated task id");
-        assert_eq!(minted.as_str().len(), 26);
-        assert!(minted.as_str().chars().all(|character| {
-            matches!(character, '0'..='9' | 'A'..='H' | 'J'..='N' | 'P'..='T' | 'V'..='Z')
-        }));
-        let supplied: TaskId = "T1".parse().expect("task id");
-        assert_eq!(
-            resolve_task_id(Some(supplied.clone())).expect("supplied task id"),
-            supplied
-        );
-    }
-
-    #[test]
-    fn list_has_only_all_and_json_flags() {
-        Cli::try_parse_from(["atm", "task", "list", "--all", "--json"])
-            .expect("documented list flags");
-        assert!(Cli::try_parse_from(["atm", "task", "list", "--member", "fenix"]).is_err());
-    }
-
-    #[test]
-    fn renderer_groups_every_member_with_state_header() {
-        let row = |task_id: &str, assignee: &str, position: u32| -> TaskRow {
-            serde_json::from_value(serde_json::json!({
-                "team": "test-team",
-                "task_id": task_id,
-                "assignee": assignee,
-                "assigner": "lead",
-                "state": "assigned",
-                "position": position,
-                "assignment_message_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-                "description": task_id,
-                "assigned_at": "2026-01-02T00:00:00Z",
-                "updated_at": "2026-01-02T00:00:00Z",
-                "reminder_count": 0,
-                "lead_notified_count": 0
-            }))
-            .expect("task row")
-        };
-        let runtime: RuntimeStatusSnapshot = serde_json::from_value(serde_json::json!({
-            "liveness": "running",
-            "readiness": "ready",
-            "members": [
-                {"team": "test-team", "member": "alice", "state": "active"},
-                {"team": "test-team", "member": "bob", "state": "idle"}
-            ]
-        }))
-        .expect("runtime snapshot");
-        let output = render_task_rows(
-            &[
-                row("A1", "alice", 1),
-                row("A2", "alice", 2),
-                row("B1", "bob", 1),
-            ],
-            true,
-            Some(&runtime),
-        );
-        assert_eq!(
-            output,
-            concat!(
-                "alice (state: active)\n",
-                "pos  state     task_id     assigned_at               reminders assigner\n",
-                "1    assigned  A1          2026-01-02T00:00:00Z      0         lead\n",
-                "2    assigned  A2          2026-01-02T00:00:00Z      0         lead\n",
-                "\n",
-                "bob (state: idle)\n",
-                "pos  state     task_id     assigned_at               reminders assigner\n",
-                "1    assigned  B1          2026-01-02T00:00:00Z      0         lead\n",
-            )
-        );
-    }
-
-    #[test]
-    fn require_daemon_api_refuses_older_daemon() {
-        let verdict = |version: &str| CompatibilityVerdict::Compatible {
-            daemon_release: ReleaseVersion::parse("1.5.14").expect("release"),
-            daemon_schema_version: 1,
-            daemon_http_api_version: HttpApiVersion::parse(version).expect("HTTP API"),
-        };
-        let min_15 = HttpApiVersion::parse("1.5.0").expect("minimum");
-        let min_16 = HttpApiVersion::parse("1.6.0").expect("minimum");
-        assert!(require_daemon_api(&verdict("1.4.0"), min_15.clone(), "task list").is_err());
-        assert!(require_daemon_api(&verdict("1.5.0"), min_15, "task list").is_ok());
-        assert!(require_daemon_api(&verdict("1.5.0"), min_16.clone(), "task move").is_err());
-        assert!(require_daemon_api(&verdict("1.6.0"), min_16, "task move").is_ok());
-    }
-
-    #[test]
-    fn compatibility_helper_refuses_task_move_below_1_6_0() {
-        let verdict = CompatibilityVerdict::Compatible {
-            daemon_release: ReleaseVersion::parse("1.5.14").expect("release"),
-            daemon_schema_version: 1,
-            daemon_http_api_version: HttpApiVersion::parse("1.5.0").expect("HTTP API"),
-        };
-        let error = require_daemon_api(
-            &verdict,
-            HttpApiVersion::parse("1.6.0").expect("minimum"),
-            "task move",
-        )
-        .expect_err("preflight must reject before request execution");
-        assert!(error.message().contains("1.5.0"));
-        assert!(error.message().contains("1.6.0"));
-    }
-
-    #[test]
-    fn parser_accepts_move_head_end_and_before() {
-        let cases = [
-            (vec!["--head"], MoveTarget::Head),
-            (vec!["--end"], MoveTarget::End),
-            (
-                vec!["--before", "T2"],
-                MoveTarget::Before {
-                    task_id: "T2".parse().expect("task id"),
-                },
-            ),
-        ];
-        for (flags, expected) in cases {
-            let mut args = vec!["atm", "task", "move", "T1"];
-            args.extend(flags);
-            let cli = Cli::try_parse_from(args).expect("valid task move");
-            let Command::Task(TaskCommand {
-                command: TaskSubcommand::Move(command),
-            }) = cli.command
-            else {
-                panic!("expected task move");
-            };
-            assert_eq!(command.target(), expected);
-        }
-    }
-}
-
-#[cfg(test)]
-#[path = "../../tests/task_close.rs"]
-mod task_close_tests;
-
-#[cfg(test)]
-#[path = "../../tests/task_assign.rs"]
-mod task_assign_tests;
-
-#[cfg(test)]
-#[path = "../../tests/task_move.rs"]
-mod task_move_tests;
-
-#[cfg(test)]
-#[path = "../../tests/task_list_events.rs"]
-mod task_list_events_tests;
+mod tests;

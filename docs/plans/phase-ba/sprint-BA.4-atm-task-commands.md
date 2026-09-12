@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba4-atm-task-commands
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba4-atm-task-commands
+---
+
 # BA.4 — `atm task` closed command set
 
 | Field | Value |
@@ -44,8 +50,8 @@ Not used: `Start`, `Block`, `Unblock`, `Reassign`, `Reopen`, `Fail`, `Abort`,
 Design §5, verbatim contract:
 
 ```
-atm task assign <agent> --template <j2> --vars <json> [--task-id <id>] [--before <other-task-id> | --head]
-atm task close  <task-id> <outcome> [reason]
+atm task assign <agent> [message | --template <j2> --vars <json>] [--task-id <id>] [--before <other-task-id> | --head]
+atm task close  <task-id> <outcome> [reason] [message]
 atm task move   <task-id> --before <other> | --head | --end
 atm task list [--all]
 atm task events <task-id>
@@ -251,7 +257,11 @@ peer ingress rejects `TaskMove` explicitly (local-only, like every task op).
 Compatibility: the envelopes are externally tagged serde enums with no
 unknown-variant fallback, so a 1.5.0 daemon fails to decode `TaskMove`
 explicitly; a 1.6.0 CLI never sends it below 1.6.0 (`require_daemon_api`);
-`docs/http-api.md` says exactly this.
+`docs/atm-daemon/http-api.md` says exactly this.
+
+Phase BA closeout — shipped state (2026-09-12): the existing `MESSAGE`
+positional remains the report body when no `--stdin`, `--file`, or `--template`
+source is supplied. Validation-family rejections use CLI exit code 3.
 
 ## Output
 
@@ -319,7 +329,10 @@ List/events:
 
 ## Acceptance criteria
 
-1. `atm task --help` lists exactly five subcommands with the design §5 syntax; `__dump-cli-surface` diff shows no other new entries.
+1. `atm task --help` lists exactly five subcommands with the design §5 syntax,
+   including the optional `MESSAGE` report body; validation-family rejections
+   exit 3 according to the CLI error-code map; `__dump-cli-surface` diff shows
+   no other new entries.
 2. Every test above exists by name and passes under `just test`.
 3. `HTTP_API_VERSION == "1.6.0"`; ADR-061 version row added; `schema-reviewer` sign-off on the PR.
 4. `grep -rn "task_complete: Option" crates/atm/src` → nothing.

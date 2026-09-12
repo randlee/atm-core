@@ -31,6 +31,12 @@ pub enum TaskPage {
     All,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskSelection<T> {
+    pub rows: Vec<T>,
+    pub omitted: usize,
+}
+
 impl TaskPage {
     pub fn bounded(limit: usize) -> Result<Self, AtmError> {
         if !(1..=MAX_TASK_PAGE_LIMIT).contains(&limit) {
@@ -50,7 +56,7 @@ impl TaskPage {
 }
 
 #[must_use]
-pub fn select_task_rows(mut rows: Vec<TaskRow>, query: &TaskListQuery) -> Vec<TaskRow> {
+pub fn select_task_rows(mut rows: Vec<TaskRow>, query: &TaskListQuery) -> TaskSelection<TaskRow> {
     rows.retain(|row| {
         row.team == query.team
             && row.state.is_open()
@@ -66,15 +72,15 @@ pub fn select_task_rows(mut rows: Vec<TaskRow>, query: &TaskListQuery) -> Vec<Ta
             &right.task_id,
         ))
     });
-    apply_page(&mut rows, query.page);
-    rows
+    let omitted = apply_page(&mut rows, query.page, PageEdge::Start);
+    TaskSelection { rows, omitted }
 }
 
 #[must_use]
 pub fn select_task_events(
     mut rows: Vec<TaskEventRow>,
     query: &TaskEventQuery,
-) -> Vec<TaskEventRow> {
+) -> TaskSelection<TaskEventRow> {
     rows.retain(|row| {
         row.team == query.team
             && row.task_id == query.task_id
@@ -84,13 +90,28 @@ pub fn select_task_events(
                 .is_none_or(|assignee| &row.assignee == assignee)
     });
     rows.sort_by_key(|row| row.seq);
-    apply_page(&mut rows, query.page);
-    rows
+    let omitted = apply_page(&mut rows, query.page, PageEdge::End);
+    TaskSelection { rows, omitted }
 }
 
-fn apply_page<T>(rows: &mut Vec<T>, page: TaskPage) {
+#[derive(Clone, Copy)]
+enum PageEdge {
+    Start,
+    End,
+}
+
+fn apply_page<T>(rows: &mut Vec<T>, page: TaskPage, edge: PageEdge) -> usize {
     if let TaskPage::Bounded { limit } = page {
-        rows.truncate(limit);
+        let omitted = rows.len().saturating_sub(limit);
+        match edge {
+            PageEdge::Start => rows.truncate(limit),
+            PageEdge::End => {
+                rows.drain(..omitted);
+            }
+        }
+        omitted
+    } else {
+        0
     }
 }
 
@@ -148,8 +169,8 @@ mod tests {
             ],
             &query,
         );
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].task_id.as_str(), "T1");
+        assert_eq!(selected.rows.len(), 1);
+        assert_eq!(selected.rows[0].task_id.as_str(), "T1");
     }
 
     #[test]
@@ -169,6 +190,7 @@ mod tests {
         );
         assert_eq!(
             selected
+                .rows
                 .iter()
                 .map(|row| row.task_id.as_str())
                 .collect::<Vec<_>>(),
@@ -189,14 +211,70 @@ mod tests {
             &query,
         );
         assert_eq!(
-            selected.iter().map(|row| row.seq).collect::<Vec<_>>(),
+            selected.rows.iter().map(|row| row.seq).collect::<Vec<_>>(),
             [1, 2, 3]
         );
-        assert!(selected.iter().any(|row| row.event == TaskEventKind::Moved));
         assert!(
             selected
+                .rows
+                .iter()
+                .any(|row| row.event == TaskEventKind::Moved)
+        );
+        assert!(
+            selected
+                .rows
                 .iter()
                 .any(|row| row.event == TaskEventKind::Started)
+        );
+    }
+
+    #[test]
+    fn bounded_list_reports_rows_omitted_from_the_end() {
+        let query = TaskListQuery {
+            team: "test-team".parse().expect("team"),
+            assignee: Some("alice".parse().expect("agent")),
+            page: TaskPage::bounded(2).expect("limit"),
+        };
+        let selected = select_task_rows(
+            vec![
+                task("T3", "alice", "assigned", Some(3)),
+                task("T1", "alice", "assigned", Some(1)),
+                task("T2", "alice", "assigned", Some(2)),
+            ],
+            &query,
+        );
+        assert_eq!(selected.omitted, 1);
+        assert_eq!(
+            selected
+                .rows
+                .iter()
+                .map(|row| row.task_id.as_str())
+                .collect::<Vec<_>>(),
+            ["T1", "T2"]
+        );
+    }
+
+    #[test]
+    fn bounded_events_keep_the_most_recent_rows_in_sequence_order() {
+        let query = TaskEventQuery {
+            team: "test-team".parse().expect("team"),
+            task_id: "T1".parse().expect("task"),
+            assignee: None,
+            page: TaskPage::bounded(2).expect("limit"),
+        };
+        let selected = select_task_events(
+            vec![
+                event(2, "moved"),
+                event(4, "started"),
+                event(1, "assigned"),
+                event(3, "moved"),
+            ],
+            &query,
+        );
+        assert_eq!(selected.omitted, 2);
+        assert_eq!(
+            selected.rows.iter().map(|row| row.seq).collect::<Vec<_>>(),
+            [3, 4]
         );
     }
 }

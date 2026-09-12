@@ -198,7 +198,7 @@ pub(super) fn team_findings(
                 task.task_id, task.assignee, task.reminder_count
             ),
             remediation: Some(
-                "check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin"
+                "check the assignee or close the task: atm task close <task_id> completed --stdin"
                     .to_owned(),
             ),
         });

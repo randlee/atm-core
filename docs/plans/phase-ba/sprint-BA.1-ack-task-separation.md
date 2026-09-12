@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba1-ack-task-separation
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba1-ack-task-separation
+---
+
 # BA.1 — Ack/task separation
 
 | Field | Value |

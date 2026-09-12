@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use atm_core::schema::AtmMessageId;
 use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 use atm_storage::{
@@ -92,7 +94,9 @@ async fn close_open_task_delivers_and_closes_in_one_write() {
     ] {
         let f = LoopbackFixture::new_with_identity("recipient", "recipient");
         seed_assignment(&f, task, "recipient", TEST_SENDER);
-        run_close(&f, close(task, "recipient", arg)).await.unwrap();
+        let output = run_close(&f, close(task, "recipient", arg)).await.unwrap();
+        let output: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(output["task_id"], task);
         let row = f
             .task_store()
             .load_task(&TEST_TEAM.parse().unwrap(), &task.parse().unwrap())
@@ -100,6 +104,26 @@ async fn close_open_task_delivers_and_closes_in_one_write() {
             .unwrap();
         assert_eq!(row.state, TaskState::Complete(expected));
         assert_eq!(f.inbox_contents(TEST_SENDER).len(), 1);
+        let events = f
+            .task_store()
+            .list_task_events(&TEST_TEAM.parse().unwrap(), &task.parse().unwrap(), None)
+            .unwrap();
+        let close_event = match expected {
+            TaskCloseOutcome::Completed => "completed",
+            TaskCloseOutcome::Refused => "refused",
+            TaskCloseOutcome::Cancelled => "cancelled",
+        };
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.event.as_str() == close_event)
+                .count(),
+            1
+        );
+        assert_eq!(
+            events.last().unwrap().to_state,
+            Some(TaskState::Complete(expected))
+        );
     }
 }
 
@@ -112,6 +136,15 @@ async fn close_by_assigner_reports_to_assignee() {
         .await
         .unwrap();
     assert_eq!(f.inbox_contents("recipient").len(), 2);
+    assert!(f.inbox_contents(TEST_SENDER).is_empty());
+    assert_eq!(
+        f.task_store()
+            .load_task(&TEST_TEAM.parse().unwrap(), &"T1".parse().unwrap())
+            .unwrap()
+            .unwrap()
+            .state,
+        TaskState::Complete(TaskCloseOutcome::Cancelled)
+    );
 }
 
 #[tokio::test]
@@ -131,16 +164,21 @@ async fn close_unknown_task_sends_nothing_and_exits_one() {
 async fn close_already_closed_delivers_report_without_task_event() {
     let f = LoopbackFixture::new_with_identity("recipient", "recipient");
     seed_assignment(&f, "T1", "recipient", TEST_SENDER);
-    run_close(&f, close("T1", "recipient", OutcomeArg::Completed))
-        .await
-        .unwrap();
+    let mut first_close = close("T1", "recipient", OutcomeArg::Completed);
+    first_close.json = false;
+    let first = run_close(&f, first_close).await.unwrap();
+    assert_eq!(first, "closed T1 (completed)\n");
     let store = f.task_store();
     let team = TEST_TEAM.parse().unwrap();
     let task = "T1".parse().unwrap();
     let before = store.list_task_events(&team, &task, None).unwrap().len();
-    run_close(&f, close("T1", "recipient", OutcomeArg::Refused))
-        .await
-        .unwrap();
+    let mut late_close = close("T1", "recipient", OutcomeArg::Refused);
+    late_close.json = false;
+    let already_closed = run_close(&f, late_close).await.unwrap();
+    assert_eq!(
+        already_closed,
+        "task T1 was already closed (completed); report delivered\n"
+    );
     assert_eq!(
         store.list_task_events(&team, &task, None).unwrap().len(),
         before
@@ -150,26 +188,62 @@ async fn close_already_closed_delivers_report_without_task_event() {
 
 #[tokio::test]
 #[serial(env)]
-async fn stale_counterparty_rejection_exits_one_without_retry() {
-    let f = LoopbackFixture::new_with_identity("recipient", "test-lead");
+async fn stale_counterparty_rejection_exits_three_without_retry() {
+    let f = LoopbackFixture::new_with_identity("recipient", "recipient");
     seed_assignment(&f, "T1", "recipient", TEST_SENDER);
-    let error = run_close(&f, close("T1", "test-lead", OutcomeArg::Completed))
+    let stale_preflight = f
+        .task_store()
+        .load_task(&TEST_TEAM.parse().unwrap(), &"T1".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(stale_preflight.assignee.as_str(), "recipient");
+    let mut reassign = atm_core::send::SendRequest::new(
+        f.home_dir.clone(),
+        f.current_dir.clone(),
+        TEST_SENDER.parse().unwrap(),
+        "test-lead@test-team",
+        TEST_TEAM.parse().unwrap(),
+        atm_core::send::SendMessageSource::Inline(
+            "reassigned while recipient held stale preflight".into(),
+        ),
+        None,
+        true,
+        Some("T1".parse().unwrap()),
+        false,
+    )
+    .unwrap();
+    reassign.nudge_mode = atm_core::send::NudgeMode::Deferred;
+    let obs = CliObservability::fallback();
+    f.composition(&obs).send(reassign).await.unwrap();
+    let sender_before = f.inbox_contents(TEST_SENDER).len();
+    let lead_before = f.inbox_contents("test-lead").len();
+    let error = run_close(&f, close("T1", "recipient", OutcomeArg::Completed))
         .await
         .unwrap_err();
-    assert_eq!(crate::exit_code_for_error(&error), 1);
+    assert_eq!(crate::exit_code_for_error(&error), 3);
+    let store = f.task_store();
+    let team = TEST_TEAM.parse().unwrap();
+    let task = "T1".parse().unwrap();
+    let row = store.load_task(&team, &task).unwrap().unwrap();
+    assert_eq!(row.state, TaskState::Assigned);
+    assert_eq!(row.assignee.as_str(), "test-lead");
+    let events = store.list_task_events(&team, &task, None).unwrap();
+    assert_eq!(events.last().unwrap().event.as_str(), "rejected");
     assert_eq!(
-        f.task_store()
-            .load_task(&TEST_TEAM.parse().unwrap(), &"T1".parse().unwrap())
-            .unwrap()
-            .unwrap()
-            .state,
-        TaskState::Assigned
+        events
+            .iter()
+            .filter(|event| event.event.as_str() == "rejected")
+            .count(),
+        1
     );
+    assert!(error.to_string().contains("report delivered"));
+    assert_eq!(f.inbox_contents(TEST_SENDER).len(), sender_before);
+    assert_eq!(f.inbox_contents("test-lead").len(), lead_before + 1);
 }
 
 #[tokio::test]
 #[serial(env)]
-async fn close_by_third_party_sends_nothing_and_exits_one() {
+async fn close_by_third_party_delivers_plain_report_and_exits_three() {
     let f = LoopbackFixture::new_with_identity("recipient", "test-lead");
     seed_assignment(&f, "T1", "recipient", TEST_SENDER);
     let sender_before = f.inbox_contents(TEST_SENDER).len();
@@ -182,9 +256,18 @@ async fn close_by_third_party_sends_nothing_and_exits_one() {
     let error = run_close(&f, close("T1", "test-lead", OutcomeArg::Completed))
         .await
         .unwrap_err();
-    assert_eq!(crate::exit_code_for_error(&error), 1);
+    assert_eq!(crate::exit_code_for_error(&error), 3);
+    assert!(error.to_string().contains("not assigned to or by"));
+    assert!(error.to_string().contains("report delivered"));
     assert_eq!(f.inbox_contents(TEST_SENDER).len(), sender_before);
-    assert_eq!(f.inbox_contents("recipient").len(), recipient_before);
+    let recipient_mail = f.inbox_contents("recipient");
+    assert_eq!(recipient_mail.len(), recipient_before + 1);
+    let report = recipient_mail
+        .iter()
+        .find(|message| message.text == "report")
+        .expect("plain rejected report");
+    assert_eq!(report.task_id, None);
+    assert_eq!(report.task_op, None);
     assert_eq!(store.list_tasks(&team, None).unwrap().len(), rows_before);
     let events = store.list_task_events(&team, &task, None).unwrap();
     assert_eq!(events.len(), events_before + 1);
@@ -218,17 +301,21 @@ async fn task_target_on_other_team_or_host_is_rejected_before_send() {
         let f = LoopbackFixture::new("recipient");
         let obs = CliObservability::fallback();
         let composition = f.composition(&obs);
+        let sender_before = f.inbox_contents(TEST_SENDER).len();
+        let recipient_before = f.inbox_contents("recipient").len();
         let error = command
             .execute(&composition, f.home_dir.clone(), f.current_dir.clone())
             .await
             .unwrap_err();
-        assert_eq!(crate::exit_code_for_error(&error), 1);
+        assert_eq!(crate::exit_code_for_error(&error), 3);
         assert!(
             f.task_store()
                 .list_tasks(&TEST_TEAM.parse().unwrap(), None)
                 .unwrap()
                 .is_empty()
         );
+        assert_eq!(f.inbox_contents(TEST_SENDER).len(), sender_before);
+        assert_eq!(f.inbox_contents("recipient").len(), recipient_before);
         drop(composition);
         drop(f);
         for alias in ["send", "queue"] {
@@ -247,8 +334,30 @@ async fn task_target_on_other_team_or_host_is_rejected_before_send() {
                         .unwrap()
                         .is_empty()
                 );
+                assert!(f.inbox_contents(TEST_SENDER).is_empty());
+                assert!(f.inbox_contents("recipient").is_empty());
             }
         }
+        let f = LoopbackFixture::new("recipient");
+        let cli = crate::commands::Cli::try_parse_from([
+            "atm",
+            "task",
+            "assign",
+            target,
+            "message",
+            "--task-id",
+            "T1",
+        ])
+        .expect("task assign parses");
+        let error = cli.run(&CliObservability::fallback()).await.unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&error), 3);
+        assert!(
+            f.task_store()
+                .list_tasks(&TEST_TEAM.parse().unwrap(), None)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(f.inbox_contents("recipient").is_empty());
     }
 }
 
@@ -267,9 +376,24 @@ async fn refusal_releases_next_queued_task() {
         .unwrap()
         .unwrap();
     assert_eq!(row.position, Some(QueuePosition::HEAD));
-    assert!(
-        f.inbox_contents("recipient")
-            .iter()
-            .any(|message| message.pending_ack_at.is_some())
+    assert_eq!(
+        f.task_store()
+            .load_task(&TEST_TEAM.parse().unwrap(), &"T1".parse().unwrap())
+            .unwrap()
+            .unwrap()
+            .state,
+        TaskState::Complete(TaskCloseOutcome::Refused)
     );
+    let t2_nudges = f
+        .inbox_contents("recipient")
+        .into_iter()
+        .filter(|message| {
+            message
+                .task_id
+                .as_ref()
+                .is_some_and(|id| id.as_str() == "T2")
+                && message.pending_ack_at.is_some()
+        })
+        .count();
+    assert_eq!(t2_nudges, 1);
 }

@@ -4,6 +4,7 @@ use crate::writer::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
+    MessageAdmissionOutcome,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
@@ -314,13 +315,46 @@ impl SharedDb {
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<bool, AtmError> {
+        let outcome = self.submit_message_admission(record, provenance)?;
+        match outcome.task_rejection {
+            Some(error) => Err(error),
+            None => Ok(outcome.existing.is_none()),
+        }
+    }
+
+    pub(crate) fn submit_message_admission(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         validate_upsert_message_request(&record)?;
         let result = self.writer.submit(WriteOp::UpsertMessage {
             record: Box::new(record),
             provenance,
         })?;
         match result {
-            WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
+            WriteOpResult::UpsertMessage {
+                inserted: true,
+                already_closed,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed,
+                task_rejection,
+            }),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: Some(existing),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: None,
+                ..
+            } => Err(AtmError::daemon_unavailable(
+                "sqlite writer reported a duplicate without its retained record",
+            )),
             WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
@@ -380,6 +414,16 @@ impl SharedDb {
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<Option<Message>, AtmError> {
+        self.submit_message_admission_async(record, provenance)
+            .await
+            .map(|outcome| outcome.existing)
+    }
+
+    pub(crate) async fn submit_message_admission_async(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         validate_upsert_message_request(&record)?;
         match self
             .writer
@@ -389,14 +433,25 @@ impl SharedDb {
             })
             .await?
         {
-            WriteOpResult::UpsertMessage { inserted: true, .. } => Ok(None),
+            WriteOpResult::UpsertMessage {
+                inserted: true,
+                already_closed,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed,
+                task_rejection,
+            }),
             WriteOpResult::UpsertMessage {
                 inserted: false,
                 existing: Some(existing),
-            } => Ok(Some(*existing)),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
             WriteOpResult::UpsertMessage {
                 inserted: false,
                 existing: None,
+                ..
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate without its retained record",
             )),
@@ -439,21 +494,31 @@ impl SharedDb {
     pub(crate) async fn submit_template_message_admission_async(
         &self,
         admission: TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         admission.validate()?;
         match self
             .writer
             .submit_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
             .await?
         {
-            WriteOpResult::TemplateMessageAdmission { inserted: true, .. } => Ok(None),
+            WriteOpResult::TemplateMessageAdmission {
+                inserted: true,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed: None,
+                task_rejection,
+            }),
             WriteOpResult::TemplateMessageAdmission {
                 inserted: false,
                 existing: Some(existing),
-            } => Ok(Some(*existing)),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
             WriteOpResult::TemplateMessageAdmission {
                 inserted: false,
                 existing: None,
+                ..
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate template admission without its retained record",
             )),

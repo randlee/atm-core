@@ -68,6 +68,26 @@ mod tests {
     }
 
     #[test]
+    fn task_rejection_codes_keep_distinct_stable_wire_spellings() {
+        for (code, wire) in [
+            (AtmErrorCode::TaskNotFound, "ATM_TASK_NOT_FOUND"),
+            (AtmErrorCode::TaskAlreadyClosed, "ATM_TASK_ALREADY_CLOSED"),
+            (
+                AtmErrorCode::TaskNotCounterparty,
+                "ATM_TASK_NOT_COUNTERPARTY",
+            ),
+            (
+                AtmErrorCode::TaskStaleCounterparty,
+                "ATM_TASK_STALE_COUNTERPARTY",
+            ),
+            (AtmErrorCode::TaskMoveInvalid, "ATM_TASK_MOVE_INVALID"),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
     fn retained_diagnostics_codes_keep_distinct_stable_wire_spellings() {
         for (code, wire) in [
             (

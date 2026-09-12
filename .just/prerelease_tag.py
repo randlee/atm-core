@@ -277,6 +277,20 @@ def remote_tag_exists(repo_root: Path, tag: str) -> bool:
     return result.returncode == 0
 
 
+def require_available_tag(repo_root: Path, tag: str) -> None:
+    local_result = git(
+        repo_root,
+        "rev-parse",
+        "--verify",
+        f"refs/tags/{tag}",
+        check=False,
+    )
+    if local_result.returncode == 0:
+        raise SystemExit(f"tag already exists locally: {tag}")
+    if remote_tag_exists(repo_root, tag):
+        raise SystemExit(f"tag already exists on origin: {tag}")
+
+
 def write_and_commit(repo_root: Path, changes: dict[Path, str], message: str) -> None:
     touched = list(changes)
     committed = False
@@ -313,16 +327,12 @@ def execute(repo_root: Path, *, dry_run: bool) -> int:
     old = workspace_version(repo_root)
     new = patch_bump(old)
     tag = f"prerelease/v{new}"
+    require_available_tag(repo_root, tag)
 
     if dry_run:
         verify_lockstep(repo_root)
         describe_plan(branch, old, new)
         return 0
-
-    if git(repo_root, "rev-parse", "--verify", f"refs/tags/{tag}", check=False).returncode == 0:
-        raise SystemExit(f"tag already exists locally: {tag}")
-    if remote_tag_exists(repo_root, tag):
-        raise SystemExit(f"tag already exists on origin: {tag}")
 
     changes = candidate_changes(repo_root, old, new)
     write_and_commit(repo_root, changes, f"chore(release): bump workspace version to {new}")

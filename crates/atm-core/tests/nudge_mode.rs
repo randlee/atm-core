@@ -61,15 +61,17 @@ impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {}
 /// Minimal executor matching the core's async admission tests. This fixture's
 /// in-memory async store never yields, so no Tokio runtime is needed.
 fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    const MAX_POLLS: usize = 1_000;
     let waker = std::task::Waker::noop();
     let mut context = std::task::Context::from_waker(waker);
     let mut future = std::pin::pin!(future);
-    loop {
+    for _ in 0..MAX_POLLS {
         match future.as_mut().poll(&mut context) {
             std::task::Poll::Ready(output) => return output,
             std::task::Poll::Pending => std::thread::yield_now(),
         }
     }
+    panic!("future did not resolve synchronously within {MAX_POLLS} polls");
 }
 
 fn setup() -> (

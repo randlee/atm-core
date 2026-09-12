@@ -2935,7 +2935,8 @@ prompt time. Handoff re-arms that marker; read, acknowledgement when required,
 or task close discharges it. The queue item is considered before the next task
 and never appears in `atm task list`.
 
-Current inherited boundary limitations recorded during Phase BA review:
+Historical inherited boundary limitations recorded during the pre-BA review
+(all four were fixed at the Phase BA shipped head `9f5aef2fe`):
 
 - `RBP-F001`: the `TaskStore` escalation-recipient methods still expose raw
   `String` / `&str` values. `AgentAddress` validation occurs at the runtime
@@ -2949,6 +2950,11 @@ Current inherited boundary limitations recorded during Phase BA review:
 - `RBQA-BA5-F004`: the six-method `PendingNudgeStore` test surface is
   reimplemented by four hand-written doubles across consumer crates; there is
   no shared configurable double yet.
+
+Phase BA closeout — shipped state (2026-09-12): `RBP-F001`, `RBP-F002`,
+`RSH-001`, and `RBQA-BA5-F004` are historical finding labels, not open
+limitations. The shipped storage-boundary validation, error propagation,
+bounded blocking work, and shared test surface are the current contract.
 
 #### RosterStore
 

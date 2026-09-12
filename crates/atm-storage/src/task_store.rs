@@ -1,11 +1,17 @@
 //! Storage-neutral task ledger capability.
 
+#[cfg(any(test, feature = "test-utils"))]
 use std::collections::HashMap;
+#[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
+#[cfg(any(test, feature = "test-utils"))]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use crate::contract::{AsyncTaskLedgerReader, ReadDeadline, ReadLaneError, sealed};
+use crate::contract::sealed;
+#[cfg(any(test, feature = "test-utils"))]
+use crate::contract::{AsyncTaskLedgerReader, ReadDeadline, ReadLaneError};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::task_state::{QueuePosition, TaskEventRow, TaskRow};
@@ -155,13 +161,16 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
 }
 
 /// Minimal in-memory implementation for composition and contract tests.
+#[cfg(any(test, feature = "test-utils"))]
 #[derive(Debug, Default)]
 pub struct DummyTaskStore {
     rows: Mutex<HashMap<(TeamName, TaskId), TaskRow>>,
     escalation_recipients: Mutex<HashMap<String, Vec<AgentAddress>>>,
     fail_reminders: bool,
+    fail_escalation_recipient_reads: AtomicBool,
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 impl DummyTaskStore {
     #[must_use]
     pub fn with_rows(rows: Vec<TaskRow>, fail_reminders: bool) -> Self {
@@ -173,7 +182,13 @@ impl DummyTaskStore {
             rows: Mutex::new(rows),
             escalation_recipients: Mutex::new(HashMap::new()),
             fail_reminders,
+            fail_escalation_recipient_reads: AtomicBool::new(false),
         }
+    }
+
+    pub fn set_fail_escalation_recipient_reads(&self, fail: bool) {
+        self.fail_escalation_recipient_reads
+            .store(fail, Ordering::SeqCst);
     }
 
     pub fn row(&self, member: &MemberKey, task_id: &TaskId) -> TaskRow {
@@ -186,10 +201,23 @@ impl DummyTaskStore {
     }
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 impl sealed::Sealed for DummyTaskStore {}
 
+#[cfg(any(test, feature = "test-utils"))]
 #[async_trait::async_trait]
 impl AsyncTaskLedgerReader for DummyTaskStore {
+    async fn load_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        _deadline: ReadDeadline,
+    ) -> Result<Option<TaskRow>, ReadLaneError> {
+        TaskStore::load_task(self, &team, &task_id).map_err(|error| ReadLaneError::Unavailable {
+            message: error.to_string(),
+        })
+    }
+
     async fn open_tasks_for_team(
         &self,
         team: TeamName,
@@ -260,6 +288,7 @@ impl AsyncTaskLedgerReader for DummyTaskStore {
     }
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 impl TaskStore for DummyTaskStore {
     fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
         Ok(self
@@ -344,6 +373,11 @@ impl TaskStore for DummyTaskStore {
         &self,
         scope: &EscalationScope,
     ) -> Result<Vec<AgentAddress>, AtmError> {
+        if self.fail_escalation_recipient_reads.load(Ordering::SeqCst) {
+            return Err(AtmError::daemon_unavailable(
+                "injected escalation recipient read failure",
+            ));
+        }
         Ok(self
             .escalation_recipients
             .lock()

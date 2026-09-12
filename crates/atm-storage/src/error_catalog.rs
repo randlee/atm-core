@@ -166,6 +166,11 @@ const fn mailbox_guidance(code: AtmErrorCode) -> Option<&'static str> {
 const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
         AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::TaskNotFound
+        | AtmErrorCode::TaskAlreadyClosed
+        | AtmErrorCode::TaskNotCounterparty
+        | AtmErrorCode::TaskStaleCounterparty
+        | AtmErrorCode::TaskMoveInvalid
         | AtmErrorCode::WorkflowQueryInvalid
         | AtmErrorCode::SearchLocalOnly
         | AtmErrorCode::LocalHttpCapabilityInvalid

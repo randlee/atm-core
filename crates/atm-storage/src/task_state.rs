@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::num::NonZeroU32;
 
 use crate::error::AtmError;
+use crate::error_codes::AtmErrorCode;
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
@@ -227,18 +228,20 @@ impl Serialize for TaskRow {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskRejected {
+    pub code: AtmErrorCode,
     pub detail: String,
 }
 
 impl TaskRejected {
-    fn new(detail: impl Into<String>) -> Self {
+    fn new(code: AtmErrorCode, detail: impl Into<String>) -> Self {
         Self {
+            code,
             detail: detail.into(),
         }
     }
 
     pub fn into_atm_error(self) -> AtmError {
-        AtmError::validation(self.detail)
+        AtmError::new(self.code, self.detail)
     }
 }
 
@@ -258,9 +261,10 @@ pub fn transition(
     use TaskState as S;
     match (state, event) {
         (None, E::Assigned) => Ok(Transition(S::Assigned)),
-        (None, E::Started | E::Completed(_)) => Err(TaskRejected::new(format!(
-            "no open task {task_id} for {actor}"
-        ))),
+        (None, E::Started | E::Completed(_)) => Err(TaskRejected::new(
+            AtmErrorCode::TaskNotFound,
+            format!("no open task {task_id} for {actor}"),
+        )),
         (Some(S::Assigned), E::Assigned) if current_assignee == Some(requested_assignee) => {
             Ok(Transition(S::Assigned))
         }
@@ -287,20 +291,22 @@ pub fn admit(
     actor: &AgentName,
 ) -> Result<(), TaskRejected> {
     match (row, event) {
-        (None, TaskEvent::Completed(_)) => Err(TaskRejected::new(format!(
-            "no open task {task_id} for {actor}"
-        ))),
+        (None, TaskEvent::Completed(_)) => Err(TaskRejected::new(
+            AtmErrorCode::TaskNotFound,
+            format!("no open task {task_id} for {actor}"),
+        )),
         (None, TaskEvent::Assigned) => Ok(()),
-        (None, TaskEvent::Started) => Err(TaskRejected::new(format!(
-            "no open task {task_id} for {actor}"
-        ))),
+        (None, TaskEvent::Started) => Err(TaskRejected::new(
+            AtmErrorCode::TaskNotFound,
+            format!("no open task {task_id} for {actor}"),
+        )),
         (Some(row), TaskEvent::Completed(_))
             if actor != &row.assignee && actor != &row.assigner =>
         {
-            Err(TaskRejected::new(format!(
-                "task {} is not assigned to or by {actor}",
-                row.task_id
-            )))
+            Err(TaskRejected::new(
+                AtmErrorCode::TaskNotCounterparty,
+                format!("task {} is not assigned to or by {actor}", row.task_id),
+            ))
         }
         (Some(_), _) => Ok(()),
     }
@@ -729,15 +735,14 @@ mod tests {
         let task_id: TaskId = "AX.3".parse().unwrap();
         let row = row("AX.3", TaskState::Assigned);
         let intruder: AgentName = "intruder".parse().unwrap();
-        assert!(
-            admit(
-                Some(&row),
-                TaskEvent::Completed(TaskCloseOutcome::Completed),
-                &task_id,
-                &intruder
-            )
-            .is_err()
-        );
+        let error = admit(
+            Some(&row),
+            TaskEvent::Completed(TaskCloseOutcome::Completed),
+            &task_id,
+            &intruder,
+        )
+        .expect_err("third-party close");
+        assert_eq!(error.code, AtmErrorCode::TaskNotCounterparty);
     }
 
     #[test]

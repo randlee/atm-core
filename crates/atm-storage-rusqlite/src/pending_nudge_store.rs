@@ -243,6 +243,16 @@ mod tests {
     /// production write path (`MessageStore::save_message`), matching how
     /// `service_runtime_store` admits and later re-writes a message.
     fn seed_message(backend: &SqliteStorageBackend, id: AtmMessageId, read: bool) {
+        save_message_state(backend, id, read, None, None);
+    }
+
+    fn save_message_state(
+        backend: &SqliteStorageBackend,
+        id: AtmMessageId,
+        read: bool,
+        pending_ack_at: Option<IsoTimestamp>,
+        acknowledged_at: Option<IsoTimestamp>,
+    ) {
         let team = team();
         let agent = agent();
         let message = Message {
@@ -260,8 +270,8 @@ mod tests {
                 summary: None,
                 message_id: None,
                 requires_ack: false,
-                pending_ack_at: None,
-                acknowledged_at: None,
+                pending_ack_at,
+                acknowledged_at,
                 acknowledges_message_id: None,
                 parent_message_id: None,
                 thread_mode: None,
@@ -449,24 +459,35 @@ mod tests {
 
     #[test]
     fn restart_after_claim_reexposes_unread_item() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let root = tempfile::tempdir().expect("temporary root");
+        let path = root.path().join("mail.db");
         let member = member();
         let msg = AtmMessageId::new();
-        seed_message(&backend, msg, false);
+        {
+            let backend = SqliteStorageBackend::new(&path).expect("backend");
+            seed_message(&backend, msg, false);
+            let store = backend.pending_nudge_store();
+            store
+                .mark_pending(&member, &msg, IsoTimestamp::now())
+                .expect("mark");
+            let claim = store
+                .claim_next_pending(&member)
+                .expect("claim")
+                .expect("claimed");
+            assert_eq!(claim.attempt, 0);
+        }
+
+        let backend = SqliteStorageBackend::new(&path).expect("restart backend");
         let store = backend.pending_nudge_store();
-        store
-            .mark_pending(&member, &msg, IsoTimestamp::now())
-            .expect("mark");
-        let claim = store
-            .claim_next_pending(&member)
-            .expect("claim")
-            .expect("claimed");
-        assert_eq!(claim.attempt, 0);
-        set_marker(&backend, msg, IsoTimestamp::now());
         assert_eq!(
             store.list_pending_members().expect("list"),
             vec![member.clone()]
         );
+        assert!(
+            state_row(&backend, msg).1.is_some(),
+            "lease survives restart"
+        );
+        set_marker(&backend, msg, IsoTimestamp::now());
         let reclaimed = store
             .claim_next_pending(&member)
             .expect("reclaim")
@@ -734,17 +755,25 @@ mod tests {
     fn immediate_send_never_carries_marker() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let member = member();
-        for _ in 0..20 {
-            let msg = AtmMessageId::new();
-            seed_message(&backend, msg, false);
-            assert!(
-                backend
-                    .pending_nudge_store()
-                    .claim_next_pending(&member)
-                    .expect("claim")
-                    .is_none()
-            );
-        }
+        let immediate = AtmMessageId::new();
+        let deferred = AtmMessageId::new();
+        seed_message(&backend, immediate, false);
+        seed_message(&backend, deferred, false);
+        let store = backend.pending_nudge_store();
+        store
+            .mark_pending(&member, &deferred, IsoTimestamp::now())
+            .expect("mark deferred send");
+
+        assert_eq!(state_row(&backend, immediate).1, None);
+        assert!(state_row(&backend, deferred).1.is_some());
+        assert_eq!(
+            store
+                .claim_next_pending(&member)
+                .expect("claim")
+                .map(|claim| claim.msg),
+            Some(deferred),
+            "only the explicitly deferred send enters the reminder queue"
+        );
     }
 
     #[test]
@@ -1030,18 +1059,16 @@ mod tests {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let member = member();
         let msg = AtmMessageId::new();
-        seed_message(&backend, msg, false);
+        let pending_at = IsoTimestamp::now();
+        save_message_state(&backend, msg, false, Some(pending_at), None);
 
         let store = backend.pending_nudge_store();
         store
             .mark_pending(&member, &msg, IsoTimestamp::now())
             .expect("mark pending");
 
-        // The read transition is just another whole-row upsert with
-        // read = true -- the same call the send/read pipeline performs
-        // (service_runtime_store -> save_message ->
-        // writer/ops.rs::insert_initial_message_state).
-        seed_message(&backend, msg, true);
+        let acknowledged_at = IsoTimestamp::now();
+        save_message_state(&backend, msg, true, None, Some(acknowledged_at));
 
         let db = backend.shared_db_for_test();
         let (nudge_pending_at, nudge_attempts): (Option<String>, i64) = db
@@ -1069,5 +1096,8 @@ mod tests {
             nudge_attempts, 0,
             "the read-path upsert must not disturb nudge_attempts"
         );
+        let state = state_row(&backend, msg);
+        assert!(state.2.is_none(), "ack clears pending_ack_at");
+        assert_eq!(state.3, Some(acknowledged_at.to_string()));
     }
 }

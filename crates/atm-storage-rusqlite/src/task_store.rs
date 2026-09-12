@@ -379,20 +379,28 @@ impl TaskStore for SqliteTaskStore {
                         .error("failed to prepare escalation recipient list", error)
                 })?;
             let rows = statement
-                .query_map([scope_key], |row| row.get(0))
+                .query_map([&scope_key], |row| row.get(0))
                 .map_err(|error| self.db.error("failed to list escalation recipients", error))?;
-            rows.map(|row| {
+            let mut recipients = Vec::new();
+            for row in rows {
                 let address: String = row.map_err(|error| {
                     self.db
                         .error("failed to decode escalation recipient", error)
                 })?;
-                address.parse().map_err(|error| {
-                    AtmError::validation(format!(
-                        "stored escalation recipient address is invalid: {error}"
-                    ))
-                })
-            })
-            .collect()
+                match address.parse() {
+                    Ok(address) => recipients.push(address),
+                    Err(error) => tracing::warn!(
+                        subsystem = "task_store",
+                        action = "escalation_recipient_decode",
+                        outcome = "skipped_invalid",
+                        scope = %scope_key,
+                        address,
+                        error = %error,
+                        "Stored escalation recipient address is invalid"
+                    ),
+                }
+            }
+            Ok(recipients)
         })
     }
 
@@ -569,6 +577,22 @@ const fn outcome_name(value: ReminderOutcome) -> &'static str {
 mod tests {
     use super::*;
     use crate::SqliteStorageBackend;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tracing_subscriber::layer::{Context, Layer};
+    use tracing_subscriber::prelude::*;
+
+    struct WarningCounter(Arc<AtomicUsize>);
+
+    impl<S> Layer<S> for WarningCounter
+    where
+        S: tracing::Subscriber,
+    {
+        fn on_event(&self, event: &tracing::Event<'_>, _context: Context<'_, S>) {
+            if *event.metadata().level() == tracing::Level::WARN {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    }
 
     const TEST_TEAM: &str = "ax6-recipient-test";
     const DAEMON_RECIPIENT: &str = "ops@ax6-recipient-test";
@@ -651,10 +675,52 @@ mod tests {
     }
 
     #[test]
+    fn invalid_escalation_recipient_row_is_skipped_without_hiding_valid_rows() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = Arc::clone(&backend.task_store);
+        let team_name: TeamName = TEST_TEAM.parse().expect("team");
+        let scope = EscalationScope::Team(team_name);
+        let now = IsoTimestamp::now();
+        let valid = address(TEAM_RECIPIENT);
+        store
+            .add_escalation_recipient(&scope, &valid, now)
+            .expect("valid recipient");
+        store
+            .db
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "INSERT INTO escalation_recipients(scope_key, address, added_at)
+                         VALUES (?1, ?2, ?3)",
+                        params![scope.key(), "not an address", now.to_string()],
+                    )
+                    .expect("insert invalid legacy row");
+                Ok(())
+            })
+            .expect("seed invalid recipient");
+
+        let warnings = Arc::new(AtomicUsize::new(0));
+        let subscriber = tracing_subscriber::registry().with(WarningCounter(Arc::clone(&warnings)));
+        let recipients = tracing::subscriber::with_default(subscriber, || {
+            store
+                .list_escalation_recipients(&scope)
+                .expect("recipient list")
+        });
+        assert_eq!(recipients, vec![valid]);
+        assert_eq!(warnings.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
     fn concurrent_recipient_adds_do_not_exceed_scope_cap() {
         use std::sync::{Arc, Barrier};
 
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        // A real on-disk (WAL) database, not the in-memory shared-cache
+        // fixture: shared-cache in-memory SQLite raises SQLITE_LOCKED for
+        // cross-connection table contention, which busy_timeout does not
+        // retry, unlike the file-locking WAL uses in production (and here).
+        let tempdir = tempfile::tempdir().expect("temporary database directory");
+        let backend = SqliteStorageBackend::new(tempdir.path().join("recipient-add-race.db"))
+            .expect("backend");
         let store = backend.task_store();
         let scope = EscalationScope::Daemon;
         let now = IsoTimestamp::now();

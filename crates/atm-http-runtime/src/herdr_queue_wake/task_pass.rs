@@ -3,21 +3,59 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome,
-    TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TaskRow,
+    TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS, TaskRow,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
+use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
+use atm_herdr::{AgentSnapshot, HerdrAgentStatus};
 
 use crate::herdr_task_disposition::{TaskDisposition, dispose};
 
 use super::{
-    HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats,
-    MemberObservation, run_blocking,
+    CandidateTarget, HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_BUDGET, HerdrCandidate,
+    HerdrQueueWakePump, HerdrQueueWakeStats, MemberObservation, herdr_request_deadline,
 };
+
+pub(super) fn queue_drain_eligible(observation: &MemberObservation) -> bool {
+    observation.state == RuntimeMemberState::Idle
+}
+
+pub(super) fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
+    match status {
+        None => RuntimeMemberState::Unknown,
+        Some(status) => match status {
+            HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
+            HerdrAgentStatus::Working => RuntimeMemberState::Active,
+            HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
+            HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        },
+    }
+}
+
+pub(super) fn runtime_state_with_absence(
+    absences: &mut HashMap<MemberKey, IsoTimestamp>,
+    member: &MemberKey,
+    status: Option<HerdrAgentStatus>,
+    observed_at: IsoTimestamp,
+) -> RuntimeMemberState {
+    const OFFLINE_ABSENCE_INTERVALS: i64 = 2;
+
+    let Some(status) = status else {
+        let started_at = absences.entry(member.clone()).or_insert(observed_at);
+        let absent_for = (observed_at.into_inner() - started_at.into_inner()).num_milliseconds();
+        return if absent_for >= TASK_REMINDER_INTERVAL_MS * OFFLINE_ABSENCE_INTERVALS {
+            RuntimeMemberState::Offline
+        } else {
+            RuntimeMemberState::Unknown
+        };
+    };
+    absences.remove(member);
+    runtime_state(Some(status))
+}
 
 pub(super) struct PreparedTaskPass {
     reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
@@ -64,6 +102,122 @@ impl HerdrQueueWakePump {
         }
     }
 
+    pub(super) async fn record_queue_prompt_reminders(
+        &self,
+        prepared: &PreparedTaskPass,
+        prompted: &HashMap<MemberKey, atm_core::schema::AtmMessageId>,
+        stats: &mut HerdrQueueWakeStats,
+    ) {
+        let now = (self.clock)();
+        for (member, message_id) in prompted {
+            let Some(row) = prepared.queue_reminder_head(member) else {
+                continue;
+            };
+            let context = crate::herdr_queue_wake_escalation::TaskReminderContext {
+                task_store: &prepared.task_store,
+                member,
+            };
+            let recorded_row = if self
+                .queue_prompt_is_head_assignment(member, *message_id, row)
+                .await
+            {
+                crate::herdr_task_start::complete_task_handoff(
+                    self,
+                    context.task_store,
+                    &self.daemon_home,
+                    context.member,
+                    row,
+                    now,
+                )
+                .await
+            } else {
+                self.record_task_reminder(
+                    context.task_store,
+                    context.member,
+                    row,
+                    now,
+                    ReminderOutcome::Emitted,
+                )
+                .await
+            };
+            stats.task_reminders += 1;
+            self.warn_failed_reminder_record(&context, row, recorded_row);
+        }
+    }
+
+    async fn queue_prompt_is_head_assignment(
+        &self,
+        member: &MemberKey,
+        message_id: atm_core::schema::AtmMessageId,
+        row: &TaskRow,
+    ) -> bool {
+        if row.state != atm_core::boundary::TaskState::Assigned
+            || row.position.is_none_or(|position| position.get() != 1)
+        {
+            return false;
+        }
+        let runtime = self.service_runtime.clone();
+        let member = member.clone();
+        matches!(
+            self.blocking_bridge
+                .run(super::herdr_request_deadline(), move || {
+                    super::load_received_hook_dispatch_message(&runtime, &member, message_id)
+                })
+                .await,
+            Ok(Some(message)) if message.envelope.task_id.as_ref() == Some(&row.task_id)
+        )
+    }
+
+    pub(super) fn collect_idle_members(
+        &self,
+        agents: Vec<AgentSnapshot>,
+        members: Vec<HerdrCandidate>,
+        observed_at: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+        eligible: &mut Vec<HerdrCandidate>,
+        task_candidates: &mut Vec<MemberObservation>,
+    ) {
+        let snapshots: HashMap<&str, &AgentSnapshot> = agents
+            .iter()
+            .filter_map(|snapshot| snapshot.name.as_deref().map(|name| (name, snapshot)))
+            .collect();
+        let accepted = self.apply_herdr_observations(&snapshots, &members, observed_at);
+        for member in members {
+            let CandidateTarget::Herdr(target) = &member.target else {
+                continue;
+            };
+            if !snapshots.contains_key(target.agent.as_str()) && member.pending {
+                stats.not_present += 1;
+                tracing::info!(
+                    event = "herdr_queue_poll_outcome",
+                    member = %member.key,
+                    herdr_agent = %target.agent,
+                    queue_kind = atm_core::boundary::NudgeKind::Queue.as_str(),
+                    outcome = "held_target_not_present",
+                    "Herdr queue target was absent from the poll result"
+                );
+            }
+            let Some(observation) = accepted.get(&member.key) else {
+                continue;
+            };
+            task_candidates.push(MemberObservation {
+                member: member.key.clone(),
+                state: observation.state,
+                state_changed_at: observation.state_changed_at,
+            });
+            if member.pending
+                && queue_drain_eligible(&MemberObservation {
+                    member: member.key.clone(),
+                    state: observation.state,
+                    state_changed_at: observation.state_changed_at,
+                })
+            {
+                stats.idle_members += 1;
+                eligible.push(member);
+            }
+        }
+    }
+
     fn task_capabilities(
         &self,
         stats: &mut HerdrQueueWakeStats,
@@ -94,12 +248,8 @@ impl HerdrQueueWakePump {
         for head in heads.values().filter(|head| {
             head.state == atm_core::boundary::TaskState::Assigned && head.last_reminded_at.is_some()
         }) {
-            if let Err(error) = crate::herdr_task_start::start_assigned_task(
-                &self.service_runtime,
-                &self.daemon_home,
-                head,
-            )
-            .await
+            if let Err(error) =
+                crate::herdr_task_start::start_assigned_task(self, &self.daemon_home, head).await
             {
                 tracing::warn!(
                     subsystem = "herdr_queue_wake",
@@ -129,7 +279,39 @@ impl HerdrQueueWakePump {
         stats: &mut HerdrQueueWakeStats,
     ) {
         let head = heads.get(&candidate.member);
-        let (refusal_count, refusal_started_at) = self.refusal_run(reader, &candidate.member).await;
+        let mail_pending = open_mail.contains(&candidate.member);
+        let new_episode = self
+            .escalation_state
+            .observe(&candidate.member, candidate.state);
+        let provisional = dispose(mail_pending, candidate.state, head, now, new_episode, 0);
+        if candidate.state != RuntimeMemberState::Idle || head.is_none() {
+            self.apply_task_disposition(
+                task_store,
+                reader,
+                head,
+                candidate,
+                now,
+                stats,
+                provisional,
+            )
+            .await;
+            return;
+        }
+        let (refusal_count, refusal_started_at) =
+            match self.refusal_run(reader, &candidate.member).await {
+                Ok(run) => run,
+                Err(error) => {
+                    tracing::warn!(
+                        subsystem = "herdr_queue_wake",
+                        action = "refusal_history_read",
+                        outcome = "failed",
+                        member = %candidate.member,
+                        error = %error,
+                        "Task disposition held because refusal history is unavailable"
+                    );
+                    return;
+                }
+            };
         if refusal_count >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD
             && let Some(since) = refusal_started_at
         {
@@ -143,14 +325,31 @@ impl HerdrQueueWakePump {
             .await;
         }
         let disposition = dispose(
-            open_mail.contains(&candidate.member),
+            mail_pending,
             candidate.state,
             head,
             now,
-            self.escalation_state
-                .observe(&candidate.member, candidate.state),
+            new_episode,
             refusal_count,
         );
+        self.apply_task_disposition(task_store, reader, head, candidate, now, stats, disposition)
+            .await;
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the disposition boundary keeps each durable input explicit"
+    )]
+    async fn apply_task_disposition(
+        &self,
+        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
+        head: Option<&TaskRow>,
+        candidate: MemberObservation,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+        disposition: TaskDisposition,
+    ) {
         match disposition {
             TaskDisposition::EscalateEpisode(kind) => {
                 crate::herdr_queue_wake_escalation::escalate_episode(
@@ -187,17 +386,13 @@ impl HerdrQueueWakePump {
         &self,
         reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         member: &MemberKey,
-    ) -> (u32, Option<IsoTimestamp>) {
-        let Ok(deadline) = ReadDeadline::new(HERDR_REQUEST_DEADLINE) else {
-            return (0, None);
-        };
-        let Ok(run) = reader
+    ) -> Result<(u32, Option<IsoTimestamp>), AtmError> {
+        let deadline = ReadDeadline::new(HERDR_REQUEST_BUDGET)?;
+        reader
             .refusal_run(member.team().clone(), member.agent().clone(), deadline)
             .await
-        else {
-            return (0, None);
-        };
-        (run.count, run.started_at)
+            .map(|run| (run.count, run.started_at))
+            .map_err(Into::into)
     }
 
     async fn open_task_heads(
@@ -210,7 +405,7 @@ impl HerdrQueueWakePump {
             .map(|candidate| candidate.member.team().clone())
             .collect();
         let mut heads = HashMap::new();
-        let deadline = match ReadDeadline::new(HERDR_REQUEST_DEADLINE) {
+        let deadline = match ReadDeadline::new(HERDR_REQUEST_BUDGET) {
             Ok(deadline) => deadline,
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "deadline_invalid", error = %error, "Herdr task reminder read skipped");
@@ -252,10 +447,12 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let member = candidate.member.clone();
         let row_for_dispatch = row.clone();
-        let dispatch = run_blocking(move || {
-            build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch)
-        })
-        .await;
+        let dispatch = self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch)
+            })
+            .await;
         let dispatch = match dispatch {
             Ok(Some(dispatch)) => dispatch,
             Ok(None) => {
@@ -283,7 +480,7 @@ impl HerdrQueueWakePump {
             return;
         };
         match emitter
-            .emit_received_message(dispatch, RequestDeadline::after(HERDR_REQUEST_DEADLINE))
+            .emit_received_message(dispatch, herdr_request_deadline())
             .await
         {
             Ok(_) => {
@@ -308,7 +505,7 @@ impl HerdrQueueWakePump {
     ) {
         let recorded_row = if outcome == ReminderOutcome::Emitted {
             crate::herdr_task_start::complete_task_handoff(
-                &self.service_runtime,
+                self,
                 context.task_store,
                 &self.daemon_home,
                 context.member,
@@ -330,6 +527,15 @@ impl HerdrQueueWakePump {
             // runtime no longer produces a blocked reminder outcome.
             ReminderOutcome::Blocked => {}
         }
+        self.warn_failed_reminder_record(context, row, recorded_row);
+    }
+
+    fn warn_failed_reminder_record(
+        &self,
+        context: &crate::herdr_queue_wake_escalation::TaskReminderContext<'_>,
+        row: &TaskRow,
+        recorded_row: Result<TaskRow, AtmError>,
+    ) {
         if let Err(error) = recorded_row {
             tracing::warn!(
                 subsystem = "herdr_queue_wake",
@@ -356,10 +562,12 @@ impl HerdrQueueWakePump {
         let task_id = row.task_id.clone();
         let write_member = member.clone();
         let write_task_id = task_id.clone();
-        match run_blocking(move || {
-            store.record_reminder(&write_member, &write_task_id, now, outcome)
-        })
-        .await
+        match self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                store.record_reminder(&write_member, &write_task_id, now, outcome)
+            })
+            .await
         {
             Ok(row) => Ok(row),
             Err(error) => {
@@ -394,5 +602,21 @@ impl HerdrQueueWakePump {
                 "Herdr task reminder step skipped: task store unavailable"
             );
         }
+    }
+}
+
+impl PreparedTaskPass {
+    pub(super) fn queue_drain_allowed(&self, member: &MemberKey) -> bool {
+        self.heads.get(member).is_none_or(|head| {
+            head.lead_notified_count > 0
+                || head.reminder_count < atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD
+        })
+    }
+
+    fn queue_reminder_head(&self, member: &MemberKey) -> Option<&TaskRow> {
+        self.heads.get(member).filter(|head| {
+            head.lead_notified_count == 0
+                && head.reminder_count < atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD
+        })
     }
 }

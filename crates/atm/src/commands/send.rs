@@ -273,7 +273,7 @@ impl SendCommand {
         )?;
         let caller_identity = request.caller_identity.clone();
         let caller_team = request.caller_team.clone();
-        if request.task_op.is_some() {
+        if request.task_id.is_some() || request.task_op.is_some() {
             preflight_task_op_compatibility(&composition).await?;
         }
         let mut outcome = composition.send(request).await?;
@@ -356,7 +356,7 @@ impl SendCommand {
         let message_source =
             self.build_message_source(max_message_bytes, &current_dir, attachment_note.as_deref())?;
         let assigning_task = self.task_id.is_some() && !self.task_complete;
-        let request = SendRequest::new(
+        let mut request = SendRequest::new(
             home_dir,
             current_dir,
             caller_context.caller_identity,
@@ -387,7 +387,7 @@ impl SendCommand {
                 })
         })
         .map_err(anyhow::Error::from)?;
-        validate_local_task_target(&request)?;
+        atm_core::send::validate_task_request(&mut request)?;
         Ok(request)
     }
 
@@ -666,24 +666,6 @@ impl SendCommand {
                 .map_err(Into::into)
         }
     }
-}
-
-pub(super) fn validate_local_task_target(request: &SendRequest) -> Result<()> {
-    if (request.task_id.is_some() || request.task_op.is_some())
-        && request.to.as_ref().is_some_and(|target| {
-            target.host().is_some()
-                || target
-                    .team()
-                    .is_some_and(|team| team != &request.caller_team)
-        })
-    {
-        let target = request.to.as_ref().expect("checked task target");
-        return Err(AtmError::validation(format!(
-            "task commands are local-team only; {target} resolves to another team or host — send a plain message or assign the local alias"
-        ))
-        .into());
-    }
-    Ok(())
 }
 
 pub(super) async fn preflight_task_op_compatibility(
@@ -1160,7 +1142,7 @@ mod tests {
 
     use super::{
         SendCommand, TaskSendOptions, require_task_op_compatibility,
-        resolve_trusted_ipv4_with_lookup, validate_local_task_target,
+        resolve_trusted_ipv4_with_lookup,
     };
     use crate::commands::send_fan_out::fan_out_result_json;
     // `FanOutRecipient`/`RecipientLocality`/`CliObservability` are consumed
@@ -1659,6 +1641,8 @@ mod tests {
         })
         .build_request_with_mode(".".into(), ".".into(), NudgeMode::Deferred, None)
         .expect("task assignment");
+        assert_eq!(alias_assign.nudge_mode, NudgeMode::Deferred);
+        assert_eq!(task_assign.nudge_mode, NudgeMode::Deferred);
         assert_eq!(
             serde_json::to_vec(&alias_assign).expect("serialize alias assignment"),
             serde_json::to_vec(&task_assign).expect("serialize task assignment")
@@ -1690,6 +1674,8 @@ mod tests {
             None,
         )
         .expect("task close");
+        assert_eq!(alias_close.nudge_mode, NudgeMode::Immediate);
+        assert_eq!(task_close.nudge_mode, NudgeMode::Immediate);
         assert_eq!(
             serde_json::to_vec(&alias_close).expect("serialize alias close"),
             serde_json::to_vec(&task_close).expect("serialize task close")
@@ -1700,7 +1686,7 @@ mod tests {
     #[serial(env)]
     fn send_builder_rejects_nonlocal_task_target() {
         for target in ["recipient-a@other-team", "recipient-a@test-team.127.0.0.1"] {
-            let request = atm_core::send::SendRequest::new(
+            let mut request = atm_core::send::SendRequest::new(
                 ".".into(),
                 ".".into(),
                 ROLE_TEAM_LEAD.parse().expect("caller"),
@@ -1713,7 +1699,7 @@ mod tests {
                 false,
             )
             .expect("request shape");
-            let error = validate_local_task_target(&request)
+            let error = atm_core::send::validate_task_request(&mut request)
                 .expect_err("non-local task target must fail before execution");
             assert!(error.to_string().contains("local-team only"), "{error:#}");
         }
@@ -1732,6 +1718,38 @@ mod tests {
         assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
         assert!(error.message().contains("1.5.0"));
         assert!(error.message().contains("1.4.0"));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn send_task_id_alias_refuses_daemon_below_1_5_0() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
+        let task_id: TaskId = "T1".parse().expect("task id");
+        let request = SendCommand::for_task(TaskSendOptions {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("assignment".to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            template: None,
+            vars: None,
+            task_id: Some(task_id),
+            json: false,
+        })
+        .build_request_with_mode(".".into(), ".".into(), NudgeMode::Deferred, None)
+        .expect("task assignment request");
+
+        assert!(request.task_id.is_some());
+        let verdict = ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::parse("1.5.11").expect("release"),
+            daemon_schema_version: 1,
+            daemon_http_api_version: HttpApiVersion::parse("1.4.0").expect("HTTP API"),
+        });
+        let error = require_task_op_compatibility(verdict)
+            .expect_err("a 1.4 daemon cannot decode task-id alias assignments");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(error.message().contains("1.5.0"));
     }
 
     #[test]

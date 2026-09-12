@@ -73,6 +73,11 @@ pub enum AtmErrorCode {
     MailboxLockTimeout,
     InternalError,
     MessageValidationFailed,
+    TaskNotFound,
+    TaskAlreadyClosed,
+    TaskNotCounterparty,
+    TaskStaleCounterparty,
+    TaskMoveInvalid,
     /// Search is intentionally local-only until a separately authorized peer
     /// query protocol exists.
     SearchLocalOnly,
@@ -252,6 +257,11 @@ impl AtmErrorCode {
             Self::MailboxLockTimeout => "ATM_MAILBOX_LOCK_TIMEOUT",
             Self::InternalError => "ATM_INTERNAL_ERROR",
             Self::MessageValidationFailed => "ATM_MESSAGE_VALIDATION_FAILED",
+            Self::TaskNotFound => "ATM_TASK_NOT_FOUND",
+            Self::TaskAlreadyClosed => "ATM_TASK_ALREADY_CLOSED",
+            Self::TaskNotCounterparty => "ATM_TASK_NOT_COUNTERPARTY",
+            Self::TaskStaleCounterparty => "ATM_TASK_STALE_COUNTERPARTY",
+            Self::TaskMoveInvalid => "ATM_TASK_MOVE_INVALID",
             Self::SearchLocalOnly => "ATM_SEARCH_LOCAL_ONLY",
             Self::LocalHttpCapabilityInvalid => "ATM_LOCAL_HTTP_CAPABILITY_INVALID",
             Self::LocalHttpEndpointSchemaUnsupported => {
@@ -433,6 +443,11 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_MAILBOX_LOCK_TIMEOUT" => AtmErrorCode::MailboxLockTimeout,
         "ATM_INTERNAL_ERROR" => AtmErrorCode::InternalError,
         "ATM_MESSAGE_VALIDATION_FAILED" => AtmErrorCode::MessageValidationFailed,
+        "ATM_TASK_NOT_FOUND" => AtmErrorCode::TaskNotFound,
+        "ATM_TASK_ALREADY_CLOSED" => AtmErrorCode::TaskAlreadyClosed,
+        "ATM_TASK_NOT_COUNTERPARTY" => AtmErrorCode::TaskNotCounterparty,
+        "ATM_TASK_STALE_COUNTERPARTY" => AtmErrorCode::TaskStaleCounterparty,
+        "ATM_TASK_MOVE_INVALID" => AtmErrorCode::TaskMoveInvalid,
         "ATM_SEARCH_LOCAL_ONLY" => AtmErrorCode::SearchLocalOnly,
         "ATM_LOCAL_HTTP_CAPABILITY_INVALID" => AtmErrorCode::LocalHttpCapabilityInvalid,
         "ATM_LOCAL_HTTP_ENDPOINT_SCHEMA_UNSUPPORTED" => {

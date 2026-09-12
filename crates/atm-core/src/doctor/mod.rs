@@ -2711,6 +2711,16 @@ mod tests {
         assert!(codes.contains(&AtmErrorCode::RosterMultipleLeads));
         assert!(codes.contains(&AtmErrorCode::RosterReservedName));
         assert!(codes.contains(&AtmErrorCode::TaskStalled));
+        let stalled = findings
+            .iter()
+            .find(|finding| finding.code == AtmErrorCode::TaskStalled)
+            .expect("stalled task finding");
+        assert_eq!(
+            stalled.remediation.as_deref(),
+            Some(
+                "check the assignee or close the task: atm task close <task_id> completed --stdin"
+            )
+        );
         let info = findings
             .iter()
             .find(|finding| finding.severity == DoctorSeverity::Info)

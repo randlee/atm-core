@@ -354,7 +354,7 @@ pub(crate) fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskI
         )
 }
 
-pub(crate) fn validate_task_request(request: &mut SendRequest) -> Result<(), AtmError> {
+pub fn validate_task_request(request: &mut SendRequest) -> Result<(), AtmError> {
     let (task_id, task_op) = request.task_op_normalized()?;
     if task_op.is_some() && task_id.is_none() {
         return Err(AtmError::validation("task_op requires task_id"));

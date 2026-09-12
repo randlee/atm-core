@@ -3406,11 +3406,33 @@
             },
             {
               "has_default": true,
+              "id": "all",
+              "long": "all",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
               "id": "json",
               "long": "json",
               "num_args": {
                 "max": 0,
                 "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "limit",
+              "long": "limit",
+              "num_args": {
+                "max": 1,
+                "min": 1
               },
               "required": false,
               "short": null
@@ -3483,6 +3505,17 @@
               "num_args": {
                 "max": 0,
                 "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "limit",
+              "long": "limit",
+              "num_args": {
+                "max": 1,
+                "min": 1
               },
               "required": false,
               "short": null

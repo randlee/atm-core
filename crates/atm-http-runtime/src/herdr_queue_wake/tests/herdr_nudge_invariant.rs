@@ -1,9 +1,11 @@
+#![cfg(test)]
+
 use super::*;
-use atm_core::boundary::TaskStore;
 use crate::{
     BareCliFifo, BareCliQueueFullDrops, RuntimeHealth, append_bare_cli_message,
     drain_bare_cli_messages,
 };
+use atm_core::boundary::TaskStore;
 use std::str::FromStr;
 use tracing::instrument::WithSubscriber;
 
@@ -123,10 +125,7 @@ async fn daemon_mail_for(
         .async_mailbox_reader()
         .expect("mailbox reader")
         .list_messages(
-            atm_storage::MailboxScope::new(
-                team.clone(),
-                agent.parse().expect("mailbox agent"),
-            ),
+            atm_storage::MailboxScope::new(team.clone(), agent.parse().expect("mailbox agent")),
             atm_storage::MessageQuery {
                 team: team.clone(),
                 agent: agent.parse().expect("query agent"),
@@ -134,11 +133,28 @@ async fn daemon_mail_for(
                 task_id: None,
                 limit: None,
             },
-            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1))
-                .expect("deadline"),
+            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline"),
         )
         .await
         .expect("read daemon mail")
+}
+
+async fn daemon_stalled_mail_for(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &str,
+) -> Vec<atm_storage::Message> {
+    daemon_mail_for(runtime, team, agent)
+        .await
+        .into_iter()
+        .filter(|message| {
+            message
+                .envelope
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.starts_with("escalation:lead_notified:"))
+        })
+        .collect()
 }
 
 async fn task_assignment_message_id(
@@ -158,13 +174,15 @@ async fn task_assignment_message_id(
                 task_id: Some(task_id.clone()),
                 limit: None,
             },
-            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1))
-                .expect("deadline"),
+            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline"),
         )
         .await
         .expect("read task assignment");
     let [message] = messages.as_slice() else {
-        panic!("expected exactly one task assignment, got {}", messages.len());
+        panic!(
+            "expected exactly one task assignment, got {}",
+            messages.len()
+        );
     };
     message
         .message_key
@@ -241,7 +259,11 @@ fn build_real_task_pump(task_names: &[&str]) -> RealTaskPumpFixture {
         .shared_roster_store_arc()
         .save_roster(&RosterSnapshot {
             team_name: team.clone(),
-            members: vec![herdr_member(&team, "worker"), bare_member(&team, "sender"), lead],
+            members: vec![
+                herdr_member(&team, "worker"),
+                bare_member(&team, "sender"),
+                lead,
+            ],
             refreshed_at: None,
         })
         .expect("lifecycle roster");
@@ -257,12 +279,7 @@ fn build_real_task_pump(task_names: &[&str]) -> RealTaskPumpFixture {
             key.agent().as_str(),
             task.clone(),
         );
-        acknowledge_task_assignment(
-            root.path(),
-            &assembly.service_runtime,
-            &key,
-            message_id,
-        );
+        acknowledge_task_assignment(root.path(), &assembly.service_runtime, &key, message_id);
     }
     clear_pending_markers(root.path(), &assembly.service_runtime, &key);
     let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
@@ -277,15 +294,7 @@ fn build_real_task_pump(task_names: &[&str]) -> RealTaskPumpFixture {
         now.clone(),
     )
     .with_daemon_home(root.path().join("home"));
-    (
-        root,
-        assembly.service_runtime,
-        fake,
-        pump,
-        key,
-        tasks,
-        now,
-    )
+    (root, assembly.service_runtime, fake, pump, key, tasks, now)
 }
 
 fn acknowledge_task_assignment(
@@ -348,11 +357,13 @@ async fn idle_member_with_queued_task_is_nudged_once_per_interval() {
         build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
     pump.tick_once().await;
     assert_eq!(prompt_texts(&fake).len(), 1);
-    *now.lock().expect("clock") = IsoTimestamp::from_str("2030-01-01T00:00:30Z").expect("timestamp");
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:30Z").expect("timestamp");
     queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
     pump.tick_once().await;
     assert_eq!(prompt_texts(&fake).len(), 1);
-    *now.lock().expect("clock") = IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
     queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
     pump.tick_once().await;
     assert_eq!(prompt_texts(&fake).len(), 2);
@@ -374,7 +385,10 @@ async fn active_member_is_never_prompted() {
         }
         pump.tick_once().await;
     }
-    assert!(prompt_texts(&fake).is_empty(), "active members are never prompted");
+    assert!(
+        prompt_texts(&fake).is_empty(),
+        "active members are never prompted"
+    );
     assert_eq!(pump.stats().task_reminders, 0);
     assert_eq!(pump.stats().blocked_escalations, 0);
     assert!(
@@ -415,13 +429,15 @@ async fn active_member_is_never_prompted() {
         .with_task_store(writer);
     runtime.apply_roster_runtime_observations(
         &team,
-        &[atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-            key.agent().clone(),
-            RuntimeMemberState::Active,
-            atm_core::protocol::RuntimeObservationSource::Heartbeat,
-            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp"),
-            None,
-        )],
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                key.agent().clone(),
+                RuntimeMemberState::Active,
+                atm_core::protocol::RuntimeObservationSource::Heartbeat,
+                IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp"),
+                None,
+            ),
+        ],
     );
     let tmux_fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
     let clock = Arc::new(Mutex::new(
@@ -446,12 +462,7 @@ async fn poll_failure_produces_no_episode() {
     let (_root, runtime, _seeded_fake, _seeded_pump, _store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
     let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-    let pump = pump_with_clock(
-        runtime.clone(),
-        fake.clone(),
-        RuntimeHealth::default(),
-        now,
-    );
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), RuntimeHealth::default(), now);
     let roster_before = runtime
         .shared_roster_store_arc()
         .load_roster(keys[0].team())
@@ -501,14 +512,8 @@ async fn breaker_open_produces_no_escalation_mail() {
 async fn escalation_mail_does_not_consume_prompt_budget() {
     let mut statuses = vec![HerdrAgentStatus::Idle; 16];
     statuses.push(HerdrAgentStatus::Blocked);
-    let (_root, runtime, fake, pump, store, keys, _now) =
-        build_task_only_pump(statuses, false);
-    install_escalation_targets(
-        &runtime,
-        store.as_ref(),
-        &keys,
-        &["observer@ax5-task-only"],
-    );
+    let (_root, runtime, fake, pump, store, keys, _now) = build_task_only_pump(statuses, false);
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &["observer@ax5-task-only"]);
     pump.tick_once().await;
     assert_eq!(prompt_texts(&fake).len(), 16);
     assert_eq!(pump.stats().task_reminders, 16);
@@ -519,8 +524,8 @@ async fn escalation_mail_does_not_consume_prompt_budget() {
             keys[16].team(),
             atm_storage::roles::ROLE_TEAM_LEAD,
         )
-            .await
-            .len(),
+        .await
+        .len(),
         1
     );
     assert_eq!(
@@ -542,20 +547,23 @@ async fn member_turning_active_between_dispose_and_emit_is_not_prompted() {
     let hook_key = keys[0].clone();
     let hooked = Arc::new(
         atm_storage::testing::InMemoryTaskLedgerReader::delegating_with_open_tasks_hook(
-        inner,
-        move || {
-            hook_runtime.apply_roster_runtime_observations(
-                hook_key.team(),
-                &[atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-                    hook_key.agent().clone(),
-                    RuntimeMemberState::Active,
-                    atm_core::protocol::RuntimeObservationSource::Heartbeat,
-                    IsoTimestamp::from_str("2030-01-01T00:00:01Z").expect("timestamp"),
-                    None,
-                )],
-            );
-        },
-    ));
+            inner,
+            move || {
+                hook_runtime.apply_roster_runtime_observations(
+                    hook_key.team(),
+                    &[
+                        atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                            hook_key.agent().clone(),
+                            RuntimeMemberState::Active,
+                            atm_core::protocol::RuntimeObservationSource::Heartbeat,
+                            IsoTimestamp::from_str("2030-01-01T00:00:01Z").expect("timestamp"),
+                            None,
+                        ),
+                    ],
+                );
+            },
+        ),
+    );
     let hooked_runtime = runtime.with_async_task_ledger_reader(hooked);
     let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
     queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
@@ -582,35 +590,32 @@ async fn member_turning_active_between_dispose_and_emit_is_not_prompted() {
 async fn blocked_member_gets_one_message_zero_nudges_per_episode() {
     let (_root, runtime, fake, pump, store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
-    install_escalation_targets(
-        &runtime,
-        store.as_ref(),
-        &keys,
-        &["observer@ax5-task-only"],
-    );
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &["observer@ax5-task-only"]);
     for second in 0..50 {
-        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
-            "2030-01-01T00:00:{second:02}Z"
-        ))
-        .expect("timestamp");
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:00:{second:02}Z")).expect("timestamp");
         pump.tick_once().await;
         if second < 49 {
             queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
         }
     }
-    assert!(prompt_texts(&fake).is_empty(), "blocked members receive no task nudges");
+    assert!(
+        prompt_texts(&fake).is_empty(),
+        "blocked members receive no task nudges"
+    );
     assert_eq!(pump.stats().task_reminders, 0);
     assert_eq!(
-        daemon_mail_for(
-            &runtime,
-            keys[0].team(),
-            atm_storage::roles::ROLE_TEAM_LEAD,
-        )
-        .await
-        .len(),
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD,)
+            .await
+            .len(),
         1
     );
-    assert_eq!(daemon_mail_for(&runtime, keys[0].team(), "observer").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), "observer")
+            .await
+            .len(),
+        1
+    );
 
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("timestamp");
@@ -621,16 +626,17 @@ async fn blocked_member_gets_one_message_zero_nudges_per_episode() {
     queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
     pump.tick_once().await;
     assert_eq!(
-        daemon_mail_for(
-            &runtime,
-            keys[0].team(),
-            atm_storage::roles::ROLE_TEAM_LEAD,
-        )
-        .await
-        .len(),
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD,)
+            .await
+            .len(),
         2
     );
-    assert_eq!(daemon_mail_for(&runtime, keys[0].team(), "observer").await.len(), 2);
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), "observer")
+            .await
+            .len(),
+        2
+    );
 }
 
 #[tokio::test]
@@ -645,12 +651,7 @@ async fn offline_member_gets_one_message_zero_nudges_per_episode() {
             refreshed_at: None,
         })
         .expect("bare CLI roster");
-    install_escalation_targets(
-        &runtime,
-        store.as_ref(),
-        &keys,
-        &["observer@ax5-task-only"],
-    );
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &["observer@ax5-task-only"]);
     let router = crate::storage_and_nudge_router::StorageAndNudgeRouter::new(
         runtime.clone(),
         Arc::new(NullObservability),
@@ -687,19 +688,87 @@ async fn offline_member_gets_one_message_zero_nudges_per_episode() {
     for _ in 0..50 {
         pump.tick_once().await;
     }
-    assert!(fake.calls().is_empty(), "the offline member has no Herdr backend");
+    assert!(
+        fake.calls().is_empty(),
+        "the offline member has no Herdr backend"
+    );
     assert_eq!(pump.stats().task_reminders, 0);
     assert_eq!(
-        daemon_mail_for(
-            &runtime,
-            keys[0].team(),
-            atm_storage::roles::ROLE_TEAM_LEAD,
-        )
-        .await
-        .len(),
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD,)
+            .await
+            .len(),
         1
     );
-    assert_eq!(daemon_mail_for(&runtime, keys[0].team(), "observer").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), "observer")
+            .await
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn sustained_listing_absence_becomes_offline_after_two_reminder_intervals_once() {
+    let (_root, runtime, fake, pump, store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &["observer@ax5-task-only"]);
+
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:01Z").expect("timestamp");
+    fake.queue_list_result(Ok(HerdrListOutcome { agents: Vec::new() }));
+    pump.tick_once().await;
+    assert_eq!(
+        runtime
+            .roster_ephemeral_state(keys[0].team(), keys[0].agent())
+            .expect("first absent observation")
+            .runtime
+            .state,
+        RuntimeMemberState::Unknown
+    );
+    assert!(
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD,)
+            .await
+            .is_empty()
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:00Z").expect("timestamp");
+    fake.queue_list_result(Ok(HerdrListOutcome { agents: Vec::new() }));
+    pump.tick_once().await;
+    assert_eq!(
+        runtime
+            .roster_ephemeral_state(keys[0].team(), keys[0].agent())
+            .expect("pre-threshold observation")
+            .runtime
+            .state,
+        RuntimeMemberState::Unknown
+    );
+
+    for timestamp in ["2030-01-01T00:02:01Z", "2030-01-01T00:03:01Z"] {
+        *now.lock().expect("clock") = IsoTimestamp::from_str(timestamp).expect("timestamp");
+        fake.queue_list_result(Ok(HerdrListOutcome { agents: Vec::new() }));
+        pump.tick_once().await;
+    }
+
+    let observation = runtime
+        .roster_ephemeral_state(keys[0].team(), keys[0].agent())
+        .expect("member observation")
+        .runtime;
+    assert_eq!(observation.state, RuntimeMemberState::Offline);
+    assert_eq!(pump.stats().task_reminders, 0);
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD,)
+            .await
+            .len(),
+        1
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), "observer")
+            .await
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -708,24 +777,20 @@ async fn daemon_restart_does_not_reescalate_ongoing_episode() {
         build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2026-01-01T00:00:00Z").expect("timestamp");
-    install_escalation_targets(
-        &runtime,
-        store.as_ref(),
-        &keys,
-        &["observer@ax5-task-only"],
-    );
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &["observer@ax5-task-only"]);
     pump.tick_once().await;
     assert_eq!(
-        daemon_mail_for(
-            &runtime,
-            keys[0].team(),
-            atm_storage::roles::ROLE_TEAM_LEAD,
-        )
-        .await
-        .len(),
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD,)
+            .await
+            .len(),
         1
     );
-    assert_eq!(daemon_mail_for(&runtime, keys[0].team(), "observer").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), "observer")
+            .await
+            .len(),
+        1
+    );
 
     let durable_reader = runtime.async_mailbox_reader().expect("durable reader");
     let counting_reader = Arc::new(atm_storage::testing::InMemoryMailboxReader::delegating(
@@ -750,18 +815,23 @@ async fn daemon_restart_does_not_reescalate_ongoing_episode() {
     }
     assert!(prompt_texts(&fake).is_empty());
     assert!(prompt_texts(&restarted_fake).is_empty());
-    assert_eq!(counting_reader.list_call_count(), 2, "one read per target at restart");
     assert_eq!(
-        daemon_mail_for(
-            &runtime,
-            keys[0].team(),
-            atm_storage::roles::ROLE_TEAM_LEAD,
-        )
-        .await
-        .len(),
+        counting_reader.list_call_count(),
+        2,
+        "one read per target at restart"
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD,)
+            .await
+            .len(),
         1
     );
-    assert_eq!(daemon_mail_for(&runtime, keys[0].team(), "observer").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), "observer")
+            .await
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -780,16 +850,21 @@ async fn recovered_then_reblocked_episode_is_reported_again() {
     *now.lock().expect("clock") = second_since;
     queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
     pump.tick_once().await;
-    assert_eq!(prompt_texts(&fake).len(), 1, "only the recovered idle tick may prompt");
-    let mail = daemon_mail_for(
-        &runtime,
-        keys[0].team(),
-        atm_storage::roles::ROLE_TEAM_LEAD,
-    )
-    .await;
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        1,
+        "only the recovered idle tick may prompt"
+    );
+    let mail = daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD).await;
     assert_eq!(mail.len(), 2);
-    assert!(mail.iter().any(|message| message.envelope.text.contains(&first_since.to_string())));
-    assert!(mail.iter().any(|message| message.envelope.text.contains(&second_since.to_string())));
+    assert!(
+        mail.iter()
+            .any(|message| message.envelope.text.contains(&first_since.to_string()))
+    );
+    assert!(
+        mail.iter()
+            .any(|message| message.envelope.text.contains(&second_since.to_string()))
+    );
 }
 
 #[tokio::test]
@@ -826,9 +901,22 @@ async fn recipients_only_episode_is_not_duplicated_after_restart() {
         )
         .expect("recipient");
     pump.tick_once().await;
-    assert!(daemon_mail_for(&runtime, keys[0].team(), "lead-a").await.is_empty());
-    assert!(daemon_mail_for(&runtime, keys[0].team(), "lead-b").await.is_empty());
-    assert_eq!(daemon_mail_for(&runtime, keys[0].team(), "observer").await.len(), 1);
+    assert!(
+        daemon_mail_for(&runtime, keys[0].team(), "lead-a")
+            .await
+            .is_empty()
+    );
+    assert!(
+        daemon_mail_for(&runtime, keys[0].team(), "lead-b")
+            .await
+            .is_empty()
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), "observer")
+            .await
+            .len(),
+        1
+    );
 
     let durable_reader = runtime.async_mailbox_reader().expect("durable reader");
     let counting_reader = Arc::new(atm_storage::testing::InMemoryMailboxReader::delegating(
@@ -848,7 +936,12 @@ async fn recipients_only_episode_is_not_duplicated_after_restart() {
     .with_daemon_home(root.path().join("home"));
     restarted.tick_once().await;
     assert_eq!(counting_reader.list_call_count(), 1);
-    assert_eq!(daemon_mail_for(&runtime, keys[0].team(), "observer").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), "observer")
+            .await
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -859,12 +952,7 @@ async fn episode_message_summary_and_body() {
         IsoTimestamp::from_str("2026-01-01T00:00:00Z").expect("timestamp");
     install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
     pump.tick_once().await;
-    let mail = daemon_mail_for(
-        &runtime,
-        keys[0].team(),
-        atm_storage::roles::ROLE_TEAM_LEAD,
-    )
-    .await;
+    let mail = daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD).await;
     assert_eq!(mail.len(), 1);
     assert_eq!(
         mail[0].envelope.summary.as_deref(),
@@ -879,14 +967,42 @@ async fn episode_message_summary_and_body() {
 }
 
 #[tokio::test]
+async fn escalation_mail_is_immediate_and_never_carries_marker() {
+    let (_root, runtime, _fake, pump, store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
+
+    pump.tick_once().await;
+
+    let lead = atm_storage::MemberKey::new(
+        keys[0].team().clone(),
+        atm_storage::roles::ROLE_TEAM_LEAD
+            .parse()
+            .expect("lead agent"),
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), lead.agent().as_str())
+            .await
+            .len(),
+        1
+    );
+    assert!(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .claim_next_pending(&lead)
+            .expect("claim pending marker")
+            .is_none(),
+        "immediate escalation mail must not create a queue marker"
+    );
+}
+
+#[tokio::test]
 async fn tenth_reminder_escalates_once_then_silence() {
-    let (_root, runtime, fake, pump, key, tasks, now) =
-        build_real_task_pump(&["LIFE-TENTH"]);
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-TENTH"]);
     for minute in 0..10 {
-        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
-            "2030-01-01T00:{minute:02}:00Z"
-        ))
-        .expect("timestamp");
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         if minute > 0 {
             queue_idle_result(&fake, &key);
         }
@@ -914,10 +1030,9 @@ async fn tenth_reminder_escalates_once_then_silence() {
     for elapsed in 11..111 {
         let hour = elapsed / 60;
         let minute = elapsed % 60;
-        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
-            "2030-01-01T{hour:02}:{minute:02}:00Z"
-        ))
-        .expect("timestamp");
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T{hour:02}:{minute:02}:00Z"))
+                .expect("timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
     }
@@ -931,14 +1046,261 @@ async fn tenth_reminder_escalates_once_then_silence() {
 }
 
 #[tokio::test]
+async fn escalation_recipient_read_error_holds_and_warns_once_per_tick() {
+    let (_root, runtime, fake, pump, store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
+    for minute in 0..10 {
+        let at =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        store
+            .record_reminder(
+                &keys[0],
+                &task_id,
+                at,
+                atm_storage::ReminderOutcome::Emitted,
+            )
+            .expect("seed reminder");
+    }
+    store.set_fail_escalation_recipient_reads(true);
+    let warnings = WarningLayer::default();
+
+    for tick in 0..2 {
+        if tick > 0 {
+            queue_idle_result(&fake, &keys[0]);
+        }
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{}:00Z", tick + 10)).expect("timestamp");
+        pump.tick_once()
+            .with_subscriber(tracing_subscriber::Registry::default().with(warnings.clone()))
+            .await;
+        let row = store.row(&keys[0], &task_id);
+        assert_eq!(row.reminder_count, 10);
+        assert_eq!(
+            row.lead_notified_count, 0,
+            "failed target reads are non-terminal"
+        );
+        let target_warnings = warnings
+            .events
+            .lock()
+            .expect("warning events")
+            .iter()
+            .filter(|(action, outcome)| action == "escalation_target_load" && outcome == "failed")
+            .count();
+        assert_eq!(
+            target_warnings,
+            tick + 1,
+            "one target-read warning per tick"
+        );
+    }
+    assert!(prompt_texts(&fake).is_empty());
+    assert_eq!(pump.stats().lead_notifications, 0);
+    assert!(
+        daemon_mail_for(&runtime, keys[0].team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty()
+    );
+}
+
+async fn drive_task_to_stall(
+    pump: &HerdrQueueWakePump,
+    fake: &Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+    key: &atm_storage::MemberKey,
+    now: &Arc<Mutex<IsoTimestamp>>,
+) {
+    for minute in 0..=10 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        if minute > 0 {
+            queue_idle_result(fake, key);
+        }
+        pump.tick_once().await;
+    }
+}
+
+#[tokio::test]
+async fn tenth_reminder_with_zero_leads_escalates_to_recipients_once_then_silence() {
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-NO-LEAD"]);
+    let mut roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(key.team())
+        .expect("roster");
+    roster
+        .members
+        .retain(|member| member.agent_type != atm_storage::AgentType::Lead);
+    roster.members.push(bare_member(key.team(), "observer"));
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&roster)
+        .expect("zero-lead roster");
+    assert!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .effective_escalation_recipients(key.team())
+            .expect("escalation recipients")
+            .is_empty()
+    );
+    runtime
+        .task_store()
+        .expect("task store")
+        .add_escalation_recipient(
+            &atm_storage::EscalationScope::Team(key.team().clone()),
+            &"observer@lifecycle-team".parse().expect("recipient"),
+            *now.lock().expect("clock"),
+        )
+        .expect("escalation recipient");
+
+    drive_task_to_stall(&pump, &fake, &key, &now).await;
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .lead_notified_count,
+        1
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "observer")
+            .await
+            .len(),
+        1
+    );
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "observer")
+            .await
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn tenth_reminder_with_no_targets_records_terminal_audit() {
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-NO-TARGETS"]);
+    let mut roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(key.team())
+        .expect("roster");
+    roster
+        .members
+        .retain(|member| member.agent_type != atm_storage::AgentType::Lead);
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&roster)
+        .expect("zero-lead roster");
+    let recipients = ["worker", "sender", atm_storage::roles::ROLE_TEAM_LEAD];
+
+    drive_task_to_stall(&pump, &fake, &key, &now).await;
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .lead_notified_count,
+        1
+    );
+    for recipient in recipients {
+        assert!(
+            daemon_stalled_mail_for(&runtime, key.team(), recipient)
+                .await
+                .is_empty(),
+            "no escalation mail should be written to {recipient}"
+        );
+    }
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 10);
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .lead_notified_count,
+        1
+    );
+    for recipient in recipients {
+        assert!(
+            daemon_stalled_mail_for(&runtime, key.team(), recipient)
+                .await
+                .is_empty(),
+            "the next tick should remain silent for {recipient}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn tenth_reminder_with_two_leads_escalates_to_each_once_then_silence() {
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-TWO-LEADS"]);
+    let mut roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(key.team())
+        .expect("roster");
+    roster
+        .members
+        .retain(|member| member.agent_type != atm_storage::AgentType::Lead);
+    for name in ["lead-a", "lead-b"] {
+        let mut lead = bare_member(key.team(), name);
+        lead.agent_type = atm_storage::AgentType::Lead;
+        roster.members.push(lead);
+    }
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&roster)
+        .expect("two-lead roster");
+
+    drive_task_to_stall(&pump, &fake, &key, &now).await;
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .lead_notified_count,
+        1
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "lead-a").await.len(),
+        1
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "lead-b").await.len(),
+        1
+    );
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "lead-a").await.len(),
+        1
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "lead-b").await.len(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn close_of_stalled_task_resumes_nudging_on_next_task() {
     let (root, runtime, fake, pump, key, tasks, now) =
         build_real_task_pump(&["LIFE-FIRST", "LIFE-SECOND"]);
     for minute in 0..=10 {
-        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
-            "2030-01-01T00:{minute:02}:00Z"
-        ))
-        .expect("timestamp");
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         if minute > 0 {
             queue_idle_result(&fake, &key);
         }
@@ -974,13 +1336,10 @@ async fn close_of_stalled_task_resumes_nudging_on_next_task() {
 
 #[tokio::test]
 async fn reopen_of_stalled_task_escalates_again_at_threshold() {
-    let (root, runtime, fake, pump, key, tasks, now) =
-        build_real_task_pump(&["LIFE-REOPEN"]);
+    let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-REOPEN"]);
     for minute in 0..=10 {
-        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
-            "2030-01-01T00:{minute:02}:00Z"
-        ))
-        .expect("timestamp");
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         if minute > 0 {
             queue_idle_result(&fake, &key);
         }
@@ -1017,10 +1376,8 @@ async fn reopen_of_stalled_task_escalates_again_at_threshold() {
     assert_eq!(reopened.lead_notified_count, 0);
 
     for minute in 20..=30 {
-        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
-            "2030-01-01T00:{minute:02}:00Z"
-        ))
-        .expect("timestamp");
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
     }
@@ -1045,7 +1402,11 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
     let team = key.team().clone();
 
     pump.tick_once().await;
-    assert_eq!(prompt_texts(&fake).len(), 1, "the queued assignment wakes once");
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        1,
+        "the queued assignment wakes once"
+    );
     assert_eq!(
         runtime
             .task_store()
@@ -1062,7 +1423,11 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
         IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert_eq!(prompt_texts(&fake).len(), 2, "the due task reminder is emitted once");
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        2,
+        "the due task reminder is emitted once"
+    );
     let store = runtime.task_store().expect("store");
     assert_eq!(
         store
@@ -1072,7 +1437,9 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
             .state,
         TaskState::Active
     );
-    let events = store.list_task_events(&team, &task, None).expect("task events");
+    let events = store
+        .list_task_events(&team, &task, None)
+        .expect("task events");
     assert_eq!(
         events
             .iter()
@@ -1100,8 +1467,7 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
                 task_id: Some(task.clone()),
                 limit: None,
             },
-            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1))
-                .expect("deadline"),
+            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline"),
         )
         .await
         .expect("read assigner mailbox");
@@ -1140,8 +1506,7 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
                 task_id: Some(task),
                 limit: None,
             },
-            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1))
-                .expect("deadline"),
+            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline"),
         )
         .await
         .expect("read assigner mailbox after retry");
@@ -1165,7 +1530,11 @@ async fn head_already_active_handoff_sends_no_receipt() {
     pump.tick_once().await;
     let store = runtime.task_store().expect("store");
     assert_eq!(
-        store.load_task(&team, &task).expect("task").expect("row").state,
+        store
+            .load_task(&team, &task)
+            .expect("task")
+            .expect("row")
+            .state,
         TaskState::Active
     );
     let starts_before = store
@@ -1195,7 +1564,11 @@ async fn head_already_active_handoff_sends_no_receipt() {
         IsoTimestamp::from_str("2030-01-01T00:02:02Z").expect("timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert_eq!(prompt_texts(&fake).len(), 3, "the active head still receives its due reminder");
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        3,
+        "the active head still receives its due reminder"
+    );
     assert_eq!(
         store
             .list_task_events(&team, &task, None)
@@ -1214,7 +1587,10 @@ async fn head_already_active_handoff_sends_no_receipt() {
         .await
         .expect("receipts")
         .len();
-    assert_eq!(receipts_after, receipts_before, "active tasks receive no second handoff receipt");
+    assert_eq!(
+        receipts_after, receipts_before,
+        "active tasks receive no second handoff receipt"
+    );
 }
 
 #[tokio::test]
@@ -1261,7 +1637,11 @@ async fn failed_start_write_then_active_member_still_starts_once() {
         .expect("row");
     assert_eq!(started.state, TaskState::Active);
     assert_eq!(started.reminder_count, 1);
-    assert_eq!(prompt_texts(&fake).len(), 1, "owed start emits no second prompt");
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        1,
+        "owed start emits no second prompt"
+    );
     assert_eq!(
         store
             .list_task_events(key.team(), &task, None)
@@ -1273,7 +1653,10 @@ async fn failed_start_write_then_active_member_still_starts_once() {
     );
     let receipts = daemon_mail_for(&runtime, key.team(), "sender").await;
     assert_eq!(receipts.len(), 1);
-    assert_eq!(receipts[0].envelope.summary.as_deref(), Some("task_started:AX5-HANDOFF"));
+    assert_eq!(
+        receipts[0].envelope.summary.as_deref(),
+        Some("task_started:AX5-HANDOFF")
+    );
 }
 
 #[tokio::test]
@@ -1309,6 +1692,79 @@ async fn idle_member_with_open_mail_holds_mail_pending() {
     );
 }
 
+async fn assert_refusal_read_failure_holds(error: atm_storage::ReadLaneError) {
+    let (_root, _runtime, fake, pump, store, keys, _now) =
+        build_task_only_pump_with_refusal_error(error);
+    let warnings = WarningLayer::default();
+    let subscriber = tracing_subscriber::Registry::default().with(warnings.clone());
+
+    pump.tick_once().with_subscriber(subscriber).await;
+
+    let task: TaskId = "AX5-TASK-00".parse().expect("task");
+    assert!(
+        prompt_texts(&fake).is_empty(),
+        "an unknown refusal run must fail closed"
+    );
+    assert_eq!(store.row(&keys[0], &task).reminder_count, 0);
+    let refusal_warnings = warnings
+        .events
+        .lock()
+        .expect("warning events")
+        .iter()
+        .filter(|(action, outcome)| action == "refusal_history_read" && outcome == "failed")
+        .count();
+    assert_eq!(
+        refusal_warnings, 1,
+        "the failed read emits one warning per tick"
+    );
+}
+
+#[tokio::test]
+async fn refusal_reader_error_holds_before_disposition() {
+    assert_refusal_read_failure_holds(atm_storage::ReadLaneError::Unavailable {
+        message: "injected refusal reader failure".to_owned(),
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn refusal_reader_deadline_timeout_holds_before_disposition() {
+    assert_refusal_read_failure_holds(atm_storage::ReadLaneError::DeadlineExpired {
+        stage: "reading refusal history",
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn non_nudge_disposition_skips_refusal_history_read() {
+    let error = atm_storage::ReadLaneError::Unavailable {
+        message: "injected refusal reader failure".to_owned(),
+    };
+    let (_root, _runtime, fake, pump, store, keys, _now) = build_task_only_pump_with_channel(
+        vec![HerdrAgentStatus::Working],
+        false,
+        None,
+        true,
+        Some(error),
+    );
+    let warnings = WarningLayer::default();
+    let subscriber = tracing_subscriber::Registry::default().with(warnings.clone());
+
+    pump.tick_once().with_subscriber(subscriber).await;
+
+    let task: TaskId = "AX5-TASK-00".parse().expect("task");
+    assert!(prompt_texts(&fake).is_empty());
+    assert_eq!(store.row(&keys[0], &task).reminder_count, 0);
+    assert!(
+        warnings
+            .events
+            .lock()
+            .expect("warning events")
+            .iter()
+            .all(|(action, _)| action != "refusal_history_read")
+    );
+}
+
 #[tokio::test]
 async fn third_refusal_holds_and_escalates_once() {
     let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&[
@@ -1328,18 +1784,16 @@ async fn third_refusal_holds_and_escalates_once() {
         );
     }
     pump.tick_once().await;
-    let mail = daemon_mail_for(
-        &runtime,
-        key.team(),
-        atm_storage::roles::ROLE_TEAM_LEAD,
-    )
-    .await;
+    let mail = daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD).await;
     assert_eq!(mail.len(), 1);
     assert_eq!(
         mail[0].envelope.summary.as_deref(),
         Some("escalation:refusals_escalated:worker@lifecycle-team")
     );
-    assert!(prompt_texts(&fake).is_empty(), "refusal hold sends no Herdr prompt");
+    assert!(
+        prompt_texts(&fake).is_empty(),
+        "refusal hold sends no Herdr prompt"
+    );
 
     close_real_task(
         root.path(),
@@ -1359,10 +1813,8 @@ async fn third_refusal_holds_and_escalates_once() {
         1
     );
     for minute in 2..22 {
-        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
-            "2030-01-01T00:{minute:02}:00Z"
-        ))
-        .expect("timestamp");
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
     }
@@ -1372,6 +1824,68 @@ async fn third_refusal_holds_and_escalates_once() {
             .await
             .len(),
         1
+    );
+}
+
+#[tokio::test]
+async fn refusal_threshold_precedes_mail_pending_hold() {
+    let (root, runtime, _fake, pump, key, tasks, now) =
+        build_real_task_pump(&["OVERLAP-01", "OVERLAP-02", "OVERLAP-03", "OVERLAP-04"]);
+    for task in &tasks[..3] {
+        close_real_task(
+            root.path(),
+            &runtime,
+            &key,
+            task,
+            atm_storage::TaskCloseOutcome::Refused,
+        );
+    }
+    queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+    let refusal_run = runtime
+        .async_task_ledger_reader()
+        .expect("task reader")
+        .refusal_run(
+            key.team().clone(),
+            key.agent().clone(),
+            atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+        )
+        .await
+        .expect("refusal run");
+    assert_eq!(
+        refusal_run.count,
+        atm_storage::TASK_CONSECUTIVE_REFUSAL_THRESHOLD
+    );
+    let head = runtime
+        .task_store()
+        .expect("task store")
+        .load_task(key.team(), &tasks[3])
+        .expect("task row")
+        .expect("open head");
+    assert_eq!(
+        crate::herdr_task_disposition::dispose(
+            true,
+            RuntimeMemberState::Idle,
+            Some(&head),
+            *now.lock().expect("clock"),
+            false,
+            refusal_run.count,
+        ),
+        crate::herdr_task_disposition::TaskDisposition::Hold("refusals escalated")
+    );
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty(),
+        "the pump owns refusal escalation"
+    );
+
+    pump.tick_once().await;
+
+    let mail = daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD).await;
+    assert_eq!(mail.len(), 1, "refusal threshold outranks mail pending");
+    assert_eq!(
+        mail[0].envelope.summary.as_deref(),
+        Some("escalation:refusals_escalated:worker@lifecycle-team")
     );
 }
 
@@ -1433,13 +1947,15 @@ async fn non_herdr_idle_member_with_task_is_nudged_through_its_backend() {
         .expect("tmux roster");
     runtime.apply_roster_runtime_observations(
         keys[0].team(),
-        &[atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-            keys[0].agent().clone(),
-            RuntimeMemberState::Idle,
-            atm_core::protocol::RuntimeObservationSource::Heartbeat,
-            *now.lock().expect("clock"),
-            None,
-        )],
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                keys[0].agent().clone(),
+                RuntimeMemberState::Idle,
+                atm_core::protocol::RuntimeObservationSource::Heartbeat,
+                *now.lock().expect("clock"),
+                None,
+            ),
+        ],
     );
     let tmux_paths = Arc::new(Mutex::new(Vec::new()));
     let tmux_fifo = BareCliFifo::default();
@@ -1461,7 +1977,12 @@ async fn non_herdr_idle_member_with_task_is_nudged_through_its_backend() {
     tmux_pump.tick_once().await;
     assert_eq!(tmux_paths.lock().expect("tmux paths").as_slice(), ["tmux"]);
     assert!(tmux_fake.calls().is_empty());
-    assert_eq!(store.row(&keys[0], &"AX5-TASK-00".parse().expect("task")).reminder_count, 1);
+    assert_eq!(
+        store
+            .row(&keys[0], &"AX5-TASK-00".parse().expect("task"))
+            .reminder_count,
+        1
+    );
 
     let (_root, runtime, _seeded_fake, _seeded_pump, store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
@@ -1475,13 +1996,15 @@ async fn non_herdr_idle_member_with_task_is_nudged_through_its_backend() {
         .expect("bare CLI roster");
     runtime.apply_roster_runtime_observations(
         keys[0].team(),
-        &[atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-            keys[0].agent().clone(),
-            RuntimeMemberState::Idle,
-            atm_core::protocol::RuntimeObservationSource::Heartbeat,
-            *now.lock().expect("clock"),
-            None,
-        )],
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                keys[0].agent().clone(),
+                RuntimeMemberState::Idle,
+                atm_core::protocol::RuntimeObservationSource::Heartbeat,
+                *now.lock().expect("clock"),
+                None,
+            ),
+        ],
     );
     let fifo_paths = Arc::new(Mutex::new(Vec::new()));
     let fifo = BareCliFifo::default();
@@ -1502,9 +2025,19 @@ async fn non_herdr_idle_member_with_task_is_nudged_through_its_backend() {
     );
     fifo_pump.tick_once().await;
     assert_eq!(fifo_paths.lock().expect("fifo paths").as_slice(), ["fifo"]);
-    assert_eq!(drain_bare_cli_messages(&fifo, &keys[0]).expect("drain FIFO").len(), 1);
+    assert_eq!(
+        drain_bare_cli_messages(&fifo, &keys[0])
+            .expect("drain FIFO")
+            .len(),
+        1
+    );
     assert!(fifo_fake.calls().is_empty());
-    assert_eq!(store.row(&keys[0], &"AX5-TASK-00".parse().expect("task")).reminder_count, 1);
+    assert_eq!(
+        store
+            .row(&keys[0], &"AX5-TASK-00".parse().expect("task"))
+            .reminder_count,
+        1
+    );
 }
 
 #[tokio::test]
@@ -1541,13 +2074,15 @@ async fn member_without_dispatchable_backend_holds_and_logs_once() {
         .with_task_store(writer);
     runtime.apply_roster_runtime_observations(
         &team,
-        &[atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-            key.agent().clone(),
-            RuntimeMemberState::Idle,
-            atm_core::protocol::RuntimeObservationSource::Heartbeat,
-            assigned_at,
-            None,
-        )],
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                key.agent().clone(),
+                RuntimeMemberState::Idle,
+                atm_core::protocol::RuntimeObservationSource::Heartbeat,
+                assigned_at,
+                None,
+            ),
+        ],
     );
     assert_eq!(
         runtime
@@ -1577,9 +2112,8 @@ async fn member_without_dispatchable_backend_holds_and_logs_once() {
         Arc::new(NoEmitterSelector),
     );
     let warnings = WarningLayer::default();
-    let subscriber = tracing::Dispatch::new(
-        tracing_subscriber::Registry::default().with(warnings.clone()),
-    );
+    let subscriber =
+        tracing::Dispatch::new(tracing_subscriber::Registry::default().with(warnings.clone()));
     pump.tick_once().with_subscriber(subscriber.clone()).await;
     pump.tick_once().with_subscriber(subscriber).await;
     let no_channel_warnings = warnings
@@ -1598,7 +2132,12 @@ async fn member_without_dispatchable_backend_holds_and_logs_once() {
         warnings.events.lock().expect("warning events")
     );
     assert!(fake.calls().is_empty());
-    assert_eq!(store.row(&key, &"AX5-TASK-00".parse().expect("task")).reminder_count, 0);
+    assert_eq!(
+        store
+            .row(&key, &"AX5-TASK-00".parse().expect("task"))
+            .reminder_count,
+        0
+    );
     assert!(
         daemon_mail_for(&runtime, &team, key.agent().as_str())
             .await

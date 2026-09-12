@@ -350,21 +350,17 @@ HerdrProcessInvoker::prompt(agent, session, rendered_nudge, deadline)
 
 ## 6. Data Flow: Queue-Tick Path
 
-Per Rand's 2026-08-26 decision, the AQ2.7 queue pump is a fixed-interval
-poller built on `list` + `prompt`, not a per-member lifecycle-gated
-`wait` loop. Cadence, FIFO ordering, and all queue state live in the
-AQ2.7 pump (`atm-http-runtime`); `atm-herdr` supplies only `list`,
-`prompt`, `get`, and the breaker.
+The Phase BA queue pump is a fixed-interval poller built on roster
+observations, task-ledger reads, and queue claims. Cadence, task ordering,
+disposition, and queue-marker state live in `atm-http-runtime` and
+`atm-storage`; `atm-herdr` supplies only the Herdr process operations.
 
 ```text
-atm-http-runtime (AQ2.7, HerdrQueueWakePump,     atm-herdr                          herdr (external process)
-not owned here)
+atm-http-runtime (Phase BA, HerdrQueueWakePump)  atm-herdr                          herdr (external process)
 ------------------------------------------------ ---------------------------------  -------------------------
 every 5 s tick:
-  list_pending_members()  [atm-storage]
-  | filter DeliveryChannel::HerdrSteer
-  |   [atm-core::delivery_channel]
-  | group pending members by session
+  roster members become candidates
+  | group Herdr-backed candidates by session
   v
 HerdrProcessInvoker::list(session, deadline)        (once per distinct session)
                                                   | breaker.permits_spawn()?
@@ -382,28 +378,30 @@ HerdrProcessInvoker::list(session, deadline)        (once per distinct session)
   |   covered unknown/absent=Unknown; never writes pid/session
   |   failed list preserves state and triggers no nudge
   |
-  | for each pending member whose committed canonical
-  |   state update is fresh Idle:
-  |     claim_next_pending(member)  [atm-storage, oldest first: FIFO]
-  |     rebuild_received_hook_dispatch(.., NudgeKind::Queue)  [atm-core]
-  |     -> HerdrReceivedHook (atm-daemon-bootstrap, AQ2.6)
-  |          -> HerdrProcessInvoker::prompt(agent, session, rendered_nudge, deadline)
-  |               (identical call/diagram to §5)
+  | owed task starts: for each head in `open_tasks_for_team` with
+  |   assigned state and an existing reminder audit, submit the idempotent
+  |   `TaskOp::Start` with no prompt
   |
-  |   at most one prompt per member per tick;
+  | queue drain: `list_pending_members()` supplies `open_mail`; for each
+  |   fresh Idle member, claim the oldest open marker, rebuild the dispatch,
+  |   and hand it to the selected backend
+  |
+  | task pass: `open_tasks_for_team(team)` reads each team's ordered queue;
+  |   `dispose(open_mail, state, head, now, new_episode, refusals)` selects
+  |   Nudge, escalation, or Hold for every observed member
+  |
+  |   at most one queue prompt per member per tick;
   |   a host-wide cap bounds total prompts issued this tick
   v
-match prompt outcome (from §5)
+match queue prompt outcome (from §5)
   AgentBlocked | AgentNotFound  -> release_pending(member, claim)  [atm-storage]
                                     (no retry-budget spend)
-  Accepted                      -> claim completes
-match list outcome
-  HerdrError::ServerNotRunning |
-  HerdrError::ProtocolMismatch |
-  HerdrError::Timeout |
-  (list call itself failed)     -> breaker.record_infrastructure_failure()
-                                    (HR-SAFE-005); listed members this tick
-                                    are skipped, not claimed
+  Accepted                      -> re-arm marker for the next interval
+                                    unless the queue item has closed
+queue marker lifecycle [atm-storage]
+  admission                     -> `nudge_pending_at = now`
+  successful handoff             -> `nudge_pending_at = now + interval`
+  read or acknowledged           -> `nudge_pending_at = NULL`
 ```
 
 Issue #1378 supersedes the historical `RuntimeHealth` write shown by the AQ2.7

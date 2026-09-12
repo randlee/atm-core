@@ -97,6 +97,11 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-12 — Phase BA closure review:** `HTTP_API_VERSION` moves from
+  `1.6.0` to `1.7.0`. Task-operation rejections gain additive, stable error
+  codes for not-found, already-closed, third-party, stale-counterparty, and
+  invalid-move families. Existing error detail text and envelope shapes are
+  unchanged. This is a minor, backward-compatible bump.
 - **2026-09-12 — Phase BA.4:** `HTTP_API_VERSION` moves from `1.5.0` to
   `1.6.0`. `RequestEnvelope::TaskMove` and `ResponseEnvelope::TaskMove` add
   the authenticated-local `/v1/atm/tasks/move` operation. Peer ingress rejects

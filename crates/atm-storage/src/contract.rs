@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
+use crate::task_state::TaskCloseOutcome;
 use crate::types::{AgentName, IsoTimestamp, MemberKey, ModelName, PaneId, TaskId, TeamName};
 
 #[doc(hidden)]
@@ -228,6 +229,29 @@ pub struct Message {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
+}
+
+/// Result of admitting one immutable message and applying any governed task
+/// operation carried by that newly inserted local message.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MessageAdmissionOutcome {
+    pub existing: Option<Message>,
+    pub already_closed: Option<TaskCloseOutcome>,
+    /// A governed task operation rejected after its report was retained as
+    /// ordinary mail. Callers must complete ordinary post-write handling
+    /// before surfacing this error to the sender.
+    pub task_rejection: Option<AtmError>,
+}
+
+impl MessageAdmissionOutcome {
+    #[must_use]
+    pub fn passive(existing: Option<Message>) -> Self {
+        Self {
+            existing,
+            already_closed: None,
+            task_rejection: None,
+        }
+    }
 }
 
 /// Aggregate display counts for one mailbox without materializing its messages.
@@ -744,16 +768,16 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         self.save_message(message)?;
         Ok(None)
     }
-    /// Like [`Self::save_message_if_absent`], carrying the write origin so a
-    /// backend can apply task transitions only for local writes. The default
-    /// keeps existing stores as passive message stores.
-    fn save_message_if_absent_with_provenance(
+    /// Provenance-aware admission that also returns the governed task-close
+    /// result produced by a newly inserted local message.
+    fn admit_message_with_provenance(
         &self,
         message: &Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         let _ = provenance;
         self.save_message_if_absent(message)
+            .map(MessageAdmissionOutcome::passive)
     }
     /// Commits related immutable mailbox records as one durable unit.
     ///
@@ -822,14 +846,16 @@ pub trait AsyncMessageStore: MessageStore {
         self.save_message_if_absent(&message)
     }
 
-    /// Async companion to [`MessageStore::save_message_if_absent_with_provenance`].
-    async fn save_message_if_absent_with_provenance_async(
+    /// Async companion to [`MessageStore::admit_message_with_provenance`].
+    async fn admit_message_with_provenance_async(
         &self,
         message: Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         let _ = provenance;
-        self.save_message_if_absent_async(message).await
+        self.save_message_if_absent_async(message)
+            .await
+            .map(MessageAdmissionOutcome::passive)
     }
 
     /// Atomically admits a mailbox record and its template decomposition on
@@ -837,7 +863,7 @@ pub trait AsyncMessageStore: MessageStore {
     async fn admit_template_message_async(
         &self,
         _admission: crate::TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         Err(AtmError::daemon_unavailable(
             "message store does not implement async template-message admission",
         ))
@@ -914,6 +940,13 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
 /// storage-owned reader lane and must not enter the ordered writer lane.
 #[async_trait::async_trait]
 pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
+    async fn load_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Option<TaskRow>, ReadLaneError>;
+
     /// Every open task on the team, ordered by assignee and queue position.
     async fn open_tasks_for_team(
         &self,
