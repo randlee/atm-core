@@ -183,21 +183,95 @@ async fn reopen_of_stalled_task_escalates_again_at_threshold() {
 
 #[tokio::test]
 async fn handoff_applies_start_and_sends_receipt_to_assigner() {
-    let (_root, runtime, _fake, pump, _store, _keys, _now) =
-        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    let (_root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
+    let team = key.team().clone();
+
     pump.tick_once().await;
-    let team: TeamName = "ax5-task-only".parse().expect("team");
-    let task: TaskId = "AX5-TASK-00".parse().expect("task");
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    let store = runtime.task_store().expect("store");
     assert_eq!(
-        runtime
-            .task_store()
-            .expect("store")
+        store
             .load_task(&team, &task)
             .expect("task")
             .expect("row")
             .state,
-        TaskState::Assigned,
-        "a reminder does not synthesize a task-start operation"
+        TaskState::Active
+    );
+    let events = store.list_task_events(&team, &task, None).expect("task events");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event.event == atm_storage::TaskEventKind::Started)
+            .count(),
+        1,
+        "the first emitted nudge starts the assigned task exactly once"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .find(|event| event.event == atm_storage::TaskEventKind::Started)
+            .expect("started event")
+            .actor,
+        atm_storage::TaskActor::Daemon
+    );
+    let reader = runtime.async_mailbox_reader().expect("mailbox reader");
+    let receipts = reader
+        .list_messages(
+            atm_storage::MailboxScope::new(team.clone(), "sender".parse().expect("assigner")),
+            atm_storage::MessageQuery {
+                team: team.clone(),
+                agent: "sender".parse().expect("assigner"),
+                sender: Some("atm-daemon".parse().expect("daemon")),
+                task_id: Some(task.clone()),
+                limit: None,
+            },
+            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1))
+                .expect("deadline"),
+        )
+        .await
+        .expect("read assigner mailbox");
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(
+        receipts[0].envelope.summary.as_deref(),
+        Some("task_started:AX5-HANDOFF")
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    let events_after = store
+        .list_task_events(&team, &task, None)
+        .expect("task events after retry");
+    assert_eq!(
+        events_after
+            .iter()
+            .filter(|event| event.event == atm_storage::TaskEventKind::Started)
+            .count(),
+        1
+    );
+    let receipts_after = reader
+        .list_messages(
+            atm_storage::MailboxScope::new(team.clone(), "sender".parse().expect("assigner")),
+            atm_storage::MessageQuery {
+                team,
+                agent: "sender".parse().expect("assigner"),
+                sender: Some("atm-daemon".parse().expect("daemon")),
+                task_id: Some(task),
+                limit: None,
+            },
+            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1))
+                .expect("deadline"),
+        )
+        .await
+        .expect("read assigner mailbox after retry");
+    assert_eq!(
+        receipts_after.len(),
+        1,
+        "an active task has no second handoff receipt"
     );
 }
 

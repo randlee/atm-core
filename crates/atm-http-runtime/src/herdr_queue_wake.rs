@@ -1653,6 +1653,72 @@ mod tests {
         (root, runtime, fake, pump, task_store, keys, now)
     }
 
+    fn build_task_handoff_pump() -> (
+        tempfile::TempDir,
+        LocalServiceRuntime,
+        Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+        HerdrQueueWakePump,
+        atm_core::boundary::MemberKey,
+        TaskId,
+        Arc<Mutex<IsoTimestamp>>,
+    ) {
+        let root = tempfile::tempdir().expect("temporary root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+        let team: TeamName = "ax5-handoff".parse().expect("team");
+        let key = atm_core::boundary::MemberKey::new(
+            team.clone(),
+            "ax5-agent-00".parse().expect("agent"),
+        );
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![
+                    herdr_member(&team, key.agent().as_str()),
+                    herdr_member(&team, "sender"),
+                ],
+                refreshed_at: None,
+            })
+            .expect("roster");
+        let task_id: TaskId = "AX5-HANDOFF".parse().expect("task");
+        queue_task_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team,
+            key.agent().as_str(),
+            task_id.clone(),
+        );
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        fake.queue_list_result(Ok(HerdrListOutcome {
+            agents: vec![AgentSnapshot {
+                name: Some(key.agent().to_string()),
+                pane_id: None,
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            }],
+        }));
+        let now = Arc::new(Mutex::new(
+            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp"),
+        ));
+        let pump = pump_with_clock(
+            assembly.service_runtime.clone(),
+            fake.clone(),
+            super::RuntimeHealth::default(),
+            Arc::clone(&now),
+        )
+        .with_daemon_home(root.path().join("home"));
+        (
+            root,
+            assembly.service_runtime,
+            fake,
+            pump,
+            key,
+            task_id,
+            now,
+        )
+    }
+
     fn task_rows(team: &TeamName, agents: &[String], assigned_at: IsoTimestamp) -> Vec<TaskRow> {
         agents
             .iter()
