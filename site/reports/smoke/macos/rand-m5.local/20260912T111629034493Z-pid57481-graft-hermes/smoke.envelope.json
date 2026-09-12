@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-09-12T11:16:29.052286+00:00",
+  "host_label": "rand-m5.local",
+  "report_html": "smoke/macos/rand-m5.local/20260912T111629034493Z-pid57481-graft-hermes/index.html",
+  "status": "FAIL"
+}

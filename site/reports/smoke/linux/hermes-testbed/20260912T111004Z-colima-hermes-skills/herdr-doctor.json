@@ -1,0 +1,33 @@
+{
+ "configured": true,
+ "endpoints": [
+  {
+   "session": "default",
+   "provenance": "herdr_default",
+   "transport": "socket",
+   "endpoint": "$HOME/.config/herdr/herdr.sock",
+   "binary": null,
+   "state": {
+    "kind": "ok",
+    "version": "0.8.2",
+    "protocol": 20
+   },
+   "remedy": "none",
+   "capabilities": {
+    "live_handoff": true
+   },
+   "members": [
+    {
+     "name": "tester",
+     "herdr_agent": "tester",
+     "outcome": {
+      "kind": "visible"
+     }
+    }
+   ]
+  }
+ ],
+ "breaker": {
+  "state": "closed"
+ }
+}
