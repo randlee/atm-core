@@ -10,14 +10,32 @@ use atm_core::boundary::{
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
+use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
+use atm_herdr::{AgentSnapshot, HerdrAgentStatus};
 
 use crate::herdr_task_disposition::{TaskDisposition, dispose};
 
 use super::{
-    HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats,
-    MemberObservation, run_blocking,
+    CandidateTarget, HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_DEADLINE, HerdrCandidate,
+    HerdrQueueWakePump, HerdrQueueWakeStats, MemberObservation, run_blocking,
 };
+
+pub(super) fn queue_drain_eligible(observation: &MemberObservation) -> bool {
+    observation.state == RuntimeMemberState::Idle
+}
+
+pub(super) fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
+    match status {
+        None => RuntimeMemberState::Unknown,
+        Some(status) => match status {
+            HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
+            HerdrAgentStatus::Working => RuntimeMemberState::Active,
+            HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
+            HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        },
+    }
+}
 
 pub(super) struct PreparedTaskPass {
     reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
@@ -61,6 +79,59 @@ impl HerdrQueueWakePump {
                 stats,
             )
             .await;
+        }
+    }
+
+    pub(super) fn collect_idle_members(
+        &self,
+        agents: Vec<AgentSnapshot>,
+        members: Vec<HerdrCandidate>,
+        observed_at: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+        eligible: &mut Vec<HerdrCandidate>,
+        task_candidates: &mut Vec<MemberObservation>,
+    ) {
+        let snapshots: HashMap<&str, &AgentSnapshot> = agents
+            .iter()
+            .filter_map(|snapshot| snapshot.name.as_deref().map(|name| (name, snapshot)))
+            .collect();
+        let accepted = self.apply_herdr_observations(&snapshots, &members, observed_at);
+        for member in members {
+            let CandidateTarget::Herdr(target) = &member.target else {
+                continue;
+            };
+            if !snapshots.contains_key(target.agent.as_str()) {
+                if member.pending {
+                    stats.not_present += 1;
+                    tracing::info!(
+                        event = "herdr_queue_poll_outcome",
+                        member = %member.key,
+                        herdr_agent = %target.agent,
+                        queue_kind = atm_core::boundary::NudgeKind::Queue.as_str(),
+                        outcome = "held_target_not_present",
+                        "Herdr queue target was absent from the poll result"
+                    );
+                }
+                continue;
+            }
+            let Some(observation) = accepted.get(&member.key) else {
+                continue;
+            };
+            task_candidates.push(MemberObservation {
+                member: member.key.clone(),
+                state: observation.state,
+                state_changed_at: observation.state_changed_at,
+            });
+            if member.pending
+                && queue_drain_eligible(&MemberObservation {
+                    member: member.key.clone(),
+                    state: observation.state,
+                    state_changed_at: observation.state_changed_at,
+                })
+            {
+                stats.idle_members += 1;
+                eligible.push(member);
+            }
         }
     }
 
