@@ -16,7 +16,7 @@ roots = []
 
 [ownership]
 io_owns = ["task_event_audit_append", "task_row_read"]
-io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn", "task_state_transition"]
+io_forbidden = ["direct_sqlite_io", "message_delivery", "process_spawn", "task_state_transition", "task_body_dereference"]
 
 [dependencies]
 allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]

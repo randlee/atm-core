@@ -11,7 +11,8 @@ use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::AtmMessageId;
 use atm_storage::task_state::{
-    DAEMON_ACTOR_NAME, QueuePosition, TaskCloseOutcome, TaskEvent, TaskRow, TaskState, admit,
+    DAEMON_ACTOR_NAME, QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskRow,
+    TaskState, TaskStateTag, Transition, admit, transition,
 };
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{AtmErrorCode, MessageWriteOrigin, MoveTarget, TaskOp};
@@ -86,7 +87,7 @@ pub(super) fn append_rejected_task_event(
     };
     let row = load_task_row(connection, target, &team, &task_id)?;
     let assignee = row.as_ref().map_or(&requested, |row| &row.assignee);
-    let state = row.as_ref().map(|row| row.state.as_str());
+    let state = row.as_ref().map(|row| row.state.tag());
     append_task_event(
         connection,
         target,
@@ -94,10 +95,10 @@ pub(super) fn append_rejected_task_event(
         &task_id,
         assignee,
         &IsoTimestamp::now(),
-        "rejected",
+        TaskEventKind::Rejected,
         state,
         state,
-        None,
+        row.as_ref().and_then(|row| row.state.close_outcome()),
         &actor,
         message_id,
         None,
@@ -147,6 +148,15 @@ fn apply_task_assignment(
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     let row = load_task_row(connection, target, &record.team, task_id)?;
+    let Transition(next_state) = transition(
+        row.as_ref().map(|row| row.state),
+        TaskEvent::Assigned,
+        task_id,
+        &record.envelope.from,
+        row.as_ref().map(|row| &row.assignee),
+        &record.agent,
+    )
+    .map_err(|error| error.into_atm_error())?;
     let at = record.envelope.timestamp;
     let message_id = record
         .envelope
@@ -190,6 +200,7 @@ fn apply_task_assignment(
         temporary,
         message_id,
         at,
+        next_state,
         connection,
         target,
     )?;
@@ -202,6 +213,7 @@ fn apply_task_assignment(
         was_closed,
         message_id,
         at,
+        next_state,
         connection,
         target,
     )
@@ -276,21 +288,23 @@ fn apply_task_assignment_row(
     temporary: u32,
     message_id: AtmMessageId,
     at: IsoTimestamp,
+    next_state: TaskState,
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     if row.is_some() {
         connection
             .execute(
-                "UPDATE tasks SET assignee=?3, assigner=?4, state='assigned', close_outcome=NULL,
-                 position=?5, assignment_message_id=?6, description=?7, assigned_at=?8,
-                 updated_at=?8, last_reminded_at=NULL, reminder_count=0, lead_notified_count=0
+                "UPDATE tasks SET assignee=?3, assigner=?4, state=?5, close_outcome=NULL,
+                 position=?6, assignment_message_id=?7, description=?8, assigned_at=?9,
+                 updated_at=?9, last_reminded_at=NULL, reminder_count=0, lead_notified_count=0
                  WHERE team=?1 AND task_id=?2",
                 params![
                     record.team.as_str(),
                     task_id.as_str(),
                     record.agent.as_str(),
                     record.envelope.from.as_str(),
+                    next_state.as_str(),
                     temporary,
                     message_id.to_string(),
                     record.envelope.text,
@@ -304,12 +318,13 @@ fn apply_task_assignment_row(
                 "INSERT INTO tasks(team, task_id, assignee, assigner, state, close_outcome, position,
                  assignment_message_id, description, assigned_at, updated_at,
                  last_reminded_at, reminder_count, lead_notified_count)
-                 VALUES (?1,?2,?3,?4,'assigned',NULL,?5,?6,?7,?8,?8,NULL,0,0)",
+                 VALUES (?1,?2,?3,?4,?5,NULL,?6,?7,?8,?9,?9,NULL,0,0)",
                 params![
                     record.team.as_str(),
                     task_id.as_str(),
                     record.agent.as_str(),
                     record.envelope.from.as_str(),
+                    next_state.as_str(),
                     temporary,
                     message_id.to_string(),
                     record.envelope.text,
@@ -342,15 +357,16 @@ fn append_assignment_event(
     was_closed: bool,
     message_id: AtmMessageId,
     at: IsoTimestamp,
+    next_state: TaskState,
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     let event = if was_closed {
-        "reopened"
+        TaskEventKind::Reopened
     } else if row.is_some() {
-        "reassigned"
+        TaskEventKind::Reassigned
     } else {
-        "assigned"
+        TaskEventKind::Assigned
     };
     append_task_event(
         connection,
@@ -360,8 +376,8 @@ fn append_assignment_event(
         &record.agent,
         &at,
         event,
-        row.map(|row| row.state.as_str()),
-        Some("assigned"),
+        row.map(|row| row.state.tag()),
+        Some(next_state.tag()),
         row.and_then(|row| row.state.close_outcome()),
         &record.envelope.from,
         Some(message_id),
@@ -378,6 +394,15 @@ fn apply_task_start(
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     let row = load_startable_task(record, task_id, connection, target)?;
+    let Transition(next_state) = transition(
+        Some(row.state),
+        TaskEvent::Started,
+        task_id,
+        &record.envelope.from,
+        Some(&row.assignee),
+        &row.assignee,
+    )
+    .map_err(|error| error.into_atm_error())?;
     if !start_reminder_was_emitted(record, task_id, connection, target)?
         || row.state == TaskState::Active
     {
@@ -390,11 +415,12 @@ fn apply_task_start(
     order.insert(0, task_id.clone());
     connection
         .execute(
-            "UPDATE tasks SET state='active', reminder_count=0, lead_notified_count=0, updated_at=?3
+            "UPDATE tasks SET state=?3, reminder_count=0, lead_notified_count=0, updated_at=?4
              WHERE team=?1 AND task_id=?2",
             params![
                 record.team.as_str(),
                 task_id.as_str(),
+                next_state.as_str(),
                 record.envelope.timestamp.to_string()
             ],
         )
@@ -407,9 +433,9 @@ fn apply_task_start(
         task_id,
         &row.assignee,
         &record.envelope.timestamp,
-        "started",
-        Some(row.state.as_str()),
-        Some("active"),
+        TaskEventKind::Started,
+        Some(row.state.tag()),
+        Some(next_state.tag()),
         None,
         &record.envelope.from,
         record.envelope.message_id,
@@ -521,6 +547,15 @@ pub(crate) fn apply_task_close(
         &record.envelope.from,
     )
     .map_err(|error| error.into_atm_error())?;
+    let Transition(next_state) = transition(
+        Some(row.state),
+        TaskEvent::Completed(outcome),
+        task_id,
+        &record.envelope.from,
+        Some(&row.assignee),
+        &row.assignee,
+    )
+    .map_err(|error| error.into_atm_error())?;
     let expected = if record.envelope.from == row.assignee {
         &row.assigner
     } else {
@@ -535,11 +570,12 @@ pub(crate) fn apply_task_close(
     acknowledge_assignment(connection, cache, target, record, &row)?;
     connection
         .execute(
-            "UPDATE tasks SET state='complete', close_outcome=?3, position=NULL, updated_at=?4
+            "UPDATE tasks SET state=?3, close_outcome=?4, position=NULL, updated_at=?5
          WHERE team=?1 AND task_id=?2",
             params![
                 record.team.as_str(),
                 task_id.as_str(),
+                next_state.as_str(),
                 outcome.as_str(),
                 record.envelope.timestamp.to_string()
             ],
@@ -554,9 +590,9 @@ pub(crate) fn apply_task_close(
         task_id,
         &row.assignee,
         &record.envelope.timestamp,
-        outcome.as_str(),
-        Some(row.state.as_str()),
-        Some("complete"),
+        close_event_kind(outcome),
+        Some(row.state.tag()),
+        Some(next_state.tag()),
         Some(outcome),
         &record.envelope.from,
         record.envelope.message_id,
@@ -603,6 +639,15 @@ pub(super) fn apply_task_move(
     if !row.state.is_open() {
         return Err(task_rejected(format!("no open task {task_id} for {actor}")));
     }
+    let Transition(next_state) = transition(
+        Some(row.state),
+        TaskEvent::Assigned,
+        task_id,
+        actor,
+        Some(&row.assignee),
+        &row.assignee,
+    )
+    .map_err(|error| error.into_atm_error())?;
     if row.state == TaskState::Active {
         append_task_event(
             connection,
@@ -611,9 +656,9 @@ pub(super) fn apply_task_move(
             task_id,
             &row.assignee,
             &at,
-            "moved",
-            Some("active"),
-            Some("active"),
+            TaskEventKind::Moved,
+            Some(row.state.tag()),
+            Some(next_state.tag()),
             None,
             actor,
             None,
@@ -653,9 +698,9 @@ pub(super) fn apply_task_move(
         task_id,
         &row.assignee,
         &at,
-        "moved",
-        Some("assigned"),
-        Some("assigned"),
+        TaskEventKind::Moved,
+        Some(row.state.tag()),
+        Some(next_state.tag()),
         None,
         actor,
         None,
@@ -849,9 +894,9 @@ fn append_task_event(
     task_id: &TaskId,
     assignee: &AgentName,
     at: &IsoTimestamp,
-    event: &str,
-    from_state: Option<&str>,
-    to_state: Option<&str>,
+    event: TaskEventKind,
+    from_state: Option<TaskStateTag>,
+    to_state: Option<TaskStateTag>,
     close_outcome: Option<TaskCloseOutcome>,
     actor: &AgentName,
     message_id: Option<AtmMessageId>,
@@ -859,6 +904,8 @@ fn append_task_event(
     marker: Option<&str>,
     detail: Option<&str>,
 ) -> Result<(), AtmError> {
+    let from_state = from_state.map(task_state_tag_name);
+    let to_state = to_state.map(task_state_tag_name);
     let seq: u64 = connection
         .query_row(
             "SELECT COALESCE(MAX(seq),0)+1 FROM task_events WHERE team=?1 AND task_id=?2",
@@ -877,7 +924,7 @@ fn append_task_event(
                 assignee.as_str(),
                 seq,
                 at.to_string(),
-                event,
+                event.as_str(),
                 from_state,
                 to_state,
                 close_outcome.map(TaskCloseOutcome::as_str),
@@ -890,4 +937,20 @@ fn append_task_event(
         )
         .map_err(|error| sqlite_error(target, "failed to append task event", error))?;
     Ok(())
+}
+
+const fn task_state_tag_name(state: TaskStateTag) -> &'static str {
+    match state {
+        TaskStateTag::Assigned => "assigned",
+        TaskStateTag::Active => "active",
+        TaskStateTag::Complete => "complete",
+    }
+}
+
+const fn close_event_kind(outcome: TaskCloseOutcome) -> TaskEventKind {
+    match outcome {
+        TaskCloseOutcome::Completed => TaskEventKind::Completed,
+        TaskCloseOutcome::Refused => TaskEventKind::Refused,
+        TaskCloseOutcome::Cancelled => TaskEventKind::Cancelled,
+    }
 }

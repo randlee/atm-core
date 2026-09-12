@@ -30,8 +30,14 @@ pub(crate) fn migrate_task_identity(
         )
         .optional()
         .map_err(|error| sqlite_error(target, "failed to inspect task identity schema", error))?;
-    if assignee_pk != Some(3) {
-        return Ok(TaskMigrationReport::default());
+    match assignee_pk {
+        Some(3) => {}
+        None | Some(0) => return Ok(TaskMigrationReport::default()),
+        Some(position) => {
+            return Err(AtmError::mailbox_write(format!(
+                "unrecognized task identity schema: assignee primary-key position is {position}; expected 0 or 3"
+            )));
+        }
     }
 
     let rows_before = count(connection, "tasks", target)?;

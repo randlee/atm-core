@@ -234,6 +234,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bapply_task_(?:assignment|completion|acknowledgement)\s*\(",
         r"\bUPDATE\s+tasks\s+SET\s+state\b",
     ),
+    "task_body_dereference": (
+        r"\btask_body_dereference\b",
+        r"\bTaskProvider\b",
+        r"\b(?:load|read|resolve)_task_body\s*\(",
+    ),
     "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),

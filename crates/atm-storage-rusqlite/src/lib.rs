@@ -1232,6 +1232,19 @@ mod tests {
             .message_store()
             .save_message(&first_close)
             .expect("first close");
+
+        // Complete rows are intercepted by the writer before the state
+        // authority's deliberately unreachable complete-row Start arm.
+        let mut late_start = message("atm:late-start", "start");
+        late_start.envelope.from = "atm-daemon".parse().expect("daemon actor");
+        late_start.envelope.task_id = Some(task_id.clone());
+        late_start.envelope.task_op = Some(TaskOp::Start);
+        let start_error = backend
+            .message_store()
+            .save_message(&late_start)
+            .expect_err("complete task cannot start");
+        assert!(start_error.message().contains("no open task T1"));
+
         let events_before = backend
             .task_store()
             .list_task_events(&team(), &task_id, Some(&agent()))
