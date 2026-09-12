@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T23:56:00Z"^^xsd:dateTime ;
-  triage:deferredNote "Per design-ruling-before-capability-adding-fix: do not allowlist tokio for atm-storage (a policy relaxation on a deliberately sync/runtime-free crate) without a ruling. Recommended fix avoiding any new dependency: replace the #[tokio::test] with a minimal hand-rolled poll-to-completion helper (a no-op RawWaker driving the boxed async-trait future once, since the non-delegate list_prompt_handoffs path never actually awaits) instead of pulling in a runtime; drop the [dev-dependencies] tokio line and its workspace entry from crates/atm-storage/Cargo.toml. Reported to fenix for ruling/dispatch, 2026-09-12T23:56Z." ;
+  triage:deferredNote "Per design-ruling-before-capability-adding-fix: do not allowlist tokio for atm-storage (a policy relaxation on a deliberately sync/runtime-free crate) without a ruling. Team-lead's recommended hand-rolled poll-to-completion helper was NOT the ruling issued. Fenix's ruling (issued to solar at 2026-09-12T23:50:00Z, ahead of team-lead's report, as a same-task follow-up on BB6-FIX-STORAGE-QA1-1789265000, no new dispatch): no tokio and no hand-rolled poll helper either (test-only machinery would violate no-unused-code). Instead the seeded-double test moves out of crates/atm-storage/src/testing.rs into crates/atm-storage-rusqlite/tests/prompt_handoffs.rs -- inside solar's existing fence, already depends on tokio, and reaches atm_storage::testing the same way sibling double methods are exercised only from consumer crates. InMemoryTaskLedgerReader keeps its real backing state (the prompt_handoffs field and replace/with_prompt_handoffs methods) in testing.rs; only the #[tokio::test] itself relocates. Fixed-pending-QA: closes on solar's follow-up commit landing on fix/bb6-storage-qa1 with just lint 36/36." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-12T23:51:08Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-004/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-004/1>
   a triage:Occurrence ;
