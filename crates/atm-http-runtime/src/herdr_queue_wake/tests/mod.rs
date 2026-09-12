@@ -5,8 +5,8 @@ mod herdr_queue_ephemeral;
 mod herdr_queue_no_delivery;
 
 use super::{
-    HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-    HERDR_REQUEST_BUDGET, BoundedBlockingBridge, HerdrQueueWakePump, ReleasePendingOnDrop,
+    BoundedBlockingBridge, HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK,
+    HERDR_POLL_INTERVAL_MS, HERDR_REQUEST_BUDGET, HerdrQueueWakePump, ReleasePendingOnDrop,
     RuntimeHealth, herdr_request_deadline, log_herdr_list_failure, runtime_state,
 };
 use atm_core::LocalServiceRuntime;
@@ -774,7 +774,7 @@ fn build_task_only_pump(
 }
 
 fn build_task_only_pump_without_delivery_channel() -> TaskOnlyPumpFixture {
-    build_task_only_pump_with_channel(vec![HerdrAgentStatus::Idle], false, None, false)
+    build_task_only_pump_with_channel(vec![HerdrAgentStatus::Idle], false, None, false, None)
 }
 
 fn build_task_only_pump_with_template(
@@ -782,7 +782,27 @@ fn build_task_only_pump_with_template(
     fail_reminders: bool,
     task_template: Option<&str>,
 ) -> TaskOnlyPumpFixture {
-    build_task_only_pump_with_channel(statuses, fail_reminders, task_template, true)
+    build_task_only_pump_with_channel(statuses, fail_reminders, task_template, true, None)
+}
+
+fn build_task_only_pump_with_refusal_error(
+    error: atm_storage::ReadLaneError,
+) -> TaskOnlyPumpFixture {
+    build_task_only_pump_with_channel(vec![HerdrAgentStatus::Idle], false, None, true, Some(error))
+}
+
+fn task_only_reader(
+    rows: Vec<TaskRow>,
+    task_store: &Arc<atm_storage::DummyTaskStore>,
+    refusal_error: Option<atm_storage::ReadLaneError>,
+) -> Arc<dyn atm_core::boundary::AsyncTaskLedgerReader + Send + Sync> {
+    match refusal_error {
+        Some(error) => Arc::new(
+            atm_storage::testing::InMemoryTaskLedgerReader::with_rows(rows, Vec::new())
+                .with_refusal_error(error),
+        ),
+        None => task_store.clone(),
+    }
 }
 
 fn build_task_only_pump_with_channel(
@@ -790,6 +810,7 @@ fn build_task_only_pump_with_channel(
     fail_reminders: bool,
     task_template: Option<&str>,
     task_channel_available: bool,
+    refusal_error: Option<atm_storage::ReadLaneError>,
 ) -> TaskOnlyPumpFixture {
     let root = tempfile::tempdir().expect("temporary root");
     let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
@@ -833,8 +854,7 @@ fn build_task_only_pump_with_channel(
         rows.clone(),
         fail_reminders,
     ));
-    let reader: Arc<dyn atm_core::boundary::AsyncTaskLedgerReader + Send + Sync> =
-        task_store.clone();
+    let reader = task_only_reader(rows, &task_store, refusal_error);
     let runtime = assembly
         .service_runtime
         .with_task_store(task_store.clone())
@@ -2161,9 +2181,51 @@ async fn ac11_claim_drop_guard_release_is_joined_before_pump_shutdown() {
     drop(prompt_gate);
 }
 
+#[tokio::test(start_paused = true)]
+async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
+    let (_root, runtime, _fake, pump, health, key) = build_test_pump();
+    let release_started = Arc::new(AtomicBool::new(false));
+    let release_blocked = Arc::new(AtomicBool::new(true));
+    let store = Arc::new(
+        atm_storage::testing::DummyPendingNudgeStore::default()
+            .with_release_blocker(Arc::clone(&release_started), Arc::clone(&release_blocked)),
+    );
+    let store: Arc<dyn atm_core::boundary::PendingNudgeStore + Send + Sync> = store;
+    let release = ReleasePendingOnDrop::new(
+        store,
+        key,
+        atm_core::boundary::NudgeClaim {
+            msg: AtmMessageId::new(),
+            attempt: 0,
+        },
+        Arc::new(Mutex::new(HashMap::new())),
+        runtime,
+        Arc::clone(&pump.release_handles),
+        pump.blocking_bridge.clone(),
+    );
+    drop(release);
+    while !release_started.load(Ordering::Acquire) {
+        tokio::task::yield_now().await;
+    }
+
+    let (shutdown_tx, shutdown_rx) = watch::channel(());
+    let task = pump.start(shutdown_rx);
+    shutdown_tx.send(()).expect("shutdown notification");
+    tokio::time::advance(HERDR_REQUEST_BUDGET).await;
+    tokio::task::yield_now().await;
+
+    assert!(
+        task.is_finished(),
+        "a stalled release store must not hold pump shutdown past its request deadline"
+    );
+    assert_eq!(health.snapshot().blocking_core_bridge_stalls_total, 1);
+    release_blocked.store(false, Ordering::Release);
+    task.await.expect("bounded pump shutdown joins");
+}
+
 #[test]
 fn release_pending_on_drop_without_runtime_releases_synchronously() {
-    let (_root, runtime, _fake, _pump, _health, key) = build_test_pump();
+    let (_root, runtime, _fake, pump, _health, key) = build_test_pump();
     let store = runtime.pending_nudge_store().expect("pending store");
     let claim = store
         .claim_next_pending(&key)
@@ -2177,6 +2239,7 @@ fn release_pending_on_drop_without_runtime_releases_synchronously() {
         Arc::new(Mutex::new(HashMap::new())),
         runtime,
         release_handles,
+        pump.blocking_bridge.clone(),
     );
 
     drop(release);

@@ -1106,10 +1106,8 @@ async fn drive_task_to_stall(
     now: &Arc<Mutex<IsoTimestamp>>,
 ) {
     for minute in 0..=10 {
-        *now.lock().expect("clock") = IsoTimestamp::from_str(&format!(
-            "2030-01-01T00:{minute:02}:00Z"
-        ))
-        .expect("timestamp");
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         if minute > 0 {
             queue_idle_result(fake, key);
         }
@@ -1119,8 +1117,7 @@ async fn drive_task_to_stall(
 
 #[tokio::test]
 async fn tenth_reminder_with_zero_leads_escalates_to_recipients_once_then_silence() {
-    let (_root, runtime, fake, pump, key, tasks, now) =
-        build_real_task_pump(&["LIFE-NO-LEAD"]);
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-NO-LEAD"]);
     let mut roster = runtime
         .shared_roster_store_arc()
         .load_roster(key.team())
@@ -1162,18 +1159,27 @@ async fn tenth_reminder_with_zero_leads_escalates_to_recipients_once_then_silenc
             .lead_notified_count,
         1
     );
-    assert_eq!(daemon_mail_for(&runtime, key.team(), "observer").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "observer")
+            .await
+            .len(),
+        1
+    );
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert_eq!(daemon_mail_for(&runtime, key.team(), "observer").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "observer")
+            .await
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
 async fn tenth_reminder_with_no_targets_records_terminal_audit() {
-    let (_root, runtime, fake, pump, key, tasks, now) =
-        build_real_task_pump(&["LIFE-NO-TARGETS"]);
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-NO-TARGETS"]);
     let mut roster = runtime
         .shared_roster_store_arc()
         .load_roster(key.team())
@@ -1234,8 +1240,7 @@ async fn tenth_reminder_with_no_targets_records_terminal_audit() {
 
 #[tokio::test]
 async fn tenth_reminder_with_two_leads_escalates_to_each_once_then_silence() {
-    let (_root, runtime, fake, pump, key, tasks, now) =
-        build_real_task_pump(&["LIFE-TWO-LEADS"]);
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-TWO-LEADS"]);
     let mut roster = runtime
         .shared_roster_store_arc()
         .load_roster(key.team())
@@ -1264,14 +1269,26 @@ async fn tenth_reminder_with_two_leads_escalates_to_each_once_then_silence() {
             .lead_notified_count,
         1
     );
-    assert_eq!(daemon_mail_for(&runtime, key.team(), "lead-a").await.len(), 1);
-    assert_eq!(daemon_mail_for(&runtime, key.team(), "lead-b").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "lead-a").await.len(),
+        1
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "lead-b").await.len(),
+        1
+    );
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert_eq!(daemon_mail_for(&runtime, key.team(), "lead-a").await.len(), 1);
-    assert_eq!(daemon_mail_for(&runtime, key.team(), "lead-b").await.len(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "lead-a").await.len(),
+        1
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), "lead-b").await.len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -1681,7 +1698,10 @@ async fn assert_refusal_read_failure_holds(error: atm_storage::ReadLaneError) {
     pump.tick_once().with_subscriber(subscriber).await;
 
     let task: TaskId = "AX5-TASK-00".parse().expect("task");
-    assert!(prompt_texts(&fake).is_empty(), "an unknown refusal run must fail closed");
+    assert!(
+        prompt_texts(&fake).is_empty(),
+        "an unknown refusal run must fail closed"
+    );
     assert_eq!(store.row(&keys[0], &task).reminder_count, 0);
     let refusal_warnings = warnings
         .events
@@ -1690,7 +1710,10 @@ async fn assert_refusal_read_failure_holds(error: atm_storage::ReadLaneError) {
         .iter()
         .filter(|(action, outcome)| action == "refusal_history_read" && outcome == "failed")
         .count();
-    assert_eq!(refusal_warnings, 1, "the failed read emits one warning per tick");
+    assert_eq!(
+        refusal_warnings, 1,
+        "the failed read emits one warning per tick"
+    );
 }
 
 #[tokio::test]
