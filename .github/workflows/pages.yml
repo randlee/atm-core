@@ -35,6 +35,15 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Cache Puppeteer Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: ${{ runner.os }}-puppeteer-chrome-v1
+
+      - name: Provision Puppeteer Chromium
+        run: npx -y puppeteer browsers install chrome
+
       - name: Verify generated procedure pages
         run: just procedures --check
 

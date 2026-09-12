@@ -36,7 +36,8 @@ from feature_smoke_report import (
     render_host_header,
     summarize_cases,
 )
-from run_inbound_peer_smoke import PANE_TEMPLATE, compose
+from run_inbound_peer_smoke import PANE_TEMPLATE
+from report_runtime import compose as _compose, source_revision as _source_revision
 from smoke_common import (
     SmokeError,
     advertised_host_from_value as advertised_host_from_json,
@@ -112,9 +113,11 @@ def branch_version() -> str:
 
 def source_revision() -> str | None:
     """Record the exact checkout that produced evidence; never guess on failure."""
-    result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False)
-    revision = result.stdout.strip()
-    return revision if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", revision) else None
+    return _source_revision(ROOT)
+
+
+def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
+    _compose(template, variables, output, root=ROOT, error_type=SmokeError)
 
 
 def selected_message(value: Any, expected: str) -> dict[str, Any] | None:
