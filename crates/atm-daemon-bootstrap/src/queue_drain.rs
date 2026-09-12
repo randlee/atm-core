@@ -414,10 +414,16 @@ fn clear_delivered_marker<'a>(
     let health_for_clear = runtime_health.clone();
     async move {
         if let Err(error) = run_blocking("clear delivered queue marker", move || {
-            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+            atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                 &runtime_for_clear,
                 &member_for_clear,
                 &message_id,
+                atm_core::types::IsoTimestamp::from_datetime(
+                    atm_core::types::IsoTimestamp::now().into_inner()
+                        + chrono::Duration::milliseconds(
+                            atm_storage::TASK_REMINDER_INTERVAL_MS,
+                        ),
+                ),
                 || health_for_clear.record_graft_queue_marker_clear_failure(),
             );
             Ok(())

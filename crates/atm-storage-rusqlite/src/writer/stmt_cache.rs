@@ -49,7 +49,14 @@ impl WriterStatementCache {
         let mut statement = cached(
             connection,
             "UPDATE mail_message_states
-             SET read = 1, updated_at = ?4, nudge_pending_at = NULL
+             SET read = 1, updated_at = ?4,
+                 nudge_pending_at = CASE
+                     WHEN nudge_pending_at IS NOT NULL
+                          AND pending_ack_at IS NOT NULL
+                          AND acknowledged_at IS NULL
+                     THEN ?5
+                     ELSE NULL
+                 END
              WHERE team = ?1 AND agent = ?2 AND message_key = ?3 AND deleted_at IS NULL;",
         )?;
         statement.execute(params)

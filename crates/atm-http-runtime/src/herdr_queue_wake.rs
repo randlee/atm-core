@@ -749,12 +749,17 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message_id = claim.msg;
+        let next_due = IsoTimestamp::from_datetime(
+            (self.clock)().into_inner()
+                + chrono::Duration::milliseconds(atm_core::boundary::TASK_REMINDER_INTERVAL_MS),
+        );
         let health = self.runtime_health.clone();
         let _ = run_blocking(move || {
-            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+            atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                 &runtime,
                 &member_key,
                 &message_id,
+                next_due,
                 || health.record_graft_queue_marker_clear_failure(),
             );
             Ok(())
@@ -1420,8 +1425,8 @@ mod tests {
         let store = runtime.pending_nudge_store().expect("pending store");
         while let Some(claim) = store.claim_next_pending(key).expect("claim pending marker") {
             store
-                .clear_pending_on_handoff(key, &claim.msg)
-                .expect("clear pending marker");
+                .rearm_pending_after_handoff(key, &claim.msg, IsoTimestamp::now())
+                .expect("rearm pending marker");
         }
     }
 

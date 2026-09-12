@@ -15,6 +15,7 @@ homepage.workspace = true
 test-support = []
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
 atm-core.workspace = true
 atm-herdr.workspace = true
 atm-runtime.workspace = true

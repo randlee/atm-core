@@ -563,7 +563,7 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
     assert_eq!(
         definitions.len(),
         1,
-        "clear_queue_marker_after_handoff must have exactly one workspace definition: {definitions:?}"
+        "rearm_queue_marker_after_handoff must have exactly one workspace definition: {definitions:?}"
     );
     assert!(
         definitions[0].contains("crates/atm-core/"),
@@ -571,7 +571,7 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
     );
     assert!(
         violations.is_empty(),
-        "direct clear_pending_on_handoff calls are forbidden outside the core helper and store impl/tests: {violations:?}"
+        "direct rearm_pending_after_handoff calls are forbidden outside the core helper and store impl/tests: {violations:?}"
     );
 }
 
@@ -587,7 +587,7 @@ struct QueueMarkerClearVisitor {
 impl<'ast> Visit<'ast> for QueueMarkerClearVisitor {
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
         let previous = self.current_function.replace(node.sig.ident.to_string());
-        if node.sig.ident == "clear_queue_marker_after_handoff" {
+        if node.sig.ident == "rearm_queue_marker_after_handoff" {
             self.definitions.push(node.sig.ident.to_string());
         }
         syn::visit::visit_item_fn(self, node);
@@ -619,8 +619,8 @@ impl<'ast> Visit<'ast> for QueueMarkerClearVisitor {
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if node.method == "clear_pending_on_handoff"
-            && self.current_function.as_deref() != Some("clear_queue_marker_after_handoff")
+        if node.method == "rearm_pending_after_handoff"
+            && self.current_function.as_deref() != Some("rearm_queue_marker_after_handoff")
             && !self.in_pending_nudge_store_impl
             && !self.in_test_module
         {

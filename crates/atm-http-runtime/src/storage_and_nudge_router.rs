@@ -1229,20 +1229,13 @@ mod tests {
             self.inner.release_pending(member, claim)
         }
 
-        fn clear_pending_on_read(
+        fn rearm_pending_after_handoff(
             &self,
             member: &MemberKey,
             msg: &AtmMessageId,
+            next_due: IsoTimestamp,
         ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_read(member, msg)
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_handoff(member, msg)
+            self.inner.rearm_pending_after_handoff(member, msg, next_due)
         }
 
         fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {

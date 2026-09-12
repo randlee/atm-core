@@ -1314,25 +1314,17 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
     /// Returns [`AtmError`] if the underlying storage operation fails.
     fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError>;
 
-    /// Clears the marker for one message on the read path.
+    /// Re-arms one just-handed-off message at its next due time while it is
+    /// still open. A message read between claim and handoff is not re-armed.
     ///
     /// # Errors
     ///
     /// Returns [`AtmError`] if the underlying storage operation fails.
-    fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
-    -> Result<(), AtmError>;
-
-    /// Clears the marker for exactly one just-handed-off message.
-    ///
-    /// Unconditional and idempotent.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] if the underlying storage operation fails.
-    fn clear_pending_on_handoff(
+    fn rearm_pending_after_handoff(
         &self,
         member: &MemberKey,
         msg: &AtmMessageId,
+        next_due: IsoTimestamp,
     ) -> Result<(), AtmError>;
 
     /// Enumerates members holding at least one eligible pending marker.
@@ -1537,18 +1529,11 @@ mod tests {
             Ok(())
         }
 
-        fn clear_pending_on_read(
+        fn rearm_pending_after_handoff(
             &self,
             _member: &MemberKey,
             _msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
+            _next_due: IsoTimestamp,
         ) -> Result<(), AtmError> {
             Ok(())
         }
@@ -1688,11 +1673,8 @@ mod tests {
             .release_pending(&member, &claim)
             .expect("release pending");
         pending_nudge_store
-            .clear_pending_on_read(&member, &msg)
-            .expect("clear pending on read");
-        pending_nudge_store
-            .clear_pending_on_handoff(&member, &msg)
-            .expect("clear pending on handoff");
+            .rearm_pending_after_handoff(&member, &msg, IsoTimestamp::now())
+            .expect("rearm pending after handoff");
         assert!(
             pending_nudge_store
                 .list_pending_members()

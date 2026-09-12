@@ -305,7 +305,12 @@ fn execute_read_display_state(
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
-    let updated_at = IsoTimestamp::now().into_inner().to_rfc3339();
+    let now = IsoTimestamp::now();
+    let updated_at = now.to_string();
+    let next_due = IsoTimestamp::from_datetime(
+        now.into_inner() + chrono::Duration::milliseconds(atm_storage::TASK_REMINDER_INTERVAL_MS),
+    )
+    .to_string();
     for message_key in message_ids {
         let updated = cache
             .mark_message_read(
@@ -315,6 +320,7 @@ fn execute_read_display_state(
                     mailbox.agent.as_str(),
                     message_key.as_str(),
                     updated_at,
+                    next_due,
                 ],
             )
             .map_err(|error| sqlite_error(target, "failed to mark mailbox message read", error))?;

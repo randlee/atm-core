@@ -614,10 +614,16 @@ async fn deliver_published_graft_hook(
             deadline,
         );
         if result.is_ok() && kind == NudgeKind::Queue {
-            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+            atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                 &service_runtime,
                 &member,
                 &message_id,
+                atm_core::types::IsoTimestamp::from_datetime(
+                    atm_core::types::IsoTimestamp::now().into_inner()
+                        + chrono::Duration::milliseconds(
+                            atm_storage::TASK_REMINDER_INTERVAL_MS,
+                        ),
+                ),
                 || runtime_health.record_graft_queue_marker_clear_failure(),
             );
         }
@@ -642,7 +648,7 @@ async fn deliver_published_graft_hook(
 /// with no scheduler ever revisiting it. A marker-clear failure must
 /// therefore never turn an already-successful append into a reported
 /// delivery failure; it is routed through the same
-/// `clear_queue_marker_after_handoff` retry-once-and-count helper AQ2's
+/// `rearm_queue_marker_after_handoff` retry-once-and-count helper AQ2's
 /// graft channel uses, so a clear failure is logged and counted (and
 /// retried once) while `emit_received_message` still returns `Success`.
 #[derive(Clone)]
@@ -698,10 +704,16 @@ impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
                 if target.kind == NudgeKind::Queue {
                     // A marker-clear failure is never allowed to fail an
                     // already-successful FIFO append; see the struct doc.
-                    atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                    atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                         &service_runtime,
                         &member,
                         &target.msg_id,
+                        atm_core::types::IsoTimestamp::from_datetime(
+                            atm_core::types::IsoTimestamp::now().into_inner()
+                                + chrono::Duration::milliseconds(
+                                    atm_storage::TASK_REMINDER_INTERVAL_MS,
+                                ),
+                        ),
                         || runtime_health.record_graft_queue_marker_clear_failure(),
                     );
                 }
@@ -969,23 +981,16 @@ mod tests {
             self.inner.release_pending(member, claim)
         }
 
-        fn clear_pending_on_read(
+        fn rearm_pending_after_handoff(
             &self,
             member: &MemberKey,
             msg: &AtmMessageId,
+            next_due: IsoTimestamp,
         ) -> Result<(), AtmError> {
             self.record_operation();
-            self.inner.clear_pending_on_read(member, msg)
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.record_operation();
+            let _ = (member, msg, next_due);
             self.clear_calls.fetch_add(1, Ordering::SeqCst);
-            Err(AtmError::mailbox_write("clear marker test failure"))
+            Err(AtmError::mailbox_write("rearm marker test failure"))
         }
 
         fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
