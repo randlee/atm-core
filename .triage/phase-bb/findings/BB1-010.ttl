@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-010>
+  a triage:Finding ;
+  triage:findingId "BB1-010" ;
+  triage:title "Doctor doc-named tests call the finding builder directly, bypassing the doctor composition" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. doctor/mod.rs:1878-1900,1902-1916 call push_template_override_findings directly rather than through run_doctor_with_runtime_ports (composition at :296), so that composition path is unproven, and there is no both-empty negative case. Sprint D6 requires \"finding ... per row\"." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/doctor/mod.rs:1878-1916,296" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: drive through run_doctor_with_runtime_ports (existing test_runtime pattern) and add the empty-store case asserting zero override findings. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-010/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-010/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 1878 ;
+  triage:snippet "doctor tests call push_template_override_findings directly instead of driving run_doctor_with_runtime_ports, leaving the real composition path unproven" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-010/1> .
+
+<urn:atm:triage:worktree/BB1-010/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

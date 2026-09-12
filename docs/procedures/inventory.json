@@ -1,0 +1,177 @@
+{
+  "procedures": [
+    {
+      "family": "smoke",
+      "id": "colima-hermes-skills",
+      "runner": "scripts/smoke/colima_skill_report.py",
+      "sources": [
+        "site/reports/smoke/linux/hermes-testbed/20260908T162312Z-colima-hermes-skills/smoke.envelope.json",
+        "site/reports/smoke/linux/hermes-testbed/20260909T001110Z-colima-hermes-skills/smoke.envelope.json",
+        "site/reports/smoke/linux/hermes-testbed/20260909T062404Z-colima-hermes-skills/smoke.envelope.json",
+        "site/reports/smoke/linux/hermes-testbed/20260912T111004Z-colima-hermes-skills/smoke.envelope.json"
+      ]
+    },
+    {
+      "family": "fuzz",
+      "id": "fuzz-atm-template-checked-emission",
+      "runner": ".just/run_fuzz.py",
+      "sources": [
+        "site/reports/20260815-an15-v2-fuzz-report/20260815-an15-v2-fuzz-report.envelope.json",
+        "site/reports/fuzz/an15-checked-emission-20260814.json",
+        "site/reports/fuzz/an15-checked-emission-v2-20260815-v2/report.json"
+      ]
+    },
+    {
+      "family": "fuzz",
+      "id": "fuzz-full",
+      "runner": ".just/run_fuzz.py",
+      "sources": [
+        "site/reports/20260801-1-fuzz-report/20260801-1-fuzz-report.envelope.json"
+      ]
+    },
+    {
+      "family": "fuzz",
+      "id": "fuzz-local-http-framing",
+      "runner": ".just/run_fuzz.py",
+      "sources": [
+        "site/reports/20260801-2-fuzz-report/20260801-2-fuzz-report.envelope.json",
+        "site/reports/20260801-3-fuzz-report/20260801-3-fuzz-report.envelope.json",
+        "site/reports/20260815-an15-http-fuzz-report/20260815-an15-http-fuzz-report.envelope.json",
+        "site/reports/fuzz/an15-http-framing-v2-20260815-v2/report.json"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "graft-hermes",
+      "runner": "scripts/phase-ai/run_hermes_graft_live.py",
+      "sources": [
+        "site/reports/smoke/macos/rand-m5.local/20260912T111154112438Z-pid54682-graft-hermes/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111535001097Z-pid57096-graft-hermes/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111629034493Z-pid57481-graft-hermes/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111722487420Z-pid57764-graft-hermes/smoke.envelope.json"
+      ]
+    },
+    {
+      "family": "benchmark",
+      "id": "read-query-benchmark",
+      "runner": "scripts/smoke/benchmark_report.py",
+      "sources": [
+        "site/reports/read-query-benchmark.json"
+      ]
+    },
+    {
+      "family": "benchmark",
+      "id": "send-message-benchmark",
+      "runner": "scripts/smoke/benchmark_report.py",
+      "sources": [
+        "site/reports/send-message-benchmark.json"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-admission-capacity",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:admission-capacity"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-crosshost-ack",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:crosshost-ack",
+        "site/reports/smoke/macos/rand-m5.local/20260808T203610076893Z-pid39023-crosshost-ack/smoke.envelope.json"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-crosshost-curl-plain",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:crosshost-curl-plain"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-crosshost-curl-tls",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:crosshost-curl-tls",
+        "site/reports/smoke/macos/rand-m4.local/20260820T222412780815Z-pid97059-crosshost-curl-tls/smoke.envelope.json"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-crosshost-send",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:crosshost-send",
+        "site/reports/smoke/macos/rand-m5.local/20260808T191605199584Z-pid24045-crosshost-send/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260811T001934627915Z-pid86365-crosshost-send/smoke.envelope.json"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-fast",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:fast"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-local-ip",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:local-ip",
+        "site/reports/smoke/macos/rand-m5.local/20260808T191410895708Z-pid23245-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260811T001002232093Z-pid82203-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260831T203502835995Z-pid58124-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111153900429Z-pid53990-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111406709913Z-pid55422-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111456913562Z-pid55962-local-ip/smoke.envelope.json",
+        "site/reports/smoke/windows/FastPC4/al14-cwin-local-ip-f3f66d6a-pid22492-local-ip/smoke.envelope.json"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-localhost",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:localhost",
+        "site/reports/smoke/macos/rand-m5.local/20260808T191357786414Z-pid23030-localhost/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260811T000951322910Z-pid81552-localhost/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260831T203217630910Z-pid56376-localhost/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111012460075Z-pid53885-localhost/smoke.envelope.json",
+        "site/reports/smoke/windows/FastPC4/al14-cwin-localhost-f3f66d6a-pid22832-localhost/smoke.envelope.json"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-normal",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:normal"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-peer-preflight",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:peer-preflight",
+        "site/reports/smoke/macos/rand-m5.local/20260808T191457421442Z-pid23503-peer-preflight/smoke.envelope.json"
+      ]
+    },
+    {
+      "family": "smoke",
+      "id": "smoke-thorough",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "sources": [
+        "runner:feature:thorough"
+      ]
+    }
+  ],
+  "schema_version": 1
+}

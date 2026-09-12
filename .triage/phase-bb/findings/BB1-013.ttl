@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-013>
+  a triage:Finding ;
+  triage:findingId "BB1-013" ;
+  triage:title "Raw-text deletion of a stale template-override row is untested end to end" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. crates/atm-storage-rusqlite/src/nudge_template_override_store.rs:324-355 seeds a task row and lists it stale but never calls clear_template_override(&team, \"task\"); the atm-core recording store returns Ok(false) for unparseable kinds (team_admin.rs:723-725), so clear_nudge_template_override_with_store with raw text is also unproven. D6 requires that on the retired-kind error path, clear_template_override is called with the raw text." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs:324-355" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: extend the storage test -- clear with \"task\" returns true, stale list is then empty. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-013/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-013/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/nudge_template_override_store.rs" ;
+  triage:line 324 ;
+  triage:snippet "stale-row deletion via clear_template_override with raw retired-kind text is seeded and listed but never actually invoked in the test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-013/1> .
+
+<urn:atm:triage:worktree/BB1-013/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .
