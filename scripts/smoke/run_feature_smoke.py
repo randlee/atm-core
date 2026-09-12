@@ -689,13 +689,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     passed = all(case["status"] == "PASS" for case in cases)
     revision = source_revision()
     procedure = "graft-hermes" if feature == "graft-hermes" else f"smoke-{feature}"
-    procedure_manifest = ROOT / "site" / "reports" / "procedures" / "manifest.json"
-    try:
-        procedure_page = _resolve_procedure_page(procedure, revision, root=ROOT, error_type=SmokeError)
-    except SmokeError:
-        if procedure_manifest.is_file():
-            raise
-        procedure_page = None
+    procedure_page = _resolve_procedure_page(procedure, revision, root=ROOT, error_type=SmokeError)
     procedure_target = (
         ROOT / "site/reports" / procedure_page.html
         if procedure_page is not None
