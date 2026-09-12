@@ -24,7 +24,9 @@
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA1-003/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA1-003/2> ;
   triage:hasResolution <urn:atm:triage:resolution/BA4-QA1-003/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BA4-QA1-003/2> ;
   triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
   triage:closedBy "fenix" ;
   triage:triageRecordVersion "1" .
@@ -55,4 +57,33 @@
   triage:fixBranch "feature/ba3-nudge-invariant" ;
   triage:verifiedInRound "BA3-FIX-R1" ;
   triage:resolutionNote "fenix's BA3-FIX-R1 acceptance (PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643008880): function-length vs integrate/phase-ba pass (only pre-existing normalize_json_number grandfathered) at c13f9bddf, confirming remind_open_tasks is no longer a RULE-002 hard violation relative to the correct base-ref. Closes the occurrence recorded here against BA.3; the corresponding occurrence on BA.4's own branch (once solar's merge-forward, task BA4-T8-1789181875, lands) is not yet recorded." .
+
+<urn:atm:triage:occurrence/BA4-QA1-003/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 22 ;
+  triage:snippet "remind_open_tasks -- BA.3's RULE-002 fix present after merge-forward" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "38f5623f7" ;
+  triage:occursIn <urn:atm:triage:worktree/BA4-QA1-003/2> .
+
+<urn:atm:triage:worktree/BA4-QA1-003/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "detached worktree of 38f5623f7 (fenix task-8 merge-forward verification)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "38f5623f7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BA4-QA1-003/2>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T03:10:00Z"^^xsd:dateTime ;
+  triage:fixCommit "38f5623f7" ;
+  triage:fixBranch "feature/ba4-atm-task-commands" ;
+  triage:verifiedInRound "BA4-T8" ;
+  triage:resolutionNote "fenix's BA.4 task-8 merge-forward acceptance (PR #1408, https://github.com/randlee/atm-core/pull/1408#issuecomment-5643053864): merge of 0ac585057 with BA.3 final c13f9bddf (both parents intact); function-length vs c13f9bddf pass (only pre-existing normalize_json_number grandfathered); BA.4 file set c13f9bddf..38f5623f7 identical to 19816c821..0ac585057." .
 

@@ -24,7 +24,9 @@
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA1-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA1-001/2> ;
   triage:hasResolution <urn:atm:triage:resolution/BA4-QA1-001/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BA4-QA1-001/2> ;
   triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
   triage:closedBy "fenix" ;
   triage:triageRecordVersion "1" .
@@ -55,4 +57,33 @@
   triage:fixBranch "feature/ba3-nudge-invariant" ;
   triage:verifiedInRound "BA3-FIX-R1" ;
   triage:resolutionNote "fenix's BA3-FIX-R1 acceptance (PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643008880): cargo test --workspace green including ac02_seventeen_due_reminders_split_across_ticks_at_sixteen and ax5_09_generic_emit_failure_counts_and_respects_cooldown at c13f9bddf. Closes the occurrence recorded here against BA.3; the corresponding occurrence on BA.4's own branch (once solar's merge-forward, task BA4-T8-1789181875, lands) is not yet recorded." .
+
+<urn:atm:triage:occurrence/BA4-QA1-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 2512 ;
+  triage:snippet "ac02_seventeen_due_reminders_split_across_ticks_at_sixteen / ax5_09_generic_emit_failure_counts_and_respects_cooldown now pass after BA.3's fix merged forward" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "38f5623f7" ;
+  triage:occursIn <urn:atm:triage:worktree/BA4-QA1-001/2> .
+
+<urn:atm:triage:worktree/BA4-QA1-001/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "detached worktree of 38f5623f7 (fenix task-8 merge-forward verification)" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "38f5623f7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BA4-QA1-001/2>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T03:10:00Z"^^xsd:dateTime ;
+  triage:fixCommit "38f5623f7" ;
+  triage:fixBranch "feature/ba4-atm-task-commands" ;
+  triage:verifiedInRound "BA4-T8" ;
+  triage:resolutionNote "fenix's BA.4 task-8 merge-forward acceptance (PR #1408, https://github.com/randlee/atm-core/pull/1408#issuecomment-5643053864): merge of 0ac585057 with BA.3 final c13f9bddf (both parents intact); cargo test --workspace fully green, including the previously-red ac02/ax5_09 tests; BA.4 file set c13f9bddf..38f5623f7 identical to 19816c821..0ac585057 (merge dropped/added nothing)." .
 
