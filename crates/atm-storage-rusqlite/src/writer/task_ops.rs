@@ -415,7 +415,7 @@ fn apply_task_start(
     order.insert(0, task_id.clone());
     connection
         .execute(
-            "UPDATE tasks SET state=?3, reminder_count=0, lead_notified_count=0, updated_at=?4
+            "UPDATE tasks SET state=?3, lead_notified_count=0, updated_at=?4
              WHERE team=?1 AND task_id=?2",
             params![
                 record.team.as_str(),

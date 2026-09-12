@@ -121,18 +121,11 @@ impl PendingNudgeStore for RecordingPendingNudgeStore {
         Ok(())
     }
 
-    fn clear_pending_on_read(
+    fn rearm_pending_after_handoff(
         &self,
         _member: &MemberKey,
         _msg: &AtmMessageId,
-    ) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn clear_pending_on_handoff(
-        &self,
-        _member: &MemberKey,
-        _msg: &AtmMessageId,
+        _next_due: IsoTimestamp,
     ) -> Result<(), AtmError> {
         Ok(())
     }

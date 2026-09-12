@@ -1,5 +1,6 @@
 [package]
 name = "atm-http-runtime"
+autotests = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +9,6 @@ license.workspace = true
 description = "Tokio HTTP runtime contract for ATM daemon composition."
 repository.workspace = true
 homepage.workspace = true
-autotests = false
 
 [features]
 # Exposes isolated listener construction only to workspace integration tests.

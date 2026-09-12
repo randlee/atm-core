@@ -653,17 +653,22 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message_id = claim.msg;
+        let now = (self.clock)();
+        let next_due = atm_core::boundary::next_reminder_due(now);
         let health = self.runtime_health.clone();
         let _ = run_blocking(move || {
-            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+            atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                 &runtime,
                 &member_key,
                 &message_id,
+                next_due,
                 || health.record_graft_queue_marker_clear_failure(),
             );
             Ok(())
         })
         .await;
+        self.complete_task_handoff_if_head(&member.key, message_id, now)
+            .await;
         #[cfg(test)]
         self.await_handoff_cleanup_test_gate().await;
         self.reset_release_streak(&member.key);
@@ -676,6 +681,77 @@ impl HerdrQueueWakePump {
             outcome = "prompted",
             "Herdr queue prompt accepted"
         );
+    }
+
+    async fn complete_task_handoff_if_head(
+        &self,
+        member: &MemberKey,
+        message_id: atm_core::schema::AtmMessageId,
+        now: IsoTimestamp,
+    ) {
+        let runtime = self.service_runtime.clone();
+        let member_for_message = member.clone();
+        let task_id = match run_blocking(move || {
+            load_received_hook_dispatch_message(&runtime, &member_for_message, message_id)
+        })
+        .await
+        {
+            Ok(Some(message)) => message.envelope.task_id,
+            Ok(None) | Err(_) => None,
+        };
+        let Some(task_id) = task_id else {
+            return;
+        };
+        let Ok(task_store) = self.service_runtime.task_store() else {
+            return;
+        };
+        let team = member.team().clone();
+        let task_id_for_load = task_id.clone();
+        let task_store_for_load = Arc::clone(&task_store);
+        let row =
+            match run_blocking(move || task_store_for_load.load_task(&team, &task_id_for_load))
+                .await
+            {
+                Ok(row) => row,
+                Err(error) => {
+                    tracing::warn!(
+                        subsystem = "herdr_queue_wake",
+                        action = "task_handoff_read",
+                        outcome = "failed",
+                        member = %member,
+                        task_id = %task_id,
+                        error = %error,
+                        "Queue assignment task lookup failed"
+                    );
+                    return;
+                }
+            };
+        let Some(row) = row.filter(|row| {
+            row.state == atm_core::boundary::TaskState::Assigned
+                && row.position.is_some_and(|position| position.get() == 1)
+        }) else {
+            return;
+        };
+        if let Err(error) = crate::herdr_task_start::complete_task_handoff(
+            &self.service_runtime,
+            &task_store,
+            &self.daemon_home,
+            member,
+            &row,
+            now,
+        )
+        .await
+        {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "task_handoff_start",
+                outcome = "failed",
+                member = %member,
+                task_id = %task_id,
+                error = %error,
+                "Queue assignment task handoff failed"
+            );
+        }
     }
 
     #[must_use]
@@ -1009,6 +1085,9 @@ impl Drop for ReleasePendingOnDrop {
 
 #[cfg(test)]
 mod tests {
+    #[path = "../tests/herdr_queue_ephemeral.rs"]
+    mod herdr_queue_ephemeral;
+
     mod herdr_nudge_invariant {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1048,6 +1127,7 @@ mod tests {
     use std::future::Future;
     use std::pin::Pin;
     use std::str::FromStr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
@@ -1237,6 +1317,17 @@ mod tests {
         agent: &str,
         task_id: TaskId,
     ) -> AtmMessageId {
+        queue_task_message_with_nudge(root, runtime, team, agent, task_id, NudgeMode::Deferred)
+    }
+
+    fn queue_task_message_with_nudge(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+        task_id: TaskId,
+        nudge_mode: NudgeMode,
+    ) -> AtmMessageId {
         let home = root.join("home");
         std::fs::create_dir_all(&home).expect("home");
         let recipient = format!("{agent}@{team}");
@@ -1253,11 +1344,97 @@ mod tests {
             false,
         )
         .expect("task write request")
-        .with_nudge_mode(NudgeMode::Deferred);
+        .with_nudge_mode(nudge_mode);
         request.task_id = Some(task_id);
         write_mail_with_runtime(request, &NullObservability, runtime)
             .expect("queue task write")
             .persisted_message_id()
+    }
+
+    fn queue_requires_ack_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+    ) -> AtmMessageId {
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).expect("home");
+        let recipient = format!("{agent}@{team}");
+        write_mail_with_runtime(
+            WriteRequest::new(
+                home.clone(),
+                home,
+                "sender".parse().expect("sender"),
+                &recipient,
+                team.clone(),
+                SendMessageSource::Inline("requires acknowledgement".to_owned()),
+                None,
+                true,
+                None,
+                false,
+            )
+            .expect("requires-ack write request")
+            .with_nudge_mode(NudgeMode::Deferred),
+            &NullObservability,
+            runtime,
+        )
+        .expect("queue requires-ack message")
+        .persisted_message_id()
+    }
+
+    fn immediate_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+    ) -> AtmMessageId {
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).expect("home");
+        let request = WriteRequest::new(
+            home.clone(),
+            home,
+            "sender".parse().expect("sender"),
+            &format!("{agent}@{team}"),
+            team.clone(),
+            SendMessageSource::Inline("immediate test message".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("immediate write request")
+        .with_nudge_mode(NudgeMode::Immediate);
+        write_mail_with_runtime(request, &NullObservability, runtime)
+            .expect("immediate write")
+            .persisted_message_id()
+    }
+
+    fn pending_state(
+        root: &std::path::Path,
+        key: &atm_core::boundary::MemberKey,
+        message_id: AtmMessageId,
+    ) -> (Option<String>, u32) {
+        atm_runtime_test_support::inspect_pending_marker_state_for_test(
+            root.join("runtime/mail.sqlite3"),
+            key.team().as_str(),
+            key.agent().as_str(),
+            atm_storage::MessageKey::from(message_id).as_str(),
+        )
+        .expect("read pending marker state")
+    }
+
+    fn acknowledgement_is_pending(
+        root: &std::path::Path,
+        key: &atm_core::boundary::MemberKey,
+        message_id: AtmMessageId,
+    ) -> bool {
+        atm_runtime_test_support::inspect_message_ack_state_for_test(
+            root.join("runtime/mail.sqlite3"),
+            key.team().as_str(),
+            key.agent().as_str(),
+            atm_storage::MessageKey::from(message_id).as_str(),
+        )
+        .expect("read acknowledgement state")
     }
 
     fn pump_with_clock(
@@ -1330,13 +1507,102 @@ mod tests {
             .collect()
     }
 
-    fn clear_pending_markers(runtime: &LocalServiceRuntime, key: &atm_core::boundary::MemberKey) {
+    fn clear_pending_markers(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        key: &atm_core::boundary::MemberKey,
+    ) {
         let store = runtime.pending_nudge_store().expect("pending store");
         while let Some(claim) = store.claim_next_pending(key).expect("claim pending marker") {
-            store
-                .clear_pending_on_handoff(key, &claim.msg)
-                .expect("clear pending marker");
+            let message_id = claim.msg.to_string();
+            let query = atm_core::read::ReadQuery::new(
+                root.join("home"),
+                root.join("home"),
+                key.agent().clone(),
+                Some(&format!("{}@{}", key.agent(), key.team())),
+                key.team().clone(),
+                atm_core::types::ReadSelection::All,
+                false,
+                true,
+                Some(&message_id),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read pending marker query");
+            atm_core::read::read_mail_with_runtime(query, &NullObservability, runtime)
+                .expect("close pending marker message");
         }
+    }
+
+    fn make_failed_attempt_due(
+        store: &dyn atm_core::boundary::PendingNudgeStore,
+        key: &atm_core::boundary::MemberKey,
+        message_id: &AtmMessageId,
+    ) {
+        store
+            .rearm_pending_after_handoff(
+                key,
+                message_id,
+                IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+            )
+            .expect("make the next failed claim due");
+    }
+
+    fn close_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        key: &atm_core::boundary::MemberKey,
+        message_id: AtmMessageId,
+    ) {
+        let message_id = message_id.to_string();
+        let query = atm_core::read::ReadQuery::new(
+            root.join("home"),
+            root.join("home"),
+            key.agent().clone(),
+            Some(&format!("{}@{}", key.agent(), key.team())),
+            key.team().clone(),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            Some(&message_id),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read message query");
+        atm_core::read::read_mail_with_runtime(query, &NullObservability, runtime)
+            .expect("close message");
+    }
+
+    fn add_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(team)
+            .expect("load roster");
+        roster.members.push(herdr_member(team, agent));
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("save roster member");
+    }
+
+    fn add_lead_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(team)
+            .expect("load roster");
+        let mut member = herdr_member(team, agent);
+        member.agent_type = atm_core::schema::AgentType::Lead;
+        roster.members.push(member);
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("save lead roster member");
     }
 
     fn ack_task_assignment(
@@ -1807,7 +2073,7 @@ mod tests {
             atm_storage::TaskState::Assigned,
             "a reminder never acknowledges the assignment"
         );
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert!(
             prompt_texts(&fake)
                 .iter()
@@ -1818,9 +2084,10 @@ mod tests {
     #[tokio::test]
     async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
         let first: TaskId = "AX5-AC1-FIRST".parse().expect("task id");
         let second: TaskId = "AX5-AC1-SECOND".parse().expect("task id");
-        let first_message = queue_task_message(
+        queue_task_message(
             root.path(),
             &runtime,
             key.team(),
@@ -1846,31 +2113,13 @@ mod tests {
             .shared_roster_store_arc()
             .save_roster(&roster)
             .expect("add task sender to roster");
-        clear_pending_markers(&runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
         let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
 
         pump.tick_once().await;
-        let first_reminder = prompt_texts(&fake).pop().expect("first reminder");
-        assert!(first_reminder.contains("AX5-AC1-FIRST"));
-        queue_idle_result(&fake, &key);
-        pump.tick_once().await;
-        assert_eq!(
-            prompt_texts(&fake).len(),
-            1,
-            "second tick is inside cadence"
-        );
-
-        *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("test timestamp");
-        queue_idle_result(&fake, &key);
-        pump.tick_once().await;
-        assert_eq!(prompt_texts(&fake).len(), 2);
-        assert!(prompt_texts(&fake)[1].contains("AX5-AC1-FIRST"));
-
-        ack_task_assignment(root.path(), &runtime, key.team(), first_message);
+        assert!(prompt_texts(&fake)[0].contains("AX5-AC1-FIRST"));
         assert_eq!(
             runtime
                 .task_store()
@@ -1881,29 +2130,26 @@ mod tests {
                 .state,
             TaskState::Active
         );
-        *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:02:10Z").expect("test timestamp");
-        queue_idle_result(&fake, &key);
-        pump.tick_once().await;
-        assert!(prompt_texts(&fake)[2].contains("AX5-AC1-FIRST"));
-
-        complete_task(root.path(), &runtime, key.team(), first);
         assert_eq!(
             runtime
                 .task_store()
                 .expect("task store")
-                .load_task(key.team(), &"AX5-AC1-FIRST".parse().expect("task id"))
-                .expect("load completed task")
-                .expect("completed task")
-                .state,
-            TaskState::Complete(atm_core::test_support::TaskCloseOutcome::Completed)
+                .load_task(key.team(), &first)
+                .expect("load first task")
+                .expect("first task")
+                .reminder_count,
+            1
         );
+        complete_task(root.path(), &runtime, key.team(), first);
         *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:03:15Z").expect("test timestamp");
+            IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
-        assert!(prompt_texts(&fake)[3].contains("AX5-AC1-SECOND"));
-        assert!(!prompt_texts(&fake)[3].contains("AX5-AC1-FIRST"));
+        assert!(
+            prompt_texts(&fake)
+                .iter()
+                .any(|text| text.contains("AX5-AC1-SECOND"))
+        );
         assert_eq!(
             runtime
                 .task_store()
@@ -1953,11 +2199,11 @@ mod tests {
             IsoTimestamp::from_str("2030-01-01T00:03:00Z").expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert_eq!(
             prompt_texts(&fake).len(),
-            4,
-            "two drains, queue, then reminder"
+            3,
+            "the queue drains consume each tick while the assignment is open"
         );
     }
 
@@ -2105,8 +2351,8 @@ mod tests {
             .into_iter()
             .last()
             .expect("active task reminder");
-        assert!(reminder.contains("<task id=\"AX5-ACTIVE\">"));
-        assert!(!reminder.contains("AX5-ASSIGNED-2"));
+        assert!(reminder.contains("AX5-ASSIGNED-2"));
+        assert!(!reminder.contains("AX5-ACTIVE"));
         assert_eq!(
             runtime
                 .task_store()
@@ -2154,9 +2400,9 @@ mod tests {
                 .expect("load task")
                 .expect("task row")
                 .reminder_count,
-            0
+            1
         );
-        assert_eq!(pump.stats().task_reminders_failed, 1);
+        assert_eq!(pump.stats().task_reminders_failed, 0);
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:02:05Z").expect("test timestamp");
@@ -2164,8 +2410,8 @@ mod tests {
         pump.tick_once().await;
         assert_eq!(
             pump.stats().task_reminders,
-            1,
-            "a failed emit retries on the next tick"
+            0,
+            "the open assignment remains the only queue nudge"
         );
 
         *now.lock().expect("test clock lock") =
@@ -2329,14 +2575,14 @@ mod tests {
             .expect("load task")
             .expect("task row");
         assert_eq!(row.reminder_count, 1);
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert_eq!(
             fake.calls()
                 .iter()
                 .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
                 .count(),
-            3,
-            "two queue drains plus exactly one cadence-controlled reminder"
+            2,
+            "the deferred assignment remains a queue nudge while its marker is open"
         );
     }
 
@@ -2515,7 +2761,7 @@ mod tests {
                 .list_pending_members()
                 .expect("pending members")
                 .len(),
-            1
+            HERDR_MAX_PROMPTS_PER_TICK + 1
         );
         let remaining = atm_core::boundary::MemberKey::new(
             key.team().clone(),
@@ -2797,7 +3043,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&key),
+            "successful deferred delivery rearms its queue marker"
         );
         assert_eq!(key.agent().as_str(), "aq27-agent");
     }
@@ -2950,8 +3197,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty(),
-            "completed marker cleanup leaves no pending member"
+                .contains(&key),
+            "completed handoff rearms the queue marker"
         );
 
         fake.queue_list_result(Ok(HerdrListOutcome {
@@ -3055,9 +3302,9 @@ mod tests {
                 "prompt count for {agent}"
             );
         }
-        assert_eq!(pump.stats().pending_members, 7);
+        assert_eq!(pump.stats().pending_members, 22);
         assert_eq!(pump.stats().prompted, 7);
-        assert_eq!(pump.cursor_position(), 2);
+        assert_eq!(pump.cursor_position(), 16);
     }
 
     #[test]
@@ -3110,6 +3357,44 @@ mod tests {
 
         fn delete_message(&self, _key: &atm_storage::MessageKey) -> Result<(), AtmError> {
             unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+    }
+
+    struct CountingMessageStore {
+        inner: Arc<dyn atm_storage::MessageStore + Send + Sync>,
+        list_messages_calls: Arc<AtomicUsize>,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for CountingMessageStore {}
+    impl atm_storage::MessageStore for CountingMessageStore {
+        fn save_message(&self, message: &atm_storage::Message) -> Result<(), AtmError> {
+            self.inner.save_message(message)
+        }
+
+        fn save_messages_atomically(
+            &self,
+            messages: &[atm_storage::Message],
+        ) -> Result<(), AtmError> {
+            self.inner.save_messages_atomically(messages)
+        }
+
+        fn load_message(
+            &self,
+            key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, AtmError> {
+            self.inner.load_message(key)
+        }
+
+        fn list_messages(
+            &self,
+            query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, AtmError> {
+            self.list_messages_calls.fetch_add(1, Ordering::SeqCst);
+            self.inner.list_messages(query)
+        }
+
+        fn delete_message(&self, key: &atm_storage::MessageKey) -> Result<(), AtmError> {
+            self.inner.delete_message(key)
         }
     }
 

@@ -75,6 +75,20 @@ pub struct StorageAndNudgeRouter {
 }
 
 impl StorageAndNudgeRouter {
+    pub(crate) fn dispatch(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.dispatch_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
+    }
+
     pub(super) async fn list_messages(
         &self,
         query: ListQuery,
@@ -992,12 +1006,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        self.dispatch_with_request_id(
-            request,
-            ingress,
-            deadline,
-            atm_core::protocol::next_request_id(),
-        )
+        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
     }
 
     fn dispatch_with_request_id(
@@ -1067,7 +1076,7 @@ pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Resu
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
@@ -1263,20 +1272,14 @@ mod tests {
             self.inner.release_pending(member, claim)
         }
 
-        fn clear_pending_on_read(
+        fn rearm_pending_after_handoff(
             &self,
             member: &MemberKey,
             msg: &AtmMessageId,
+            next_due: IsoTimestamp,
         ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_read(member, msg)
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_handoff(member, msg)
+            self.inner
+                .rearm_pending_after_handoff(member, msg, next_due)
         }
 
         fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
@@ -2361,6 +2364,71 @@ mod tests {
             response.messages[0].body,
             "<atm><action>queue</action></atm>"
         );
+    }
+
+    pub(crate) struct BareCliPullFixture {
+        pub(crate) _temporary_root: TempDir,
+        pub(crate) router: StorageAndNudgeRouter,
+        pub(crate) runtime: LocalServiceRuntime,
+        pub(crate) pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+        pub(crate) home_dir: PathBuf,
+        pub(crate) current_dir: PathBuf,
+        pub(crate) member: MemberKey,
+        pub(crate) message_id: AtmMessageId,
+    }
+
+    pub(crate) fn bare_cli_pull_fixture() -> BareCliPullFixture {
+        let fixture = fixture(true, None, None);
+        let member = MemberKey::new(
+            "test-team".parse().expect("team"),
+            "recipient".parse().expect("agent"),
+        );
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_nudge_mode(NudgeMode::Deferred);
+        request.to = Some("recipient@test-team".parse().expect("recipient"));
+        let message_id = atm_core::send::write_mail_with_runtime(
+            request,
+            &NullObservability,
+            &fixture.router.service_runtime,
+        )
+        .expect("deferred queue write")
+        .persisted_message_id();
+        fixture
+            .pending_nudge_store
+            .mark_pending(&member, &message_id, IsoTimestamp::now())
+            .expect("mark queue item pending");
+        let claim = fixture
+            .pending_nudge_store
+            .claim_next_pending(&member)
+            .expect("claim queue item")
+            .expect("queue item claim");
+        assert_eq!(claim.msg, message_id);
+
+        let fifo: BareCliFifo = Default::default();
+        let drops: BareCliQueueFullDrops = Default::default();
+        append_bare_cli_message(
+            &fifo,
+            &drops,
+            member.clone(),
+            QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: message_id,
+                body: "queued".to_owned(),
+            },
+        )
+        .expect("seed FIFO");
+        let runtime = fixture.router.service_runtime.clone();
+        let router = fixture.router.with_bare_cli_fifo(fifo, drops);
+        BareCliPullFixture {
+            _temporary_root: fixture._temporary_root,
+            router,
+            runtime,
+            pending_nudge_store: fixture.pending_nudge_store,
+            home_dir: fixture.home_dir,
+            current_dir: fixture.current_dir,
+            member,
+            message_id,
+        }
     }
 
     /// AC6 migration case: a stale FIFO entry from an earlier bare-CLI

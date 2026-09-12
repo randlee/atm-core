@@ -165,7 +165,7 @@ pub(crate) fn execute(
             mailbox,
             message_ids,
             seen_watermark,
-        } => execute_read_display_state(
+        } => super::read_display_state::execute_read_display_state(
             mailbox,
             message_ids,
             *seen_watermark,
@@ -291,55 +291,6 @@ fn execute_diagnostic_prune(
         params![crate::DIAGNOSTIC_PRUNE_BATCH, crate::DIAGNOSTIC_MAX_ROWS],
     ).map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
     Ok(WriteOpResult::DiagnosticsPruned(excess_rows as u64))
-}
-
-fn execute_read_display_state(
-    mailbox: &MailboxScope,
-    message_ids: &[MessageKey],
-    seen_watermark: Option<IsoTimestamp>,
-    connection: &Connection,
-    cache: &mut WriterStatementCache,
-    target: &SharedDbTarget,
-) -> Result<WriteOpResult, AtmError> {
-    let updated_at = IsoTimestamp::now().into_inner().to_rfc3339();
-    for message_key in message_ids {
-        let updated = cache
-            .mark_message_read(
-                connection,
-                params![
-                    mailbox.team.as_str(),
-                    mailbox.agent.as_str(),
-                    message_key.as_str(),
-                    updated_at,
-                ],
-            )
-            .map_err(|error| sqlite_error(target, "failed to mark mailbox message read", error))?;
-        if updated != 1 {
-            return Err(AtmError::mailbox_read(format!(
-                "message {} was not found for {}@{} while applying read display state",
-                message_key.as_str(),
-                mailbox.agent.as_str(),
-                mailbox.team.as_str(),
-            )));
-        }
-    }
-    if let Some(watermark) = seen_watermark {
-        connection
-            .execute(
-                "INSERT INTO mail_seen_watermarks(team, agent, watermark)
-                 VALUES (?1, ?2, ?3)
-                 ON CONFLICT(team, agent) DO UPDATE SET watermark = excluded.watermark",
-                params![
-                    mailbox.team.as_str(),
-                    mailbox.agent.as_str(),
-                    watermark.into_inner().to_rfc3339(),
-                ],
-            )
-            .map_err(|error| {
-                sqlite_error(target, "failed to persist mailbox seen watermark", error)
-            })?;
-    }
-    Ok(WriteOpResult::ReadDisplayStateApplied)
 }
 
 fn execute_template_registration(

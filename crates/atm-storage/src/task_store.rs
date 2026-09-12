@@ -25,6 +25,14 @@ pub const TASK_STALLED_REMINDER_THRESHOLD: u32 = 10;
 /// Minimum spacing between task reminders for one assignee.
 pub const TASK_REMINDER_INTERVAL_MS: i64 = 60_000;
 
+/// Computes the next due time for a deferred queue or task reminder.
+#[must_use]
+pub fn next_reminder_due(now: IsoTimestamp) -> IsoTimestamp {
+    IsoTimestamp::from_datetime(
+        now.into_inner() + chrono::Duration::milliseconds(TASK_REMINDER_INTERVAL_MS),
+    )
+}
+
 /// Consecutive refused closes that hold task prompting and escalate the run.
 ///
 /// See Phase BA plan §2 R5.

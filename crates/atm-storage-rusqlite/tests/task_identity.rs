@@ -295,14 +295,14 @@ fn start_when_another_task_active_is_rejected_active_elsewhere() {
 }
 
 #[test]
-fn start_moves_task_to_position_one_and_resets_counters_preserving_last_reminded_at() {
+fn start_moves_task_to_position_one_and_preserves_reminder_count() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
     h.start("T2", "alice").unwrap();
     let row = h.row("T2");
     assert_eq!(row.position, Some(QueuePosition::HEAD));
-    assert_eq!(row.reminder_count, 0);
+    assert_eq!(row.reminder_count, 1);
     assert!(row.last_reminded_at.is_some());
 }
 
