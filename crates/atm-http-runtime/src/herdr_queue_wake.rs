@@ -1136,7 +1136,7 @@ mod tests {
         build_retained_logger,
     };
     use atm_runtime_test_support::open_isolated_sqlite_boundary;
-    use atm_storage::{MessageStore, RosterSnapshot, TaskRow, TaskState, TaskStore};
+    use atm_storage::{RosterSnapshot, TaskRow, TaskState, TaskStore};
     use serde_json::json;
     use std::collections::HashMap;
     use std::future::Future;
@@ -1424,19 +1424,32 @@ mod tests {
             .collect()
     }
 
-    fn clear_pending_markers(runtime: &LocalServiceRuntime, key: &atm_core::boundary::MemberKey) {
+    fn clear_pending_markers(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        key: &atm_core::boundary::MemberKey,
+    ) {
         let store = runtime.pending_nudge_store().expect("pending store");
         while let Some(claim) = store.claim_next_pending(key).expect("claim pending marker") {
-            let message_key = atm_core::boundary::MessageKey::from(claim.msg);
-            let mut message = runtime
-                .message_store()
-                .load_message(&message_key)
-                .expect("load pending marker message")
-                .expect("pending marker message");
-            message.envelope.read = true;
-            runtime
-                .message_store()
-                .save_message(&message)
+            let message_id = claim.msg.to_string();
+            let query = atm_core::read::ReadQuery::new(
+                root.join("home"),
+                root.join("home"),
+                key.agent().clone(),
+                Some(&format!("{}@{}", key.agent(), key.team())),
+                key.team().clone(),
+                atm_core::types::ReadSelection::All,
+                false,
+                true,
+                Some(&message_id),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read pending marker query");
+            atm_core::read::read_mail_with_runtime(query, &NullObservability, runtime)
                 .expect("close pending marker message");
         }
     }
@@ -2404,7 +2417,7 @@ mod tests {
             .shared_roster_store_arc()
             .save_roster(&roster)
             .expect("add task sender to roster");
-        clear_pending_markers(&runtime, &key);
+        clear_pending_markers(root.path(), &runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
@@ -2997,7 +3010,7 @@ mod tests {
             RuntimeMemberState::Blocked,
         );
 
-        clear_pending_markers(&runtime, &key);
+        clear_pending_markers(root.path(), &runtime, &key);
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
