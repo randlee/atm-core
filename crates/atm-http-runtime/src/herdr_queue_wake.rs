@@ -225,14 +225,7 @@ impl HerdrQueueWakePump {
             }
         };
         let roster_store = self.service_runtime.shared_roster_store_arc();
-        let pending_members = match self
-            .blocking_bridge
-            .run(herdr_request_deadline(), {
-                let pending_store = Arc::clone(&pending_store);
-                move || pending_store.list_pending_members()
-            })
-            .await
-        {
+        let pending_members = match self.list_pending_members(&pending_store).await {
             Ok(members) => members,
             Err(error) => {
                 tracing::warn!(
@@ -249,11 +242,7 @@ impl HerdrQueueWakePump {
         stats.pending_members = pending_members.len();
         let pending_set: HashSet<_> = pending_members.into_iter().collect();
         let candidates = match self
-            .blocking_bridge
-            .run(herdr_request_deadline(), {
-                let pending_set = pending_set.clone();
-                move || herdr_candidates(roster_store.as_ref(), &pending_set)
-            })
+            .load_candidates(roster_store, pending_set.clone())
             .await
         {
             Ok(candidates) => candidates,
@@ -285,6 +274,30 @@ impl HerdrQueueWakePump {
             .await;
         }
         self.finish_tick(stats);
+    }
+
+    async fn list_pending_members(
+        &self,
+        pending_store: &Arc<dyn PendingNudgeStore + Send + Sync>,
+    ) -> Result<Vec<MemberKey>, AtmError> {
+        self.blocking_bridge
+            .run(herdr_request_deadline(), {
+                let pending_store = Arc::clone(pending_store);
+                move || pending_store.list_pending_members()
+            })
+            .await
+    }
+
+    async fn load_candidates(
+        &self,
+        roster_store: Arc<dyn DurableRosterStore + Send + Sync>,
+        pending_set: HashSet<MemberKey>,
+    ) -> Result<Vec<HerdrCandidate>, AtmError> {
+        self.blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                herdr_candidates(roster_store.as_ref(), &pending_set)
+            })
+            .await
     }
 
     fn finish_tick(&self, stats: HerdrQueueWakeStats) {
@@ -495,17 +508,8 @@ impl HerdrQueueWakePump {
         member: &HerdrCandidate,
         stats: &mut HerdrQueueWakeStats,
     ) -> bool {
-        let claim = match self
-            .blocking_bridge
-            .run(herdr_request_deadline(), {
-                let pending_store = Arc::clone(pending_store);
-                let member = member.key.clone();
-                move || pending_store.claim_next_pending(&member)
-            })
-            .await
-        {
-            Ok(Some(claim)) => claim,
-            Ok(None) | Err(_) => return false,
+        let Some(claim) = self.claim_next_pending(pending_store, member).await else {
+            return false;
         };
         // A claimed nudge is now a real, in-flight Herdr wake attempt for this
         // member: mark the ephemeral roster state pending. `ReleasePendingOnDrop`
@@ -568,6 +572,22 @@ impl HerdrQueueWakePump {
         };
         self.emit_claim(emitter, dispatch, member, claim, &mut release, stats)
             .await
+    }
+
+    async fn claim_next_pending(
+        &self,
+        pending_store: &Arc<dyn PendingNudgeStore + Send + Sync>,
+        member: &HerdrCandidate,
+    ) -> Option<atm_core::boundary::NudgeClaim> {
+        self.blocking_bridge
+            .run(herdr_request_deadline(), {
+                let pending_store = Arc::clone(pending_store);
+                let member = member.key.clone();
+                move || pending_store.claim_next_pending(&member)
+            })
+            .await
+            .ok()
+            .flatten()
     }
 
     async fn rebuild_dispatch(
