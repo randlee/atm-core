@@ -16,12 +16,15 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/task_close.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BA4 ;
   triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/ATM-QA-003/1> ;
+  triage:closedAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/ATM-QA-003/1>
@@ -29,8 +32,8 @@
   triage:file "crates/atm-core/src/task_close.rs" ;
   triage:line 16 ;
   triage:snippet "fn preflight_close(...) -- never called from TaskCloseCommand::run" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ba4-atm-task-commands" ;
   triage:headSha "5ab184d75" ;
   triage:occursIn <urn:atm:triage:worktree/ATM-QA-003/1> .
@@ -41,4 +44,13 @@
   triage:branch "feature/ba4-atm-task-commands" ;
   triage:headSha "5ab184d75" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/ATM-QA-003/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
+  triage:fixCommit "0ac585057" ;
+  triage:fixBranch "feature/ba4-atm-task-commands" ;
+  triage:verifiedInRound "BA4-FIX-R1" ;
+  triage:resolutionNote "fenix verification of BA4-FIX-R1 (PR #1408, accepted 0ac585057, https://github.com/randlee/atm-core/pull/1408#issuecomment-5642941279): preflight_close(rows, task_id) is now a pure projection with TaskCloseCommand as its one caller (wired in as designed, not deleted), and the sprint doc was corrected. QA-2 confirmation pending; fixed stays fixed per fenix." .
 
