@@ -16,12 +16,15 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BA5 ;
   triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-004/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BA5-QA1-004/1> ;
+  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/BA5-QA1-004/1>
@@ -29,8 +32,8 @@
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
   triage:line 1002 ;
   triage:snippet "RULE-003 violation: prod=1002 exceeds limit 1000 (execute_read_display_state's next_due threading pushed it over)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ba5-queue-ephemeral-item" ;
   triage:headSha "b617a9eab" ;
   triage:occursIn <urn:atm:triage:worktree/BA5-QA1-004/1> .
@@ -41,4 +44,13 @@
   triage:branch "feature/ba5-queue-ephemeral-item" ;
   triage:headSha "b617a9eab" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/BA5-QA1-004/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6b9ca5980" ;
+  triage:fixBranch "feature/ba5-queue-ephemeral-item" ;
+  triage:verifiedInRound "BA5-FIX-R1" ;
+  triage:resolutionNote "fenix's BA5-FIX-R1 acceptance (PR #1407, https://github.com/randlee/atm-core/pull/1407#issuecomment-5643008929): '004 (6b9ca5980) ... verified fixed'; RULE-003 pass (function-length vs 19816c821 pass, remind_open_tasks 88 lines grandfathered BA.3 code with 0 diff lines)." .
 

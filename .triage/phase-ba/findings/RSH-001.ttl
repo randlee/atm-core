@@ -24,6 +24,7 @@
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/2> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/RSH-001/1>
@@ -31,8 +32,11 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 898 ;
   triage:snippet "fn run_blocking(...) -- no internal timeout on the spawn_blocking closure" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "ruled BA.6 fold-in by fenix (#1408 issuecomment-5642738654); tracked under BA.6" ;
   triage:branch "feature/ba4-atm-task-commands" ;
   triage:headSha "5ab184d75" ;
   triage:occursIn <urn:atm:triage:worktree/RSH-001/1> .
@@ -43,4 +47,22 @@
   triage:branch "feature/ba4-atm-task-commands" ;
   triage:headSha "5ab184d75" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:occurrence/RSH-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 898 ;
+  triage:snippet "fn run_blocking(...) -- no internal timeout on the spawn_blocking closure" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "15d2276c4" ;
+  triage:occursIn <urn:atm:triage:worktree/RSH-001/2> .
+
+<urn:atm:triage:worktree/RSH-001/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "BA.6 fold-in interim tracking (BA.6 has no branch yet); carried on integrate/phase-ba per fenix" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "15d2276c4" ;
+  triage:orderIndex 1 .
 

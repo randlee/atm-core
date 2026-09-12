@@ -16,7 +16,7 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs (MemberObservation/still_idle reminder pacing)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:relatedFinding "BA5-QA1-001" ;
@@ -24,6 +24,9 @@
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T01:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA4-QA1-001/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BA4-QA1-001/1> ;
+  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/BA4-QA1-001/1>
@@ -31,8 +34,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 2512 ;
   triage:snippet "ac02_seventeen_due_reminders_split_across_ticks_at_sixteen / ax5_09_generic_emit_failure_counts_and_respects_cooldown fail identically at 19816c821" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "19816c821" ;
   triage:occursIn <urn:atm:triage:worktree/BA4-QA1-001/1> .
@@ -43,4 +46,13 @@
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "19816c821" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/BA4-QA1-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c13f9bddf" ;
+  triage:fixBranch "feature/ba3-nudge-invariant" ;
+  triage:verifiedInRound "BA3-FIX-R1" ;
+  triage:resolutionNote "fenix's BA3-FIX-R1 acceptance (PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643008880): cargo test --workspace green including ac02_seventeen_due_reminders_split_across_ticks_at_sixteen and ax5_09_generic_emit_failure_counts_and_respects_cooldown at c13f9bddf. Closes the occurrence recorded here against BA.3; the corresponding occurrence on BA.4's own branch (once solar's merge-forward, task BA4-T8-1789181875, lands) is not yet recorded." .
 

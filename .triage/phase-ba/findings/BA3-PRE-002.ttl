@@ -16,12 +16,15 @@
   triage:source "fenix pre-review" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs (does not exist)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-PRE-002/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BA3-PRE-002/1> ;
+  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/BA3-PRE-002/1>
@@ -29,8 +32,8 @@
   triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
   triage:line 1 ;
   triage:snippet "doc-named test file does not exist; 29 of 32 named tests absent under any name" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "82ff24ded" ;
   triage:occursIn <urn:atm:triage:worktree/BA3-PRE-002/1> .
@@ -41,4 +44,13 @@
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "82ff24ded" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/BA3-PRE-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c13f9bddf" ;
+  triage:fixBranch "feature/ba3-nudge-invariant" ;
+  triage:verifiedInRound "BA3-FIX-R1" ;
+  triage:resolutionNote "fenix's BA3-FIX-R1 acceptance (PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643008880): all 32 doc-named tests resolve exactly once (Pure in herdr_task_disposition.rs; Runtime in crates/atm-http-runtime/tests/herdr_nudge_invariant.rs via the #[path] include at herdr_queue_wake.rs, autotests = false)." .
 

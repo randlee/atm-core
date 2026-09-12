@@ -16,12 +16,15 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs (does not exist)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BA5 ;
   triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-002/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BA5-QA1-002/1> ;
+  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/BA5-QA1-002/1>
@@ -29,8 +32,8 @@
   triage:file "crates/atm-http-runtime/tests/herdr_queue_ephemeral.rs" ;
   triage:line 1 ;
   triage:snippet "doc-named test file does not exist; blocked_member_with_open_item_escalates_not_reminded absent under any name" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ba5-queue-ephemeral-item" ;
   triage:headSha "b617a9eab" ;
   triage:occursIn <urn:atm:triage:worktree/BA5-QA1-002/1> .
@@ -41,4 +44,13 @@
   triage:branch "feature/ba5-queue-ephemeral-item" ;
   triage:headSha "b617a9eab" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/BA5-QA1-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:fixCommit "e6ef9b488" ;
+  triage:fixBranch "feature/ba5-queue-ephemeral-item" ;
+  triage:verifiedInRound "BA5-FIX-R1" ;
+  triage:resolutionNote "fenix's BA5-FIX-R1 acceptance (PR #1407, https://github.com/randlee/atm-core/pull/1407#issuecomment-5643008929): '002/003 (e6ef9b488) ... verified fixed'; blocked_member_with_open_item_escalates_not_reminded written; 9 of 13 doc-named runtime tests present in tests/herdr_queue_ephemeral.rs." .
 

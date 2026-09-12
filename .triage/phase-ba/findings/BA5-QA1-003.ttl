@@ -16,12 +16,15 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/Cargo.toml, crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BA5 ;
   triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA1-003/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BA5-QA1-003/1> ;
+  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/BA5-QA1-003/1>
@@ -29,8 +32,8 @@
   triage:file "crates/atm-http-runtime/Cargo.toml" ;
   triage:line 47 ;
   triage:snippet "rusqlite = { version = \"0.33.0\", features = [\"bundled\"] } -- unauthorized dev-dependency, 8 lint-boundaries errors" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ba5-queue-ephemeral-item" ;
   triage:headSha "b617a9eab" ;
   triage:occursIn <urn:atm:triage:worktree/BA5-QA1-003/1> .
@@ -41,4 +44,13 @@
   triage:branch "feature/ba5-queue-ephemeral-item" ;
   triage:headSha "b617a9eab" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/BA5-QA1-003/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:fixCommit "e6ef9b488" ;
+  triage:fixBranch "feature/ba5-queue-ephemeral-item" ;
+  triage:verifiedInRound "BA5-FIX-R1" ;
+  triage:resolutionNote "fenix's BA5-FIX-R1 acceptance (PR #1407, https://github.com/randlee/atm-core/pull/1407#issuecomment-5643008929): '002/003 (e6ef9b488) ... verified fixed'; rusqlite is out of atm-http-runtime; storage test-support additions sit behind the pre-existing test-support feature gate; boundaries lint pass (TOML unchanged)." .
 

@@ -16,12 +16,15 @@
   triage:source "fenix pre-review" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/send/nudge_template.rs (task_started template)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-PRE-003/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BA3-PRE-003/1> ;
+  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/BA3-PRE-003/1>
@@ -29,8 +32,8 @@
   triage:file "crates/atm-core/src/send/nudge_template.rs" ;
   triage:line 233 ;
   triage:snippet "assertion `left == right` failed: left: \"...started by test-arch-member.\\n\" right: \"...started by arch-ctm.\\n\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "82ff24ded" ;
   triage:occursIn <urn:atm:triage:worktree/BA3-PRE-003/1> .
@@ -41,4 +44,13 @@
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "82ff24ded" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/BA3-PRE-003/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c13f9bddf" ;
+  triage:fixBranch "feature/ba3-nudge-invariant" ;
+  triage:verifiedInRound "BA3-FIX-R1" ;
+  triage:resolutionNote "fenix's BA3-FIX-R1 acceptance (PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643008880): cargo test --workspace green including task_started_template_populates_task_and_assignee." .
 
