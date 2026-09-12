@@ -27,6 +27,13 @@ TEST_TEAM = "test-team"
 
 
 class FeatureSmokeTests(unittest.TestCase):
+    def test_report_and_envelope_carry_source_revision(self):
+        self.assertIn('"source_revision": revision', Path(RUNNER.__file__).read_text(encoding="utf-8"))
+
+    def test_missing_git_writes_null_source_revision(self):
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+            self.assertIsNone(RUNNER.source_revision())
+
     def test_local_ip_alias_is_supported(self):
         with mock.patch.object(RUNNER, "run_live", return_value=0) as run_live:
             with mock.patch.object(RUNNER.sys, "argv", ["smoke", "local-up"]):
@@ -220,6 +227,7 @@ class FeatureSmokeTests(unittest.TestCase):
                     "platform": "windows",
                     "run_id": "run-1",
                     "status": "PASS",
+                    "source_revision": None,
                     "cases": [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "cwin", "destination": "cwin"}],
                 },
             )

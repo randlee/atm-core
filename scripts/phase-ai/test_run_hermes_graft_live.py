@@ -23,6 +23,15 @@ class HermesGraftLiveSmokeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_module()
 
+    def test_graft_report_and_envelope_carry_source_revision_and_procedure(self) -> None:
+        source = Path(self.module.feature_smoke.__file__).read_text(encoding="utf-8")
+        self.assertIn('"procedure": "graft-hermes"', source)
+        self.assertIn('"source_revision": revision', source)
+
+    def test_graft_missing_git_writes_null_source_revision(self) -> None:
+        with mock.patch.object(self.module.feature_smoke.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+            self.assertIsNone(self.module.feature_smoke.source_revision())
+
     def test_ready_pair_runs_backend_and_registers_graft_report(self) -> None:
         doctor = {"summary": {"status": "healthy"}, "runtime_status": {"readiness": "ready"}, "client_context": {"version": "1.4.1-beta-ai-1"}, "daemon_context": {"version": "1.4.1-beta-ai-1"}}
         completed = mock.Mock(returncode=0, stdout="Hermes graft smoke test: PASS\n", stderr="")

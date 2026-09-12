@@ -274,6 +274,8 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
         "summary_copy_json": json.dumps({"session_id": session["session_id"], "status": status, "workers": len(workers)}, sort_keys=True),
         "summary_copy_context": f"{session['session_id']}: {status}; {len(workers)} worker panels.",
         "footer_html": "<p>Generated from validated adversarial-fuzz v2 evidence through sc-compose.</p>",
+        "procedure_label": f"fuzz-{session['campaign']['target']} @ {str(session['campaign'].get('source_revision') or 'unresolved')[:8]}",
+        "procedure_href": f"procedures/fuzz-{session['campaign']['target']}/{str(session['campaign'].get('source_revision') or 'unresolved')[:8]}.html",
     }
     compose(REPORT_TEMPLATE, report_data, report_html)
     # sc-compose accepts arrays of objects only at top-level var-file paths.

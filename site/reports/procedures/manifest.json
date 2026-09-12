@@ -1,0 +1,353 @@
+{
+  "schema_version": 1,
+  "procedures": [
+    {
+      "procedure": "colima-hermes-skills",
+      "family": "smoke",
+      "runner": "scripts/smoke/colima_skill_report.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/colima-hermes-skills/1595424d.html"
+        },
+        {
+          "rev": "6040ecf36a3ac43d40207869d281114c719533ea",
+          "date": "2026-09-08",
+          "note": "historical runner revision",
+          "html": "procedures/colima-hermes-skills/6040ecf3.html"
+        }
+      ]
+    },
+    {
+      "procedure": "fuzz-atm-template-checked-emission",
+      "family": "fuzz",
+      "runner": ".just/run_fuzz.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/fuzz-atm-template-checked-emission/1595424d.html"
+        },
+        {
+          "rev": "2f40a3a785cb9eedf50a439c5b85bf9571bac62e",
+          "date": "2026-07-31",
+          "note": "historical runner revision",
+          "html": "procedures/fuzz-atm-template-checked-emission/2f40a3a7.html"
+        }
+      ]
+    },
+    {
+      "procedure": "fuzz-full",
+      "family": "fuzz",
+      "runner": ".just/run_fuzz.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/fuzz-full/1595424d.html"
+        },
+        {
+          "rev": "2f40a3a785cb9eedf50a439c5b85bf9571bac62e",
+          "date": "2026-07-31",
+          "note": "historical runner revision",
+          "html": "procedures/fuzz-full/2f40a3a7.html"
+        }
+      ]
+    },
+    {
+      "procedure": "fuzz-local-http-framing",
+      "family": "fuzz",
+      "runner": ".just/run_fuzz.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "historical runner revision",
+          "html": "procedures/fuzz-local-http-framing/1595424d.html"
+        },
+        {
+          "rev": "cc0ee308e0a02a09aa41c3c6e635101b5011d418",
+          "date": "2026-08-14",
+          "note": "current",
+          "html": "procedures/fuzz-local-http-framing/cc0ee308.html"
+        },
+        {
+          "rev": "2f40a3a785cb9eedf50a439c5b85bf9571bac62e",
+          "date": "2026-07-31",
+          "note": "historical runner revision",
+          "html": "procedures/fuzz-local-http-framing/2f40a3a7.html"
+        }
+      ]
+    },
+    {
+      "procedure": "graft-hermes",
+      "family": "smoke",
+      "runner": "scripts/phase-ai/run_hermes_graft_live.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/graft-hermes/1595424d.html"
+        },
+        {
+          "rev": "bab416ca946b8776ea6c5514c79868a447a6683e",
+          "date": "2026-08-10",
+          "note": "historical runner revision",
+          "html": "procedures/graft-hermes/bab416ca.html"
+        }
+      ]
+    },
+    {
+      "procedure": "read-query-benchmark",
+      "family": "benchmark",
+      "runner": "scripts/smoke/benchmark_report.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/read-query-benchmark/1595424d.html"
+        },
+        {
+          "rev": "bedcb4b85af06a00ed527adff0e2817d2fca7b90",
+          "date": "2026-07-31",
+          "note": "historical runner revision",
+          "html": "procedures/read-query-benchmark/bedcb4b8.html"
+        }
+      ]
+    },
+    {
+      "procedure": "send-message-benchmark",
+      "family": "benchmark",
+      "runner": "scripts/smoke/benchmark_report.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/send-message-benchmark/1595424d.html"
+        },
+        {
+          "rev": "bedcb4b85af06a00ed527adff0e2817d2fca7b90",
+          "date": "2026-07-31",
+          "note": "historical runner revision",
+          "html": "procedures/send-message-benchmark/bedcb4b8.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-admission-capacity",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-admission-capacity/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-admission-capacity/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-crosshost-ack",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-crosshost-ack/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-crosshost-ack/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-crosshost-curl-plain",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-crosshost-curl-plain/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-crosshost-curl-plain/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-crosshost-curl-tls",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-crosshost-curl-tls/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-crosshost-curl-tls/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-crosshost-send",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-crosshost-send/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-crosshost-send/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-fast",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-fast/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-fast/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-local-ip",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-local-ip/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-local-ip/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-localhost",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-localhost/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-localhost/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-normal",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-normal/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-normal/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-peer-preflight",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-peer-preflight/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-peer-preflight/c355f382.html"
+        }
+      ]
+    },
+    {
+      "procedure": "smoke-thorough",
+      "family": "smoke",
+      "runner": "scripts/smoke/run_feature_smoke.py",
+      "revisions": [
+        {
+          "rev": "1595424dca42905e6eb8ceb7b48d722cb8c8ddef",
+          "date": "2026-09-12",
+          "note": "current",
+          "html": "procedures/smoke-thorough/1595424d.html"
+        },
+        {
+          "rev": "c355f382a62b5cc94d47a321ec3fbbebcbe9f167",
+          "date": "2026-07-26",
+          "note": "historical runner revision",
+          "html": "procedures/smoke-thorough/c355f382.html"
+        }
+      ]
+    }
+  ]
+}

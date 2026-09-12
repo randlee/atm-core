@@ -110,6 +110,13 @@ def branch_version() -> str:
     return next(iter(versions))
 
 
+def source_revision() -> str | None:
+    """Record the exact checkout that produced evidence; never guess on failure."""
+    result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False)
+    revision = result.stdout.strip()
+    return revision if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", revision) else None
+
+
 def selected_message(value: Any, expected: str) -> dict[str, Any] | None:
     if isinstance(value, dict):
         for key in ("message", "selected_message"):
@@ -809,11 +816,18 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     report = directory / f"{identity['feature']}.json"
     passed = all(case["status"] == "PASS" for case in cases)
+    revision = source_revision()
+    procedure = "graft-hermes" if feature == "graft-hermes" else f"smoke-{feature}"
+    procedure_href = os.path.relpath(
+        ROOT / "site/reports/procedures" / procedure / f"{revision[:8] if revision else 'unresolved'}.html",
+        directory,
+    )
     report.write_text(
         json.dumps(
             {
                 **identity,
                 "status": "PASS" if passed else "FAIL",
+                "source_revision": revision,
                 "cases": cases,
             },
             indent=2,
@@ -846,6 +860,8 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
             "title": f"ATM smoke — {feature}",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pane_src": local_pane.name,
+            "procedure_label": f"{procedure} @ {revision[:8] if revision else 'unresolved'}",
+            "procedure_href": procedure_href,
         },
         report.with_suffix(".html"),
     )
@@ -863,6 +879,8 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
             "title": "ATM cross-host smoke",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pane_html": pane_html,
+            "procedure_label": f"{procedure} @ {revision[:8] if revision else 'unresolved'}",
+            "procedure_href": procedure_href,
         },
         directory / "index.html",
     )
@@ -877,6 +895,8 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
                 "host_label": host,
                 "report_html": (directory / "index.html").relative_to(reports_root).as_posix(),
                 "status": "PASS" if passed else "FAIL",
+                "source_revision": revision,
+                **({"procedure": "graft-hermes"} if feature == "graft-hermes" else {}),
             },
             indent=2,
         )

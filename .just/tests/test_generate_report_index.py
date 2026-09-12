@@ -59,6 +59,35 @@ def write_smoke_envelope(root: Path, platform: str, host: str, run: str) -> str:
 
 
 class GenerateReportIndexTests(unittest.TestCase):
+    def test_links_report_to_procedure_by_source_revision(self) -> None:
+        self.assertIn("source_revision", __import__("generate_report_index").OPTIONAL_FIELDS)
+
+    def test_links_historical_smoke_result_by_run_date_and_marks_inferred(self) -> None:
+        self.assertIn("inferred from run date", build_index(Path(__file__).resolve().parents[2] / "site/reports", require_manifest=True))
+
+    def test_dated_report_resolves_to_revision_in_effect_not_head(self) -> None:
+        index = build_index(Path(__file__).resolve().parents[2] / "site/reports", require_manifest=True)
+        self.assertIn("procedure smoke-localhost", index)
+
+    def test_every_committed_report_resolves_to_a_manifest_page(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        self.assertEqual(write_or_check(root, check=True), 0)
+
+    def test_rejects_report_whose_procedure_has_no_page(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir); reports = root / "site/reports"; reports.mkdir(parents=True)
+            write_envelope(root, "bad", "benchmark", "2026-08-01T00:00:00Z", "host")
+            (reports / "procedures").mkdir()
+            (reports / "procedures/manifest.json").write_text('{"schema_version": 1, "procedures": []}\n')
+            with self.assertRaises(ReportIndexError): write_or_check(root, check=False)
+
+    def test_rejects_site_without_procedure_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir); write_envelope(root, "bad", "benchmark", "2026-08-01T00:00:00Z", "host")
+            with self.assertRaises(ReportIndexError): write_or_check(root, check=False)
+
+    def test_accepts_source_revision_and_procedure_envelope_fields(self) -> None:
+        self.assertIn("procedure", __import__("generate_report_index").OPTIONAL_FIELDS)
     def test_empty_input_has_every_report_group(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)

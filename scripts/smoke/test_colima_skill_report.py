@@ -52,19 +52,24 @@ class ParseTests(unittest.TestCase):
         self.assertTrue(all(c["origin"] == c["destination"] == MODULE.HOST for c in cases))
 
     def test_header_carries_version_and_transport(self):
-        doctor, advertised, transport = MODULE.header_cases(RESULT, MODULE.parse_report(REPORT))
+        doctor, advertised, transport, testbed = MODULE.header_cases(RESULT, MODULE.parse_report(REPORT))
         self.assertEqual((doctor["status"], doctor["detail"]), ("PASS", "ATM 1.5.9"))
         self.assertEqual(advertised["name"], "advertised host")
         self.assertEqual((transport["status"], transport["detail"]), ("PASS", "socket ({'kind': 'ready'})"))
+        self.assertEqual(testbed["name"], "testbed ref")
 
     def test_header_doctor_fails_without_a_passing_doctor_step(self):
-        doctor, _, transport = MODULE.header_cases(
+        doctor, _, transport, _ = MODULE.header_cases(
             RESULT.replace("socket (", "cli ("), MODULE.parse_report(REPORT.replace("2 PASS Doctor", "2 FAIL Doctor")))
         self.assertEqual(doctor["status"], "FAIL")
         self.assertEqual(transport["status"], "FAIL")
 
 
 class RenderTests(unittest.TestCase):
+    def test_payload_and_envelope_carry_source_revision_and_testbed_ref_case(self):
+        self.assertIn('"source_revision": source_revision', Path(MODULE.__file__).read_text(encoding="utf-8"))
+        self.assertIn('case("testbed ref"', Path(MODULE.__file__).read_text(encoding="utf-8"))
+
     def test_render_writes_the_smoke_evidence_set(self):
         with tempfile.TemporaryDirectory() as tmp:
             run_dir = Path(tmp) / "20260908T162312Z"
@@ -86,7 +91,7 @@ class RenderTests(unittest.TestCase):
             payload = json.loads(report.read_text(encoding="utf-8"))
             self.assertEqual((payload["feature"], payload["host"], payload["platform"], payload["run_id"], payload["status"]),
                              (MODULE.FEATURE, MODULE.HOST, "linux", "20260908T162312Z", "PASS"))
-            self.assertEqual(len(payload["cases"]), 6)
+            self.assertEqual(len(payload["cases"]), 7)
             self.assertEqual([name for name, _ in composed],
                              ["inbound-peer-pane.xhtml.j2", "inbound-peer-frame.html.j2", "inbound-peer-review.html.j2"])
             self.assertEqual({p.name for _, p in composed},

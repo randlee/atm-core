@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -248,6 +249,11 @@ def panel_variables(campaign: BenchmarkCampaign) -> dict[str, Any]:
         "completed_at": None if campaign.completed_at is None else time_view(campaign.completed_at),
         "rows": campaign_rows(campaign),
         "incomplete_reason": incomplete_reason(campaign),
+        "procedure_label": f"send-message-benchmark @ {campaign.source_revision[:8]}",
+        "procedure_href": os.path.relpath(
+            REPORTS_ROOT / "procedures/send-message-benchmark" / f"{campaign.source_revision[:8]}.html",
+            REPORTS_ROOT / REPORT_NAME,
+        ),
     }
 
 
@@ -401,6 +407,8 @@ def render_envelope(
     measurement_note: str | None = None,
     effective_lane_settings: Mapping[str, Any] | None = None,
     ratchet: Mapping[str, Any] | None = None,
+    source_revision: str | None = None,
+    procedure: str | None = None,
 ) -> None:
     """Write the shared reports-index envelope for benchmark-family reports.
 
@@ -420,6 +428,13 @@ def render_envelope(
         "generated_at": generated_at, "host_label": host_label,
         "report_html": report_html,
     }
+    if source_revision is None and campaigns:
+        revisions = {campaign.source_revision for campaign in campaigns if getattr(campaign, "source_revision", None)}
+        source_revision = next(iter(revisions)) if len(revisions) == 1 else None
+    if source_revision is not None:
+        payload["source_revision"] = source_revision
+    if procedure is not None:
+        payload["procedure"] = procedure
     if execution_identity is not None:
         payload["execution_identity"] = dict(execution_identity)
     if measurement_note is not None:
