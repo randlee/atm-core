@@ -279,6 +279,28 @@ impl HerdrQueueWakePump {
         stats: &mut HerdrQueueWakeStats,
     ) {
         let head = heads.get(&candidate.member);
+        let disposition = dispose(
+            open_mail.contains(&candidate.member),
+            candidate.state,
+            head,
+            now,
+            self.escalation_state
+                .observe(&candidate.member, candidate.state),
+            0,
+        );
+        if disposition != TaskDisposition::Nudge {
+            self.apply_task_disposition(
+                task_store,
+                reader,
+                head,
+                candidate,
+                now,
+                stats,
+                disposition,
+            )
+            .await;
+            return;
+        }
         let (refusal_count, refusal_started_at) =
             match self.refusal_run(reader, &candidate.member).await {
                 Ok(run) => run,
@@ -305,16 +327,26 @@ impl HerdrQueueWakePump {
                 stats,
             )
             .await;
+            return;
         }
-        let disposition = dispose(
-            open_mail.contains(&candidate.member),
-            candidate.state,
-            head,
-            now,
-            self.escalation_state
-                .observe(&candidate.member, candidate.state),
-            refusal_count,
-        );
+        self.apply_task_disposition(task_store, reader, head, candidate, now, stats, disposition)
+            .await;
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the disposition boundary keeps each durable input explicit"
+    )]
+    async fn apply_task_disposition(
+        &self,
+        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
+        head: Option<&TaskRow>,
+        candidate: MemberObservation,
+        now: IsoTimestamp,
+        stats: &mut HerdrQueueWakeStats,
+        disposition: TaskDisposition,
+    ) {
         match disposition {
             TaskDisposition::EscalateEpisode(kind) => {
                 crate::herdr_queue_wake_escalation::escalate_episode(

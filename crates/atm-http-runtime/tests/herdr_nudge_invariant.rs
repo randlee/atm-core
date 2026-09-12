@@ -1689,6 +1689,36 @@ async fn refusal_reader_deadline_timeout_holds_before_disposition() {
 }
 
 #[tokio::test]
+async fn non_nudge_disposition_skips_refusal_history_read() {
+    let error = atm_storage::ReadLaneError::Unavailable {
+        message: "injected refusal reader failure".to_owned(),
+    };
+    let (_root, _runtime, fake, pump, store, keys, _now) = build_task_only_pump_with_channel(
+        vec![HerdrAgentStatus::Working],
+        false,
+        None,
+        true,
+        Some(error),
+    );
+    let warnings = WarningLayer::default();
+    let subscriber = tracing_subscriber::Registry::default().with(warnings.clone());
+
+    pump.tick_once().with_subscriber(subscriber).await;
+
+    let task: TaskId = "AX5-TASK-00".parse().expect("task");
+    assert!(prompt_texts(&fake).is_empty());
+    assert_eq!(store.row(&keys[0], &task).reminder_count, 0);
+    assert!(
+        warnings
+            .events
+            .lock()
+            .expect("warning events")
+            .iter()
+            .all(|(action, _)| action != "refusal_history_read")
+    );
+}
+
+#[tokio::test]
 async fn third_refusal_holds_and_escalates_once() {
     let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&[
         "REFUSE-01",
