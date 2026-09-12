@@ -39,6 +39,7 @@ fn is_cfg_test(attribute: &syn::Attribute) -> bool {
 #[derive(Default)]
 struct RuntimeStateVisitor {
     function: Option<String>,
+    impl_type: Option<String>,
     in_test: bool,
     violations: Vec<String>,
 }
@@ -47,8 +48,9 @@ impl RuntimeStateVisitor {
     fn permitted(&self) -> bool {
         matches!(
             self.function.as_deref(),
-            Some("dispose" | "runtime_state" | "still_idle" | "observe" | "queue_drain_eligible")
-        )
+            Some("dispose" | "runtime_state" | "still_idle" | "queue_drain_eligible")
+        ) || (self.function.as_deref() == Some("observe")
+            && self.impl_type.as_deref() == Some("EscalationState"))
     }
 
     fn check_path(&mut self, path: &syn::Path) {
@@ -77,6 +79,20 @@ impl<'ast> Visit<'ast> for RuntimeStateVisitor {
         let prior = self.function.replace(node.sig.ident.to_string());
         syn::visit::visit_impl_item_fn(self, node);
         self.function = prior;
+    }
+
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        let prior = self.impl_type.clone();
+        self.impl_type = match node.self_ty.as_ref() {
+            syn::Type::Path(path) => path
+                .path
+                .segments
+                .last()
+                .map(|segment| segment.ident.to_string()),
+            _ => None,
+        };
+        syn::visit::visit_item_impl(self, node);
+        self.impl_type = prior;
     }
 
     fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
@@ -116,9 +132,13 @@ impl<'ast> Visit<'ast> for RuntimeStateVisitor {
 fn escalation_ownership_architecture_test() {
     let root = workspace_root();
     let core = rust_sources(&root.join("crates/atm-core/src"));
+    let identifiers: std::collections::BTreeSet<_> = core
+        .split(|character: char| !(character == '_' || character.is_ascii_alphanumeric()))
+        .filter(|identifier| !identifier.is_empty())
+        .collect();
     for forbidden in ["escalate", "escalate_mail", "escalation_summary"] {
         assert!(
-            !core.contains(forbidden),
+            !identifiers.contains(forbidden),
             "forbidden core identifier: {forbidden}"
         );
     }

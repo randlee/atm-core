@@ -311,7 +311,9 @@ impl HerdrQueueWakePump {
                 stats.task_reminders += 1;
             }
             ReminderOutcome::Unrenderable => stats.task_reminders_unrenderable += 1,
-            ReminderOutcome::Blocked => stats.task_reminders_blocked += 1,
+            // Retained for decoding durable pre-BA.3 reminder rows; this
+            // runtime no longer produces a blocked reminder outcome.
+            ReminderOutcome::Blocked => {}
         }
         if let Err(error) = recorded_row {
             tracing::warn!(
