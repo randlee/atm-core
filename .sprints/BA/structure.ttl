@@ -1,0 +1,15 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseBA a triage:Phase .
+
+# Order follows docs/plans/phase-ba/phase-ba-plan.md's wave sequence: BA.1
+# standalone, then BA.2 -> BA.3 -> {BA.4, BA.5} stacked on BA.3, then BA.6
+# (must_follow every other sprint, PR completion). BA.4/BA.5 both order after
+# BA.3 since both stack on it; relative order between them is not load-bearing.
+triage:BA1 a triage:Sprint ; triage:inPhase triage:PhaseBA ; triage:order 1 ; triage:branch "feature/ba1-ack-task-separation" ; triage:criteria "docs/plans/phase-ba/sprint-BA.1-ack-task-separation.md" .
+triage:BA2 a triage:Sprint ; triage:inPhase triage:PhaseBA ; triage:order 2 ; triage:branch "feature/ba2-task-identity-queue" ; triage:criteria "docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md" .
+triage:BA3 a triage:Sprint ; triage:inPhase triage:PhaseBA ; triage:order 3 ; triage:branch "feature/ba3-nudge-invariant" ; triage:criteria "docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md" .
+triage:BA4 a triage:Sprint ; triage:inPhase triage:PhaseBA ; triage:order 4 ; triage:branch "feature/ba4-atm-task-commands" ; triage:criteria "docs/plans/phase-ba/sprint-BA.4-atm-task-commands.md" .
+triage:BA5 a triage:Sprint ; triage:inPhase triage:PhaseBA ; triage:order 5 ; triage:branch "feature/ba5-queue-ephemeral-item" ; triage:criteria "docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md" .
+triage:BA6 a triage:Sprint ; triage:inPhase triage:PhaseBA ; triage:order 6 ; triage:branch "docs/ba6-task-nudge-documentation" ; triage:criteria "docs/plans/phase-ba/sprint-BA.6-docs.md" .
