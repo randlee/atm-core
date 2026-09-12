@@ -151,7 +151,7 @@ async fn peer_ingress_rejects_task_move_explicitly() {
 
 #[test]
 fn protocol_1_5_0_fixtures_decode_on_1_6_0() {
-    #[derive(serde::Deserialize)]
+    #[derive(Debug, serde::Deserialize)]
     enum RequestEnvelope15 {
         QueueGetNext(serde_json::Value),
         ReloadRuntimeView,
@@ -173,4 +173,15 @@ fn protocol_1_5_0_fixtures_decode_on_1_6_0() {
             RequestEnvelope15::ReloadRuntimeView => {}
         }
     }
+
+    let task_move = serde_json::to_vec(&RequestEnvelope::TaskMove(TaskMoveRequest {
+        caller_identity: TEST_SENDER.parse().unwrap(),
+        caller_team: TEST_TEAM.parse().unwrap(),
+        task_id: "T1".parse().unwrap(),
+        target: MoveTarget::Head,
+    }))
+    .expect("task move fixture");
+    let error = serde_json::from_slice::<RequestEnvelope15>(&task_move)
+        .expect_err("1.5 enum must reject the 1.6-only variant");
+    assert!(error.to_string().contains("unknown variant `TaskMove`"));
 }
