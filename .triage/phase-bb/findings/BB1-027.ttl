@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-027>
+  a triage:Finding ;
+  triage:findingId "BB1-027" ;
+  triage:title "Anonymous tuple return on a public boundary-governed trait method" ;
+  triage:description "quality-mgr BB1-QA1-1789242600 (Final Quality Report, FAIL, https://github.com/randlee/atm-core/pull/1438#issuecomment-5648365789, 2026-09-12T20:06:37Z), reviewed at b06b3e262. QA1-M3: crates/atm-storage/src/contract.rs:1253 NudgeTemplateOverrideStore::list_stale_template_override_kinds returns Vec<(String, IsoTimestamp)>, destructured positionally at every call site." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/contract.rs:1253 and its call sites" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
+  triage:deferredNote "Recommend a named struct (e.g. StaleTemplateOverrideKind { kind, updated_at }) so the fields are self-describing and can't be silently transposed. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-027/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-027/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 1253 ;
+  triage:snippet "list_stale_template_override_kinds returns an anonymous (String, IsoTimestamp) tuple on a public boundary-governed trait method" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-027/1> .
+
+<urn:atm:triage:worktree/BB1-027/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .
