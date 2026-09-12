@@ -249,9 +249,20 @@ Unit — `crates/atm-core/src/send/nudge_template.rs`:
 Unit — `crates/atm-core/src/nudge_dispatch.rs`:
 
 - `task_pass_builder_sets_ready_at_zero_reminders_then_reminder_with_count`.
-- `claim_builder_sets_ready_for_head_assignment_and_queued_otherwise` — positions 1, 2, 3.
-- `claim_builder_sets_started_for_daemon_receipt`.
+- `claim_builder_never_sets_task_transition` — a claimed row with a task
+  id (the legacy pre-BB shape) and a claimed row without one both leave
+  `task_transition` `None`; the task-linked one renders `delivery` (D3,
+  plan P14).
+
+Unit — `crates/atm-core/src/send/hook.rs` (the immediate builder, D5 bullet 3):
+
+- `immediate_builder_sets_started_for_applied_start` — the event built
+  from a write result whose `task_op` is `Start` carries `Started`; a
+  rejected start never reaches the builder (plan P12).
 - `close_builder_sets_complete_for_assignee_and_closed_cancelled_for_assigner`.
+- `immediate_assignment_without_position_renders_delivery` — `task_op`
+  `None` with no queue position in the write result leaves the field
+  `None` until BB.5 supplies the position (plan P14).
 
 Unit — `crates/atm-core/src/doctor/mod.rs`:
 
