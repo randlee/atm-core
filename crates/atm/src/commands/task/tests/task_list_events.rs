@@ -22,8 +22,8 @@ fn assign(task: &str, assignee: &str, placement: Option<MoveTarget>) -> TaskAssi
             _ => None,
         },
         head: matches!(placement, Some(MoveTarget::Head)),
-        message: Some(format!("assign {task}")),
-        source: MessageSourceArgs {
+        message: MessageSourceArgs {
+            text: Some(format!("assign {task}")),
             file: None,
             stdin: false,
             template: None,
