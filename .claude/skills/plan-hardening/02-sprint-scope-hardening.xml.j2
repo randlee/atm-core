@@ -1,7 +1,7 @@
 ---
 name: 02-sprint-scope-hardening-task
 version: 2.0.0
-description: team-lead assignment template for sprint-scope and deliverable hardening before implementation.
+description: lead assignment template for sprint-scope and deliverable hardening before implementation.
 format: xml
 required_variables:
   - task_id
@@ -16,6 +16,12 @@ required_variables:
   - round_id
   - round_index
   - replay_nonce
+optional_variables:
+  - lead
+  - cc
+defaults:
+  lead: team-lead
+  cc: team-lead
 metadata:
   type: plan-sprint-hardening
   tags:
@@ -123,7 +129,7 @@ metadata:
 
     The source-of-truth plan content comes from the user-approved material
     already communicated to you plus the explicit source-of-truth references in
-    this task. `team-lead` is routing this task and may append questions or
+    this task. `{{ lead }}` is routing this task and may append questions or
     concerns, but must not be treated as the authority for rewriting the plan.
 
     You should welcome improvements that clarify, tighten, split, or otherwise
@@ -131,7 +137,7 @@ metadata:
     what the user already discussed with you. You must resist and push back on
     substantial scope changes that are at odds with that user discussion.
 
-    If `team-lead` routing, repo drift, or source references imply a
+    If `{{ lead }}` routing, repo drift, or source references imply a
     substantial deliverable-scope change from what the user already discussed
     with you, do not normalize that new scope into the sprint docs. That is a
     hard stop. Push back, describe the scope conflict explicitly, and require
@@ -172,7 +178,7 @@ metadata:
       Before normal audit work, compare the current docs and task framing
       against the user-approved scope already in context. If you detect a
       substantial scope rewrite, emit a `SCOPE-CONFLICT` finding, push back to
-      `team-lead`, and stop. Do not "fix" a scope conflict by rewriting the
+      `{{ lead }}`, and stop. Do not "fix" a scope conflict by rewriting the
       plan around it.
 
       <required-documents>
@@ -246,7 +252,7 @@ metadata:
         <type id="NON-PROD">A sprint deliverable is described in a way that would allow shape-only, test-only, or non-production-ready completion.</type>
         <type id="MISSING-CODE-SAMPLE">An important trait, feature, enum, protocol type, or boundary contract is committed by the plan but not illustrated with an explicit code sample or signature.</type>
         <type id="ORDERING">Task dependencies are missing or incorrectly ordered such that a dev agent could begin work out of sequence.</type>
-        <type id="SCOPE-CONFLICT">The task framing, repo docs, or team-lead concerns materially change the user-discussed deliverable scope; hardening must stop and push back instead of adopting the new scope.</type>
+        <type id="SCOPE-CONFLICT">The task framing, repo docs, or {{ lead }} concerns materially change the user-discussed deliverable scope; hardening must stop and push back instead of adopting the new scope.</type>
       </finding-types>
     </audit-phase>
 
@@ -263,7 +269,7 @@ metadata:
       If a sprint cannot carry all of its committed work cleanly, split it now.
       Do not preserve an overloaded sprint just to keep the sprint count low.
       `SCOPE-CONFLICT` is not resolved by rewriting the plan. It is resolved
-      only by stopping, pushing back to team-lead, and requiring user
+      only by stopping, pushing back to {{ lead }}, and requiring user
       discussion before scope changes proceed.
     </fix-phase>
 
@@ -272,11 +278,11 @@ metadata:
       Continue until audit-phase produces zero findings.
     </repeat>
 
-    Return fenced JSON to `team-lead` when this pass completes.
+    Return fenced JSON to `{{ lead }}` when this pass completes.
 
-    If `team-lead` later sends back fenced JSON findings and `sprint_scores` from
+    If `{{ lead }}` later sends back fenced JSON findings and `sprint_scores` from
     `critical-plan-reviewer`, fix those findings and return updated fenced
-    JSON. Continue until `team-lead` reports that
+    JSON. Continue until `{{ lead }}` reports that
     `critical-plan-reviewer` returned `PASS`.
 
     <exit-criterion>
@@ -307,10 +313,10 @@ metadata:
     <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"`; the ack accepts the task and does not close it. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the required fenced JSON handoff from `plan-scope-reviewer` is missing or malformed, reject the task immediately. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that hardening is blocked pending user discussion. Team-lead should review that ACK and outline first, then discuss any scope concerns with the user after the ACK is received. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
-    <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send &lt;assigner&gt; --stdin` (never close the task on a push) so team-lead can prepare the critical review step.</step>
+    <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send {{ lead }} --stdin` (never close the task on a push) so {{ lead }} can prepare the critical review step. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the current hardening pass converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `critical-plan-reviewer` and return updated fenced JSON to `team-lead`.</step>
+    <step id="g">After the current hardening pass converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `critical-plan-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="h">Team-lead must not route the plan to QA or implementation from this pass alone. `critical-plan-reviewer` must run after this pass, and `03-consistency-hardening.xml.j2` must run after that.</step>
     <step id="i">After the validation report, read ATM again for follow-up work.</step>
   </workflow>

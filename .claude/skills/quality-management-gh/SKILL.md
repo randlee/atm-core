@@ -126,7 +126,7 @@ Suggested commands:
 - in-flight update:
   `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr comment <PR> --body-file -`
 - ATM verdict:
-  `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
+  `atm task close <task-id> completed --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
 
 ## Final Quality Report to PR (Closeout)
 
@@ -142,7 +142,7 @@ Suggested command:
 - PR closeout:
   `atm compose --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr review <PR> --approve --body-file -`
 - ATM verdict:
-  `atm send team-lead --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
+  `atm task close <task-id> completed --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
 
 Use the final template only for `PASS` closeout.
 

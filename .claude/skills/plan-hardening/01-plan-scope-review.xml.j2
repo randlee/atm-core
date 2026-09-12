@@ -1,7 +1,7 @@
 ---
 name: 01-plan-scope-review-task
 version: 2.0.0
-description: team-lead assignment template for the initial arch-ctm guidelines pass before background scope review.
+description: lead assignment template for the initial arch-ctm guidelines pass before background scope review.
 format: xml
 required_variables:
   - task_id
@@ -15,6 +15,12 @@ required_variables:
   - round_id
   - round_index
   - replay_nonce
+optional_variables:
+  - lead
+  - cc
+defaults:
+  lead: team-lead
+  cc: team-lead
 metadata:
   type: plan-scope-review
   tags:
@@ -73,21 +79,21 @@ metadata:
     - tighten the current plan docs to match the sprint-planning guidelines
     - create missing sprint docs when the plan already implies they are needed
     - make the sprint set reviewable by `plan-scope-reviewer`
-    - do not rely on `team-lead` to restate plan details
+    - do not rely on `{{ lead }}` to restate plan details
     - do not materially change user-discussed scope
 
     If task framing, repo drift, or references imply a substantial deliverable
     scope change from what the user already discussed with you, push back to
-    team-lead directly. If team-lead does not concede, escalate to the user.
+    {{ lead }} directly. If {{ lead }} does not concede, escalate to the user.
     Do not normalize the new scope into the plan without user approval.
 
-    Return fenced JSON to `team-lead` when this pass is complete. `team-lead`
+    Return fenced JSON to `{{ lead }}` when this pass is complete. `{{ lead }}`
     will launch `plan-scope-reviewer` with that JSON.
 
-    If `team-lead` later sends back fenced JSON findings and `sprint_scores`
+    If `{{ lead }}` later sends back fenced JSON findings and `sprint_scores`
     from
     `plan-scope-reviewer`, fix those findings and return updated fenced JSON.
-    Continue until `team-lead` reports that `plan-scope-reviewer` returned
+    Continue until `{{ lead }}` reports that `plan-scope-reviewer` returned
     `PASS`.
 
     Expected output shape:
@@ -112,10 +118,10 @@ metadata:
     <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"`; the ack accepts the task and does not close it. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
-    <step id="d">As soon as the guidelines pass is complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send &lt;assigner&gt; --stdin` so scope review can begin in parallel; never close the task on a push.</step>
+    <step id="d">As soon as the guidelines pass is complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send {{ lead }} --stdin` so scope review can begin in parallel; never close the task on a push. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="e">After the push report, run the required validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">Return fenced JSON only after the current pass converges, delivered as the close: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `plan-scope-reviewer` and return updated fenced JSON to `team-lead`.</step>
+    <step id="g">Return fenced JSON only after the current pass converges, delivered as the close: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `plan-scope-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="h">After the close, read ATM again: the next queued task starts only now.</step>
   </workflow>
 </atm-task>

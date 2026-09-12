@@ -1,7 +1,7 @@
 ---
 name: dev-task
 version: 1.0.0
-description: team-lead sprint assignment template for codex-orchestration development work.
+description: lead sprint assignment template for codex-orchestration development work.
 format: xml
 required_variables:
   - task_id
@@ -15,8 +15,12 @@ required_variables:
   - acceptance_criteria
   - references
 optional_variables:
+  - lead
+  - cc
   - dependency_relations
 defaults:
+  lead: team-lead
+  cc: team-lead
   dependency_relations: "- See authoritative sprint doc."
 metadata:
   type: dev-task
@@ -67,9 +71,9 @@ metadata:
     <step id="c">Read `{{ sprint_doc }}` before coding. Treat it as the authoritative source for scope, deliverables, deletion targets, validation, and acceptance criteria. If this assignment summary and the sprint doc differ, the sprint doc wins and the mismatch must be reported.</step>
     <step id="d">Before coding, update the worktree from the sprint target branch and include prior fixes already merged to that target.</step>
     <step id="d1">Honor `<dependency-relations>`: must-follow merge-forward trigger is parent dev push, not QA; merge parent → child before every round. PR-completion trigger is parent PR merge first. Stop if a parallel-safe relation intersects.</step>
-    <step id="e">As soon as the development changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away to the assigner (the sender of this message) with a plain `atm send &lt;assigner&gt; --stdin` — a progress report, not a close; never close the task on a push. This lets PR work and QA preparation begin in parallel.</step>
+    <step id="e">As soon as the development changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away to the assigner (the sender of this message) with a plain `atm send {{ lead }} --stdin` — a progress report, not a close; never close the task on a push. This lets PR work and QA preparation begin in parallel. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="f">After the push report, run the required validation and tests. Do not wait for PR creation before starting validation.</step>
-    <step id="g">After validation, fix findings and re-run checks until clean. Then close the task with the completion report as the body: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` — the deliverable inventory and the exact gate output lines; for deletion or cleanup sprints, the before/after targeted symbol or code-path inventory (net LOC is secondary evidence). Only this close frees your queue: the next assignment stays queued and never starts until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. Use `atm task close {{ task_id }} refused "&lt;reason&gt;"` only when the whole assignment cannot be done.</step>
+    <step id="g">After validation, fix findings and re-run checks until clean. Then close the task with the completion report as the body: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` — the deliverable inventory and the exact gate output lines; for deletion or cleanup sprints, the before/after targeted symbol or code-path inventory (net LOC is secondary evidence). Only this close frees your queue: the next assignment stays queued and never starts until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. Use `atm task close {{ task_id }} refused "&lt;reason&gt;"` only when the whole assignment cannot be done. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="h">After the close, read ATM again: the next queued task starts only now.</step>
   </workflow>
 </atm-task>

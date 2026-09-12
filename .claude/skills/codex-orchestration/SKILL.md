@@ -1,7 +1,7 @@
 ---
 name: codex-orchestration
 version: 0.1.0
-description: Orchestrate atm-core sprint work where team-lead coordinates, arch-ctm is the sole developer, and quality-mgr enforces the QA gate.
+description: Orchestrate atm-core sprint work where an appointed lead coordinates, arch-ctm is the sole developer, and quality-mgr enforces the QA gate.
 depends_on:
   quality-management-gh: 1.x
   quality-mgr: 0.x
@@ -20,9 +20,33 @@ This skill defines the repo-local orchestration workflow for `atm-core`.
 
 ## Model
 
-- `team-lead` coordinates sprint sequencing, worktree assignments, and PR flow
+- The **lead** coordinates sprint sequencing, worktree assignments, PR flow,
+  and every dispatch and report in this skill. `team-lead` is the default
+  lead; `fenix` or any other identity may hold the role.
 - `arch-ctm` is the sole developer for Codex-driven implementation work
 - `quality-mgr` runs the QA gate after each delivery
+
+## Lead Role
+
+- A lead must be appointed for every phase before its first dispatch. Record
+  the appointment in the phase status row of `docs/project-plan.md` and in the
+  phase ledger, and announce it over ATM to every agent in the roster.
+- Every template in this skill addresses the lead through the `lead`
+  variable (default `team-lead`). Dispatch with `--var lead=<identity>` or a
+  `lead` key in the vars file so acks, push reports, and closes reach the
+  identity that actually holds the role; never hard-code `team-lead`.
+- The role can be transferred mid-phase. The outgoing lead sends the incoming
+  lead a handoff message listing open task ids, open PRs, and pending QA
+  rounds, records the transfer in the ledger, and announces the new lead to
+  the roster. In-flight tasks keep their original assigner; the new lead
+  reads those reports via `atm read --task <task-id>`. Tasks dispatched after
+  the transfer name the new lead.
+
+Reports carbon-copy `team-lead` by default. Every template also takes a `cc`
+variable (default `team-lead`): when the lead is another identity, the
+assignee sends a one-line plain copy of each push report and close summary
+to `cc`; when `lead` and `cc` are the same identity, nothing extra is sent.
+The lead may set `cc` to an empty string to switch copies off.
 
 ## Preconditions
 
@@ -56,7 +80,7 @@ Before starting a sprint:
 
 ## Sprint Flow
 
-1. `team-lead` assigns development to `arch-ctm` using `dev-template.xml.j2`.
+1. the lead assigns development to `arch-ctm` using `dev-template.xml.j2`.
    Every dev assignment must include the sprint-plan document path as
    `sprint_doc`, and that sprint document is the authoritative source for the
    task. Assignment prose may summarize, but it must not replace or weaken the
@@ -66,8 +90,8 @@ Before starting a sprint:
    the integration branch using the same `review_targets` planned for QA-1 and
    fixes all RBP findings found there. This is a developer cleanup step, not a
    QA surprise.
-4. `team-lead` opens or updates the PR.
-5. `team-lead` assigns QA to `quality-mgr` using `qa-template.xml.j2`.
+4. the lead opens or updates the PR.
+5. the lead assigns QA to `quality-mgr` using `qa-template.xml.j2`.
    Every QA assignment must include `sprint_doc`, and `quality-mgr` must treat
    that sprint document as the authoritative QA scope source.
 6. `quality-mgr` launches the reviewer set:
@@ -86,12 +110,12 @@ Before starting a sprint:
    merge gate is 0B+0I+0m with no exceptions and no backlog deferral. QA-1
    findings route back to `arch-ctm` via `fix-assignment.xml.j2` before
    QA-2, following the standard triage-and-fix path.
-   `ruthless-boundary-qa` remains part of that loop unless team-lead
+   `ruthless-boundary-qa` remains part of that loop unless the lead
    explicitly narrows the reviewer set for a specific task.
 8. If QA passes and CI is green, merge may proceed.
-9. If QA fails, `team-lead` first runs `/triaging-findings` to correlate the
+9. If QA fails, the lead first runs `/triaging-findings` to correlate the
    findings across worktrees and determine the promoted fix branch.
-10. After triage completes, `team-lead` routes concrete fixes back to
+10. After triage completes, the lead routes concrete fixes back to
    `arch-ctm` using `fix-assignment.xml.j2`. Fix assignments must also include
    `sprint_doc`, and the sprint document remains authoritative if the task
    summary omits or compresses details.
@@ -108,8 +132,8 @@ with one QA pass, never to a frozen layer.
 
 ## Plan Review Flow
 
-1. `team-lead` completes `/plan-hardening` steps 1 through 5.
-2. `team-lead` assigns plan QA to `quality-mgr` using `qa-template.xml.j2`
+1. the lead completes `/plan-hardening` steps 1 through 5.
+2. the lead assigns plan QA to `quality-mgr` using `qa-template.xml.j2`
    with `review_mode: plan`.
 3. The QA assignment must include the phase-plan document as `sprint_doc`, and
    that plan document is the authoritative scope source for plan QA.
@@ -120,7 +144,7 @@ with one QA pass, never to a frozen layer.
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
 5. If plan QA passes, the hardened plan is ready for implementation dispatch.
-6. If plan QA fails, `team-lead` uses the normal codex-orchestration
+6. If plan QA fails, the lead uses the normal codex-orchestration
    triage-and-fix loop to route concrete fixes back to `arch-ctm`.
 
 ## QA Coverage Rule

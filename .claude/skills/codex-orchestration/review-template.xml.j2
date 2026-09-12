@@ -1,7 +1,7 @@
 ---
 name: review-task
 version: 1.0.0
-description: team-lead phase-ending code review template for codex-orchestration phases.
+description: lead phase-ending code review template for codex-orchestration phases.
 format: xml
 required_variables:
   - task_id
@@ -12,6 +12,12 @@ required_variables:
   - review_focus
   - review_questions
   - references
+optional_variables:
+  - lead
+  - cc
+defaults:
+  lead: team-lead
+  cc: team-lead
 metadata:
   type: review-task
   tags:
@@ -55,6 +61,6 @@ metadata:
     <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"` (the message id is in the nudge line and the `atm read` header). The ack accepts the task; it does not close it.</step>
     <step id="b">Read the relevant source and doc files in the specified worktree and commit context.</step>
     <step id="c">Do not make any code changes.</step>
-    <step id="d">Deliver the structured findings report by closing the task with the report as the body: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF`. Only this close frees your queue: the next assignment stays queued and never starts until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. Re-verify every cited file:line against the current branch and worktree before reporting it; stale or missing evidence is a finding, not a guess.</step>
+    <step id="d">Deliver the structured findings report by closing the task with the report as the body: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF`. Only this close frees your queue: the next assignment stays queued and never starts until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. Re-verify every cited file:line against the current branch and worktree before reporting it; stale or missing evidence is a finding, not a guess. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
   </workflow>
 </atm-review>
