@@ -4,8 +4,6 @@ mod release_guard;
 mod task_pass;
 
 use release_guard::ReleasePendingOnDrop;
-#[cfg(test)]
-use task_pass::runtime_state;
 use task_pass::{queue_drain_eligible, runtime_state_with_absence};
 
 use std::collections::{HashMap, HashSet};
@@ -901,10 +899,11 @@ mod tests {
         ));
     }
 
+    use super::task_pass::runtime_state;
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
         HERDR_REQUEST_BUDGET, HerdrQueueWakePump, ReleasePendingOnDrop, RuntimeHealth,
-        herdr_request_deadline, log_herdr_list_failure, runtime_state,
+        herdr_request_deadline, log_herdr_list_failure,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
