@@ -157,6 +157,17 @@ pub(crate) trait RetainedMailboxRuntime {
         let _ = provenance;
         self.admit_message_record(home_dir, record)
     }
+    /// Provenance-aware admission with the governed task-close result from
+    /// the same durable writer transaction.
+    fn admit_message_record_with_outcome(
+        &self,
+        home_dir: &Path,
+        record: boundary::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        self.admit_message_record_with_provenance(home_dir, record, provenance)
+            .map(atm_storage::MessageAdmissionOutcome::passive)
+    }
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
     fn persist_message_records_atomically(
         &self,
@@ -266,6 +277,16 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
     ) -> Result<Option<boundary::Message>, AtmError> {
         self.message_store
             .save_message_if_absent_with_provenance(&record, provenance)
+    }
+
+    fn admit_message_record_with_outcome(
+        &self,
+        _home_dir: &Path,
+        record: boundary::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        self.message_store
+            .admit_message_with_provenance(&record, provenance)
     }
 
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError> {

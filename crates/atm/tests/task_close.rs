@@ -131,16 +131,21 @@ async fn close_unknown_task_sends_nothing_and_exits_one() {
 async fn close_already_closed_delivers_report_without_task_event() {
     let f = LoopbackFixture::new_with_identity("recipient", "recipient");
     seed_assignment(&f, "T1", "recipient", TEST_SENDER);
-    run_close(&f, close("T1", "recipient", OutcomeArg::Completed))
-        .await
-        .unwrap();
+    let mut first_close = close("T1", "recipient", OutcomeArg::Completed);
+    first_close.json = false;
+    let first = run_close(&f, first_close).await.unwrap();
+    assert_eq!(first, "closed T1 (completed)\n");
     let store = f.task_store();
     let team = TEST_TEAM.parse().unwrap();
     let task = "T1".parse().unwrap();
     let before = store.list_task_events(&team, &task, None).unwrap().len();
-    run_close(&f, close("T1", "recipient", OutcomeArg::Refused))
-        .await
-        .unwrap();
+    let mut late_close = close("T1", "recipient", OutcomeArg::Refused);
+    late_close.json = false;
+    let already_closed = run_close(&f, late_close).await.unwrap();
+    assert_eq!(
+        already_closed,
+        "task T1 was already closed (completed); report delivered\n"
+    );
     assert_eq!(
         store.list_task_events(&team, &task, None).unwrap().len(),
         before

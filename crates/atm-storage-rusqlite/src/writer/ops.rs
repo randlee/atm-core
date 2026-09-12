@@ -6,6 +6,7 @@ use crate::search_schema::{
     sync_template_projection,
 };
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
+use atm_storage::TaskCloseOutcome;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxScope,
     Message, MessageKey,
@@ -140,6 +141,9 @@ pub(crate) enum WriteOpResult {
         /// race. Loading it on the writer connection keeps async callers from
         /// opening a synchronous reader connection after awaiting the queue.
         existing: Option<Box<Message>>,
+        /// Populated when a newly inserted local close report targeted a task
+        /// that was already complete.
+        already_closed: Option<TaskCloseOutcome>,
     },
     UpsertMessages,
     Acknowledged(Box<AcknowledgementCommit>),
@@ -239,6 +243,7 @@ fn execute_admit_template_message(
         WriteOpResult::UpsertMessage {
             inserted: false,
             existing,
+            ..
         } => Ok(WriteOpResult::TemplateMessageAdmission {
             inserted: false,
             existing,
@@ -730,10 +735,16 @@ pub(super) fn execute_upsert_message(
     } else {
         Some(Box::new(load_existing_message(record, connection, target)?))
     };
-    if inserted && provenance == MessageWriteOrigin::Local {
-        apply_task_message(record, connection, cache, target)?;
-    }
-    Ok(WriteOpResult::UpsertMessage { inserted, existing })
+    let already_closed = if inserted && provenance == MessageWriteOrigin::Local {
+        apply_task_message(record, connection, cache, target)?
+    } else {
+        None
+    };
+    Ok(WriteOpResult::UpsertMessage {
+        inserted,
+        existing,
+        already_closed,
+    })
 }
 
 struct MessageInsertValues {

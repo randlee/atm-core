@@ -44,7 +44,7 @@ pub(super) fn build_send_outcome(
         requires_ack,
         task_id,
         task_complete: request.task_complete.clone(),
-        already_closed: None,
+        already_closed: persistence.already_closed,
         summary: Some(summary.to_string()),
         message: request.dry_run.then_some(body.to_string()),
         warnings: context.warnings.clone(),

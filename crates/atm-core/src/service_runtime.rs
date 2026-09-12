@@ -611,6 +611,23 @@ impl LocalServiceRuntime {
             .await
     }
 
+    /// Awaits one provenance-aware admission and preserves any task-close
+    /// outcome produced by the ordered writer transaction.
+    pub async fn admit_message_with_provenance_async(
+        &self,
+        message: crate::boundary::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio durable message admission was not installed in this runtime",
+            )
+        })?;
+        store
+            .admit_message_with_provenance_async(message, provenance)
+            .await
+    }
+
     /// One durable Tokio admission for a decomposed template message.
     pub async fn admit_template_message_async(
         &self,

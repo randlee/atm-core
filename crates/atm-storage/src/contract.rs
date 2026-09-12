@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
+use crate::task_state::TaskCloseOutcome;
 use crate::types::{AgentName, IsoTimestamp, MemberKey, ModelName, PaneId, TaskId, TeamName};
 
 #[doc(hidden)]
@@ -228,6 +229,24 @@ pub struct Message {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
+}
+
+/// Result of admitting one immutable message and applying any governed task
+/// operation carried by that newly inserted local message.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MessageAdmissionOutcome {
+    pub existing: Option<Message>,
+    pub already_closed: Option<TaskCloseOutcome>,
+}
+
+impl MessageAdmissionOutcome {
+    #[must_use]
+    pub fn passive(existing: Option<Message>) -> Self {
+        Self {
+            existing,
+            already_closed: None,
+        }
+    }
 }
 
 /// Aggregate display counts for one mailbox without materializing its messages.
@@ -755,6 +774,16 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         let _ = provenance;
         self.save_message_if_absent(message)
     }
+    /// Provenance-aware admission that also returns the governed task-close
+    /// result produced by a newly inserted local message.
+    fn admit_message_with_provenance(
+        &self,
+        message: &Message,
+        provenance: MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
+        self.save_message_if_absent_with_provenance(message, provenance)
+            .map(MessageAdmissionOutcome::passive)
+    }
     /// Commits related immutable mailbox records as one durable unit.
     ///
     /// AI.31 uses this for an acknowledgement reply plus the acknowledged
@@ -830,6 +859,17 @@ pub trait AsyncMessageStore: MessageStore {
     ) -> Result<Option<Message>, AtmError> {
         let _ = provenance;
         self.save_message_if_absent_async(message).await
+    }
+
+    /// Async companion to [`MessageStore::admit_message_with_provenance`].
+    async fn admit_message_with_provenance_async(
+        &self,
+        message: Message,
+        provenance: MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
+        self.save_message_if_absent_with_provenance_async(message, provenance)
+            .await
+            .map(MessageAdmissionOutcome::passive)
     }
 
     /// Atomically admits a mailbox record and its template decomposition on

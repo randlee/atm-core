@@ -315,6 +315,15 @@ impl MessageStore for SqliteMessageStore {
         )).map(Some)
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        message: &Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        self.db
+            .submit_message_admission(message.clone(), provenance)
+    }
+
     fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
         self.db.submit_upsert_messages_atomically(messages.to_vec())
     }
@@ -587,6 +596,16 @@ impl AsyncMessageStore for SqliteMessageStore {
     ) -> Result<Option<Message>, AtmError> {
         self.db
             .submit_upsert_message_with_provenance_async(message, provenance)
+            .await
+    }
+
+    async fn admit_message_with_provenance_async(
+        &self,
+        message: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        self.db
+            .submit_message_admission_async(message, provenance)
             .await
     }
 
@@ -1283,28 +1302,13 @@ mod tests {
             outcome: TaskCloseOutcome::Refused,
             reason: Some("too late".to_owned()),
         });
-        backend
+        let admission = backend
             .message_store()
-            .save_message_if_absent_with_provenance(&report, MessageWriteOrigin::Peer)
-            .expect("stage report mail without applying its local task operation");
-
-        let db = Arc::clone(&backend.message_store.db);
-        let target = Arc::clone(&db.target);
-        let already_closed = db
-            .with_connection(|connection| {
-                crate::writer::apply_task_close(
-                    &report,
-                    &task_id,
-                    TaskCloseOutcome::Refused,
-                    Some("too late"),
-                    connection,
-                    &mut crate::writer::WriterStatementCache,
-                    target.as_ref(),
-                )
-            })
+            .admit_message_with_provenance(&report, MessageWriteOrigin::Local)
             .expect("already-closed report is ordinary mail");
 
-        assert_eq!(already_closed, Some(TaskCloseOutcome::Completed));
+        assert!(admission.existing.is_none());
+        assert_eq!(admission.already_closed, Some(TaskCloseOutcome::Completed));
         assert_eq!(
             backend
                 .task_store()

@@ -112,9 +112,9 @@ pub(super) fn apply_task_message(
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-) -> Result<(), AtmError> {
+) -> Result<Option<TaskCloseOutcome>, AtmError> {
     let Some(task_id) = record.envelope.task_id.as_ref() else {
-        return Ok(());
+        return Ok(None);
     };
     match record.envelope.task_op.as_ref() {
         None => apply_task_assignment(
@@ -124,8 +124,9 @@ pub(super) fn apply_task_message(
             connection,
             cache,
             target,
-        ),
-        Some(TaskOp::Start) => apply_task_start(record, task_id, connection, target),
+        )
+        .map(|()| None),
+        Some(TaskOp::Start) => apply_task_start(record, task_id, connection, target).map(|()| None),
         Some(TaskOp::Close { outcome, reason }) => apply_task_close(
             record,
             task_id,
@@ -134,8 +135,7 @@ pub(super) fn apply_task_message(
             connection,
             cache,
             target,
-        )
-        .map(|_| ()),
+        ),
     }
 }
 
