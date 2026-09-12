@@ -273,7 +273,7 @@ impl SendCommand {
         )?;
         let caller_identity = request.caller_identity.clone();
         let caller_team = request.caller_team.clone();
-        if request.task_op.is_some() {
+        if request.task_id.is_some() || request.task_op.is_some() {
             preflight_task_op_compatibility(&composition).await?;
         }
         let mut outcome = composition.send(request).await?;
@@ -1732,6 +1732,36 @@ mod tests {
         assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
         assert!(error.message().contains("1.5.0"));
         assert!(error.message().contains("1.4.0"));
+    }
+
+    #[test]
+    fn send_task_id_alias_refuses_daemon_below_1_5_0() {
+        let task_id: TaskId = "T1".parse().expect("task id");
+        let request = SendCommand::for_task(TaskSendOptions {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("assignment".to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            template: None,
+            vars: None,
+            task_id: Some(task_id),
+            json: false,
+        })
+        .build_request_with_mode(".".into(), ".".into(), NudgeMode::Deferred, None)
+        .expect("task assignment request");
+
+        assert!(request.task_id.is_some());
+        let verdict = ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::parse("1.5.11").expect("release"),
+            daemon_schema_version: 1,
+            daemon_http_api_version: HttpApiVersion::parse("1.4.0").expect("HTTP API"),
+        });
+        let error = require_task_op_compatibility(verdict)
+            .expect_err("a 1.4 daemon cannot decode task-id alias assignments");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(error.message().contains("1.5.0"));
     }
 
     #[test]
