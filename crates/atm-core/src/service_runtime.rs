@@ -596,21 +596,6 @@ impl LocalServiceRuntime {
         store.save_message_if_absent_async(message).await
     }
 
-    pub async fn save_message_if_absent_with_provenance_async(
-        &self,
-        message: crate::boundary::Message,
-        provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<Option<crate::boundary::Message>, AtmError> {
-        let store = self.async_message_store.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "Tokio durable message admission was not installed in this runtime",
-            )
-        })?;
-        store
-            .save_message_if_absent_with_provenance_async(message, provenance)
-            .await
-    }
-
     /// Awaits one provenance-aware admission and preserves any task-close
     /// outcome produced by the ordered writer transaction.
     pub async fn admit_message_with_provenance_async(

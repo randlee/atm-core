@@ -299,22 +299,6 @@ impl MessageStore for SqliteMessageStore {
         }).map(Some)
     }
 
-    fn save_message_if_absent_with_provenance(
-        &self,
-        message: &Message,
-        provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<Option<Message>, AtmError> {
-        if self
-            .db
-            .submit_upsert_message_with_provenance(message.clone(), provenance)?
-        {
-            return Ok(None);
-        }
-        self.load_message(&message.message_key)?.ok_or_else(|| AtmError::daemon_unavailable(
-            "sqlite writer reported an existing message key but the retained record could not be loaded",
-        )).map(Some)
-    }
-
     fn admit_message_with_provenance(
         &self,
         message: &Message,
@@ -587,16 +571,6 @@ impl AsyncMessageStore for SqliteMessageStore {
         message: Message,
     ) -> Result<Option<Message>, AtmError> {
         self.db.submit_upsert_message_async(message).await
-    }
-
-    async fn save_message_if_absent_with_provenance_async(
-        &self,
-        message: Message,
-        provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<Option<Message>, AtmError> {
-        self.db
-            .submit_upsert_message_with_provenance_async(message, provenance)
-            .await
     }
 
     async fn admit_message_with_provenance_async(
@@ -3875,7 +3849,7 @@ mod tests {
         let mut peer = message("atm:peer-task", "peer receipt");
         peer.envelope.task_id = Some(peer_task.clone());
         store
-            .save_message_if_absent_with_provenance(&peer, MessageWriteOrigin::Peer)
+            .admit_message_with_provenance(&peer, MessageWriteOrigin::Peer)
             .expect("persist peer receipt");
         assert!(
             tasks
@@ -4265,7 +4239,7 @@ mod tests {
         source.envelope.requires_ack = true;
         source.envelope.pending_ack_at = Some(IsoTimestamp::now());
         store
-            .save_message_if_absent_with_provenance(&source, MessageWriteOrigin::Peer)
+            .admit_message_with_provenance(&source, MessageWriteOrigin::Peer)
             .expect("save peer assignment");
 
         store
@@ -4328,7 +4302,7 @@ mod tests {
 
         backend
             .async_message_store()
-            .save_message_if_absent_with_provenance_async(peer, MessageWriteOrigin::Peer)
+            .admit_message_with_provenance_async(peer, MessageWriteOrigin::Peer)
             .await
             .expect("persist peer receipt");
         assert!(

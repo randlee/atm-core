@@ -763,17 +763,6 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         self.save_message(message)?;
         Ok(None)
     }
-    /// Like [`Self::save_message_if_absent`], carrying the write origin so a
-    /// backend can apply task transitions only for local writes. The default
-    /// keeps existing stores as passive message stores.
-    fn save_message_if_absent_with_provenance(
-        &self,
-        message: &Message,
-        provenance: MessageWriteOrigin,
-    ) -> Result<Option<Message>, AtmError> {
-        let _ = provenance;
-        self.save_message_if_absent(message)
-    }
     /// Provenance-aware admission that also returns the governed task-close
     /// result produced by a newly inserted local message.
     fn admit_message_with_provenance(
@@ -781,7 +770,8 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         message: &Message,
         provenance: MessageWriteOrigin,
     ) -> Result<MessageAdmissionOutcome, AtmError> {
-        self.save_message_if_absent_with_provenance(message, provenance)
+        let _ = provenance;
+        self.save_message_if_absent(message)
             .map(MessageAdmissionOutcome::passive)
     }
     /// Commits related immutable mailbox records as one durable unit.
@@ -851,23 +841,14 @@ pub trait AsyncMessageStore: MessageStore {
         self.save_message_if_absent(&message)
     }
 
-    /// Async companion to [`MessageStore::save_message_if_absent_with_provenance`].
-    async fn save_message_if_absent_with_provenance_async(
-        &self,
-        message: Message,
-        provenance: MessageWriteOrigin,
-    ) -> Result<Option<Message>, AtmError> {
-        let _ = provenance;
-        self.save_message_if_absent_async(message).await
-    }
-
     /// Async companion to [`MessageStore::admit_message_with_provenance`].
     async fn admit_message_with_provenance_async(
         &self,
         message: Message,
         provenance: MessageWriteOrigin,
     ) -> Result<MessageAdmissionOutcome, AtmError> {
-        self.save_message_if_absent_with_provenance_async(message, provenance)
+        let _ = provenance;
+        self.save_message_if_absent_async(message)
             .await
             .map(MessageAdmissionOutcome::passive)
     }
