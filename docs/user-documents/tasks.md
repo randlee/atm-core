@@ -26,14 +26,20 @@ Inspect the durable task ledger with either of these surfaces:
 
 ```sh
 atm task list
+atm task list --limit 50
 atm task list --all --json
 atm task events t-42
+atm task events t-42 --limit 50
+atm task events t-42 --all
 atm task events t-42 --json
 ```
 
 `atm task list --json` returns the caller's open task rows; `--all` includes
-every team member. `atm task events <id> --json`
-returns that task's append-only events in sequence order. An unknown task id
+every team member without truncation. Both commands default to 200 rows and
+accept `--limit N` or `--all`; events retain the most recent rows and display
+them in sequence order. When a limit drops rows, ATM prints
+`N more rows omitted (--all)` on stderr. `atm task events <id> --json` returns
+that task's append-only events. An unknown task id
 prints the event header only (or `[]` as JSON) and succeeds. See ADR-062 for
 the task tables and audit/replay contract.
 

@@ -546,6 +546,8 @@ Append-only event history of one task
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
 | `<task_id>` |  | yes |  |
+| `--limit` |  | no |  |
+| `--all` |  | no |  |
 | `--json` |  | no |  |
 | `--as` |  | no |  |
 | `--team` |  | no |  |
@@ -558,6 +560,7 @@ Queue view: the caller's open tasks; --all includes every member
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
 | `--all` |  | no |  |
+| `--limit` |  | no |  |
 | `--json` |  | no |  |
 | `--as` |  | no |  |
 | `--team` |  | no |  |

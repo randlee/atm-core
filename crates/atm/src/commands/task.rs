@@ -14,7 +14,7 @@ use atm_core::protocol::{
 use atm_core::send::NudgeMode;
 use atm_core::task_close::{ClosePreflight, preflight_close, report_recipient};
 use atm_core::task_query::{
-    TaskEventQuery, TaskListQuery, TaskPage, select_task_events_page, select_task_rows_page,
+    TaskEventQuery, TaskListQuery, TaskPage, select_task_events, select_task_rows,
 };
 use atm_core::types::{AgentName, TaskId, TeamName};
 use atm_storage::{
@@ -409,7 +409,7 @@ impl TaskListCommand {
                 contract.assignee.clone(),
             )?)
             .await?;
-        let selected = select_task_rows_page(outcome.task_rows, &contract);
+        let selected = select_task_rows(outcome.task_rows, &contract);
         let runtime = if self.all {
             composition
                 .doctor(DoctorQuery {
@@ -488,7 +488,7 @@ impl TaskEventsCommand {
         )?
         .with_task_ledger(ledger.clone());
         let outcome = composition.list(query).await?;
-        let selected = select_task_events_page(outcome.task_event_rows, &contract);
+        let selected = select_task_events(outcome.task_event_rows, &contract);
         let output = render_task_events(&selected.rows, self.json)?;
         print_omitted_rows(selected.omitted);
         Ok(output)

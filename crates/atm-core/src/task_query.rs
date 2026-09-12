@@ -56,15 +56,7 @@ impl TaskPage {
 }
 
 #[must_use]
-pub fn select_task_rows(rows: Vec<TaskRow>, query: &TaskListQuery) -> Vec<TaskRow> {
-    select_task_rows_page(rows, query).rows
-}
-
-#[must_use]
-pub fn select_task_rows_page(
-    mut rows: Vec<TaskRow>,
-    query: &TaskListQuery,
-) -> TaskSelection<TaskRow> {
+pub fn select_task_rows(mut rows: Vec<TaskRow>, query: &TaskListQuery) -> TaskSelection<TaskRow> {
     rows.retain(|row| {
         row.team == query.team
             && row.state.is_open()
@@ -85,12 +77,7 @@ pub fn select_task_rows_page(
 }
 
 #[must_use]
-pub fn select_task_events(rows: Vec<TaskEventRow>, query: &TaskEventQuery) -> Vec<TaskEventRow> {
-    select_task_events_page(rows, query).rows
-}
-
-#[must_use]
-pub fn select_task_events_page(
+pub fn select_task_events(
     mut rows: Vec<TaskEventRow>,
     query: &TaskEventQuery,
 ) -> TaskSelection<TaskEventRow> {
@@ -133,10 +120,7 @@ mod tests {
     use atm_storage::{TaskEventKind, TaskEventRow, TaskRow};
     use serde_json::json;
 
-    use super::{
-        TaskEventQuery, TaskListQuery, TaskPage, select_task_events, select_task_events_page,
-        select_task_rows, select_task_rows_page,
-    };
+    use super::{TaskEventQuery, TaskListQuery, TaskPage, select_task_events, select_task_rows};
 
     fn task(task_id: &str, assignee: &str, state: &str, position: Option<u32>) -> TaskRow {
         serde_json::from_value(json!({
@@ -185,8 +169,8 @@ mod tests {
             ],
             &query,
         );
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].task_id.as_str(), "T1");
+        assert_eq!(selected.rows.len(), 1);
+        assert_eq!(selected.rows[0].task_id.as_str(), "T1");
     }
 
     #[test]
@@ -206,6 +190,7 @@ mod tests {
         );
         assert_eq!(
             selected
+                .rows
                 .iter()
                 .map(|row| row.task_id.as_str())
                 .collect::<Vec<_>>(),
@@ -226,12 +211,18 @@ mod tests {
             &query,
         );
         assert_eq!(
-            selected.iter().map(|row| row.seq).collect::<Vec<_>>(),
+            selected.rows.iter().map(|row| row.seq).collect::<Vec<_>>(),
             [1, 2, 3]
         );
-        assert!(selected.iter().any(|row| row.event == TaskEventKind::Moved));
         assert!(
             selected
+                .rows
+                .iter()
+                .any(|row| row.event == TaskEventKind::Moved)
+        );
+        assert!(
+            selected
+                .rows
                 .iter()
                 .any(|row| row.event == TaskEventKind::Started)
         );
@@ -244,7 +235,7 @@ mod tests {
             assignee: Some("alice".parse().expect("agent")),
             page: TaskPage::bounded(2).expect("limit"),
         };
-        let selected = select_task_rows_page(
+        let selected = select_task_rows(
             vec![
                 task("T3", "alice", "assigned", Some(3)),
                 task("T1", "alice", "assigned", Some(1)),
@@ -271,7 +262,7 @@ mod tests {
             assignee: None,
             page: TaskPage::bounded(2).expect("limit"),
         };
-        let selected = select_task_events_page(
+        let selected = select_task_events(
             vec![
                 event(2, "moved"),
                 event(4, "started"),
