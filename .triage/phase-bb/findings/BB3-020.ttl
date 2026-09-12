@@ -16,17 +16,15 @@
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/smoke/report_runtime.py" ;
-  triage:status "fixed" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Consider moving report_runtime.py to top-level scripts/, matching scripts/public_redaction.py's placement, since it is consumed outside scripts/smoke/. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) fixed this on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA; QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1). Verified fixed at f94125cf5 under BB3-QA4-1789262000 (PR #1455 comment, 2026-09-12T23:24:52Z): report_runtime.py moved to top-level scripts/, matching scripts/public_redaction.py's placement; all real import sites updated. Residual minor cosmetic leftovers noted (test file not yet moved to the sibling-test convention; a stale comment at scripts/phase-ai/test_run_hermes_graft_live.py:32 still names the old path) -- non-blocking, recommended for a future layer. Closed." ;
+  triage:deferredNote "Consider moving report_runtime.py to top-level scripts/, matching scripts/public_redaction.py's placement, since it is consumed outside scripts/smoke/. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) fixed this on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA; QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1). Core relocation FIXED at f94125cf5 under BB3-QA4-1789262000 (PR #1455 comment, 2026-09-12T23:24:52Z): report_runtime.py moved to top-level scripts/, matching scripts/public_redaction.py's placement; all real import sites updated. REOPENED per fenix's correction (2026-09-12T23:32:13Z): not fully closed -- residual (Minor) is scripts/smoke/test_report_runtime.py belongs in .just/tests (sibling-test convention) and a stale path comment remains at scripts/phase-ai/test_run_hermes_graft_live.py:32. In the BB3-FIX-R5-1789264000 fence, closes on cipher's fix at fix/bb3-qa4-r5 (cut from a7d4664d1, feature/bb6-storage-prompt-handoffs, top of stack #1457)." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-020/1> ;
-  triage:hasResolution <urn:atm:triage:resolution/BB3-020/1> ;
-  triage:closedAt "2026-09-12T23:24:52Z"^^xsd:dateTime ;
-  triage:closedBy "quality-mgr" ;
-  triage:triageRecordVersion "3" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-020/2> ;
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/BB3-020/1>
   a triage:Occurrence ;
@@ -45,6 +43,24 @@
   triage:branch "fix/bb3-qa3-r4" ;
   triage:headSha "f94125cf5" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB3-020/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_report_runtime.py" ;
+  triage:line 1 ;
+  triage:snippet "residual: test file not moved to .just/tests (sibling-test convention); stale path comment remains at scripts/phase-ai/test_run_hermes_graft_live.py:32" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-020/2> .
+
+<urn:atm:triage:worktree/BB3-020/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5 (cut from a7d4664d1, feature/bb6-storage-prompt-handoffs, top of stack #1457)" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:orderIndex 2 .
 
 <urn:atm:triage:resolution/BB3-020/1>
   a triage:Resolution ;

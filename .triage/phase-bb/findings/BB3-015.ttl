@@ -16,17 +16,15 @@
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/smoke/report_runtime.py" ;
-  triage:status "fixed" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add scripts/smoke/test_report_runtime.py with direct unit coverage of GIT_REVISION validation, the subprocess failure path, tempfile cleanup in finally, and per-caller error_type substitution. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) reported this not-reproducible at the current, already-satisfied path on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA (verify-not-reproducible); QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1) to confirm against the record. Verified fixed at f94125cf5 under BB3-QA4-1789262000 (PR #1455 comment, 2026-09-12T23:24:52Z): genuinely FIXED by two dedicated commits this round (59ebfad08, 16d97d4b6) adding scripts/smoke/test_report_runtime.py, resolving the core 'zero coverage' defect -- confirmed independently by req-qa and arch-qa. quality-mgr's BB3-QA4 explicitly corrected cipher's own close report, which had mislabeled this 'not-reproducible'; the code is fine, only that label was wrong. Residual gap (Important, non-blocking): two of the four originally-named behaviors are still untested (source_revision()'s subprocess-failure branch; resolve_procedure_page()'s GIT_REVISION regex on a malformed string) -- recommended for the next layer, does not block this closure. Closed." ;
+  triage:deferredNote "Fix: add scripts/smoke/test_report_runtime.py with direct unit coverage of GIT_REVISION validation, the subprocess failure path, tempfile cleanup in finally, and per-caller error_type substitution. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) reported this not-reproducible at the current, already-satisfied path on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA (verify-not-reproducible); QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1) to confirm against the record. Core defect FIXED at f94125cf5 under BB3-QA4-1789262000 (PR #1455 comment, 2026-09-12T23:24:52Z) by two dedicated commits this round (59ebfad08, 16d97d4b6) adding scripts/smoke/test_report_runtime.py -- confirmed independently by req-qa and arch-qa; also corrected cipher's own close report, which had mislabeled this 'not-reproducible'. REOPENED per fenix's correction (2026-09-12T23:32:13Z): not fully closed -- residual (Important, quality-mgr's ATM-QA-002) is two of the four originally-named behaviors still untested (source_revision()'s subprocess-failure branch; resolve_procedure_page()'s GIT_REVISION regex on a malformed string). In the BB3-FIX-R5-1789264000 fence, closes on cipher's fix at fix/bb3-qa4-r5 (cut from a7d4664d1, feature/bb6-storage-prompt-handoffs, top of stack #1457)." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-015/1> ;
-  triage:hasResolution <urn:atm:triage:resolution/BB3-015/1> ;
-  triage:closedAt "2026-09-12T23:24:52Z"^^xsd:dateTime ;
-  triage:closedBy "quality-mgr" ;
-  triage:triageRecordVersion "3" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-015/2> ;
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/BB3-015/1>
   a triage:Occurrence ;
@@ -45,6 +43,24 @@
   triage:branch "fix/bb3-qa3-r4" ;
   triage:headSha "f94125cf5" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB3-015/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/report_runtime.py" ;
+  triage:line 1 ;
+  triage:snippet "residual (ATM-QA-002): source_revision()'s subprocess-failure branch and resolve_procedure_page()'s GIT_REVISION regex on a malformed string remain untested" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-015/2> .
+
+<urn:atm:triage:worktree/BB3-015/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5 (cut from a7d4664d1, feature/bb6-storage-prompt-handoffs, top of stack #1457)" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:orderIndex 2 .
 
 <urn:atm:triage:resolution/BB3-015/1>
   a triage:Resolution ;
