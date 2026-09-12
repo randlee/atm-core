@@ -265,6 +265,7 @@ impl HerdrQueueWakePump {
         self.remind_open_tasks(
             task_candidates,
             &prompted_by_drain,
+            &pending_set,
             list_complete,
             &mut stats,
         )
