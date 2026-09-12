@@ -22,13 +22,14 @@
   triage:relatedFinding "BA3-QA1-002" ;
   triage:deferredNote "fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z) adds worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer, pushed at BA.6's then-current head a49b922aa; now dfd47edca). No longer folded into BA3-FIX-R3 on feature/ba3-nudge-invariant -- fixed once on fix/phase-ba-cleanup per the O(n^2) fix-multiplication avoidance rule; the ba3 occurrence will close by merge-forward, not a separate fix." ;
   triage:deferredNote "fenix's disposition settled (ATM 2026-09-12T05:10:27Z): correction to the above -- BA.3 has carried the no-delivery-channel warn since 67ff0420f (herdr_queue_wake_reminders.rs:247, one warn per candidate per tick, bare return), so the production half was already present and is on BA.3 at c462c6977 (BA3-QA2 verifies it, tracked like BA3-QA1-001/002/003). Only the missing test still lands on fix/phase-ba-cleanup (cipher, BA-CLEANUP-FIXUP)." ;
+  triage:deferredNote "fenix (ATM 2026-09-12T05:27:38Z): BA3-QA2-1789189465 verdict PASS (content) at c462c6977, report https://github.com/randlee/atm-core/pull/1402#issuecomment-5643745166 -- production-half occurrence/3 confirmed fixed, same pass as BA3-QA1-001/002/003. Finding stays open overall: the test-only gap (occurrence/2) still lives on fix/phase-ba-cleanup." ;
   triage:promoteTo "fix/phase-ba-cleanup" ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/3> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/BA3-QA1-004/1>
   a triage:Occurrence ;
@@ -74,8 +75,11 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
   triage:line 247 ;
   triage:snippet "no-delivery-channel warn present since 67ff0420f (one warn per candidate per tick, bare return) -- production half already on BA.3" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "BA3-QA2-1789189465 PASS at c462c6977 confirms the production-half warn (#1402 issuecomment-5643745166); test-only gap remains open on fix/phase-ba-cleanup (occurrence/2)" ;
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "c462c6977" ;
   triage:occursIn <urn:atm:triage:worktree/BA3-QA1-004/3> .

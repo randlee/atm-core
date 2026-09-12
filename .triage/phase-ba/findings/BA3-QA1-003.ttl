@@ -16,15 +16,16 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs (record_task_outcome), crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
   triage:deferredNote "fenix (ATM 2026-09-12T05:04:25Z): feature/ba3-nudge-invariant complete and FROZEN at c462c6977 (solar, BA3-FIX-R3B closed). BA3-QA2 dispatched to quality-mgr on c462c6977 (merge-base with integrate fd242df7a); this finding is expected to close on that pass -- not yet confirmed, status held open pending BA3-QA2 verdict." ;
+  triage:deferredNote "fenix (ATM 2026-09-12T05:27:38Z): BA3-QA2-1789189465 verdict PASS (content) at c462c6977, all five reviewers confirm, report https://github.com/randlee/atm-core/pull/1402#issuecomment-5643745166. FIXED." ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-003/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-003/2> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BA3-QA1-003/1>
   a triage:Occurrence ;
@@ -52,8 +53,11 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
   triage:line 318 ;
   triage:snippet "let _ = recorded_row; -- complete_task_handoff's Result silently discarded; handoff_applies_start_and_sends_receipt_to_assigner asserts state stays Assigned, contradicting R1" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "BA3-QA2-1789189465 PASS at c462c6977; all five reviewers confirm (#1402 issuecomment-5643745166)" ;
   triage:branch "feature/ba3-nudge-invariant" ;
   triage:headSha "c462c6977" ;
   triage:occursIn <urn:atm:triage:worktree/BA3-QA1-003/2> .
