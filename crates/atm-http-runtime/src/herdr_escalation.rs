@@ -365,3 +365,39 @@ async fn write_escalation_mail_with_summary(
     })
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{EscalationKind, EscalationState, escalation_summary};
+    use atm_core::boundary::MemberKey;
+    use atm_core::protocol::RuntimeMemberState;
+
+    fn member() -> MemberKey {
+        MemberKey::new(
+            "test-team".parse().expect("team"),
+            "member".parse().expect("agent"),
+        )
+    }
+
+    #[test]
+    fn episode_map_replaces_kind_on_flip_and_clears_on_recovery() {
+        let state = EscalationState::default();
+        let member = member();
+        assert!(state.observe(&member, RuntimeMemberState::Blocked));
+        assert!(!state.observe(&member, RuntimeMemberState::Blocked));
+        assert!(state.observe(&member, RuntimeMemberState::Offline));
+        assert!(!state.observe(&member, RuntimeMemberState::Idle));
+        assert!(state.observe(&member, RuntimeMemberState::Blocked));
+    }
+
+    #[test]
+    fn escalation_summary_is_stable() {
+        let member = member();
+        let first = escalation_summary(EscalationKind::BlockedEscalated, &member, None);
+        assert_eq!(
+            first,
+            escalation_summary(EscalationKind::BlockedEscalated, &member, None)
+        );
+        assert_eq!(first, "escalation:blocked_escalated:member@test-team");
+    }
+}
