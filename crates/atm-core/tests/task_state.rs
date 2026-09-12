@@ -2,11 +2,9 @@
 
 use atm_core::ack::{AckRequest, ack_mail_with_runtime};
 use atm_core::boundary::{
-    LocalSteerTarget, NudgeKind, PostSendBuiltInTarget, RosterEntry, RosterHarness,
-    RosterMemberKind,
-};
-use atm_core::nudge_dispatch::{
-    load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
+    BuiltInNudgeTemplateKind, LocalSteerTarget, NudgeKind, PostSendBuiltInTarget, RosterEntry,
+    RosterHarness, RosterMemberKind, TaskTransition,
+    built_in_nudge_template_kind_from_post_send_event,
 };
 use atm_core::observability::NullObservability;
 use atm_core::schema::AtmMessageId;
@@ -97,15 +95,41 @@ fn task_write_request_with_mode(
     (request, message_id)
 }
 
+/// BB.5: an assignment is an immediate write that emits exactly one
+/// `task_queued` line and leaves no pending-nudge marker behind.
 fn assert_task_send_surface(harness: RosterHarness, nudge_mode: NudgeMode, task_id: &str) {
     let (root, runtime, team) = setup(harness);
     let home = root.path().join("home");
     std::fs::create_dir_all(&home).expect("home");
     let task_id = task_id.parse::<TaskId>().expect("task id");
-    let (request, _) =
+    let (request, message_id) =
         task_write_request_with_mode(&home, &team, "sender", task_id.clone(), nudge_mode);
-    let outcome =
-        write_mail_with_runtime(request, &NullObservability, &runtime).expect("task write");
+    let mut prepared =
+        prepare_write_with_runtime(request, &NullObservability, &runtime).expect("task write");
+
+    // BB.5: a task-linked send is immediate whichever mode the caller asked
+    // for (crates/atm-core/src/send/mod.rs:381).
+    assert_eq!(
+        prepared.outbound_request().nudge_mode,
+        NudgeMode::Immediate,
+        "an assignment is written immediately"
+    );
+    // BB.5: the write-time planner emits the assignment line itself rather
+    // than suppressing it for a queue claim
+    // (crates/atm-core/src/write/pipeline.rs:268).
+    let dispatches = prepared
+        .build_received_hook_dispatches(&runtime)
+        .expect("assignment dispatch");
+    assert_eq!(dispatches.len(), 1, "one line per assignment");
+    let dispatch = &dispatches[0];
+    prepared
+        .finish(&runtime, &NullObservability)
+        .expect("finish task write");
+    // BB.5: the marker seam is a no-op for an immediate write
+    // (crates/atm-core/src/write/pipeline.rs:138).
+    prepared
+        .mark_pending_if_deferred(&runtime)
+        .expect("marker seam is a no-op for an assignment");
 
     assert_eq!(
         task_row(&runtime, &team, &task_id).state,
@@ -115,29 +139,35 @@ fn assert_task_send_surface(harness: RosterHarness, nudge_mode: NudgeMode, task_
         team.clone(),
         "recipient".parse::<AgentName>().expect("recipient"),
     );
+    // BB.5: an assignment sets no pending-nudge marker, so the pump has
+    // nothing to claim (crates/atm-core/src/write/pipeline.rs:138).
     assert!(
-        runtime
+        !runtime
             .pending_nudge_store()
             .expect("pending store")
             .list_pending_members()
             .expect("pending members")
-            .contains(&member)
+            .contains(&member),
+        "an assignment leaves no pending-nudge marker for the assignee"
     );
 
-    let message =
-        load_received_hook_dispatch_message(&runtime, &member, outcome.persisted_message_id())
-            .expect("load task message")
-            .expect("task message belongs to recipient");
-    let dispatch = rebuild_received_hook_dispatch(
-        &runtime,
-        &member,
-        outcome.persisted_message_id(),
-        NudgeKind::Queue,
-        &message,
-    )
-    .expect("rebuild task dispatch")
-    .expect("task dispatch");
+    assert_eq!(dispatch.event.message_id, message_id);
     assert_eq!(dispatch.event.task_id, Some(task_id.clone()));
+    // BB.5: every assignment carries its landed queue position
+    // (crates/atm-core/src/delivery_plan.rs:88).
+    assert_eq!(
+        dispatch.event.task_transition,
+        Some(TaskTransition::Queued { position: 1 }),
+    );
+    // BB.5: an immediate dispatch carries the steer kind
+    // (crates/atm-core/src/send/hook.rs:131).
+    assert_eq!(dispatch.kind, NudgeKind::Steer);
+    // BB.5: a `Queued` transition selects the task_queued template
+    // (crates/atm-core/src/boundary/mod.rs:163).
+    assert_eq!(
+        built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
+        BuiltInNudgeTemplateKind::TaskQueued,
+    );
     let rendered = match &dispatch.target {
         PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(target)) => {
             &target.rendered_nudge
@@ -145,11 +175,14 @@ fn assert_task_send_surface(harness: RosterHarness, nudge_mode: NudgeMode, task_
         PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(target)) => &target.rendered_nudge,
         target => panic!("unexpected task target: {target:?}"),
     };
-    assert!(rendered.starts_with("<atm from=\""));
-    assert!(rendered.contains("<action>ack the message</action>"));
+    // BB.5: the task_queued body names the task and its position
+    // (crates/atm-core/src/send/nudge_template.rs:135).
+    assert!(rendered.starts_with("<atm task=\""));
+    assert!(rendered.contains(task_id.as_str()));
+    assert!(rendered.contains("queued=\"1\""));
     assert!(
-        !rendered.contains(task_id.as_str()),
-        "a deferred assignment without a transition uses the ordinary queue-ack template"
+        !rendered.contains("<action>ack the message</action>"),
+        "an assignment never asks for an acknowledgement"
     );
 }
 
@@ -277,7 +310,7 @@ fn deferred_herdr_prepare_persists_the_same_task_assignment() {
 }
 
 #[test]
-fn ac03_send_task_to_herdr_sets_marker_and_renders_task_body() {
+fn ac03_send_task_to_herdr_sets_no_marker_and_renders_task_body() {
     assert_task_send_surface(
         RosterHarness::Hermes,
         NudgeMode::Immediate,
@@ -286,7 +319,7 @@ fn ac03_send_task_to_herdr_sets_marker_and_renders_task_body() {
 }
 
 #[test]
-fn ac03_queue_task_to_herdr_sets_marker_and_renders_task_body() {
+fn ac03_queue_task_to_herdr_sets_no_marker_and_renders_task_body() {
     assert_task_send_surface(
         RosterHarness::Hermes,
         NudgeMode::Deferred,
@@ -295,7 +328,7 @@ fn ac03_queue_task_to_herdr_sets_marker_and_renders_task_body() {
 }
 
 #[test]
-fn ac03_send_task_to_tmux_sets_marker_and_renders_task_body() {
+fn ac03_send_task_to_tmux_sets_no_marker_and_renders_task_body() {
     assert_task_send_surface(
         RosterHarness::ClaudeCode,
         NudgeMode::Immediate,
@@ -304,7 +337,7 @@ fn ac03_send_task_to_tmux_sets_marker_and_renders_task_body() {
 }
 
 #[test]
-fn ac03_queue_task_to_tmux_sets_marker_and_renders_task_body() {
+fn ac03_queue_task_to_tmux_sets_no_marker_and_renders_task_body() {
     assert_task_send_surface(
         RosterHarness::ClaudeCode,
         NudgeMode::Deferred,
