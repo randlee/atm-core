@@ -105,6 +105,10 @@ R10. Templates first. Rand: "the work you are planning should focus on
     w/ a set of templates immediately. The logic changes should be small and
     if anything attempt to simplify things, not make them more complicated."
     Delivery plan in §9.
+R11. Starting a task out of order is allowed and reorders it to head. Rand:
+    "basically allowing agent to exercise judgement in a situation that
+    likely requires it. it is certainly easier to allow it than to make the
+    agent re-order things to do the same thing."
 
 ## 3. Transitions and templates
 
@@ -230,7 +234,7 @@ New verb, same shape as `close`:
 
 Caller must be the row's assignee; the row must be `assigned` (any position:
 starting a non-head task is allowed and simply reorders it to head, so the
-queue reflects what the agent is actually doing). One writer op: the message
+queue reflects what the agent is actually doing; R11). One writer op: the message
 to the assigner with `task_op = Start`, the `assigned → active` transition,
 the `Started` event, and the `task_started` receipt rendered from the same
 message (immediate, informational). Idempotent on `active` ("already
@@ -337,9 +341,6 @@ reports it; busy assigner across an entire assign→close cycle → receives
 
 ## 8. Open for Rand
 
-- Starting a non-head task reorders it to head (§4.4). Alternative: reject
-  with "not head of queue; use `atm task move`". I chose reorder because the
-  queue must reflect what the agent is doing.
 - `reassigned` as a closed outcome on the old assignee's line (§3.1).
 
 ## 9. Delivery plan (R10)
