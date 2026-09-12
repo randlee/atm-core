@@ -16,7 +16,7 @@
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope ".claude/skills/graph-orchestration/SKILL.md,codex-orchestration/SKILL.md" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
   triage:deferredNote "Consider factoring the Required Message Sequence prose into a single owned source (e.g. a shared doc both SKILL.md files reference) while touching these files for BB2-004/BB2-005. Routing pending fenix's dispatch ruling." ;
@@ -24,22 +24,34 @@
   triage:foundIn triage:BB2 ;
   triage:foundAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB2-007/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasResolution <urn:atm:triage:resolution/BB2-007/1> ;
+  triage:closedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB2-007/1>
   a triage:Occurrence ;
   triage:file ".claude/skills/graph-orchestration/SKILL.md" ;
   triage:line 544 ;
   triage:snippet "Required Message Sequence block copy-pasted byte-for-byte into both graph-orchestration/SKILL.md and codex-orchestration/SKILL.md, no shared source" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "fix/bb2-qa1-r1" ;
-  triage:headSha "ef7572fd0" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
   triage:occursIn <urn:atm:triage:worktree/BB2-007/1> .
 
 <urn:atm:triage:worktree/BB2-007/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1444, fix/bb2-qa1-r1" ;
-  triage:branch "fix/bb2-qa1-r1" ;
-  triage:headSha "ef7572fd0" ;
+  triage:path "PR #1447, fix/bb2-qa2-r2" ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB2-007/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:fixCommit "d2a9b6cc57eee25d5dd3bf417616ae0be7a8a300" ;
+  triage:fixBranch "fix/bb2-qa2-r2" ;
+  triage:verifiedInRound "BB2-QA3" ;
+  triage:resolutionNote "Both orchestration SKILL.md's Required Message Sequence sections now defer to docs/team-protocol.md's Required Flow; no restated sequence, no assigner ack." .

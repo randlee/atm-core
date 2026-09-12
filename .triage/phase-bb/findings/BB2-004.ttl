@@ -16,29 +16,41 @@
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope ".claude/skills/graph-orchestration/SKILL.md" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: rewrite SKILL.md:415-431 step 4 to dispatch a new top-of-stack fix layer via dev-fix.xml.j2 instead of merging into the next sprint's worktree, and drop the dangling j2-template cross-reference. Suggested owner: arch-ctm (per QA report's next_action); routing pending fenix's dispatch ruling." ;
   triage:foundIn triage:BB2 ;
   triage:foundAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB2-004/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasResolution <urn:atm:triage:resolution/BB2-004/1> ;
+  triage:closedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB2-004/1>
   a triage:Occurrence ;
   triage:file ".claude/skills/graph-orchestration/SKILL.md" ;
   triage:line 427 ;
   triage:snippet "Completion Invalidation step 4: 'Dev merges forward into the next sprint's worktree, picking up any important/minor findings on the way' -- contradicts the Stack Discipline section in the same file" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "fix/bb2-qa1-r1" ;
-  triage:headSha "ef7572fd0" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
   triage:occursIn <urn:atm:triage:worktree/BB2-004/1> .
 
 <urn:atm:triage:worktree/BB2-004/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1444, fix/bb2-qa1-r1" ;
-  triage:branch "fix/bb2-qa1-r1" ;
-  triage:headSha "ef7572fd0" ;
+  triage:path "PR #1447, fix/bb2-qa2-r2" ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB2-004/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:fixCommit "d2a9b6cc57eee25d5dd3bf417616ae0be7a8a300" ;
+  triage:fixBranch "fix/bb2-qa2-r2" ;
+  triage:verifiedInRound "BB2-QA3" ;
+  triage:resolutionNote "Completion Invalidation step 4 now dispatches a new top-of-stack fix layer via dev-fix.xml.j2, no stale merge-forward wording." .
