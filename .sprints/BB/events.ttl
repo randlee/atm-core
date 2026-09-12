@@ -1,8 +1,31 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-# Phase BB is orchestrated with plain ATM sends (codex-orchestration), not
-# the graph-orchestration Assignment/Completion event workflow, so this file
-# is intentionally empty. Append real events here only if Phase BB ever
-# switches to graph-orchestration dispatch; do not backfill historical
-# assignments/completions from memory.
+# Phase BB is dispatched with plain ATM sends (codex-orchestration), not the
+# graph-orchestration workflow, but /triage-report derives its DEV column
+# from these events regardless of dispatch method (fenix ruling,
+# 2026-09-12T19:49:01Z, overruling the earlier "intentionally empty"
+# convention). Record one triage:Assignment per dev dispatch using the
+# timestamp from `atm task events <task-id>`, never from memory; add a
+# matching triage:Completion when that sprint's dev push is accepted (not
+# merely when the ATM task closes -- a FAILed QA round gets no Completion).
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:BB1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-12T18:38:28Z"^^xsd:dateTime .
+
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:BB3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-12T18:38:28Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:BB3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-12T19:14:53Z"^^xsd:dateTime .
+
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:BB2 ;
+    triage:assignedTo "solar" ;
+    triage:assignedAt "2026-09-12T19:47:43Z"^^xsd:dateTime .
