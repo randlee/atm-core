@@ -12,6 +12,9 @@
 # (the same "ttl-triage" check `just lint`/CI runs) also runs here, against the
 # same extracted pushed-commit tree, so the canonical-sprint-form and
 # contradictory-status checks fail locally instead of costing a full CI cycle.
+# The touched phase's docs/plans/<phase>/.audit/qa-evidence-master.json must
+# also exist and parse (runs[] of {phase_sprint, verdict}) at the pushed commit,
+# because /triage-report exits 3 (TTL.QA_MASTER_MISSING) without it.
 #
 # Both the changed-file detection and the TTL validation itself operate on
 # the actual commits/tree being pushed (via `git rev-list`/`git diff-tree`
@@ -188,6 +191,36 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         fi
         if [ ! -d "$findings_dir" ]; then
             echo "pre-push: REFUSED. $triage_rel/findings missing at pushed commit $local_sha." >&2
+            ttl_fail=1
+            continue
+        fi
+
+        # /triage-report also needs the phase's QA evidence master. A triage
+        # write that lands without it (or with a malformed one) makes the
+        # report exit 3 (TTL.QA_MASTER_MISSING) for everyone until someone
+        # notices, so gate it here: the file must exist at the pushed commit
+        # and parse as {"runs": [ {phase_sprint, verdict}, ... ]} (an empty
+        # runs array is fine for a phase whose first QA round has not run).
+        qa_master_rel="docs/plans/$real_triage_dir/.audit/qa-evidence-master.json"
+        if ! git cat-file -e "$local_sha:$qa_master_rel" 2>/dev/null; then
+            echo "pre-push: REFUSED. $qa_master_rel missing at pushed commit $local_sha; /triage-report --phase $phase_short would exit 3 (TTL.QA_MASTER_MISSING). Add the QA evidence master (runs may be empty) in the same push as the triage records." >&2
+            ttl_fail=1
+            continue
+        fi
+        if ! git show "$local_sha:$qa_master_rel" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+runs = data.get("runs") if isinstance(data, dict) else None
+if not isinstance(runs, list):
+    raise SystemExit("qa-evidence-master.json must be an object with a runs array")
+for index, run in enumerate(runs):
+    if not isinstance(run, dict):
+        raise SystemExit(f"runs[{index}] must be an object")
+    for key in ("phase_sprint", "verdict"):
+        if not run.get(key):
+            raise SystemExit(f"runs[{index}] lacks {key}")
+' 2>"$ref_root/qa-master.err"; then
+            echo "pre-push: REFUSED. $qa_master_rel at pushed commit $local_sha is malformed: $(cat "$ref_root/qa-master.err")" >&2
             ttl_fail=1
             continue
         fi
