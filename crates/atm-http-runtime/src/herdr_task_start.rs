@@ -6,13 +6,13 @@ use std::sync::Arc;
 use atm_core::LocalServiceRuntime;
 use atm_core::boundary::{MemberKey, ReminderOutcome, TaskOp, TaskRow, TaskState, TaskStore};
 use atm_core::observability::NullObservability;
-use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+use atm_core::send::{
+    NudgeMode, SendMessageSource, WriteRequest, render_task_started_template,
+    write_mail_with_runtime,
+};
 use atm_core::types::IsoTimestamp;
 
 use crate::herdr_queue_wake::run_blocking;
-
-const TASK_STARTED_RECEIPT: &str =
-    "ATM recorded that task {{task_id}} was started by {{assignee}}.";
 
 /// Records the emitted reminder, then starts an assigned task exactly once.
 /// A failed start write leaves the durable reminder audit in place so a later
@@ -48,9 +48,7 @@ pub(crate) async fn start_assigned_task(
     let daemon_home = daemon_home.to_path_buf();
     let row = row.clone();
     run_blocking(move || {
-        let body = TASK_STARTED_RECEIPT
-            .replace("{{task_id}}", row.task_id.as_str())
-            .replace("{{assignee}}", row.assignee.as_str());
+        let body = render_task_started_template(row.task_id.as_str(), row.assignee.as_str())?;
         let mut request = WriteRequest::new(
             daemon_home.clone(),
             daemon_home,

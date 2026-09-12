@@ -144,9 +144,6 @@ fn record_escalation_stats(
     stats.escalation_writes_failed = stats
         .escalation_writes_failed
         .saturating_add(outcome.recipients_failed as usize);
-    stats.notifications_failed = stats
-        .notifications_failed
-        .saturating_add(usize::from(outcome.notify_attempted && !outcome.notify_ok));
 }
 
 pub(crate) async fn escalate_episode(
@@ -166,6 +163,34 @@ pub(crate) async fn escalate_episode(
         &escalation_summary(kind.into(), member, None),
         &body,
         kind.into(),
+        Some(since),
+    )
+    .await;
+    record_escalation_stats(stats, &outcome);
+    stats.blocked_escalations += usize::from(outcome.reached_anyone());
+}
+
+pub(crate) async fn escalate_refusals(
+    pump: &HerdrQueueWakePump,
+    task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+    member: &MemberKey,
+    since: IsoTimestamp,
+    stats: &mut HerdrQueueWakeStats,
+) {
+    let body = format!(
+        "member {} has refused three consecutive task handoffs since {}\nRun: atm list --task-events --member {}",
+        member.agent(),
+        since,
+        member.agent(),
+    );
+    let outcome = escalate_mail(
+        &pump.service_runtime,
+        Some(task_store),
+        &pump.daemon_home,
+        member.team(),
+        &escalation_summary(EscalationKind::RefusalsEscalated, member, None),
+        &body,
+        EscalationKind::RefusalsEscalated,
         Some(since),
     )
     .await;

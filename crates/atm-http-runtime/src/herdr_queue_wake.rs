@@ -53,7 +53,6 @@ pub(crate) struct HerdrQueueWakeStats {
     pub lead_notifications: usize,
     pub blocked_escalations: usize,
     pub escalation_writes_failed: usize,
-    pub notifications_failed: usize,
     pub task_step_skipped: bool,
     pub last_tick_at: Option<IsoTimestamp>,
 }
@@ -261,7 +260,6 @@ impl HerdrQueueWakePump {
             lead_notifications = stats.lead_notifications,
             blocked_escalations = stats.blocked_escalations,
             escalation_writes_failed = stats.escalation_writes_failed,
-            notifications_failed = stats.notifications_failed,
             task_step_skipped = stats.task_step_skipped,
             "Herdr queue wake poll tick"
         );
@@ -277,22 +275,27 @@ impl HerdrQueueWakePump {
         let mut task_candidates = Vec::new();
         let mut complete = true;
         for candidate in candidates {
-            if candidate.herdr_agent.is_some() {
-                by_session
-                    .entry(candidate.session.clone())
-                    .or_default()
-                    .push(candidate);
-            } else if let Some(record) = self
-                .service_runtime
-                .roster_ephemeral_state(candidate.key.team(), candidate.key.agent())
-            {
-                task_candidates.push(MemberObservation {
-                    member: candidate.key.clone(),
-                    state: record.runtime.state,
-                    state_changed_at: record.runtime.state_changed_at,
-                });
-                if candidate.pending && record.runtime.state == RuntimeMemberState::Idle {
-                    eligible.push(candidate);
+            match &candidate.target {
+                CandidateTarget::Herdr(target) => {
+                    by_session
+                        .entry(target.session.clone())
+                        .or_default()
+                        .push(candidate);
+                }
+                CandidateTarget::RosterOnly => {
+                    if let Some(record) = self
+                        .service_runtime
+                        .roster_ephemeral_state(candidate.key.team(), candidate.key.agent())
+                    {
+                        task_candidates.push(MemberObservation {
+                            member: candidate.key.clone(),
+                            state: record.runtime.state,
+                            state_changed_at: record.runtime.state_changed_at,
+                        });
+                        if candidate.pending && record.runtime.state == RuntimeMemberState::Idle {
+                            eligible.push(candidate);
+                        }
+                    }
                 }
             }
         }
@@ -346,13 +349,12 @@ impl HerdrQueueWakePump {
             .collect();
         let mut updates_by_team = HashMap::new();
         for member in &members {
-            let herdr_agent = member
-                .herdr_agent
-                .as_ref()
-                .expect("Herdr poll candidates always have an Herdr target");
+            let CandidateTarget::Herdr(target) = &member.target else {
+                continue;
+            };
             let state = runtime_state(
                 snapshots
-                    .get(herdr_agent.as_str())
+                    .get(target.agent.as_str())
                     .map(|snapshot| snapshot.status),
             );
             updates_by_team
@@ -379,17 +381,16 @@ impl HerdrQueueWakePump {
             }
         }
         for member in members {
-            let herdr_agent = member
-                .herdr_agent
-                .as_ref()
-                .expect("Herdr poll candidates always have an Herdr target");
-            if !snapshots.contains_key(herdr_agent.as_str()) {
+            let CandidateTarget::Herdr(target) = &member.target else {
+                continue;
+            };
+            if !snapshots.contains_key(target.agent.as_str()) {
                 if member.pending {
                     stats.not_present += 1;
                     tracing::info!(
                         event = "herdr_queue_poll_outcome",
                         member = %member.key,
-                        herdr_agent = %herdr_agent,
+                        herdr_agent = %target.agent,
                         queue_kind = NudgeKind::Queue.as_str(),
                         outcome = "held_target_not_present",
                         "Herdr queue target was absent from the poll result"
@@ -744,9 +745,20 @@ impl crate::RuntimeMaintenance for HerdrQueueWakePump {
 #[derive(Clone)]
 struct HerdrCandidate {
     key: MemberKey,
-    herdr_agent: Option<HerdrAgentName>,
-    session: Option<HerdrSession>,
     pending: bool,
+    target: CandidateTarget,
+}
+
+#[derive(Clone)]
+enum CandidateTarget {
+    Herdr(HerdrTarget),
+    RosterOnly,
+}
+
+#[derive(Clone)]
+struct HerdrTarget {
+    agent: HerdrAgentName,
+    session: Option<HerdrSession>,
 }
 
 /// One accepted runtime observation. The task-disposition pass consumes this
@@ -769,38 +781,27 @@ fn herdr_candidates(
         let roster = roster_store.load_roster(&team)?;
         for member in roster.members {
             let key = MemberKey::new(member.team_name.clone(), member.agent_name.clone());
-            let Some(backend) = local_message_received_backend(&member) else {
-                continue;
-            };
-            let (configured_agent, session) = match backend {
-                atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr {
+            let target = match local_message_received_backend(&member) {
+                Some(atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr {
                     session,
                     agent,
-                } => (Some(agent), session),
-                atm_core::delivery_channel::LocalMessageReceivedBackend::Tmux { .. } => {
-                    candidates.push(HerdrCandidate {
-                        pending: pending.contains(&key),
-                        key,
-                        herdr_agent: None,
-                        session: None,
-                    });
-                    continue;
+                }) => {
+                    let Some(agent) = atm_core::delivery_channel::resolve_herdr_agent_target(
+                        key.agent(),
+                        agent,
+                        "herdr_queue_wake",
+                    ) else {
+                        continue;
+                    };
+                    CandidateTarget::Herdr(HerdrTarget { agent, session })
                 }
-            };
-            let Some(herdr_agent) = configured_agent.and_then(|configured_agent| {
-                atm_core::delivery_channel::resolve_herdr_agent_target(
-                    key.agent(),
-                    configured_agent,
-                    "herdr_queue_wake",
-                )
-            }) else {
-                continue;
+                Some(atm_core::delivery_channel::LocalMessageReceivedBackend::Tmux { .. })
+                | None => CandidateTarget::RosterOnly,
             };
             candidates.push(HerdrCandidate {
                 pending: pending.contains(&key),
                 key,
-                herdr_agent: Some(herdr_agent),
-                session,
+                target,
             });
         }
     }
@@ -2001,7 +2002,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ax5_09_generic_emit_failure_retries_until_durable_rate_limit() {
+    async fn ax5_09_generic_emit_failure_counts_and_respects_cooldown() {
         let (_root, _runtime, fake, pump, store, keys, now) =
             build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
         fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentPromptStalled));

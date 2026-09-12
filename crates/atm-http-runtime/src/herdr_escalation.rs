@@ -32,7 +32,6 @@ pub(crate) enum EscalationKind {
     TaskStalled,
     BlockedEscalated,
     OfflineEscalated,
-    #[expect(dead_code, reason = "the runtime refusal path lands in task 7")]
     RefusalsEscalated,
 }
 
@@ -147,8 +146,6 @@ pub(crate) async fn escalate_mail(
     };
     let mut outcome = EscalationOutcome {
         lead: targets.lead.clone(),
-        // Mail-only escalation deliberately does not invoke Herdr notification.
-        notify_ok: true,
         ..Default::default()
     };
     let reader = suppress_since.and_then(|_| match runtime.async_mailbox_reader() {
@@ -241,16 +238,12 @@ pub(crate) struct EscalationOutcome {
     pub lead_write: Option<atm_core::schema::AtmMessageId>,
     pub recipients_written: u32,
     pub recipients_failed: u32,
-    pub notify_attempted: bool,
-    pub notify_ok: bool,
 }
 
 impl EscalationOutcome {
     #[must_use]
     pub fn reached_anyone(&self) -> bool {
-        self.lead_write.is_some()
-            || self.recipients_written > 0
-            || (self.notify_attempted && self.notify_ok)
+        self.lead_write.is_some() || self.recipients_written > 0
     }
 }
 
