@@ -1,5 +1,6 @@
 //! Closed task command surface.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -515,11 +516,21 @@ fn print_task_rows(
         println!("{}", serde_json::to_string_pretty(rows)?);
         return Ok(());
     }
+    print!("{}", render_task_rows(rows, grouped, runtime));
+    Ok(())
+}
+
+fn render_task_rows(
+    rows: &[TaskRow],
+    grouped: bool,
+    runtime: Option<&RuntimeStatusSnapshot>,
+) -> String {
+    let mut output = String::new();
     let mut current_member = None;
     for row in rows {
         if grouped && current_member.as_ref() != Some(&row.assignee) {
             if current_member.is_some() {
-                println!();
+                writeln!(output).expect("writing to String cannot fail");
             }
             let state = runtime
                 .and_then(|snapshot| {
@@ -529,29 +540,44 @@ fn print_task_rows(
                         .find(|member| member.team == row.team && member.member == row.assignee)
                 })
                 .map_or("unknown", |member| runtime_state_name(member.state));
-            println!("{}", member_state_header(&row.assignee, state));
-            println!("pos  state     task_id     assigned_at               reminders assigner");
+            writeln!(output, "{}", member_state_header(&row.assignee, state))
+                .expect("writing to String cannot fail");
+            writeln!(
+                output,
+                "pos  state     task_id     assigned_at               reminders assigner"
+            )
+            .expect("writing to String cannot fail");
             current_member = Some(row.assignee.clone());
         } else if !grouped && current_member.is_none() {
-            println!("pos  state     task_id     assigned_at               reminders assigner");
+            writeln!(
+                output,
+                "pos  state     task_id     assigned_at               reminders assigner"
+            )
+            .expect("writing to String cannot fail");
             current_member = Some(row.assignee.clone());
         }
-        println!(
+        writeln!(
+            output,
             "{:<4} {:<9} {:<11} {:<25} {:<9} {}",
             row.position.map_or(0, |position| position.get()),
             row.state.as_str(),
-            row.task_id,
+            row.task_id.as_str(),
             row.assigned_at
                 .into_inner()
                 .to_rfc3339_opts(SecondsFormat::Secs, true),
             row.reminder_count,
             row.assigner,
-        );
+        )
+        .expect("writing to String cannot fail");
     }
     if rows.is_empty() {
-        println!("pos  state     task_id     assigned_at               reminders assigner");
+        writeln!(
+            output,
+            "pos  state     task_id     assigned_at               reminders assigner"
+        )
+        .expect("writing to String cannot fail");
     }
-    Ok(())
+    output
 }
 
 const fn runtime_state_name(state: RuntimeMemberState) -> &'static str {
@@ -711,13 +737,54 @@ mod tests {
 
     #[test]
     fn list_all_shows_every_member_grouped_with_state_header() {
-        let alice: AgentName = "alice".parse().expect("agent");
-        let bob: AgentName = "bob".parse().expect("agent");
-        assert_eq!(
-            member_state_header(&alice, "active"),
-            "alice (state: active)"
+        let row = |task_id: &str, assignee: &str, position: u32| -> TaskRow {
+            serde_json::from_value(serde_json::json!({
+                "team": "test-team",
+                "task_id": task_id,
+                "assignee": assignee,
+                "assigner": "lead",
+                "state": "assigned",
+                "position": position,
+                "assignment_message_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "description": task_id,
+                "assigned_at": "2026-01-02T00:00:00Z",
+                "updated_at": "2026-01-02T00:00:00Z",
+                "reminder_count": 0,
+                "lead_notified_count": 0
+            }))
+            .expect("task row")
+        };
+        let runtime: RuntimeStatusSnapshot = serde_json::from_value(serde_json::json!({
+            "liveness": "running",
+            "readiness": "ready",
+            "members": [
+                {"team": "test-team", "member": "alice", "state": "active"},
+                {"team": "test-team", "member": "bob", "state": "idle"}
+            ]
+        }))
+        .expect("runtime snapshot");
+        let output = render_task_rows(
+            &[
+                row("A1", "alice", 1),
+                row("A2", "alice", 2),
+                row("B1", "bob", 1),
+            ],
+            true,
+            Some(&runtime),
         );
-        assert_eq!(member_state_header(&bob, "idle"), "bob (state: idle)");
+        assert_eq!(
+            output,
+            concat!(
+                "alice (state: active)\n",
+                "pos  state     task_id     assigned_at               reminders assigner\n",
+                "1    assigned  A1          2026-01-02T00:00:00Z      0         lead\n",
+                "2    assigned  A2          2026-01-02T00:00:00Z      0         lead\n",
+                "\n",
+                "bob (state: idle)\n",
+                "pos  state     task_id     assigned_at               reminders assigner\n",
+                "1    assigned  B1          2026-01-02T00:00:00Z      0         lead\n",
+            )
+        );
     }
 
     #[test]
