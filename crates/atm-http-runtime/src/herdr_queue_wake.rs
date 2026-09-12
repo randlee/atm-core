@@ -39,8 +39,6 @@ pub const HERDR_POLL_INTERVAL_MS: u64 = 5_000;
 pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
-/// Minimum spacing between task reminders for one Herdr assignee.
-pub const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
 const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1113,8 +1111,8 @@ impl Drop for ReleasePendingOnDrop {
 mod tests {
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HerdrQueueWakePump, HerdrQueueWakeStats, ReleasePendingOnDrop, TASK_REMINDER_INTERVAL_MS,
-        log_herdr_list_failure, runtime_state,
+        HerdrQueueWakePump, HerdrQueueWakeStats, ReleasePendingOnDrop, log_herdr_list_failure,
+        runtime_state,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -1872,7 +1870,7 @@ mod tests {
     fn poll_contract_uses_fixed_cadence_and_cap() {
         assert_eq!(HERDR_POLL_INTERVAL_MS, 5_000);
         assert_eq!(HERDR_MAX_PROMPTS_PER_TICK, 16);
-        assert_eq!(TASK_REMINDER_INTERVAL_MS, 60_000);
+        assert_eq!(atm_core::boundary::TASK_REMINDER_INTERVAL_MS, 60_000);
     }
 
     #[tokio::test]

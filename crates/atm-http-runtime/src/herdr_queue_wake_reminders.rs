@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskRow,
+    AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TASK_REMINDER_INTERVAL_MS,
+    TaskRow,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
@@ -13,7 +14,7 @@ use atm_core::types::IsoTimestamp;
 
 use super::{
     HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats,
-    MemberObservation, TASK_REMINDER_INTERVAL_MS, run_blocking,
+    MemberObservation, run_blocking,
 };
 
 impl HerdrQueueWakePump {
@@ -271,7 +272,7 @@ impl HerdrQueueWakePump {
             now.into_inner()
                 .signed_duration_since(then.into_inner())
                 .num_milliseconds()
-                >= i64::try_from(TASK_REMINDER_INTERVAL_MS).unwrap_or(i64::MAX)
+                >= TASK_REMINDER_INTERVAL_MS
         };
         row.last_reminded_at.is_none_or(due)
             && self
