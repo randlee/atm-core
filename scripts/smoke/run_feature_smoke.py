@@ -30,6 +30,10 @@ import tempfile
 import time
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from feature_smoke_report import (
     render_cross_host_section,
     render_feature_pane,
@@ -37,7 +41,7 @@ from feature_smoke_report import (
     summarize_cases,
 )
 from run_inbound_peer_smoke import PANE_TEMPLATE
-from report_runtime import (
+from scripts.report_runtime import (
     compose as _compose,
     resolve_procedure_page as _resolve_procedure_page,
     source_revision as _source_revision,
@@ -50,7 +54,6 @@ from smoke_common import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_FEATURES = frozenset({"fast", "normal", "thorough"})
 LOCALHOST = "localhost"
 LOCAL_IP = "local-ip"
@@ -219,150 +222,11 @@ def doctor_ready(report: Any, expected_version: str) -> bool:
     )
 
 
-def remote_command(peer: str, remote_atm: str, args: list[str], timeout: float = 20.0) -> dict[str, Any]:
-    """Invoke only the public CLI on an already-running SSH peer."""
-    remote_identity = os.environ.get("ATM_SMOKE_REMOTE_IDENTITY", "").strip()
-    remote_team = os.environ.get("ATM_SMOKE_REMOTE_TEAM", "").strip()
-    if remote_identity and remote_team:
-        return command(
-            ["ssh", peer, "env", f"ATM_IDENTITY={remote_identity}", f"ATM_TEAM={remote_team}", remote_atm, *args],
-            timeout=timeout,
-        )
-    return command(["ssh", peer, remote_atm, *args], timeout=timeout)
 
+from scripts.smoke import feature_smoke_network_support as _network_support
 
-def remote_context() -> tuple[str, str]:
-    """Return the explicit recipient identity required for live peer sends."""
-    identity = os.environ.get("ATM_SMOKE_REMOTE_IDENTITY", "").strip()
-    team = os.environ.get("ATM_SMOKE_REMOTE_TEAM", "").strip()
-    if not identity or not team:
-        raise SmokeError(
-            "set ATM_SMOKE_REMOTE_IDENTITY and ATM_SMOKE_REMOTE_TEAM for cross-host ATM delivery smoke"
-        )
-    return identity, team
-
-
-def remote_shell(peer: str, script: str, timeout: float = 20.0) -> dict[str, Any]:
-    """Run one bounded, quoted diagnostic command in the peer's shell."""
-    return command(["ssh", peer, f"sh -lc {shlex.quote(script)}"], timeout=timeout)
-
-
-@contextmanager
-def remote_certificate_workspace(peer: str):
-    """Yield a unique remote certificate workspace and remove only its files."""
-    created = remote_shell(peer, "mktemp -d")
-    if created["exit_code"] != 0:
-        raise SmokeError(f"{peer} could not create a temporary certificate directory: {created['stderr'].strip()}")
-    workspace = created["stdout"].strip()
-    if not workspace:
-        raise SmokeError(f"{peer} returned no temporary certificate directory")
-
-    completed = False
-    try:
-        yield workspace
-        completed = True
-    finally:
-        local_public = f"{workspace}/local-public.pem"
-        peer_public = f"{workspace}/peer-public.pem"
-        cleanup = remote_shell(
-            peer,
-            "rm -f "
-            f"{shlex.quote(local_public)} {shlex.quote(peer_public)} "
-            f"&& rmdir {shlex.quote(workspace)}",
-        )
-        if completed and cleanup["exit_code"] != 0:
-            raise SmokeError(
-                f"{peer} could not remove temporary certificate workspace: {cleanup['stderr'].strip()}"
-            )
-
-
-def certificate_bundle(atm: str) -> str:
-    certificate = parse_json(command([atm, "peer", "certificate", "show", "--json"]), "peer certificate show")
-    bundle = certificate.get("private_key_ref") if isinstance(certificate, dict) else None
-    if not isinstance(bundle, str) or not bundle:
-        raise SmokeError("peer certificate show did not expose private_key_ref")
-    return bundle
-
-
-def certificate_authority(pem: Path) -> str:
-    result = command(["openssl", "x509", "-in", str(pem), "-noout", "-subject", "-nameopt", "RFC2253"])
-    if result["exit_code"] != 0:
-        raise SmokeError(f"could not inspect public certificate: {result['stderr'].strip()}")
-    match = re.search(r"CN=([^,\n]+)", result["stdout"])
-    if match is None:
-        raise SmokeError("public certificate subject has no common name")
-    return match.group(1)
-
-
-def resolve_dns_addresses(host: str) -> list[str]:
-    """Return every address the local resolver provides for a peer hostname."""
-    try:
-        records = socket.getaddrinfo(host, direct_peer_port(), type=socket.SOCK_STREAM)
-    except OSError as error:
-        raise SmokeError(f"DNS resolution for {host} failed: {error}") from error
-    return sorted({record[4][0] for record in records})
-
-
-def remote_resolve_dns_addresses(peer: str, host: str) -> list[str]:
-    """Resolve a hostname through the remote computer's normal resolver."""
-    port = direct_peer_port()
-    script = (
-        "import json, socket; "
-        f"print(json.dumps(sorted({{item[4][0] for item in socket.getaddrinfo({host!r}, {port}, type=socket.SOCK_STREAM)}})))"
-    )
-    result = remote_shell(peer, f"python3 -c {shlex.quote(script)}")
-    try:
-        addresses = parse_json(result, f"{peer} DNS resolution for {host}")
-    except SmokeError:
-        raise
-    if not isinstance(addresses, list) or not all(isinstance(address, str) for address in addresses):
-        raise SmokeError(f"{peer} DNS resolution for {host} did not return an address list")
-    return addresses
-
-
-def add_dns_case(
-    cases: list[dict[str, Any]], name: str, origin: str, destination: str, hostname: str, expected_ip: str,
-    resolver: Any,
-) -> None:
-    """Record real OS DNS resolution and require the daemon's advertised IP."""
-    try:
-        addresses = resolver(hostname)
-        passed = expected_ip in addresses
-        detail = f"{hostname} -> {', '.join(addresses)}"
-        if not passed:
-            detail += f"; missing advertised IP {expected_ip}"
-        add_case(cases, name, passed, detail, origin=origin, destination=destination)
-    except SmokeError as error:
-        add_case(cases, name, False, str(error), origin=origin, destination=destination)
-
-
-def mtls_rejected_before_http(result: dict[str, Any]) -> bool:
-    """Return whether curl observed a TLS rejection with no HTTP response.
-
-    The negative smoke trusts the server certificate but supplies no client
-    certificate. A nonzero curl exit plus status 000 proves the connection
-    stopped in the mTLS handshake, before Hyper can parse an HTTP request or
-    the router can dispatch it.
-    """
-    return result["exit_code"] != 0 and result["stdout"].strip() == "000"
-
-
-def add_mtls_rejection_case(
-    cases: list[dict[str, Any]], name: str, result: dict[str, Any], origin: str, destination: str
-) -> None:
-    """Record a bounded, public pre-router mTLS negative result."""
-    passed = mtls_rejected_before_http(result)
-    if passed:
-        detail = "mTLS rejected the unauthenticated client before any HTTP status"
-    else:
-        http_status = result["stdout"].strip() or "no status marker"
-        detail = (
-            "expected a pre-router mTLS rejection "
-            f"(nonzero curl exit and HTTP status 000); got exit={result['exit_code']}, status={http_status}"
-        )
-    add_case(cases, name, passed, detail, origin=origin, destination=destination)
-
-
+globals().update({name: getattr(_network_support, name) for name in _network_support.__all__})
+_network_support._PUBLIC_NAMESPACE = globals()
 def curl_doctor(
     cases: list[dict[str, Any]], peer: str, atm: str, remote_atm: str, remote_host: str, expected_version: str,
     *, plaintext: bool,

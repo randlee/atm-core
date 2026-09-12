@@ -11,11 +11,10 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SMOKE_DIR = ROOT / "scripts/smoke"
-if str(SMOKE_DIR) not in sys.path:
-    sys.path.insert(0, str(SMOKE_DIR))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-import report_runtime as MODULE  # noqa: E402
+from scripts import report_runtime as MODULE  # noqa: E402
 
 
 class FixtureError(RuntimeError):

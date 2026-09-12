@@ -28,7 +28,7 @@ from scripts.smoke.benchmark_schema import (
     classify_status,
 )
 from scripts.smoke.benchmark_baselines import load_baselines
-from scripts.smoke.report_runtime import compose as _compose
+from scripts.report_runtime import compose as _compose
 
 
 REPORTS_ROOT = ROOT / "site" / "reports"

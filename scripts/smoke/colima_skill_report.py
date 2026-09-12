@@ -24,10 +24,11 @@ import sys
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from feature_smoke_report import render_feature_pane  # noqa: E402
 from run_feature_smoke import update_master_report_index  # noqa: E402
 from run_inbound_peer_smoke import PANE_TEMPLATE, REPO_ROOT  # noqa: E402
-from report_runtime import (  # noqa: E402
+from scripts.report_runtime import (  # noqa: E402
     compose as _compose,
     resolve_procedure_page as _resolve_procedure_page,
     source_revision as _git_source_revision,

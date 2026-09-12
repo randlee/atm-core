@@ -23,6 +23,10 @@ import sys
 import time
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from smoke_common import (
     SmokeError,
     command_result,
@@ -30,7 +34,7 @@ from smoke_common import (
     extract_message_id,
     sanitize,
 )
-from report_runtime import compose as _compose
+from scripts.report_runtime import compose as _compose
 
 REQUIRED_LOCAL_CHECKS = frozenset({"localhost/local loopback", "own-IP", "nudge"})
 

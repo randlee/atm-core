@@ -29,7 +29,7 @@ if str(JUST_ROOT) not in sys.path:
 from scripts.public_redaction import public_value
 from run_fuzz import FuzzInputError as V2FuzzInputError
 from run_fuzz import validate_report
-from scripts.smoke.report_runtime import compose as _compose, resolve_procedure_page
+from scripts.report_runtime import compose as _compose, resolve_procedure_page
 
 
 REPORTS_ROOT = ROOT / "site" / "reports"

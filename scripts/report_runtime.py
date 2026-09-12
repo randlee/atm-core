@@ -1,8 +1,7 @@
 """Cross-domain provenance and rendering plumbing for report-producing runners.
 
-This module stays under ``scripts/smoke`` because smoke owns the public report
-layout and all current consumers render into that layout, including the fuzz
-adapter.  Keeping one owner avoids a second top-level report utility.
+This module is shared by smoke, benchmark, and fuzz report producers. Keeping
+one owner avoids each evidence family growing a subtly different renderer.
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ class ProcedurePage:
 
 def source_revision(root: Path | None = None) -> str | None:
     """Return the exact checkout revision, or ``None`` when it is unresolved."""
-    checkout = root or Path(__file__).resolve().parents[2]
+    checkout = root or Path(__file__).resolve().parents[1]
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=checkout,
         capture_output=True, text=True, check=False,
@@ -49,13 +48,8 @@ def resolve_procedure_page(
     root: Path | None = None,
     error_type: type[E] = ReportRuntimeError,  # type: ignore[assignment]
 ) -> ProcedurePage | None:
-    """Select the exact page or newest manifest ancestor for ``revision``.
-
-    A missing source revision has no exact provenance and therefore returns
-    ``None`` so callers can link the procedure's stable index.  A resolved
-    revision must never degrade to a guessed or nonexistent page.
-    """
-    checkout = root or Path(__file__).resolve().parents[2]
+    """Select the exact page or newest manifest ancestor for ``revision``."""
+    checkout = root or Path(__file__).resolve().parents[1]
     if revision is None:
         return None
     if not GIT_REVISION.fullmatch(revision):
@@ -106,7 +100,7 @@ def compose(
     error_type: type[E] = ReportRuntimeError,  # type: ignore[assignment]
 ) -> None:
     """Render a checked-in template through the repository sc-compose binary."""
-    checkout = root or Path(__file__).resolve().parents[2]
+    checkout = root or Path(__file__).resolve().parents[1]
     output.parent.mkdir(parents=True, exist_ok=True)
     variables_path: Path | None = None
     try:

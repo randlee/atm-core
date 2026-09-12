@@ -387,6 +387,7 @@ mod tests {
 
         for (is_ack, requires_ack, kind, expected) in [
             (true, false, NudgeKind::Steer, K::Acknowledge),
+            (true, false, NudgeKind::Queue, K::Acknowledge),
             (false, false, NudgeKind::Steer, K::Delivery),
             (false, true, NudgeKind::Steer, K::DeliveryAck),
             (false, false, NudgeKind::Queue, K::Queue),
