@@ -1117,14 +1117,14 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
     clear_pending_markers(root.path(), &runtime, &key);
     let first: TaskId = "AX5-AC1-FIRST".parse().expect("task id");
     let second: TaskId = "AX5-AC1-SECOND".parse().expect("task id");
-    queue_task_message(
+    let first_message_id = queue_task_message(
         root.path(),
         &runtime,
         key.team(),
         key.agent().as_str(),
         first.clone(),
     );
-    queue_task_message(
+    let second_message_id = queue_task_message(
         root.path(),
         &runtime,
         key.team(),
@@ -1149,8 +1149,13 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
 
     pump.tick_once().await;
-    let prompts_after_first = prompt_texts(&fake).len();
-    assert!(prompts_after_first > 0);
+    let prompts = prompt_texts(&fake);
+    assert!(prompts.iter().any(|text| {
+        text.starts_with("<atm from=\"")
+            && text.contains(&format!("message-id=\"{first_message_id}\""))
+            && !text.contains(first.as_str())
+    }));
+    let prompts_after_first = prompts.len();
     assert_eq!(
         runtime
             .task_store()
@@ -1177,7 +1182,13 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
         IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert!(prompt_texts(&fake).len() > prompts_after_first);
+    let prompts = prompt_texts(&fake);
+    assert!(prompts.len() > prompts_after_first);
+    assert!(prompts[prompts_after_first..].iter().any(|text| {
+        text.starts_with("<atm from=\"")
+            && text.contains(&format!("message-id=\"{second_message_id}\""))
+            && !text.contains(second.as_str())
+    }));
     assert_eq!(
         runtime
             .task_store()
@@ -1339,7 +1350,7 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
         key.agent().as_str(),
         first.clone(),
     );
-    queue_task_message(
+    let second_message = queue_task_message(
         root.path(),
         &runtime,
         key.team(),
@@ -1379,6 +1390,11 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
     let reminders = prompt_texts(&fake);
     assert!(!reminders.is_empty());
     assert!(reminders.iter().all(|text| !text.contains("AX5-ACTIVE")));
+    assert!(reminders.iter().any(|text| {
+        text.starts_with("<atm from=\"")
+            && text.contains(&format!("message-id=\"{second_message}\""))
+            && !text.contains(second.as_str())
+    }));
     assert_eq!(
         runtime
             .task_store()
@@ -2468,7 +2484,14 @@ impl atm_core::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrid
     fn list_stale_template_override_kinds(
         &self,
         _team: &TeamName,
-    ) -> Result<Vec<(String, atm_core::types::IsoTimestamp)>, AtmError> {
+    ) -> Result<Vec<atm_core::boundary::StaleNudgeTemplateOverrideKind>, AtmError> {
+        Ok(Vec::new())
+    }
+
+    fn list_template_overrides(
+        &self,
+        _team: &TeamName,
+    ) -> Result<Vec<atm_core::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
         Ok(Vec::new())
     }
 

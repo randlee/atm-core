@@ -64,7 +64,7 @@ small (progressive disclosure).
 ## Lead Role
 
 The orchestrator in this skill is the **lead**: the identity that dispatches
-sprint nodes, appends events, and receives completion messages.
+sprint nodes, appends events, and receives task-close reports.
 `team-lead` is the default lead; `fenix` or any other identity may hold the role. A lead
 must be appointed for every phase before its first dispatch, recorded in the
 phase status row of `docs/project-plan.md` and the phase ledger, and
@@ -82,6 +82,16 @@ variable (default `team-lead`): when the lead is another identity, the
 assignee sends a one-line plain copy of each push report and close summary
 to `cc`; when `lead` and `cc` are the same identity, nothing extra is sent.
 The lead may set `cc` to an empty string to switch copies off.
+
+## Stack Discipline
+
+Every phase runs as one append-only `gh stack` above `integrate/phase-N`.
+The rule is defined once, in
+[`docs/development/gh-stack-guidelines.md`](../../../docs/development/gh-stack-guidelines.md)
+§0, and is not restated here. What it means for this skill: every dispatch
+— `dev-task`, `dev-fix`, the CLEANUP pass — is a new worktree cut from the
+current top of the stack, and the `<stack-discipline>` element every
+template carries is the dev-facing copy of §0.
 
 ## Defaults
 
@@ -267,7 +277,7 @@ triaging-findings to determine template selection.
 ## Appending Events
 
 **Team-lead is the sole writer of TTL events.** Agents (dev, QA) never append to
-`.sprints/` files directly. Dev sends an ATM completion message; the lead
+`.sprints/` files directly. Dev sends an ATM task-close report; the lead
 appends triage:Completion and triage:Resolution events, then validates.
 
 Assignments and Completions go into `events.ttl`. They are file-appended and
@@ -286,7 +296,7 @@ git add .sprints/<PHASE>/events.ttl && git commit -m "event: Assignment <PHASE>-
 # Validate after every append
 .claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
 
-# Completion — append when the lead receives dev's ATM completion message
+# Completion — append when the lead receives the dev's ATM task-close report
 cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:c<N> a triage:Completion ;
     triage:ofSprint triage:Phase<X>-S<n> ;
@@ -356,8 +366,9 @@ finding ids before editing.
 
 The orchestrator saves `vars` to a temp file and adds non-graph variables.
 Every assignment (dev, fix, QA) is sent with
-`atm send <agent> --template <template> --vars <json>`; that is the only
-sanctioned dispatch form.
+`atm send <agent> --task-id "$TASK_ID" --template <template> --vars <json>`;
+that is the only sanctioned dispatch form. The same `TASK_ID` must also be
+passed as the template's `task_id` variable.
 Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
 consulting triaging-findings:
 
@@ -377,6 +388,7 @@ SPRINT=$(echo "$RESULT" | jq -r .vars.sprint)
 # Check findings via triaging-findings skill (orchestrator step)
 # If blocking findings exist, use dev-fix.xml.j2; otherwise dev-task.xml.j2
 TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
+TASK_ID="GO-$(date +%s)"
 
 # Dispatch via atm send --template (orchestrator supplies remaining vars).
 # Always use this form; never render the template yourself and paste or
@@ -384,9 +396,10 @@ TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
 # `atm compose` with the same --template/--vars/--var arguments. The daemon-owned template admission path records the
 # template and vars structurally, so the dispatch is queryable from outside.
 atm send arch-ctm \
+  --task-id "$TASK_ID" \
   --template ".claude/skills/graph-orchestration/$TEMPLATE" \
   --vars /tmp/graph-vars.json \
-  --var task_id="GO-$(date +%s)" \
+  --var task_id="$TASK_ID" \
   --var worktree_path="$WORKTREE_PATH" \
   --var branch="$BRANCH" \
   --var pr_target="$PR_TARGET" \
@@ -406,10 +419,11 @@ Completion, the Completion is invalidated:
    does not block — dev has sent a Completion, so the sprint is not in-flight;
    a new Assignment is required for re-dispatch)
 2. Team-lead appends a new Assignment event to events.ttl for the sprint
-3. Dev fixes the blocker and sends an ATM completion message; the lead
-   appends a new Completion
-4. Dev merges forward into the next sprint's worktree, picking up any
-   important/minor findings on the way (Step 4 in the j2 template)
+3. The lead dispatches the fix as a new top-of-stack layer with
+   `dev-fix.xml.j2` (Fix Dispatch); the invalidated sprint's own layer stays
+   frozen, and any open important/minor findings ride the same fix layer
+4. Dev closes that task with an ATM task-close report; the lead appends a
+   new Completion for the sprint
 
 This guarantees QA always has the final word. A sprint is never permanently
 "done" while a blocking finding exists postdating its Completion.
@@ -426,15 +440,15 @@ This 3–4× speedup is load-bearing — do not deviate.
 
 **Orchestrator steps (in order, before dispatching dev-fix):**
 
-1. Confirm all sprint Completions are valid and CI is green on each sprint branch.
-2. Merge sprint branches forward in sequence into the highest-order sprint branch:
-   - Merge S1 → S2's branch
-   - Merge S2 → S3's branch
-   - ... up to S(n-1) → S(n)'s branch
-3. Run CI on the merged S(n) branch. Fix any merge conflicts before proceeding.
-4. Collect all open important/minor findings via `open-findings-sprint.sparql`.
-5. Dispatch ONE dev-fix assignment to S(n)'s worktree with the full findings list.
-6. QA reviews the merged branch once.
+1. Confirm all sprint Completions are valid. On an append-only stack every
+   layer already contains the layers below it, so no merge-forward pass is
+   needed; only the top layer's CI matters.
+2. Cut a new cleanup worktree from the current top of the stack
+   (`git worktree add ../atm-core-worktrees/<branch> -b <branch> origin/<top>`).
+3. Collect all open important/minor findings via `open-findings-sprint.sparql`.
+4. Dispatch ONE dev-fix assignment to that worktree with the full findings list;
+   open its PR (base = the top sprint layer) on the first push and link it.
+5. QA reviews the cleanup layer once.
 
 **Strong default:** Fix important/minor findings on the consolidated highest
 sprint branch during CLEANUP. Dispatching findings back to the branch where
@@ -444,9 +458,9 @@ forward merge dependency and re-merging would be higher churn than fixing
 in place.
 
 **CLEANUP branch template variables (`atm send --template --vars`):**
-- `worktree_path` = highest-order sprint's worktree
-- `branch` = highest-order sprint's branch
-- `pr_target` = phase integration branch
+- `worktree_path` = the new cleanup worktree cut from the top of the stack
+- `branch` = the cleanup layer's branch
+- `pr_target` = the layer below (the top sprint layer's branch)
 - `findings` = full output of `open-findings-sprint.sparql` (all open important/minor)
 - `cleanup_mode` = "true"
 
@@ -460,7 +474,7 @@ graph-orchestration:
 | `triage:Phase` | — | Phase identity node |
 | `triage:Sprint` | `inPhase`, `order`, `criteria` | One per sprint; `order` is unique within a phase |
 | `triage:Assignment` | `ofSprint`, `assignedTo`, `assignedAt` | Appended by the lead when dispatching; must be unique per sprint |
-| `triage:Completion` | `ofSprint`, `at` | Appended by the lead on receipt of dev's ATM completion message; may be invalidated by a later blocking finding |
+| `triage:Completion` | `ofSprint`, `at` | Appended by the lead on receipt of the dev's ATM task-close report; may be invalidated by a later blocking finding |
 | `triage:Resolution` | `resolves`, `resolvedAt` | Appended by the lead when a non-blocking finding is confirmed fixed; blocking findings need no Resolution |
 
 Findings are defined by the triaging-findings skill and live in
@@ -540,8 +554,7 @@ QA assignment uses the existing `quality-mgr` prompt directly — no new templat
 
 ## Required Message Sequence
 
-Every ATM task message must follow:
-1. ACK
-2. Work
-3. Completion summary (including git push SHA)
-4. Completion ACK by receiver
+The sequence for every ATM task assignment — ack, work, task close; the
+receiver never acks a close — is defined once in
+[`docs/team-protocol.md`](../../../docs/team-protocol.md) (Required Flow).
+This skill adds nothing to it and restates none of it.

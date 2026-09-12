@@ -1,0 +1,66 @@
+{
+  "feature": "fast",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20260912T204119754750Z",
+  "status": "PASS",
+  "source_revision": "fe5dac5cb48953915e99f84937c63c58eb58fa66",
+  "cases": [
+    {
+      "name": "AD11-CMD-SEND-001",
+      "status": "PASS",
+      "detail": "send command preserves caller-context ownership across environment and explicit override paths",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "AD11-CMD-READ-001",
+      "status": "PASS",
+      "detail": "read command preserves caller-context ownership across environment and explicit override paths",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "AD11-CMD-MEMBERS-001",
+      "status": "PASS",
+      "detail": "members command remains daemon-independent while preserving explicit team override handling",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "AD11-CMD-TEAMS-001",
+      "status": "PASS",
+      "detail": "teams list command remains daemon-independent on the retained CLI surface",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "AD11-CMD-LOG-001",
+      "status": "PASS",
+      "detail": "log command remains daemon-independent with caller-context enforcement at the CLI boundary",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "AD11-CMD-DOCTOR-001",
+      "status": "PASS",
+      "detail": "doctor remains identity-free while preserving optional team scoping and the direct local path",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "AD11-POSTSEND-LOCAL-TMUX-001",
+      "status": "PASS",
+      "detail": "local tmux post-send requires and uses authoritative pane metadata",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "AD11-POSTSEND-WARNING-001",
+      "status": "PASS",
+      "detail": "sender-visible warning fallback survives failed post-send emission",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    }
+  ]
+}

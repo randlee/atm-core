@@ -425,7 +425,14 @@ impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideSt
     fn list_stale_template_override_kinds(
         &self,
         _team: &TeamName,
-    ) -> Result<Vec<(String, crate::types::IsoTimestamp)>, AtmError> {
+    ) -> Result<Vec<crate::boundary::StaleNudgeTemplateOverrideKind>, AtmError> {
+        Ok(Vec::new())
+    }
+
+    fn list_template_overrides(
+        &self,
+        _team: &TeamName,
+    ) -> Result<Vec<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
         Ok(Vec::new())
     }
 

@@ -10,7 +10,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from typing import Any, Iterable, Literal, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
@@ -29,6 +28,7 @@ from scripts.smoke.benchmark_schema import (
     classify_status,
 )
 from scripts.smoke.benchmark_baselines import load_baselines
+from scripts.smoke.report_runtime import compose as _compose
 
 
 REPORTS_ROOT = ROOT / "site" / "reports"
@@ -81,25 +81,8 @@ def target_label(target: str) -> str:
 
 
 def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
-    """Render a checked-in sc-compose template without network dependencies."""
-    output.parent.mkdir(parents=True, exist_ok=True)
-    variables_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
-            json.dump(variables, handle, sort_keys=True)
-            variables_path = Path(handle.name)
-        completed = subprocess.run(
-            ["sc-compose", "render", "--root", str(ROOT), "--file", str(template),
-             "--var-file", str(variables_path), "--output", str(output)],
-            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
-        )
-        if completed.returncode != 0:
-            raise BenchmarkReportError(
-                f"sc-compose render failed: {completed.stderr.strip() or completed.stdout.strip()}"
-            )
-    finally:
-        if variables_path is not None:
-            variables_path.unlink(missing_ok=True)
+    """Render through the shared report runtime with benchmark errors."""
+    _compose(template, variables, output, root=ROOT, error_type=BenchmarkReportError)
 
 
 def load_json(path: Path) -> dict[str, Any]:

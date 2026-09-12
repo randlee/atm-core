@@ -1,5 +1,5 @@
 ---
-status: complete
+status: planned
 branch: feature/bb1-transition-templates
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb1-transition-templates
 ---
@@ -97,21 +97,21 @@ pub enum TaskTransition {
 
 - [ ] D3 — `boundary/mod.rs:148-167`
   `built_in_nudge_template_kind_from_post_send_event` returns
-  `Result<BuiltInNudgeTemplateKind, AtmError>`:
+  `BuiltInNudgeTemplateKind`:
 
 ```rust
-match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requires_ack, delivery_kind) {
-    (true, _, _, _, _) => Ok(K::Acknowledge),
-    (false, Some(TaskTransition::Queued { .. }), _, _, _) => Ok(K::TaskQueued),
-    (false, Some(TaskTransition::Ready), _, _, _) => Ok(K::TaskReady),
-    (false, Some(TaskTransition::Reminder { .. }), _, _, _) => Ok(K::TaskReminder),
-    (false, Some(TaskTransition::Started), _, _, _) => Ok(K::TaskStarted),
-    (false, Some(TaskTransition::Complete { .. }), _, _, _) => Ok(K::TaskComplete),
-    (false, Some(TaskTransition::Closed { .. }), _, _, _) => Ok(K::TaskClosed),
-    (false, None, _, false, NudgeKind::Steer) => Ok(K::Delivery),
-    (false, None, _, true, NudgeKind::Steer) => Ok(K::DeliveryAck),
-    (false, None, _, false, NudgeKind::Queue) => Ok(K::Queue),
-    (false, None, _, true, NudgeKind::Queue) => Ok(K::QueueAck),
+match (event.is_ack, event.task_transition, event.requires_ack, delivery_kind) {
+    (true, _, _, _) => K::Acknowledge,
+    (false, Some(TaskTransition::Queued { .. }), _, _) => K::TaskQueued,
+    (false, Some(TaskTransition::Ready), _, _) => K::TaskReady,
+    (false, Some(TaskTransition::Reminder { .. }), _, _) => K::TaskReminder,
+    (false, Some(TaskTransition::Started), _, _) => K::TaskStarted,
+    (false, Some(TaskTransition::Complete { .. }), _, _) => K::TaskComplete,
+    (false, Some(TaskTransition::Closed { .. }), _, _) => K::TaskClosed,
+    (false, None, false, NudgeKind::Steer) => K::Delivery,
+    (false, None, true, NudgeKind::Steer) => K::DeliveryAck,
+    (false, None, false, NudgeKind::Queue) => K::Queue,
+    (false, None, true, NudgeKind::Queue) => K::QueueAck,
 }
 ```
 
@@ -119,9 +119,9 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
   ordinary non-task kind. That case is reachable only for a pre-BB queued
   assignment claimed before BB.5 D6's open-time normalization, or a task-op
   message sent through `atm queue`; both must render, not warn (plan P14).
-  The `Result` return remains for the retired-kind parse path only. The
-  `task_id.is_some()` column is therefore unused by the match and is
-  dropped from the tuple.
+  The selector is exhaustive and infallible. Retired-kind parsing remains a
+  separate validation path. The `task_id.is_some()` column is unused by the
+  match and is dropped from the tuple.
 
 - [ ] D4 — `crates/atm-core/src/send/nudge_template.rs:77-101` default bodies
   for the six kinds, byte-for-byte from design §3 (the `task_ready` and
@@ -170,17 +170,20 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
 
 - [ ] D6 — doctor, `crates/atm-core/src/doctor/mod.rs:691-700` (beside the
   disabled-delivery finding):
-  - `NudgeTemplateOverrideStore::list_stale_template_override_kinds(team) -> Result<Vec<(String, IsoTimestamp)>, AtmError>`
+  - `NudgeTemplateOverrideStore::list_stale_template_override_kinds(team) -> Result<Vec<StaleNudgeTemplateOverrideKind>, AtmError>`
     (raw `kind` text of rows that no longer parse) in
     `crates/atm-storage/src/contract.rs` and
     `crates/atm-storage-rusqlite/src/nudge_template_override_store.rs`;
   - finding `stale_nudge_template_override` per row, remediation
     `atm teams clear-nudge-template <kind>`; the row is otherwise ignored
     (never re-mapped);
-  - finding `disabled_task_nudge_template` per disabled row whose kind is one
+  - `NudgeTemplateOverrideStore::list_template_overrides(team)` returns the
+    current typed rows in one read so doctor does not issue one read per task
+    kind;
+  - finding `disabled_task_nudge_template_override` per disabled row whose kind is one
     of the six task kinds (a disabled `task_reminder` silences nags);
   - `atm teams clear-nudge-template` (`crates/atm/src/commands/teams.rs`)
-    accepts `task` and `acknowledge_task` for deletion only: the command
+    accepts all four names in `RETIRED_TEMPLATE_KINDS` for deletion only: the command
     parses the kind with `BuiltInNudgeTemplateKind::from_str` and, on the
     retired-kind error, calls `clear_template_override` with the raw text.
     `clear_template_override`'s `kind` parameter becomes `&str`.
@@ -188,7 +191,7 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
 - [ ] D6a — boundary manifests for the widened sealed trait:
   `boundaries/atm-storage/nudge-template-override-store.toml` `[contracts]`
   `request_types` gains `"retired kind name (&str, deletion only)"`,
-  `response_types` gains `"Vec<(String, IsoTimestamp)> (stale override kinds)"`,
+  `response_types` gains `"Vec<StaleNudgeTemplateOverrideKind>"`,
   and `[public] notes` records the two additions;
   `boundaries/atm-storage-rusqlite/nudge-template-override-store-sqlite.toml`
   `request_types` and `response_types` gain the same entries. The trait stays
@@ -232,7 +235,7 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
 Unit — `crates/atm-core/src/boundary/mod.rs` (kind decision):
 
 - `kind_decision_covers_every_transition` — twelve arms, parametrised, no `_` arm in the test.
-- `task_linked_event_without_transition_is_a_validation_error`.
+- `task_linked_event_without_transition_renders_non_task_kind`.
 
 Unit — `crates/atm-storage/src/contract.rs`:
 
@@ -246,13 +249,15 @@ Unit — `crates/atm-core/src/send/nudge_template.rs`:
 - `ready_and_reminder_bodies_name_atm_task_start`.
 - `unknown_placeholder_is_a_validation_error`.
 
-Unit — `crates/atm-core/src/nudge_dispatch.rs`:
+Integration — `crates/atm-core/tests/task_reminder_dispatch.rs` and
+`crates/atm-core/tests/nudge_mode.rs`:
 
-- `task_pass_builder_sets_ready_at_zero_reminders_then_reminder_with_count`.
-- `claim_builder_never_sets_task_transition` — a claimed row with a task
-  id (the legacy pre-BB shape) and a claimed row without one both leave
-  `task_transition` `None`; the task-linked one renders `delivery` (D3,
-  plan P14).
+- `reminder_dispatch_renders_from_a_task_row_without_assignment_mail` and
+  `reminder_dispatch_uses_durable_reminder_count` exercise the real builder at
+  reminder counts zero and three.
+- `actual_dispatch_matrix_covers_tmux_and_herdr_members` — real claimed rows
+  with and without a task id leave `task_transition` `None`; the task-linked
+  row renders the ordinary queue family (D3, plan P14).
 
 Unit — `crates/atm-core/src/send/hook.rs` (the immediate builder, D5 bullet 3):
 
@@ -274,7 +279,8 @@ CLI — `crates/atm/src/commands/teams.rs`:
 - `clear_nudge_template_accepts_retired_task_kind_for_deletion`.
 - `set_nudge_template_rejects_retired_task_kind_with_hint`.
 
-Compatibility — `crates/atm-graft/tests/` and `crates/atm-graft-python`:
+Compatibility — `crates/atm-core/src/boundary/mod.rs`,
+`crates/atm-graft/src/nudge_sink.rs`, and `crates/atm-graft-python`:
 
 - `graft_decodes_pre_1_8_event_without_task_transition`.
 - `graft_python_callback_shape_unchanged_with_task_transition_present`.
@@ -291,8 +297,8 @@ Storage — `crates/atm-storage-rusqlite/tests/`:
 
 ## Acceptance criteria
 
-1. `grep -rn "AcknowledgeTask\|K::Task\b\|\"acknowledge_task\"" crates/` returns only the `from_str` retired arm and its test.
-2. Every test above passes; `just lint nudge-taxonomy` passes with no inventory change.
+1. `grep -rn "AcknowledgeTask\|K::Task\b\|\"acknowledge_task\"" crates/` returns only the centralized retired-kind list, the D6 raw-text deletion path, and their tests (lead ruling, fenix, PR #1438 review).
+2. Every test above passes; `just lint nudge-taxonomy` passes with the Phase-BB amendment recorded (lead ruling, fenix, PR #1438 review).
 3. `HTTP_API_VERSION == "1.8.0"`; ADR-061 D5 row; schema-reviewer sign-off on the PR.
 4. On the prerelease built from this sprint, the nudge-test of 2026-09-12 (three assignments to cipher) shows the *same three prompts as today* but rendered as `task_ready` (head, claimed) and `task_queued` (positions 2 and 3), and the receipt to team-lead rendered as `task_started`. Timing is unchanged (that is BB.5).
 5. D8 edits landed; `just lint spell` passes.

@@ -1,6 +1,13 @@
 use crate::contract::BuiltInNudgeTemplateKind;
 use crate::error::AtmError;
 
+pub const RETIRED_TEMPLATE_KINDS: [&str; 4] = [
+    "task",
+    "acknowledge_task",
+    "delivery_task",
+    "delivery_task_ack",
+];
+
 pub(crate) fn parse_built_in_template_kind(
     value: &str,
 ) -> Result<BuiltInNudgeTemplateKind, AtmError> {
@@ -17,11 +24,9 @@ pub(crate) fn parse_built_in_template_kind(
         "task_started" => Ok(Kind::TaskStarted),
         "task_complete" => Ok(Kind::TaskComplete),
         "task_closed" => Ok(Kind::TaskClosed),
-        "task" | "acknowledge_task" | "delivery_task" | "delivery_task_ack" => {
-            Err(AtmError::validation(format!(
-                "template kind `{value}` was retired; use one of task_queued, task_ready, task_reminder, task_started, task_complete, task_closed"
-            )))
-        }
+        retired if RETIRED_TEMPLATE_KINDS.contains(&retired) => Err(AtmError::validation(format!(
+            "template kind `{value}` was retired; use one of task_queued, task_ready, task_reminder, task_started, task_complete, task_closed"
+        ))),
         other => Err(AtmError::validation(format!(
             "unsupported built-in nudge template kind `{other}`"
         ))),

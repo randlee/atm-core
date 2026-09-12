@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-003>
+  a triage:Finding ;
+  triage:findingId "BB1-003" ;
+  triage:title "Dependency-allowlist relaxation outside sprint ownership for a test-local serde derive" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. .just/lint-config.toml:167, boundaries/atm-graft-python/hermes-graft-binding.toml:25, crates/atm-graft-python/Cargo.toml:39 add serde solely for the test-local derive at crates/atm-graft-python/src/lib.rs:1343-1357. Plan section 4: BB.1 owns \"the two override-store manifests under boundaries/** (D6a)\"; the sprint's \"Paths edited outside crates/\" list names only those two, not this third manifest edit." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable false ;
+  triage:sweepScope ".just/lint-config.toml:167; boundaries/atm-graft-python/hermes-graft-binding.toml:25; crates/atm-graft-python/Cargo.toml:39" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (fenix): revert the three allowlist edits; the frozen-struct half of the decode test (frozen_1_7_event_shape_decodes_1_8_payload_with_task_transition) moves to atm-core, owner of PostSendHookEvent and already depends on serde; atm-graft-python keeps only the JSON-fixture to PyNudge::from_post_send half, needing serde_json only. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-003/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 167 ;
+  triage:snippet "serde added to the dependency allowlist and atm-graft-python's Cargo.toml solely for a test-local derive, outside BB.1's declared outside-crates/ ownership" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-003/1> .
+
+<urn:atm:triage:worktree/BB1-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

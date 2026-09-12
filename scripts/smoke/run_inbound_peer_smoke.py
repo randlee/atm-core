@@ -20,7 +20,6 @@ import re
 import shlex
 import subprocess
 import sys
-import tempfile
 import time
 from typing import Any
 
@@ -31,6 +30,7 @@ from smoke_common import (
     extract_message_id,
     sanitize,
 )
+from report_runtime import compose as _compose
 
 REQUIRED_LOCAL_CHECKS = frozenset({"localhost/local loopback", "own-IP", "nudge"})
 
@@ -307,19 +307,8 @@ REVIEW_TEMPLATE = REPO_ROOT / "templates/smoke-report/inbound-peer-review.xhtml.
 
 
 def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
-    """Render only through the repository's sc-compose template mechanism."""
-    with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
-        json.dump(variables, handle)
-        variables_path = Path(handle.name)
-    try:
-        result = command_result([
-            "sc-compose", "render", "--root", str(REPO_ROOT), "--file", str(template),
-            "--var-file", str(variables_path), "--output", str(output),
-        ], 15.0)
-        if result["exit_code"] != 0:
-            raise SmokeError("sc-compose render failed: " + (result["stderr"] or result["stdout"]))
-    finally:
-        variables_path.unlink(missing_ok=True)
+    """Render through the shared report runtime with the smoke error contract."""
+    _compose(template, variables, output, root=REPO_ROOT, error_type=SmokeError)
 
 
 def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict[str, Any]], records: list[dict[str, Any]]) -> None:

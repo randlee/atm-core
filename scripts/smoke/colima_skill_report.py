@@ -16,6 +16,7 @@ import argparse
 from datetime import datetime, timezone
 from html import escape
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -25,7 +26,9 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from feature_smoke_report import render_feature_pane  # noqa: E402
 from run_feature_smoke import update_master_report_index  # noqa: E402
-from run_inbound_peer_smoke import PANE_TEMPLATE, REPO_ROOT, compose  # noqa: E402
+from run_inbound_peer_smoke import PANE_TEMPLATE, REPO_ROOT  # noqa: E402
+from report_runtime import compose as _compose, source_revision as _git_source_revision  # noqa: E402
+from smoke_common import SmokeError  # noqa: E402
 
 FEATURE = "colima-hermes-skills"
 PLATFORM = "linux"
@@ -35,6 +38,7 @@ STEP = re.compile(r"^\s+\d+ (PASS|FAIL) (.*)$")
 FIELD = re.compile(r"^(skill|agent|result): (.*)$", re.MULTILINE)
 ATM_LINE = re.compile(r"^atm:\s+(\S+)", re.MULTILINE)
 TRANSPORT_LINE = re.compile(r"^herdr transport: (\S+ \([^)]*\))", re.MULTILINE)
+REF_LINE = re.compile(r"@ ([0-9a-f]{7,40})")
 
 
 def case(name: str, status: str, detail: str, host: str = HOST) -> dict[str, Any]:
@@ -61,10 +65,12 @@ def header_cases(result_text: str, report_cases: list[dict[str, Any]]) -> list[d
     doctor_steps = [item for item in report_cases if item["name"].endswith(": Doctor passes")]
     status = "PASS" if doctor_steps and all(item["status"] == "PASS" for item in doctor_steps) else "FAIL"
     observed = transport.group(1) if transport else "not recorded"
+    revision = REF_LINE.search(result_text)
     return [
         case("doctor", status, f"ATM {version.group(1) if version else 'unknown'}"),
         case("advertised host", "PASS", "127.0.0.1 (sentences enter by docker exec; --no-peer)"),
         case("herdr transport (atm doctor, fixture daemon)", "PASS" if observed.startswith("socket") else "FAIL", observed),
+        case("testbed ref", "PASS" if revision else "FAIL", revision.group(1) if revision else "not recorded"),
     ]
 
 
@@ -81,7 +87,12 @@ def render(run_dir: Path, out_dir: Path) -> Path:
             shutil.copy2(path, out_dir / path.name)
     generated_at = datetime.now(timezone.utc).isoformat()
     report = out_dir / f"{FEATURE}.json"
-    payload = {"feature": FEATURE, "host": HOST, "platform": PLATFORM, "run_id": run_id, "status": status, "cases": cases}
+    source_revision = _source_revision()
+    procedure_href = os.path.relpath(
+        REPO_ROOT / "site/reports/procedures" / FEATURE / f"{source_revision[:8] if source_revision else 'unresolved'}.html",
+        out_dir,
+    )
+    payload = {"feature": FEATURE, "host": HOST, "platform": PLATFORM, "run_id": run_id, "status": status, "source_revision": source_revision, "cases": cases}
     report.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     pane = out_dir / f"{HOST}-{FEATURE}.xhtml"
     compose(PANE_TEMPLATE, {
@@ -90,19 +101,30 @@ def render(run_dir: Path, out_dir: Path) -> Path:
     }, pane)
     compose(REPO_ROOT / "templates/smoke-report/inbound-peer-frame.html.j2", {
         "title": f"ATM smoke — {FEATURE}", "generated_at": generated_at, "pane_src": pane.name,
+        "procedure_label": f"{FEATURE} @ {source_revision[:8] if source_revision else 'unresolved'}", "procedure_href": procedure_href,
     }, report.with_suffix(".html"))
     compose(REPO_ROOT / "templates/smoke-report/inbound-peer-review.html.j2", {
         "title": "ATM colima integration smoke", "generated_at": generated_at,
         "pane_html": f'<section><h2>{escape(HOST)}</h2><iframe title="ATM smoke evidence for {escape(HOST, quote=True)}" '
                      f'src="{escape(pane.name, quote=True)}"></iframe></section>',
+        "procedure_label": f"{FEATURE} @ {source_revision[:8] if source_revision else 'unresolved'}", "procedure_href": procedure_href,
     }, out_dir / "index.html")
     (out_dir / "smoke.envelope.json").write_text(json.dumps({
         "schema_version": 1, "report_type": "smoke", "generated_at": generated_at, "host_label": HOST,
         "report_html": (out_dir / "index.html").resolve().relative_to((REPO_ROOT / "site/reports").resolve()).as_posix(),
         "status": status,
+        "source_revision": source_revision,
     }, indent=2) + "\n", encoding="utf-8")
     update_master_report_index()
     return report
+
+
+def _source_revision() -> str | None:
+    return _git_source_revision(REPO_ROOT)
+
+
+def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
+    _compose(template, variables, output, root=REPO_ROOT, error_type=SmokeError)
 
 
 def main() -> int:
