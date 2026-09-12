@@ -356,7 +356,7 @@ impl SendCommand {
         let message_source =
             self.build_message_source(max_message_bytes, &current_dir, attachment_note.as_deref())?;
         let assigning_task = self.task_id.is_some() && !self.task_complete;
-        let request = SendRequest::new(
+        let mut request = SendRequest::new(
             home_dir,
             current_dir,
             caller_context.caller_identity,
@@ -387,7 +387,7 @@ impl SendCommand {
                 })
         })
         .map_err(anyhow::Error::from)?;
-        validate_local_task_target(&request)?;
+        atm_core::send::validate_task_request(&mut request)?;
         Ok(request)
     }
 
@@ -666,24 +666,6 @@ impl SendCommand {
                 .map_err(Into::into)
         }
     }
-}
-
-pub(super) fn validate_local_task_target(request: &SendRequest) -> Result<()> {
-    if (request.task_id.is_some() || request.task_op.is_some())
-        && request.to.as_ref().is_some_and(|target| {
-            target.host().is_some()
-                || target
-                    .team()
-                    .is_some_and(|team| team != &request.caller_team)
-        })
-    {
-        let target = request.to.as_ref().expect("checked task target");
-        return Err(AtmError::validation(format!(
-            "task commands are local-team only; {target} resolves to another team or host — send a plain message or assign the local alias"
-        ))
-        .into());
-    }
-    Ok(())
 }
 
 pub(super) async fn preflight_task_op_compatibility(
@@ -1160,7 +1142,7 @@ mod tests {
 
     use super::{
         SendCommand, TaskSendOptions, require_task_op_compatibility,
-        resolve_trusted_ipv4_with_lookup, validate_local_task_target,
+        resolve_trusted_ipv4_with_lookup,
     };
     use crate::commands::send_fan_out::fan_out_result_json;
     // `FanOutRecipient`/`RecipientLocality`/`CliObservability` are consumed
@@ -1700,7 +1682,7 @@ mod tests {
     #[serial(env)]
     fn send_builder_rejects_nonlocal_task_target() {
         for target in ["recipient-a@other-team", "recipient-a@test-team.127.0.0.1"] {
-            let request = atm_core::send::SendRequest::new(
+            let mut request = atm_core::send::SendRequest::new(
                 ".".into(),
                 ".".into(),
                 ROLE_TEAM_LEAD.parse().expect("caller"),
@@ -1713,7 +1695,7 @@ mod tests {
                 false,
             )
             .expect("request shape");
-            let error = validate_local_task_target(&request)
+            let error = atm_core::send::validate_task_request(&mut request)
                 .expect_err("non-local task target must fail before execution");
             assert!(error.to_string().contains("local-team only"), "{error:#}");
         }
