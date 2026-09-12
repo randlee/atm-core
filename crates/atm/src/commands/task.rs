@@ -14,7 +14,7 @@ use atm_core::protocol::{
 use atm_core::send::NudgeMode;
 use atm_core::task_close::{ClosePreflight, preflight_close, report_recipient};
 use atm_core::task_query::{
-    TaskEventQuery, TaskListQuery, TaskPage, select_task_events, select_task_rows,
+    TaskEventQuery, TaskListQuery, TaskPage, select_task_events_page, select_task_rows_page,
 };
 use atm_core::types::{AgentName, TaskId, TeamName};
 use atm_storage::{
@@ -57,6 +57,8 @@ enum TaskSubcommand {
 struct TaskListCommand {
     #[arg(long)]
     all: bool,
+    #[arg(long, value_name = "N", conflicts_with = "all")]
+    limit: Option<usize>,
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -66,6 +68,10 @@ struct TaskListCommand {
 #[derive(Debug, Args)]
 struct TaskEventsCommand {
     task_id: TaskId,
+    #[arg(long, value_name = "N", conflicts_with = "all")]
+    limit: Option<usize>,
+    #[arg(long)]
+    all: bool,
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -360,6 +366,15 @@ impl TaskCloseCommand {
 }
 
 impl TaskListCommand {
+    fn page(&self) -> Result<TaskPage, atm_core::error::AtmError> {
+        if self.all {
+            Ok(TaskPage::All)
+        } else {
+            self.limit
+                .map_or_else(|| Ok(TaskPage::default_bounded()), TaskPage::bounded)
+        }
+    }
+
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("task list")?;
         let caller = resolve_context(&self.caller)?;
@@ -382,7 +397,7 @@ impl TaskListCommand {
         let contract = TaskListQuery {
             team: caller.caller_team.clone(),
             assignee: (!self.all).then_some(caller.caller_identity.clone()),
-            page: TaskPage::default_bounded(),
+            page: self.page()?,
         };
         preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task list").await?;
         let outcome = composition
@@ -394,7 +409,7 @@ impl TaskListCommand {
                 contract.assignee.clone(),
             )?)
             .await?;
-        let rows = select_task_rows(outcome.task_rows, &contract);
+        let selected = select_task_rows_page(outcome.task_rows, &contract);
         let runtime = if self.all {
             composition
                 .doctor(DoctorQuery {
@@ -410,11 +425,23 @@ impl TaskListCommand {
         } else {
             None
         };
-        render_task_rows_output(&rows, self.json, self.all, runtime.as_ref())
+        let output =
+            render_task_rows_output(&selected.rows, self.json, self.all, runtime.as_ref())?;
+        print_omitted_rows(selected.omitted);
+        Ok(output)
     }
 }
 
 impl TaskEventsCommand {
+    fn page(&self) -> Result<TaskPage, atm_core::error::AtmError> {
+        if self.all {
+            Ok(TaskPage::All)
+        } else {
+            self.limit
+                .map_or_else(|| Ok(TaskPage::default_bounded()), TaskPage::bounded)
+        }
+    }
+
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("task events")?;
         let caller = resolve_context(&self.caller)?;
@@ -438,7 +465,7 @@ impl TaskEventsCommand {
             team: caller.caller_team.clone(),
             task_id: self.task_id.clone(),
             assignee: None,
-            page: TaskPage::default_bounded(),
+            page: self.page()?,
         };
         preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task events").await?;
         let ledger = TaskLedgerQuery::Events {
@@ -461,8 +488,16 @@ impl TaskEventsCommand {
         )?
         .with_task_ledger(ledger.clone());
         let outcome = composition.list(query).await?;
-        let rows = select_task_events(outcome.task_event_rows, &contract);
-        render_task_events(&rows, self.json)
+        let selected = select_task_events_page(outcome.task_event_rows, &contract);
+        let output = render_task_events(&selected.rows, self.json)?;
+        print_omitted_rows(selected.omitted);
+        Ok(output)
+    }
+}
+
+fn print_omitted_rows(omitted: usize) {
+    if omitted > 0 {
+        eprintln!("{omitted} more rows omitted (--all)");
     }
 }
 
@@ -823,9 +858,17 @@ mod tests {
     }
 
     #[test]
-    fn list_has_only_all_and_json_flags() {
+    fn list_and_events_accept_bounded_or_all_paging() {
         Cli::try_parse_from(["atm", "task", "list", "--all", "--json"])
             .expect("documented list flags");
+        Cli::try_parse_from(["atm", "task", "list", "--limit", "10"]).expect("bounded list");
+        assert!(Cli::try_parse_from(["atm", "task", "list", "--all", "--limit", "10"]).is_err());
+        Cli::try_parse_from(["atm", "task", "events", "T1", "--all"]).expect("all events");
+        Cli::try_parse_from(["atm", "task", "events", "T1", "--limit", "10"])
+            .expect("bounded events");
+        assert!(
+            Cli::try_parse_from(["atm", "task", "events", "T1", "--all", "--limit", "10"]).is_err()
+        );
         assert!(Cli::try_parse_from(["atm", "task", "list", "--member", "fenix"]).is_err());
     }
 

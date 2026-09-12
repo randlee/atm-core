@@ -42,6 +42,7 @@ async fn run_assign(f: &LoopbackFixture, command: TaskAssignCommand) {
 async fn list(f: &LoopbackFixture, all: bool, actor: &str) -> String {
     let command = TaskListCommand {
         all,
+        limit: None,
         json: true,
         caller: caller(actor),
     };
@@ -83,6 +84,7 @@ async fn list_all_shows_every_member_grouped_with_state_header() {
     run_assign(&f, assign("B", "test-lead@test-team", None)).await;
     let command = TaskListCommand {
         all: true,
+        limit: None,
         json: false,
         caller: caller(TEST_SENDER),
     };
@@ -169,6 +171,8 @@ async fn events_are_seq_ordered_and_include_moved_and_started() {
     composition.send(start).await.unwrap();
     let command = TaskEventsCommand {
         task_id: "T2".parse().unwrap(),
+        limit: None,
+        all: false,
         json: true,
         caller: caller("recipient"),
     };
