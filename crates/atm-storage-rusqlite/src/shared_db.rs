@@ -328,12 +328,16 @@ impl SharedDb {
                 inserted: true,
                 already_closed,
                 task_assignee,
+                queued_position,
+                reassign_notice,
                 task_rejection,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
                 already_closed,
                 task_assignee,
+                queued_position,
+                reassign_notice: reassign_notice.map(|notice| *notice),
                 task_rejection,
             }),
             WriteOpResult::UpsertMessage {
@@ -430,12 +434,16 @@ impl SharedDb {
                 inserted: true,
                 already_closed,
                 task_assignee,
+                queued_position,
+                reassign_notice,
                 task_rejection,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
                 already_closed,
                 task_assignee,
+                queued_position,
+                reassign_notice: reassign_notice.map(|notice| *notice),
                 task_rejection,
             }),
             WriteOpResult::UpsertMessage {
@@ -499,12 +507,16 @@ impl SharedDb {
             WriteOpResult::TemplateMessageAdmission {
                 inserted: true,
                 task_assignee,
+                queued_position,
+                reassign_notice,
                 task_rejection,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
                 already_closed: None,
                 task_assignee,
+                queued_position,
+                reassign_notice: reassign_notice.map(|message| *message),
                 task_rejection,
             }),
             WriteOpResult::TemplateMessageAdmission {
@@ -767,6 +779,17 @@ pub(crate) fn ensure_schema(
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
     crate::task_store::ensure_schema(connection, target)?;
+    let normalized =
+        crate::task_assignment_migration::normalize_legacy_assignment_markers(connection, target)?;
+    if normalized > 0 {
+        tracing::info!(
+            subsystem = "atm_storage.task_assignment_migration",
+            action = "normalize_legacy_assignment_markers",
+            outcome = "ok",
+            affected_rows = normalized,
+            "normalized legacy assignment acknowledgement and nudge markers"
+        );
+    }
     ensure_column(
         connection,
         target,

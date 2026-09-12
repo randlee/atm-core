@@ -144,6 +144,9 @@ migration functions directly.
 
 ### D6. Storage-schema approval record
 
+- **2026-09-12 — Phase BB.5 (note):** storage open idempotently clears the
+  acknowledgement and pending-nudge state columns on pre-BB open assignment
+  messages. This is data normalization only; it adds no DDL or schema version.
 - **2026-09-12 — Phase BB.1 (approved):** Fenix, as Phase BB lead, ruled
   that `team_nudge_template_overrides` is rebuilt at open without the
   `template_kind` `CHECK`; accepted kind validation remains in Rust. This is

@@ -133,7 +133,7 @@ pub struct SendCommand {
     #[arg(long)]
     summary: Option<String>,
 
-    #[arg(long = "requires-ack")]
+    #[arg(long = "requires-ack", conflicts_with = "task_id")]
     pub(super) requires_ack: bool,
 
     #[arg(long = "task-id")]
@@ -355,7 +355,6 @@ impl SendCommand {
         let classification = self.build_classification()?;
         let message_source =
             self.build_message_source(max_message_bytes, &current_dir, attachment_note.as_deref())?;
-        let assigning_task = self.task_id.is_some() && !self.task_complete;
         let mut request = SendRequest::new(
             home_dir,
             current_dir,
@@ -364,7 +363,7 @@ impl SendCommand {
             caller_context.caller_team,
             message_source,
             self.summary,
-            self.requires_ack || assigning_task,
+            self.requires_ack,
             self.task_id,
             self.dry_run,
         )
@@ -380,14 +379,13 @@ impl SendCommand {
                 .with_activity_observation(caller_context.activity_observation)
                 .with_max_message_bytes(max_message_bytes)
                 .with_classification(classification)
-                .with_nudge_mode(if assigning_task {
-                    NudgeMode::Deferred
-                } else {
-                    nudge_mode
-                })
+                .with_nudge_mode(nudge_mode)
         })
         .map_err(anyhow::Error::from)?;
         atm_core::send::validate_task_request(&mut request)?;
+        if request.task_id.is_some() {
+            request.nudge_mode = NudgeMode::Immediate;
+        }
         Ok(request)
     }
 
@@ -1495,6 +1493,25 @@ mod tests {
     }
 
     #[test]
+    fn requires_ack_conflicts_with_task_id() {
+        let error = crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "recipient-a@test-team",
+            "assignment",
+            "--requires-ack",
+            "--task-id",
+            "T1",
+        ])
+        .expect_err("task assignments cannot request acknowledgement");
+        assert!(
+            error.to_string().contains(
+                "the argument '--requires-ack' cannot be used with '--task-id <TASK_ID>'"
+            )
+        );
+    }
+
+    #[test]
     fn cli_accepts_from_json_without_a_positional_recipient() {
         crate::commands::Cli::try_parse_from(["atm", "send", "--from-json"])
             .expect("--from-json alone must parse without a positional recipient");
@@ -1655,8 +1672,8 @@ mod tests {
         })
         .build_request_with_mode(".".into(), ".".into(), NudgeMode::Deferred, None)
         .expect("task assignment");
-        assert_eq!(alias_assign.nudge_mode, NudgeMode::Deferred);
-        assert_eq!(task_assign.nudge_mode, NudgeMode::Deferred);
+        assert_eq!(alias_assign.nudge_mode, NudgeMode::Immediate);
+        assert_eq!(task_assign.nudge_mode, NudgeMode::Immediate);
         assert_eq!(
             serde_json::to_vec(&alias_assign).expect("serialize alias assignment"),
             serde_json::to_vec(&task_assign).expect("serialize task assignment")

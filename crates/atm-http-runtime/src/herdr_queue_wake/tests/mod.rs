@@ -11,7 +11,6 @@ use super::{
     RuntimeHealth, herdr_request_deadline, log_herdr_list_failure,
 };
 use atm_core::LocalServiceRuntime;
-use atm_core::ack::{AckRequest, ack_mail_with_runtime};
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
@@ -279,7 +278,7 @@ fn queue_task_message_with_nudge(
         team.clone(),
         SendMessageSource::Inline("AX5 reminder task".to_owned()),
         None,
-        true,
+        false,
         None,
         false,
     )
@@ -546,27 +545,11 @@ fn add_lead_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent:
 }
 
 fn ack_task_assignment(
-    root: &std::path::Path,
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    message_id: AtmMessageId,
+    _root: &std::path::Path,
+    _runtime: &LocalServiceRuntime,
+    _team: &TeamName,
+    _message_id: AtmMessageId,
 ) {
-    let home = root.join("home");
-    ack_mail_with_runtime(
-        AckRequest {
-            home_dir: home.clone(),
-            current_dir: home,
-            caller_identity: "aq27-agent".parse().expect("agent"),
-            caller_chat_id: None,
-            caller_team: team.clone(),
-            activity_observation: None,
-            message_id,
-            reply_body: "acknowledged".to_owned(),
-        },
-        &NullObservability,
-        runtime,
-    )
-    .expect("task acknowledgement");
 }
 
 fn complete_task(
@@ -1223,6 +1206,7 @@ async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
         IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+    queue_idle_result(&fake, &key);
     pump.tick_once().await;
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
@@ -1521,6 +1505,7 @@ async fn ax5_06_task_reminder_only_appends_audit_bookkeeping() {
         IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+    queue_idle_result(&fake, &key);
     pump.tick_once().await;
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");

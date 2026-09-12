@@ -1,9 +1,12 @@
+mod message_admission;
 mod ops;
 mod ops_envelope;
 mod read_display_state;
 mod shutdown_support;
 mod stmt_cache;
+mod task_assignment_refresh;
 mod task_ops;
+mod task_reassign_notice;
 mod task_rejection;
 mod task_report;
 
@@ -16,7 +19,8 @@ use crate::shared_db::{
     sqlite_error,
 };
 use atm_storage::{AtmError, AtmErrorCode, DiagnosticEvent};
-pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
+pub(crate) use message_admission::validate_upsert_message_request;
+pub(crate) use ops::{WriteOp, WriteOpResult};
 use rusqlite::TransactionBehavior;
 use shutdown_support::{
     checkpoint_writer_connection, drain_submit_replies, writer_channel_closed_error,

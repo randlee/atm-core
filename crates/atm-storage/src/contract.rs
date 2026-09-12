@@ -233,6 +233,10 @@ pub struct MessageAdmissionOutcome {
     pub already_closed: Option<TaskCloseOutcome>,
     /// Assignee snapshot for an applied start or close operation.
     pub task_assignee: Option<AgentName>,
+    /// Landed queue position for an assignment admitted by this write.
+    pub queued_position: Option<u32>,
+    /// Canonical reassignment notice inserted atomically for the old assignee.
+    pub reassign_notice: Option<Message>,
     /// A governed task operation rejected after its report was retained as
     /// ordinary mail. Callers must complete ordinary post-write handling
     /// before surfacing this error to the sender.
@@ -246,6 +250,8 @@ impl MessageAdmissionOutcome {
             existing,
             already_closed: None,
             task_assignee: None,
+            queued_position: None,
+            reassign_notice: None,
             task_rejection: None,
         }
     }

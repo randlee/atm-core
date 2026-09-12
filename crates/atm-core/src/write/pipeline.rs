@@ -265,10 +265,10 @@ impl PreparedWrite {
         // selector owns the channel-specific emitter; retain AQ1's
         // suppression for every other backend until its downstream trigger
         // sprint supplies that emitter.
-        if self.outbound_request.nudge_mode == NudgeMode::Deferred
+        let suppress_primary = self.outbound_request.nudge_mode == NudgeMode::Deferred
             && !post_write.delivery_snapshot.graft_post_send
-            && !post_write.delivery_snapshot.bare_cli_post_send
-        {
+            && !post_write.delivery_snapshot.bare_cli_post_send;
+        if suppress_primary {
             tracing::info!(
                 subsystem = "atm_core.queue",
                 action = "steer_suppressed",
@@ -276,10 +276,9 @@ impl PreparedWrite {
                 message_id = %self.persisted_message_id(),
                 "deferred write suppresses its immediate receiver steer"
             );
-            return Ok(Vec::new());
         }
         let mut dispatches = Vec::new();
-        for message in &post_write.messages {
+        for message in post_write.messages.iter().filter(|_| !suppress_primary) {
             let event = crate::send::hook::post_send_event_from_message(
                 &post_write.recipient,
                 message,
@@ -292,6 +291,21 @@ impl PreparedWrite {
                 self.outbound_request.nudge_mode,
             )?;
             if let Some(dispatch) = dispatch {
+                dispatches.push(dispatch);
+            }
+        }
+        if let Some(notice) = &post_write.reassign_notice {
+            let event = crate::send::hook::post_send_event_from_message(
+                &notice.recipient,
+                &notice.message,
+                notice.delivery_snapshot.recipient_pane_id.as_ref(),
+            )?;
+            if let Some(dispatch) = crate::send::hook::build_built_in_dispatch(
+                runtime,
+                &notice.delivery_snapshot,
+                &event,
+                NudgeMode::Immediate,
+            )? {
                 dispatches.push(dispatch);
             }
         }
@@ -543,6 +557,7 @@ fn prepare_atomic_acknowledgement_write<
         recipient: recipient.clone(),
         delivery_snapshot: delivery_snapshot.clone(),
         messages: vec![logical.clone()],
+        reassign_notice: None,
     }));
     Ok(PreparedWrite {
         outcome,

@@ -150,7 +150,8 @@ as `task_started`.
 | `reminder_count` reaches `TASK_STALLED_REMINDER_THRESHOLD` (10) | escalate once; reminders stop until the task changes state (start or close) or is reassigned or reopened; a change in the assignee's runtime state alone does not resume nudging. |
 
 Task selection for an idle member: the active task, else the first `assigned`
-task in queue order.
+task in queue order. A `reminded` event is recorded only against the task the
+prompt was rendered for.
 
 ## Consequences
 

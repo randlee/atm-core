@@ -1585,13 +1585,12 @@ Required behavior:
 
 Required behavior:
 - persist `taskId`
-- require acknowledgement for any task-linked message
 - reject blank task ids
 - acknowledgement MUST NOT read, gate on, or change task state
 
 If `--task-id` is present:
 - treat the message as task-linked mail
-- imply `--requires-ack`
+- reject `--requires-ack` because it conflicts with `--task-id`
 
 `--task-complete` closes the task named by `--task-id` with outcome
 `completed`; it requires `--task-id` and carries the mandatory completion
@@ -2975,10 +2974,8 @@ The implementation must encode legal transitions in code structure, not only in 
 Messages with `taskId` are task-linked messages.
 
 Required rules:
-- every task-linked message must require acknowledgement
-- a task-linked message remains actionable until acknowledged
-- a task-linked message must continue to appear in `atm read` until acknowledged
-- a task-linked message must never be removed by `atm clear` before acknowledgement
+- a task-linked message never requires acknowledgement; readiness is signalled
+  by the task pass (`task_ready`), and start by `atm task start`
 - acknowledgement is message hygiene only: `atm ack` MUST NOT read, gate on,
   or change task state, and task admission MUST NOT reject a message ack
 - every transition, rejection, and reminder is append-only audit data; a
@@ -3036,7 +3033,9 @@ Nudge invariant (Phase BA):
     `PickerMemberStatus`, a `RuntimeHealth` projection, raw Herdr output, or
     heartbeat DTOs.
 15. `Idle` with an open task MUST be nudged, no more than once per 60 seconds
-    per task.
+    per task. The first prompt is `task_ready`; later prompts are
+    `task_reminder` with a rising attempt. Every assignment produces one
+    `task_queued` line at write time.
 16. `Active` MUST never be nudged or diverted to another task.
 17. `Blocked` or `Offline` MUST escalate once per episode and MUST receive
     zero nudges.

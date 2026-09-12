@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 use atm_storage::contract::{Message, MessageKey};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope};
 use atm_storage::{
-    AgentName, AtmErrorCode, IsoTimestamp, MemberKey, MoveTarget, QueuePosition, TaskCloseOutcome,
-    TaskEventKind, TaskId, TaskOp, TaskState, TeamName,
+    AgentName, AtmErrorCode, IsoTimestamp, MemberKey, MessageAdmissionOutcome, MessageWriteOrigin,
+    MoveTarget, QueuePosition, TaskCloseOutcome, TaskEventKind, TaskId, TaskOp, TaskState,
+    TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 use chrono::Utc;
@@ -43,14 +44,29 @@ impl Harness {
         assigner: &str,
         placement: Option<MoveTarget>,
     ) -> Message {
+        self.assign_with_outcome(task, assignee, assigner, placement)
+            .0
+    }
+
+    fn assign_with_outcome(
+        &self,
+        task: &str,
+        assignee: &str,
+        assigner: &str,
+        placement: Option<MoveTarget>,
+    ) -> (Message, MessageAdmissionOutcome) {
         let task_id: TaskId = task.parse().expect("task");
         let mut message = self.message(assignee, assigner, &format!("assign {task}"));
         message.envelope.task_id = Some(task_id);
         message.envelope.placement = placement;
-        message.envelope.requires_ack = true;
-        message.envelope.pending_ack_at = Some(message.envelope.timestamp);
-        self.save(&message).expect("assign");
-        message
+        message.envelope.requires_ack = false;
+        message.envelope.pending_ack_at = None;
+        let outcome = self
+            .backend
+            .message_store()
+            .admit_message_with_provenance(&message, MessageWriteOrigin::Local)
+            .expect("assign");
+        (message, outcome)
     }
 
     fn start(&self, task: &str, assignee: &str) -> Result<(), atm_storage::AtmError> {
@@ -163,16 +179,33 @@ impl Harness {
 }
 
 #[test]
+fn assignment_at_every_position_emits_task_queued_with_position() {
+    let h = Harness::new();
+    for (task, expected) in [("T1", 1), ("T2", 2), ("T3", 3)] {
+        let (message, outcome) = h.assign_with_outcome(task, "alice", "lead", None);
+        assert!(!message.envelope.requires_ack);
+        assert!(message.envelope.pending_ack_at.is_none());
+        assert_eq!(outcome.queued_position, Some(expected));
+        assert!(outcome.reassign_notice.is_none());
+    }
+}
+
+#[test]
 fn assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues() {
     let h = Harness::new();
     let old = h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
     h.assign("T3", "bob", "lead", None);
-    h.assign("T1", "bob", "new-lead", Some(MoveTarget::Head));
+    let (_, outcome) = h.assign_with_outcome("T1", "bob", "new-lead", Some(MoveTarget::Head));
     let row = h.row("T1");
     assert_eq!(row.assignee.as_str(), "bob");
     assert_eq!(h.positions("alice")["T2"], 1);
     assert_eq!(h.positions("bob")["T1"], 1);
+    assert_eq!(outcome.queued_position, Some(1));
+    assert_eq!(
+        outcome.reassign_notice.as_ref().unwrap().agent.as_str(),
+        "alice"
+    );
     assert_eq!(
         h.events("T1").last().unwrap().event,
         TaskEventKind::Reassigned
@@ -185,8 +218,37 @@ fn assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_
             .unwrap()
             .envelope
             .acknowledged_at
-            .is_some()
+            .is_none()
     );
+    let notices = h
+        .backend
+        .message_store()
+        .list_messages(&atm_storage::MessageQuery {
+            team: h.team.clone(),
+            agent: "alice".parse().unwrap(),
+            sender: None,
+            task_id: Some("T1".parse().unwrap()),
+            limit: None,
+        })
+        .unwrap();
+    let notice = notices
+        .iter()
+        .find(|message| message.envelope.summary.as_deref() == Some("task_closed:T1"))
+        .expect("reassignment notice to old assignee");
+    assert_eq!(notice.envelope.from.as_str(), "new-lead");
+    assert_eq!(notice.envelope.text, "task T1 was reassigned to bob");
+    assert!(!notice.envelope.requires_ack);
+    assert!(notice.envelope.task_op.is_none());
+    let state_rows: u32 = Connection::open(&h.path)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM mail_message_states WHERE team = ?1 AND agent = ?2 AND message_key = ?3",
+            params![h.team.as_str(), "alice", notice.message_key.as_ref()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(state_rows, 1);
+    assert!(!h.positions("alice").contains_key("T1"));
 }
 
 #[test]
@@ -239,7 +301,7 @@ fn same_agent_resend_refreshes_message_link_without_event() {
             .unwrap()
             .envelope
             .acknowledged_at
-            .is_some()
+            .is_none()
     );
 }
 

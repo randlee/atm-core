@@ -1,5 +1,5 @@
 use crate::schema::InboxMessage;
-use atm_storage::{AgentName, AtmError, TaskCloseOutcome};
+use atm_storage::{AgentName, AtmError, Message, TaskCloseOutcome};
 
 use super::WarningEntry;
 
@@ -28,6 +28,8 @@ pub(crate) struct DeliveryPersistenceResult {
     pub(crate) original_message: InboxMessage,
     pub(crate) already_closed: Option<TaskCloseOutcome>,
     pub(crate) task_assignee: Option<AgentName>,
+    pub(crate) queued_position: Option<u32>,
+    pub(crate) reassign_notice: Option<Message>,
     pub(crate) task_rejection: Option<AtmError>,
     pub(crate) warnings: Vec<WarningEntry>,
 }
@@ -41,6 +43,8 @@ impl DeliveryPersistenceResult {
             original_message,
             already_closed: None,
             task_assignee: None,
+            queued_position: None,
+            reassign_notice: None,
             task_rejection: None,
             warnings: Vec::new(),
         }
@@ -54,6 +58,8 @@ impl DeliveryPersistenceResult {
             original_message,
             already_closed: None,
             task_assignee: None,
+            queued_position: None,
+            reassign_notice: None,
             task_rejection: None,
             warnings: Vec::new(),
         }
@@ -67,6 +73,8 @@ impl DeliveryPersistenceResult {
             original_message,
             already_closed: None,
             task_assignee: None,
+            queued_position: None,
+            reassign_notice: None,
             task_rejection: None,
             warnings: Vec::new(),
         }
@@ -85,6 +93,17 @@ impl DeliveryPersistenceResult {
     #[must_use]
     pub(crate) fn with_task_assignee(mut self, task_assignee: Option<AgentName>) -> Self {
         self.task_assignee = task_assignee;
+        self
+    }
+
+    #[must_use]
+    pub(crate) fn with_assignment_metadata(
+        mut self,
+        queued_position: Option<u32>,
+        reassign_notice: Option<Message>,
+    ) -> Self {
+        self.queued_position = queued_position;
+        self.reassign_notice = reassign_notice;
         self
     }
 

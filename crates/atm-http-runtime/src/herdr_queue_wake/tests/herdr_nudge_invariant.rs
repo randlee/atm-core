@@ -298,27 +298,11 @@ fn build_real_task_pump(task_names: &[&str]) -> RealTaskPumpFixture {
 }
 
 fn acknowledge_task_assignment(
-    root: &std::path::Path,
-    runtime: &LocalServiceRuntime,
-    member: &atm_storage::MemberKey,
-    message_id: AtmMessageId,
+    _root: &std::path::Path,
+    _runtime: &LocalServiceRuntime,
+    _member: &atm_storage::MemberKey,
+    _message_id: AtmMessageId,
 ) {
-    let home = root.join("home");
-    ack_mail_with_runtime(
-        AckRequest {
-            home_dir: home.clone(),
-            current_dir: home,
-            caller_identity: member.agent().clone(),
-            caller_chat_id: None,
-            caller_team: member.team().clone(),
-            activity_observation: None,
-            message_id,
-            reply_body: "assignment received by fixture".to_owned(),
-        },
-        &NullObservability,
-        runtime,
-    )
-    .expect("acknowledge task assignment");
 }
 
 fn close_real_task(

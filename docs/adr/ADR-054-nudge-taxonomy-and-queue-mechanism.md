@@ -308,6 +308,9 @@ carried the marker (immediate sends) are never reminded. For an idle member
 the pending drain discharges queued messages before the task pass (ADR-062,
 Phase BA amendment). No column or mechanism is added.
 
+Phase BB removes the assignment's pending-nudge marker: the task pass owns
+every task prompt.
+
 ### Phase-BB amendment (2026-09-12)
 
 `task` and `acknowledge_task` are retired built-in template kinds. Six

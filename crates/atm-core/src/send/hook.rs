@@ -191,7 +191,9 @@ pub(crate) fn post_send_event_from_message(
         requires_ack: message.requires_ack,
         is_ack: message.is_ack,
         task_id: message.envelope.task_id.clone(),
-        task_transition: task_transition_from_message(message),
+        task_transition: message
+            .task_transition
+            .or_else(|| task_transition_from_message(message)),
         recipient_pane_id: recipient_pane_id.cloned(),
     })
 }

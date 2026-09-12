@@ -196,7 +196,7 @@ pub fn build_task_reminder_dispatch(
         recipient_team: row.team.clone(),
         message_id: row.assignment_message_id,
         description: row.description.clone(),
-        requires_ack: true,
+        requires_ack: false,
         is_ack: false,
         task_id: Some(row.task_id.clone()),
         task_transition: Some(task_pass_transition(row.reminder_count)),
