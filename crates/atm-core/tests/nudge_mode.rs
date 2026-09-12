@@ -684,7 +684,7 @@ fn assert_local_matrix(herdr: bool) {
                 &dispatches[0].event,
                 dispatches[0].kind,
             ),
-            expected_kind,
+            Ok(expected_kind),
         );
         prepared
             .finish(&runtime, &NullObservability)
@@ -750,7 +750,7 @@ fn assert_local_matrix(herdr: bool) {
         assert_eq!(dispatch.kind, NudgeKind::Queue);
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
-            expected_kind,
+            Ok(expected_kind),
         );
     };
     queued(false, atm_core::boundary::BuiltInNudgeTemplateKind::Queue);
@@ -809,7 +809,7 @@ fn assert_local_matrix(herdr: bool) {
         assert_eq!(dispatch.kind, NudgeKind::Queue);
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
-            atm_core::boundary::BuiltInNudgeTemplateKind::Task,
+            Ok(atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck),
         );
     };
     task(NudgeMode::Immediate);
@@ -883,7 +883,7 @@ fn assert_graft_task_dispatch(async_path: bool) {
     assert_eq!(dispatches[0].kind, NudgeKind::Queue);
     assert_eq!(
         built_in_nudge_template_kind_from_post_send_event(&dispatches[0].event, dispatches[0].kind,),
-        atm_core::boundary::BuiltInNudgeTemplateKind::Task,
+        Ok(atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck),
     );
     prepared
         .finish(&runtime, &NullObservability)
@@ -900,15 +900,9 @@ fn sync_and_async_graft_task_writes_use_the_queue_dispatch_kind() {
 }
 
 #[test]
-fn acknowledge_default_templates_match_recorded_pre_ax1_fixtures() {
+fn acknowledge_default_template_matches_recorded_pre_ax1_fixture() {
     assert_eq!(
         atm_core::send::default_template(atm_core::boundary::BuiltInNudgeTemplateKind::Acknowledge),
         "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\"/>"
-    );
-    assert_eq!(
-        atm_core::send::default_template(
-            atm_core::boundary::BuiltInNudgeTemplateKind::AcknowledgeTask
-        ),
-        "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\" task-id=\"{{task_id}}\"/>"
     );
 }

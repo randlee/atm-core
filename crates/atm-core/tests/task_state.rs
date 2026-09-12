@@ -145,7 +145,12 @@ fn assert_task_send_surface(harness: RosterHarness, nudge_mode: NudgeMode, task_
         PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(target)) => &target.rendered_nudge,
         target => panic!("unexpected task target: {target:?}"),
     };
-    assert!(rendered.contains(&format!("<task id=\"{}\">", task_id.as_str())));
+    assert!(rendered.starts_with("<atm from=\""));
+    assert!(rendered.contains("<action>ack the message</action>"));
+    assert!(
+        !rendered.contains(task_id.as_str()),
+        "a deferred assignment without a transition uses the ordinary queue-ack template"
+    );
 }
 
 fn ack_request(home: &std::path::Path, team: &TeamName, message_id: AtmMessageId) -> AckRequest {

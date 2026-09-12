@@ -2754,10 +2754,12 @@ Architectural rules:
   (ADR-054), and neither kind ever precedes persistence
 - the shipped default emitter path is the receiver-only
   `MessageReceivedHookEmitter` delivery path
-- the built-in renderer selects exactly one of seven named template kinds:
-  `delivery`, `delivery_ack`, `queue`, `queue_ack`, `task`, `acknowledge`,
-  and `acknowledge_task`; `NudgeKind` selects the delivery or queue family,
-  while task-tagged messages select `task`
+- the built-in renderer selects exactly one of eleven named template kinds:
+  `delivery`, `delivery_ack`, `queue`, `queue_ack`, `acknowledge`,
+  `task_queued`, `task_ready`, `task_reminder`, `task_started`,
+  `task_complete`, and `task_closed`; `task` and `acknowledge_task` are
+  retired, `NudgeKind` selects the delivery or queue family, and a task-linked
+  message selects the kind named by its `task_transition`
 - any team-scoped built-in template override row must be resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
   emitter/render path runs; `atm` and `atm-core` must not perform direct
@@ -2780,7 +2782,6 @@ Architectural rules:
   success
 - the accepted compact built-in acknowledge forms are:
   - `<atm kind="ack" from="..." message-id="..."/>`
-  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 - the accepted seam is a dedicated post-send emitter with optional direct
   notification-log append at the event site, not
   `DeliveryPlan`/`NotificationSink` or a daemon-owned notification

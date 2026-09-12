@@ -29,8 +29,8 @@ scope = "outside_owner_crate"
 forbidden = ["SqliteNudgeTemplateOverrideStore", "rusqlite::Connection"]
 
 [contracts]
-request_types = ["TeamName", "BuiltInNudgeTemplateKind"]
-response_types = ["TeamNudgeTemplateOverrideRow"]
+request_types = ["TeamName", "BuiltInNudgeTemplateKind", "retired kind name (&str, deletion only)"]
+response_types = ["TeamNudgeTemplateOverrideRow", "Vec<(String, IsoTimestamp)> (stale override kinds)"]
 error_types = ["AtmError"]
 
 [testing]

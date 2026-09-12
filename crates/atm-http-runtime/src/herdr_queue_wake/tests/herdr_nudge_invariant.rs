@@ -2048,10 +2048,15 @@ async fn member_without_dispatchable_backend_holds_and_logs_once() {
     let key = atm_storage::MemberKey::new(team.clone(), "worker".parse().expect("agent"));
     let mut member = bare_member(&team, key.agent().as_str());
     member.harness = RosterHarness::ClaudeCode;
-    assembly
-        .nudge_template_override_store
-        .disable_template_override(&team, atm_storage::BuiltInNudgeTemplateKind::Task)
-        .expect("disable the final built-in dispatch path");
+    for kind in [
+        atm_storage::BuiltInNudgeTemplateKind::TaskReady,
+        atm_storage::BuiltInNudgeTemplateKind::TaskReminder,
+    ] {
+        assembly
+            .nudge_template_override_store
+            .disable_template_override(&team, kind)
+            .expect("disable every task-pass dispatch path");
+    }
     assembly
         .service_runtime
         .shared_roster_store_arc()

@@ -1,4 +1,32 @@
+use crate::contract::BuiltInNudgeTemplateKind;
 use crate::error::AtmError;
+
+pub(crate) fn parse_built_in_template_kind(
+    value: &str,
+) -> Result<BuiltInNudgeTemplateKind, AtmError> {
+    use BuiltInNudgeTemplateKind as Kind;
+    match value {
+        "delivery" => Ok(Kind::Delivery),
+        "delivery_ack" => Ok(Kind::DeliveryAck),
+        "queue" => Ok(Kind::Queue),
+        "queue_ack" => Ok(Kind::QueueAck),
+        "acknowledge" => Ok(Kind::Acknowledge),
+        "task_queued" => Ok(Kind::TaskQueued),
+        "task_ready" => Ok(Kind::TaskReady),
+        "task_reminder" => Ok(Kind::TaskReminder),
+        "task_started" => Ok(Kind::TaskStarted),
+        "task_complete" => Ok(Kind::TaskComplete),
+        "task_closed" => Ok(Kind::TaskClosed),
+        "task" | "acknowledge_task" | "delivery_task" | "delivery_task_ack" => {
+            Err(AtmError::validation(format!(
+                "template kind `{value}` was retired; use one of task_queued, task_ready, task_reminder, task_started, task_complete, task_closed"
+            )))
+        }
+        other => Err(AtmError::validation(format!(
+            "unsupported built-in nudge template kind `{other}`"
+        ))),
+    }
+}
 
 pub fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmError> {
     if value.is_empty() {

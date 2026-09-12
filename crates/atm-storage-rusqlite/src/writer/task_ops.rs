@@ -1,8 +1,8 @@
 //! The rusqlite writer's sole task-ledger mutation site.
 
 use super::ops::{
-    WriteOp, execute_upsert_message, load_existing_message, load_pending_ack_source,
-    mark_source_acknowledged,
+    TaskMessageResult, WriteOp, execute_upsert_message, load_existing_message,
+    load_pending_ack_source, mark_source_acknowledged,
 };
 use super::stmt_cache::WriterStatementCache;
 use super::task_rejection::{
@@ -22,22 +22,7 @@ use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{MessageWriteOrigin, MoveTarget, TaskOp};
 use rusqlite::{Connection, OptionalExtension, params};
 
-use crate::task_sql;
-
-pub(super) enum TaskMessageResult {
-    Applied(Option<TaskCloseOutcome>),
-    RejectedReportDelivered(AtmError),
-}
-
-fn load_task_row(
-    connection: &Connection,
-    target: &SharedDbTarget,
-    team: &TeamName,
-    task_id: &TaskId,
-) -> Result<Option<TaskRow>, AtmError> {
-    task_sql::select_task_row(connection, team, task_id)
-        .map_err(|error| sqlite_error(target, "failed to load task row", error))
-}
+use crate::task_sql::load_task_row;
 
 pub(super) fn append_rejected_task_event(
     op: &WriteOp,
@@ -119,7 +104,10 @@ pub(super) fn apply_task_message(
     target: &SharedDbTarget,
 ) -> Result<TaskMessageResult, AtmError> {
     let Some(task_id) = record.envelope.task_id.as_ref() else {
-        return Ok(TaskMessageResult::Applied(None));
+        return Ok(TaskMessageResult::Applied {
+            already_closed: None,
+            task_assignee: None,
+        });
     };
     match record.envelope.task_op.as_ref() {
         None => apply_task_assignment(
@@ -130,9 +118,18 @@ pub(super) fn apply_task_message(
             cache,
             target,
         )
-        .map(|()| TaskMessageResult::Applied(None)),
-        Some(TaskOp::Start) => apply_task_start(record, task_id, connection, target)
-            .map(|()| TaskMessageResult::Applied(None)),
+        .map(|()| TaskMessageResult::Applied {
+            already_closed: None,
+            task_assignee: None,
+        }),
+        Some(TaskOp::Start) => {
+            apply_task_start(record, task_id, connection, target).map(|task_assignee| {
+                TaskMessageResult::Applied {
+                    already_closed: None,
+                    task_assignee: Some(task_assignee),
+                }
+            })
+        }
         Some(TaskOp::Close { outcome, reason }) => apply_task_close(
             record,
             task_id,
@@ -398,7 +395,7 @@ fn apply_task_start(
     task_id: &TaskId,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<(), AtmError> {
+) -> Result<AgentName, AtmError> {
     let row = load_startable_task(record, task_id, connection, target)?;
     let Transition(next_state) = transition(
         Some(row.state),
@@ -412,7 +409,7 @@ fn apply_task_start(
     if !start_reminder_was_emitted(record, task_id, connection, target)?
         || row.state == TaskState::Active
     {
-        return Ok(());
+        return Ok(row.assignee);
     }
     reject_concurrent_active_task(record, task_id, &row, connection, target)?;
 
@@ -448,7 +445,8 @@ fn apply_task_start(
         None,
         None,
         None,
-    )
+    )?;
+    Ok(row.assignee)
 }
 
 fn load_startable_task(
@@ -544,7 +542,10 @@ pub(crate) fn apply_task_close(
     };
     if let TaskState::Complete(already) = row.state {
         drop_task_link_from_mail(record, connection, target)?;
-        return Ok(TaskMessageResult::Applied(Some(already)));
+        return Ok(TaskMessageResult::Applied {
+            already_closed: Some(already),
+            task_assignee: None,
+        });
     }
     if let Err(error) = admit(
         Some(&row),
@@ -580,7 +581,10 @@ pub(crate) fn apply_task_close(
     persist_task_close(
         record, task_id, outcome, reason, &row, next_state, connection, cache, target,
     )?;
-    Ok(TaskMessageResult::Applied(None))
+    Ok(TaskMessageResult::Applied {
+        already_closed: None,
+        task_assignee: Some(row.assignee),
+    })
 }
 
 fn deliver_rejected_close_report(

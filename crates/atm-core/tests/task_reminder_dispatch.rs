@@ -110,7 +110,7 @@ fn reminder_dispatch_propagates_a_broken_task_override() {
         .expect("roster");
     assembly
         .nudge_template_override_store
-        .save_template_override(&team, BuiltInNudgeTemplateKind::Task, "{{ invalid")
+        .save_template_override(&team, BuiltInNudgeTemplateKind::TaskReady, "{{ invalid")
         .expect("override");
     let row = task_row(&team);
     let key = MemberKey::new(team, row.assignee.clone());

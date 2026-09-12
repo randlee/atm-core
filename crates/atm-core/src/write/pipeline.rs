@@ -536,8 +536,9 @@ fn prepare_atomic_acknowledgement_write<
         &recipient.team,
         &recipient.agent,
     )?;
-    let logical = crate::delivery_plan::LogicalMessage::new(reply.envelope.clone(), false, true)
-        .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+    let logical =
+        crate::delivery_plan::LogicalMessage::new(reply.envelope.clone(), false, true, None)
+            .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
     let received_hook = Ok(Some(PreparedReceivedHook {
         recipient: recipient.clone(),
         delivery_snapshot: delivery_snapshot.clone(),

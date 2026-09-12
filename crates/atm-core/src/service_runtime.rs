@@ -1117,6 +1117,13 @@ mod tests {
     }
 
     impl crate::boundary::NudgeTemplateOverrideStore for UnusedRuntimeStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<(String, crate::types::IsoTimestamp)>, crate::error::AtmError> {
+            Ok(Vec::new())
+        }
+
         fn load_template_override(
             &self,
             _team: &TeamName,
@@ -1146,7 +1153,7 @@ mod tests {
         fn clear_template_override(
             &self,
             _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+            _kind: &str,
         ) -> Result<bool, crate::error::AtmError> {
             unreachable!("task-store absence test does not write nudge templates")
         }

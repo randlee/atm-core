@@ -17,6 +17,8 @@ use crate::error::AtmError;
 use crate::schema::HomeDirPath;
 use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
 
+const RETIRED_ACKNOWLEDGE_TASK_KIND: &str = concat!("acknowledge", "_task");
+
 #[path = "team_admin/filesystem.rs"]
 mod filesystem;
 #[path = "team_admin/member_mutation.rs"]
@@ -235,15 +237,20 @@ impl DisableNudgeTemplateOverrideRequest {
 pub struct ClearNudgeTemplateOverrideRequest {
     pub caller_team: TeamName,
     pub team: TeamName,
-    pub kind: BuiltInNudgeTemplateKind,
+    pub kind: String,
 }
 
 impl ClearNudgeTemplateOverrideRequest {
     pub fn new(caller_team: TeamName, team: &str, kind: &str) -> Result<Self, AtmError> {
+        match kind.parse::<BuiltInNudgeTemplateKind>() {
+            Ok(_) => {}
+            Err(_) if kind == "task" || kind == RETIRED_ACKNOWLEDGE_TASK_KIND => {}
+            Err(error) => return Err(error),
+        }
         Ok(Self {
             caller_team,
             team: team.parse()?,
-            kind: kind.parse()?,
+            kind: kind.to_owned(),
         })
     }
 }
@@ -272,7 +279,7 @@ pub struct DisableNudgeTemplateOverrideOutcome {
 pub struct ClearNudgeTemplateOverrideOutcome {
     pub action: &'static str,
     pub team: TeamName,
-    pub kind: BuiltInNudgeTemplateKind,
+    pub kind: String,
     pub cleared: bool,
 }
 
@@ -433,7 +440,7 @@ pub fn clear_nudge_template_override_with_store(
         request.team.clone(),
         "clear-nudge-template",
     )?;
-    let cleared = override_store.clear_template_override(&request.team, request.kind)?;
+    let cleared = override_store.clear_template_override(&request.team, &request.kind)?;
     Ok(ClearNudgeTemplateOverrideOutcome {
         action: "clear-nudge-template",
         team: request.team,
@@ -473,7 +480,7 @@ pub(crate) fn ordered_roster_member_summaries(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::path::PathBuf;
     use std::sync::Mutex;
 
@@ -513,7 +520,7 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingNudgeTemplateOverrideStore {
-        rows: Mutex<BTreeMap<(TeamName, BuiltInNudgeTemplateKind), TeamNudgeTemplateOverrideRow>>,
+        rows: Mutex<HashMap<(TeamName, BuiltInNudgeTemplateKind), TeamNudgeTemplateOverrideRow>>,
     }
 
     impl RecordingRosterStore {
@@ -646,6 +653,13 @@ mod tests {
     }
 
     impl NudgeTemplateOverrideStore for RecordingNudgeTemplateOverrideStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<(String, crate::types::IsoTimestamp)>, crate::error::AtmError> {
+            Ok(Vec::new())
+        }
+
         fn load_template_override(
             &self,
             team: &TeamName,
@@ -704,8 +718,11 @@ mod tests {
         fn clear_template_override(
             &self,
             team: &TeamName,
-            kind: BuiltInNudgeTemplateKind,
+            kind: &str,
         ) -> Result<bool, crate::error::AtmError> {
+            let Ok(kind) = kind.parse::<BuiltInNudgeTemplateKind>() else {
+                return Ok(false);
+            };
             Ok(self
                 .rows
                 .lock()

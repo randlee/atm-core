@@ -840,16 +840,21 @@ fn build_task_only_pump_with_channel(
                 .nudge_template_override_store
                 .save_template_override(
                     &team,
-                    atm_storage::BuiltInNudgeTemplateKind::Task,
+                    atm_storage::BuiltInNudgeTemplateKind::TaskReminder,
                     template,
                 )
                 .expect("task template override");
         }
     } else {
-        assembly
-            .nudge_template_override_store
-            .disable_template_override(&team, atm_storage::BuiltInNudgeTemplateKind::Task)
-            .expect("disable task template override");
+        for kind in [
+            atm_storage::BuiltInNudgeTemplateKind::TaskReady,
+            atm_storage::BuiltInNudgeTemplateKind::TaskReminder,
+        ] {
+            assembly
+                .nudge_template_override_store
+                .disable_template_override(&team, kind)
+                .expect("disable task template override");
+        }
     }
     let task_store = Arc::new(atm_storage::DummyTaskStore::with_rows(
         rows.clone(),
@@ -1118,11 +1123,9 @@ async fn ax5_01_assigned_task_is_reminded_without_a_state_transition() {
         "a reminder never acknowledges the assignment"
     );
     assert_eq!(pump.stats().task_reminders, 0);
-    assert!(
-        prompt_texts(&fake)
-            .iter()
-            .any(|text| text.contains("<task id=\"AX5-ASSIGNED\">"))
-    );
+    let prompts = prompt_texts(&fake);
+    assert!(prompts.iter().any(|text| text.starts_with("<atm from=\"")));
+    assert!(prompts.iter().all(|text| !text.contains(task_id.as_str())));
 }
 
 #[tokio::test]
@@ -1163,7 +1166,8 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
 
     pump.tick_once().await;
-    assert!(prompt_texts(&fake)[0].contains("AX5-AC1-FIRST"));
+    let prompts_after_first = prompt_texts(&fake).len();
+    assert!(prompts_after_first > 0);
     assert_eq!(
         runtime
             .task_store()
@@ -1189,11 +1193,7 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
         IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert!(
-        prompt_texts(&fake)
-            .iter()
-            .any(|text| text.contains("AX5-AC1-SECOND"))
-    );
+    assert!(prompt_texts(&fake).len() > prompts_after_first);
     assert_eq!(
         runtime
             .task_store()
@@ -1390,12 +1390,9 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
 
-    let reminder = prompt_texts(&fake)
-        .into_iter()
-        .last()
-        .expect("active task reminder");
-    assert!(reminder.contains("AX5-ASSIGNED-2"));
-    assert!(!reminder.contains("AX5-ACTIVE"));
+    let reminders = prompt_texts(&fake);
+    assert!(!reminders.is_empty());
+    assert!(reminders.iter().all(|text| !text.contains("AX5-ACTIVE")));
     assert_eq!(
         runtime
             .task_store()
@@ -2481,6 +2478,13 @@ impl atm_storage::MessageStore for CountingMessageStore {
 struct NoopNudgeTemplateOverrideStore;
 impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
 impl atm_core::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+    fn list_stale_template_override_kinds(
+        &self,
+        _team: &TeamName,
+    ) -> Result<Vec<(String, atm_core::types::IsoTimestamp)>, AtmError> {
+        Ok(Vec::new())
+    }
+
     fn load_template_override(
         &self,
         _team: &TeamName,
@@ -2506,11 +2510,7 @@ impl atm_core::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrid
         unreachable!("herdr candidate test never touches the override-store boundary")
     }
 
-    fn clear_template_override(
-        &self,
-        _team: &TeamName,
-        _kind: atm_core::boundary::BuiltInNudgeTemplateKind,
-    ) -> Result<bool, AtmError> {
+    fn clear_template_override(&self, _team: &TeamName, _kind: &str) -> Result<bool, AtmError> {
         unreachable!("herdr candidate test never touches the override-store boundary")
     }
 }

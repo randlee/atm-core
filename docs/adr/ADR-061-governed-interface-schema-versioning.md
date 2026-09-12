@@ -74,6 +74,9 @@ migration functions directly.
   updated documentation (`openapi.yaml` and surface baseline; the storage
   schema document; the Herdr version matrix) and a test proving the older
   consumer still works.
+- Phase BB.1 evidence: `frozen_1_7_event_shape_decodes_1_8_payload_with_task_transition`
+  proves that the previous `PostSendHookEvent` field set ignores the additive
+  1.8 field, while the same fixture reaches the unchanged Python callback path.
 - A major change requires Rand's explicit, recorded approval and sign-off
   before plan approval, cited by message id, issue comment, or ADR, and
   cited again at phase end. It must ship with a co-existence window: the new
@@ -97,6 +100,11 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-12 — Phase BB.1:** `HTTP_API_VERSION` moves from `1.7.0` to
+  `1.8.0`. `PostSendHookEvent` gains additive optional `task_transition`
+  metadata; omitted values default to `None`, older consumers ignore the
+  field, and both graft receivers decode it without changing the Python
+  callback shape. This is a minor, backward-compatible bump.
 - **2026-09-12 — Phase BA closure review:** `HTTP_API_VERSION` moves from
   `1.6.0` to `1.7.0`. Task-operation rejections gain additive, stable error
   codes for not-found, already-closed, third-party, stale-counterparty, and
@@ -135,6 +143,13 @@ migration functions directly.
 
 ### D6. Storage-schema approval record
 
+- **2026-09-12 — Phase BB.1 (approved):** Fenix, as Phase BB lead, ruled
+  that `team_nudge_template_overrides` is rebuilt at open without the
+  `template_kind` `CHECK`; accepted kind validation remains in Rust. This is
+  an additive SQLite MINOR change: existing rows, including stale retired-kind
+  rows, are copied unchanged, while later task-transition kind spellings can
+  be inserted. No `STORAGE_SCHEMA_VERSION` is added because the repository
+  does not yet have the global storage-version mechanism described above.
 - **2026-09-09 — Phase AZ (withdrawn):** Rand approved a planned
   `STORAGE_SCHEMA_VERSION = 2.0.0` task-domain migration as an ADR-061 major
   change (ATM `1.6.0` canonical v2 tables with a v1 bridge through `1.6.x`;

@@ -1089,10 +1089,11 @@ mod tests {
         start.envelope.from = "atm-daemon".parse().expect("daemon actor");
         start.envelope.task_id = Some(task_id.clone());
         start.envelope.task_op = Some(TaskOp::Start);
-        backend
+        let admission = backend
             .message_store()
-            .save_message(&start)
+            .admit_message_with_provenance(&start, MessageWriteOrigin::Local)
             .expect("start task");
+        assert_eq!(admission.task_assignee, Some(agent()));
     }
 
     fn move_task(
@@ -1257,10 +1258,11 @@ mod tests {
             outcome: TaskCloseOutcome::Completed,
             reason: None,
         });
-        backend
+        let first_admission = backend
             .message_store()
-            .save_message(&first_close)
+            .admit_message_with_provenance(&first_close, MessageWriteOrigin::Local)
             .expect("first close");
+        assert_eq!(first_admission.task_assignee, Some(agent()));
 
         let move_error =
             move_task(&backend, "T1", MoveTarget::End).expect_err("complete task cannot move");
@@ -1305,6 +1307,7 @@ mod tests {
 
         assert!(admission.existing.is_none());
         assert_eq!(admission.already_closed, Some(TaskCloseOutcome::Completed));
+        assert_eq!(admission.task_assignee, None);
         assert_eq!(
             backend
                 .task_store()
@@ -2994,6 +2997,7 @@ mod tests {
             .await
             .expect("rejected report admission commits");
         assert!(outcome.task_rejection.is_some());
+        assert_eq!(outcome.task_assignee, None);
 
         let retained = backend
             .message_store()

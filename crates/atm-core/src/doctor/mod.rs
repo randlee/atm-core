@@ -293,6 +293,7 @@ pub fn run_doctor_with_runtime_ports(
         doctor_context.team_scope.is_all_teams(),
         &mut general_findings,
     );
+    push_template_override_findings(runtime, &teams, &mut general_findings);
     let escalation_recipients = ax6::task_and_roster_findings(
         runtime,
         match &doctor_context.team_scope {
@@ -337,6 +338,77 @@ pub fn run_doctor_with_runtime_ports(
         runtime_doctors.herdr_breaker.report(),
         escalation_recipients,
     ))
+}
+
+fn push_template_override_findings(
+    runtime: &LocalServiceRuntime,
+    teams: &[TeamName],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    use crate::boundary::{BuiltInNudgeTemplateKind as K, TeamNudgeTemplateOverrideMode};
+
+    for team in teams {
+        match runtime
+            .nudge_template_override_store
+            .list_stale_template_override_kinds(team)
+        {
+            Ok(rows) => {
+                for (kind, updated_at) in rows {
+                    findings.push(DoctorFinding {
+                        severity: DoctorSeverity::Warning,
+                        code: AtmErrorCode::WarningObservabilityHealthDegraded,
+                        message: format!(
+                            concat!("stale_nu", "dge_template_override: team {} has retired template kind `{}` last updated {}"),
+                            team,
+                            kind,
+                            updated_at,
+                        ),
+                        remediation: Some(format!(
+                            "atm teams clear-nudge-template --team {team} --kind {kind}"
+                        )),
+                    });
+                }
+            }
+            Err(error) => {
+                push_doctor_error_for_team(findings, DoctorSeverity::Warning, error, Some(team))
+            }
+        }
+
+        for kind in [
+            K::TaskQueued,
+            K::TaskReady,
+            K::TaskReminder,
+            K::TaskStarted,
+            K::TaskComplete,
+            K::TaskClosed,
+        ] {
+            match runtime
+                .nudge_template_override_store
+                .load_template_override(team, kind)
+            {
+                Ok(Some(row)) if matches!(row.mode, TeamNudgeTemplateOverrideMode::Disabled) => {
+                    findings.push(DoctorFinding {
+                        severity: DoctorSeverity::Warning,
+                        code: AtmErrorCode::WarningObservabilityHealthDegraded,
+                        message: format!(
+                            concat!(
+                                "disabled_task_nu",
+                                "dge_template: team {} has disabled `{}`"
+                            ),
+                            team, kind
+                        ),
+                        remediation: Some(format!(
+                            "atm teams clear-nudge-template --team {team} --kind {kind}"
+                        )),
+                    });
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    push_doctor_error_for_team(findings, DoctorSeverity::Warning, error, Some(team))
+                }
+            }
+        }
+    }
 }
 
 /// Add asynchronous, composition-owned presence findings and refresh the
@@ -1284,6 +1356,11 @@ mod tests {
     }
     struct NoopNudgeTemplateOverrideStore;
 
+    struct OverrideFindingStore {
+        stale_kind: Option<String>,
+        disabled_kind: Option<crate::boundary::BuiltInNudgeTemplateKind>,
+    }
+
     impl atm_storage::contract::sealed::Sealed for UnusedMailStore {}
     impl atm_storage::contract::sealed::Sealed for TestRosterStore {}
 
@@ -1454,8 +1531,65 @@ mod tests {
     }
 
     impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
+    impl atm_storage::contract::sealed::Sealed for OverrideFindingStore {}
+
+    impl crate::boundary::NudgeTemplateOverrideStore for OverrideFindingStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<(String, crate::types::IsoTimestamp)>, AtmError> {
+            Ok(self
+                .stale_kind
+                .clone()
+                .map(|kind| vec![(kind, crate::types::IsoTimestamp::now())])
+                .unwrap_or_default())
+        }
+
+        fn load_template_override(
+            &self,
+            team: &TeamName,
+            kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok((self.disabled_kind == Some(kind)).then(|| {
+                crate::boundary::TeamNudgeTemplateOverrideRow {
+                    team_name: team.clone(),
+                    kind,
+                    mode: crate::boundary::TeamNudgeTemplateOverrideMode::Disabled,
+                    updated_at: crate::types::IsoTimestamp::now(),
+                }
+            }))
+        }
+
+        fn save_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+            _template_body: &str,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("doctor finding store is read-only")
+        }
+
+        fn disable_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("doctor finding store is read-only")
+        }
+
+        fn clear_template_override(&self, _team: &TeamName, _kind: &str) -> Result<bool, AtmError> {
+            unreachable!("doctor finding store is read-only")
+        }
+    }
 
     impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<(String, crate::types::IsoTimestamp)>, AtmError> {
+            Ok(Vec::new())
+        }
+
         fn load_template_override(
             &self,
             _team: &TeamName,
@@ -1481,11 +1615,7 @@ mod tests {
             unreachable!("doctor tests do not touch the override-store boundary")
         }
 
-        fn clear_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-        ) -> Result<bool, AtmError> {
+        fn clear_template_override(&self, _team: &TeamName, _kind: &str) -> Result<bool, AtmError> {
             unreachable!("doctor tests do not touch the override-store boundary")
         }
     }
@@ -1727,6 +1857,62 @@ mod tests {
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         )
+    }
+
+    fn test_runtime_with_override_store(
+        store: Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
+    ) -> LocalServiceRuntime {
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+            roster_store(&[TEST_SENDER]),
+        ))
+        .expect("write-through roster fixture");
+        LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(UnusedMailStore),
+            roster,
+            store,
+            Arc::new(crate::LocalFileNonClaudeOutbound::new()),
+        )
+    }
+
+    #[test]
+    fn doctor_reports_stale_task_override_row_with_clear_remediation() {
+        let runtime = test_runtime_with_override_store(Arc::new(OverrideFindingStore {
+            stale_kind: Some("task".to_owned()),
+            disabled_kind: None,
+        }));
+        let mut findings = Vec::new();
+        super::push_template_override_findings(
+            &runtime,
+            &[TEST_TEAM.parse().expect("team")],
+            &mut findings,
+        );
+        assert_eq!(findings.len(), 1);
+        assert!(
+            findings[0]
+                .message
+                .contains("stale_nudge_template_override")
+        );
+        assert_eq!(
+            findings[0].remediation.as_deref(),
+            Some("atm teams clear-nudge-template --team test-team --kind task")
+        );
+    }
+
+    #[test]
+    fn doctor_reports_disabled_task_reminder_override() {
+        let runtime = test_runtime_with_override_store(Arc::new(OverrideFindingStore {
+            stale_kind: None,
+            disabled_kind: Some(crate::boundary::BuiltInNudgeTemplateKind::TaskReminder),
+        }));
+        let mut findings = Vec::new();
+        super::push_template_override_findings(
+            &runtime,
+            &[TEST_TEAM.parse().expect("team")],
+            &mut findings,
+        );
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].message.contains("disabled_task_nudge_template"));
+        assert!(findings[0].message.contains("task_reminder"));
     }
 
     fn test_runtime(paths: &TestPaths) -> LocalServiceRuntime {

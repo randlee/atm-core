@@ -1,5 +1,5 @@
 use crate::schema::InboxMessage;
-use atm_storage::{AtmError, TaskCloseOutcome};
+use atm_storage::{AgentName, AtmError, TaskCloseOutcome};
 
 use super::WarningEntry;
 
@@ -27,6 +27,7 @@ pub(crate) struct DeliveryPersistenceResult {
     pub(crate) newly_persisted: bool,
     pub(crate) original_message: InboxMessage,
     pub(crate) already_closed: Option<TaskCloseOutcome>,
+    pub(crate) task_assignee: Option<AgentName>,
     pub(crate) task_rejection: Option<AtmError>,
     pub(crate) warnings: Vec<WarningEntry>,
 }
@@ -39,6 +40,7 @@ impl DeliveryPersistenceResult {
             newly_persisted: true,
             original_message,
             already_closed: None,
+            task_assignee: None,
             task_rejection: None,
             warnings: Vec::new(),
         }
@@ -51,6 +53,7 @@ impl DeliveryPersistenceResult {
             newly_persisted: false,
             original_message,
             already_closed: None,
+            task_assignee: None,
             task_rejection: None,
             warnings: Vec::new(),
         }
@@ -63,6 +66,7 @@ impl DeliveryPersistenceResult {
             newly_persisted: false,
             original_message,
             already_closed: None,
+            task_assignee: None,
             task_rejection: None,
             warnings: Vec::new(),
         }
@@ -79,6 +83,12 @@ impl DeliveryPersistenceResult {
     }
 
     #[must_use]
+    pub(crate) fn with_task_assignee(mut self, task_assignee: Option<AgentName>) -> Self {
+        self.task_assignee = task_assignee;
+        self
+    }
+
+    #[must_use]
     pub(crate) fn with_task_rejection(mut self, task_rejection: Option<AtmError>) -> Self {
         if task_rejection.is_some() {
             // The writer retained this report without task linkage. Keep the
@@ -88,6 +98,7 @@ impl DeliveryPersistenceResult {
             self.original_message.task_op = None;
             self.original_message.task_complete = None;
             self.original_message.placement = None;
+            self.task_assignee = None;
         }
         self.task_rejection = task_rejection;
         self

@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::boundary::{
-    BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
-    TeamNudgeTemplateOverrideRow,
+    BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate, TaskClosedOutcome,
+    TaskTransition, TeamNudgeTemplateOverrideRow,
 };
 use crate::error::AtmError;
 
@@ -58,6 +58,35 @@ pub fn render_task_started_template(task_id: &str, assignee: &str) -> Result<Str
 }
 
 fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
+    let (position, attempt, outcome) = match event.task_transition {
+        Some(TaskTransition::Queued { position }) => {
+            (position.to_string(), String::new(), String::new())
+        }
+        Some(TaskTransition::Reminder { attempt }) => {
+            (String::new(), attempt.to_string(), String::new())
+        }
+        Some(TaskTransition::Complete { outcome }) => {
+            (String::new(), String::new(), outcome.as_str().to_owned())
+        }
+        Some(TaskTransition::Closed { outcome }) => (
+            String::new(),
+            String::new(),
+            match outcome {
+                TaskClosedOutcome::Cancelled => "cancelled",
+                TaskClosedOutcome::Reassigned => "reassigned",
+            }
+            .to_owned(),
+        ),
+        _ => (String::new(), String::new(), String::new()),
+    };
+    let assignee = if matches!(
+        event.task_transition,
+        Some(TaskTransition::Started | TaskTransition::Complete { .. })
+    ) {
+        event.recipient.to_string()
+    } else {
+        event.sender.to_string()
+    };
     BTreeMap::from([
         ("from", qualified_sender_identity(event)),
         ("team", event.recipient_team.to_string()),
@@ -71,6 +100,11 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
                 .map(ToString::to_string)
                 .unwrap_or_default(),
         ),
+        ("position", position),
+        ("attempt", attempt),
+        ("assignee", assignee),
+        ("outcome", outcome),
+        ("by", event.sender.to_string()),
     ])
 }
 
@@ -88,14 +122,26 @@ pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
         BuiltInNudgeTemplateKind::QueueAck => {
             "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <description>{{description}}</description>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
-        BuiltInNudgeTemplateKind::Task => {
-            "<atm from=\"{{from}}\" message-id=\"{{message_id}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>ack the message</action>\n  <task id=\"{{task_id}}\">{{description}}</task>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
-        }
         BuiltInNudgeTemplateKind::Acknowledge => {
             "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\"/>"
         }
-        BuiltInNudgeTemplateKind::AcknowledgeTask => {
-            "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\" task-id=\"{{task_id}}\"/>"
+        BuiltInNudgeTemplateKind::TaskQueued => {
+            "<atm task=\"{{task_id}}\" queued=\"{{position}}\" message=\"{{message_id}}\" from=\"{{from}}\"/>"
+        }
+        BuiltInNudgeTemplateKind::TaskReady => {
+            "<atm task=\"{{task_id}}\" ready message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+        }
+        BuiltInNudgeTemplateKind::TaskReminder => {
+            "<atm task=\"{{task_id}}\" reminder=\"{{attempt}}\" message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+        }
+        BuiltInNudgeTemplateKind::TaskStarted => {
+            "<atm task=\"{{task_id}}\" started agent=\"{{assignee}}\" message=\"{{message_id}}\"/>"
+        }
+        BuiltInNudgeTemplateKind::TaskComplete => {
+            "<atm task=\"{{task_id}}\" complete agent=\"{{assignee}}\" outcome=\"{{outcome}}\" message=\"{{message_id}}\"/>"
+        }
+        BuiltInNudgeTemplateKind::TaskClosed => {
+            "<atm task=\"{{task_id}}\" closed by=\"{{from}}\" outcome=\"{{outcome}}\" message=\"{{message_id}}\"/>"
         }
     }
 }
@@ -141,7 +187,8 @@ mod tests {
     };
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
-        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        TaskCloseOutcome, TaskClosedOutcome, TaskTransition, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow,
     };
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use crate::types::{AgentName, ChatId, IsoTimestamp, PaneId, TeamName};
@@ -159,6 +206,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
         }
     }
@@ -219,9 +267,12 @@ mod tests {
 
     #[test]
     fn render_built_in_nudge_populates_placeholders() {
+        let mut event = base_event();
+        event.task_id = Some("task-9".parse().expect("task id"));
+        event.task_transition = Some(TaskTransition::Ready);
         let rendered = render_built_in_nudge(
-            &base_event(),
-            default_template(BuiltInNudgeTemplateKind::Task),
+            &event,
+            default_template(BuiltInNudgeTemplateKind::TaskReady),
         )
         .expect("rendered template");
         assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
@@ -237,38 +288,82 @@ mod tests {
     }
 
     #[test]
-    fn all_default_templates_render_and_match_their_delivery_contract() {
-        let kinds = [
-            BuiltInNudgeTemplateKind::Delivery,
-            BuiltInNudgeTemplateKind::DeliveryAck,
-            BuiltInNudgeTemplateKind::Queue,
-            BuiltInNudgeTemplateKind::QueueAck,
-            BuiltInNudgeTemplateKind::Task,
-            BuiltInNudgeTemplateKind::Acknowledge,
-            BuiltInNudgeTemplateKind::AcknowledgeTask,
+    fn every_default_body_renders_with_its_placeholders() {
+        let cases = [
+            (BuiltInNudgeTemplateKind::Delivery, None),
+            (BuiltInNudgeTemplateKind::DeliveryAck, None),
+            (BuiltInNudgeTemplateKind::Queue, None),
+            (BuiltInNudgeTemplateKind::QueueAck, None),
+            (BuiltInNudgeTemplateKind::Acknowledge, None),
+            (
+                BuiltInNudgeTemplateKind::TaskQueued,
+                Some(TaskTransition::Queued { position: 2 }),
+            ),
+            (
+                BuiltInNudgeTemplateKind::TaskReady,
+                Some(TaskTransition::Ready),
+            ),
+            (
+                BuiltInNudgeTemplateKind::TaskReminder,
+                Some(TaskTransition::Reminder { attempt: 3 }),
+            ),
+            (
+                BuiltInNudgeTemplateKind::TaskStarted,
+                Some(TaskTransition::Started),
+            ),
+            (
+                BuiltInNudgeTemplateKind::TaskComplete,
+                Some(TaskTransition::Complete {
+                    outcome: TaskCloseOutcome::Completed,
+                }),
+            ),
+            (
+                BuiltInNudgeTemplateKind::TaskClosed,
+                Some(TaskTransition::Closed {
+                    outcome: TaskClosedOutcome::Cancelled,
+                }),
+            ),
         ];
-        for kind in kinds {
+        for (kind, transition) in cases {
+            let mut event = base_event();
+            event.task_id = Some("task-9".parse().expect("task id"));
+            event.task_transition = transition;
             let body = default_template(kind);
             assert!(!body.contains("read atm "), "legacy read action in {kind}");
-            render_built_in_nudge(&base_event(), body).expect("default template renders");
-            if matches!(
-                kind,
-                BuiltInNudgeTemplateKind::Delivery | BuiltInNudgeTemplateKind::DeliveryAck
-            ) {
-                assert!(body.contains("<when idle=\"immediate\""));
-            } else if !matches!(
-                kind,
-                BuiltInNudgeTemplateKind::Acknowledge | BuiltInNudgeTemplateKind::AcknowledgeTask
-            ) {
-                assert!(!body.contains("<when "));
-            }
-            if !matches!(
-                kind,
-                BuiltInNudgeTemplateKind::Acknowledge | BuiltInNudgeTemplateKind::AcknowledgeTask
-            ) {
-                assert!(body.contains("execute the assigned task"));
-                assert!(body.contains("atm read --message-id"));
-            }
+            render_built_in_nudge(&event, body).expect("default template renders");
         }
+    }
+
+    #[test]
+    fn informational_kinds_carry_no_action_element() {
+        for kind in [
+            BuiltInNudgeTemplateKind::TaskQueued,
+            BuiltInNudgeTemplateKind::TaskStarted,
+            BuiltInNudgeTemplateKind::TaskComplete,
+            BuiltInNudgeTemplateKind::TaskClosed,
+        ] {
+            assert!(!default_template(kind).contains("<action>"));
+        }
+    }
+
+    #[test]
+    fn ready_and_reminder_bodies_name_atm_task_start() {
+        for kind in [
+            BuiltInNudgeTemplateKind::TaskReady,
+            BuiltInNudgeTemplateKind::TaskReminder,
+        ] {
+            assert!(default_template(kind).contains("<action>atm task start {{task_id}}</action>"));
+        }
+    }
+
+    #[test]
+    fn unknown_placeholder_is_a_validation_error() {
+        let error =
+            render_built_in_nudge(&base_event(), "{{unknown}}").expect_err("unknown placeholder");
+        assert!(
+            error
+                .message()
+                .contains("unsupported built-in nudge placeholder")
+        );
     }
 }

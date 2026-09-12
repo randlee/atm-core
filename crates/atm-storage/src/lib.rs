@@ -78,9 +78,9 @@ pub use search::{
 };
 pub use task_op::{MoveTarget, TaskOp};
 pub use task_state::{
-    DAEMON_ACTOR_NAME, QueuePosition, RefusalRun, TaskActor, TaskCloseOutcome, TaskEvent,
-    TaskEventKind, TaskEventMarker, TaskEventRow, TaskRejected, TaskRow, TaskState, TaskStateTag,
-    Transition, admit, transition,
+    DAEMON_ACTOR_NAME, QueuePosition, RefusalRun, TaskActor, TaskCloseOutcome, TaskClosedOutcome,
+    TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow, TaskRejected, TaskRow, TaskState,
+    TaskStateTag, TaskTransition, Transition, admit, transition,
 };
 #[cfg(any(test, feature = "test-utils"))]
 pub use task_store::DummyTaskStore;

@@ -908,7 +908,7 @@ mod tests {
         PyGraftSessionOptions, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
         observability, observability_paths,
     };
-    use atm_core::boundary::{NudgeKind, PostSendHookEvent};
+    use atm_core::boundary::{NudgeKind, PostSendHookEvent, TaskTransition};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::list::ListOutcome;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -917,7 +917,9 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendOutcome};
     use atm_core::test_support::EnvGuard;
     use atm_core::transport::testing::FakeClientTransport;
-    use atm_core::types::{AgentName, ChatId, CommandAction, ReadSelection, TeamName};
+    use atm_core::types::{
+        AgentName, ChatId, CommandAction, HostName, PaneId, ReadSelection, TaskId, TeamName,
+    };
     use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
@@ -1291,12 +1293,88 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: None,
         };
 
         let nudge = PyNudge::from_post_send(&event).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
         assert_eq!(nudge.kind, "steer");
+    }
+
+    #[test]
+    fn graft_python_callback_shape_unchanged_with_task_transition_present() {
+        let mut event = PostSendHookEvent {
+            sender: AgentName::from_validated(TEST_SENDER),
+            sender_chat_id: None,
+            sender_team: TeamName::from_validated(TEST_TEAM),
+            sender_host: None,
+            recipient: AgentName::from_validated(TEST_RECIPIENT),
+            recipient_team: TeamName::from_validated(TEST_TEAM),
+            message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
+            description: "nudge".to_owned(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: Some("BB.1".parse().expect("task id")),
+            task_transition: None,
+            recipient_pane_id: None,
+        };
+        let before = PyNudge::from_post_send(&event).expect("pre-transition callback");
+        event.task_transition = Some(TaskTransition::Started);
+        let after = PyNudge::from_post_send(&event).expect("1.8 callback");
+        assert_eq!(after.message_id, before.message_id);
+        assert_eq!(after.source.agent, before.source.agent);
+        assert_eq!(after.body, before.body);
+        assert_eq!(after.notice_text, before.notice_text);
+        assert_eq!(after.kind, before.kind);
+    }
+
+    #[derive(serde::Deserialize, serde::Serialize)]
+    struct FrozenPostSendHookEventV17 {
+        sender: AgentName,
+        sender_chat_id: Option<ChatId>,
+        sender_team: TeamName,
+        sender_host: Option<HostName>,
+        recipient: AgentName,
+        recipient_team: TeamName,
+        message_id: AtmMessageId,
+        description: String,
+        requires_ack: bool,
+        is_ack: bool,
+        task_id: Option<TaskId>,
+        recipient_pane_id: Option<PaneId>,
+    }
+
+    #[test]
+    fn frozen_1_7_event_shape_decodes_1_8_payload_with_task_transition() {
+        let fixture = serde_json::json!({
+            "sender": TEST_SENDER,
+            "sender_chat_id": null,
+            "sender_team": TEST_TEAM,
+            "recipient": TEST_RECIPIENT,
+            "recipient_team": TEST_TEAM,
+            "message_id": "01KX1TEST00000000000000000",
+            "description": "transition payload",
+            "requires_ack": false,
+            "is_ack": false,
+            "task_id": "BB.1",
+            "task_transition": { "transition": "started" },
+            "recipient_pane_id": null
+        });
+        let frozen: FrozenPostSendHookEventV17 =
+            serde_json::from_value(fixture.clone()).expect("1.7 consumer ignores additive field");
+        assert!(
+            serde_json::to_value(&frozen)
+                .expect("serialize frozen shape")
+                .get("task_transition")
+                .is_none()
+        );
+
+        let current: PostSendHookEvent =
+            serde_json::from_value(fixture).expect("1.8 event decodes");
+        assert_eq!(current.task_transition, Some(TaskTransition::Started));
+        let callback = PyNudge::from_post_send(&current).expect("python callback accepts fixture");
+        assert_eq!(callback.body, "transition payload");
     }
 
     #[test]
@@ -1439,6 +1517,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: None,
         };
 
@@ -1489,6 +1568,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: None,
         };
 

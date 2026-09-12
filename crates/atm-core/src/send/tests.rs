@@ -643,6 +643,7 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         requires_ack: false,
         is_ack: false,
         task_id: None,
+        task_transition: None,
         recipient_pane_id: Some(PaneId::from_cli("%1").expect("pane")),
     };
     let mut tmux_snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
@@ -714,6 +715,7 @@ fn post_send_herdr_skips_a_nonconforming_canonical_recipient_without_panicking()
         requires_ack: false,
         is_ack: false,
         task_id: None,
+        task_transition: None,
         recipient_pane_id: None,
     };
     let mut snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);

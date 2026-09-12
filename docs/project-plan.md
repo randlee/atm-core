@@ -1824,7 +1824,7 @@ team-lead lands the final status when the phase PR merges.
 
 | Sprint | Status | Branch | Authoritative sprint doc |
 | --- | --- | --- | --- |
-| `BB.1` | `planned` | `feature/bb1-transition-templates` | `docs/plans/phase-bb/sprint-BB.1-transition-templates.md` |
+| `BB.1` | `complete` | `feature/bb1-transition-templates` | `docs/plans/phase-bb/sprint-BB.1-transition-templates.md` |
 | `BB.2` | `planned` | `feature/bb2-orchestration-templates-1516` | `docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md` |
 | `BB.3` | `planned` | `feature/bb3-test-procedure-pages` | `docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md` |
 | `BB.4` | `planned` | `feature/bb4-task-start` | `docs/plans/phase-bb/sprint-BB.4-task-start.md` |

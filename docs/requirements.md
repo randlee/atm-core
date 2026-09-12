@@ -1365,21 +1365,24 @@ Post-send-hook rules:
   `home_dir` metadata rather than the caller's live process working directory
 - if no matching external `[[atm.post_send_hooks]]` rule is configured, ATM
   must still attempt the shipped built-in in-process post-send path
-- the built-in shipped nudge path must support exactly seven named template
+- the built-in shipped nudge path must support exactly eleven named template
   cases:
   - `delivery`
   - `delivery_ack`
   - `queue`
   - `queue_ack`
-  - `task`
   - `acknowledge`
-  - `acknowledge_task`
-  `NudgeKind` selects the delivery or queue family; task-tagged messages select
-  `task` in either family.
+  - `task_queued`
+  - `task_ready`
+  - `task_reminder`
+  - `task_started`
+  - `task_complete`
+  - `task_closed`
+  `NudgeKind` selects the delivery or queue family; a task-linked message
+  selects the kind named by its `task_transition`.
 - the default built-in acknowledge nudge shapes are intentionally compact:
   - `<atm kind="ack" from="..." message-id="..."/>`
-  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
-- teams may override any subset of those seven built-in template bodies through
+- teams may override any subset of those eleven built-in template bodies through
   host-scoped, team-keyed ATM-managed override rows resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract
 - built-in precedence is:
@@ -4968,7 +4971,7 @@ Task ledger shape (Phase BA):
     persistence
   - the shipped default post-send path is the built-in in-process
     implementation
-  - teams may override any subset of the seven built-in nudge template bodies
+  - teams may override any subset of the eleven built-in nudge template bodies
     through host-scoped, team-keyed ATM-managed override rows resolved through
     the storage-neutral `NudgeTemplateOverrideStore` contract
   - emission failure must be logged and surfaced as a sender-visible warning

@@ -16,8 +16,8 @@ pub use atm_storage::{
     AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, DAEMON_ACTOR_NAME, EscalationScope,
     MAX_ESCALATION_RECIPIENTS, NudgeTemplateOverrideStore, ReadDeadline, ReminderOutcome,
     TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS, TASK_STALLED_REMINDER_THRESHOLD,
-    TaskEventKind, TaskEventRow, TaskRow, TaskStore, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow, next_reminder_due,
+    TaskCloseOutcome, TaskClosedOutcome, TaskEventKind, TaskEventRow, TaskRow, TaskStore,
+    TaskTransition, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, next_reminder_due,
 };
 pub use atm_storage::{TaskOp, TaskState};
 
@@ -129,6 +129,8 @@ pub struct PostSendHookEvent {
     pub requires_ack: bool,
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_transition: Option<TaskTransition>,
     pub recipient_pane_id: Option<PaneId>,
 }
 
@@ -148,21 +150,25 @@ impl PostSendHookEvent {
 pub fn built_in_nudge_template_kind_from_post_send_event(
     event: &PostSendHookEvent,
     delivery_kind: NudgeKind,
-) -> BuiltInNudgeTemplateKind {
+) -> Result<BuiltInNudgeTemplateKind, AtmError> {
     use BuiltInNudgeTemplateKind as K;
     match (
         event.is_ack,
-        event.task_id.is_some(),
+        event.task_transition,
         event.requires_ack,
         delivery_kind,
     ) {
-        (true, true, _, _) => K::AcknowledgeTask,
-        (true, false, _, _) => K::Acknowledge,
-        (false, true, _, _) => K::Task,
-        (false, false, false, NudgeKind::Steer) => K::Delivery,
-        (false, false, true, NudgeKind::Steer) => K::DeliveryAck,
-        (false, false, false, NudgeKind::Queue) => K::Queue,
-        (false, false, true, NudgeKind::Queue) => K::QueueAck,
+        (true, _, _, _) => Ok(K::Acknowledge),
+        (false, Some(TaskTransition::Queued { .. }), _, _) => Ok(K::TaskQueued),
+        (false, Some(TaskTransition::Ready), _, _) => Ok(K::TaskReady),
+        (false, Some(TaskTransition::Reminder { .. }), _, _) => Ok(K::TaskReminder),
+        (false, Some(TaskTransition::Started), _, _) => Ok(K::TaskStarted),
+        (false, Some(TaskTransition::Complete { .. }), _, _) => Ok(K::TaskComplete),
+        (false, Some(TaskTransition::Closed { .. }), _, _) => Ok(K::TaskClosed),
+        (false, None, false, NudgeKind::Steer) => Ok(K::Delivery),
+        (false, None, true, NudgeKind::Steer) => Ok(K::DeliveryAck),
+        (false, None, false, NudgeKind::Queue) => Ok(K::Queue),
+        (false, None, true, NudgeKind::Queue) => Ok(K::QueueAck),
     }
 }
 
@@ -304,6 +310,91 @@ pub enum PostSendEmissionOutcome {
         hook_summary: HookExecutionSummary,
         warning: crate::send::WarningEntry,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        BuiltInNudgeTemplateKind as K, NudgeKind, PostSendHookEvent, TaskCloseOutcome,
+        TaskClosedOutcome, TaskTransition, built_in_nudge_template_kind_from_post_send_event,
+    };
+    use crate::schema::AtmMessageId;
+    use crate::types::{AgentName, TeamName};
+
+    fn event() -> PostSendHookEvent {
+        PostSendHookEvent {
+            sender: AgentName::from_validated("sender"),
+            sender_chat_id: None,
+            sender_team: TeamName::from_validated("team"),
+            sender_host: None,
+            recipient: AgentName::from_validated("recipient"),
+            recipient_team: TeamName::from_validated("team"),
+            message_id: AtmMessageId::new(),
+            description: "test".to_owned(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
+            task_transition: None,
+            recipient_pane_id: None,
+        }
+    }
+
+    #[test]
+    fn kind_decision_covers_every_transition() {
+        let transitions = [
+            (TaskTransition::Queued { position: 2 }, K::TaskQueued),
+            (TaskTransition::Ready, K::TaskReady),
+            (TaskTransition::Reminder { attempt: 1 }, K::TaskReminder),
+            (TaskTransition::Started, K::TaskStarted),
+            (
+                TaskTransition::Complete {
+                    outcome: TaskCloseOutcome::Completed,
+                },
+                K::TaskComplete,
+            ),
+            (
+                TaskTransition::Closed {
+                    outcome: TaskClosedOutcome::Cancelled,
+                },
+                K::TaskClosed,
+            ),
+        ];
+        for (transition, expected) in transitions {
+            let mut value = event();
+            value.task_transition = Some(transition);
+            assert_eq!(
+                built_in_nudge_template_kind_from_post_send_event(&value, NudgeKind::Steer),
+                Ok(expected)
+            );
+        }
+
+        for (is_ack, requires_ack, kind, expected) in [
+            (true, false, NudgeKind::Steer, K::Acknowledge),
+            (false, false, NudgeKind::Steer, K::Delivery),
+            (false, true, NudgeKind::Steer, K::DeliveryAck),
+            (false, false, NudgeKind::Queue, K::Queue),
+            (false, true, NudgeKind::Queue, K::QueueAck),
+        ] {
+            let mut value = event();
+            value.is_ack = is_ack;
+            value.requires_ack = requires_ack;
+            assert_eq!(
+                built_in_nudge_template_kind_from_post_send_event(&value, kind),
+                Ok(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn task_linked_event_without_transition_is_a_validation_error() {
+        let mut value = event();
+        value.task_id = Some("BB.1".parse().expect("task id"));
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&value, NudgeKind::Steer),
+            Ok(K::Delivery),
+            "D3/P14 require a task-linked event without a transition to fall through"
+        );
+    }
 }
 // `PostSendHookEmitter` deliberately has no compatibility alias. Any use is
 // a compiler failure and must migrate to `MessageReceivedHookEmitter`.

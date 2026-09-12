@@ -6,6 +6,7 @@ use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, ResolvedRecipient, WarningEntry,
 };
+use crate::types::AgentName;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPlanDisposition {
     Persisted,
@@ -22,6 +23,7 @@ pub(crate) struct LogicalMessage {
     pub(crate) envelope: InboxMessage,
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
+    pub(crate) task_assignee: Option<AgentName>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,6 +46,7 @@ impl LogicalMessage {
         envelope: InboxMessage,
         requires_ack: bool,
         is_ack: bool,
+        task_assignee: Option<AgentName>,
     ) -> Result<Self, LogicalMessageError> {
         let message_id = envelope
             .message_id
@@ -53,6 +56,7 @@ impl LogicalMessage {
             envelope,
             requires_ack,
             is_ack,
+            task_assignee,
         })
     }
 
@@ -70,6 +74,7 @@ pub(crate) fn logical_messages_from_persistence(
         persistence.original_message.clone(),
         requires_ack,
         is_ack,
+        persistence.task_assignee.clone(),
     )?];
     Ok(messages)
 }

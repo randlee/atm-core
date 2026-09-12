@@ -38,6 +38,24 @@ pub enum TaskCloseOutcome {
     Cancelled,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskClosedOutcome {
+    Cancelled,
+    Reassigned,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", tag = "transition")]
+pub enum TaskTransition {
+    Queued { position: u32 },
+    Ready,
+    Reminder { attempt: u32 },
+    Started,
+    Complete { outcome: TaskCloseOutcome },
+    Closed { outcome: TaskClosedOutcome },
+}
+
 impl TaskCloseOutcome {
     #[must_use]
     pub const fn as_str(self) -> &'static str {

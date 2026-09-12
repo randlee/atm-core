@@ -77,16 +77,7 @@ CREATE TABLE IF NOT EXISTS team_roster (
 
 CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
     team_name TEXT NOT NULL,
-    template_kind TEXT NOT NULL
-        CHECK(template_kind IN (
-            'delivery',
-            'delivery_ack',
-            'queue',
-            'queue_ack',
-            'task',
-            'acknowledge',
-            'acknowledge_task'
-        )),
+    template_kind TEXT NOT NULL,
     mode TEXT NOT NULL DEFAULT 'override'
         CHECK(mode IN ('override', 'disabled')),
     template_body TEXT NOT NULL,
@@ -336,11 +327,13 @@ impl SharedDb {
             WriteOpResult::UpsertMessage {
                 inserted: true,
                 already_closed,
+                task_assignee,
                 task_rejection,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
                 already_closed,
+                task_assignee,
                 task_rejection,
             }),
             WriteOpResult::UpsertMessage {
@@ -436,11 +429,13 @@ impl SharedDb {
             WriteOpResult::UpsertMessage {
                 inserted: true,
                 already_closed,
+                task_assignee,
                 task_rejection,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
                 already_closed,
+                task_assignee,
                 task_rejection,
             }),
             WriteOpResult::UpsertMessage {
@@ -503,11 +498,13 @@ impl SharedDb {
         {
             WriteOpResult::TemplateMessageAdmission {
                 inserted: true,
+                task_assignee,
                 task_rejection,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
                 already_closed: None,
+                task_assignee,
                 task_rejection,
             }),
             WriteOpResult::TemplateMessageAdmission {
@@ -766,6 +763,7 @@ pub(crate) fn ensure_schema(
     crate::template_override_migration::migrate_template_override_kinds_to_seven(
         connection, target,
     )?;
+    crate::template_override_migration::remove_template_override_kind_check(connection, target)?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
     crate::task_store::ensure_schema(connection, target)?;
@@ -1456,6 +1454,14 @@ mod tests {
                 [],
             )
             .expect("new queue kind should satisfy migrated check");
+        connection
+            .execute(
+                "INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                 VALUES ('test-team', 'task_ready', 'override', '<task-ready/>', '2026-09-05T00:00:00Z');",
+                [],
+            )
+            .expect("new task transition kind should satisfy migrated check");
         let schema_sql: String = connection
             .query_row(
                 "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'team_nudge_template_overrides';",
@@ -1463,7 +1469,11 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("read migrated schema");
-        assert!(schema_sql.contains("'queue'"));
+        assert!(
+            !schema_sql
+                .to_ascii_lowercase()
+                .contains("template_kind text not null check")
+        );
 
         let schema_before_second_open = schema_sql.clone();
         ensure_schema(&mut connection, &target).expect("second schema ensure");
@@ -1482,7 +1492,76 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("count rows after second open");
-        assert_eq!(row_count_after_second_open, 2);
+        assert_eq!(row_count_after_second_open, 3);
+    }
+
+    #[test]
+    fn ensure_schema_removes_seven_kind_check_without_changing_stale_rows() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-shared-db-test-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE team_nudge_template_overrides (
+                    team_name TEXT NOT NULL,
+                    template_kind TEXT NOT NULL CHECK(template_kind IN (
+                        'delivery', 'delivery_ack', 'queue', 'queue_ack', 'task',
+                        'acknowledge', 'acknowledge_task'
+                    )),
+                    mode TEXT NOT NULL DEFAULT 'override'
+                        CHECK(mode IN ('override', 'disabled')),
+                    template_body TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (team_name, template_kind)
+                );
+                INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                VALUES ('test-team', 'task', 'override', X'003C6F6C642D7461736B2F3E',
+                        '2026-09-05T00:00:00Z');",
+            )
+            .expect("create previous-consumer table");
+
+        let before: (String, String, Vec<u8>, String) = connection
+            .query_row(
+                "SELECT template_kind, mode, CAST(template_body AS BLOB), updated_at
+                 FROM team_nudge_template_overrides;",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("read stale row before migration");
+        ensure_schema(&mut connection, &target).expect("remove kind constraint");
+        let after: (String, String, Vec<u8>, String) = connection
+            .query_row(
+                "SELECT template_kind, mode, CAST(template_body AS BLOB), updated_at
+                 FROM team_nudge_template_overrides;",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("read stale row after migration");
+        assert_eq!(after, before, "the stale row must survive byte-for-byte");
+        connection
+            .execute(
+                "INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                 VALUES ('test-team', 'task_ready', 'override', '<ready/>',
+                         '2026-09-12T00:00:00Z');",
+                [],
+            )
+            .expect("new task transition kind");
+
+        ensure_schema(&mut connection, &target).expect("second schema ensure");
+        let rows: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM team_nudge_template_overrides;",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count rows after idempotent ensure");
+        assert_eq!(rows, 2);
     }
 
     #[test]
