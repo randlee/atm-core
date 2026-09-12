@@ -364,7 +364,7 @@ async fn write_escalation_mail_with_summary(
                 None,
                 false,
             )?
-            .with_nudge_mode(NudgeMode::Deferred);
+            .with_nudge_mode(NudgeMode::Immediate);
             write_mail_with_runtime(request, &NullObservability, &runtime)
                 .map(|outcome| outcome.persisted_message_id())
         })

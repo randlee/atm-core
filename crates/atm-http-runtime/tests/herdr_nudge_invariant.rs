@@ -897,6 +897,37 @@ async fn episode_message_summary_and_body() {
 }
 
 #[tokio::test]
+async fn escalation_mail_is_immediate_and_never_carries_marker() {
+    let (_root, runtime, _fake, pump, store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
+
+    pump.tick_once().await;
+
+    let lead = atm_storage::MemberKey::new(
+        keys[0].team().clone(),
+        atm_storage::roles::ROLE_TEAM_LEAD
+            .parse()
+            .expect("lead agent"),
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, keys[0].team(), lead.agent().as_str())
+            .await
+            .len(),
+        1
+    );
+    assert!(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .claim_next_pending(&lead)
+            .expect("claim pending marker")
+            .is_none(),
+        "immediate escalation mail must not create a queue marker"
+    );
+}
+
+#[tokio::test]
 async fn tenth_reminder_escalates_once_then_silence() {
     let (_root, runtime, fake, pump, key, tasks, now) =
         build_real_task_pump(&["LIFE-TENTH"]);
