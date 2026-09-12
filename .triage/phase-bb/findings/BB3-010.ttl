@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-010>
+  a triage:Finding ;
+  triage:findingId "BB3-010" ;
+  triage:title "render_procedure_pages compose/mermaid_svg duplicates the existing diagram-pages render_svg logic" ;
+  triage:description "quality-mgr QA1-I5, reviewed at 27e21224c, per ruthless-boundary-qa's duplicate-symbol sweep. render_procedure_pages.py::compose/mermaid_svg reimplement markdown/mermaid-rendering logic that already exists in docs/reports/generate_diagram_pages.py::render_svg (L273-291) rather than reusing it -- D2 was explicitly modelled on that existing module, so this is a real duplicate implementation, not a coincidental similarity." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/procedures/render_procedure_pages.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:19:46Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1: de-duplicate compose/mermaid_svg against docs/reports/generate_diagram_pages.py::render_svg per D2's stated modelling." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:19:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-010/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-010/1>
+  a triage:Occurrence ;
+  triage:file "scripts/procedures/render_procedure_pages.py" ;
+  triage:line 29 ;
+  triage:snippet "compose/mermaid_svg reimplement markdown/mermaid rendering already provided by generate_diagram_pages.py::render_svg, which D2 explicitly modelled this module on" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-010/1> .
+
+<urn:atm:triage:worktree/BB3-010/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .

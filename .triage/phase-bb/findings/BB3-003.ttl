@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-003>
+  a triage:Finding ;
+  triage:findingId "BB3-003" ;
+  triage:title "Exact-match revision resolution refuses every future run past manifest generation" ;
+  triage:description "fenix critical review B3, reviewed at 27e21224c. generate_report_index.py:213-225 (resolve_procedures): when source_revision is present, only rev == source_revision is accepted, with no fallback; anything else raises ReportIndexError. The manifest can only hold commits older than the commit that committed it, so every run at any other commit is refused. Reproduced with a synthetic smoke-fast run at 27e21224c: 'procedure smoke-fast has no page for revision 27e21224c' exit 1. run_feature_smoke.py:905-920 write_report -> update_master_report_index() -> SmokeError, so every just smoke <feature> at a non-manifest commit fails at report time; same for colima_skill_report.render and read_benchmark.execute, and for benchmarks. AC4 cannot be met as written. LEAD RULING RECORDED (fenix, design authority for the sprint doc, on PR #1436): D5 rule 1 amended to: exact rev == source_revision if present in the manifest; otherwise the newest manifest entry that is an ancestor of source_revision (git merge-base --is-ancestor <rev> <source_revision>; when git is unavailable, newest entry dated <= generated_at) -- that resolution is exact provenance, not inferred. Date-only resolution (flagged inferred) applies only when source_revision is null. AC4 amended to: a fresh just smoke fast at the PR head links to the newest manifest revision that is an ancestor of its source_revision, without the inferred note. Sprint doc D5/AC4 lines to be updated in the fix commit." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".just/generate_report_index.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1 alongside the sprint-doc D5/AC4 amendment. Not a schema/DDL change -- resolution-logic and doc text only." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-003/1>
+  a triage:Occurrence ;
+  triage:file ".just/generate_report_index.py" ;
+  triage:line 213 ;
+  triage:snippet "resolve_procedures accepts only rev == source_revision with no fallback; every run at a commit newer than the manifest's newest entry is refused with ReportIndexError" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-003/1> .
+
+<urn:atm:triage:worktree/BB3-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .

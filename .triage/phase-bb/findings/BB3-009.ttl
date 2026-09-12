@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-009>
+  a triage:Finding ;
+  triage:findingId "BB3-009" ;
+  triage:title "Unprovisioned mermaid/puppeteer CI dependency; require_manifest is a production test-only switch; undocumented benchmark writer change" ;
+  triage:description "quality-mgr QA1-I3/QA1-I4 + fenix critical review I2/I5/M3, reviewed at 27e21224c. .github/workflows/pages.yml (~L34) adds just procedures --check, which shells out to npx @mermaid-js/mermaid-cli (Puppeteer/headless Chromium), with no Node/Chromium provisioning step added and no other workflow already exercising this dependency; it also runs once per revision (37x, cold CI downloads chromium each time), and just lint pytests separately repeats the full render via test_check_mode_detects_stale_page. Separately, .just/generate_report_index.py's build_index/resolve_procedures/discover_envelopes default require_manifest=False (L361, 450, 204-210), silently fabricating procedure=\"unresolved\" when the manifest is absent instead of failing closed per doc D5; only tests default it False, write_or_check always passes True, so this is a production test-only switch forbidden by AC6. Also, scripts/smoke/benchmark_report.py:431-435 was changed to write source_revision though doc D3 says 'no change to their writers' -- combined with BB3-003's exact-match refusal, this now breaks every future benchmark run unless the sprint doc is amended to document the change." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".github/workflows/pages.yml" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1: add Node/Chromium provisioning to pages.yml (or cache it), remove the require_manifest test-only switch and give tests a manifest fixture instead, and either revert benchmark_report.py's writer change or amend D3 to document it." ;
+  triage:relatedFinding "BB3-003" ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-009/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-009/1>
+  a triage:Occurrence ;
+  triage:file ".github/workflows/pages.yml" ;
+  triage:line 34 ;
+  triage:snippet "pages.yml adds just procedures --check (mermaid-cli/puppeteer) with no Chromium provisioning; require_manifest defaults False in production code, not just tests; benchmark_report.py writer change to add source_revision is undocumented in the sprint doc" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-009/1> .
+
+<urn:atm:triage:worktree/BB3-009/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .

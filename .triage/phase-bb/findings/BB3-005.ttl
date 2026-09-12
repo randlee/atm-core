@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-005>
+  a triage:Finding ;
+  triage:findingId "BB3-005" ;
+  triage:title "D6 revision-distinctness test gives false assurance; doc-named tests broadly don't assert their doc line" ;
+  triage:description "quality-mgr QA1-B4 + fenix critical review I1, reviewed at 27e21224c. scripts/tests/test_render_procedure_pages.py::test_two_revisions_render_distinct_step_tables (L25-29) asserts only that whole-page text differs, true trivially via title/date scalars, and never isolates the Steps-table markup itself -- so it passes despite the byte-identical tables in BB3-001. The same doc-named-presence-not-coverage pattern recurs broadly: .just/tests/test_generate_report_index.py:62-70,65-66 (asserts field membership, not real index content); scripts/tests/test_render_procedure_pages.py:31-33 (hits the wrong missing-mermaid-flow path, not the entry-without-section path at render_procedure_pages.py:168-169), :39-47,55-56 (check=True on a clean tree detects nothing stale); source-text greps in scripts/smoke/test_run_feature_smoke.py:30-31, scripts/phase-ai/test_run_hermes_graft_live.py:26-29, scripts/smoke/test_colima_skill_report.py:69-71. Each test name promises verification the implementation does not provide." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/tests/test_render_procedure_pages.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:19:46Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1. Fix needs a D6 test that actually isolates and diffs the Steps-table fragment, plus fixture-based rewrites of the other doc-named tests listed." ;
+  triage:relatedFinding "BB3-001" ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:19:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-005/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-005/1>
+  a triage:Occurrence ;
+  triage:file "scripts/tests/test_render_procedure_pages.py" ;
+  triage:line 25 ;
+  triage:snippet "test_two_revisions_render_distinct_step_tables asserts whole-page text differs (trivially true via title/date) and never isolates the Steps-table markup" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-005/1> .
+
+<urn:atm:triage:worktree/BB3-005/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .

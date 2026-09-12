@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-006>
+  a triage:Finding ;
+  triage:findingId "BB3-006" ;
+  triage:title "fast/normal/thorough smoke pipeline never reaches D3 provenance code; source_revision never written" ;
+  triage:description "quality-mgr QA1-B5, reviewed at 27e21224c. scripts/smoke/run_feature_smoke.py dispatches fast/normal/thorough (the FIXTURE_FEATURES frozenset, L49) to a separate run.py subprocess (L1052-1055) that returns before ever calling write_report() (L813, only invoked once at L1034, in a different non-FIXTURE_FEATURES branch). This makes AC4 (\"a fresh just smoke fast run would write source_revision\") false for the three most commonly run smoke features. Confirmed by grep across phase_ad_suite.py, run_thorough.py, render_report.py showing zero references to source_revision/write_report/envelope -- these form a wholly separate, untouched reporting pipeline." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/run_feature_smoke.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:19:46Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1. Fix must route fast/normal/thorough through the same write_report()/envelope path as the other smoke features, or extend that pipeline to call it." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:19:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-006/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-006/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_feature_smoke.py" ;
+  triage:line 1052 ;
+  triage:snippet "FIXTURE_FEATURES (fast/normal/thorough) dispatch to a separate run.py subprocess that returns before write_report() is ever called; source_revision is never written for these features" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-006/1> .
+
+<urn:atm:triage:worktree/BB3-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .

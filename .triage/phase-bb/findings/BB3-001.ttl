@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-001>
+  a triage:Finding ;
+  triage:findingId "BB3-001" ;
+  triage:title "Procedure docs are generator boilerplate: fabricated Steps tables and byte-identical revision sections" ;
+  triage:description "fenix critical review B1 (PR #1436 comment 5648097377, 2026-09-12T19:14:53Z) + quality-mgr QA1-B1/QA1-B2 (BB3-QA1-1789239618, 2026-09-12T19:19:46Z), reviewed at 27e21224c. scripts/procedures/inventory_reports.py:107-175 (write_procedure_docs / _report_step_names) emits all 18 docs/procedures/*.md from one hard-coded 3-node flowchart reused for the body and every revision section; step rows are the alphabetised union of cases[].name from committed evidence, or a hard-coded fallback (doctor / advertised host / smoke case results) when no evidence JSON matches -- confirmed verbatim in at least 5 docs. smoke-thorough.md shows 3 rows against the runner's 35 add_case calls; smoke-localhost.md order is alphabetical, not runner order; colima-hermes-skills.md has 48 rows vs 45 cases. Every `## Revision <rev8>` block for a given procedure is byte-identical (same Flow diagram, same Steps table) regardless of which historical revision it names, with generic revision notes (\"current\" / \"historical runner revision\"). Violates D1's requirement that Steps rows come from the runner's real per-case names in runner order, and that each revision section be authored from `git show <rev>:<runner>`. AC2 fails." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/procedures/inventory_reports.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1 fix round (fenix, 2026-09-12T19:14:54Z; quality-mgr routing correction, 2026-09-12T19:20:54Z). Fix must include real per-case step derivation in runner order (no generic fallback) and genuine per-revision content diffing authored from git show <rev>:<runner>." ;
+  triage:relatedFinding "BB3-005" ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-001/1>
+  a triage:Occurrence ;
+  triage:file "scripts/procedures/inventory_reports.py" ;
+  triage:line 107 ;
+  triage:snippet "_report_step_names falls back to a hardcoded generic 3-row list whenever no matching evidence JSON exists for a procedure id; write_procedure_docs reuses one hard-coded flowchart and byte-identical tables across every revision section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-001/1> .
+
+<urn:atm:triage:worktree/BB3-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .

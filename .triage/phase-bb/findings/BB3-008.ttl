@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-008>
+  a triage:Finding ;
+  triage:findingId "BB3-008" ;
+  triage:title "D3 graft-hermes.json missing procedure field; graft tests undiscovered by the pytest gate; diff-gate test pinned to wrong base ref" ;
+  triage:description "quality-mgr QA1-I1/QA1-I2 + fenix critical review I3/I4, reviewed at 27e21224c. run_feature_smoke.py::write_report (L813-905) writes \"procedure\": \"graft-hermes\" only into smoke.envelope.json (L899), never into the graft-hermes.json payload itself, though D3 requires the field in both files. The two graft tests under scripts/phase-ai/ are not discovered by .just/run_pytests.py:49-54, so just lint pytests / CI never run them (doc D6 requires discovery). Separately, scripts/tests/test_site_reports_diff_is_generated_only.py:14 diffs against origin/integrate/phase-bb instead of the merge base with develop as the sprint doc and AC3 specify -- a documented-contract deviation, vacuous after merge into that branch, and a CI fragility risk if that ref isn't fetched." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/run_feature_smoke.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1: write procedure into graft-hermes.json itself, add the two graft tests to run_pytests.py discovery, and repoint the diff-gate test at the develop merge base." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-008/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-008/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_feature_smoke.py" ;
+  triage:line 899 ;
+  triage:snippet "procedure field written only into smoke.envelope.json, never into graft-hermes.json; phase-ai graft tests not discovered by .just/run_pytests.py; diff-gate test pinned to origin/integrate/phase-bb instead of the develop merge base" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-008/1> .
+
+<urn:atm:triage:worktree/BB3-008/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .
