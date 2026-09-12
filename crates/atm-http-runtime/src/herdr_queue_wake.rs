@@ -1591,6 +1591,20 @@ mod tests {
             .expect("save roster member");
     }
 
+    fn add_lead_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(team)
+            .expect("load roster");
+        let mut member = herdr_member(team, agent);
+        member.agent_type = atm_core::schema::AgentType::Lead;
+        roster.members.push(member);
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("save lead roster member");
+    }
+
     fn ack_task_assignment(
         root: &std::path::Path,
         runtime: &LocalServiceRuntime,

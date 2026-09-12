@@ -75,14 +75,18 @@ pub struct StorageAndNudgeRouter {
 }
 
 impl StorageAndNudgeRouter {
-    #[cfg(test)]
-    pub(crate) fn dispatch_for_test(
+    pub(crate) fn dispatch(
         &self,
         request: ApiRequest,
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        self.dispatch(request, ingress, deadline)
+        self.dispatch_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
     }
 
     pub(super) async fn list_messages(
@@ -968,12 +972,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        self.dispatch_with_request_id(
-            request,
-            ingress,
-            deadline,
-            atm_core::protocol::next_request_id(),
-        )
+        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
     }
 
     fn dispatch_with_request_id(

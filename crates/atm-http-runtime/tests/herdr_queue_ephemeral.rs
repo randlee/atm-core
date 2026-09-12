@@ -2,6 +2,37 @@
 
 use super::*;
 
+async fn task_started_receipt_count(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    task_id: &TaskId,
+) -> usize {
+    let sender: atm_core::types::AgentName = "sender".parse().expect("sender");
+    let reader = runtime
+        .async_mailbox_reader()
+        .expect("mailbox reader");
+    let messages = reader
+        .list_messages(
+            atm_core::boundary::MailboxScope::new(team.clone(), sender.clone()),
+            atm_storage::MessageQuery {
+                team: team.clone(),
+                agent: sender,
+                sender: None,
+                task_id: Some(task_id.clone()),
+                limit: None,
+            },
+            atm_core::boundary::ReadDeadline::new(std::time::Duration::from_secs(1))
+                .expect("read deadline"),
+        )
+        .await
+        .expect("list assigner mailbox");
+    let summary = format!("task_started:{task_id}");
+    messages
+        .iter()
+        .filter(|message| message.envelope.summary.as_deref() == Some(summary.as_str()))
+        .count()
+}
+
 #[tokio::test]
 async fn task_prompt_waits_while_queue_item_open_across_ticks() {
     let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
@@ -228,7 +259,7 @@ async fn bare_cli_pull_closes_item() {
     let member = fixture.member.clone();
     let router = fixture.router;
     let response = router
-        .dispatch_for_test(
+        .dispatch(
             atm_core::api::ApiRequest::new(atm_core::protocol::RequestEnvelope::QueueGetNext(
                 atm_core::protocol::QueueGetNextRequest {
                     team: member.team().clone(),
@@ -405,6 +436,11 @@ async fn deferred_assignment_handoff_starts_head_task_once() {
         .filter(|event| event.event == atm_storage::TaskEventKind::Started)
         .count();
     assert_eq!(started, 1, "the assignment handoff emits one Start receipt");
+    assert_eq!(
+        task_started_receipt_count(&runtime, key.team(), &first).await,
+        1,
+        "the assigner receives one task_started receipt"
+    );
 
     for _ in 0..20 {
         queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
@@ -415,6 +451,11 @@ async fn deferred_assignment_handoff_starts_head_task_once() {
         1,
         "active roster must suppress later queue and task nudges: {:?}",
         prompt_texts(&fake)
+    );
+    assert_eq!(
+        task_started_receipt_count(&runtime, key.team(), &first).await,
+        1,
+        "active ticks add no task_started receipts"
     );
     assert_eq!(
         runtime
@@ -602,10 +643,12 @@ async fn blocked_member_with_open_item_escalates_not_reminded() {
         key.agent().as_str(),
         task_id.clone(),
     );
+    add_lead_roster_member(&runtime, key.team(), "sender");
     queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
     pump.tick_once().await;
 
     assert_eq!(pump.stats().task_reminders, 0);
+    assert_eq!(pump.stats().blocked_escalations, 1);
     assert!(prompt_texts(&fake).is_empty());
     assert!(pending_state(root.path(), &key, message_id).0.is_some());
     assert_eq!(task_store.row(&key, &task_id).state, TaskState::Assigned);
