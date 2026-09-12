@@ -109,6 +109,11 @@ R11. Starting a task out of order is allowed and reorders it to head. Rand:
     "basically allowing agent to exercise judgement in a situation that
     likely requires it. it is certainly easier to allow it than to make the
     agent re-order things to do the same thing."
+R12. Outcome is a field, not a template. `reassigned` is a distinct closed
+    outcome on the old assignee's line. Rand: "outcome (additional state)
+    info is great. since it is a field in a template, it does not multiply
+    the # of templates and reassignment is distinctly different from
+    cancelled."
 
 ## 3. Transitions and templates
 
@@ -147,8 +152,8 @@ deferred, so they cannot arrive after the fact (fixes SMK-004).
 | move (`--head`, `--end`, `--before`) | nothing. `atm task list` shows position; a move to head while idle becomes `task_ready` on the next pass | — |
 | cancel by assigner | `task_closed outcome="cancelled"` | — |
 
-`reassigned` is a new `TaskCloseOutcome`-shaped value on the closed template
-only; the task row keeps its one id and open state per BA §3.1a. The old
+`reassigned` is a distinct value of the closed template's `outcome` field
+(R12), not a `TaskCloseOutcome`; the task row keeps its one id and open state per BA §3.1a. The old
 assignee's mailbox row is the informational message itself.
 
 ## 4. Contract changes
@@ -341,7 +346,7 @@ reports it; busy assigner across an entire assign→close cycle → receives
 
 ## 8. Open for Rand
 
-- `reassigned` as a closed outcome on the old assignee's line (§3.1).
+None. R1–R12 cover every choice in this document.
 
 ## 9. Delivery plan (R10)
 
