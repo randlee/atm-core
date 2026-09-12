@@ -262,11 +262,16 @@ impl HerdrQueueWakePump {
 
         let (eligible, task_candidates, list_complete) =
             self.list_eligible(candidates, &mut stats).await;
-        let _prompted = self
+        let prompted_by_drain = self
             .drain_eligible(pending_store, eligible, &mut stats)
             .await;
-        self.remind_open_tasks(task_candidates, &pending_set, list_complete, &mut stats)
-            .await;
+        self.remind_open_tasks(
+            task_candidates,
+            &prompted_by_drain,
+            list_complete,
+            &mut stats,
+        )
+        .await;
         self.finish_tick(stats);
     }
 
@@ -1163,7 +1168,7 @@ mod tests {
         build_retained_logger,
     };
     use atm_runtime_test_support::open_isolated_sqlite_boundary;
-    use atm_storage::{RosterSnapshot, TaskRow, TaskState, TaskStore};
+    use atm_storage::{MessageStore, RosterSnapshot, TaskRow, TaskState, TaskStore};
     use serde_json::json;
     use std::collections::HashMap;
     use std::future::Future;
@@ -1454,9 +1459,17 @@ mod tests {
     fn clear_pending_markers(runtime: &LocalServiceRuntime, key: &atm_core::boundary::MemberKey) {
         let store = runtime.pending_nudge_store().expect("pending store");
         while let Some(claim) = store.claim_next_pending(key).expect("claim pending marker") {
-            store
-                .rearm_pending_after_handoff(key, &claim.msg, IsoTimestamp::now())
-                .expect("rearm pending marker");
+            let message_key = atm_core::boundary::MessageKey::from(claim.msg);
+            let mut message = runtime
+                .message_store()
+                .load_message(&message_key)
+                .expect("load pending marker message")
+                .expect("pending marker message");
+            message.envelope.read = true;
+            runtime
+                .message_store()
+                .save_message(&message)
+                .expect("close pending marker message");
         }
     }
 
