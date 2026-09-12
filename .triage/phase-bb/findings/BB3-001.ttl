@@ -24,6 +24,7 @@
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-001/2> ;
   triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-001/1>
@@ -44,7 +45,7 @@
   triage:snippet "front matter declares rev 6040ecf36a3ac43d40207869d281114c719533ea, but the mermaid flow diagram and all 48 Steps-table rows stamp a different hash, 9b59af6e" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:branch "fix/bb3-qa2-r2" ;
   triage:headSha "d2c69e9f6" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-001/2> .
 
@@ -57,7 +58,7 @@
 
 <urn:atm:triage:worktree/BB3-001/2>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
-  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:path "PR #1436 stack, fix/bb3-qa2-r2" ;
+  triage:branch "fix/bb3-qa2-r2" ;
   triage:headSha "d2c69e9f6" ;
   triage:orderIndex 2 .

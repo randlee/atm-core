@@ -24,6 +24,7 @@
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T19:19:46Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-005/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-005/2> ;
   triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-005/1>
