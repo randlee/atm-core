@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-12T19:00:24Z",
-    "end": "2026-09-12T21:18:29Z"
+    "end": "2026-09-12T22:19:10Z"
   },
   "scope": "BB.1 (PR #1438, feature/bb1-transition-templates) and BB.2 (PR #1439, feature/bb2-orchestration-templates-1516) each have one QA-1 round in flight (assigned, no result yet -- verdict/pass/result_* fields are null/empty until quality-mgr reports). BB.3 (PR #1436, feature/bb3-test-procedure-pages) has one QA-1 FAIL round closed and a QA-2 round in flight on the fix-round push (BB3-FIX-R1, cipher, head 8a8b29640). fenix's parallel critical reviews (on BB.1 and BB.3 so far) are not dispatched quality-mgr QA runs; their findings are recorded separately under .triage/phase-bb/findings/ (BB1-001..021, BB3-001..012), correlated with QA findings on the same commit rather than duplicated. Phase BB is orchestrated with plain atm send (codex-orchestration), not graph-orchestration Assignment/Completion events, but .sprints/BB/events.ttl records dev Assignment/Completion events anyway per fenix's ruling so /triage-report's DEV column works.",
   "count_basis": "headline/reviewer",
@@ -188,7 +188,7 @@
       "run_id": "BB1-QA2",
       "aich_sprint": "BB1",
       "phase_sprint": "BB.1",
-      "pass": null,
+      "pass": true,
       "run_type": "qa",
       "assignment_time_utc": "2026-09-12T21:04:48Z",
       "assignment_time_pst": null,
@@ -196,18 +196,18 @@
       "assignment_from": "fenix",
       "assignment_shared_path": null,
       "assignment_summary": "BB1-QA2-1789252000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1449, pinned head 3b2fa2183 (fix/bb1-review-r1, solar's BB1-CR-B1..M7 critical-review fix layer) -- BB.1 transition-templates QA-2 follow-up pass.",
-      "result_time_utc": null,
+      "result_time_utc": "2026-09-12T22:18:29Z",
       "result_time_pst": null,
-      "result_message_id": null,
-      "result_from": null,
+      "result_message_id": "01M2BV7DC97PE470XBGARR8FQ2",
+      "result_from": "quality-mgr",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "PENDING",
-      "blockers": null,
-      "important": null,
-      "minor": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 0,
+      "minor": 1,
       "count_basis": "headline/reviewer",
-      "evidence": "QA-2 assigned to quality-mgr; PR #1449, fix/bb1-review-r1 (solar's BB1 critical-review fix layer), pinned head 3b2fa2183; result pending."
+      "evidence": "Sprint BB.1 QA-2 (Final Quality Report): PASS (0 blocking / 0 important / 1 minor), PR #1449 @ reviewed pin 3b2fa2183 (PR head 73c0611e8 confirmed a clean forward-merge-only ancestor, no content drift on reviewed files). https://github.com/randlee/atm-core/pull/1449#issuecomment-5649058041. All BB.1 deliverables (D1-D8), all critical-review lead rulings (B1-B4, I1, I3), and all 28 BB1-001..028 triage records independently re-verified fixed/accepted. One new Minor (ATM-QA-001, kind_decision_covers_every_transition missing an explicit (is_ack=true, NudgeKind::Queue) parametrized arm; production match already exhaustive, test-rigor gap only) recorded as BB1-029, does not block merge. Merge-ready per quality-mgr. Completed post-cancellation on Rand's explicit instruction (fenix's carved-out exception)."
     },
     {
       "run_id": "BB2-QA3",
@@ -233,6 +233,31 @@
       "minor": 1,
       "count_basis": "headline/reviewer",
       "evidence": "Deliverables 7/7 (100%). All 8 named QA-2 residuals (BB2-004..011) confirmed fixed and closed. 2 Blocking + 3 Important + 1 Minor are new, from this round's full workspace sweep finding the same retired 4-step receiver-ACK sequence surviving in AGENTS.md, quality-management-gh/SKILL.md, and CLAUDE.md (x2 distinct instances), plus dev-fix.xml.j2 stale wording and the parity test's hardcoded SEQUENCE_DOCS tuple. Filed as BB2-012..017, routed to fenix's fix/bb2-qa3-r3 (new top layer, cut from BB.5 @ f232a104c)."
+    },
+    {
+      "run_id": "BB4-QA2",
+      "aich_sprint": "BB4",
+      "phase_sprint": "BB.4",
+      "pass": false,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-12T21:17:22Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2BQRVG4XCCD82HT8B97E2YZ",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB4-QA2-1789254000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1446, pinned head a66fbcbb3 (fix/bb4-qa1-r1, cipher's BB4-FIX-R1 layer) -- BB.4 task-start QA-2 follow-up pass.",
+      "result_time_utc": "2026-09-12T22:19:10Z",
+      "result_time_pst": null,
+      "result_message_id": "01M2BV8NZTP2WAYKECQRQP88GA",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 0,
+      "important": 2,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "Sprint BB.4 QA-2 (QA Findings Update): FAIL (0 blocking / 2 important / 0 minor), deliverables 4/4 (100%), PR #1446 @ a66fbcbb3. https://github.com/randlee/atm-core/pull/1446#issuecomment-5649061544. BB4-001..004 confirmed fixed (req-qa PASS 100%/0 findings; rust-qa-agent PASS, fmt/clippy/tests all green); closed. New Important: ARCH-001 (ADR-062 line 126 'no event or delivery' contradicts its own Replay row and the actual writer, which appends one Rejected event) and RBQA-F001 (docs/architecture.md:2924 Task Storage table still teaches pre-BB.4 idempotent-resend behavior, no Phase-BB amendment) recorded as BB4-005/BB4-006, owner solar. Not merge-ready. ruthless-boundary-qa's RBQA-F002/F003 (BB.1/BB.5 sprint-doc observations) flagged as phase-wide awareness items, not counted against this verdict, not filed. Completed post-cancellation on Rand's explicit instruction (fenix's carved-out exception)."
     }
   ]
 }

@@ -84,3 +84,13 @@ triage:c4 a triage:Completion ;
 triage:c5 a triage:Completion ;
     triage:ofSprint triage:BB1 ;
     triage:at "2026-09-12T21:10:13Z"^^xsd:dateTime .
+
+triage:a12 a triage:Assignment ;
+    triage:ofSprint triage:BB3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-12T22:24:23Z"^^xsd:dateTime .
+
+triage:a13 a triage:Assignment ;
+    triage:ofSprint triage:BB5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-12T22:24:23Z"^^xsd:dateTime .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-029>
+  a triage:Finding ;
+  triage:findingId "BB1-029" ;
+  triage:title "kind_decision_covers_every_transition parametrizes 11 of the sprint doc's 12 required arms, missing the explicit (is_ack=true, NudgeKind::Queue) case" ;
+  triage:description "quality-mgr BB1-QA2-1789252000 (Final Quality Report PASS, https://github.com/randlee/atm-core/pull/1449#issuecomment-5649058041, 2026-09-12T22:18:29Z; ATM-QA-001), reviewed at 3b2fa2183 (PR head 73c0611e8, no drift). crates/atm-core/src/boundary/mod.rs:360's kind_decision_covers_every_transition parametrizes 11 of the sprint doc's explicitly required 12 arms (docs/plans/phase-bb/sprint-BB.1-transition-templates.md:237) -- missing an explicit (is_ack=true, NudgeKind::Queue) case. Verified the production match (boundary/mod.rs:151-174) has no _ wildcard and its first arm (true, _, _, _) => K::Acknowledge already covers this combination correctly at runtime, so this is a test-rigor gap, not a functional defect." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/boundary/mod.rs:360" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T22:18:29Z"^^xsd:dateTime ;
+  triage:deferredNote "Recommend adding the missing (is_ack=true, NudgeKind::Queue) parametrized case to kind_decision_covers_every_transition before the next touch of this test. Not routed; Phase BB is cancelled and the code now lives on feature/bb-collapsed (PR #1452). Low-priority test debt only, does not block merge per quality-mgr's own recommendation." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T22:18:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-029/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-029/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 360 ;
+  triage:snippet "kind_decision_covers_every_transition parametrizes 11 of 12 required arms per sprint-BB.1-transition-templates.md:237, missing (is_ack=true, NudgeKind::Queue)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb1-review-r1" ;
+  triage:headSha "73c0611e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-029/1> .
+
+<urn:atm:triage:worktree/BB1-029/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1449, fix/bb1-review-r1" ;
+  triage:branch "fix/bb1-review-r1" ;
+  triage:headSha "73c0611e8" ;
+  triage:orderIndex 1 .

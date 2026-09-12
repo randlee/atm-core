@@ -23,22 +23,34 @@
   triage:foundIn triage:BB4 ;
   triage:foundAt "2026-09-12T20:43:40Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB4-004/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasResolution <urn:atm:triage:resolution/BB4-004/1> ;
+  triage:closedAt "2026-09-12T22:19:10Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB4-004/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-bb/sprint-BB.4-task-start.md" ;
   triage:line 1 ;
   triage:snippet "requirements.md line-citations (2996-2997, 3010-3013) are off by a few lines from the current file; content matches verbatim" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/bb4-task-start" ;
-  triage:headSha "e9731c06e" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb4-qa1-r1" ;
+  triage:headSha "a66fbcbb3" ;
   triage:occursIn <urn:atm:triage:worktree/BB4-004/1> .
 
 <urn:atm:triage:worktree/BB4-004/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1441, feature/bb4-task-start" ;
-  triage:branch "feature/bb4-task-start" ;
-  triage:headSha "e9731c06e" ;
+  triage:path "PR #1446, fix/bb4-qa1-r1" ;
+  triage:branch "fix/bb4-qa1-r1" ;
+  triage:headSha "a66fbcbb3" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB4-004/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T22:19:10Z"^^xsd:dateTime ;
+  triage:fixCommit "a66fbcbb3dc4cfef04479aecffc4a5d81b6674a1" ;
+  triage:fixBranch "fix/bb4-qa1-r1" ;
+  triage:verifiedInRound "BB4-QA2" ;
+  triage:resolutionNote "quality-mgr BB4-QA2-1789254000 Final verdict FAIL overall (2 new Important doc-consistency findings, BB4-005/BB4-006), but confirmed BB4-001..004 fixed: req-qa PASS 100%/0 findings, rust-qa-agent PASS (fmt/clippy/tests all green), https://github.com/randlee/atm-core/pull/1446#issuecomment-5649061544, 2026-09-12T22:19:10Z." .

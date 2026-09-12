@@ -24,22 +24,34 @@
   triage:foundIn triage:BB1 ;
   triage:foundAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB1-024/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasResolution <urn:atm:triage:resolution/BB1-024/1> ;
+  triage:closedAt "2026-09-12T22:18:29Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB1-024/1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/template_override_migration.rs" ;
   triage:line 131 ;
   triage:snippet "legacy seven-kind CHECK-constraint literal matches AC1's retired-kind grep but is legitimate historical-compatibility code the acceptance criterion's wording doesn't account for" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/bb1-transition-templates" ;
-  triage:headSha "b06b3e262" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb1-review-r1" ;
+  triage:headSha "73c0611e8" ;
   triage:occursIn <urn:atm:triage:worktree/BB1-024/1> .
 
 <urn:atm:triage:worktree/BB1-024/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1438, feature/bb1-transition-templates" ;
-  triage:branch "feature/bb1-transition-templates" ;
-  triage:headSha "b06b3e262" ;
+  triage:path "PR #1449, fix/bb1-review-r1" ;
+  triage:branch "fix/bb1-review-r1" ;
+  triage:headSha "73c0611e8" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB1-024/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T22:18:29Z"^^xsd:dateTime ;
+  triage:fixCommit "73c0611e85864d716eefb25980ecd691341f6483" ;
+  triage:fixBranch "fix/bb1-review-r1" ;
+  triage:verifiedInRound "BB1-QA2" ;
+  triage:resolutionNote "quality-mgr BB1-QA2-1789252000 Final Quality Report (PASS 0/0/1, https://github.com/randlee/atm-core/pull/1449#issuecomment-5649058041, 2026-09-12T22:18:29Z) independently re-verified fixed/accepted via direct code and git inspection. Reviewed pin 3b2fa2183eb0b799bb7ed93e0a547ed9c4b835b4; PR head 73c0611e85864d716eefb25980ecd691341f6483 confirmed a clean forward-merge-only ancestor with no content drift on reviewed files." .
