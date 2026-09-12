@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-011>
+  a triage:Finding ;
+  triage:findingId "BB2-011" ;
+  triage:title "codex-orchestration/SKILL.md's Stacked Phases section opens with conditional framing but closes by declaring stacking mandatory" ;
+  triage:description "quality-mgr BB2-QA2-1789248000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1444#issuecomment-5648627854, 2026-09-12T20:54:11Z; M3, arch-qa ARCH-003), reviewed at ef7572fd0. codex-orchestration/SKILL.md's 'Stacked Phases' section opens with conditional framing ('When a phase runs as a gh stack...') but its own closing sentence declares stacking mandatory ('the default for every phase, not an option'); graph-orchestration/SKILL.md's parallel section states the rule unconditionally throughout. Internally inconsistent framing, no functional impact." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".claude/skills/codex-orchestration/SKILL.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: reword codex-orchestration/SKILL.md's Stacked Phases opening to state the rule unconditionally, matching its own closing sentence and graph-orchestration/SKILL.md's parallel section. Routing pending fenix's dispatch ruling." ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-011/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB2-011/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/codex-orchestration/SKILL.md" ;
+  triage:line 1 ;
+  triage:snippet "Stacked Phases section opens with conditional framing ('When a phase runs as a gh stack...') but closes declaring stacking mandatory ('the default for every phase, not an option')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-011/1> .
+
+<urn:atm:triage:worktree/BB2-011/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1444, fix/bb2-qa1-r1" ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
+  triage:orderIndex 1 .

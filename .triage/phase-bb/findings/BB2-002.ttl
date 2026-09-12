@@ -16,29 +16,41 @@
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope ".claude/skills/graph-orchestration/SKILL.md" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
   triage:deferredNote "Routed to fix/bb2-qa1-r1 (fenix, owner, cut from the top of stack #1443, 2026-09-12T20:29:38Z). Reconcile the stale Required Message Sequence / Completion ACK by receiver step in both graph-orchestration/SKILL.md and codex-orchestration/SKILL.md with the task-close-is-terminal model documented elsewhere in the same files." ;
   triage:foundIn triage:BB2 ;
   triage:foundAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB2-002/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasResolution <urn:atm:triage:resolution/BB2-002/1> ;
+  triage:closedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB2-002/1>
   a triage:Occurrence ;
   triage:file ".claude/skills/graph-orchestration/SKILL.md" ;
   triage:line 544 ;
   triage:snippet "Required Message Sequence section still lists a generic 4-step protocol ending in a distinct Completion ACK by receiver step, contradicting the new task-close-is-terminal model" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/bb2-orchestration-templates-1516" ;
-  triage:headSha "67a6a3fe4" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
   triage:occursIn <urn:atm:triage:worktree/BB2-002/1> .
 
 <urn:atm:triage:worktree/BB2-002/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1439, feature/bb2-orchestration-templates-1516" ;
-  triage:branch "feature/bb2-orchestration-templates-1516" ;
-  triage:headSha "67a6a3fe4" ;
-  triage:orderIndex 1 .
+  triage:path "PR #1444, fix/bb2-qa1-r1" ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB2-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:fixCommit "ef7572fd072a505986101c6ae34717f5d0e82262" ;
+  triage:fixBranch "fix/bb2-qa1-r1" ;
+  triage:verifiedInRound "BB2-QA2" ;
+  triage:resolutionNote "Confirmed fixed by all 3 reviewers (req-qa, arch-qa, ruthless-boundary-qa) in BB2-QA2: the Required Message Sequence in both SKILL.md files now ends at task close, no receiver-side completion ACK." .

@@ -19,7 +19,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:43:40Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: run the three named tests against the colima hermes testbed and commit the resulting evidence under site/reports/, or obtain an explicit lead ruling narrowing this requirement. Routed to cipher's BB4-FIX-R1-1789249000 (fenix, queued behind BB3-FIX-R2), promote_to_branch fix/bb4-qa1-r1." ;
+  triage:deferredNote "Fix: run the three named tests against the colima hermes testbed and commit the resulting evidence under site/reports/, or obtain an explicit lead ruling narrowing this requirement. Routed to cipher's BB4-FIX-R1-1789249000 (fenix, queued behind BB3-FIX-R2), promote_to_branch fix/bb4-qa1-r1. Ruling (fenix, 2026-09-12T20:59:50Z, relayed after cipher flagged a testbed-driver blocker): three colima smoke scenarios named after the three tests, CLI-driven, with runner-written evidence committed under site/reports/; the requirement is not narrowed." ;
   triage:foundIn triage:BB4 ;
   triage:foundAt "2026-09-12T20:43:40Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB4-001/1> ;

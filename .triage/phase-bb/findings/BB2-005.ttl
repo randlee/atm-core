@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-005>
+  a triage:Finding ;
+  triage:findingId "BB2-005" ;
+  triage:title "triaging-findings/SKILL.md still lists the stale four-step ATM Message Contract ending in a receiver-side completion ACK, the exact defect BB2-002 was filed to remove" ;
+  triage:description "quality-mgr BB2-QA2-1789248000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1444#issuecomment-5648627854, 2026-09-12T20:54:11Z; B2, arch-qa ARCH-001, confirmed by quality-mgr via direct read), reviewed at ef7572fd0. .claude/skills/triaging-findings/SKILL.md:376-382 ('ATM Message Contract') still lists the four-step sequence ending in '4. completion ACK by receiver' -- the exact stale step BB2-002 was filed to remove. This now directly contradicts codex-orchestration/SKILL.md:255 and graph-orchestration/SKILL.md:565, both of which this round correctly fixed to state there is no completion ACK by the receiver. ruthless-boundary-qa's sweep reported no other file carries the old requirement, but its search evidently matched only the corrected sentence and missed this file's differently-worded stale list; quality-mgr's direct read resolves the conflict in arch-qa's favor." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".claude/skills/triaging-findings/SKILL.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: update triaging-findings/SKILL.md's ATM Message Contract to the corrected sequence (ack -> work -> task close; no completion ACK by receiver), or replace the inline list with a reference to the single Required Message Sequence definition. Suggested owner: arch-ctm (per QA report's next_action); routing pending fenix's dispatch ruling." ;
+  triage:relatedFinding "BB2-002" ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-005/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB2-005/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/triaging-findings/SKILL.md" ;
+  triage:line 376 ;
+  triage:snippet "ATM Message Contract still lists a four-step sequence ending in 'completion ACK by receiver', contradicting the sentence this round corrected in codex-orchestration/SKILL.md and graph-orchestration/SKILL.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-005/1> .
+
+<urn:atm:triage:worktree/BB2-005/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1444, fix/bb2-qa1-r1" ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
+  triage:orderIndex 1 .

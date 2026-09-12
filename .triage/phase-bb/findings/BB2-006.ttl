@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-006>
+  a triage:Finding ;
+  triage:findingId "BB2-006" ;
+  triage:title "The <stack-discipline> paragraph is duplicated byte-for-byte across four dispatch templates with no shared source" ;
+  triage:description "quality-mgr BB2-QA2-1789248000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1444#issuecomment-5648627854, 2026-09-12T20:54:11Z; I1, arch-qa ARCH-002 + ruthless-boundary-qa RBQA-F002, confirmed by quality-mgr via direct grep), reviewed at ef7572fd0. The <stack-discipline> paragraph is duplicated byte-for-byte across four templates (graph-orchestration/dev-fix.xml.j2:52, graph-orchestration/dev-task.xml.j2:49, codex-orchestration/dev-template.xml.j2:43, codex-orchestration/fix-assignment.xml.j2:49) with no shared source. qa-template.xml.j2:49 is legitimately different (QA-perspective wording), not drift. Not yet diverged, but no mechanical guard prevents it on the next edit." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "maintainability" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".claude/skills/graph-orchestration,codex-orchestration" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:deferredNote "Consider factoring the <stack-discipline> prose into a single owned source while touching these files for BB2-004/BB2-005. Routing pending fenix's dispatch ruling." ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-006/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB2-006/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/graph-orchestration/dev-fix.xml.j2" ;
+  triage:line 52 ;
+  triage:snippet "<stack-discipline> paragraph duplicated byte-for-byte across dev-fix.xml.j2:52, dev-task.xml.j2:49, codex dev-template.xml.j2:43, fix-assignment.xml.j2:49, no shared source" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-006/1> .
+
+<urn:atm:triage:worktree/BB2-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1444, fix/bb2-qa1-r1" ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
+  triage:orderIndex 1 .
