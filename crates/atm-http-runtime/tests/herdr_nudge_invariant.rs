@@ -141,6 +141,24 @@ async fn daemon_mail_for(
         .expect("read daemon mail")
 }
 
+async fn daemon_stalled_mail_for(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &str,
+) -> Vec<atm_storage::Message> {
+    daemon_mail_for(runtime, team, agent)
+        .await
+        .into_iter()
+        .filter(|message| {
+            message
+                .envelope
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.starts_with("escalation:lead_notified:"))
+        })
+        .collect()
+}
+
 async fn task_assignment_message_id(
     runtime: &LocalServiceRuntime,
     member: &atm_storage::MemberKey,
@@ -964,6 +982,14 @@ async fn tenth_reminder_with_zero_leads_escalates_to_recipients_once_then_silenc
         .shared_roster_store_arc()
         .save_roster(&roster)
         .expect("zero-lead roster");
+    assert!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .effective_escalation_recipients(key.team())
+            .expect("escalation recipients")
+            .is_empty()
+    );
     runtime
         .task_store()
         .expect("task store")
@@ -991,6 +1017,68 @@ async fn tenth_reminder_with_zero_leads_escalates_to_recipients_once_then_silenc
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
     assert_eq!(daemon_mail_for(&runtime, key.team(), "observer").await.len(), 1);
+}
+
+#[tokio::test]
+async fn tenth_reminder_with_no_targets_records_terminal_audit() {
+    let (_root, runtime, fake, pump, key, tasks, now) =
+        build_real_task_pump(&["LIFE-NO-TARGETS"]);
+    let mut roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(key.team())
+        .expect("roster");
+    roster
+        .members
+        .retain(|member| member.agent_type != atm_storage::AgentType::Lead);
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&roster)
+        .expect("zero-lead roster");
+    let recipients = ["worker", "sender", atm_storage::roles::ROLE_TEAM_LEAD];
+
+    drive_task_to_stall(&pump, &fake, &key, &now).await;
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .lead_notified_count,
+        1
+    );
+    for recipient in recipients {
+        assert!(
+            daemon_stalled_mail_for(&runtime, key.team(), recipient)
+                .await
+                .is_empty(),
+            "no escalation mail should be written to {recipient}"
+        );
+    }
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 10);
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .lead_notified_count,
+        1
+    );
+    for recipient in recipients {
+        assert!(
+            daemon_stalled_mail_for(&runtime, key.team(), recipient)
+                .await
+                .is_empty(),
+            "the next tick should remain silent for {recipient}"
+        );
+    }
 }
 
 #[tokio::test]
