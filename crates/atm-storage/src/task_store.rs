@@ -5,10 +5,11 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+use crate::MoveTarget;
 use crate::contract::sealed;
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
-use crate::task_state::{TaskEventRow, TaskRow};
+use crate::task_state::{QueuePosition, TaskEventRow, TaskRow};
 use crate::types::{AgentName, IsoTimestamp, MemberKey, TaskId, TeamName};
 
 /// Selects the daemon-wide or team-specific escalation recipient list.
@@ -85,6 +86,18 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         task_id: &TaskId,
         assignee: Option<&AgentName>,
     ) -> Result<Vec<TaskEventRow>, AtmError>;
+    fn move_task(
+        &self,
+        _team: &TeamName,
+        _task_id: &TaskId,
+        _actor: &AgentName,
+        _target: &MoveTarget,
+        _at: IsoTimestamp,
+    ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "task store does not implement ordered task movement",
+        ))
+    }
     fn record_reminder(
         &self,
         member: &MemberKey,

@@ -696,6 +696,7 @@ pub(super) async fn preflight_daemon_api(
     }
 }
 
+#[cfg(test)]
 fn require_task_op_compatibility(response: ResponseEnvelope) -> Result<(), AtmError> {
     match response {
         ResponseEnvelope::CompatibilityVerdict(verdict) => {

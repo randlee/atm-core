@@ -589,12 +589,13 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::{HttpRouteKind, encode_http_request, http_route_kind};
-    use crate::protocol::QueueGetNextRequest;
     use crate::protocol::{
         GraftReceiverLookupRequest, GraftReceiverRegistration, OwnerGeneration, RequestEnvelope,
     };
+    use crate::protocol::{QueueGetNextRequest, TaskMoveRequest};
     use crate::search::SearchRequest;
     use crate::types::{AgentName, TeamName};
+    use atm_storage::MoveTarget;
 
     #[test]
     fn search_is_encoded_as_one_bodyless_get_query_parameter() {
@@ -702,6 +703,27 @@ mod tests {
             serde_json::from_slice(&encoded.body).expect("queue get request body");
         assert_eq!(decoded.team.as_str(), "test-team");
         assert_eq!(decoded.member.as_str(), "test-agent");
+    }
+
+    #[test]
+    fn task_move_route_round_trips_through_the_shared_codec() {
+        let request = RequestEnvelope::TaskMove(TaskMoveRequest {
+            caller_identity: AgentName::from_validated("test-agent"),
+            caller_team: TeamName::from_validated("test-team"),
+            task_id: "T1".parse().expect("task id"),
+            target: MoveTarget::Head,
+        });
+        let encoded = encode_http_request(&request, &[]).expect("task move HTTP request");
+        assert_eq!(encoded.method, "POST");
+        assert_eq!(encoded.path, "/v1/atm/tasks/move");
+        assert_eq!(
+            http_route_kind(&encoded.method, &encoded.path),
+            Some(HttpRouteKind::TaskMove)
+        );
+        let decoded: TaskMoveRequest =
+            serde_json::from_slice(&encoded.body).expect("task move request body");
+        assert_eq!(decoded.task_id.as_str(), "T1");
+        assert_eq!(decoded.target, MoveTarget::Head);
     }
 }
 

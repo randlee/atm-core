@@ -106,7 +106,6 @@ impl ListCommand {
             atm_core::types::ReadSelection::Actionable
         }
     }
-
 }
 
 #[cfg(test)]
@@ -114,7 +113,6 @@ mod tests {
     use atm_core::test_support::EnvGuard;
     use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
     use atm_core::types::ReadSelection;
-    use clap::Parser;
     use serial_test::serial;
 
     use super::ListCommand;

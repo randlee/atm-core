@@ -621,11 +621,7 @@ pub(super) fn apply_task_move(
             None,
             Some("1→1"),
         )?;
-        return Ok((
-            row.assignee,
-            QueuePosition::HEAD,
-            QueuePosition::HEAD,
-        ));
+        return Ok((row.assignee, QueuePosition::HEAD, QueuePosition::HEAD));
     }
     let from = row
         .position

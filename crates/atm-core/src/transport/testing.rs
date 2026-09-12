@@ -103,6 +103,9 @@ impl LoopbackClientTransport {
             RequestEnvelope::QueueGetNext(_) => Err(AtmError::daemon_unavailable(
                 "loopback queue pull transport is not wired outside the daemon runtime",
             )),
+            RequestEnvelope::TaskMove(_) => Err(AtmError::daemon_unavailable(
+                "loopback task move transport is not wired outside the daemon runtime",
+            )),
             RequestEnvelope::GraftReceiverRegister(_)
             | RequestEnvelope::GraftReceiverRefresh(_)
             | RequestEnvelope::GraftReceiverUnregister(_)

@@ -226,10 +226,7 @@ impl TaskCommand {
 
 impl TaskAssignCommand {
     async fn run(self, observability: &CliObservability) -> Result<()> {
-        let task_id = match self.task_id.clone() {
-            Some(task_id) => task_id,
-            None => TaskId::from_str(&ulid::Ulid::new().to_string())?,
-        };
+        let task_id = resolve_task_id(self.task_id.clone())?;
         let placement = self.placement();
         let json = self.json;
         let assignee = self.assignee.to_string();
@@ -476,6 +473,10 @@ fn task_list_request(
     .with_task_ledger(TaskLedgerQuery::Tasks { member }))
 }
 
+fn resolve_task_id(task_id: Option<TaskId>) -> Result<TaskId, atm_core::error::AtmError> {
+    task_id.map_or_else(|| TaskId::from_str(&ulid::Ulid::new().to_string()), Ok)
+}
+
 fn print_task_rows(rows: &[TaskRow], json: bool, grouped: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(rows)?);
@@ -545,4 +546,125 @@ fn print_task_events(rows: &[TaskEventRow], json: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use atm_core::protocol::{CompatibilityVerdict, HttpApiVersion, ReleaseVersion};
+    use clap::{CommandFactory, Parser};
+
+    use super::*;
+    use crate::commands::send::require_daemon_api;
+    use crate::commands::{Cli, Command};
+
+    #[test]
+    fn task_has_exactly_five_subcommands() {
+        let command = Cli::command();
+        let task = command.find_subcommand("task").expect("task command");
+        let names: std::collections::BTreeSet<_> = task
+            .get_subcommands()
+            .map(clap::Command::get_name)
+            .collect();
+        assert_eq!(names, ["assign", "close", "events", "list", "move"].into());
+    }
+
+    #[test]
+    fn close_parses_positional_outcome_and_reason() {
+        let cli = Cli::try_parse_from(["atm", "task", "close", "T1", "refused", "no capacity"])
+            .expect("valid close");
+        let Command::Task(TaskCommand {
+            command: TaskSubcommand::Close(close),
+        }) = cli.command
+        else {
+            panic!("expected task close");
+        };
+        assert!(matches!(close.outcome, OutcomeArg::Refused));
+        assert_eq!(close.reason.as_deref(), Some("no capacity"));
+        let error = Cli::try_parse_from(["atm", "task", "close", "T1", "bogus"])
+            .expect_err("invalid outcome");
+        let rendered = error.to_string();
+        for expected in ["completed", "refused", "cancelled"] {
+            assert!(rendered.contains(expected));
+        }
+    }
+
+    #[test]
+    fn close_without_reason_or_report_source_is_rejected() {
+        let cli =
+            Cli::try_parse_from(["atm", "task", "close", "T1", "refused"]).expect("clap shape");
+        let Command::Task(TaskCommand {
+            command: TaskSubcommand::Close(close),
+        }) = cli.command
+        else {
+            panic!("expected task close");
+        };
+        assert!(close.validate().is_err());
+    }
+
+    #[test]
+    fn close_with_source_and_no_reason_is_accepted() {
+        for source in [
+            vec!["--stdin"],
+            vec!["--template", "report.j2", "--vars", "report.json"],
+        ] {
+            let mut args = vec!["atm", "task", "close", "T1", "completed"];
+            args.extend(source);
+            let cli = Cli::try_parse_from(args).expect("close report source");
+            let Command::Task(TaskCommand {
+                command: TaskSubcommand::Close(close),
+            }) = cli.command
+            else {
+                panic!("expected task close");
+            };
+            assert!(close.reason.is_none());
+            close.validate().expect("source makes close valid");
+        }
+    }
+
+    #[test]
+    fn move_requires_exactly_one_target() {
+        assert!(Cli::try_parse_from(["atm", "task", "move", "T1"]).is_err());
+        assert!(Cli::try_parse_from(["atm", "task", "move", "T1", "--head", "--end"]).is_err());
+        for target in [vec!["--head"], vec!["--end"], vec!["--before", "T2"]] {
+            let mut args = vec!["atm", "task", "move", "T1"];
+            args.extend(target);
+            Cli::try_parse_from(args).expect("one move target");
+        }
+    }
+
+    #[test]
+    fn assign_without_task_id_mints_ulid() {
+        let minted = resolve_task_id(None).expect("generated task id");
+        assert_eq!(minted.as_str().len(), 26);
+        assert!(minted.as_str().chars().all(|character| {
+            matches!(character, '0'..='9' | 'A'..='H' | 'J'..='N' | 'P'..='T' | 'V'..='Z')
+        }));
+        let supplied: TaskId = "T1".parse().expect("task id");
+        assert_eq!(
+            resolve_task_id(Some(supplied.clone())).expect("supplied task id"),
+            supplied
+        );
+    }
+
+    #[test]
+    fn list_has_only_all_and_json_flags() {
+        Cli::try_parse_from(["atm", "task", "list", "--all", "--json"])
+            .expect("documented list flags");
+        assert!(Cli::try_parse_from(["atm", "task", "list", "--member", "fenix"]).is_err());
+    }
+
+    #[test]
+    fn require_daemon_api_refuses_older_daemon() {
+        let verdict = |version: &str| CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::parse("1.5.14").expect("release"),
+            daemon_schema_version: 1,
+            daemon_http_api_version: HttpApiVersion::parse(version).expect("HTTP API"),
+        };
+        let min_15 = HttpApiVersion::parse("1.5.0").expect("minimum");
+        let min_16 = HttpApiVersion::parse("1.6.0").expect("minimum");
+        assert!(require_daemon_api(&verdict("1.4.0"), min_15.clone(), "task list").is_err());
+        assert!(require_daemon_api(&verdict("1.5.0"), min_15, "task list").is_ok());
+        assert!(require_daemon_api(&verdict("1.5.0"), min_16.clone(), "task move").is_err());
+        assert!(require_daemon_api(&verdict("1.6.0"), min_16, "task move").is_ok());
+    }
 }

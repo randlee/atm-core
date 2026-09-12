@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{
-    AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, ReminderOutcome,
-    TaskActor, TaskCloseOutcome, TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState,
-    TaskStateTag, TaskStore,
+    AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, MoveTarget,
+    QueuePosition, ReminderOutcome, TaskActor, TaskCloseOutcome, TaskEventKind, TaskEventMarker,
+    TaskEventRow, TaskRow, TaskState, TaskStateTag, TaskStore,
 };
 use rusqlite::{Connection, Row, params};
 
@@ -278,6 +278,28 @@ impl TaskStore for SqliteTaskStore {
             task_sql::select_task_events(connection, team, task_id, assignee)
                 .map_err(|error| self.db.error("failed to list task events", error))
         })
+    }
+
+    fn move_task(
+        &self,
+        team: &TeamName,
+        task_id: &TaskId,
+        actor: &AgentName,
+        target: &MoveTarget,
+        at: IsoTimestamp,
+    ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+        match self.db.submit_writer_op(crate::writer::WriteOp::TaskMove {
+            team: team.clone(),
+            task_id: task_id.clone(),
+            actor: actor.clone(),
+            target: target.clone(),
+            at,
+        })? {
+            crate::writer::WriteOpResult::TaskMoved(outcome) => Ok(outcome),
+            _ => Err(AtmError::mailbox_write(
+                "task move writer returned an unexpected result",
+            )),
+        }
     }
 
     fn record_reminder(

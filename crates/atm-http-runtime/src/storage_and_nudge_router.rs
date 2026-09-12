@@ -24,7 +24,7 @@ use atm_core::observability::ObservabilityPort;
 use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
 use atm_core::protocol::{
     CompatibilityVerdict, GraftReceiverRegistration, GraftReceiverUnregistration, ReleaseVersion,
-    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope,
+    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope, TaskMoveOutcome,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
@@ -515,6 +515,7 @@ impl StorageAndNudgeRouter {
             ApiRequest::QueueGetNext(request) => {
                 self.queue_get_next(request, ingress, deadline).await
             }
+            ApiRequest::TaskMove(request) => self.task_move(request, ingress, deadline).await,
             ApiRequest::GraftReceiverRegister(request) => {
                 self.graft_receiver_register(request, ingress, deadline)
                     .await
@@ -552,6 +553,39 @@ impl StorageAndNudgeRouter {
                 )
                 .map(ResponseEnvelope::Clear)
                 .map(ApiResponse::new)
+            })
+            .await
+    }
+
+    async fn task_move(
+        &self,
+        request: atm_core::protocol::TaskMoveRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if ingress != AuthenticatedIngress::Local {
+            return Err(AtmError::validation(
+                "task move is available only through authenticated local HTTP adapters",
+            ));
+        }
+        let runtime = self.service_runtime.clone();
+        self.control_path_sync_bridge
+            .run(deadline, move || {
+                let (assignee, from, to) = runtime.task_store()?.move_task(
+                    &request.caller_team,
+                    &request.task_id,
+                    &request.caller_identity,
+                    &request.target,
+                    atm_core::types::IsoTimestamp::now(),
+                )?;
+                Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
+                    TaskMoveOutcome {
+                        task_id: request.task_id,
+                        assignee,
+                        from,
+                        to,
+                    },
+                )))
             })
             .await
     }
