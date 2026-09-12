@@ -196,6 +196,8 @@ observed member: `new_episode = escalation.observe(member, state)`,
 → act; when `refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD`, also
 `escalate_mail(summary = escalation_summary(RefusalsEscalated, member, None), suppress_since = run.started_at)`.
 
+Implemented `tick_once` matches this order (observations → owed task starts → queue drain → `open_tasks_for_team` → dispose) since `e9428769f`; `mail_and_task_share_one_prompt_per_tick` and `deferred_assignment_handoff_starts_head_task_once` pin it.
+
 **Start (R1).** `complete_task_handoff(runtime, member, head, now)` in
 `herdr_task_start.rs` (new) is the only caller that submits `TaskOp::Start`:
 (1) `record_task_reminder(member, head.task_id, now, ReminderOutcome::Emitted)`;
