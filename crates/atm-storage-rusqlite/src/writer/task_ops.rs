@@ -4,8 +4,8 @@ use super::ops::{
     WriteOp, execute_upsert_message, load_existing_message, load_pending_ack_source,
     mark_source_acknowledged,
 };
-use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
+use super::task_report::drop_task_link_from_mail;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
@@ -22,6 +22,11 @@ use crate::task_sql;
 
 fn task_rejected(detail: impl std::fmt::Display) -> AtmError {
     AtmError::validation(detail.to_string())
+}
+
+pub(super) enum TaskMessageResult {
+    Applied(Option<TaskCloseOutcome>),
+    RejectedReportDelivered(AtmError),
 }
 
 fn load_task_row(
@@ -112,9 +117,9 @@ pub(super) fn apply_task_message(
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-) -> Result<Option<TaskCloseOutcome>, AtmError> {
+) -> Result<TaskMessageResult, AtmError> {
     let Some(task_id) = record.envelope.task_id.as_ref() else {
-        return Ok(None);
+        return Ok(TaskMessageResult::Applied(None));
     };
     match record.envelope.task_op.as_ref() {
         None => apply_task_assignment(
@@ -125,8 +130,9 @@ pub(super) fn apply_task_message(
             cache,
             target,
         )
-        .map(|()| None),
-        Some(TaskOp::Start) => apply_task_start(record, task_id, connection, target).map(|()| None),
+        .map(|()| TaskMessageResult::Applied(None)),
+        Some(TaskOp::Start) => apply_task_start(record, task_id, connection, target)
+            .map(|()| TaskMessageResult::Applied(None)),
         Some(TaskOp::Close { outcome, reason }) => apply_task_close(
             record,
             task_id,
@@ -529,7 +535,7 @@ pub(crate) fn apply_task_close(
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-) -> Result<Option<TaskCloseOutcome>, AtmError> {
+) -> Result<TaskMessageResult, AtmError> {
     let Some(row) = load_task_row(connection, target, &record.team, task_id)? else {
         return Err(task_rejected(format!(
             "no open task {task_id} for {}",
@@ -538,15 +544,18 @@ pub(crate) fn apply_task_close(
     };
     if let TaskState::Complete(already) = row.state {
         drop_task_link_from_mail(record, connection, target)?;
-        return Ok(Some(already));
+        return Ok(TaskMessageResult::Applied(Some(already)));
     }
-    admit(
+    if let Err(error) = admit(
         Some(&row),
         TaskEvent::Completed(outcome),
         task_id,
         &record.envelope.from,
     )
-    .map_err(|error| error.into_atm_error())?;
+    .map_err(|error| error.into_atm_error())
+    {
+        return deliver_rejected_close_report(record, task_id, &row, error, connection, target);
+    }
     let Transition(next_state) = transition(
         Some(row.state),
         TaskEvent::Completed(outcome),
@@ -562,15 +571,47 @@ pub(crate) fn apply_task_close(
         &row.assignee
     };
     if &record.agent != expected {
-        return Err(task_rejected(format!(
+        let error = task_rejected(format!(
             "task {task_id}: {} is no longer the counterparty — re-run the command",
             record.agent
-        )));
+        ));
+        return deliver_rejected_close_report(record, task_id, &row, error, connection, target);
     }
     persist_task_close(
         record, task_id, outcome, reason, &row, next_state, connection, cache, target,
     )?;
-    Ok(None)
+    Ok(TaskMessageResult::Applied(None))
+}
+
+fn deliver_rejected_close_report(
+    record: &Message,
+    task_id: &TaskId,
+    row: &TaskRow,
+    error: AtmError,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<TaskMessageResult, AtmError> {
+    drop_task_link_from_mail(record, connection, target)?;
+    append_task_event(
+        connection,
+        target,
+        &record.team,
+        task_id,
+        &row.assignee,
+        &IsoTimestamp::now(),
+        TaskEventKind::Rejected,
+        Some(row.state.tag()),
+        Some(row.state.tag()),
+        row.state.close_outcome(),
+        &record.envelope.from,
+        record.envelope.message_id,
+        None,
+        None,
+        Some(error.message()),
+    )?;
+    Ok(TaskMessageResult::RejectedReportDelivered(
+        AtmError::validation(format!("{}; report delivered", error.detail())),
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -618,27 +659,6 @@ fn persist_task_close(
         None,
         reason,
     )
-}
-
-fn drop_task_link_from_mail(
-    record: &Message,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let mut envelope = record.envelope.clone();
-    envelope.task_id = None;
-    envelope.task_op = None;
-    envelope.task_complete = None;
-    envelope.placement = None;
-    let json = serde_json::to_string(&StorageEnvelope::new(&envelope))
-        .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
-    connection
-        .execute(
-            "UPDATE mail_messages SET envelope_json=?4 WHERE team=?1 AND agent=?2 AND message_key=?3",
-            params![record.team.as_str(), record.agent.as_str(), record.message_key.as_str(), json],
-        )
-        .map_err(|error| sqlite_error(target, "failed to detach already-closed task report", error))?;
-    Ok(())
 }
 
 pub(super) fn apply_task_move(

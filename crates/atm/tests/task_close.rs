@@ -158,10 +158,13 @@ async fn close_already_closed_delivers_report_without_task_event() {
 async fn stale_counterparty_rejection_exits_three_without_retry() {
     let f = LoopbackFixture::new_with_identity("recipient", "test-lead");
     seed_assignment(&f, "T1", "recipient", TEST_SENDER);
+    let recipient_before = f.inbox_contents("recipient").len();
     let error = run_close(&f, close("T1", "test-lead", OutcomeArg::Completed))
         .await
         .unwrap_err();
     assert_eq!(crate::exit_code_for_error(&error), 3);
+    assert!(error.to_string().contains("report delivered"));
+    assert_eq!(f.inbox_contents("recipient").len(), recipient_before + 1);
     assert_eq!(
         f.task_store()
             .load_task(&TEST_TEAM.parse().unwrap(), &"T1".parse().unwrap())
@@ -174,7 +177,7 @@ async fn stale_counterparty_rejection_exits_three_without_retry() {
 
 #[tokio::test]
 #[serial(env)]
-async fn close_by_third_party_sends_nothing_and_exits_three() {
+async fn close_by_third_party_delivers_plain_report_and_exits_three() {
     let f = LoopbackFixture::new_with_identity("recipient", "test-lead");
     seed_assignment(&f, "T1", "recipient", TEST_SENDER);
     let sender_before = f.inbox_contents(TEST_SENDER).len();
@@ -188,8 +191,17 @@ async fn close_by_third_party_sends_nothing_and_exits_three() {
         .await
         .unwrap_err();
     assert_eq!(crate::exit_code_for_error(&error), 3);
+    assert!(error.to_string().contains("not assigned to or by"));
+    assert!(error.to_string().contains("report delivered"));
     assert_eq!(f.inbox_contents(TEST_SENDER).len(), sender_before);
-    assert_eq!(f.inbox_contents("recipient").len(), recipient_before);
+    let recipient_mail = f.inbox_contents("recipient");
+    assert_eq!(recipient_mail.len(), recipient_before + 1);
+    let report = recipient_mail
+        .iter()
+        .find(|message| message.text == "report")
+        .expect("plain rejected report");
+    assert_eq!(report.task_id, None);
+    assert_eq!(report.task_op, None);
     assert_eq!(store.list_tasks(&team, None).unwrap().len(), rows_before);
     let events = store.list_task_events(&team, &task, None).unwrap();
     assert_eq!(events.len(), events_before + 1);

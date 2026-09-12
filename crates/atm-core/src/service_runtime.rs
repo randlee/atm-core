@@ -626,6 +626,21 @@ impl LocalServiceRuntime {
         store.admit_template_message_async(admission).await
     }
 
+    /// One durable Tokio admission that retains a task-report fallback result.
+    pub async fn admit_template_message_with_outcome_async(
+        &self,
+        admission: atm_storage::TemplateMessageAdmission,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio template message admission was not installed in this runtime",
+            )
+        })?;
+        store
+            .admit_template_message_with_outcome_async(admission)
+            .await
+    }
+
     /// Loads a threaded-message validation projection through the bounded
     /// Tokio reader lane. It never enters the ordered writer queue.
     pub async fn list_messages_async(

@@ -1,6 +1,6 @@
 use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
-use super::task_ops::apply_task_message;
+use super::task_ops::{TaskMessageResult, apply_task_message};
 use crate::search_schema::{
     InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
     sync_template_projection,
@@ -144,6 +144,9 @@ pub(crate) enum WriteOpResult {
         /// Populated when a newly inserted local close report targeted a task
         /// that was already complete.
         already_closed: Option<TaskCloseOutcome>,
+        /// Populated when task governance rejected the operation after
+        /// retaining its report as ordinary mail.
+        task_rejection: Option<AtmError>,
     },
     UpsertMessages,
     Acknowledged(Box<AcknowledgementCommit>),
@@ -153,6 +156,7 @@ pub(crate) enum WriteOpResult {
     TemplateMessageAdmission {
         inserted: bool,
         existing: Option<Box<Message>>,
+        task_rejection: Option<AtmError>,
     },
     DiagnosticsRecorded,
     DiagnosticsPruned(u64),
@@ -247,13 +251,28 @@ fn execute_admit_template_message(
         } => Ok(WriteOpResult::TemplateMessageAdmission {
             inserted: false,
             existing,
+            task_rejection: None,
         }),
-        WriteOpResult::UpsertMessage { inserted: true, .. } => {
+        WriteOpResult::UpsertMessage {
+            inserted: true,
+            task_rejection: Some(error),
+            ..
+        } => Ok(WriteOpResult::TemplateMessageAdmission {
+            inserted: true,
+            existing: None,
+            task_rejection: Some(error),
+        }),
+        WriteOpResult::UpsertMessage {
+            inserted: true,
+            task_rejection: None,
+            ..
+        } => {
             let _ =
                 execute_decomposed_message_admission(&admission.decomposition, connection, target)?;
             Ok(WriteOpResult::TemplateMessageAdmission {
                 inserted: true,
                 existing: None,
+                task_rejection: None,
             })
         }
         other => Err(AtmError::daemon_unavailable(format!(
@@ -735,15 +754,19 @@ pub(super) fn execute_upsert_message(
     } else {
         Some(Box::new(load_existing_message(record, connection, target)?))
     };
-    let already_closed = if inserted && provenance == MessageWriteOrigin::Local {
-        apply_task_message(record, connection, cache, target)?
+    let (already_closed, task_rejection) = if inserted && provenance == MessageWriteOrigin::Local {
+        match apply_task_message(record, connection, cache, target)? {
+            TaskMessageResult::Applied(already_closed) => (already_closed, None),
+            TaskMessageResult::RejectedReportDelivered(error) => (None, Some(error)),
+        }
     } else {
-        None
+        (None, None)
     };
     Ok(WriteOpResult::UpsertMessage {
         inserted,
         existing,
         already_closed,
+        task_rejection,
     })
 }
 

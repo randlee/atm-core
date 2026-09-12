@@ -1,5 +1,5 @@
 use crate::schema::InboxMessage;
-use atm_storage::TaskCloseOutcome;
+use atm_storage::{AtmError, TaskCloseOutcome};
 
 use super::WarningEntry;
 
@@ -27,6 +27,7 @@ pub(crate) struct DeliveryPersistenceResult {
     pub(crate) newly_persisted: bool,
     pub(crate) original_message: InboxMessage,
     pub(crate) already_closed: Option<TaskCloseOutcome>,
+    pub(crate) task_rejection: Option<AtmError>,
     pub(crate) warnings: Vec<WarningEntry>,
 }
 
@@ -38,6 +39,7 @@ impl DeliveryPersistenceResult {
             newly_persisted: true,
             original_message,
             already_closed: None,
+            task_rejection: None,
             warnings: Vec::new(),
         }
     }
@@ -49,6 +51,7 @@ impl DeliveryPersistenceResult {
             newly_persisted: false,
             original_message,
             already_closed: None,
+            task_rejection: None,
             warnings: Vec::new(),
         }
     }
@@ -60,6 +63,7 @@ impl DeliveryPersistenceResult {
             newly_persisted: false,
             original_message,
             already_closed: None,
+            task_rejection: None,
             warnings: Vec::new(),
         }
     }
@@ -71,6 +75,21 @@ impl DeliveryPersistenceResult {
     #[must_use]
     pub(crate) fn with_already_closed(mut self, already_closed: Option<TaskCloseOutcome>) -> Self {
         self.already_closed = already_closed;
+        self
+    }
+
+    #[must_use]
+    pub(crate) fn with_task_rejection(mut self, task_rejection: Option<AtmError>) -> Self {
+        if task_rejection.is_some() {
+            // The writer retained this report without task linkage. Keep the
+            // post-write snapshot identical so hook routing observes an
+            // ordinary message rather than the rejected task operation.
+            self.original_message.task_id = None;
+            self.original_message.task_op = None;
+            self.original_message.task_complete = None;
+            self.original_message.placement = None;
+        }
+        self.task_rejection = task_rejection;
         self
     }
 }

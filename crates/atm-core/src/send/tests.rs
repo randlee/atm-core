@@ -1048,6 +1048,26 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
 }
 
 #[test]
+fn rejected_task_report_uses_plain_message_post_write_snapshot() {
+    let mut message = outbound_message();
+    message.task_id = Some("T1".parse().expect("task id"));
+    message.task_op = Some(atm_storage::TaskOp::Close {
+        outcome: atm_storage::TaskCloseOutcome::Completed,
+        reason: Some("report".to_owned()),
+    });
+    let persistence = crate::send::DeliveryPersistenceResult::persisted(message)
+        .with_task_rejection(Some(AtmError::validation(
+            "task close rejected; report delivered",
+        )));
+
+    assert!(persistence.task_rejection.is_some());
+    assert_eq!(persistence.original_message.task_id, None);
+    assert_eq!(persistence.original_message.task_op, None);
+    assert_eq!(persistence.original_message.task_complete, None);
+    assert_eq!(persistence.original_message.placement, None);
+}
+
+#[test]
 fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
     let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();

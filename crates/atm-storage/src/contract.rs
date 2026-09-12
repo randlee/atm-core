@@ -237,6 +237,10 @@ pub struct Message {
 pub struct MessageAdmissionOutcome {
     pub existing: Option<Message>,
     pub already_closed: Option<TaskCloseOutcome>,
+    /// A governed task operation rejected after its report was retained as
+    /// ordinary mail. Callers must complete ordinary post-write handling
+    /// before surfacing this error to the sender.
+    pub task_rejection: Option<AtmError>,
 }
 
 impl MessageAdmissionOutcome {
@@ -245,6 +249,7 @@ impl MessageAdmissionOutcome {
         Self {
             existing,
             already_closed: None,
+            task_rejection: None,
         }
     }
 }
@@ -862,6 +867,17 @@ pub trait AsyncMessageStore: MessageStore {
         Err(AtmError::daemon_unavailable(
             "message store does not implement async template-message admission",
         ))
+    }
+
+    /// Outcome-preserving companion used when a template-carried task report
+    /// can fall back to ordinary mail after task governance rejects it.
+    async fn admit_template_message_with_outcome_async(
+        &self,
+        admission: crate::TemplateMessageAdmission,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
+        self.admit_template_message_async(admission)
+            .await
+            .map(MessageAdmissionOutcome::passive)
     }
 
     /// Resolves a pending acknowledgement source, persists its reply, and

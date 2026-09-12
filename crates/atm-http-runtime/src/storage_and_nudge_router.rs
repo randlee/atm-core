@@ -304,6 +304,7 @@ impl StorageAndNudgeRouter {
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
         let persisted_timestamp = prepared.persisted_timestamp();
+        let task_rejection = prepared.task_rejection();
         let received_hook_dispatches = if newly_persisted {
             prepared.build_received_hook_dispatches(&self.service_runtime)
         } else {
@@ -346,6 +347,7 @@ impl StorageAndNudgeRouter {
             persisted_timestamp,
             newly_persisted,
             received_hook_dispatches,
+            task_rejection,
         })
     }
 
@@ -906,6 +908,7 @@ struct CommittedWrite {
     persisted_timestamp: atm_core::types::IsoTimestamp,
     newly_persisted: bool,
     received_hook_dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
+    task_rejection: Option<AtmError>,
 }
 
 impl atm_core::boundary::sealed::Sealed for StorageAndNudgeRouter {}
@@ -995,6 +998,9 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     let warnings = hook_task.await;
                     append_warnings(&mut committed.outcome, warnings);
                 }
+            }
+            if let Some(error) = committed.task_rejection {
+                return Err(error);
             }
             Ok(ApiResponse::new(write_response(committed.outcome)))
         })

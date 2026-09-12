@@ -249,7 +249,10 @@ async fn admit_verified_template(
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let admission =
         build_template_admission(request, context, &envelope, message_id, timestamp, verified)?;
-    if let Some(existing) = runtime.admit_template_message_async(admission).await? {
+    let admission = runtime
+        .admit_template_message_with_outcome_async(admission)
+        .await?;
+    if let Some(existing) = admission.existing {
         if existing.envelope != envelope {
             return Err(AtmError::message_id_conflict(format!(
                 "message {message_id} already exists with different immutable data"
@@ -257,7 +260,10 @@ async fn admit_verified_template(
         }
         return Ok(DeliveryPersistenceResult::already_persisted(envelope));
     }
-    Ok(DeliveryPersistenceResult::persisted(envelope))
+    Ok(
+        DeliveryPersistenceResult::persisted(envelope)
+            .with_task_rejection(admission.task_rejection),
+    )
 }
 
 fn build_template_admission(

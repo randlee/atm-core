@@ -315,8 +315,11 @@ impl SharedDb {
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<bool, AtmError> {
-        self.submit_message_admission(record, provenance)
-            .map(|outcome| outcome.existing.is_none())
+        let outcome = self.submit_message_admission(record, provenance)?;
+        match outcome.task_rejection {
+            Some(error) => Err(error),
+            None => Ok(outcome.existing.is_none()),
+        }
     }
 
     pub(crate) fn submit_message_admission(
@@ -333,10 +336,12 @@ impl SharedDb {
             WriteOpResult::UpsertMessage {
                 inserted: true,
                 already_closed,
+                task_rejection,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
                 already_closed,
+                task_rejection,
             }),
             WriteOpResult::UpsertMessage {
                 inserted: false,
@@ -431,10 +436,12 @@ impl SharedDb {
             WriteOpResult::UpsertMessage {
                 inserted: true,
                 already_closed,
+                task_rejection,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
                 already_closed,
+                task_rejection,
             }),
             WriteOpResult::UpsertMessage {
                 inserted: false,
@@ -487,21 +494,31 @@ impl SharedDb {
     pub(crate) async fn submit_template_message_admission_async(
         &self,
         admission: TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         admission.validate()?;
         match self
             .writer
             .submit_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
             .await?
         {
-            WriteOpResult::TemplateMessageAdmission { inserted: true, .. } => Ok(None),
+            WriteOpResult::TemplateMessageAdmission {
+                inserted: true,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed: None,
+                task_rejection,
+            }),
             WriteOpResult::TemplateMessageAdmission {
                 inserted: false,
                 existing: Some(existing),
-            } => Ok(Some(*existing)),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
             WriteOpResult::TemplateMessageAdmission {
                 inserted: false,
                 existing: None,
+                ..
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate template admission without its retained record",
             )),

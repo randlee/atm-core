@@ -427,22 +427,60 @@ fn writer_close_already_closed_omits_task_event() {
 fn writer_close_by_third_party_is_rejected() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
-    let error = h
-        .close("T1", "lead", "intruder", TaskCloseOutcome::Completed)
-        .expect_err("third party");
+    let before = h.row("T1");
+    let event_count = h.events("T1").len();
+    let mut report = h.message("lead", "intruder", "third-party report");
+    report.envelope.task_id = Some("T1".parse().unwrap());
+    report.envelope.task_op = Some(TaskOp::Close {
+        outcome: TaskCloseOutcome::Completed,
+        reason: Some("reason".to_owned()),
+    });
+    let error = h.save(&report).expect_err("third party");
     assert!(error.message().contains("not assigned to or by"));
-    assert_eq!(h.events("T1").last().unwrap().assignee.as_str(), "alice");
+    assert!(error.message().contains("report delivered"));
+    assert_eq!(h.row("T1"), before);
+    let events = h.events("T1");
+    assert_eq!(events.len(), event_count + 1);
+    assert_eq!(events.last().unwrap().event, TaskEventKind::Rejected);
+    let stored = h
+        .backend
+        .message_store()
+        .load_message(&report.message_key)
+        .unwrap()
+        .expect("plain rejected report");
+    assert_eq!(stored.envelope.text, "third-party report");
+    assert_eq!(stored.envelope.task_id, None);
+    assert_eq!(stored.envelope.task_op, None);
 }
 
 #[test]
 fn writer_stale_counterparty_is_rejected() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
-    let error = h
-        .close("T1", "other-lead", "alice", TaskCloseOutcome::Completed)
-        .expect_err("stale recipient");
+    let before = h.row("T1");
+    let event_count = h.events("T1").len();
+    let mut report = h.message("other-lead", "alice", "stale-counterparty report");
+    report.envelope.task_id = Some("T1".parse().unwrap());
+    report.envelope.task_op = Some(TaskOp::Close {
+        outcome: TaskCloseOutcome::Completed,
+        reason: Some("reason".to_owned()),
+    });
+    let error = h.save(&report).expect_err("stale recipient");
     assert!(error.message().contains("no longer the counterparty"));
-    assert_eq!(h.row("T1").state, TaskState::Assigned);
+    assert!(error.message().contains("report delivered"));
+    assert_eq!(h.row("T1"), before);
+    let events = h.events("T1");
+    assert_eq!(events.len(), event_count + 1);
+    assert_eq!(events.last().unwrap().event, TaskEventKind::Rejected);
+    let stored = h
+        .backend
+        .message_store()
+        .load_message(&report.message_key)
+        .unwrap()
+        .expect("plain rejected report");
+    assert_eq!(stored.envelope.text, "stale-counterparty report");
+    assert_eq!(stored.envelope.task_id, None);
+    assert_eq!(stored.envelope.task_op, None);
 }
 
 #[test]

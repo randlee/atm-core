@@ -587,6 +587,20 @@ impl AsyncMessageStore for SqliteMessageStore {
         &self,
         admission: atm_storage::TemplateMessageAdmission,
     ) -> Result<Option<Message>, AtmError> {
+        let outcome = self
+            .db
+            .submit_template_message_admission_async(admission)
+            .await?;
+        match outcome.task_rejection {
+            Some(error) => Err(error),
+            None => Ok(outcome.existing),
+        }
+    }
+
+    async fn admit_template_message_with_outcome_async(
+        &self,
+        admission: atm_storage::TemplateMessageAdmission,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
         self.db
             .submit_template_message_admission_async(admission)
             .await
@@ -4173,13 +4187,13 @@ mod tests {
             .save_message(&third_party_completion)
             .expect_err("G2 rejects a third-party completion");
         assert!(third_party_error.message().contains(second_id.as_str()));
-        assert!(
-            store
-                .load_message(&third_party_completion.message_key)
-                .expect("load rejected G2 completion")
-                .is_none(),
-            "G2 rejection writes no completion message"
-        );
+        let retained_report = store
+            .load_message(&third_party_completion.message_key)
+            .expect("load rejected G2 completion")
+            .expect("G2 rejection retains the report as plain mail");
+        assert_eq!(retained_report.envelope.text, "not allowed");
+        assert_eq!(retained_report.envelope.task_id, None);
+        assert_eq!(retained_report.envelope.task_op, None);
 
         let missing_id: atm_storage::TaskId = "AX.3-missing".parse().expect("task");
         let mut unknown_completion = message("atm:unknown-completion", "not a task");

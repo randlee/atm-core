@@ -42,6 +42,7 @@ pub struct PreparedWrite {
     same_store_peer_receipt: bool,
     received_hook: Result<Option<PreparedReceivedHook>, AtmError>,
     acknowledgement: Option<ResolvedAcknowledgement>,
+    task_rejection: Option<AtmError>,
 }
 
 impl PreparedWrite {
@@ -73,6 +74,9 @@ impl PreparedWrite {
     /// `StorageAndNudgeRouter`) must schedule [`PreparedWrite::mark_pending_if_deferred`]
     /// on their own blocking task after this returns. Callers with no such
     /// boundary should use [`PreparedWrite::finish_and_mark`] instead.
+    /// A task rejection whose report was retained as plain mail is likewise
+    /// available through [`PreparedWrite::task_rejection`] only after the
+    /// caller completes ordinary post-write delivery.
     pub fn finish(
         &mut self,
         runtime: &LocalServiceRuntime,
@@ -97,7 +101,7 @@ impl PreparedWrite {
         runtime: &LocalServiceRuntime,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
-        let outcome = self.finish(runtime, observability)?;
+        let outcome = self.finish_with_runtime(runtime, observability)?;
         if let Err(error) = self.mark_pending_if_deferred(runtime) {
             tracing::warn!(
                 message_id = %self.persisted_message_id(),
@@ -105,7 +109,22 @@ impl PreparedWrite {
                 "synchronous deferred-write queue marker failed after durable write"
             );
         }
+        self.reject_task_operation_if_needed()?;
         Ok(outcome)
+    }
+
+    /// Returns the task rejection that must be surfaced only after ordinary
+    /// post-write delivery completes.
+    #[must_use]
+    pub fn task_rejection(&self) -> Option<AtmError> {
+        self.task_rejection.clone()
+    }
+
+    fn reject_task_operation_if_needed(&self) -> Result<(), AtmError> {
+        match &self.task_rejection {
+            Some(error) => Err(error.clone()),
+            None => Ok(()),
+        }
     }
 
     /// Sets the durable at-most-once queue marker for a newly persisted
@@ -532,6 +551,7 @@ fn prepare_atomic_acknowledgement_write<
         same_store_peer_receipt: false,
         received_hook,
         acknowledgement: Some(acknowledgement.acknowledgement),
+        task_rejection: None,
     })
 }
 
@@ -604,6 +624,7 @@ fn prepare_persisted_write<
             == DuplicateWriteDisposition::SameStorePeerReceipt,
         received_hook,
         acknowledgement,
+        task_rejection: persistence.task_rejection.clone(),
     })
 }
 
@@ -668,6 +689,7 @@ async fn prepare_persisted_write_async(
             == DuplicateWriteDisposition::SameStorePeerReceipt,
         received_hook,
         acknowledgement,
+        task_rejection: persistence.task_rejection.clone(),
     })
 }
 
