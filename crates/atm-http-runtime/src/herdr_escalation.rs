@@ -6,7 +6,6 @@ use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
-use atm_core::api::RequestDeadline;
 use atm_core::boundary::TaskStore;
 use atm_core::boundary::{
     AsyncMailboxReader, MAX_ESCALATION_RECIPIENTS, MailboxScope, MemberKey, MessageQuery,
@@ -16,7 +15,6 @@ use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
-use atm_herdr::HerdrProcessAdapter;
 
 use crate::herdr_queue_wake::run_blocking;
 use crate::herdr_task_disposition::EpisodeKind;
@@ -31,7 +29,6 @@ static DAEMON_ACTOR: LazyLock<AgentName> =
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum EscalationKind {
-    BreakerOpened,
     TaskStalled,
     BlockedEscalated,
     OfflineEscalated,
@@ -42,7 +39,6 @@ pub(crate) enum EscalationKind {
 impl EscalationKind {
     const fn as_str(self) -> &'static str {
         match self {
-            Self::BreakerOpened => "breaker_opened",
             Self::TaskStalled => "lead_notified",
             Self::BlockedEscalated => "blocked_escalated",
             Self::OfflineEscalated => "offline_escalated",
@@ -239,14 +235,6 @@ async fn should_suppress(
     }
 }
 
-/// Herdr notification content is intentionally separate from queued mail.
-/// Callers may derive it from task metadata, but never pass the mail body.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct EscalationNotification {
-    pub(crate) title: String,
-    pub(crate) body: String,
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct EscalationOutcome {
     pub lead: Option<AgentName>,
@@ -264,57 +252,6 @@ impl EscalationOutcome {
             || self.recipients_written > 0
             || (self.notify_attempted && self.notify_ok)
     }
-}
-
-/// Delivers one escalation to the lead, configured recipients, and Herdr.
-/// Mail is deliberately written through the same canonical deferred path as
-/// `atm send`; the caller supplies the pump's blocking helper for every write.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "escalation keeps the runtime, storage, routing, notification, and outcome context explicit"
-)]
-pub(crate) async fn escalate(
-    runtime: &LocalServiceRuntime,
-    herdr_process: &dyn HerdrProcessAdapter,
-    task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
-    daemon_home: &Path,
-    team: &TeamName,
-    mail_body: &str,
-    notification: &EscalationNotification,
-    kind: EscalationKind,
-) -> EscalationOutcome {
-    let targets = match load_escalation_targets(runtime, task_store, team).await {
-        Ok(targets) => targets,
-        Err(()) => return notify_only(herdr_process, team, notification, kind).await,
-    };
-    let mut outcome = EscalationOutcome {
-        lead: targets.lead,
-        ..Default::default()
-    };
-    write_target_mail(
-        runtime,
-        daemon_home,
-        team,
-        mail_body,
-        targets.recipients,
-        &mut outcome,
-    )
-    .await;
-    outcome.notify_attempted = true;
-    outcome.notify_ok = notify(herdr_process, notification).await;
-    tracing::info!(
-        event = "herdr_queue_poll_outcome",
-        subsystem = "herdr_queue_wake",
-        action = "escalation",
-        outcome = kind.as_str(),
-        team = %team,
-        lead_present = outcome.lead.is_some(),
-        recipients_written = outcome.recipients_written,
-        recipients_failed = outcome.recipients_failed,
-        notify_ok = outcome.notify_ok,
-        "Herdr escalation completed"
-    );
-    outcome
 }
 
 struct EscalationTargets {
@@ -400,110 +337,6 @@ async fn load_escalation_recipients(
     } else {
         recipients
     }
-}
-
-async fn write_target_mail(
-    runtime: &LocalServiceRuntime,
-    daemon_home: &Path,
-    team: &TeamName,
-    body: &str,
-    recipients: Vec<String>,
-    outcome: &mut EscalationOutcome,
-) {
-    if let Some(lead) = outcome.lead.clone() {
-        let address = format!("{lead}@{team}");
-        match write_escalation_mail(runtime, daemon_home, team, &address, body).await {
-            Ok(message_id) => outcome.lead_write = Some(message_id),
-            Err(error) => tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "escalation_lead_write",
-                outcome = "failed",
-                team = %team,
-                lead = %lead,
-                error = %error,
-                "Escalation lead mail write failed"
-            ),
-        }
-    }
-    for recipient in recipients {
-        match write_escalation_mail(runtime, daemon_home, team, &recipient, body).await {
-            Ok(_) => outcome.recipients_written = outcome.recipients_written.saturating_add(1),
-            Err(error) => {
-                outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "escalation_recipient_write",
-                    outcome = "failed",
-                    team = %team,
-                    recipient = %recipient,
-                    error = %error,
-                    "Escalation recipient mail write failed"
-                );
-            }
-        }
-    }
-}
-
-async fn notify_only(
-    herdr_process: &dyn HerdrProcessAdapter,
-    team: &TeamName,
-    notification: &EscalationNotification,
-    kind: EscalationKind,
-) -> EscalationOutcome {
-    let notify_ok = notify(herdr_process, notification).await;
-    tracing::info!(
-        event = "herdr_queue_poll_outcome",
-        subsystem = "herdr_queue_wake",
-        action = "escalation",
-        outcome = kind.as_str(),
-        team = %team,
-        lead_present = false,
-        recipients_written = 0,
-        recipients_failed = 0,
-        notify_ok,
-        "Herdr escalation completed without roster data"
-    );
-    EscalationOutcome {
-        notify_attempted: true,
-        notify_ok,
-        ..Default::default()
-    }
-}
-
-async fn notify(
-    herdr_process: &dyn HerdrProcessAdapter,
-    notification: &EscalationNotification,
-) -> bool {
-    match herdr_process
-        .notify(
-            &notification.title,
-            &notification.body,
-            RequestDeadline::after(HERDR_NOTIFY_DEADLINE),
-        )
-        .await
-    {
-        Ok(()) => true,
-        Err(error) => {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "herdr_notify",
-                outcome = "failed",
-                error = ?error,
-                "Herdr escalation notification failed"
-            );
-            false
-        }
-    }
-}
-
-async fn write_escalation_mail(
-    runtime: &LocalServiceRuntime,
-    daemon_home: &Path,
-    team: &TeamName,
-    recipient: &str,
-    body: &str,
-) -> Result<atm_core::schema::AtmMessageId, AtmError> {
-    write_escalation_mail_with_summary(runtime, daemon_home, team, recipient, body, body).await
 }
 
 async fn write_escalation_mail_with_summary(
