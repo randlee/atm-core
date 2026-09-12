@@ -44,3 +44,4 @@ atm-runtime-test-support.workspace = true
 serde_yaml = "0.9"
 tempfile = "3"
 tracing-subscriber.workspace = true
+rusqlite = { version = "0.33.0", features = ["bundled"] }

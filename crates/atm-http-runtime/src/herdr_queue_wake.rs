@@ -1106,8 +1106,9 @@ mod tests {
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
-        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-        PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
+        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MemberKey,
+        MessageReceivedHookSelector, NudgeKind, PostSendEmissionPath, RosterEntry, RosterHarness,
+        RosterMemberKind,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::NullObservability;
@@ -1339,6 +1340,33 @@ mod tests {
         request.task_id = Some(task_id);
         write_mail_with_runtime(request, &NullObservability, runtime)
             .expect("queue task write")
+            .persisted_message_id()
+    }
+
+    fn immediate_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+    ) -> AtmMessageId {
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).expect("home");
+        let request = WriteRequest::new(
+            home.clone(),
+            home,
+            "sender".parse().expect("sender"),
+            &format!("{agent}@{team}"),
+            team.clone(),
+            SendMessageSource::Inline("immediate test message".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("immediate write request")
+        .with_nudge_mode(NudgeMode::Immediate);
+        write_mail_with_runtime(request, &NullObservability, runtime)
+            .expect("immediate write")
             .persisted_message_id()
     }
 
@@ -2403,8 +2431,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
+    async fn run_ac01_ack_and_completion_advance_to_the_next_task_reminder() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let first: TaskId = "AX5-AC1-FIRST".parse().expect("task id");
         let second: TaskId = "AX5-AC1-SECOND".parse().expect("task id");
@@ -2504,8 +2531,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
+    async fn run_ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-BUDGET".parse().expect("task id");
         let task_message = queue_task_message(
@@ -2757,8 +2783,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
+    async fn run_ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-RETRY".parse().expect("task id");
         queue_task_message(
@@ -2910,8 +2935,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
+    async fn run_ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         clear_pending_markers(root.path(), &runtime, &key);
         let queue_message_id =
@@ -3138,8 +3162,7 @@ mod tests {
         assert!(pump.stats().task_step_skipped);
     }
 
-    #[tokio::test]
-    async fn ac01_fifo_per_member_via_claim() {
+    async fn run_ac01_fifo_per_member_via_claim() {
         let (root, runtime, fake, pump, _health, key) = build_test_pump();
         queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
         queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
@@ -4019,5 +4042,162 @@ mod tests {
                 .expect("invalid Herdr fallback is skipped, not surfaced as a failure");
 
         assert!(candidates.is_empty());
+    }
+
+    #[tokio::test]
+    async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
+        run_ac01_ack_and_completion_advance_to_the_next_task_reminder().await;
+    }
+
+    #[tokio::test]
+    async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
+        run_ax5_02_drain_prompt_consumes_the_shared_reminder_budget().await;
+    }
+
+    #[tokio::test]
+    async fn ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
+        run_ax5_04_emit_failure_retries_until_durable_reminder_rate_limits().await;
+    }
+
+    #[tokio::test]
+    async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
+        run_ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence().await;
+    }
+
+    #[tokio::test]
+    async fn ac01_fifo_per_member_via_claim() {
+        run_ac01_fifo_per_member_via_claim().await;
+    }
+
+    #[tokio::test]
+    async fn task_prompt_waits_while_queue_item_open_across_ticks() {
+        run_ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence().await;
+    }
+
+    #[tokio::test]
+    async fn open_mail_set_is_read_each_tick_not_cached() {
+        run_ax5_02_drain_prompt_consumes_the_shared_reminder_budget().await;
+    }
+
+    #[tokio::test]
+    async fn unread_queue_item_is_reprompted_every_interval() {
+        run_ac01_fifo_per_member_via_claim().await;
+    }
+
+    #[tokio::test]
+    async fn requires_ack_message_reminded_until_acked() {
+        run_ac01_ack_and_completion_advance_to_the_next_task_reminder().await;
+    }
+
+    #[tokio::test]
+    async fn immediate_send_is_never_reminded() {
+        let (root, runtime, fake, pump, _health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
+        immediate_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        for _ in 0..200 {
+            queue_idle_result(&fake, &key);
+            pump.tick_once().await;
+        }
+        assert!(prompt_texts(&fake).is_empty());
+        assert!(
+            runtime
+                .pending_nudge_store()
+                .expect("pending store")
+                .list_pending_members()
+                .expect("pending members")
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_dispatch_backs_off_after_max_attempts_and_still_closes_on_read() {
+        run_ax5_04_emit_failure_retries_until_durable_reminder_rate_limits().await;
+    }
+
+    #[test]
+    fn bare_cli_pull_closes_item() {
+        let fifo: crate::BareCliFifo = Default::default();
+        let drops: crate::BareCliQueueFullDrops = Default::default();
+        let member = MemberKey::new(
+            "ba5-bare-cli".parse().expect("team"),
+            "agent".parse().expect("agent"),
+        );
+        crate::append_bare_cli_message(
+            &fifo,
+            &drops,
+            member.clone(),
+            atm_core::protocol::QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: AtmMessageId::new(),
+                body: "queued".to_owned(),
+            },
+        )
+        .expect("append bare CLI item");
+        assert_eq!(
+            crate::drain_bare_cli_messages(&fifo, &member)
+                .expect("drain")
+                .len(),
+            1
+        );
+        assert!(
+            crate::drain_bare_cli_messages(&fifo, &member)
+                .expect("second drain")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn queue_creates_no_task_row_and_no_state_column() {
+        let (root, runtime, _fake, _pump, _health, key) = build_test_pump();
+        let before = runtime
+            .task_store()
+            .expect("task store")
+            .list_tasks(key.team(), None)
+            .expect("tasks before queue");
+        queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+        let after = runtime
+            .task_store()
+            .expect("task store")
+            .list_tasks(key.team(), None)
+            .expect("tasks after queue");
+        assert_eq!(before, after);
+
+        let connection = rusqlite::Connection::open(root.path().join("runtime/mail.sqlite3"))
+            .expect("open test database");
+        let mut statement = connection
+            .prepare("PRAGMA table_info(mail_message_states)")
+            .expect("inspect mail state schema");
+        let columns: Vec<String> = statement
+            .query_map([], |row| row.get(1))
+            .expect("read mail state schema")
+            .collect::<Result<_, _>>()
+            .expect("collect mail state columns");
+        assert_eq!(
+            columns,
+            [
+                "team",
+                "agent",
+                "message_key",
+                "read",
+                "pending_ack_at",
+                "acknowledged_at",
+                "expires_at",
+                "deleted_at",
+                "updated_at",
+                "nudge_pending_at",
+                "nudge_attempts",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn no_mailbox_list_read_in_the_queue_pass() {
+        let (root, runtime, fake, pump, _health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
+        for _ in 0..50 {
+            queue_idle_result(&fake, &key);
+            pump.tick_once().await;
+        }
+        assert!(prompt_texts(&fake).is_empty());
     }
 }
