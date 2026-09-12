@@ -52,9 +52,9 @@ metadata:
   </output-format>
 
   <workflow>
-    <step id="a">ACK this message immediately.</step>
+    <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"` (the message id is in the nudge line and the `atm read` header). The ack accepts the task; it does not close it.</step>
     <step id="b">Read the relevant source and doc files in the specified worktree and commit context.</step>
     <step id="c">Do not make any code changes.</step>
-    <step id="d">Send the structured findings report directly in the ATM message. Re-verify every cited file:line against the current branch and worktree before reporting it; stale or missing evidence is a finding, not a guess.</step>
+    <step id="d">Deliver the structured findings report by closing the task with the report as the body: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF`. Only this close frees your queue: the next assignment stays queued and never starts until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. Re-verify every cited file:line against the current branch and worktree before reporting it; stale or missing evidence is a finding, not a guess.</step>
   </workflow>
 </atm-review>

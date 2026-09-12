@@ -73,16 +73,16 @@ metadata:
   </references>
 
   <workflow>
-    <step id="a">ACK this message immediately. Begin work in the same session unless blocked.</step>
+    <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"` (the message id is in the nudge line and the `atm read` header). The ack accepts the task; it does not close it. Begin work in the same session unless blocked.</step>
     <step id="b">Read `{{ sprint_doc }}` before editing. Treat it as the authoritative source for sprint scope, retained requirements, deletion targets, validation, and acceptance criteria. If this assignment summary and the sprint doc differ, the sprint doc wins and the mismatch must be reported.</step>
     <step id="c">Update the assigned worktree from the target branch before editing. Include all earlier-sprint fixes already merged forward to that branch.</step>
     <step id="c1">Honor the `&lt;dependency-relations&gt;` block above: must-follow merge-forward trigger is parent dev push, not QA; merge parent → child before every round. PR-completion trigger is parent PR merge first. Stop if a parallel-safe relation intersects.</step>
     <step id="d">Read the referenced triage records first. Treat the listed occurrences as the minimum required scope on this branch.</step>
     <step id="d2">Before fixing each finding, verify the defect it describes is still actually present at the cited file:line in this worktree's current state. If a finding does not reproduce — already fixed, superseded by other work, or the described code path no longer exists — refuse to perform speculative or invented work to "address" it. Do not edit unrelated code in its name. Note it in your push/validation report as `not-reproducible` with the file:line you checked instead, and skip it. This applies per-finding, not to the whole task — fix every finding that does reproduce as normal.</step>
     <step id="e">Fix every promoted-branch occurrence in scope. Do not stop at the first location when the triage record marks the finding as repeatable.</step>
-    <step id="f">As soon as the branch is pushable, commit and push immediately. Send branch name and commit hash right away so follow-up QA can start in parallel.</step>
-    <step id="g">Run the required validation after the push report and send a second report with PASS or FAIL plus concrete failure details.</step>
+    <step id="f">As soon as the branch is pushable, commit and push immediately. Send branch name and commit hash right away to the assigner (the sender of this message) with a plain `atm send &lt;assigner&gt; --stdin` — a progress report, not a close; never close the task on a push. This lets follow-up QA start in parallel.</step>
+    <step id="g">Run the required validation after the push report. While it is FAIL, keep fixing and report progress with plain `atm send`. When it is PASS, close the task with the validation report as the body: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` — PASS plus the gate output lines and, per finding, fixed or `not-reproducible` with the file:line checked. Only this close frees your queue: the next assignment stays queued and never starts until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. Use `atm task close {{ task_id }} refused "&lt;reason&gt;"` only when the whole assignment cannot be done.</step>
 {% if triage_records and triage_records|trim %}    <step id="g1">Triage records are attached to this assignment. Use the `/closing-triage` skill to close out the findings fixed on this branch before reporting.</step>
-{% endif %}    <step id="h">After the validation report, read ATM again for follow-up work.</step>
+{% endif %}    <step id="h">After the close, read ATM again: the next queued task starts only now.</step>
   </workflow>
 </atm-task>

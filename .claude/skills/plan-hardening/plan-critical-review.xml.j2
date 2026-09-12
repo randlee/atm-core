@@ -58,7 +58,7 @@ metadata:
 {% endif %}
 
   <workflow>
-    <step id="a">ACK this message immediately.</step>
+    <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"` (the message id is in the nudge line and the `atm read` header). The ack accepts the task; it does not close it.</step>
     <step id="b">Assume the `critical-plan-reviewer` role from `.claude/agents/critical-plan-reviewer.md`. Read every document in `<references>` from `{{ worktree_path }}` at commit `{{ commit }}` with `git show {{ commit }}:&lt;path&gt;`; never review working files.</step>
     <step id="c">Verify every claim the plan makes about existing code against the branch before recording a finding; cite `file:line` on `{{ commit }}`.</step>
     <step id="d">Return the STEP3 handoff fenced JSON (PLAN-CRIT-nnn findings, sprint_scores, PASS only at zero Blocking and zero Important) with `atm task close {{ task_id }} completed --stdin`.</step>
