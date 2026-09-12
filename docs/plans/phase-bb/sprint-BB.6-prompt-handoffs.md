@@ -15,12 +15,13 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb6-prompt-
 | Governed interfaces | SQLite MINOR (additive table); HTTP/peer API MINOR: optional `handoffs` on the task-events list response, `HTTP_API_VERSION` 1.8.0 → 1.9.0; schema-reviewer sign-off |
 | Requirements / ADRs edited | ADR-062 new subsection; ADR-061 D5 (1.9.0) and D6 (additive table entry) |
 
-One durable row per emitted **task-linked** prompt, written by the path
-that emitted it after the sink reported success, read back by
-`atm task events`. It is an observation record, best-effort by design
-(plan P10, P11): a storage failure after a successful emission is logged,
-never retried, and never fails the emission. With it the 2026-09-12 nudge
-test is one query.
+One best-effort durable observation per successfully emitted **task-linked**
+prompt, written by the path that emitted it after the sink reported
+success, read back by `atm task events`. A storage failure after a
+successful emission is logged, never retried, and never fails the emission
+(plan P10, P11); exact one-to-one holds for a run whose log shows zero
+record failures, which is what the colima acceptance asserts. With it the
+2026-09-12 nudge test is one query.
 
 ## Deliverables
 
@@ -35,7 +36,7 @@ CREATE TABLE IF NOT EXISTS prompt_handoffs (
     kind TEXT NOT NULL,
     task_id TEXT NOT NULL,
     attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
-    trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'queue_claim', 'idle_drain', 'recovery_sweep', 'task_pass')),
+    trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'task_pass')),
     at TEXT NOT NULL,
     UNIQUE (team, agent, message_key, attempt)
 );
@@ -59,7 +60,7 @@ CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id
 ```rust
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum PromptTrigger { Steer, QueueClaim, IdleDrain, RecoverySweep, TaskPass }
+pub enum PromptTrigger { Steer, TaskPass }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PromptHandoff {
@@ -87,43 +88,43 @@ pub struct PromptHandoff {
   `boundaries/atm-storage/task-store.toml` and
   `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` list both.
 
-- [ ] D3 — one helper in `crates/atm-core/src/prompt_handoff_record.rs`
-  (new, ≤ 80 lines), `pub` because both emitting crates already depend on
-  `atm-core` (`atm-daemon-bootstrap/Cargo.toml:24` also depends on
-  `atm-http-runtime`, but a `pub(crate)` helper there is unreachable from
-  bootstrap):
+- [ ] D3 — one helper in `crates/atm-http-runtime/src/prompt_handoff_record.rs`
+  (new, ≤ 80 lines), `pub(crate)`: both emit paths that can carry a task
+  link live in this crate (plan P13):
 
 ```rust
-pub fn record_prompt_handoff(
-    store: &dyn TaskStore,
+pub(crate) async fn record_prompt_handoff(
+    bridge: &BoundedBlockingBridge,          // router_support.rs:81
+    deadline: RequestDeadline,
+    store: Arc<dyn TaskStore + Send + Sync>,
     dispatch: &BuiltInPostSendDispatch,
     trigger: PromptTrigger,
     at: IsoTimestamp,
 ) // returns (); logs, never errors
 ```
 
-  It builds the row from `dispatch.event` (`kind` via the BB.1 decision,
-  `task_id`, `attempt` from `Reminder { attempt }` else `0`) and returns
-  without writing when `dispatch.event.task_transition` is `None` (not
-  task-linked; plan P10). On `Err` from `record_prompt_handoff` it emits one
-  `tracing::error!(action = "prompt_handoff_record_failed", message_id, kind, trigger)`
+  It returns without writing when `dispatch.event.task_transition` is
+  `None` (not task-linked; plan P10). Otherwise it builds the row (`kind`
+  via the BB.1 decision, `task_id`, `attempt` from `Reminder { attempt }`
+  else `0`) and runs the synchronous store call through the caller's
+  bridge exactly as `record_task_reminder` does
+  (`task_pass.rs:552-580`: `bridge.run(deadline, move || store.record_prompt_handoff(&row)).await`).
+  Any `Err` — storage, bridge timeout, bridge saturation — emits one
+  `tracing::error!(subsystem, action = "prompt_handoff_record_failed", reason, message_id, kind, trigger)`
   and returns (plan P11). Called **after the sink reports success** at the
-  five emit paths, each with its trigger:
+  two emit paths:
 
-  | trigger | call site at `281e6f546` |
-  | --- | --- |
-  | `Steer` | `storage_and_nudge_router.rs:487` (immediate built-in path) |
-  | `QueueClaim` | `herdr_queue_wake.rs:646` (herdr claim) |
-  | `IdleDrain` | `atm-daemon-bootstrap/src/queue_drain.rs::drain_one` (`:300-330`) called from the transition sink (`:99-127`) |
-  | `RecoverySweep` | the same `drain_one` called from `run_recovery_sweep_once` (`:256`) |
-  | `TaskPass` | `herdr_queue_wake/task_pass.rs:483`, beside `record_task_reminder` |
+  | trigger | call site at `281e6f546` | bridge / deadline |
+  | --- | --- | --- |
+  | `Steer` | `storage_and_nudge_router.rs:487` (immediate built-in path, after the `timeout(remaining, …)` returns `Ok(Ok(_))`) | the router's `BoundedBlockingBridge`; the request's remaining deadline (`:42-49`), skipped with the failure log when already exhausted |
+  | `TaskPass` | `herdr_queue_wake/task_pass.rs:483`, beside `record_task_reminder` | the task pass's `blocking_bridge`; `herdr_request_deadline()` |
 
-  `drain_one` gains a `trigger: PromptTrigger` parameter; its two callers
-  pass `IdleDrain` and `RecoverySweep`. The store handle is
-  `LocalServiceRuntime::task_store` (`service_runtime.rs:325`), already held
-  by every caller. A failed sink writes no row (`requeue_claim`,
-  `queue_drain.rs:424`, is failure bookkeeping, not an emission). Exact
-  lines pinned in the PR body.
+  The herdr queue claim (`herdr_queue_wake.rs:646`) and the bootstrap
+  `queue_drain.rs::drain_one` (idle drain and recovery sweep) are untouched:
+  after BB.5 no task-linked message is deferred, so they never see a task
+  link (`send_mode_for_task_request`, `send/mod.rs:381-389`, becomes
+  `request.nudge_mode` for every task request). A failed sink writes no
+  row. Exact lines pinned in the PR body.
 
 - [ ] D4 — `atm task events <id>` (`crates/atm/src/commands/task.rs:437+`,
   `render_task_events`): the response (`TaskLedgerQuery` list outcome) gains
@@ -138,9 +139,10 @@ pub fn record_prompt_handoff(
   field and still decodes.
 
 - [ ] D5 — ADR-062 new subsection "Prompt handoffs (Phase BB)": the table,
-  the five triggers, task-linked only (P10), best-effort after sink success
-  with the logged failure line (P11), and "`task_events.reminded` remains
-  the task-side counter; `prompt_handoffs` is the emission record".
+  the two triggers and why only two (P13), task-linked only (P10),
+  best-effort after sink success with the logged failure line (P11), and
+  "`task_events.reminded` remains the task-side counter; `prompt_handoffs`
+  is the emission record".
   ADR-061 D5 entry (1.9.0) and D6 entry (additive table, MINOR), each
   naming its previous-consumer proof test below (ADR-061 D3). ADR-054
   capability count: no edit, no new capability (P10).
@@ -149,7 +151,7 @@ pub fn record_prompt_handoff(
 
 Storage — `crates/atm-storage-rusqlite/tests/`:
 
-- `record_prompt_handoff_round_trips_every_trigger` — all five.
+- `record_prompt_handoff_round_trips_every_trigger` — both.
 - `record_prompt_handoff_ignores_duplicate_identity` — same `(team, agent, message_key, attempt)` twice: one row, `Ok(())`.
 - `record_prompt_handoff_keeps_reminder_attempts_distinct` — one key, attempts 1 and 2: two rows.
 - `list_prompt_handoffs_orders_by_time_then_rowid`.
@@ -164,13 +166,11 @@ Runtime — `crates/atm-http-runtime/`:
 - `queue_claim_records_handoff_with_trigger_queue_claim`.
 - `steer_of_non_task_message_records_no_handoff` (P10).
 - `failed_sink_records_no_handoff` — one per path (steer, queue claim, task pass).
-- `record_failure_logs_prompt_handoff_record_failed_and_emission_succeeds` — a failing `TaskStore` stub; the sink result is unchanged and the log line carries message id, kind, trigger.
-
-Bootstrap — `crates/atm-daemon-bootstrap/src/queue_drain.rs` tests:
-
-- `idle_drain_records_handoff_with_trigger_idle_drain`.
-- `recovery_sweep_records_handoff_with_trigger_recovery_sweep`.
-- `drain_failed_sink_records_no_handoff_and_requeues`.
+- `record_failure_logs_prompt_handoff_record_failed_and_emission_succeeds` — a failing `TaskStore` stub; the sink result is unchanged and the log line carries `reason = storage`, message id, kind, trigger.
+- `record_bridge_timeout_logs_and_emission_succeeds` — a store stub that sleeps past the deadline: `reason = timeout`, sink result unchanged, the Tokio worker is not blocked (the test's own timer keeps firing).
+- `record_bridge_saturated_logs_and_emission_succeeds` — bridge permits exhausted: `reason = saturated`, sink result unchanged.
+- `steer_with_exhausted_deadline_skips_record_with_failure_log`.
+- `deferred_task_linked_message_is_impossible_after_bb5` — every task request goes through `send_mode_for_task_request` as `Immediate`; the claim path is asserted never to see `task_transition.is_some()`.
 
 CLI:
 

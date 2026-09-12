@@ -196,7 +196,7 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
     (false, Some(Started), _, _, _)                => K::TaskStarted,
     (false, Some(Complete{..}), _, _, _)           => K::TaskComplete,
     (false, Some(Closed{..}), _, _, _)             => K::TaskClosed,
-    (false, None, true, _, _)                      => unreachable after 4.3; rejected task links are stripped before the event (`send/delivery_persistence.rs:85-90`) so this arm is a validation error, not a template
+    (false, None, true, _, _)                      => falls through to the non-task rows below: a task-linked message with no transition (a pre-BB queued assignment claimed before the open-time normalization, BB.5 D6; a task-op message sent through `atm queue`) renders the ordinary `delivery`/`queue` kind, never an error
     (false, None, false, false, NudgeKind::Steer)  => K::Delivery,
     (false, None, false, true,  NudgeKind::Steer)  => K::DeliveryAck,
     (false, None, false, false, NudgeKind::Queue)  => K::Queue,
@@ -245,11 +245,14 @@ ordinary write route, so no new route, envelope arm or wire field (plan P1) —
 the `assigned → active` transition, the `Started` event, and the
 `task_started` line rendered from the same message (immediate,
 informational). A second start of an `active` task is a writer rejection
-("task <id> is already active"): the report is retained as ordinary mail
-with the task link stripped, exactly like every other task rejection
-(`with_task_rejection`, `delivery_persistence.rs:82-95`), so no `started`
-event is written, the assigner sees a plain `delivery` line, and the CLI
-prints the writer's rejection text. The CLI's preflight read is a courtesy
+(`ATM_TASK_ALREADY_ACTIVE`, "task <id> is already active") and behaves
+exactly like the other start rejections (non-assignee, complete, another
+task active): the write fails, the message is rolled back, nothing is
+delivered, one `rejected` audit row is appended
+(`writer/batch.rs:432-438` → `append_rejected_task_event`), and the CLI
+prints the writer's error. Only a *close* keeps its report on rejection
+(`deliver_rejected_close_report`), because a close carries a report worth
+keeping; a start carries none. The CLI's preflight read is a courtesy
 fast-fail only; the serialized writer is the sole authority (plan P12).
 Rejected on `complete`, and rejected while another task is `active` for the
 assignee (BA's one-active index: "already has an active task"); the agent
@@ -276,15 +279,22 @@ report message id (R7). A close on an already-closed task keeps today's
 
 ### 4.6 Observability (SMK-005, ruling (a))
 
-One durable record per emitted **task-linked** prompt, written by whichever
-path emitted it, after the sink reported success:
+One best-effort durable observation per successfully emitted **task-linked**
+prompt, written by the path that emitted it after the sink reported success
+(exact one-to-one holds for any run whose log shows zero record failures):
 
 ```
 prompt_handoffs(team, agent, message_key TEXT, kind, task_id NOT NULL,
                 attempt NOT NULL DEFAULT 0, trigger, at)
 UNIQUE (team, agent, message_key, attempt)
-trigger ∈ steer | queue_claim | idle_drain | recovery_sweep | task_pass
+trigger ∈ steer | task_pass
 ```
+
+Two triggers, because after §4.7 no task-linked message is ever deferred:
+assignments, starts and closes are all immediate (`steer`), and the task pass
+is the only other task prompt source. The queue claim, idle drain and
+recovery-sweep paths never carry a task link after BB.5 and record nothing
+(plan P13).
 
 Only task-linked prompts are recorded: the one reader is `atm task events`,
 and a row nobody reads is unused code (plan P10). The record is an
@@ -337,7 +347,7 @@ ephemeral items are not tasks and are unchanged (BA §9).
 ## 6. Tests
 
 Unit: an assignment write leaves `requires_ack` false and `pending_ack_at` NULL and creates no pending nudge marker; `--requires-ack --task-id` rejected by clap; `atm task start` by a non-assignee, on `complete`, and twice on the same task; `--requires-ack --task-id` rejected by clap; kind decision covers every arm of §4.2 including the `(false, None,
-true, ..)` validation error; every default body renders with its placeholders
+true, ..)` fall-through to the non-task kinds; every default body renders with its placeholders
 and contains no `<action>` for the four informational kinds; `"task"` parse
 error names `task_ready`.
 
@@ -347,8 +357,9 @@ one `queued="3"`, one `ready` for task 1, no `execute` line for tasks 2 and 3; `
 shows Unread 3 / Pending-Ack 0 throughout; `atm task start` on task 1 →
 assigner sees `started` with the start message id and task 1 goes `active`; close → assigner sees `complete` with the report id
 and the agent sees `ready` for task 2 within one pass; task events show
-`reminded attempt=0`, `acked`, `started`, `completed` on the right task ids
-and nothing on the others; ready never followed by `atm task start` → `reminder="1"`, `reminder="2"` at
+`reminded attempt=0`, `started`, `completed` on the right task ids, no
+`acked` row anywhere (`atm ack` of the assignment mail writes no task
+event), and nothing on the others; ready never followed by `atm task start` → `reminder="1"`, `reminder="2"` at
 ≥60 s, task stays `assigned`, no `started`; start of a non-head task → it
 becomes head and `active`, previous head stays `assigned`; reassign → old assignee `closed outcome="reassigned"`,
 new assignee `queued` or `ready`; move to head while idle → `ready` next pass

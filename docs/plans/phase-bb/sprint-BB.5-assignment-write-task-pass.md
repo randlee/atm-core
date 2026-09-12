@@ -87,6 +87,32 @@ task pass is the only source of `task_ready`/`task_reminder`, and every
   is the same call with the notice message and that transition). Nothing
   crosses the wire: `SendOutcome` is unchanged.
 
+- [ ] D6 — pre-BB durable assignments (plan P14). New
+  `crates/atm-storage-rusqlite/src/task_assignment_migration.rs::normalize_legacy_assignment_markers(connection: &Connection, target: &SharedDbTarget) -> Result<u64, AtmError>`
+  called from `ensure_schema` beside
+  `migrate_template_override_kinds_to_seven` (`shared_db.rs:756-770`), one
+  statement, idempotent, run at every open:
+
+```sql
+UPDATE mail_message_states
+   SET pending_ack_at = NULL, nudge_pending_at = NULL, nudge_attempts = 0
+ WHERE acknowledged_at IS NULL
+   AND (team, agent, message_key) IN (
+        SELECT m.team, m.agent, m.message_key
+          FROM mail_messages m
+          JOIN tasks t ON t.team = m.team AND t.assignee = m.agent
+                      AND t.assignment_message_id = m.message_id
+         WHERE t.state IN ('assigned', 'active'));
+```
+
+  (column names pinned against `mail_messages_schema.rs:250` and
+  `pending_nudge_store.rs:40-72` in the PR body). Envelopes are immutable
+  and keep `requires_ack = true`; that is harmless because the pending
+  predicate (`pending_nudge_store.rs:13`) and the `Pending-Ack:` header read
+  state columns only. Once BB.5 writes no markers the statement matches
+  nothing. Logged once per open with the affected-row count when non-zero.
+  ADR-061 D6 gets a note row (no DDL change).
+
 - [ ] D5 — `docs/requirements.md:1585` delete "require acknowledgement for
   any task-linked message"; `:1591` delete "imply `--requires-ack`", add
   "`--requires-ack` conflicts with `--task-id`"; `:2975` → "a task-linked
@@ -104,7 +130,7 @@ task pass is the only source of `task_ready`/`task_reminder`, and every
 - `send.rs` `assigning_task` binding
 - `task_pass.rs::record_queue_prompt_reminders`, `::queue_prompt_is_head_assignment`
 - `herdr_task_start.rs` (whole file) and its `mod` line
-- `nudge_dispatch.rs` claim-time `Queued` derivation from BB.1 D5.1 for assignments (assignments are never claimed now); keep the `Close` arms
+- nothing in `nudge_dispatch.rs`: BB.1 D5.1's claim path already sets no transition
 - tests asserting an assignment is pending-ack or claimed by the pump (grep `pending_ack_at` in task tests; `queue_prompt_is_head_assignment`)
 
 ## Tests
@@ -120,6 +146,9 @@ Unit / writer:
 - `reassign_notice_has_state_row_and_projection` — `atm read` returns it once, mark-read persists in `mail_message_states`, message search finds its body.
 - `insert_message_canonical_is_the_only_insert_path` — `execute_upsert_message` and the notice both go through it; a duplicate message key returns `false` and inserts nothing.
 - `same_assignee_reassign_refreshes_row_and_emits_task_queued` (plan §1 row 15).
+- `ba_fixture_with_pending_assignments_opens_with_zero_pending_ack_and_no_markers` — the BA live-ledger fixture (three open assignments with `pending_ack_at` and `nudge_pending_at` set) opened by the BB.5 binary: `Pending-Ack 0`, no pending markers, envelopes byte-identical, the three tasks still `assigned` in order, a second open changes nothing (D6).
+- `legacy_assignment_claimed_before_normalization_renders_delivery` — the same fixture with the pump claiming a marker before `ensure_schema` runs (unit-level, claim path invoked directly): the event has no transition and the kind is `delivery`, no error (BB.1 D3, plan P14).
+- `pump_never_claims_a_bb_assignment_and_loses_no_prompt` — three assignments on a normalized fixture: exactly one `task_ready` after the next pass, no duplicate, no `queue` line.
 - `reopen_complete_task_emits_task_queued` (row 9).
 - `ack_of_assignment_writes_no_task_event` (row 14).
 
@@ -144,7 +173,7 @@ Integration (colima, every roster shape):
 1. `grep -rn "queue_prompt_is_head_assignment\|record_queue_prompt_reminders\|herdr_task_start" crates/` returns nothing.
 2. Every test above passes.
 3. D5 edits landed; `just lint spell` passes.
-4. No new column, state, event kind or counter (plan P8).
+4. No new column, state, event kind or counter (plan P8); D6 changes data, not DDL.
 
 ## Required validation
 

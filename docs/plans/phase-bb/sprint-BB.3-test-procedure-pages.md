@@ -16,7 +16,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb3-test-pr
 | Rulings | Rand 2026-09-12: "When I read through the current reports (smoke, integration, fuzz, ...), there is no way for me to see what the test did. i.e. every test has a test procedure and that procedure should be linked from the test. Ideally the test procedure would contain diagrams and good explanation for the user reviewing and available in html. (I expect we would only need a single page for each procedure version which would change slowly over time)." / "I am not asking you to rewrite tests, I just want info to help me understand exactly what procedure is done." / "we may need to dig up some older procedures from git history" |
 | Requirements / ADRs edited | none |
 | Governed interfaces (ADR-061) | none. Evidence JSON, the report index and the procedure manifest are not one of the three governed interfaces; their contract is pinned in §2 D3 and D5 of this doc. |
-| Not in scope | changing what any runner does; a runner that executes its steps from the procedure file (considered, rejected by Rand as test rewriting); editing any existing file under `site/reports/**` other than adding new files; `atm-hermes-testbed` changes |
+| Not in scope | changing what any runner does; a runner that executes its steps from the procedure file (considered, rejected by Rand as test rewriting); editing any runner-written evidence file under `site/reports/**` (every `*.json`, `*.envelope.json`, per-run `*.html`/`*.xhtml`); `atm-hermes-testbed` changes. The generated `site/reports/index.html` **is** rewritten by `just reports-index` — it is generator output, not evidence, and the sprint's diff check (D5) proves it is the only pre-existing file that changes |
 
 ## 0. What the reader gets
 
@@ -41,7 +41,7 @@ the runner read the page (Rand: no test rewrites).
 | Procedure id | Runner | Evidence JSON | Envelope writer | Revision in evidence today |
 | --- | --- | --- | --- | --- |
 | `smoke-<feature>` for every feature the runner accepts: `fast`, `normal`, `thorough` (`FIXTURE_FEATURES` L49), `localhost`, `local-ip` (alias `local-up` maps to it), `peer-preflight`, `crosshost-send`, `crosshost-ack`, `crosshost-curl-plain`, `crosshost-curl-tls`, `admission-capacity` (constants L50–61) | `scripts/smoke/run_feature_smoke.py` (`add_case` L527; `write_report` L806) | `<run>/<feature>.json` (`feature, platform, host, run_id, status, cases[]`) | `write_report` L868–880 → `smoke.envelope.json` | **none** |
-| `graft-hermes` | `scripts/phase-ai/run_hermes_graft_live.py` (four committed envelopes under `site/reports/smoke/macos/rand-m5.local/*-graft-hermes`) | same shape | its own envelope writer | **none** |
+| `graft-hermes` | `scripts/phase-ai/run_hermes_graft_live.py` dispatched by `just smoke graft-hermes` (`.just/run_smoke.py:15`; active — four envelopes dated 2026-09-12 under `site/reports/smoke/macos/rand-m5.local/*-graft-hermes`) | `<run>/graft-hermes.json` (same shape) | its `smoke.envelope.json` writer | **none** — D3 adds it |
 | `colima-hermes-skills` | `scripts/smoke/colima_skill_report.py` (`render` L71) rendering `atm-hermes-testbed ./test.sh` output | `<run>/colima-hermes-skills.json` (same shape) | L99–103 | **none** |
 | `read-query-benchmark` | `scripts/smoke/read_benchmark.py` (`_report_variables` L709; campaign payload L775–793) | `<campaign>.json` | `scripts/smoke/benchmark_report.py::render_envelope` L392 | `source_revision` L793 |
 | `send-message-benchmark` | `scripts/smoke/benchmark_report.py` (30 revisions) | `<campaign>.json` | same | `source_revision` where the producer wrote it (index comment L32–36) |
@@ -166,6 +166,14 @@ Add `"source_revision": <git rev-parse HEAD of the runner's checkout>` to:
   (L99–103). The runner is the report renderer here; the value is the
   atm-core checkout that rendered, and the testbed's own ref goes in the
   existing `header_cases` (L57) as a case named `testbed ref`.
+- `scripts/phase-ai/run_hermes_graft_live.py` (the `graft-hermes` lane,
+  active per §1): `source_revision` and `procedure: "graft-hermes"` in
+  `graft-hermes.json` and in its `smoke.envelope.json`, resolved the same
+  way as the smoke runner (one `git rev-parse HEAD`, `null` on failure).
+  New graft reports therefore resolve by exact revision, never by date.
+  Tests in `scripts/phase-ai/test_run_hermes_graft_live.py`:
+  `test_graft_report_and_envelope_carry_source_revision_and_procedure`,
+  `test_graft_missing_git_writes_null_source_revision`.
 - `.just/generate_report_index.py`: `OPTIONAL_FIELDS` (L34) gains
   `source_revision` and `procedure`; `Envelope` (L44) gains
   `source_revision: str | None` and `procedure: str | None`;
@@ -173,7 +181,11 @@ Add `"source_revision": <git rev-parse HEAD of the runner's checkout>` to:
 
 Benchmarks and fuzz already carry `source_revision`; no change to their
 writers. Existing evidence files are not edited (they stay byte-for-byte
-runner output); they take the historical path in D5.
+runner output); they take the historical path in D5. The diff gate:
+`git diff --stat develop -- site/reports` at the PR head lists only
+additions plus the single modified file `site/reports/index.html`;
+`scripts/tests/test_site_reports_diff_is_generated_only.py` asserts exactly
+that against the merge base.
 
 ### D4 Backfill from git history
 
@@ -250,6 +262,7 @@ L62–330):
 `scripts/smoke/test_run_feature_smoke.py` (L230 pattern):
 
 - `test_report_and_envelope_carry_source_revision`
+- `test_site_reports_diff_is_generated_only` (`scripts/tests/`, the D3 diff gate)
 - `test_missing_git_writes_null_source_revision`
 
 `scripts/smoke/test_colima_skill_report.py`:
@@ -266,8 +279,9 @@ L62–330):
    `cases[].name` (smoke/colima), family (benchmark) or worker (fuzz) values in
    that report's JSON.
 3. Every historical entry links the page in effect on its run date and says
-   "inferred from run date"; no historical evidence file has changed
-   (`git diff --stat develop -- site/reports` shows additions only).
+   "inferred from run date"; no runner-written evidence file has changed
+   (`git diff --stat develop -- site/reports` shows additions plus only the
+   regenerated `site/reports/index.html`; the D3 diff-gate test proves it).
 4. A fresh `just smoke fast` run on the PR head writes `source_revision` into
    both its JSON and envelope and its index entry links without the inferred
    note.

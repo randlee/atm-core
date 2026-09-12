@@ -108,18 +108,20 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
     (false, Some(TaskTransition::Started), _, _, _) => Ok(K::TaskStarted),
     (false, Some(TaskTransition::Complete { .. }), _, _, _) => Ok(K::TaskComplete),
     (false, Some(TaskTransition::Closed { .. }), _, _, _) => Ok(K::TaskClosed),
-    (false, None, true, _, _) => Err(AtmError::validation(format!(
-        "task-linked message {} has no task transition", event.message_id
-    ))),
-    (false, None, false, false, NudgeKind::Steer) => Ok(K::Delivery),
-    (false, None, false, true, NudgeKind::Steer) => Ok(K::DeliveryAck),
-    (false, None, false, false, NudgeKind::Queue) => Ok(K::Queue),
-    (false, None, false, true, NudgeKind::Queue) => Ok(K::QueueAck),
+    (false, None, _, false, NudgeKind::Steer) => Ok(K::Delivery),
+    (false, None, _, true, NudgeKind::Steer) => Ok(K::DeliveryAck),
+    (false, None, _, false, NudgeKind::Queue) => Ok(K::Queue),
+    (false, None, _, true, NudgeKind::Queue) => Ok(K::QueueAck),
 }
 ```
 
-  The two callers (`send/hook.rs`, `nudge_dispatch.rs`) propagate the error;
-  it surfaces as the existing sender-visible post-send warning.
+  A task-linked event with no transition is **not** an error: it renders the
+  ordinary non-task kind. That case is reachable only for a pre-BB queued
+  assignment claimed before BB.5 D6's open-time normalization, or a task-op
+  message sent through `atm queue`; both must render, not warn (plan P14).
+  The `Result` return remains for the retired-kind parse path only. The
+  `task_id.is_some()` column is therefore unused by the match and is
+  dropped from the tuple.
 
 - [ ] D4 — `crates/atm-core/src/send/nudge_template.rs:77-101` default bodies
   for the six kinds, byte-for-byte from design §3 (the `task_ready` and
@@ -146,13 +148,17 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
      `task_op = Some(Start)` →
      `Started` — this builder only ever sees a start the writer applied: a
      rejected start (duplicate, non-assignee, complete, another task
-     active) is retained with `task_id = None` and `task_op = None` by
-     `with_task_rejection` (`crates/atm-core/src/send/delivery_persistence.rs:82-95`)
-     before post-write routing, so it reaches the kind decision as a plain
-     `delivery` (plan P12); `task_op = Some(Close { outcome, .. })` →
-     `Complete` when `envelope.from == row.assignee`, else
-     `Closed { Cancelled }`; an `already_closed` admission is likewise
-     retained with the link stripped and renders `delivery` (plan §1 row 17).
+     active) fails the write and is rolled back before post-write routing
+     (plan P12, `batch.rs:432-438`); `task_op = Some(Close { outcome, .. })`
+     → `Complete` when `envelope.from == row.assignee`, else
+     `Closed { Cancelled }`; a rejected close (`RejectedReportDelivered`) and
+     an `already_closed` admission are retained with the link stripped by
+     `with_task_rejection` / `with_already_closed`
+     (`crates/atm-core/src/send/delivery_persistence.rs:76-95`) and render
+     `delivery` (plan §1 rows 17, 19). This is the **immediate** builder; the
+     claim path (`load_received_hook_dispatch_message`) sets no transition at
+     all — after BB.5 no task-linked message is deferred, and a legacy one
+     renders the non-task kind (D3).
   2. Task pass, `nudge_dispatch.rs:157-189` `build_task_reminder_dispatch`:
      `Ready` when `row.reminder_count == 0`, else
      `Reminder { attempt: row.reminder_count }`.
@@ -160,7 +166,7 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
      write result): same rule as 1 for `Close`; an immediate assignment does
      not exist today (assignments are deferred until BB.5), so `Queued` is
      set from the write result's position when BB.5 lands and is `None` →
-     validation error until then, which is unreachable (test pins it).
+     ordinary `delivery` until then (plan P14; test pins it).
   Line numbers are pinned in the PR body at task start; QA diffs.
 
 - [ ] D6 — doctor, `crates/atm-core/src/doctor/mod.rs:691-700` (beside the
@@ -180,6 +186,17 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
     retired-kind error, calls `clear_template_override` with the raw text.
     `clear_template_override`'s `kind` parameter becomes `&str`.
 
+- [ ] D6a — boundary manifests for the widened sealed trait:
+  `boundaries/atm-storage/nudge-template-override-store.toml` `[contracts]`
+  `request_types` gains `"retired kind name (&str, deletion only)"`,
+  `response_types` gains `"Vec<(String, IsoTimestamp)> (stale override kinds)"`,
+  and `[public] notes` records the two additions;
+  `boundaries/atm-storage-rusqlite/nudge-template-override-store-sqlite.toml`
+  `request_types` and `response_types` gain the same entries. The trait stays
+  sealed and implemented only by `atm-storage-rusqlite`
+  (`[implementation] visibility = "trait_only"` unchanged); `just lint
+  boundaries` and the `no_cli_sqlite_lookup` review gate cover the edit.
+
 - [ ] D7 — `crates/atm-graft/src/nudge_sink.rs`, `crates/atm-graft/src/runtime/mod.rs`,
   `crates/atm-graft-python/src/lib.rs`: decode `PostSendHookEvent` with the
   new optional field (no `deny_unknown_fields` anywhere on the path; the
@@ -194,6 +211,12 @@ match (event.is_ack, event.task_transition, event.task_id.is_some(), event.requi
   `:4971` seven → eleven; ADR-054 (a) lists the eleven kinds and gains a
   "Phase-BB amendment (2026-09-xx)" recording the retirement and the (g)
   both-sides change; ADR-061 D5 entry "Phase BB.1: 1.7.0 → 1.8.0".
+
+## Paths edited outside `crates/`
+
+- `boundaries/atm-storage/nudge-template-override-store.toml`
+- `boundaries/atm-storage-rusqlite/nudge-template-override-store-sqlite.toml`
+- `docs/requirements.md`, `docs/adr/ADR-054-…`, `docs/adr/ADR-061-…` (D8)
 
 ## Paths to delete
 

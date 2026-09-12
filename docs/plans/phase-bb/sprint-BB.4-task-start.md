@@ -12,7 +12,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb4-task-st
 | Recommended | arch-ctm / deep-reasoning |
 | Depends on | `must_follow` BB.1 (dev push) — emits `TaskTransition::Started`; stacks on `feature/bb1-transition-templates` |
 | Worktree | `feature/bb4-task-start` |
-| Governed interfaces | none. `TaskOp::Start` already exists on `WriteRequest` (`crates/atm-storage/src/task_op.rs:10-17`); this sprint changes who may send it |
+| Governed interfaces | route/envelope: none — `TaskOp::Start` already exists on `WriteRequest` (`crates/atm-storage/src/task_op.rs:10-17`); this sprint changes who may send it. Error contract: new additive stable code `ATM_TASK_ALREADY_ACTIVE` (MINOR), appended to the ADR-061 D5 1.8.0 entry BB.1 opens; schema-reviewer sign-off |
 | Requirements / ADRs edited | `docs/requirements.md` 2996–2997, 3010–3013; ADR-062 134–137 → Phase BB amendment |
 
 After this sprint the only actor that applies `Started` is the assignee,
@@ -59,28 +59,40 @@ struct TaskStartCommand {
   `:394-408`: sets `task_id`, `task_op = Some(TaskOp::Start)`,
   `NudgeMode::default()`); `validate_task_request`; `composition.send`.
   Output: `started {id}` on an applied start; on a writer rejection the
-  CLI prints the rejection text the daemon returned (`task {id} is already
-  active`, `… is already complete`, `… already has an active task`,
-  `… is not assigned to …`) and exits 1, exactly as `task close` surfaces
-  `task_rejection` today. The preflight row is used only for the fast-fail
-  above; it never decides idempotency (plan P12). JSON: the `SendResult`.
+  write fails and the CLI prints the daemon's error (`ATM_TASK_ALREADY_ACTIVE`
+  `task {id} is already active`, `… is already complete`,
+  `… already has an active task`, `… is not assigned to …`) and exits 1,
+  exactly as any failed `atm send` does. Nothing is delivered on rejection.
+  The preflight row is used only for the fast-fail above; it never decides
+  idempotency (plan P12). JSON: the `SendResult`.
 
 - [ ] D2 — `crates/atm-storage-rusqlite/src/writer/task_ops.rs`:
   - `load_startable_task` (`:454-478`): replace the `DAEMON_ACTOR_NAME`
     check (`:472-476`) with
     `if record.envelope.from != row.assignee { return Err(task_not_counterparty(format!("task {task_id} is not assigned to {}", record.envelope.from))); }`.
+  - `crates/atm-error/src/error_codes.rs:76-80`: add
+    `AtmErrorCode::TaskAlreadyActive` with wire name
+    `ATM_TASK_ALREADY_ACTIVE` (`:446-450` parse arm), beside
+    `TaskAlreadyClosed`; update the error-code surface fixtures and
+    `openapi.yaml` the way the last added code did (additive, MINOR).
+  - `writer/task_rejection.rs`: add
+    `pub(super) fn task_already_active(detail) -> AtmError` beside
+    `task_already_closed` and add `TaskAlreadyActive` to the
+    `is_task_rejection` match, so `append_rejected_task_event`
+    (`task_ops.rs:42-112`) audits it like the other rejections.
   - `apply_task_start` (`:396-452`): delete the
     `start_reminder_was_emitted` call (`:412`); the silent
     `row.state == TaskState::Active` early return becomes
-    `return Err(task_already_active(format!("task {task_id} is already active")));`
-    where `task_already_active` is a new constructor in
-    `writer/task_rejection.rs` beside `task_already_closed`, using the same
-    error code those constructors share so `is_task_rejection` (`task_ops.rs:48`)
-    routes it to `TaskMessageResult::RejectedReportDelivered` (`ops.rs:751`):
-    report retained as ordinary mail, link stripped, a `rejected` event row,
-    no `started` row (plan P12). `reject_concurrent_active_task` (`:417`) and
-    the move-to-head (`:419-421`) stay. The `started` event row keeps
-    `actor = TaskActor::Member(assignee)` and
+    `return Err(task_already_active(format!("task {task_id} is already active")));`.
+    The error propagates exactly as the existing start rejections do:
+    `apply_task_message` (`:115-145`) returns it, `writer/batch.rs:432-438`
+    drops the savepoint (the report row is rolled back, nothing is
+    delivered) and appends one `rejected` row `active → active` with
+    `actor = assignee`, `message_id = record.envelope.message_id`,
+    `detail = error.message()`. No retained-report path is added for starts
+    (plan P12). `reject_concurrent_active_task` (`:500-527`,
+    `ATM_TASK_MOVE_INVALID`) and the move-to-head (`:419-421`) stay. The
+    `started` event row keeps `actor = TaskActor::Member(assignee)` and
     `message_id = record.envelope.message_id`. Because admission is
     serialized in the writer transaction, two concurrent starts of one task
     yield exactly one `started` row and one rejection; a start that races a
@@ -130,12 +142,13 @@ Writer — `crates/atm-storage-rusqlite/tests/task_ledger_writer.rs`:
 - `start_by_non_assignee_is_rejected` — assigner and third party.
 - `start_on_complete_task_is_rejected`.
 - `start_while_another_task_is_active_is_rejected` — `already has an active task`.
-- `duplicate_start_is_rejected_report_retained_no_event` — second start: `RejectedReportDelivered`, the report row exists with `task_id = NULL`, one `rejected` row, still one `started` row (plan §1 row 5).
+- `duplicate_start_is_rejected_nothing_delivered_one_rejected_row` — second start: the write returns `ATM_TASK_ALREADY_ACTIVE`, no mail row exists for the message, one `rejected` row `active → active`, still exactly one `started` row (plan §1 row 5).
+- `rejected_start_rolls_back_report_state_and_projection_atomically` — after the rejection, `mail_messages`, `mail_message_states` and the search projection have no trace of the message while the `rejected` row is committed (the savepoint contract of `batch.rs:432-441`).
 - `concurrent_starts_admit_exactly_one_started_event` — two writer transactions for the same start interleaved through the serialized writer: one `started`, one rejection.
 - `start_racing_reassign_is_rejected_as_not_counterparty` — reassign to B commits first; A's start is row 13.
-- `start_of_missing_task_is_rejected_without_event` (row 18).
+- `start_of_missing_task_appends_null_state_rejected_row` (row 18): `ATM_TASK_NOT_FOUND`, a `rejected` row with `from_state = to_state = NULL` and `assignee` = the requested agent.
 - `move_of_active_task_appends_moved_head_to_head` (row 16, existing behaviour pinned).
-- `close_of_complete_task_retains_report_and_strips_link` (row 17) and `close_by_non_party_is_rejected_and_retained` (row 19), `move_of_complete_task_errors` (row 20) — existing behaviour pinned so plan §1 is closed.
+- `close_of_complete_task_retains_report_and_strips_link` (row 17, `Applied(Some(outcome))`), `close_by_non_party_is_rejected_and_retained` (row 19, `RejectedReportDelivered`), `move_of_complete_task_appends_rejected_row` (row 20, `ATM_TASK_ALREADY_CLOSED`, `rejected` complete→complete) — existing behaviour pinned so plan §1 is closed.
 - `start_without_prior_reminder_succeeds` — the removed gate.
 - `daemon_actor_can_no_longer_start_a_task`.
 
@@ -144,7 +157,7 @@ CLI — `crates/atm/src/commands/task/tests`:
 - `task_start_sends_to_assigner_with_start_op`.
 - `task_start_defaults_message_when_omitted`.
 - `task_start_by_non_assignee_fails_before_sending`.
-- `task_start_prints_writer_rejection_for_active_task` — the daemon's `task_rejection` text is printed verbatim, exit 1; no preflight-derived wording exists in the command.
+- `task_start_prints_writer_error_for_active_task` — the daemon's `ATM_TASK_ALREADY_ACTIVE` error is printed verbatim, exit 1; no preflight-derived wording exists in the command.
 
 Integration (colima, every roster shape):
 
@@ -157,7 +170,7 @@ Integration (colima, every roster shape):
 1. `grep -rn "start_assigned_task\|start_reminder_was_emitted\|render_task_started_template\|task_started:" crates/` returns nothing.
 2. Every test above passes.
 3. D4 edits landed; `just lint spell` passes.
-4. No new state, event kind, counter, route, or wire field (plan P1, P8): `git diff --stat feature/bb1-transition-templates -- crates/atm-core/src/protocol.rs` is empty.
+4. No new state, event kind, counter, route, or wire field (plan P1, P8): `git diff --stat feature/bb1-transition-templates -- crates/atm-core/src/protocol.rs` is empty. The one interface addition is the error code `ATM_TASK_ALREADY_ACTIVE`, present in the surface fixtures and the ADR-061 D5 1.8.0 entry.
 
 ## Required validation
 
