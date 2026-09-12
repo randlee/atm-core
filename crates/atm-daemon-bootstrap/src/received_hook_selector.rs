@@ -620,9 +620,7 @@ async fn deliver_published_graft_hook(
                 &message_id,
                 atm_core::types::IsoTimestamp::from_datetime(
                     atm_core::types::IsoTimestamp::now().into_inner()
-                        + chrono::Duration::milliseconds(
-                            atm_storage::TASK_REMINDER_INTERVAL_MS,
-                        ),
+                        + chrono::Duration::milliseconds(atm_storage::TASK_REMINDER_INTERVAL_MS),
                 ),
                 || runtime_health.record_graft_queue_marker_clear_failure(),
             );

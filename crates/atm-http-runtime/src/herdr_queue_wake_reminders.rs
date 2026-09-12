@@ -20,7 +20,7 @@ impl HerdrQueueWakePump {
     pub(super) async fn remind_open_tasks(
         &self,
         candidates: Vec<TaskCandidate>,
-        prompted_by_drain: &HashSet<MemberKey>,
+        open_mail: &HashSet<MemberKey>,
         list_complete: bool,
         stats: &mut HerdrQueueWakeStats,
     ) {
@@ -58,8 +58,7 @@ impl HerdrQueueWakePump {
                 if !candidate.blocked && stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK {
                     continue;
                 }
-                if prompted_by_drain.contains(&candidate.member.key) {
-                    self.stamp_task_attempt(&candidate.member.key, now);
+                if open_mail.contains(&candidate.member.key) {
                     continue;
                 }
                 let Some(row) = self.read_due_task(reader.as_ref(), &candidate, now).await else {

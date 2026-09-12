@@ -1235,7 +1235,8 @@ mod tests {
             msg: &AtmMessageId,
             next_due: IsoTimestamp,
         ) -> Result<(), AtmError> {
-            self.inner.rearm_pending_after_handoff(member, msg, next_due)
+            self.inner
+                .rearm_pending_after_handoff(member, msg, next_due)
         }
 
         fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
