@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-014>
+  a triage:Finding ;
+  triage:findingId "CPR-014" ;
+  triage:title "Eight BA.4 CLI tests pass without exercising their doc lines" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. Eight BA.4 CLI tests pass without exercising their doc lines. Doc says: sprint-BA.4 AC2: every named test exists and passes, proving the stage table. Code does: close_already_closed_delivers_report_without_task_event sets json: true in the fixture, making the already_closed branch structurally unreachable, and never inspects the returned string (task_close.rs:131-149). stale_counterparty_rejection_exits_one_without_retry is byte-identical in setup to the third-party test and is rejected by admit(), never reaching the staleness guard (task_close.rs:151-168). task_target_on_other_team_or_host_is_rejected_before_send fails at peer resolution before the R8 guard and asserts only exit==1, which every task-path failure returns (task_close.rs:199-253). refusal_releases_next_queued_task's nudge assertion is satisfied by the fixture's own pending_ack_at seeding (task_close.rs:270-274). assign_to_active_member_persists_with_zero_prompts_until_idle never makes the member Active, never ticks a pump across its 20-iteration loop, and never reads the marker (crates/atm/tests/task_assign.rs:46-114). send_alias_builds_identical_write_request_to_task_command builds the two legs with opposite nudge modes and still asserts byte-equality, proving the assertion is blind to nudge mode (crates/atm/src/commands/send.rs:1636-1697). protocol_1_5_0_fixtures_decode_on_1_6_0 pins a hand-written 2-variant stub against a 16-variant enum (crates/atm/tests/task_move.rs:152-187). move_head_end_before_via_cli has no active task and never reads assigned_at (task_move.rs:70-99). Recommendation: Rewrite the eight bodies. In particular, make exit-code assertions discriminating by preserving AtmError through the task path (see CPR-023) so a test can assert which rejection fired. solar review-3 item B3, with negation proof per test. CPR-014's task_close.rs:131 fix lands after CPR-002 lands." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/tests/task_close.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2AAK16W2ZCGDTMEWHA3CCTC, 2026-09-12T08:08:52Z): fixed by solar at review-3 aadcc172a; fix/phase-ba-review-3 is now FROZEN at aadcc172a. Gate-green confirmed (ATM 01M2AAV9D2RG4BKNKG34W732RE, 2026-09-12T08:13:23Z): 13-gate-green on fenix's host (cli_surface 2/2)." ;
+  triage:relatedFinding "CPR-002" ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-014/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-014/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CPR-014/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/task_close.rs" ;
+  triage:line 131 ;
+  triage:snippet "close_already_closed_delivers_report_without_task_event, stale_counterparty_rejection_exits_one_without_retry, task_target_on_other_team_or_host_is_rejected_before_send, refusal_releases_next_queued_task, assign_to_active_member_persists_with_zero_prompts_until_idle, send_alias_builds_identical_write_request_to_task_command, protocol_1_5_0_fixtures_decode_on_1_6_0, move_head_end_before_via_cli -- all pass without discriminating the behavior they name" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:08:52Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-3 @ aadcc172a)." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-014/review3> .
+
+<urn:atm:triage:occurrence/CPR-014/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/task_close.rs" ;
+  triage:line 131 ;
+  triage:snippet "all eight test bodies rewritten to discriminate the behavior they name" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:08:52Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "solar fix/phase-ba-review-3 @ aadcc172a (branch now FROZEN at this sha); 13-gate-green confirmed on fenix's host (cli_surface 2/2)." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "aadcc172a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-014/2> .
+
+<urn:atm:triage:worktree/CPR-014/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar), FROZEN at aadcc172a, gate-green" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "aadcc172a" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/CPR-014/review3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar, B3 negation-proof items), above fix/phase-ba-review-2" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 9 .

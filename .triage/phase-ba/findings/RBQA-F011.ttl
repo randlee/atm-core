@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F011>
+  a triage:Finding ;
+  triage:findingId "RBQA-F011" ;
+  triage:title "escalation_admin::add is unused in production; CLI Add bypasses it" ;
+  triage:description "ruthless-boundary-qa phase-ending critical review @ 9f5aef2fe. Finding: escalation_admin::add, new in Phase BA, is unused in production code -- the CLI's Add subcommand bypasses it entirely, calling a different path. fenix's ruling: fix on review-1 (cipher item 4). Fixed at 04ad51873, ACCEPTED by fenix." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F011/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F011/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/escalation_admin.rs" ;
+  triage:line 1 ;
+  triage:snippet "escalation_admin::add unused in production; CLI Add bypasses it" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 04ad51873 (item 4), ACCEPTED by fenix." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "04ad51873" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-F011/1> .
+
+<urn:atm:triage:worktree/RBQA-F011/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), above integrate/phase-ba" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "04ad51873" ;
+  triage:orderIndex 7 .

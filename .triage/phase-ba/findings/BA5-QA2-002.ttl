@@ -26,7 +26,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-002/BA6-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-002/CLEANUP-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-002/CLEANUPB-1> ;
-  triage:triageRecordVersion "3" .
+  triage:deferredNote "PHASE BA CLOSEOUT (fenix, ATM 01M2A7443Z9R020ABEPJFJHAJC, 2026-09-12T07:08:18Z): arch-qa phase-ending review (ARCH-001) + quality-mgr BA-PHASE-END-QA independently live-verified fixed in tree at 9f5aef2fe. No status change; occurrences already closed by team-lead's prior batch (d32345d4c)." ;
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/BA5-QA2-002/BA6-1>
   a triage:Occurrence ;

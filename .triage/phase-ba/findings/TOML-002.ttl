@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/TOML-002>
+  a triage:Finding ;
+  triage:findingId "TOML-002" ;
+  triage:title "Four sqlite boundary TOMLs omit an edge that runtime-composition.toml claims they all carry" ;
+  triage:description "boundary-guard BG-001 phase-ending critical review @ 9f5aef2fe. Finding: four sqlite boundary TOMLs (pending-nudge-store-sqlite, nudge-template-override-store-sqlite, graft-receiver-endpoint-store-sqlite, template-catalog-sqlite line 25) omit the forbidden atm-daemon -> atm-storage-rusqlite edge that runtime-composition.toml line 55 claims they all carry. VERIFIED: all four untouched across the full phase diff (5ad925cd7..9f5aef2fe) and no real edge exists in code. fenix's ruling: important, not blocking (no real edge exists, so this is a manifest-accuracy issue not a boundary violation); the TOML edit itself is Rand's -- agents never edit boundary TOML. Parked for Rand alongside TOML-001 (whose description boundary-guard independently confirmed complete and accurate)." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-guard" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/TOML-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/TOML-002/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/pending-nudge-store-sqlite.toml" ;
+  triage:line 1 ;
+  triage:snippet "runtime-composition.toml:55 claims an edge these four TOMLs omit; no real edge exists" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9f5aef2fe" ;
+  triage:occursIn <urn:atm:triage:worktree/TOML-002/1> .
+
+<urn:atm:triage:worktree/TOML-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ba (phase landing head)" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9f5aef2fe" ;
+  triage:orderIndex 0 .

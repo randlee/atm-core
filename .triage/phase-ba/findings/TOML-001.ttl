@@ -23,7 +23,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/TOML-001/BA-CLEANUP-B-1> ;
   triage:deferredNote "Boundary TOML decision deferred per fenix ruling: awaits Rand's approval before dispatch. This is a design choice about public-testing surface, not a fix-routine blocker." ;
   triage:deferredNote "fenix (ATM 01M2A25E8T4QXDAG7FH85MCWF8, 2026-09-12T05:41:38Z): minor, post-landing review-findings stack, Rand's call -- agents never edit boundary TOML, so this waits for Rand. No live gh-stack layer target; promoteTo intentionally unset." ;
-  triage:triageRecordVersion "1" .
+  triage:deferredNote "PHASE BA CLOSEOUT (fenix, ATM 01M2A7443Z9R020ABEPJFJHAJC, 2026-09-12T07:08:18Z): boundary-guard's phase-ending critical review at 9f5aef2fe independently confirmed this description complete and accurate. Still Rand-owned, still open, promoteTo remains unset." ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/TOML-001/BA-CLEANUP-B-1>
   a triage:Occurrence ;

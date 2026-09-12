@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-009>
+  a triage:Finding ;
+  triage:findingId "CPR-009" ;
+  triage:title "Design section 1 arm 4 (dead agent -> escalate) is unreachable for an agent that actually died" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. Design §1 arm 4 (dead agent -> escalate) is unreachable for an agent that actually died. Doc says: nudge-task-design.md §1 arm 4: blocked or dead -> escalate once. Code does: runtime_state maps `None | Unknown -> RuntimeMemberState::Unknown`, never Offline. Offline is produced only by an explicit HeartbeatActivity::SessionEnded heartbeat. A Herdr-backed agent whose process dies stops appearing in the listing entirely, so runtime_state(None) yields Unknown and dispose returns Hold('unobserved'). Recommendation: Treat sustained absence from the runtime listing (beyond a bounded grace window) as Offline, or add an explicit staleness arm to dispose. Test with a fixture whose member vanishes from the listing rather than sending SessionEnded. fenix's ruling: sustained absence from the runtime listing (beyond a bounded grace window) counts as Offline and escalates once, matching design section 1 arm 4 -- not gated on an explicit SessionEnded heartbeat." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2AC6DXZ4Q9FBGQQ14EG9MM7, 2026-09-12T08:36:56Z): pushed by arch-ctm at review-2 343f9b25a (fix(tasks): escalate sustained runtime absence). Recorded fixed-pending-review: fenix's diff review and gates are in progress. fenix (ATM 01M2AC8X6E4YWCK3AD6JY1ECD2, 2026-09-12T08:38:18Z): GATE FAIL at 343f9b25a -- atm-architecture escalation_ownership test (RuntimeMemberState named in herdr_queue_wake.rs); all other 12 gates green. Recorded fixed-pending-correction; correction commit requested from arch-ctm, head sha to follow. fenix (ATM 01M2ACJFX0VDB81Y4P15HJW92X, 2026-09-12T08:43:32Z): remap -- architecture correction commit ce6999a46 accepted on review (state mapping moved into herdr_queue_wake/task_pass.rs); status fixed-pending-gate at ce6999a46, fenix's gate run in flight. A follow-up tidy commit (test-only import moved into the tests module) will arrive with CPR-018 and will become the CPR-009 head -- expect one more remap. Gate-green confirmed (ATM 01M2ACNJPMYFDEZEDMWFWS33ZQ, 2026-09-12T08:45:13Z): 13-gate-green on fenix's host (cli_surface 2/2); CPR-009 closed at ce6999a46. The CPR-018 tidy commit will be a final head remap only. fenix (ATM 01M2ACWKQZMWB5JDEQFRH6W5WK, 2026-09-12T08:49:03Z): final head remap -- ce6999a46 -> 0b34764b9 (tidy: test import moved into the tests module; accepted). Gates cover it via the CPR-018 911133abb run in flight; status fixed pending that gate confirmation. fenix (ATM 01M2ACZR3BAP24EHM1CQDP2VH8, 2026-09-12T08:50:46Z): CPR-018's 911133abb run had a cli_surface GATE FAIL (baseline not regenerated for the new --limit/--all args, unrelated to CPR-009's own fix); other 12 gates green, which covers CPR-009's 0b34764b9 too. CPR-009 closed at 0b34764b9." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-009/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-009/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-009/3> ;
+  triage:triageRecordVersion "5" .
+
+<urn:atm:triage:occurrence/CPR-009/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 935 ;
+  triage:snippet "runtime_state maps None|Unknown -> RuntimeMemberState::Unknown, never Offline; a crashed agent (no SessionEnded heartbeat) holds silently forever instead of escalating" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:36:56Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ 343f9b25a, pending review)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-009/review2> .
+
+<urn:atm:triage:occurrence/CPR-009/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 935 ;
+  triage:snippet "sustained absence from the runtime listing (beyond a bounded grace window) counts as Offline and escalates once, matching design section 1 arm 4" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:43:32Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; GATE FAIL corrected, tracked at occurrence/3 (fix/phase-ba-review-2 @ ce6999a46)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "343f9b25a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-009/2> .
+
+<urn:atm:triage:worktree/CPR-009/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), GATE FAIL (escalation_ownership), correction pending" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "343f9b25a" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:occurrence/CPR-009/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 935 ;
+  triage:snippet "architecture correction: state mapping moved into herdr_queue_wake/task_pass.rs, resolving the atm-architecture escalation_ownership violation" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:43:32Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm fix/phase-ba-review-2 @ 0b34764b9 (architecture correction ce6999a46 + tidy commit: test-only import moved into the tests module, accepted); other 12 gates green on the CPR-018 911133abb run cover this head (the run's sole cli_surface GATE FAIL is unrelated, a CPR-018 baseline-regeneration issue). CPR-009 closed." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "0b34764b9" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-009/3> .
+
+<urn:atm:triage:worktree/CPR-009/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), architecture correction + tidy commit, gate-green (via CPR-018 911133abb run)" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "0b34764b9" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/CPR-009/review2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm, bounded bridge + CPR items 4-14), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

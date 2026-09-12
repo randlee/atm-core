@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-007>
+  a triage:Finding ;
+  triage:findingId "CPR-007" ;
+  triage:title "Escalation recipient read fails open: one unparseable stored row silently disables all oversight for the team" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. Escalation recipient read fails open: one unparseable stored row silently disables all oversight for the team. Doc says: nudge-task-design.md §6.2: 'Addresses are free-form text, so `omega-prime@hermes` works today and a future `rand@human` needs no schema change.' Code does: crates/atm-storage-rusqlite/src/task_store.rs:389 now parses each stored recipient and returns Err on failure, erroring the whole scope. load_escalation_recipients catches that and substitutes an empty list: `Err(error) => { tracing::warn!(... outcome = 'failed' ...); Vec::new() }`. Recommendation: Skip and warn on the individual unparseable row rather than failing the scope, and never substitute an empty recipient list for a read error — escalate to the lead or surface a health error instead. Add tests for both arms. fenix's ruling: skip and warn on the individual unparseable recipient row rather than failing the whole scope; on a genuine read error, Hold with one warn per tick rather than silently substituting an empty recipient list." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2AAHXS8QB8CQTR4J0BSHVST, 2026-09-12T08:08:16Z): fixed at review-2 1afb11318. Gate-green confirmed (ATM 01M2AAP2C6BY2DSSEKEWX2S3YA, 2026-09-12T08:10:32Z) on fenix's host." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-007/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-007/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CPR-007/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 307 ;
+  triage:snippet "task_store.rs:389 parses each stored recipient and errors the whole scope on one bad row; load_escalation_recipients substitutes an empty list on that error, escalating to nobody" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:08:16Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ 1afb11318)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-007/review2> .
+
+<urn:atm:triage:occurrence/CPR-007/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_escalation.rs" ;
+  triage:line 307 ;
+  triage:snippet "skip and warn on the individual unparseable recipient row rather than failing the whole scope; on a genuine read error, Hold with one warn per tick rather than silently substituting an empty recipient list" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:08:16Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm fix/phase-ba-review-2 @ 1afb11318; gate-green confirmed on fenix's host." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "1afb11318" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-007/2> .
+
+<urn:atm:triage:worktree/CPR-007/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), gate-green" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "1afb11318" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/CPR-007/review2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm, bounded bridge + CPR items 4-14), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

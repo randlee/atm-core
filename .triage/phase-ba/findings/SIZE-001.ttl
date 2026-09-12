@@ -15,22 +15,27 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T06:08:00Z"^^xsd:dateTime ;
   triage:deferredNote "fenix (ATM 01M2A33J3NNYGRTMQBDCS1XG4F, 2026-09-12T05:58:05Z): minor, post-landing review-findings stack; remediation = module split. No live gh-stack layer target; promoteTo intentionally unset." ;
+  triage:deferredNote "PHASE BA CLOSEOUT (fenix, ATM 01M2A7443Z9R020ABEPJFJHAJC, 2026-09-12T07:08:18Z): FIXED by cipher, review-1 @ 2718f9439 -- module split landed, ACCEPTED by fenix." ;
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T05:58:05Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SIZE-001/BA-CLEANUP-B-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/SIZE-001/REVIEW1-1> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/SIZE-001/BA-CLEANUP-B-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 998 ;
   triage:snippet "herdr_queue_wake.rs at prod-line 998 of 1000" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/REVIEW1-1 (fix/phase-ba-review-1 @ 2718f9439)" ;
   triage:branch "fix/phase-ba-cleanup-b" ;
   triage:headSha "a2da4a570" ;
   triage:occursIn <urn:atm:triage:worktree/ba-cleanup-b/a2da4a570> .
@@ -41,3 +46,24 @@
   triage:branch "fix/phase-ba-cleanup-b" ;
   triage:headSha "a2da4a570" ;
   triage:orderIndex 6 .
+
+<urn:atm:triage:occurrence/SIZE-001/REVIEW1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "herdr_queue_wake.rs module split -- RULE-003 ceiling relieved" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 @ 2718f9439, ACCEPTED by fenix. Corroborating note (fenix ATM 01M2A9SVX16WV1SV9NGGHQ7919, 2026-09-12T07:55:08Z): quality-mgr measured herdr_queue_wake.rs production lines 998->790 on review-3 after B1 (RBQA-F001/RBQA-BA-END-F001 test-module relocation)." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "2718f9439" ;
+  triage:occursIn <urn:atm:triage:worktree/SIZE-001/review1> .
+
+<urn:atm:triage:worktree/SIZE-001/review1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), module split fix" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "2718f9439" ;
+  triage:orderIndex 7 .

@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-013>
+  a triage:Finding ;
+  triage:findingId "CPR-013" ;
+  triage:title "BA.2 rejection and migration tests assert weaker properties than their doc lines, and one documented case is untested" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. BA.2 rejection and migration tests assert weaker properties than their doc lines, and one documented case is untested. Doc says: sprint-BA.2 names writer_close_by_third_party_is_rejected, writer_stale_counterparty_is_rejected, a MoveTarget::Head-with-active-task case, and replay_of_migrated_history_reproduces_row_state over five fixtures. Code does: writer_close_by_third_party_is_rejected asserts only `.last().assignee == 'alice'` and cannot fail. writer_stale_counterparty_is_rejected does not construct the reassign race it names. MoveTarget::Head with an active task at position 2 is untested anywhere in the workspace. replay_of_migrated_history_reproduces_row_state is near-tautological and covers 3 of the 5 documented fixtures. Recommendation: Fix the four bodies, add the Head-behind-active case, and either rename the shipped tests to the documented names or amend the doc. solar review-3 item B3, with negation proof per test." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/tests/task_identity.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A8MZRBR51PDNSSS1HAV6NK, 2026-09-12T07:34:59Z): fixed by solar at review-3 14e9e6bc7, gate-green. Sha remap (fenix ATM 01M2A9NY2AEAKS6EAHY0V4ZDYB, 2026-09-12T07:52:59Z): review-3 rebased onto review-2 33754d69d (force-with-lease); 14e9e6bc7 -> 4c7b8ceec." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-013/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-013/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CPR-013/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/tests/task_identity.rs" ;
+  triage:line 1 ;
+  triage:snippet "writer_close_by_third_party_is_rejected and writer_stale_counterparty_is_rejected assert weaker properties than named; MoveTarget::Head with active task at position 2 untested anywhere; replay_of_migrated_history_reproduces_row_state covers only 3 of 5 documented fixtures" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:34:59Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-3 @ 4c7b8ceec)." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-013/review3> .
+
+<urn:atm:triage:occurrence/CPR-013/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/tests/task_identity.rs" ;
+  triage:line 1 ;
+  triage:snippet "four test bodies fixed, Head-behind-active case added, names reconciled with the doc" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:34:59Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "solar fix/phase-ba-review-3 @ 4c7b8ceec (rebased onto review-2 33754d69d, was 14e9e6bc7 pre-rebase), gate-green." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "4c7b8ceec" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-013/2> .
+
+<urn:atm:triage:worktree/CPR-013/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar), rebased onto review-2 33754d69d, gate-green" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "4c7b8ceec" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/CPR-013/review3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar, B3 negation-proof items), above fix/phase-ba-review-2" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 9 .

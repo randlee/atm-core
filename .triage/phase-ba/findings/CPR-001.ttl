@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-001>
+  a triage:Finding ;
+  triage:findingId "CPR-001" ;
+  triage:title "Stalled-task escalation is not terminal unless the team has exactly one lead" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. Stalled-task escalation is not terminal unless the team has exactly one lead. Doc says: nudge-task-design.md §6 FIX: 'make the threshold TERMINAL, not multiplicative. At 10, escalate ONCE and STOP nudging.' Phase acceptance 2 claims this shipped. Code does: record_lead_audit is gated on `if let (Some(lead), Some(message_id)) = (outcome.lead, outcome.lead_write)`. `load_escalation_targets` computes `let lead = (leads.len() == 1).then(|| leads[0].clone())`, so zero leads AND two-or-more leads both yield None. record_lead_audit is the sole caller of record_lead_notified (crates/atm-storage-rusqlite/src/task_store.rs:344-364), the sole writer of lead_notified_count. dispose's Hold('stalled') arm keys only on lead_notified_count > 0, and escalate_stalled_task passes suppress_since: None so there is no mailbox suppression either. Recommendation: Make terminality independent of lead resolution: increment the stall counter (or record suppression) whenever EscalateStalled is dispatched, regardless of whether a lead was resolved or the write succeeded. Add tenth_reminder_escalates_once_then_silence variants for zero-lead and two-lead rosters before re-closing phase acceptance 2. fenix's ruling: make stall-escalation terminality independent of lead resolution -- audit fires on every EscalateStalled dispatch regardless of how many leads resolve (all-leads / recipients-only), not gated on a single-lead roster." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A8MZRBR51PDNSSS1HAV6NK, 2026-09-12T07:34:59Z): fixed at review-2 4079088f5 (all-leads TaskStalled mail, terminal stall audit on every dispatch, daemon fallback reference) plus e615755f7 (no-target fallback test); both gate-green." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-001/2> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/CPR-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 63 ;
+  triage:snippet "record_lead_audit gated on Some(lead)/Some(message_id); zero-lead and multi-lead rosters both yield None, so the stall counter never increments and escalation repeats every tick" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:34:59Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ e615755f7)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-001/review2> .
+
+<urn:atm:triage:occurrence/CPR-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs" ;
+  triage:line 63 ;
+  triage:snippet "stall-escalation terminality made independent of lead resolution; audit fires on every EscalateStalled dispatch (all-leads / recipients-only), not gated on a single-lead roster" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:34:59Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm fix/phase-ba-review-2 @ 4079088f5 (all-leads TaskStalled mail, terminal stall audit, daemon fallback reference) + e615755f7 (no-target fallback test); both gate-green." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "e615755f7" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-001/2> .
+
+<urn:atm:triage:worktree/CPR-001/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), gate-green" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "e615755f7" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/CPR-001/review2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm, bounded bridge + CPR items 4-14), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

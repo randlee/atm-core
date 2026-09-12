@@ -1,0 +1,113 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-023>
+  a triage:Finding ;
+  triage:findingId "CPR-023" ;
+  triage:title "escalate_refusals runs unconditionally every tick, scanning the mailbox per target per tick" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. escalate_refusals runs unconditionally every tick, scanning the mailbox per target per tick. Doc says: sprint-BA.3: 'one read per target per episode'. Code does: process_task_candidate calls escalate_refusals before dispose on every tick, including for members that dispose will immediately Hold, and each call performs a list_messages mailbox scan per target. Recommendation: Gate escalate_refusals on the disposition, or memoize the episode check per target." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "efficiency" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2ADZCQ0CZSWBYN826TGSV8N, 2026-09-12T09:08:03Z): pushed by arch-ctm at review-2 739833663 (fix(tasks): gate refusal reads on disposition). Recorded fixed-pending-correction: dispose's refusals-escalated arm became dead because the threshold hold bypasses the disposition table (plan R5 ruling). Correction commit will be the head. fenix (ATM 01M2AE1PD5D61SGTXP6H1DVFJA, 2026-09-12T09:09:18Z): 739833663 is 13-gate-green on fenix's host (cli_surface 2/2); this also closed out CPR-026's tidy head cce076f1c. CPR-023 itself stays fixed-pending-correction at 739833663 until arch-ctm's R5 correction lands. fenix (ATM 01M2AE6S483CSEPPTDHK1REHWC, 2026-09-12T09:12:05Z): remap -- R5 correction commit 50b3f33fc accepted on review (refusal hold re-disposed through the table); status fixed-pending-gate at 50b3f33fc, fenix's gate run in flight. fenix (ATM 01M2AE9VFR8K4EPF2S0VWAYMV9, 2026-09-12T09:13:46Z): arch-ctm's QA found an overlap gap at 50b3f33fc -- nudge-gated refusal read demotes refusal-threshold precedence over mail-pending/stalled. fenix ruled to apply the structural gate (Idle + open head). Reverted to fixed-pending-correction at 50b3f33fc (headSha unchanged pending the next correction commit); fenix's gate run on 50b3f33fc continues as gates-only. fenix (ATM 01M2AEP4Z43YK16XSJJZ2D1QD6, 2026-09-12T09:20:29Z): remap -- overlap correction commit 639f540db accepted on review (refusal read gated on Idle + open head, overlap regression test); status fixed-pending-gate at 639f540db, fenix's gate run in flight. Gate-green confirmed (ATM 01M2AESF4P9F6T674DAK7CTY2H, 2026-09-12T09:22:17Z): 13-gate-green on fenix's host (cli_surface 2/2); CPR-023 closed at 639f540db." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-023/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-023/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-023/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-023/4> ;
+  triage:triageRecordVersion "4" .
+
+<urn:atm:triage:occurrence/CPR-023/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 1 ;
+  triage:snippet "process_task_candidate calls escalate_refusals before dispose on every tick, including for members dispose will immediately Hold; each call performs a list_messages mailbox scan per target" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T09:08:03Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ 739833663, pending correction)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-023/review2> .
+
+<urn:atm:triage:occurrence/CPR-023/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 1 ;
+  triage:snippet "escalate_refusals now gated on disposition instead of running unconditionally every tick" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T09:12:05Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; R5 correction applied, tracked at occurrence/3 (fix/phase-ba-review-2 @ 50b3f33fc)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "739833663" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-023/2> .
+
+<urn:atm:triage:worktree/CPR-023/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), pending correction (R5 ruling), gates in flight (also covers CPR-026 head remap)" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "739833663" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:occurrence/CPR-023/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 1 ;
+  triage:snippet "refusal hold re-disposed through the disposition table, per plan R5 ruling" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T09:20:29Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; overlap correction applied, tracked at occurrence/4 (fix/phase-ba-review-2 @ 639f540db)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "50b3f33fc" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-023/3> .
+
+<urn:atm:triage:worktree/CPR-023/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), overlap-gap correction pending (structural gate: Idle + open head), gates-only in flight" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "50b3f33fc" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:occurrence/CPR-023/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 1 ;
+  triage:snippet "refusal read gated on Idle + open head (structural gate), with an overlap regression test" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T09:20:29Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm fix/phase-ba-review-2 @ 639f540db (overlap correction commit, accepted on review); 13-gate-green confirmed on fenix's host (cli_surface 2/2)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "639f540db" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-023/4> .
+
+<urn:atm:triage:worktree/CPR-023/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), overlap correction accepted, gate-green" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "639f540db" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/CPR-023/review2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm, bounded bridge + CPR items 4-14), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

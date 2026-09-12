@@ -15,16 +15,21 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "repo-wide grep for include!(...) pulling a tests/*.rs or *_test.rs file into a src/ module" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
   triage:deferredNote "fenix (ATM 2026-09-12T05:32:23Z): promotion target is the post-landing review-findings stack (deferred) -- a scanner-scope design question, not an immediate fix dispatch. Do not set a live gh-stack layer as promoteTo until that design question resolves." ;
+  triage:deferredNote "PHASE BA CLOSEOUT (fenix, ATM 01M2A7443Z9R020ABEPJFJHAJC, 2026-09-12T07:08:18Z): promoted off the post-landing deferred set onto the review-findings stack -- solar review-3 item B1, fix/phase-ba-review-3 (base fix/phase-ba-review-2 once rebased). In progress." ;
+  triage:deferredNote "fenix (ATM 01M2A9SVX16WV1SV9NGGHQ7919, 2026-09-12T07:55:08Z): fixed at review-3 a7877cdbd (B1: #[path] test modules moved under src/herdr_queue_wake/tests/ and crates/atm/src/commands/task/tests/ with #![cfg(test)], boundary_enforcement scanners skip test-only sources; solar's original report 01M2A75SMQ at 85e83e577 pre-rebase, quality-mgr independently verified per 01M2A80ZWRGBAFTR9GMXGGRK0V); gate-green on the rebased head 8ebad9606." ;
+  triage:promoteTo "fix/phase-ba-review-3" ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T05:27:38Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/BA3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/BA5-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/PBCLEANUP-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/review3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/review3-2> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/RBQA-F001/BA3-1>
   a triage:Occurrence ;
@@ -79,3 +84,45 @@
   triage:branch "fix/phase-ba-cleanup" ;
   triage:headSha "b9f7c4386" ;
   triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/RBQA-F001/review3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1039 ;
+  triage:snippet "include!(...) pattern still present at phase landing (9f5aef2fe); solar review-3 item B1 to replace with #[path] mods per task.rs:913-927 precedent" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:55:08Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/review3-2 (fix/phase-ba-review-3 @ a7877cdbd)." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/review3/112f8f384> .
+
+<urn:atm:triage:occurrence/RBQA-F001/review3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1039 ;
+  triage:snippet "#[path] test modules moved under src/herdr_queue_wake/tests/ with #![cfg(test)]; boundary_enforcement scanners skip test-only sources" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:55:08Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "solar fix/phase-ba-review-3 @ a7877cdbd (item B1); quality-mgr independently verified (message 01M2A80ZWRGBAFTR9GMXGGRK0V); gate-green on the rebased head 8ebad9606." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "a7877cdbd" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-F001/review3-2> .
+
+<urn:atm:triage:worktree/RBQA-F001/review3-2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar), item B1 fixed, gate-green on rebased head 8ebad9606" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "a7877cdbd" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/review3/112f8f384>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher) -> fix/phase-ba-review-2 (arch-ctm) -> fix/phase-ba-review-3 (solar), item B1 in progress" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 7 .

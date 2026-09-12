@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-008>
+  a triage:Finding ;
+  triage:findingId "CPR-008" ;
+  triage:title "BA.2 doc says Start resets reminder_count; code preserves it, and the doc-named test was renamed" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. BA.2 doc says Start resets reminder_count; code preserves it, and the doc-named test was renamed. Doc says: sprint-BA.2 specifies Start sets `reminder_count = 0` alongside `lead_notified_count = 0`, and AC2 asserts 'Every test above exists by name'. Code does: `UPDATE tasks SET state=?3, lead_notified_count=0, updated_at=?4 WHERE team=?1 AND task_id=?2` — reminder_count is preserved (commit fa32b1cbb), and the doc-named test was renamed to `..._preserves_reminder_count`. Recommendation: Amend sprint-BA.2 to match the shipped semantics and re-state AC2, or record the rename explicitly." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A821M48VWSZ0JGXMA4WWZ7, 2026-09-12T07:24:38Z): fixed by cipher at 0e9c8266b (docs bundle)." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-008/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-008/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CPR-008/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md" ;
+  triage:line 1 ;
+  triage:snippet "`UPDATE tasks SET state=?3, lead_notified_count=0, updated_at=?4 WHERE team=?1 AND task_id=?2` — reminder_count is preserved (commit fa32b1cbb), and the doc-named test was renamed to `..._preserves_re" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-1 @ 0e9c8266b)." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-008/review1> .
+
+<urn:atm:triage:occurrence/CPR-008/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md" ;
+  triage:line 1 ;
+  triage:snippet "sprint-BA.2 amended to match shipped semantics; rename recorded explicitly" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 @ 0e9c8266b." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "0e9c8266b" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-008/2> .
+
+<urn:atm:triage:worktree/CPR-008/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), frozen at 5a00502ee" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "0e9c8266b" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/CPR-008/review1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher, docs+CPR bundle), above integrate/phase-ba" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 7 .

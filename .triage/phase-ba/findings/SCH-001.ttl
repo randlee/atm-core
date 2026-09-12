@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SCH-001>
+  a triage:Finding ;
+  triage:findingId "SCH-001" ;
+  triage:title "STORAGE_SCHEMA_VERSION (ADR-061 D1) not landed in Phase BA" ;
+  triage:description "schema-reviewer phase-ending critical review @ 9f5aef2fe: PASS on all three governed interfaces (SQLite MAJOR approval at ADR-061 lines 144-156; HTTP 1.4.0 -> 1.5.0 -> 1.6.0 additive; Herdr IPC 0.8.0 unchanged). Noted separately as pre-existing planned debt, not a Phase BA defect: STORAGE_SCHEMA_VERSION (ADR-061 D1) has not landed yet -- deferred to a future phase, noted in the post-mortem, no dev dispatch." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "schema" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SCH-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SCH-001/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-061-governed-interface-schema-versioning.md" ;
+  triage:line 144 ;
+  triage:snippet "STORAGE_SCHEMA_VERSION (ADR-061 D1) not landed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9f5aef2fe" ;
+  triage:occursIn <urn:atm:triage:worktree/SCH-001/1> .
+
+<urn:atm:triage:worktree/SCH-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ba (phase landing head)" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9f5aef2fe" ;
+  triage:orderIndex 0 .

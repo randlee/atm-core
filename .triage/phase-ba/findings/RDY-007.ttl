@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RDY-007>
+  a triage:Finding ;
+  triage:findingId "RDY-007" ;
+  triage:title "Yanked chacha20 crate version pinned in Cargo.lock" ;
+  triage:description "solar BA-READINESS Part A @ 9f5aef2fe (cargo audit / cargo deny findings). Finding: Cargo.lock pins a yanked chacha20 crate version. Fixed by cipher on fix/phase-ba-review-1 (item 9), landing at the review-1 head 112f8f384, ACCEPTED by fenix." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dependency-hygiene" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RDY-007/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RDY-007/1>
+  a triage:Occurrence ;
+  triage:file "Cargo.lock" ;
+  triage:line 1 ;
+  triage:snippet "yanked chacha20 crate version pinned" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 112f8f384 (item 9), ACCEPTED by fenix -- review-1 gate run confirmed clean (fmt, clippy, workspace tests, RULE-003, boundaries, RULE-002, taxonomy, read-concurrency, identities, adr-index, manifests all green)." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/RDY-007/1> .
+
+<urn:atm:triage:worktree/RDY-007/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), above integrate/phase-ba" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 7 .

@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-016>
+  a triage:Finding ;
+  triage:findingId "CPR-016" ;
+  triage:title "An undeliverable queue item permanently silences that member's task reminders (absorbs CPR-005)" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. An undeliverable queue item permanently silences that member's task reminders. Doc says: nudge-task-design.md §1: 'Up until the point a task is complete the agent MUST keep working on it.' Code does: dispose returns Hold('mail pending') whenever any open queue item exists for the member. An item that can never be delivered or read (no delivery channel, dead pane, permanently unreachable transport) stays open forever, so the member's task nudges are suppressed indefinitely with no escalation. Recommendation: Bound the mail-pending hold: after N consecutive holds on the same item, escalate or fall through to the task nudge. fenix's ruling: a queue prompt to a member with an open head task counts as a reminder against the same section-6 counter -- this closes both the frozen reminder_count problem (CPR-005) and the unbounded mail-pending hold (CPR-016) with one counter change. ALSO ABSORBS CPR-005 (reminder_count frozen on the primary assignment flow): Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. reminder_count is frozen on the primary assignment flow, so a real assignment can never reach the escalation threshold. Doc says: nudge-task-design.md §6: reminders accumulate and escalate terminally at TASK_STALLED_REMINDER_THRESHOLD = 10. Code does: Assignments always set requires_ack (crates/atm-core/src/send/mod.rs:348-356: `task_id.is_some() && request.task_op.is_none()`), so the assignment message stays an open queue item until acked or closed. dispose therefore returns Hold('mail pending') every tick and no task reminder is recorded. After Start, complete_task_handoff_if_head filters `row.state == TaskState::Assigned && position == 1`, so the reminder-recording handoff no longer runs either. Recommendation: Decide whether the assignment message's open-queue state should suppress task reminders at all; if not, exclude the task's own assignment message from the mail_pending computation in dispose. Add an end-to-end test that drives reminder_count from 0 to 10 through the real pump." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_task_disposition.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2AAHXS8QB8CQTR4J0BSHVST, 2026-09-12T08:08:16Z): fixed at review-2 a719f8955, chain b337cdfce (counter) + 8f3dfcc40 (own-assignment handoff guard) + a719f8955 (dead-flag cleanup); all gate-green on fenix's host. Closes both CPR-016 and CPR-005 with one counter change." ;
+  triage:relatedFinding "CPR-005" ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-016/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-016/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CPR-016/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_task_disposition.rs" ;
+  triage:line 42 ;
+  triage:snippet "dispose returns Hold(\\'mail pending\\') whenever any open queue item exists; an undeliverable item stays open forever with no bound and no escalation, and assignment messages freeze reminder_count at 0 via the same mail-pending path" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:08:16Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ a719f8955)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-016/review2> .
+
+<urn:atm:triage:occurrence/CPR-016/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_task_disposition.rs" ;
+  triage:line 42 ;
+  triage:snippet "queue prompt to a member with an open head task counts as a reminder against the same section-6 counter -- closes both the frozen reminder_count problem (CPR-005) and the unbounded mail-pending hold (CPR-016) with one counter change" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T08:08:16Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm fix/phase-ba-review-2, chain b337cdfce (counter) + 8f3dfcc40 (own-assignment handoff guard) + a719f8955 (dead-flag cleanup); all gate-green on fenix's host." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "a719f8955" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-016/2> .
+
+<urn:atm:triage:worktree/CPR-016/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), gate-green" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "a719f8955" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/CPR-016/review2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm, bounded bridge + CPR items 4-14), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-019>
+  a triage:Finding ;
+  triage:findingId "CPR-019" ;
+  triage:title "atm task close and atm task assign carry an undocumented trailing positional that silently swallows arguments" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. `atm task close` and `atm task assign` carry an undocumented trailing positional that silently swallows arguments. Doc says: nudge-task-design.md §5 / sprint-BA.4 contract: `atm task close <task-id> <outcome> [reason]`; assign takes --template/--vars. BA.4 AC1: 'lists exactly five subcommands with the design §5 syntax.' Code does: The flattened MessageSourceArgs.text (value_name = 'MESSAGE') adds a free positional. Actual usage from the built binary: `atm task close [OPTIONS] <TASK_ID> <OUTCOME> [REASON] [MESSAGE]` and `atm task assign [OPTIONS] <ASSIGNEE> [MESSAGE]`. Recommendation: Either document the MESSAGE positional in §5 and BA.4, or suppress it on these two subcommands. fenix's ruling: keep section-5 syntax exact; suppress the MESSAGE positional specifically on close and assign." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/src/commands/task.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A821M48VWSZ0JGXMA4WWZ7, 2026-09-12T07:24:38Z): fixed by cipher at 33894ac10 (bundled with CPR-020/RBP-F102), with a correction landed in follow-up commit 000849597." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-019/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-019/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CPR-019/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task.rs" ;
+  triage:line 183 ;
+  triage:snippet "the flattened MessageSourceArgs.text (value_name = MESSAGE) adds a free positional; atm task close T1 completed \\'did it\\' \\'oops\\' silently takes the extra arg as the report body with no error" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-1 @ 33894ac10, corrected at 000849597)." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-019/review1> .
+
+<urn:atm:triage:occurrence/CPR-019/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task.rs" ;
+  triage:line 183 ;
+  triage:snippet "MESSAGE positional suppressed on atm task close and atm task assign per fenix's ruling" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 @ 33894ac10, corrected in follow-up commit 000849597." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "33894ac10" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-019/2> .
+
+<urn:atm:triage:worktree/CPR-019/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), frozen at 5a00502ee" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "33894ac10" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/CPR-019/review1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher, docs+CPR bundle), above integrate/phase-ba" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 7 .

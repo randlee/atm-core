@@ -27,7 +27,8 @@
   triage:deferredNote "fenix's BA.5 QA-2 ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5643452062) folds this into BA.6 fold-in task. Occurrence #1 closed on feature/ba5-queue-ephemeral-item where observed during QA-2. Further promoted by fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z): worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer) -- arch-ctm's BA6-DOCS/BA6-CLEANUP work item for this note is cancelled; occurrence #2 (docs/ba6) closed, fold-in note now lands once on the cleanup layer." ;
   triage:deferredNote "fenix (ATM 01M2A4DWXYME20KRNTBXHQS534, 2026-09-12T06:21:13Z): BA-TOP-QA-1789192584 PASS on PR #1414 @ a2da4a570 (base 03c623717), report https://github.com/randlee/atm-core/pull/1414#issuecomment-5644152591, five reviewers, 0 blocking. Close as FIXED @ a2da4a570 (verified by quality-mgr reading code at that head)." ;
   triage:promoteTo "fix/phase-ba-cleanup" ;
-  triage:triageRecordVersion "4" .
+  triage:deferredNote "PHASE BA CLOSEOUT (fenix, ATM 01M2A7443Z9R020ABEPJFJHAJC, 2026-09-12T07:08:18Z): arch-qa phase-ending review (ARCH-001) + quality-mgr BA-PHASE-END-QA independently live-verified fixed in tree at 9f5aef2fe. No status change; occurrences already closed by team-lead's prior batch (d32345d4c)." ;
+  triage:triageRecordVersion "5" .
 
 <urn:atm:triage:occurrence/BA5-QA2-005/1>
   a triage:Occurrence ;
