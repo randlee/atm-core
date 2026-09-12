@@ -38,7 +38,7 @@
 
 <urn:atm:triage:worktree/BB6-002/1>
   a triage:WorktreeSnapshot ;
-  triage:path "fix/bb6-storage-qa1 (cut from a7d4664d1)" ;
+  triage:path "PR #1459, fix/bb6-storage-qa1" ;
   triage:branch "fix/bb6-storage-qa1" ;
   triage:headSha "0c09c62b0" ;
   triage:orderIndex 1 .
