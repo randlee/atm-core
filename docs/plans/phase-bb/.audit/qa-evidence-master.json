@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-12T19:00:24Z",
-    "end": "2026-09-12T21:04:48Z"
+    "end": "2026-09-12T21:10:13Z"
   },
   "scope": "BB.1 (PR #1438, feature/bb1-transition-templates) and BB.2 (PR #1439, feature/bb2-orchestration-templates-1516) each have one QA-1 round in flight (assigned, no result yet -- verdict/pass/result_* fields are null/empty until quality-mgr reports). BB.3 (PR #1436, feature/bb3-test-procedure-pages) has one QA-1 FAIL round closed and a QA-2 round in flight on the fix-round push (BB3-FIX-R1, cipher, head 8a8b29640). fenix's parallel critical reviews (on BB.1 and BB.3 so far) are not dispatched quality-mgr QA runs; their findings are recorded separately under .triage/phase-bb/findings/ (BB1-001..021, BB3-001..012), correlated with QA findings on the same commit rather than duplicated. Phase BB is orchestrated with plain atm send (codex-orchestration), not graph-orchestration Assignment/Completion events, but .sprints/BB/events.ttl records dev Assignment/Completion events anyway per fenix's ruling so /triage-report's DEV column works.",
   "count_basis": "headline/reviewer",
@@ -163,7 +163,7 @@
       "run_id": "BB3-QA3",
       "aich_sprint": "BB3",
       "phase_sprint": "BB.3",
-      "pass": null,
+      "pass": false,
       "run_type": "qa",
       "assignment_time_utc": "2026-09-12T20:50:08Z",
       "assignment_time_pst": null,
@@ -171,18 +171,18 @@
       "assignment_from": "fenix",
       "assignment_shared_path": null,
       "assignment_summary": "BB3-QA3-1789250000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1445, pinned head 66be1d012 (fix/bb3-qa2-r2, cipher's BB3-FIX-R2 final push, PR retargeted to fix/bb2-qa1-r1, MERGEABLE) -- BB.3 test-procedure-pages QA-3 follow-up pass.",
-      "result_time_utc": null,
+      "result_time_utc": "2026-09-12T21:08:20Z",
       "result_time_pst": null,
-      "result_message_id": null,
-      "result_from": null,
+      "result_message_id": "01M2BQ6DP0BSZ2VCJ4X9790WV5",
+      "result_from": "quality-mgr",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "PENDING",
-      "blockers": null,
-      "important": null,
-      "minor": null,
+      "verdict": "FAIL",
+      "blockers": 2,
+      "important": 2,
+      "minor": 6,
       "count_basis": "headline/reviewer",
-      "evidence": "QA-3 assigned to quality-mgr; PR #1445, fix/bb3-qa2-r2 (cipher's BB3-005/001/003/009 residual fix layer), pinned head 66be1d012; result pending."
+      "evidence": "Deliverables 6/8 (75%). 2 Blocking: BB3-QA3-B1 colima_skill_report write_report/render builds procedure_href from the raw source_revision short SHA with no ancestor fallback -- live 404 in committed evidence (20260912T204119754750Z-pid87697-fast/index.html); BB3-QA3-B2 colima-hermes-skills.md Steps tables missing the testbed-ref row header_cases() emits (48 doc rows vs 49 runner cases). 2 Important + 6 Minor filed as BB3-013..022. 6/8 named residuals confirmed fixed and closed: BB3-005, BB3-001, BB3-003 (own scope), BB3-009 (all three parts), QA-2 M1. Routed to solar's BB3-FIX-R3-1789253000, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1."
     },
     {
       "run_id": "BB1-QA2",

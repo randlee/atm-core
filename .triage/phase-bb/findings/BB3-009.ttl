@@ -16,16 +16,19 @@
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope ".github/workflows/pages.yml" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
-  triage:deferredNote "Routed to cipher's BB3-FIX-R1: add Node/Chromium provisioning to pages.yml (or cache it), remove the require_manifest test-only switch and give tests a manifest fixture instead, and either revert benchmark_report.py's writer change or amend D3 to document it. BB3-QA2 (2026-09-12T20:20:11Z): marked partial -- require_manifest test-only switch removal and benchmark_report.py's source_revision write / D3 documentation are not flagged as residual in the QA-2 report, so treated as confirmed. Puppeteer/Chromium provisioning is only partially closed: a Node.js setup step was added ahead of just procedures --check, but npx -y @mermaid-js/mermaid-cli (called once per procedure revision, dozens of times) still has no explicit Chromium provisioning or caching (BB3-QA2 I4, arch-qa ARCH-BB3-02, .github/workflows/pages.yml:33-39). Routed to cipher's BB3-FIX-R2 (fix/bb3-qa2-r2, per fenix's fix-round-worktree ruling 2026-09-12T20:24:40Z)." ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1: add Node/Chromium provisioning to pages.yml (or cache it), remove the require_manifest test-only switch and give tests a manifest fixture instead, and either revert benchmark_report.py's writer change or amend D3 to document it. BB3-QA2 (2026-09-12T20:20:11Z): marked partial -- require_manifest test-only switch removal and benchmark_report.py's source_revision write / D3 documentation are not flagged as residual in the QA-2 report, so treated as confirmed. Puppeteer/Chromium provisioning is only partially closed: a Node.js setup step was added ahead of just procedures --check, but npx -y @mermaid-js/mermaid-cli (called once per procedure revision, dozens of times) still has no explicit Chromium provisioning or caching (BB3-QA2 I4, arch-qa ARCH-BB3-02, .github/workflows/pages.yml:33-39). Routed to cipher's BB3-FIX-R2 (fix/bb3-qa2-r2, per fenix's fix-round-worktree ruling 2026-09-12T20:24:40Z). BB3-QA3 (2026-09-12T21:08:20Z): confirmed fixed -- require_manifest fully removed (zero references, _manifest() unconditionally fail-closed); pages.yml now provisions Node + Puppeteer Chromium before just procedures --check; benchmark_report.py's source_revision usage traced to a pre-BB.3 commit via git log --diff-filter=A --follow, confirming the sprint doc's D3 line was accurate all along, not a documentation gap." ;
   triage:relatedFinding "BB3-003" ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-009/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-009/2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasResolution <urn:atm:triage:resolution/BB3-009/1> ;
+  triage:closedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB3-009/1>
   a triage:Occurrence ;
@@ -43,10 +46,10 @@
   triage:file ".github/workflows/pages.yml" ;
   triage:line 33 ;
   triage:snippet "Node.js setup step added ahead of just procedures --check, but npx -y @mermaid-js/mermaid-cli still has no explicit Chromium/Puppeteer provisioning or caching (BB3-QA2 I4, arch-qa ARCH-BB3-02)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa2-r2" ;
-  triage:headSha "d2c69e9f6" ;
+  triage:headSha "66be1d012" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-009/2> .
 
 <urn:atm:triage:worktree/BB3-009/1>
@@ -62,3 +65,12 @@
   triage:branch "fix/bb3-qa2-r2" ;
   triage:headSha "d2c69e9f6" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB3-009/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:fixCommit "66be1d012d4f89154434a77360bdaba939313abf" ;
+  triage:fixBranch "fix/bb3-qa2-r2" ;
+  triage:verifiedInRound "BB3-QA3" ;
+  triage:resolutionNote "Puppeteer/Chromium now provisioned in pages.yml before just procedures --check; require_manifest fully removed and unconditionally fail-closed; benchmark_report.py's source_revision usage confirmed pre-existing, D3 line accurate." .

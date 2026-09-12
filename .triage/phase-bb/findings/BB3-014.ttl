@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-014>
+  a triage:Finding ;
+  triage:findingId "BB3-014" ;
+  triage:title "colima-hermes-skills.md's Steps table is missing the testbed-ref row the runner emits" ;
+  triage:description "quality-mgr BB3-QA3-1789250000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1445#issuecomment-5648698551, 2026-09-12T21:08:20Z; BB3-QA3-B2), reviewed at 66be1d012. docs/procedures/colima-hermes-skills.md:32 (and identically in its ## Revision 6040ecf3 section): the Steps table has no row for the testbed ref case. scripts/smoke/colima_skill_report.py:61-81 (header_cases) emits four header rows (doctor, advertised host, herdr transport, testbed ref) prepended to every run's cases[], but the doc's table jumps from row 3 (herdr transport) straight to row 4 (atm-setup-environment / tester: Start line) -- confirmed directly by reading both the runner source and the doc. The doc's 48 steps do not read straight across to the runner's real 49 cases[] entries, violating D1's per-add_case-row contract and AC2." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/procedures/colima-hermes-skills.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: add a testbed ref row to both Steps tables in the doc, then regenerate via just procedures and re-run scripts/tests/test_render_procedure_pages.py to confirm. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1)." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-014/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-014/1>
+  a triage:Occurrence ;
+  triage:file "docs/procedures/colima-hermes-skills.md" ;
+  triage:line 32 ;
+  triage:snippet "Steps table jumps from row 3 (herdr transport) straight to row 4 (atm-setup-environment / tester: Start line), missing the testbed ref row header_cases() emits; 48 doc rows vs 49 runner cases" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-014/1> .
+
+<urn:atm:triage:worktree/BB3-014/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1445, fix/bb3-qa2-r2" ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:orderIndex 1 .

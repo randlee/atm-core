@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-019>
+  a triage:Finding ;
+  triage:findingId "BB3-019" ;
+  triage:title "No test enforces that a doc's Revision sections are physically ordered to match front-matter declaration order" ;
+  triage:description "quality-mgr BB3-QA3-1789250000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1445#issuecomment-5648698551, 2026-09-12T21:08:20Z; BB3-QA3-M3), reviewed at 66be1d012. scripts/tests/test_render_procedure_pages.py:113 has no assertion that a doc's ## Revision sections are physically ordered to match front-matter declaration order, which is exactly why BB3-QA3-I2 (smoke-admission-capacity.md's out-of-order sections) passed CI silently." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/tests/test_render_procedure_pages.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:deferredNote "Add test_revision_sections_appear_in_front_matter_order. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1)." ;
+  triage:relatedFinding "BB3-016" ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-019/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-019/1>
+  a triage:Occurrence ;
+  triage:file "scripts/tests/test_render_procedure_pages.py" ;
+  triage:line 113 ;
+  triage:snippet "no assertion that a doc's Revision sections are physically ordered to match front-matter declaration order -- why BB3-QA3-I2 passed CI silently" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-019/1> .
+
+<urn:atm:triage:worktree/BB3-019/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1445, fix/bb3-qa2-r2" ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "66be1d012" ;
+  triage:orderIndex 1 .
