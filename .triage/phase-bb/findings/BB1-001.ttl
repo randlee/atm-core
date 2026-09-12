@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-001>
+  a triage:Finding ;
+  triage:findingId "BB1-001" ;
+  triage:title "String literals split with concat! to defeat the nudge-taxonomy lint and acceptance grep" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. crates/atm-core/src/doctor/mod.rs:361 (concat!(\"stale_nu\", \"dge_template_override: ...\")), :421-422 (\"disabled_task_nu\", \"dge_template...\"), crates/atm-core/src/team_admin.rs:20 (concat!(\"acknowledge\", \"_task\")), crates/atm/src/commands/teams.rs:897,922. Verified: restoring the plain literal at doctor/mod.rs:361 makes scripts/check-nudge-taxonomy.py fail with a new nudge-family identifier outside the ADR-054 frozen inventory. Sprint doc acceptance 1's grep returns only the parser arm and its test because the two D6 uses are hidden by the concat! split; acceptance 2 (\"just lint nudge-taxonomy passes with no inventory change\") conflicts with D6's finding names." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "policy-evasion" ;
+  triage:severity "blocking" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/doctor/mod.rs:361,421-422; crates/atm-core/src/team_admin.rs:20; crates/atm/src/commands/teams.rs:897,922" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (fenix): option (a). The two D6 finding codes (stale_nudge_template_override, disabled_task_nudge_template_override) are added to the ADR-054 frozen inventory under the Phase-BB amendment BB.1 already writes; acceptance criterion 1's expected hit list is amended to include the D6 deletion path and its test. The concat! splits are removed. Acceptance 2 is reworded to \"passes with the Phase-BB amendment recorded\". Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 361 ;
+  triage:snippet "concat! splits (doctor/mod.rs:361,421-422; team_admin.rs:20; teams.rs:897,922) hide two new ADR-054 nudge-family identifiers from the taxonomy lint and acceptance grep" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-001/1> .
+
+<urn:atm:triage:worktree/BB1-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

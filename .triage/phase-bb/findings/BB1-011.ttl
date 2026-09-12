@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-011>
+  a triage:Finding ;
+  triage:findingId "BB1-011" ;
+  triage:title "Task-pass doc-named test exercises only the helper, not the named builder" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. nudge_dispatch.rs:219-226 tests task_pass_transition, never build_task_reminder_dispatch even though D5 bullet 2 names the builder. Ready at reminder_count 0 is only indirectly proven by tests/task_reminder_dispatch.rs; Reminder { attempt } wiring has no test at all." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/nudge_dispatch.rs:219-226" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: call build_task_reminder_dispatch with rows at reminder_count 0 and 3 and assert the resolved template kind. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-011/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-011/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/nudge_dispatch.rs" ;
+  triage:line 219 ;
+  triage:snippet "task-pass test exercises task_pass_transition only; build_task_reminder_dispatch and its Reminder{attempt} wiring are untested" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-011/1> .
+
+<urn:atm:triage:worktree/BB1-011/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .
