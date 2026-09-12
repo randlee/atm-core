@@ -37,7 +37,11 @@ from feature_smoke_report import (
     summarize_cases,
 )
 from run_inbound_peer_smoke import PANE_TEMPLATE
-from report_runtime import compose as _compose, source_revision as _source_revision
+from report_runtime import (
+    compose as _compose,
+    resolve_procedure_page as _resolve_procedure_page,
+    source_revision as _source_revision,
+)
 from smoke_common import (
     SmokeError,
     advertised_host_from_value as advertised_host_from_json,
@@ -821,10 +825,17 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     passed = all(case["status"] == "PASS" for case in cases)
     revision = source_revision()
     procedure = "graft-hermes" if feature == "graft-hermes" else f"smoke-{feature}"
+    procedure_page = _resolve_procedure_page(procedure, revision, root=ROOT, error_type=SmokeError)
+    procedure_target = (
+        ROOT / "site/reports" / procedure_page.html
+        if procedure_page is not None
+        else ROOT / "site/reports/procedures" / procedure / "index.html"
+    )
     procedure_href = os.path.relpath(
-        ROOT / "site/reports/procedures" / procedure / f"{revision[:8] if revision else 'unresolved'}.html",
+        procedure_target,
         directory,
     )
+    procedure_revision = procedure_page.revision if procedure_page is not None else None
     report.write_text(
         json.dumps(
             {
@@ -864,7 +875,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
             "title": f"ATM smoke — {feature}",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pane_src": local_pane.name,
-            "procedure_label": f"{procedure} @ {revision[:8] if revision else 'unresolved'}",
+            "procedure_label": f"{procedure} @ {procedure_revision[:8] if procedure_revision else 'unresolved'}",
             "procedure_href": procedure_href,
         },
         report.with_suffix(".html"),
@@ -883,7 +894,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
             "title": "ATM cross-host smoke",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pane_html": pane_html,
-            "procedure_label": f"{procedure} @ {revision[:8] if revision else 'unresolved'}",
+            "procedure_label": f"{procedure} @ {procedure_revision[:8] if procedure_revision else 'unresolved'}",
             "procedure_href": procedure_href,
         },
         directory / "index.html",

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 from unittest import mock
 import unittest
 
@@ -30,17 +31,26 @@ class FeatureSmokeTests(unittest.TestCase):
     def test_report_and_envelope_carry_source_revision(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            with mock.patch.object(RUNNER, "ROOT", root), mock.patch.object(RUNNER, "source_revision", return_value="a" * 40), \
-                    mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(RUNNER, "os") as os_module, \
-                    mock.patch.object(RUNNER, "compose"), mock.patch.object(RUNNER, "update_master_report_index"):
+            procedure = root / "site/reports/procedures/graft-hermes/selected.html"
+            procedure.parent.mkdir(parents=True)
+            procedure.write_text("<html>procedure</html>\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "run-1"}), \
+                    mock.patch.object(RUNNER, "ROOT", root), mock.patch.object(RUNNER, "source_revision", return_value="a" * 40), \
+                    mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(RUNNER.os, "getpid", return_value=1), \
+                    mock.patch.object(RUNNER, "_resolve_procedure_page", return_value=SimpleNamespace(
+                        revision="b" * 40, html="procedures/graft-hermes/selected.html"
+                    )), mock.patch.object(RUNNER, "compose") as compose, \
+                    mock.patch.object(RUNNER, "update_master_report_index"):
                 platform.system.return_value = "Darwin"
                 platform.node.return_value = "m5"
-                os_module.environ = {"ATM_SMOKE_RUN_ID": "run-1"}
-                os_module.getpid.return_value = 1
                 report = RUNNER.write_report("graft-hermes", [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "m5", "destination": "m5"}])
             self.assertEqual(json.loads(report.read_text())["source_revision"], "a" * 40)
             self.assertEqual(json.loads((report.parent / "smoke.envelope.json").read_text())["source_revision"], "a" * 40)
             self.assertEqual(json.loads(report.read_text())["procedure"], "graft-hermes")
+            procedure_href = compose.call_args_list[1].args[1]["procedure_href"]
+            self.assertEqual((report.parent / procedure_href).resolve(), procedure.resolve())
+            self.assertTrue((report.parent / procedure_href).is_file())
+            self.assertEqual(compose.call_args_list[1].args[1]["procedure_label"], "graft-hermes @ bbbbbbbb")
 
     def test_missing_git_writes_null_source_revision(self):
         with mock.patch.object(RUNNER.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):

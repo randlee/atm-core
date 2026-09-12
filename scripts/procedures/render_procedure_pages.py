@@ -177,6 +177,21 @@ def validate_revision_stamps(
             )
 
 
+def validate_revision_order(
+    path: Path, metadata: dict[str, Any], sections: dict[str, str],
+) -> None:
+    """Require reader-facing revision sections to follow front matter order."""
+    revisions = metadata.get("revisions")
+    if not isinstance(revisions, list):
+        raise ProcedureRenderError(f"{path}: revisions must be a YAML list")
+    expected = [item.get("rev", "")[:8] for item in revisions if isinstance(item, dict)]
+    actual = list(sections)
+    if actual != expected:
+        raise ProcedureRenderError(
+            f"{path}: revision sections {actual} do not match front matter order {expected}"
+        )
+
+
 def procedure_input_hash(path: Path, section: str) -> str:
     """Hash the procedure source and selected revision section for stale checks."""
     source = path.read_text(encoding="utf-8")
@@ -222,6 +237,7 @@ def render(root: Path = ROOT, check: bool = False) -> int:
             entries.append({"rev": rev, "date": entry_date.isoformat() if isinstance(entry_date, date) else str(entry_date or ""), "note": item.get("note", ""), "html": f"procedures/{procedure}/{rev8}.html"})
         if {key for key in sections} != {str(item["rev"])[:8] for item in revisions}:
             raise ProcedureRenderError(f"{path}: revision section and front matter entries differ")
+        validate_revision_order(path, metadata, sections)
         index_rows = "".join(f'<li><a href="{html.escape(item["rev"][:8])}.html">revision {html.escape(item["rev"][:8])}</a> — {html.escape(str(item.get("date", "")))} — {html.escape(str(item.get("note", "")))}</li>' for item in entries)
         expected[output / procedure / "index.html"] = f'<!doctype html><html><head><meta charset="utf-8"><title>{html.escape(procedure)}</title></head><body><h1>{html.escape(procedure)}</h1><ul>{index_rows}</ul></body></html>\n'
         manifest.append({"procedure": procedure, "family": metadata.get("family"), "runner": metadata.get("runner"), "revisions": entries})

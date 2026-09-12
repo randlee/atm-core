@@ -29,7 +29,7 @@ if str(JUST_ROOT) not in sys.path:
 from scripts.public_redaction import public_value
 from run_fuzz import FuzzInputError as V2FuzzInputError
 from run_fuzz import validate_report
-from scripts.smoke.report_runtime import compose as _compose
+from scripts.smoke.report_runtime import compose as _compose, resolve_procedure_page
 
 
 REPORTS_ROOT = ROOT / "site" / "reports"
@@ -239,6 +239,16 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
         {"label": worker["fuzz_run_description"], "iterations": worker["iterations"], "pass": f"{worker['passed']}/{worker['iterations']}", "result": worker["result"]}
         for worker in workers
     ]
+    procedure = f"fuzz-{session['campaign']['target']}"
+    source_revision = session["campaign"].get("source_revision")
+    procedure_page = resolve_procedure_page(
+        procedure,
+        source_revision if isinstance(source_revision, str) else None,
+        root=ROOT,
+        error_type=FuzzReportError,
+    )
+    procedure_href = procedure_page.html if procedure_page is not None else f"procedures/{procedure}/index.html"
+    procedure_revision = procedure_page.revision if procedure_page is not None else None
     report_data: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "output_path": f"site/reports/{stem}.html",
@@ -261,8 +271,8 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
         "summary_copy_json": json.dumps({"session_id": session["session_id"], "status": status, "workers": len(workers)}, sort_keys=True),
         "summary_copy_context": f"{session['session_id']}: {status}; {len(workers)} worker panels.",
         "footer_html": "<p>Generated from validated adversarial-fuzz v2 evidence through sc-compose.</p>",
-        "procedure_label": f"fuzz-{session['campaign']['target']} @ {str(session['campaign'].get('source_revision') or 'unresolved')[:8]}",
-        "procedure_href": f"procedures/fuzz-{session['campaign']['target']}/{str(session['campaign'].get('source_revision') or 'unresolved')[:8]}.html",
+        "procedure_label": f"{procedure} @ {procedure_revision[:8] if procedure_revision else 'unresolved'}",
+        "procedure_href": procedure_href,
     }
     compose(REPORT_TEMPLATE, report_data, report_html)
     # sc-compose accepts arrays of objects only at top-level var-file paths.
