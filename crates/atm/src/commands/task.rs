@@ -27,9 +27,7 @@ use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 use crate::commands::caller_context::{
     CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride, resolve_cli_caller_context,
 };
-use crate::commands::send::{
-    SendCommand, TaskSendOptions, preflight_daemon_api, validate_local_task_target,
-};
+use crate::commands::send::{SendCommand, TaskSendOptions, preflight_daemon_api};
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
 };
@@ -180,13 +178,13 @@ struct CallerArgs {
 
 #[derive(Debug, Args)]
 struct MessageSourceArgs {
-    #[arg(value_name = "MESSAGE", conflicts_with_all = ["file", "stdin", "template"])]
+    #[arg(skip)]
     text: Option<String>,
-    #[arg(long, conflicts_with_all = ["text", "stdin", "template"])]
+    #[arg(long, conflicts_with_all = ["stdin", "template"])]
     file: Option<PathBuf>,
-    #[arg(long, conflicts_with_all = ["text", "file", "template"])]
+    #[arg(long, conflicts_with_all = ["file", "template"])]
     stdin: bool,
-    #[arg(long, conflicts_with_all = ["text", "file", "stdin"])]
+    #[arg(long, conflicts_with_all = ["file", "stdin"])]
     template: Option<PathBuf>,
     #[arg(long, requires = "template")]
     vars: Option<String>,
@@ -263,8 +261,7 @@ impl TaskAssignCommand {
             current_dir.clone(),
             NudgeMode::Deferred,
             None,
-        )
-        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        )?;
         request.placement = placement;
         preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task assign").await?;
         composition.send(request).await?;
@@ -330,7 +327,7 @@ impl TaskCloseCommand {
                 vars: None,
             }
         };
-        let request = SendCommand::for_task(report.into_send_options(
+        let mut request = SendCommand::for_task(report.into_send_options(
             recipient.to_string(),
             self.caller,
             None,
@@ -343,11 +340,11 @@ impl TaskCloseCommand {
             outcome,
             reason,
         )?;
-        validate_local_task_target(&request)?;
+        atm_core::send::validate_task_request(&mut request)?;
         let result = composition
             .send(request)
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(anyhow::Error::from)?;
         if self.json {
             Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
         } else if let Some(closed) = result.already_closed {
@@ -697,7 +694,10 @@ fn render_task_events(rows: &[TaskEventRow], json: bool) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use atm_core::protocol::{CompatibilityVerdict, HttpApiVersion, ReleaseVersion};
+    use atm_core::test_support::{EnvGuard, TEST_TEAM};
     use clap::{CommandFactory, Parser};
+    use serial_test::serial;
+    use tempfile::TempDir;
 
     use super::*;
     use crate::commands::send::require_daemon_api;
@@ -732,6 +732,14 @@ mod tests {
         for expected in ["completed", "refused", "cancelled"] {
             assert!(rendered.contains(expected));
         }
+    }
+
+    #[test]
+    fn close_rejects_a_fourth_positional_argument() {
+        assert!(
+            Cli::try_parse_from(["atm", "task", "close", "T1", "completed", "reason", "extra"])
+                .is_err()
+        );
     }
 
     #[test]
@@ -790,6 +798,36 @@ mod tests {
             resolve_task_id(Some(supplied.clone())).expect("supplied task id"),
             supplied
         );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn task_assign_template_load_failure_exits_two() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("sender"))]);
+        let home = TempDir::new().expect("home directory");
+        let current = TempDir::new().expect("current directory");
+        let command = SendCommand::for_task(TaskSendOptions {
+            to: "recipient@test-team".to_string(),
+            message: None,
+            team: Some(TEST_TEAM.to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            template: Some(current.path().join("missing.j2")),
+            vars: None,
+            task_id: Some("T1".parse().expect("task id")),
+            json: false,
+        });
+        let error = command
+            .build_request_with_mode(
+                home.path().to_path_buf(),
+                current.path().to_path_buf(),
+                NudgeMode::Deferred,
+                None,
+            )
+            .expect_err("missing task template");
+
+        assert_eq!(crate::exit_code_for_error(&error), 2);
     }
 
     #[test]
