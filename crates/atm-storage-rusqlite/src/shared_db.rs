@@ -760,9 +760,6 @@ pub(crate) fn ensure_schema(
     crate::template_override_migration::ensure_team_nudge_template_override_columns(
         connection, target,
     )?;
-    crate::template_override_migration::migrate_template_override_kinds_to_seven(
-        connection, target,
-    )?;
     crate::template_override_migration::remove_template_override_kind_check(connection, target)?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
@@ -1400,7 +1397,7 @@ mod tests {
     }
 
     #[test]
-    fn ensure_schema_rebuilds_six_kind_override_table_and_is_idempotent() {
+    fn ensure_schema_preserves_pre_seven_retired_kinds_as_stale_and_is_idempotent() {
         let target = SharedDbTarget::InMemory {
             uri: format!(
                 "file:atm-storage-rusqlite-shared-db-test-{}?mode=memory&cache=shared",
@@ -1437,15 +1434,27 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("count migrated rows");
-        assert_eq!(row_count, 1, "only the retired row should be dropped");
-        let retained_kind: String = connection
-            .query_row(
-                "SELECT template_kind FROM team_nudge_template_overrides WHERE team_name = 'test-team';",
-                [],
-                |row| row.get(0),
+        assert_eq!(
+            row_count, 2,
+            "retired rows must survive for doctor reporting"
+        );
+        let stale_kinds = connection
+            .prepare(
+                "SELECT template_kind FROM team_nudge_template_overrides
+                 WHERE team_name = 'test-team' ORDER BY template_kind;",
             )
-            .expect("read retained row");
-        assert_eq!(retained_kind, "delivery_ack");
+            .expect("prepare migrated kinds")
+            .query_map([], |row| row.get::<_, String>(0))
+            .expect("query migrated kinds")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("read migrated kinds")
+            .into_iter()
+            .filter(|kind| {
+                kind.parse::<atm_storage::BuiltInNudgeTemplateKind>()
+                    .is_err()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(stale_kinds, vec!["delivery_task"]);
         connection
             .execute(
                 "INSERT INTO team_nudge_template_overrides
@@ -1492,7 +1501,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("count rows after second open");
-        assert_eq!(row_count_after_second_open, 3);
+        assert_eq!(row_count_after_second_open, 4);
     }
 
     #[test]

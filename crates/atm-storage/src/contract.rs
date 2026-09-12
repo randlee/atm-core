@@ -186,6 +186,12 @@ pub struct TeamNudgeTemplateOverrideRow {
     pub updated_at: IsoTimestamp,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StaleNudgeTemplateOverrideKind {
+    pub kind: String,
+    pub updated_at: IsoTimestamp,
+}
+
 impl TeamNudgeTemplateOverrideRow {
     pub fn template_body(&self) -> Option<&str> {
         match &self.mode {
@@ -1253,7 +1259,12 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
     fn list_stale_template_override_kinds(
         &self,
         team: &TeamName,
-    ) -> Result<Vec<(String, IsoTimestamp)>, AtmError>;
+    ) -> Result<Vec<StaleNudgeTemplateOverrideKind>, AtmError>;
+
+    fn list_template_overrides(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<TeamNudgeTemplateOverrideRow>, AtmError>;
 
     fn load_template_override(
         &self,
@@ -1532,7 +1543,14 @@ mod tests {
         fn list_stale_template_override_kinds(
             &self,
             _team: &TeamName,
-        ) -> Result<Vec<(String, IsoTimestamp)>, AtmError> {
+        ) -> Result<Vec<StaleNudgeTemplateOverrideKind>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn list_template_overrides(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<TeamNudgeTemplateOverrideRow>, AtmError> {
             Ok(Vec::new())
         }
 

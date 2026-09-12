@@ -1,5 +1,6 @@
 use atm_core::boundary::{
     BuiltInNudgeTemplateKind, MemberKey, RosterEntry, RosterHarness, RosterMemberKind,
+    built_in_nudge_template_kind_from_post_send_event,
 };
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
 use atm_core::schema::AtmMessageId;
@@ -64,8 +65,48 @@ fn reminder_dispatch_renders_from_a_task_row_without_assignment_mail() {
         .expect("Herdr dispatch");
     assert!(dispatch.event.sender_host.is_none());
     assert_eq!(dispatch.event.task_id, Some(row.task_id));
+    assert_eq!(
+        dispatch.event.task_transition,
+        Some(atm_core::boundary::TaskTransition::Ready)
+    );
+    assert_eq!(
+        built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
+        BuiltInNudgeTemplateKind::TaskReady
+    );
     assert!(dispatch.event.requires_ack);
     assert!(!dispatch.event.is_ack);
+}
+
+#[test]
+fn reminder_dispatch_uses_durable_reminder_count() {
+    let root = tempfile::tempdir().expect("temporary runtime root");
+    let assembly =
+        atm_runtime_test_support::open_isolated_sqlite_boundary(root.path()).expect("runtime");
+    let team: TeamName = "ax5-dispatch".parse().expect("team");
+    assembly
+        .service_runtime
+        .shared_roster_store_arc()
+        .save_roster(&RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![member(&team, "herdr")],
+            refreshed_at: None,
+        })
+        .expect("roster");
+    let mut row = task_row(&team);
+    row.reminder_count = 3;
+    let key = MemberKey::new(team, row.assignee.clone());
+
+    let dispatch = build_task_reminder_dispatch(&assembly.service_runtime, &key, &row)
+        .expect("build reminder")
+        .expect("Herdr dispatch");
+    assert_eq!(
+        dispatch.event.task_transition,
+        Some(atm_core::boundary::TaskTransition::Reminder { attempt: 3 })
+    );
+    assert_eq!(
+        built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
+        BuiltInNudgeTemplateKind::TaskReminder
+    );
 }
 
 #[test]

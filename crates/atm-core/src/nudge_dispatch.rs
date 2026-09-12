@@ -21,10 +21,6 @@ use crate::send::hook::build_built_in_dispatch;
 use crate::service_runtime::LocalServiceRuntime;
 use atm_storage::TaskRow;
 
-const fn claim_task_transition() -> Option<TaskTransition> {
-    None
-}
-
 const fn task_pass_transition(reminder_count: u32) -> TaskTransition {
     if reminder_count == 0 {
         TaskTransition::Ready
@@ -155,7 +151,7 @@ pub fn rebuild_received_hook_dispatch(
         requires_ack: message.envelope.requires_ack,
         is_ack: message.envelope.acknowledges_message_id.is_some(),
         task_id: message.envelope.task_id.clone(),
-        task_transition: claim_task_transition(),
+        task_transition: None,
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };
 
@@ -203,50 +199,4 @@ pub fn build_task_reminder_dispatch(
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };
     build_built_in_dispatch(runtime, &delivery_snapshot, &event, NudgeMode::Deferred)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{claim_task_transition, task_pass_transition};
-    use crate::boundary::{
-        BuiltInNudgeTemplateKind, NudgeKind, PostSendHookEvent, TaskTransition,
-        built_in_nudge_template_kind_from_post_send_event,
-    };
-    use crate::schema::AtmMessageId;
-    use crate::types::{AgentName, TeamName};
-
-    #[test]
-    fn task_pass_builder_sets_ready_at_zero_reminders_then_reminder_with_count() {
-        assert_eq!(task_pass_transition(0), TaskTransition::Ready);
-        assert_eq!(
-            task_pass_transition(3),
-            TaskTransition::Reminder { attempt: 3 }
-        );
-    }
-
-    #[test]
-    fn claim_builder_never_sets_task_transition() {
-        for task_id in [None, Some("BB.1".parse().expect("task id"))] {
-            let event = PostSendHookEvent {
-                sender: AgentName::from_validated("sender"),
-                sender_chat_id: None,
-                sender_team: TeamName::from_validated("team"),
-                sender_host: None,
-                recipient: AgentName::from_validated("recipient"),
-                recipient_team: TeamName::from_validated("team"),
-                message_id: AtmMessageId::new(),
-                description: "test".to_owned(),
-                requires_ack: false,
-                is_ack: false,
-                task_id,
-                task_transition: claim_task_transition(),
-                recipient_pane_id: None,
-            };
-            assert_eq!(event.task_transition, None);
-            assert_eq!(
-                built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
-                Ok(BuiltInNudgeTemplateKind::Delivery)
-            );
-        }
-    }
 }

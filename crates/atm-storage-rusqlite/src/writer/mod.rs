@@ -3,9 +3,11 @@ mod ops_envelope;
 mod read_display_state;
 mod shutdown_support;
 mod stmt_cache;
+mod task_close;
 mod task_ops;
 mod task_rejection;
 mod task_report;
+mod task_start;
 
 use crate::DIAGNOSTIC_PRUNE_CHECK_EVERY;
 use crate::observability::{

@@ -45,6 +45,25 @@ pub fn render_built_in_nudge(
     render_template_body(event, template_body)
 }
 
+pub(crate) fn validate_built_in_nudge_template_body(template_body: &str) -> Result<(), AtmError> {
+    render_template(
+        template_body,
+        &BTreeMap::from([
+            ("from", String::new()),
+            ("team", String::new()),
+            ("message_id", String::new()),
+            ("description", String::new()),
+            ("task_id", String::new()),
+            ("position", String::new()),
+            ("attempt", String::new()),
+            ("assignee", String::new()),
+            ("outcome", String::new()),
+            ("by", String::new()),
+        ]),
+    )
+    .map(|_| ())
+}
+
 /// Renders the durable receipt written when the queue-wake pump starts an
 /// assigned task after emitting its reminder.
 pub fn render_task_started_template(task_id: &str, assignee: &str) -> Result<String, AtmError> {
@@ -290,46 +309,68 @@ mod tests {
     #[test]
     fn every_default_body_renders_with_its_placeholders() {
         let cases = [
-            (BuiltInNudgeTemplateKind::Delivery, None),
-            (BuiltInNudgeTemplateKind::DeliveryAck, None),
-            (BuiltInNudgeTemplateKind::Queue, None),
-            (BuiltInNudgeTemplateKind::QueueAck, None),
-            (BuiltInNudgeTemplateKind::Acknowledge, None),
+            (BuiltInNudgeTemplateKind::Delivery, None, true, true),
+            (BuiltInNudgeTemplateKind::DeliveryAck, None, true, true),
+            (BuiltInNudgeTemplateKind::Queue, None, false, true),
+            (BuiltInNudgeTemplateKind::QueueAck, None, false, true),
+            (BuiltInNudgeTemplateKind::Acknowledge, None, false, false),
             (
                 BuiltInNudgeTemplateKind::TaskQueued,
                 Some(TaskTransition::Queued { position: 2 }),
+                false,
+                false,
             ),
             (
                 BuiltInNudgeTemplateKind::TaskReady,
                 Some(TaskTransition::Ready),
+                false,
+                true,
             ),
             (
                 BuiltInNudgeTemplateKind::TaskReminder,
                 Some(TaskTransition::Reminder { attempt: 3 }),
+                false,
+                true,
             ),
             (
                 BuiltInNudgeTemplateKind::TaskStarted,
                 Some(TaskTransition::Started),
+                false,
+                false,
             ),
             (
                 BuiltInNudgeTemplateKind::TaskComplete,
                 Some(TaskTransition::Complete {
                     outcome: TaskCloseOutcome::Completed,
                 }),
+                false,
+                false,
             ),
             (
                 BuiltInNudgeTemplateKind::TaskClosed,
                 Some(TaskTransition::Closed {
                     outcome: TaskClosedOutcome::Cancelled,
                 }),
+                false,
+                false,
             ),
         ];
-        for (kind, transition) in cases {
+        for (kind, transition, has_idle_clause, has_read_action) in cases {
             let mut event = base_event();
             event.task_id = Some("task-9".parse().expect("task id"));
             event.task_transition = transition;
             let body = default_template(kind);
             assert!(!body.contains("read atm "), "legacy read action in {kind}");
+            assert_eq!(
+                body.contains("<when idle=\"immediate\""),
+                has_idle_clause,
+                "idle delivery contract for {kind}"
+            );
+            assert_eq!(
+                body.contains("<action>atm read --message-id {{message_id}}</action>"),
+                has_read_action,
+                "read delivery contract for {kind}"
+            );
             render_built_in_nudge(&event, body).expect("default template renders");
         }
     }

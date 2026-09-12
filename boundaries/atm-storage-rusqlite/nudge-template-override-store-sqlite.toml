@@ -30,7 +30,7 @@ forbidden = ["SqliteNudgeTemplateOverrideStore", "rusqlite::Connection"]
 
 [contracts]
 request_types = ["TeamName", "BuiltInNudgeTemplateKind", "retired kind name (&str, deletion only)"]
-response_types = ["TeamNudgeTemplateOverrideRow", "Vec<(String, IsoTimestamp)> (stale override kinds)"]
+response_types = ["TeamNudgeTemplateOverrideRow", "Vec<TeamNudgeTemplateOverrideRow>", "Vec<StaleNudgeTemplateOverrideKind>"]
 error_types = ["AtmError"]
 
 [testing]

@@ -316,7 +316,10 @@ transition-specific task kinds replace them: `task_queued`, `task_ready`,
 `PostSendHookEvent` gains the additive optional `task_transition` field; both
 the `atm-graft` loopback receiver and `atm-graft-python` callback adapter decode
 the widened event while leaving the Python callback shape unchanged, satisfying
-the both-sides rule in (g).
+the both-sides rule in (g). This amendment also adds the doctor finding codes
+`stale_nudge_template_override` and
+`disabled_task_nudge_template_override` to the frozen identifier inventory;
+they are the operator-facing diagnostics for the override lifecycle above.
 
 ## Rejected alternatives
 

@@ -892,34 +892,46 @@ mod tests {
 
     #[test]
     fn set_nudge_template_rejects_retired_task_kind_with_hint() {
-        let command = SetNudgeTemplateCommand {
-            team: TEST_TEAM.to_string(),
-            kind: concat!("delivery", "_task").to_string(),
-            template_body: "<atm/>".to_string(),
-            json: false,
-        };
+        for kind in [
+            "task",
+            "acknowledge_task",
+            "delivery_task",
+            "delivery_task_ack",
+        ] {
+            let command = SetNudgeTemplateCommand {
+                team: TEST_TEAM.to_string(),
+                kind: kind.to_string(),
+                template_body: "<atm/>".to_string(),
+                json: false,
+            };
 
-        let error = command
-            .build_request(CallerContext {
-                caller_identity: TEST_SENDER.parse().expect("caller"),
-                caller_chat_id: None,
-                caller_team: TEST_TEAM.parse().expect("team"),
-                activity_observation: None,
-            })
-            .expect_err("retired kind");
+            let error = command
+                .build_request(CallerContext {
+                    caller_identity: TEST_SENDER.parse().expect("caller"),
+                    caller_chat_id: None,
+                    caller_team: TEST_TEAM.parse().expect("team"),
+                    activity_observation: None,
+                })
+                .expect_err("retired kind");
 
-        let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
-        assert_eq!(atm_error.code(), AtmErrorCode::MessageValidationFailed);
-        assert!(
-            atm_error.message().contains("use one of task_queued"),
-            "{atm_error}"
-        );
-        assert_eq!(crate::exit_code_for_atm_error(atm_error), 3);
+            let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+            assert_eq!(atm_error.code(), AtmErrorCode::MessageValidationFailed);
+            assert!(
+                atm_error.message().contains("use one of task_queued"),
+                "{atm_error}"
+            );
+            assert_eq!(crate::exit_code_for_atm_error(atm_error), 3);
+        }
     }
 
     #[test]
     fn clear_nudge_template_accepts_retired_task_kind_for_deletion() {
-        for kind in ["task", concat!("acknowledge", "_task")] {
+        for kind in [
+            "task",
+            "acknowledge_task",
+            "delivery_task",
+            "delivery_task_ack",
+        ] {
             let request = ClearNudgeTemplateCommand {
                 team: TEST_TEAM.to_owned(),
                 kind: kind.to_owned(),

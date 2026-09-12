@@ -29,7 +29,7 @@ forbidden = ["rusqlite::Connection", "NotificationSink::deliver"]
 
 [contracts]
 request_types = ["team name", "BuiltInNudgeTemplateKind", "retired kind name (&str, deletion only)"]
-response_types = ["Option<TeamNudgeTemplateOverrideRow>", "AckRequirementState", "Vec<(String, IsoTimestamp)> (stale override kinds)"]
+response_types = ["Option<TeamNudgeTemplateOverrideRow>", "Vec<TeamNudgeTemplateOverrideRow>", "AckRequirementState", "Vec<StaleNudgeTemplateOverrideKind>"]
 error_types = ["AtmError"]
 notes = ["atm-core retains built_in_nudge_template_kind_from_post_send_event because PostSendHookEvent remains atm-core owned", "built-in template bodies and placeholder substitution remain owned by atm", "the emitter path must receive resolved template text or absence only and must not perform lookup itself"]
 
