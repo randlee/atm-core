@@ -7,8 +7,6 @@ import argparse
 from collections import defaultdict
 import json
 from pathlib import Path
-import re
-import subprocess
 from typing import Any
 
 
@@ -99,90 +97,11 @@ def build_inventory(root: Path = ROOT) -> dict[str, Any]:
     return {"schema_version": 1, "procedures": procedures}
 
 
-def _revision_date(root: Path, revision: str, fallback: str) -> str:
-    result = subprocess.run(["git", "show", "-s", "--format=%ad", "--date=short", revision], cwd=root, capture_output=True, text=True, check=False)
-    return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else fallback
-
-
-def _report_step_names(root: Path, procedure: str) -> list[str]:
-    names: set[str] = set()
-    for path in (root / "site" / "reports").rglob("*.json"):
-        data = _json(path)
-        if not data:
-            continue
-        if isinstance(data.get("cases"), list):
-            feature = data.get("feature")
-            expected = ("graft-hermes" if procedure == "graft-hermes" else
-                        "colima-hermes-skills" if procedure == "colima-hermes-skills" else
-                        procedure.removeprefix("smoke-"))
-            if feature == expected:
-                names.update(str(item["name"]) for item in data["cases"] if isinstance(item, dict) and isinstance(item.get("name"), str))
-        campaign = data.get("campaign") if isinstance(data.get("campaign"), dict) else data
-        if procedure.startswith("fuzz-") and isinstance(data.get("workers"), list) and campaign.get("target") == procedure.removeprefix("fuzz-"):
-            names.update(str(item.get("correlation_id")) for item in data["workers"] if isinstance(item, dict) and item.get("correlation_id"))
-    if names:
-        return sorted(names)
-    if procedure.startswith("fuzz-"):
-        return ["shape-probe", "template-probe", "boundary-probe", "differential-probe"]
-    if procedure.startswith("smoke-"):
-        return ["doctor", "advertised host", "smoke case results"]
-    if procedure == "graft-hermes":
-        return ["doctor", "graft outbound durable write and receiver round trip"]
-    if procedure == "colima-hermes-skills":
-        return ["doctor", "testbed ref", "skill procedure steps"]
-    return ["sqlite", "uds", "tcp", "mTLS"]
-
-
-def write_procedure_docs(root: Path = ROOT) -> None:
-    inventory = build_inventory(root)
-    head_result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True)
-    head = head_result.stdout.strip()
-    docs = root / "docs" / "procedures"; docs.mkdir(parents=True, exist_ok=True)
-    for item in inventory["procedures"]:
-        procedure = item["id"]
-        revisions = []
-        for path in item["sources"]:
-            data = _json(root / path) if not path.startswith("runner:") else None
-            candidate = data.get("source_revision") if data else None
-            if not candidate and data and isinstance(data.get("campaign"), dict):
-                candidate = data["campaign"].get("source_revision")
-            if isinstance(candidate, str) and re.fullmatch(r"[0-9a-f]{40}", candidate):
-                revisions.append(candidate)
-        revisions.extend([head])
-        unique = list(dict.fromkeys(revisions))
-        runner = item["runner"]
-        history = subprocess.run(["git", "log", "--follow", "--format=%H", "--", runner], cwd=root, capture_output=True, text=True, check=False).stdout.splitlines()
-        anchor = history[-1] if history else head
-        if anchor not in unique:
-            unique.append(anchor)
-        unique = list(dict.fromkeys(unique))
-        entries = []
-        for index, revision in enumerate(unique):
-            fallback = "2026-09-12" if revision == head else "2026-08-01"
-            entries.append((revision, _revision_date(root, revision, fallback), "current" if index == 0 else "historical runner revision"))
-        entries.sort(key=lambda value: (value[1], value[0]), reverse=True)
-        rows = _report_step_names(root, procedure)
-        table = "| step | action | observable | evidence |\n| --- | --- | --- | --- |\n" + "".join(
-            f"| {index} | Run `{name}` | PASS or FAIL is recorded | `{procedure}.json` cases |\n" for index, name in enumerate(rows, 1)
-        )
-        flow = "```mermaid\nflowchart LR\n  setup[Prepare runner] --> steps[Execute procedure steps]\n  steps --> evidence[Write immutable evidence JSON and HTML]\n```"
-        front = ["---", f"procedure: {procedure}", f"family: {item['family']}", f"runner: {item['runner']}", "evidence: site/reports/<run>/<procedure>.json", "revisions:"]
-        for revision, revision_date, note in entries:
-            front += [f"  - rev: {revision}", f"    date: {revision_date}", f"    note: \"{note}\""]
-        body = ["---", "", "## What this test proves", f"The `{procedure}` procedure runs the named verification steps in order. Each step records an observable result in the run evidence. The page is addressed by the runner revision so a historical report remains explainable after the runner changes.", "", "## Flow", flow, "", "## Steps", table, "", "## Evidence layout", "The runner writes a procedure JSON payload beside its rendered report and an envelope used by the public report index. Existing evidence artifacts are immutable.", "", "## Changes", "This page is backfilled from the runner history; revision-specific notes are listed below.", ""]
-        for revision, revision_date, note in entries:
-            body += [f"## Revision {revision[:8]} ({revision_date})", f"{note}.", "", flow, "", "## Steps", table, ""]
-        (docs / f"{procedure}.md").write_text("\n".join(front + body), encoding="utf-8")
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--check", action="store_true")
-    parser.add_argument("--write-docs", action="store_true")
     args = parser.parse_args()
-    if args.write_docs:
-        write_procedure_docs(args.root.resolve())
     expected = json.dumps(build_inventory(args.root.resolve()), indent=2, sort_keys=True) + "\n"
     if args.check:
         return 0 if args.root.resolve().joinpath("docs/procedures/inventory.json").read_text(encoding="utf-8") == expected else 1

@@ -2,94 +2,122 @@
 procedure: fuzz-local-http-framing
 family: fuzz
 runner: .just/run_fuzz.py
-evidence: site/reports/<run>/<procedure>.json
+evidence: site/reports/<run>/fuzz-local-http-framing.json
 revisions:
-  - rev: 1595424dca42905e6eb8ceb7b48d722cb8c8ddef
-    date: 2026-09-12
-    note: "historical runner revision"
-  - rev: cc0ee308e0a02a09aa41c3c6e635101b5011d418
+  - rev: daae4065642f3602d16687ce8b50908db3ca0781
     date: 2026-08-14
-    note: "current"
+    note: "current runner revision"
+  - rev: 4c1dada21c60f26dd5c90beeb192370b92707b5d
+    date: 2026-08-14
+    note: "test(fuzz): add deterministic HTTP campaign"
   - rev: 2f40a3a785cb9eedf50a439c5b85bf9571bac62e
     date: 2026-07-31
-    note: "historical runner revision"
+    note: "feat: add bounded fuzz tooling contract"
 ---
 
 ## What this test proves
-The `fuzz-local-http-framing` procedure runs the named verification steps in order. Each step records an observable result in the run evidence. The page is addressed by the runner revision so a historical report remains explainable after the runner changes.
+This fuzz procedure probes HTTP framing boundaries with the bounded workers and retains the observed rejection diagnostics, including the worker that produced each result.
 
 ## Flow
 ```mermaid
 flowchart LR
-  setup[Prepare runner] --> steps[Execute procedure steps]
-  steps --> evidence[Write immutable evidence JSON and HTML]
+  setup[Setup fuzz-local-http-framing]
+  case1[group1: shape-probe]
+  case2[group2: boundary-probe]
+  teardown[Validate and close]
+  evidence[Write immutable evidence]
+  setup --> case1
+  case1 --> case2
+  case2 --> teardown
+  teardown --> evidence
+  note[runner revision daae4065]:::revision
 ```
 
 ## Steps
 | step | action | observable | evidence |
 | --- | --- | --- | --- |
-| 1 | Run `boundary-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 2 | Run `differential-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 3 | Run `shape-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 4 | Run `template-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-
+| 1 | Execute `shape-probe` | The named check reports PASS or FAIL at revision `daae4065` | campaign worker/family evidence |
+| 2 | Execute `template-probe` | The named check reports PASS or FAIL at revision `daae4065` | campaign worker/family evidence |
+| 3 | Execute `boundary-probe` | The named check reports PASS or FAIL at revision `daae4065` | campaign worker/family evidence |
+| 4 | Execute `differential-probe` | The named check reports PASS or FAIL at revision `daae4065` | campaign worker/family evidence |
 
 ## Evidence layout
-The runner writes a procedure JSON payload beside its rendered report and an envelope used by the public report index. Existing evidence artifacts are immutable.
+The runner writes immutable evidence for `fuzz-local-http-framing` beneath `site/reports/`. The JSON payload is the source for case or worker outcomes; the rendered report and envelope provide the public navigation entry.
 
 ## Changes
-This page is backfilled from the runner history; revision-specific notes are listed below.
+The revision sections below are the retained runner-history backfill. Each section records the source revision and its own ordered procedure description.
 
-## Revision 1595424d (2026-09-12)
-historical runner revision.
+## Revision daae4065 (2026-08-14)
+The runner change `test(fuzz): retain typed HTTP rejection diagnostics` is the source for this revision's procedure order.
 
 ```mermaid
 flowchart LR
-  setup[Prepare runner] --> steps[Execute procedure steps]
-  steps --> evidence[Write immutable evidence JSON and HTML]
+  setup[Setup fuzz-local-http-framing]
+  case1[group1: shape-probe]
+  case2[group2: boundary-probe]
+  teardown[Validate and close]
+  evidence[Write immutable evidence]
+  setup --> case1
+  case1 --> case2
+  case2 --> teardown
+  teardown --> evidence
+  note[runner revision daae4065]:::revision
 ```
 
 ## Steps
 | step | action | observable | evidence |
 | --- | --- | --- | --- |
-| 1 | Run `boundary-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 2 | Run `differential-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 3 | Run `shape-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 4 | Run `template-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
+| 1 | Execute `shape-probe` | The named check reports PASS or FAIL at revision `daae4065` | campaign worker/family evidence |
+| 2 | Execute `template-probe` | The named check reports PASS or FAIL at revision `daae4065` | campaign worker/family evidence |
+| 3 | Execute `boundary-probe` | The named check reports PASS or FAIL at revision `daae4065` | campaign worker/family evidence |
+| 4 | Execute `differential-probe` | The named check reports PASS or FAIL at revision `daae4065` | campaign worker/family evidence |
 
-
-## Revision cc0ee308 (2026-08-14)
-current.
+## Revision 4c1dada2 (2026-08-14)
+The runner change `test(fuzz): add deterministic HTTP campaign` is the source for this revision's procedure order.
 
 ```mermaid
 flowchart LR
-  setup[Prepare runner] --> steps[Execute procedure steps]
-  steps --> evidence[Write immutable evidence JSON and HTML]
+  setup[Setup fuzz-local-http-framing]
+  case1[group1: shape-probe]
+  case2[group2: boundary-probe]
+  teardown[Validate and close]
+  evidence[Write immutable evidence]
+  setup --> case1
+  case1 --> case2
+  case2 --> teardown
+  teardown --> evidence
+  note[runner revision 4c1dada2]:::revision
 ```
 
 ## Steps
 | step | action | observable | evidence |
 | --- | --- | --- | --- |
-| 1 | Run `boundary-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 2 | Run `differential-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 3 | Run `shape-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 4 | Run `template-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-
+| 1 | Execute `shape-probe` | The named check reports PASS or FAIL at revision `4c1dada2` | campaign worker/family evidence |
+| 2 | Execute `template-probe` | The named check reports PASS or FAIL at revision `4c1dada2` | campaign worker/family evidence |
+| 3 | Execute `boundary-probe` | The named check reports PASS or FAIL at revision `4c1dada2` | campaign worker/family evidence |
+| 4 | Execute `differential-probe` | The named check reports PASS or FAIL at revision `4c1dada2` | campaign worker/family evidence |
 
 ## Revision 2f40a3a7 (2026-07-31)
-historical runner revision.
+The runner change `feat: add bounded fuzz tooling contract` is the source for this revision's procedure order.
 
 ```mermaid
 flowchart LR
-  setup[Prepare runner] --> steps[Execute procedure steps]
-  steps --> evidence[Write immutable evidence JSON and HTML]
+  setup[Setup fuzz-local-http-framing]
+  case1[group1: shape-probe]
+  case2[group2: boundary-probe]
+  teardown[Validate and close]
+  evidence[Write immutable evidence]
+  setup --> case1
+  case1 --> case2
+  case2 --> teardown
+  teardown --> evidence
+  note[runner revision 2f40a3a7]:::revision
 ```
 
 ## Steps
 | step | action | observable | evidence |
 | --- | --- | --- | --- |
-| 1 | Run `boundary-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 2 | Run `differential-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 3 | Run `shape-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-| 4 | Run `template-probe` | PASS or FAIL is recorded | `fuzz-local-http-framing.json` cases |
-
+| 1 | Execute `shape-probe` | The named check reports PASS or FAIL at revision `2f40a3a7` | campaign worker/family evidence |
+| 2 | Execute `template-probe` | The named check reports PASS or FAIL at revision `2f40a3a7` | campaign worker/family evidence |
+| 3 | Execute `boundary-probe` | The named check reports PASS or FAIL at revision `2f40a3a7` | campaign worker/family evidence |
+| 4 | Execute `differential-probe` | The named check reports PASS or FAIL at revision `2f40a3a7` | campaign worker/family evidence |

@@ -17,6 +17,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import sys
+import subprocess
 from typing import Any, Iterable
 
 
@@ -161,6 +162,12 @@ def _sibling_feature(source: Path) -> str | None:
     return None
 
 
+def _procedure_for_feature(feature: str) -> str:
+    if feature in {"graft-hermes", "colima-hermes-skills"}:
+        return feature
+    return "smoke-" + ("local-ip" if feature == "local-up" else feature)
+
+
 def _manifest(reports_root: Path) -> dict[str, list[dict[str, Any]]]:
     path = reports_root / "procedures" / "manifest.json"
     if not path.is_file():
@@ -194,15 +201,30 @@ def _procedure_for(envelope: Envelope) -> str:
     return "fuzz-" + (target or "unknown")
 
 
-def resolve_procedures(envelopes: list[Envelope], reports_root: Path, *, require_manifest: bool = True) -> list[Envelope]:
+def _revision_is_ancestor(revision: str, source_revision: str, reports_root: Path) -> bool | None:
+    repository = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        cwd=reports_root.parent.parent,
+        capture_output=True,
+        check=False,
+    )
+    if repository.returncode != 0:
+        return None
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", revision, source_revision],
+        cwd=reports_root.parent.parent,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return True
+    return False if result.returncode == 1 else None
+
+
+def resolve_procedures(envelopes: list[Envelope], reports_root: Path) -> list[Envelope]:
     if not envelopes:
         return []
-    try:
-        manifest = _manifest(reports_root)
-    except ReportIndexError:
-        if require_manifest:
-            raise
-        return [Envelope(**{**envelope.__dict__, "procedure": "unresolved", "procedure_html": "", "procedure_inferred": True}) for envelope in envelopes]
+    manifest = _manifest(reports_root)
     resolved: list[Envelope] = []
     for envelope in envelopes:
         procedure = _procedure_for(envelope)
@@ -212,6 +234,23 @@ def resolve_procedures(envelopes: list[Envelope], reports_root: Path, *, require
         source_revision = envelope.source_revision
         selected = next((item for item in revisions if source_revision and item.get("rev") == source_revision), None)
         inferred = source_revision is None
+        if selected is None and source_revision:
+            ancestry = [
+                (_revision_is_ancestor(item["rev"], source_revision, reports_root), item)
+                for item in revisions
+                if isinstance(item.get("rev"), str)
+            ]
+            ancestors = [item for is_ancestor, item in ancestry if is_ancestor]
+            git_unavailable = any(is_ancestor is None for is_ancestor, _item in ancestry)
+            if git_unavailable:
+                dated = [
+                    item for item in revisions
+                    if isinstance(item.get("date"), str)
+                    and item["date"] <= envelope.generated_at_text[:10]
+                ]
+                selected = max(dated, key=lambda item: item["date"], default=None)
+            else:
+                selected = max(ancestors, key=lambda item: item.get("date", ""), default=None)
         if selected is None and inferred:
             dated = [item for item in revisions if isinstance(item.get("date"), str) and item["date"] <= envelope.generated_at_text[:10]]
             selected = max(dated, key=lambda item: item["date"], default=None)
@@ -315,10 +354,11 @@ def parse_smoke_result(source: Path, reports_root: Path, payload: dict[str, Any]
         source=source,
         status=_smoke_status(payload["status"], source),
         source_revision=_source_revision(payload.get("source_revision"), source),
+        procedure=_procedure_for_feature(payload["feature"]),
     )
 
 
-def discover_envelopes(reports_root: Path, *, require_manifest: bool = True) -> list[Envelope]:
+def discover_envelopes(reports_root: Path) -> list[Envelope]:
     if not reports_root.exists():
         return []
     if not reports_root.is_dir():
@@ -360,7 +400,7 @@ def discover_envelopes(reports_root: Path, *, require_manifest: bool = True) -> 
             and {"feature", "platform", "host", "run_id", "status", "cases"}.issubset(payload)
         ):
             envelopes.append(parse_smoke_result(source, reports_root, payload))
-    return resolve_procedures(envelopes, reports_root, require_manifest=require_manifest)
+    return resolve_procedures(envelopes, reports_root)
 
 
 def aggregate_entries(envelopes: Iterable[Envelope]) -> list[ReportEntry]:
@@ -450,13 +490,13 @@ def render_index(entries: Iterable[ReportEntry]) -> str:
     )
 
 
-def build_index(reports_root: Path, *, require_manifest: bool = False) -> str:
-    return render_index(aggregate_entries(discover_envelopes(reports_root, require_manifest=require_manifest)))
+def build_index(reports_root: Path) -> str:
+    return render_index(aggregate_entries(discover_envelopes(reports_root)))
 
 
 def write_or_check(repo_root: Path, check: bool) -> int:
     reports_root = repo_root / REPORTS_RELATIVE
-    expected = build_index(reports_root, require_manifest=True)
+    expected = build_index(reports_root)
     index_path = reports_root / INDEX_NAME
     if check:
         try:

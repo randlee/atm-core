@@ -1,8 +1,24 @@
 from __future__ import annotations
 
 import importlib.util
+from html.parser import HTMLParser
 from pathlib import Path
+import re
+import tempfile
 import unittest
+
+
+class _MarkupProbe(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.svg = 0
+        self.tables = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "svg":
+            self.svg += 1
+        elif tag == "table":
+            self.tables += 1
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,14 +39,24 @@ class ProcedurePageTests(unittest.TestCase):
             self.assertEqual(len(pages), len(procedure["revisions"]) + 1)
 
     def test_two_revisions_render_distinct_step_tables(self):
-        procedure = next(item for item in self.manifest["procedures"] if len(item["revisions"]) >= 2)
+        procedure = next(item for item in self.manifest["procedures"] if item["procedure"] == "smoke-localhost")
         paths = [ROOT / "site/reports" / item["html"] for item in procedure["revisions"]]
-        self.assertNotEqual(paths[0].read_text(), paths[1].read_text())
-        self.assertIn("<table", paths[0].read_text())
+        tables = [re.search(r"<table>.*?</table>", path.read_text(), re.DOTALL).group(0) for path in paths[:2]]
+        self.assertNotEqual(tables[0], tables[1])
 
     def test_revision_entry_without_section_is_a_render_error(self):
-        with self.assertRaises(MODULE.ProcedureRenderError):
-            MODULE.revision_content("No steps here")
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            docs = root / "docs/procedures"
+            docs.mkdir(parents=True)
+            (docs / "broken.md").write_text(
+                "---\nprocedure: broken\nfamily: smoke\nrunner: runner.py\nrevisions:\n"
+                "  - rev: " + "a" * 40 + "\n    date: 2026-01-01\n    note: broken\n---\n"
+                "\n## What this test proves\nA fixture.\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(MODULE.ProcedureRenderError, "no matching section"):
+                MODULE.render(root)
 
     def test_inventory_matches_committed_reports_and_runner_targets(self):
         inventory = MODULE.json.loads((ROOT / "docs/procedures/inventory.json").read_text())
@@ -38,9 +64,10 @@ class ProcedurePageTests(unittest.TestCase):
 
     def test_flow_svg_and_steps_table_are_markup_not_text(self):
         page = next((ROOT / "site/reports/procedures").glob("*/????????.html"))
-        text = page.read_text()
-        self.assertIn("<svg", text)
-        self.assertIn("<table", text)
+        probe = _MarkupProbe()
+        probe.feed(page.read_text())
+        self.assertGreater(probe.svg, 0)
+        self.assertGreater(probe.tables, 0)
 
     def test_scalar_title_stays_escaped(self):
         page = next((ROOT / "site/reports/procedures").glob("*/????????.html"))

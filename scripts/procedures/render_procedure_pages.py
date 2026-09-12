@@ -9,13 +9,15 @@ import html
 import json
 from pathlib import Path
 import re
-import subprocess
+import sys
 import tempfile
 from typing import Any
 
-
-
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from docs.reports.generate_diagram_pages import render_file, render_mermaid_source  # noqa: E402
 DOCS = ROOT / "docs" / "procedures"
 OUTPUT = ROOT / "site" / "reports" / "procedures"
 TEMPLATE = ROOT / "templates" / "procedure-report" / "procedure.html.j2"
@@ -26,20 +28,14 @@ class ProcedureRenderError(ValueError):
     pass
 
 
-def compose(template: Path, variables: dict[str, Any], output: Path | None = None) -> str:
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as handle:
-        json.dump(variables, handle)
-        var_file = Path(handle.name)
+def compose(template: Path, variables: dict[str, Any], output: Path) -> str:
     try:
-        command = ["sc-compose", "render", "--root", str(ROOT), "--file", str(template), "--var-file", str(var_file)]
-        if output:
-            command += ["--output", str(output)]
-        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
-        if result.returncode:
-            raise ProcedureRenderError(result.stderr.strip() or result.stdout.strip() or "sc-compose failed")
-        return output.read_text(encoding="utf-8") if output else result.stdout
-    finally:
-        var_file.unlink(missing_ok=True)
+        with tempfile.TemporaryDirectory() as tempdir:
+            rendered = Path(tempdir) / output.name
+            render_file(template, variables, rendered)
+            return rendered.read_text(encoding="utf-8")
+    except Exception as error:
+        raise ProcedureRenderError(str(error)) from error
 
 
 def markdown_fragment(text: str) -> str:
@@ -131,13 +127,10 @@ def parse_document(path: Path) -> tuple[dict[str, Any], str, dict[str, str]]:
 
 
 def mermaid_svg(source: str) -> str:
-    with tempfile.TemporaryDirectory() as temp:
-        directory = Path(temp); inp = directory / "flow.mmd"; out = directory / "flow.svg"
-        inp.write_text(source, encoding="utf-8")
-        result = subprocess.run(["npx", "-y", "@mermaid-js/mermaid-cli", "-i", str(inp), "-o", str(out)], cwd=ROOT, capture_output=True, text=True, check=False)
-        if result.returncode or not out.is_file():
-            raise ProcedureRenderError(result.stderr.strip() or "mermaid rendering failed")
-        return out.read_text(encoding="utf-8")
+    try:
+        return render_mermaid_source(source)
+    except Exception as error:
+        raise ProcedureRenderError(str(error)) from error
 
 
 def revision_content(section: str) -> tuple[str, str]:
@@ -148,6 +141,16 @@ def revision_content(section: str) -> tuple[str, str]:
     if not steps:
         raise ProcedureRenderError("revision section is missing a Steps table")
     return flow.group(1).strip(), steps.group(1).strip()
+
+
+def summary_content(body: str) -> str:
+    """Keep narrative sections in the page body; revision markup is rendered once."""
+    return re.sub(
+        r"\n## (?:Flow|Steps)\s*\n.*?(?=\n## |\Z)",
+        "",
+        body,
+        flags=re.DOTALL,
+    )
 
 
 def render(root: Path = ROOT, check: bool = False) -> int:
@@ -173,9 +176,10 @@ def render(root: Path = ROOT, check: bool = False) -> int:
             vars_obj = {"title": title, "procedure": procedure, "revision": rev, "revision_short": rev8,
                         "date": str(item.get("date", "")), "note": str(item.get("note", "")),
                         "flow_svg": svg, "steps_html": markdown_fragment(steps),
-                        "body_html": markdown_fragment(body)}
+                        "body_html": markdown_fragment(summary_content(body))}
             destination = output / procedure / f"{rev8}.html"
-            expected[destination] = compose(root / "templates/procedure-report/procedure.html.j2", vars_obj)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            expected[destination] = compose(root / "templates/procedure-report/procedure.html.j2", vars_obj, destination)
             entry_date = item.get("date")
             entries.append({"rev": rev, "date": entry_date.isoformat() if isinstance(entry_date, date) else str(entry_date or ""), "note": item.get("note", ""), "html": f"procedures/{procedure}/{rev8}.html"})
         if {key for key in sections} != {str(item["rev"])[:8] for item in revisions}:

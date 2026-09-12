@@ -13,9 +13,6 @@ required_variables:
   - completed_at
   - rows
   - incomplete_reason
-defaults:
-  procedure_label: ""
-  procedure_href: ""
 ---
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -33,7 +30,6 @@ defaults:
 <body>
   <h1>{{ title | e }}</h1>
   <p class="meta"><code>{{ campaign_id | e }}</code> · {{ host_label | e }} · phase {{ phase | e }} · source <code>{{ source_revision | e }}</code></p>
-{% if procedure_label and procedure_href %}<p class="meta">Procedure: <a href="{{ procedure_href | e }}">{{ procedure_label | e }}</a></p>{% endif %}
   <p>Status: <strong class="{{ status | e }}">{{ status | e }}</strong> · started <time datetime="{{ started_at.datetime | e }}">{{ started_at.text | e }}</time>{% if completed_at %} · completed <time datetime="{{ completed_at.datetime | e }}">{{ completed_at.text | e }}</time>{% endif %}</p>
   <table>
     <thead><tr><th>Test</th><th>p50 msg/sec</th><th>p95</th><th>p99</th><th>Durable write proof</th><th>Baseline floor</th><th>Margin</th><th>Verdict</th></tr></thead>

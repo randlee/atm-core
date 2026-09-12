@@ -828,6 +828,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
                 **identity,
                 "status": "PASS" if passed else "FAIL",
                 "source_revision": revision,
+                **({"procedure": "graft-hermes"} if feature == "graft-hermes" else {}),
                 "cases": cases,
             },
             indent=2,
@@ -1052,7 +1053,28 @@ def main() -> int:
     if args.feature in FIXTURE_FEATURES:
         if args.peers:
             raise SmokeError(f"fixture smoke `{args.feature}` does not accept hostnames")
-        return subprocess.run([sys.executable, str(ROOT / "scripts" / "smoke" / "run.py"), args.feature, "--write-artifacts"], check=False).returncode
+        from phase_ad_suite import run_suite
+        if args.feature == "thorough":
+            from run_thorough import THOROUGH_ROWS
+            specs = THOROUGH_ROWS
+        else:
+            from run import FAST_ROWS, NORMAL_ROWS
+            specs = FAST_ROWS if args.feature == "fast" else NORMAL_ROWS
+        payload = run_suite(args.feature, specs, write_artifacts=False)
+        cases = [
+            {
+                "name": row["id"],
+                "status": row["verdict"],
+                "detail": row["flow"],
+                "origin": platform.node(),
+                "destination": platform.node(),
+            }
+            for row in payload["rows"]
+        ]
+        report = write_report(args.feature, cases)
+        passed = payload["status"] == "passed"
+        print(f"{'PASS' if passed else 'FAIL'} evidence: {report}")
+        return 0 if passed else 1
     feature = LOCAL_IP if args.feature == LOCAL_IP_ALIAS else args.feature
     # `crosshost` remains a compatibility alias for the first explicit
     # cross-host stage; new automation should use `crosshost-send`.

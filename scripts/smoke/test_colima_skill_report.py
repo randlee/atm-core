@@ -67,8 +67,21 @@ class ParseTests(unittest.TestCase):
 
 class RenderTests(unittest.TestCase):
     def test_payload_and_envelope_carry_source_revision_and_testbed_ref_case(self):
-        self.assertIn('"source_revision": source_revision', Path(MODULE.__file__).read_text(encoding="utf-8"))
-        self.assertIn('case("testbed ref"', Path(MODULE.__file__).read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            run_dir.mkdir()
+            (run_dir / "result.txt").write_text(RESULT, encoding="utf-8")
+            (run_dir / "report-1.txt").write_text(REPORT, encoding="utf-8")
+            (run_dir / "herdr-doctor.json").write_text("{}", encoding="utf-8")
+            out_dir = Path(tmp) / "site" / "reports" / "smoke" / "linux" / MODULE.HOST / "out"
+            with mock.patch.object(MODULE, "_source_revision", return_value="b" * 40), mock.patch.object(MODULE, "compose"), \
+                    mock.patch.object(MODULE, "update_master_report_index"), mock.patch.object(MODULE, "REPO_ROOT", Path(tmp)):
+                report = MODULE.render(run_dir, out_dir)
+            payload = json.loads(report.read_text())
+            envelope = json.loads((out_dir / "smoke.envelope.json").read_text())
+            self.assertEqual(payload["source_revision"], "b" * 40)
+            self.assertEqual(envelope["source_revision"], "b" * 40)
+            self.assertIn("testbed ref", [item["name"] for item in payload["cases"]])
 
     def test_render_writes_the_smoke_evidence_set(self):
         with tempfile.TemporaryDirectory() as tmp:

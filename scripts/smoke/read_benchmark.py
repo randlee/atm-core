@@ -759,11 +759,6 @@ def _report_variables(
         "summary_html": summary,
         "sections_html": sections,
         "footer_html": "Generated from the existing sc-compose view-report template.",
-        "procedure_label": f"read-query-benchmark @ {str(payload.get('source_revision', 'unresolved'))[:8]}",
-        "procedure_href": os.path.relpath(
-            REPORTS_ROOT / "procedures/read-query-benchmark" / f"{str(payload.get('source_revision', 'unresolved'))[:8]}.html",
-            html_path.parent,
-        ),
     }
 
 
@@ -943,8 +938,6 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
             measurement_note=payload["measurement_note"],
             effective_lane_settings=payload["effective_lane_settings"],
             ratchet=payload["ratchet"],
-            source_revision=payload.get("source_revision"),
-            procedure="read-query-benchmark",
         )
         regenerate_index()
         check = subprocess.run(

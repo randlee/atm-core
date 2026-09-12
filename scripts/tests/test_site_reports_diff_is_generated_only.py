@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class SiteReportsDiffTests(unittest.TestCase):
     def test_site_reports_diff_is_generated_only(self):
         result = subprocess.run(
-            ["git", "diff", "--name-status", "origin/integrate/phase-bb", "--", "site/reports"],
+            ["git", "diff", "--name-status", subprocess.check_output(["git", "merge-base", "origin/develop", "HEAD"], cwd=ROOT, text=True).strip(), "--", "site/reports"],
             cwd=ROOT, capture_output=True, text=True, check=True,
         )
         changed = [line.split("\t", 1) for line in result.stdout.splitlines() if line]

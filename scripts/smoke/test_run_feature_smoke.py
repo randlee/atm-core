@@ -28,7 +28,19 @@ TEST_TEAM = "test-team"
 
 class FeatureSmokeTests(unittest.TestCase):
     def test_report_and_envelope_carry_source_revision(self):
-        self.assertIn('"source_revision": revision', Path(RUNNER.__file__).read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with mock.patch.object(RUNNER, "ROOT", root), mock.patch.object(RUNNER, "source_revision", return_value="a" * 40), \
+                    mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(RUNNER, "os") as os_module, \
+                    mock.patch.object(RUNNER, "compose"), mock.patch.object(RUNNER, "update_master_report_index"):
+                platform.system.return_value = "Darwin"
+                platform.node.return_value = "m5"
+                os_module.environ = {"ATM_SMOKE_RUN_ID": "run-1"}
+                os_module.getpid.return_value = 1
+                report = RUNNER.write_report("graft-hermes", [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "m5", "destination": "m5"}])
+            self.assertEqual(json.loads(report.read_text())["source_revision"], "a" * 40)
+            self.assertEqual(json.loads((report.parent / "smoke.envelope.json").read_text())["source_revision"], "a" * 40)
+            self.assertEqual(json.loads(report.read_text())["procedure"], "graft-hermes")
 
     def test_missing_git_writes_null_source_revision(self):
         with mock.patch.object(RUNNER.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
@@ -64,11 +76,15 @@ class FeatureSmokeTests(unittest.TestCase):
                 RUNNER.main()
 
     def test_fixture_level_retains_existing_runner(self):
-        completed = mock.Mock(returncode=0)
-        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
+        with mock.patch("phase_ad_suite.run_suite", return_value={"status": "passed", "rows": [{"id": "AD-1", "verdict": "PASS", "flow": "fixture"}]}) as suite, \
+                mock.patch.object(RUNNER, "write_report", return_value=Path("report.json")) as report:
             with mock.patch.object(RUNNER.sys, "argv", ["smoke", "thorough"]):
                 self.assertEqual(RUNNER.main(), 0)
-        self.assertEqual(Path(run.call_args.args[0][1]).name, "run.py")
+        suite.assert_called_once()
+        report.assert_called_once_with("thorough", [{
+            "name": "AD-1", "status": "PASS", "detail": "fixture",
+            "origin": RUNNER.platform.node(), "destination": RUNNER.platform.node(),
+        }])
 
     def test_admission_capacity_reuses_the_feature_smoke_dispatcher(self):
         completed = mock.Mock(returncode=0)

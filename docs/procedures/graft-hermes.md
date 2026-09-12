@@ -2,67 +2,62 @@
 procedure: graft-hermes
 family: smoke
 runner: scripts/phase-ai/run_hermes_graft_live.py
-evidence: site/reports/<run>/<procedure>.json
+evidence: site/reports/<run>/graft-hermes.json
 revisions:
-  - rev: 1595424dca42905e6eb8ceb7b48d722cb8c8ddef
-    date: 2026-09-12
-    note: "current"
-  - rev: bab416ca946b8776ea6c5514c79868a447a6683e
-    date: 2026-08-10
-    note: "historical runner revision"
+  - rev: b08b24983306e1897b86ce33ea4ebf4c3ee49be9
+    date: 2026-08-11
+    note: "current runner revision"
 ---
 
 ## What this test proves
-The `graft-hermes` procedure runs the named verification steps in order. Each step records an observable result in the run evidence. The page is addressed by the runner revision so a historical report remains explainable after the runner changes.
+The graft lane first requires the selected runtime pair to be ready, then performs one durable outbound write and a native acknowledgement round trip through the installed graft adapter.
 
 ## Flow
 ```mermaid
 flowchart LR
-  setup[Prepare runner] --> steps[Execute procedure steps]
-  steps --> evidence[Write immutable evidence JSON and HTML]
+  setup[Setup graft-hermes]
+  case1[group1: doctor]
+  case2[group2: graft outbound durable write a]
+  teardown[Validate and close]
+  evidence[Write immutable evidence]
+  setup --> case1
+  case1 --> case2
+  case2 --> teardown
+  teardown --> evidence
+  note[runner revision b08b2498]:::revision
 ```
 
 ## Steps
 | step | action | observable | evidence |
 | --- | --- | --- | --- |
-| 1 | Run `doctor` | PASS or FAIL is recorded | `graft-hermes.json` cases |
-| 2 | Run `graft outbound durable write and receiver round trip` | PASS or FAIL is recorded | `graft-hermes.json` cases |
-
+| 1 | Execute `doctor` | The named check reports PASS or FAIL at revision `b08b2498` | `graft-hermes.json` cases |
+| 2 | Execute `graft outbound durable write and receiver round trip` | The named check reports PASS or FAIL at revision `b08b2498` | `graft-hermes.json` cases |
 
 ## Evidence layout
-The runner writes a procedure JSON payload beside its rendered report and an envelope used by the public report index. Existing evidence artifacts are immutable.
+The runner writes immutable evidence for `graft-hermes` beneath `site/reports/`. The JSON payload is the source for case or worker outcomes; the rendered report and envelope provide the public navigation entry.
 
 ## Changes
-This page is backfilled from the runner history; revision-specific notes are listed below.
+The revision sections below are the retained runner-history backfill. Each section records the source revision and its own ordered procedure description.
 
-## Revision 1595424d (2026-09-12)
-current.
+## Revision b08b2498 (2026-08-11)
+The runner change `fix(smoke): route Hermes graft acknowledgements through CLI` is the source for this revision's procedure order.
 
 ```mermaid
 flowchart LR
-  setup[Prepare runner] --> steps[Execute procedure steps]
-  steps --> evidence[Write immutable evidence JSON and HTML]
+  setup[Setup graft-hermes]
+  case1[group1: doctor]
+  case2[group2: graft outbound durable write a]
+  teardown[Validate and close]
+  evidence[Write immutable evidence]
+  setup --> case1
+  case1 --> case2
+  case2 --> teardown
+  teardown --> evidence
+  note[runner revision b08b2498]:::revision
 ```
 
 ## Steps
 | step | action | observable | evidence |
 | --- | --- | --- | --- |
-| 1 | Run `doctor` | PASS or FAIL is recorded | `graft-hermes.json` cases |
-| 2 | Run `graft outbound durable write and receiver round trip` | PASS or FAIL is recorded | `graft-hermes.json` cases |
-
-
-## Revision bab416ca (2026-08-10)
-historical runner revision.
-
-```mermaid
-flowchart LR
-  setup[Prepare runner] --> steps[Execute procedure steps]
-  steps --> evidence[Write immutable evidence JSON and HTML]
-```
-
-## Steps
-| step | action | observable | evidence |
-| --- | --- | --- | --- |
-| 1 | Run `doctor` | PASS or FAIL is recorded | `graft-hermes.json` cases |
-| 2 | Run `graft outbound durable write and receiver round trip` | PASS or FAIL is recorded | `graft-hermes.json` cases |
-
+| 1 | Execute `doctor` | The named check reports PASS or FAIL at revision `b08b2498` | `graft-hermes.json` cases |
+| 2 | Execute `graft outbound durable write and receiver round trip` | The named check reports PASS or FAIL at revision `b08b2498` | `graft-hermes.json` cases |
