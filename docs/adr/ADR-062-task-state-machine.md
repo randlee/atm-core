@@ -82,12 +82,13 @@ audited as `LeadNotified` only when the lead write succeeds. A missing or
 ambiguous lead suppresses that audit event without suppressing configured
 escalation-recipient fan-out.
 
-*Superseded (BA):* Blocked runtime observations create an in-memory episode. The first escalation
-is eligible after 60 seconds and subsequent notifications are eligible every
-10 minutes. An episode is stamped only when at least one lead or configured
-recipient write, or the Herdr notification, succeeds; total failure therefore
-retries on the next eligible tick. Lead and recipient failures are independent
-and are surfaced in queue-pump statistics.
+*Superseded (BA):* Blocked runtime observations create an in-memory episode.
+The first escalation is eligible after 60 seconds and subsequent notifications
+are eligible every 10 minutes. The Phase BA disposition below replaces this
+cooldown model; BA.3 deleted `BLOCKED_RENOTIFY_MS`. An episode is stamped only
+when at least one lead or configured recipient write, or the Herdr notification,
+succeeds; total failure therefore retries on the next eligible tick. Lead and
+recipient failures are independent and are surfaced in queue-pump statistics.
 
 Escalation recipients are stored by `TaskStore` in daemon scope or an explicit
 team scope. A team list replaces the daemon list for that team; absent team
@@ -129,6 +130,11 @@ States: `assigned`, `active`, `complete`. Events: `Assigned`, `Started`,
 further reminders) and appends one timestamped event carrying the outcome;
 these are two facts recorded together. A close that fails never discards the
 carried message.
+
+Phase BA R1 is decided: `Started` is applied when the runtime hands the head
+task's deferred assignment or reminder nudge to an `Idle` member. The daemon is
+the actor and sends the `task_started` receipt to the assigner; there is no
+public `start` command.
 
 ### Reminder and escalation
 

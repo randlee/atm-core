@@ -97,6 +97,18 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-12 — Phase BA.4:** `HTTP_API_VERSION` moves from `1.5.0` to
+  `1.6.0`. `RequestEnvelope::TaskMove` and `ResponseEnvelope::TaskMove` add
+  the authenticated-local `/v1/atm/tasks/move` operation. Peer ingress rejects
+  the operation before the writer lane. The 1.6.0 client gates this command on
+  the daemon's advertised version, while all 1.5.0 fixtures remain readable.
+  This is a minor, backward-compatible bump.
+- **2026-09-11 — Phase BA.2:** `HTTP_API_VERSION` moves from `1.4.0` to
+  `1.5.0`. `WriteRequest` adds optional `task_op` and `placement`; task-row
+  projections add optional `close_outcome` and `position`. The legacy
+  `task_complete` carrier remains decode-only, omitted placement defaults to
+  end of queue, and pre-1.5.0 task-row fixtures remain readable. This is a
+  minor, backward-compatible bump.
 - **2026-09-09 — issue #1378 canonical agent state:** `HTTP_API_VERSION` moves
   from `1.3.0` to `1.4.0`. The runtime-status member projection adds
   `revision`, `availability`, `last_observation_attempt_by`,
@@ -139,7 +151,9 @@ migration functions directly.
   migration writes; a pre-BA binary against the migrated database operates
   read-only-safe: reads and ordinary mail work, legacy task-bearing acks still
   run the old transition, assignment writes fail on the new constraints (BA.2
-  'Rollback and the pre-BA binary'). Recorded on PR #1398.
+  'Rollback and the pre-BA binary'). The durable entry landed in
+  [`ab44564bc`](https://github.com/randlee/atm-core/commit/ab44564bc), with the
+  approval recorded in [PR #1398's R0 comment](https://github.com/randlee/atm-core/pull/1398#issuecomment-5638982996).
 
 ## Consequences
 
@@ -147,7 +161,9 @@ migration functions directly.
   to `1.2.0` for the additive doctor-presence field, and
   DOCTOR-HERDR-TARGET-R1 moved it to `1.3.0` for endpoint findings. Issue
   #1378 moves it to `1.4.0` for canonical runtime-state revision and freshness
-  fields; it is bumped on every later governed-interface change.
+  fields, Phase BA.2 moves it to `1.5.0` for additive task write/projection
+  fields, and Phase BA.4 moves it to `1.6.0` for task move; it is bumped on
+  every later governed-interface change.
 - Herdr support becomes a matrix, not a single version; per-release
   conformance fixtures are required.
 - SQLite migrations gain a declared version and an explicit rollback test
