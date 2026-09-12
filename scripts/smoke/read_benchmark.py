@@ -902,7 +902,7 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
         for result in results:
             family_id = result["family"]
             family_json = REPORT_DIR / f"{payload['campaign_id']}-{family_id}.json"
-            family_html = REPORT_DIR / f"{payload['campaign_id']}-{family_id}.xhtml"
+            family_html = REPORT_DIR / f"{payload['campaign_id']}-{family_id}.html"
             family_payload = {**payload, "campaign_id": f"{payload['campaign_id']}-{family_id}", "families": [result]}
             family_json.write_text(
                 json.dumps(family_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
