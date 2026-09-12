@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-023>
+  a triage:Finding ;
+  triage:findingId "BB3-023" ;
+  triage:title "test_graft_report_and_envelope_carry_source_revision_and_procedure fails on every BB layer, turning just lint and just test red" ;
+  triage:description "fenix, 2026-09-12T22:40:58Z, root-caused from CI failures on PR #1452 (feature/bb-collapsed @ b74f0d6ef) and independently corroborated by team-lead from the same run's job logs (Just lint job 103631070870: 'pytests failed', FileNotFoundError on site/reports/procedures/manifest.json inside report_runtime.resolve_procedure_page; Test (ubuntu-latest) job 103631559165 separately red on the known BB.5 ack-contract nudge_mode failures, unrelated to this finding). scripts/phase-ai/test_run_hermes_graft_live.py::test_graft_report_and_envelope_carry_source_revision_and_procedure fails on the clean BB base b74f0d6ef and passes on develop. Root cause: BB.3 (53381f11e..4f03d49bc) made write_report in scripts/smoke/run_feature_smoke.py resolve a procedure page through report_runtime.resolve_procedure_page, which raises when site/reports/procedures/manifest.json is absent; the graft-live unit test patches ROOT to an empty temp dir and mocks the whole os module, so it can never pass. This is the single failure that turns both just lint (run_pytests) and just test red on every BB layer -- confirmed as the actual cause of CI red on #1452's frozen bottom layer, which per feedback_ci_only_on_top_layer would otherwise not gate any merge, but since #1453 (fix/bb5-closure-r1, the current top layer) branches from #1452 it inherits the same failure and needs it fixed to land. Note for the sprint record: BB.3's QA rounds could not have run a green just test." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "fenix root-cause analysis" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/phase-ai/test_run_hermes_graft_live.py; scripts/smoke/report_runtime.py" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T22:40:58Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix (test-only, mirrors scripts/smoke/test_run_feature_smoke.py::test_report_and_envelope_carry_source_revision): supply the selected page and patch _resolve_procedure_page; patch os.environ via patch.dict, getpid only. Already implemented by fenix on her fix/bb5-contract-tests layer, fixed-pending-QA. Not routed further; fenix owns this layer." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T22:40:58Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-023/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-023/1>
+  a triage:Occurrence ;
+  triage:file "scripts/phase-ai/test_run_hermes_graft_live.py" ;
+  triage:line 28 ;
+  triage:snippet "test_graft_report_and_envelope_carry_source_revision_and_procedure patches ROOT to an empty temp dir and mocks the whole os module, so report_runtime.resolve_procedure_page's manifest.json read always raises; turns just lint and just test red on every BB layer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb-collapsed" ;
+  triage:headSha "b74f0d6ef" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-023/1> .
+
+<urn:atm:triage:worktree/BB3-023/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1452, feature/bb-collapsed" ;
+  triage:branch "feature/bb-collapsed" ;
+  triage:headSha "b74f0d6ef" ;
+  triage:orderIndex 1 .
