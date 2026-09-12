@@ -125,23 +125,14 @@ Before starting a sprint:
 
 ## Stacked Phases
 
-When a phase runs as a `gh stack` of sprint and fix layers above
-`integrate/phase-N`, the stack rules in
+Every phase runs as one append-only `gh stack` of sprint and fix layers
+above `integrate/phase-N`. The rule is defined once, in
 [`docs/development/gh-stack-guidelines.md`](../../../docs/development/gh-stack-guidelines.md)
-govern layer ownership, rebase-at-task-start, freezing, PR-on-first-push,
-the CI-trigger PR, and the landing sequence. The orchestrator owns the stack;
-each dev owns exactly one layer. Fix and cleanup work goes to a new top layer
-with one QA pass, never to a frozen layer.
-
-The stack is append-only (guidelines §0). Every unit of work — a sprint, a
-fix round, a cleanup pass, a docs sprint — is a new worktree cut from the
-current top of the stack, with its PR opened on the first push and linked
-into the stack. Nothing below the top is ever edited again; a layer is
-frozen the moment its task closes. The lead never waits for a layer's QA or
-CI before cutting the next layer: the dev's next sprint starts on a layer
-cut from their just-pushed head, and QA findings for the lower layer arrive
-as a fix layer above it. This is the default for every phase, not an
-option the lead re-derives per sprint.
+§0, and is not restated here. What it means for this skill: the lead owns
+the stack and each dev owns exactly one layer; every dispatch below — dev,
+fix, cleanup — is a new worktree cut from the current top, and the
+`<stack-discipline>` element every template carries is the dev-facing copy
+of §0.
 
 ## Plan Review Flow
 
@@ -246,13 +237,7 @@ Use the Rust assignment templates from:
 
 ## Required Message Sequence
 
-Every ATM task assignment follows:
-1. ACK — `atm ack <message-id> "accepted <task-id>: …"`; accepts the task, does not close it.
-2. Work — a plain `atm send <lead> --stdin` push report (branch + SHA) on the first push.
-3. Task close — `atm task close <task-id> completed --stdin <<'EOF' … EOF` with the
-   completion report as the body, or `atm task close <task-id> refused "<reason>"`
-   when the whole assignment cannot be done. The close is the terminal step: it
-   frees the assignee's queue and there is no completion ACK by the receiver.
-   The lead reads the daemon's close receipt (`atm read --message-id`) and
-   closes the mirror task on its own side; a plain reply is not part of the
-   sequence.
+The sequence for every ATM task assignment — ack, work, task close; the
+receiver never acks a close — is defined once in
+[`docs/team-protocol.md`](../../../docs/team-protocol.md) (Required Flow).
+This skill adds nothing to it and restates none of it.
