@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-003>
+  a triage:Finding ;
+  triage:findingId "BB2-003" ;
+  triage:title "docs/agent-team-api.md, referenced in CLAUDE.md's Key Documentation list, does not exist in the repo" ;
+  triage:description "quality-mgr BB2-QA1-1789243200 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1439#issuecomment-5648494400, 2026-09-12T20:28:31Z), reviewed at 67a6a3fe4. Confirmed via Glob: no such file anywhere in the repo or worktree. CLAUDE.md itself is unchanged by this diff, so this is a pre-existing broken reference, not introduced by this sprint (req-qa finding 6). Does not block this sprint." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "CLAUDE.md" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
+  triage:deferredNote "Pre-existing, out of BB.2's scope -- not required for this sprint's fix round. Left open for a future doc-hygiene pass." ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB2-003/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 1 ;
+  triage:snippet "Key Documentation list references docs/agent-team-api.md, which does not exist anywhere in the repo (pre-existing, unrelated to this sprint's diff)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb2-orchestration-templates-1516" ;
+  triage:headSha "67a6a3fe4" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-003/1> .
+
+<urn:atm:triage:worktree/BB2-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1439, feature/bb2-orchestration-templates-1516" ;
+  triage:branch "feature/bb2-orchestration-templates-1516" ;
+  triage:headSha "67a6a3fe4" ;
+  triage:orderIndex 1 .

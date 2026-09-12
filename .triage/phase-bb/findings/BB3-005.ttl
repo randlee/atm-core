@@ -19,23 +19,34 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T19:19:46Z"^^xsd:dateTime ;
-  triage:deferredNote "Routed to cipher's BB3-FIX-R1. Fix needs a D6 test that actually isolates and diffs the Steps-table fragment, plus fixture-based rewrites of the other doc-named tests listed." ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1. Fix needs a D6 test that actually isolates and diffs the Steps-table fragment, plus fixture-based rewrites of the other doc-named tests listed. REOPENED as Blocking (BB3-QA2 B1, 2026-09-12T20:20:11Z): cipher's BB3-FIX-R1 replaced the assertion but test_two_revisions_render_distinct_step_tables (scripts/tests/test_render_procedure_pages.py:41-45) now compares a non-discriminating revision pair (7475fed9 / 93458691, byte-identical apart from the revision hash itself) -- the test is still hollow, just differently. Fix must use a genuinely step-differing pair (e.g. 513b3374 vs 93458691) or assert directly on row-count/case-name-set. Routed to cipher's BB3-FIX-R2 (fix/bb3-qa2-r2, per fenix's fix-round-worktree ruling 2026-09-12T20:24:40Z)." ;
   triage:relatedFinding "BB3-001" ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T19:19:46Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-005/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-005/1>
   a triage:Occurrence ;
   triage:file "scripts/tests/test_render_procedure_pages.py" ;
   triage:line 25 ;
   triage:snippet "test_two_revisions_render_distinct_step_tables asserts whole-page text differs (trivially true via title/date) and never isolates the Steps-table markup" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-005/1> .
+
+<urn:atm:triage:occurrence/BB3-005/2>
+  a triage:Occurrence ;
+  triage:file "scripts/tests/test_render_procedure_pages.py" ;
+  triage:line 41 ;
+  triage:snippet "test_two_revisions_render_distinct_step_tables now compares revision pair 7475fed9/93458691, byte-identical apart from the revision hash itself -- still not a genuine Steps-table distinctness check" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "d2c69e9f6" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-005/2> .
 
 <urn:atm:triage:worktree/BB3-005/1>
   a triage:WorktreeSnapshot ;
@@ -43,3 +54,10 @@
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/BB3-005/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436 stack, fix/bb3-qa2-r2" ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "d2c69e9f6" ;
+  triage:orderIndex 2 .

@@ -12,29 +12,40 @@
   triage:phaseId "phase-bb" ;
   triage:triageMode "initial_pass" ;
   triage:category "correctness" ;
-  triage:severity "blocking" ;
+  triage:severity "important" ;
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope ".just/generate_report_index.py" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
-  triage:deferredNote "Routed to cipher's BB3-FIX-R1 alongside the sprint-doc D5/AC4 amendment. Not a schema/DDL change -- resolution-logic and doc text only." ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1 alongside the sprint-doc D5/AC4 amendment. Not a schema/DDL change -- resolution-logic and doc text only. BB3-QA2 (req-qa, ATM-QA-013): the ancestor-fallback resolution logic itself (_revision_is_ancestor, .just/generate_report_index.py:204-261) is correct by inspection and the original exact-match-refusal defect is gone, but the fallback path carries zero regression-test coverage in .just/tests/test_generate_report_index.py -- severity downgraded blocking to important to match this residual scope. Routed to cipher's BB3-FIX-R2 (fix/bb3-qa2-r2, per fenix's fix-round-worktree ruling 2026-09-12T20:24:40Z): add a test that exercises _revision_is_ancestor selecting a non-exact ancestor entry." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-003/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-003/1>
   a triage:Occurrence ;
   triage:file ".just/generate_report_index.py" ;
   triage:line 213 ;
   triage:snippet "resolve_procedures accepts only rev == source_revision with no fallback; every run at a commit newer than the manifest's newest entry is refused with ReportIndexError" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-003/1> .
+
+<urn:atm:triage:occurrence/BB3-003/2>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_generate_report_index.py" ;
+  triage:line 1 ;
+  triage:snippet "no regression test exercises _revision_is_ancestor selecting a non-exact ancestor manifest entry" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "d2c69e9f6" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-003/2> .
 
 <urn:atm:triage:worktree/BB3-003/1>
   a triage:WorktreeSnapshot ;
@@ -42,3 +53,10 @@
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/BB3-003/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436 stack, fix/bb3-qa2-r2" ;
+  triage:branch "fix/bb3-qa2-r2" ;
+  triage:headSha "d2c69e9f6" ;
+  triage:orderIndex 2 .

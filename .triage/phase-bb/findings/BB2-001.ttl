@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-001>
+  a triage:Finding ;
+  triage:findingId "BB2-001" ;
+  triage:title "dev-fix.xml.j2 never documents the refused close path required by D2" ;
+  triage:description "quality-mgr BB2-QA1-1789243200 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1439#issuecomment-5648494400, 2026-09-12T20:28:31Z), reviewed at 67a6a3fe4. D2 (docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md:44-48) requires: 'refused is documented in dev-fix.xml.j2 for the not-reproducible-and-nothing-else case only when the whole assignment cannot be done.' Confirmed independently by req-qa and arch-qa via direct grep: zero occurrences of 'refused' anywhere in .claude/skills/graph-orchestration/dev-fix.xml.j2. Both final-actions branches (cleanup_mode and normal, ~lines 80-95) document only the completed close command; the existing not-reproducible note (step c2, line 76) is a per-finding note inside a completed report, not the distinct whole-assignment-refused terminal state D2 requires. The sibling codex-orchestration/dev-template.xml.j2 and fix-assignment.xml.j2 already document this path correctly (pre-existing, unedited by this diff) -- dev-fix.xml.j2 is the one file this sprint's own deliverable named and it was not done." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".claude/skills/graph-orchestration/dev-fix.xml.j2" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: add a refused close command and guidance to dev-fix.xml.j2's final-actions (both branches), mirroring the pattern in codex-orchestration/dev-template.xml.j2 step g and fix-assignment.xml.j2 step g, reserved for when the whole fix assignment cannot be done (distinct from the existing per-finding not-reproducible note inside a completed report). Routed to fix/bb2-qa1-r1 (fenix, owner, cut from the top of stack #1443, 2026-09-12T20:29:38Z) -- this fix layer also writes Rand's append-only-stack rule into the dispatch templates and both SKILL.md." ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB2-001/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/graph-orchestration/dev-fix.xml.j2" ;
+  triage:line 80 ;
+  triage:snippet "final-actions documents only the completed close command in both branches; no refused close path for the whole-assignment-cannot-be-done case" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb2-orchestration-templates-1516" ;
+  triage:headSha "67a6a3fe4" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-001/1> .
+
+<urn:atm:triage:worktree/BB2-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1439, feature/bb2-orchestration-templates-1516" ;
+  triage:branch "feature/bb2-orchestration-templates-1516" ;
+  triage:headSha "67a6a3fe4" ;
+  triage:orderIndex 1 .

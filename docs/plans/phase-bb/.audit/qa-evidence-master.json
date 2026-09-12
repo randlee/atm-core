@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-12T19:00:24Z",
-    "end": "2026-09-12T20:01:45Z"
+    "end": "2026-09-12T20:28:26Z"
   },
   "scope": "BB.1 (PR #1438, feature/bb1-transition-templates) and BB.2 (PR #1439, feature/bb2-orchestration-templates-1516) each have one QA-1 round in flight (assigned, no result yet -- verdict/pass/result_* fields are null/empty until quality-mgr reports). BB.3 (PR #1436, feature/bb3-test-procedure-pages) has one QA-1 FAIL round closed and a QA-2 round in flight on the fix-round push (BB3-FIX-R1, cipher, head 8a8b29640). fenix's parallel critical reviews (on BB.1 and BB.3 so far) are not dispatched quality-mgr QA runs; their findings are recorded separately under .triage/phase-bb/findings/ (BB1-001..021, BB3-001..012), correlated with QA findings on the same commit rather than duplicated. Phase BB is orchestrated with plain atm send (codex-orchestration), not graph-orchestration Assignment/Completion events, but .sprints/BB/events.ttl records dev Assignment/Completion events anyway per fenix's ruling so /triage-report's DEV column works.",
   "count_basis": "headline/reviewer",
@@ -63,7 +63,7 @@
       "run_id": "BB2-QA1",
       "aich_sprint": "BB2",
       "phase_sprint": "BB.2",
-      "pass": null,
+      "pass": false,
       "run_type": "qa",
       "assignment_time_utc": "2026-09-12T19:53:22Z",
       "assignment_time_pst": null,
@@ -71,24 +71,24 @@
       "assignment_from": "fenix",
       "assignment_shared_path": null,
       "assignment_summary": "BB2-QA1-1789243200 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1439, pinned head cd1d7218e -- BB.2 orchestration-templates-1516 QA-1 pass.",
-      "result_time_utc": null,
+      "result_time_utc": "2026-09-12T20:28:26Z",
       "result_time_pst": null,
-      "result_message_id": null,
-      "result_from": null,
+      "result_message_id": "01M2BMXC4RH4C3DGKH13VW3PZ9",
+      "result_from": "quality-mgr",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "PENDING",
-      "blockers": null,
-      "important": null,
-      "minor": null,
+      "verdict": "FAIL",
+      "blockers": 1,
+      "important": 1,
+      "minor": 1,
       "count_basis": "headline/reviewer",
-      "evidence": "QA-1 assigned to quality-mgr; PR #1439 pinned head cd1d7218e; result pending."
+      "evidence": "Sprint BB.2 QA-1 (QA Findings Update): FAIL (1 blocking / 1 important / 1 minor), PR #1439. https://github.com/randlee/atm-core/pull/1439#issuecomment-5648494400. Deliverables 5/6 (83%). The assigned pin cd1d7218e had drifted twice by review time (a genuine dev commit, then a merge of unrelated integrate/phase-bb triage/hook content); quality-mgr confirmed the actual PR head via gh pr view and reviewed at the corrected head 67a6a3fe4 throughout -- reviewed head recorded here is 67a6a3fe4, not the stale assignment pin. Blocking B1 (dev-fix.xml.j2 never documents the refused close path D2 requires). Important I1 (stale 'Completion ACK by receiver' step in both edited SKILL.md files, unreconciled with the new task-close-is-terminal model). Minor M1 (docs/agent-team-api.md missing, pre-existing, out of scope). req-qa's tooling initially scored AC2/AC3 Blocking for lack of gh access; quality-mgr independently verified both via the PR body and closed them out rather than propagate false blockers. Not merge-ready. Recorded as .triage/phase-bb/findings/BB2-001..003.ttl. Fix layer: fix/bb2-qa1-r1 (owner fenix, cut from the top of stack #1443, also carries Rand's append-only-stack rule into the dispatch templates and both SKILL.md)."
     },
     {
       "run_id": "BB3-QA2",
       "aich_sprint": "BB3",
       "phase_sprint": "BB.3",
-      "pass": null,
+      "pass": false,
       "run_type": "qa",
       "assignment_time_utc": "2026-09-12T20:01:45Z",
       "assignment_time_pst": null,
@@ -96,18 +96,18 @@
       "assignment_from": "fenix",
       "assignment_shared_path": null,
       "assignment_summary": "BB3-QA2-1789244000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1436, fix-round head 8a8b29640 at assignment time (cipher's BB3-FIX-R1 push, rebased on integrate/phase-bb @ b051d3417) -- BB.3 test-procedure-pages QA-2 follow-up pass.",
-      "result_time_utc": null,
+      "result_time_utc": "2026-09-12T20:20:11Z",
       "result_time_pst": null,
-      "result_message_id": null,
-      "result_from": null,
+      "result_message_id": "01M2BME3CM3K3Z748CB24P0K5F",
+      "result_from": "quality-mgr",
       "result_shared_path": null,
       "result_temp_path": null,
-      "verdict": "PENDING",
-      "blockers": null,
-      "important": null,
-      "minor": null,
+      "verdict": "FAIL",
+      "blockers": 1,
+      "important": 4,
+      "minor": 2,
       "count_basis": "headline/reviewer",
-      "evidence": "QA-2 assigned to quality-mgr; PR #1436 fix-round; cipher's BB3-FIX-R1 closed at 791680c2a with all 12 BB3-001..012 claimed implemented (message 01M2BKSDXSRBP86B9RYM7NXNSM) -- reviewed head moved to 791680c2a per fenix. BB3-001..012 held open until QA-2 confirms fixed. Result pending."
+      "evidence": "Sprint BB.3 QA-2 (Final Quality Report): FAIL (1 blocking / 4 important / 2 minor), PR #1436 @ d2c69e9f6 (code fix at 791680c2ae8155bced4fd5fd2888c5a607228f01; head then moved to d2c69e9f6 via a generated-report-only commit, no code change). https://github.com/randlee/atm-core/pull/1436#issuecomment-5648444629. Deliverables 11/12 (92%). Blocking B1 (test_two_revisions_render_distinct_step_tables compares a non-discriminating revision pair, still hollow post-fix). Important I1 (BB3-003's ancestor-fallback path has zero regression-test coverage), I2 (colima-hermes-skills.md front-matter/body revision mismatch), I3 (compose()/source_revision() duplication across 4+ files, pre-existing, not a regression), I4 (pages.yml's mermaid-cli invocation still lacks Chromium/Puppeteer provisioning, partially closed). Minor M1 (test_check_mode_detects_stale_page still doesn't exercise its named branch), M2 (BB3-012's relocated sibling-JSON pattern persists, no live effect, left open by design). BB3-002,004,006,007,008,010,011,012 confirmed fixed and closed. BB3-001 downgraded blocking->important (fixed_partial, residual I2). BB3-003 downgraded blocking->important (fixed_partial, residual I1). BB3-005 reopened as Blocking (B1). BB3-009 marked fixed_partial (Chromium provisioning residual, I4). Not merge-ready. Fix layer: fix/bb3-qa2-r2 (cipher, off feature/bb4-task-start, per fenix's fix-round-worktree ruling 2026-09-12T20:24:40Z -- lower stack layers frozen from here). See .triage/phase-bb/findings/BB3-001..012.ttl."
     }
   ]
 }

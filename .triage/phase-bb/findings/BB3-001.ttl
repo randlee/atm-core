@@ -12,30 +12,41 @@
   triage:phaseId "phase-bb" ;
   triage:triageMode "initial_pass" ;
   triage:category "correctness" ;
-  triage:severity "blocking" ;
+  triage:severity "important" ;
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/procedures/inventory_reports.py" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
-  triage:deferredNote "Routed to cipher's BB3-FIX-R1 fix round (fenix, 2026-09-12T19:14:54Z; quality-mgr routing correction, 2026-09-12T19:20:54Z). Fix must include real per-case step derivation in runner order (no generic fallback) and genuine per-revision content diffing authored from git show <rev>:<runner>." ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1 fix round (fenix, 2026-09-12T19:14:54Z; quality-mgr routing correction, 2026-09-12T19:20:54Z). Fix must include real per-case step derivation in runner order (no generic fallback) and genuine per-revision content diffing authored from git show <rev>:<runner>. Core fabrication mechanism (hardcoded flowchart + generic fallback) confirmed gone in BB3-QA2 (ruthless-boundary-qa); severity downgraded blocking to important to match the residual scope: colima-hermes-skills.md's front-matter rev (6040ecf36...) disagrees with its own body-stamped rev (9b59af6e, mermaid diagram + all 48 Steps rows) -- QA-2 finding I2, ruthless-boundary-qa RBQA-BB3-001-R1. Other 17 procedure docs should be spot-checked for the same drift. Routed to cipher's BB3-FIX-R2." ;
   triage:relatedFinding "BB3-005" ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-001/1>
   a triage:Occurrence ;
   triage:file "scripts/procedures/inventory_reports.py" ;
   triage:line 107 ;
   triage:snippet "_report_step_names falls back to a hardcoded generic 3-row list whenever no matching evidence JSON exists for a procedure id; write_procedure_docs reuses one hard-coded flowchart and byte-identical tables across every revision section" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-001/1> .
+
+<urn:atm:triage:occurrence/BB3-001/2>
+  a triage:Occurrence ;
+  triage:file "docs/procedures/colima-hermes-skills.md" ;
+  triage:line 1 ;
+  triage:snippet "front matter declares rev 6040ecf36a3ac43d40207869d281114c719533ea, but the mermaid flow diagram and all 48 Steps-table rows stamp a different hash, 9b59af6e" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "d2c69e9f6" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-001/2> .
 
 <urn:atm:triage:worktree/BB3-001/1>
   a triage:WorktreeSnapshot ;
@@ -43,3 +54,10 @@
   triage:branch "feature/bb3-test-procedure-pages" ;
   triage:headSha "27e21224c" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/BB3-001/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "d2c69e9f6" ;
+  triage:orderIndex 2 .
