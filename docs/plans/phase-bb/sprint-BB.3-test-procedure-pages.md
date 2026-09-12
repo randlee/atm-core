@@ -1,7 +1,7 @@
 ---
-status: planned
-branch: feature/bb3-test-procedure-pages
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb3-test-procedure-pages
+status: complete
+branch: fix/bb3-qa2-r2
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/fix/bb3-qa2-r2
 ---
 
 # BB.3 — Test-procedure pages (PARALLEL with BB.1)
@@ -199,6 +199,12 @@ Record the command output in the PR body so QA can re-run it.
 
 ### D5 Index linking and the gate — `.just/generate_report_index.py`
 
+R2 amendment (lead ruling, fenix, 2026-09-12): when `source_revision` is
+present, exact revision matching is preferred and the newest manifest entry
+that is an ancestor of that source revision is selected otherwise. A source
+revision with no exact or ancestor page is an error; only reports without a
+source revision use the inferred run-date path and its visible note.
+
 - `discover_envelopes` (L227) also loads `site/reports/procedures/manifest.json`
   (absent manifest ⇒ `ReportIndexError`, the site is not publishable without
   procedures once this lands).
@@ -287,7 +293,8 @@ L62–330):
    "inferred from run date"; no runner-written evidence file has changed
    (`git diff --stat develop -- site/reports` shows additions plus only the
    regenerated `site/reports/index.html`; the D3 diff-gate test proves it).
-4. A fresh `just smoke fast` run on the PR head writes `source_revision` into
+4. A fresh `just smoke fast` run on the final branch head writes
+   `source_revision` into
    both its JSON and envelope and its index entry links to the newest
    manifest revision that is an ancestor of that source revision, without the
    inferred note (lead ruling, fenix, PR #1436 review).

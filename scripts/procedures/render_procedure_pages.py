@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import date
+import hashlib
 import html
 import json
 from pathlib import Path
@@ -22,6 +23,8 @@ DOCS = ROOT / "docs" / "procedures"
 OUTPUT = ROOT / "site" / "reports" / "procedures"
 TEMPLATE = ROOT / "templates" / "procedure-report" / "procedure.html.j2"
 SHA = re.compile(r"^[0-9a-f]{40}$")
+REVISION_STAMP = re.compile(r"\brevision\s+`?([0-9a-f]{8})`?", re.IGNORECASE)
+INPUT_HASH = re.compile(r'<meta name="procedure-input-sha256" content="([0-9a-f]{64})">')
 
 
 class ProcedureRenderError(ValueError):
@@ -153,12 +156,41 @@ def summary_content(body: str) -> str:
     )
 
 
+def validate_revision_stamps(
+    path: Path, metadata: dict[str, Any], body: str, sections: dict[str, str],
+) -> None:
+    """Require every rendered procedure fragment to name its own revision."""
+    revisions = metadata.get("revisions")
+    if not isinstance(revisions, list) or not revisions:
+        raise ProcedureRenderError(f"{path}: at least one revision is required")
+    expected = [item.get("rev", "")[:8] for item in revisions if isinstance(item, dict)]
+    body_stamps = set(REVISION_STAMP.findall(body))
+    if body_stamps and body_stamps != {expected[0]}:
+        raise ProcedureRenderError(
+            f"{path}: current body revision stamps {sorted(body_stamps)} do not match {expected[0]}"
+        )
+    for revision in expected:
+        stamps = set(REVISION_STAMP.findall(sections.get(revision, "")))
+        if stamps and stamps != {revision}:
+            raise ProcedureRenderError(
+                f"{path}: revision {revision} body stamps {sorted(stamps)}"
+            )
+
+
+def procedure_input_hash(path: Path, section: str) -> str:
+    """Hash the procedure source and selected revision section for stale checks."""
+    source = path.read_text(encoding="utf-8")
+    return hashlib.sha256((source + "\0" + section).encode("utf-8")).hexdigest()
+
+
 def render(root: Path = ROOT, check: bool = False) -> int:
     docs = root / "docs/procedures"; output = root / "site/reports/procedures"
-    expected: dict[Path, str] = {}
+    expected: dict[Path, str | None] = {}
+    expected_hashes: dict[Path, str] = {}
     manifest: list[dict[str, Any]] = []
     for path in sorted(docs.glob("*.md")):
         metadata, body, sections = parse_document(path)
+        validate_revision_stamps(path, metadata, body, sections)
         procedure = metadata.get("procedure")
         revisions = metadata.get("revisions")
         if not isinstance(procedure, str) or not isinstance(revisions, list):
@@ -170,16 +202,22 @@ def render(root: Path = ROOT, check: bool = False) -> int:
             rev = item["rev"]; rev8 = rev[:8]
             if rev8 not in sections:
                 raise ProcedureRenderError(f"{path}: revision {rev8} has no matching section")
-            flow, steps = revision_content(sections[rev8])
-            svg = mermaid_svg(flow)
+            section = sections[rev8]
+            input_hash = procedure_input_hash(path, section)
+            flow, steps = revision_content(section)
             title = f"{procedure} procedure — revision {rev8}"
-            vars_obj = {"title": title, "procedure": procedure, "revision": rev, "revision_short": rev8,
-                        "date": str(item.get("date", "")), "note": str(item.get("note", "")),
-                        "flow_svg": svg, "steps_html": markdown_fragment(steps),
-                        "body_html": markdown_fragment(summary_content(body))}
             destination = output / procedure / f"{rev8}.html"
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            expected[destination] = compose(root / "templates/procedure-report/procedure.html.j2", vars_obj, destination)
+            expected_hashes[destination] = input_hash
+            if check:
+                expected[destination] = None
+            else:
+                svg = mermaid_svg(flow)
+                vars_obj = {"title": title, "procedure": procedure, "revision": rev, "revision_short": rev8,
+                            "date": str(item.get("date", "")), "note": str(item.get("note", "")),
+                            "flow_svg": svg, "steps_html": markdown_fragment(steps),
+                            "body_html": markdown_fragment(summary_content(body)), "input_hash": input_hash}
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                expected[destination] = compose(root / "templates/procedure-report/procedure.html.j2", vars_obj, destination)
             entry_date = item.get("date")
             entries.append({"rev": rev, "date": entry_date.isoformat() if isinstance(entry_date, date) else str(entry_date or ""), "note": item.get("note", ""), "html": f"procedures/{procedure}/{rev8}.html"})
         if {key for key in sections} != {str(item["rev"])[:8] for item in revisions}:
@@ -191,7 +229,16 @@ def render(root: Path = ROOT, check: bool = False) -> int:
     expected[output / "manifest.json"] = manifest_text
     existing = {p: p.read_text(encoding="utf-8") for p in output.rglob("*") if p.is_file()} if output.exists() else {}
     if check:
-        return 0 if existing == expected else 1
+        if set(existing) != set(expected):
+            return 1
+        for path, content in expected.items():
+            if content is None:
+                match = INPUT_HASH.search(existing[path])
+                if match is None or match.group(1) != expected_hashes[path]:
+                    return 1
+            elif existing[path] != content:
+                return 1
+        return 0
     for path, content in expected.items():
         path.parent.mkdir(parents=True, exist_ok=True); path.write_text(content, encoding="utf-8")
     for path in set(existing) - set(expected):

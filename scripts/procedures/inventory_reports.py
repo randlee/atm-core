@@ -34,6 +34,24 @@ def _json(path: Path) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def _smoke_feature(path: Path, data: dict[str, Any]) -> str | None:
+    """Read a result's own feature or the immutable run-directory suffix."""
+    feature = data.get("feature")
+    if isinstance(feature, str):
+        return feature
+    run_name = path.parent.name
+    for candidate in sorted(FEATURES, key=len, reverse=True):
+        if run_name.endswith("-" + candidate):
+            return candidate
+    return None
+
+
+def _procedure_for_feature(feature: str) -> str:
+    if feature in {"graft-hermes", "colima-hermes-skills"}:
+        return feature
+    return "smoke-" + ("local-ip" if feature == "local-up" else feature)
+
+
 def build_inventory(root: Path = ROOT) -> dict[str, Any]:
     reports = root / "site" / "reports"
     sources: dict[str, set[str]] = defaultdict(set)
@@ -46,18 +64,17 @@ def build_inventory(root: Path = ROOT) -> dict[str, Any]:
             continue
         report_type = data.get("report_type")
         if report_type == "smoke":
-            feature = None
-            html_path = str(data.get("report_html", ""))
-            for candidate in sorted(reports.rglob("*.json")):
-                if candidate.parent == path.parent and candidate.name not in {path.name}:
-                    payload = _json(candidate)
-                    if payload and isinstance(payload.get("feature"), str):
-                        feature = payload["feature"]
-                        break
+            feature = _smoke_feature(path, data)
             if feature:
                 sources["graft-hermes" if feature == "graft-hermes" else
                         "colima-hermes-skills" if feature == "colima-hermes-skills" else
                         "smoke-" + ("local-ip" if feature == "local-up" else feature)].add(path.relative_to(root).as_posix())
+        elif (
+            isinstance(data.get("feature"), str)
+            and isinstance(data.get("cases"), list)
+            and isinstance(data.get("run_id"), str)
+        ):
+            sources[_procedure_for_feature(data["feature"])].add(path.relative_to(root).as_posix())
         elif report_type == "benchmark":
             name = path.name.removesuffix(".json")
             sources[name].add(path.relative_to(root).as_posix())

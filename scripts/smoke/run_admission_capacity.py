@@ -63,6 +63,7 @@ from scripts.smoke.benchmark_account import (
     require_benchmark_account,
 )
 from scripts.smoke.benchmark_baselines import load_baselines
+from scripts.smoke.report_runtime import source_revision as _git_source_revision
 from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_identity
 from scripts.smoke.benchmark_snapshot import (
     BenchmarkSnapshotError,
@@ -105,7 +106,6 @@ CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 4, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
-GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 PEER_WIRE_SECURITY_MODES = ("mutual-tls", "plaintext-test")
 DIRECT_PEER_TCP_PORT = 43_101
 CAPACITY_DIRECT_PEER_PORT_ENV = "ATM_CAPACITY_DIRECT_PEER_PORT"
@@ -895,12 +895,8 @@ def sqlite_writer_probe() -> Path:
 
 def source_revision() -> str:
     """Bind retained benchmark evidence to the checkout that built the daemon."""
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
-        text=True, check=False,
-    )
-    revision = result.stdout.strip()
-    if result.returncode != 0 or not GIT_REVISION.fullmatch(revision):
+    revision = _git_source_revision(ROOT)
+    if revision is None:
         raise SmokeError("capacity benchmark requires a Git checkout with a resolved HEAD revision")
     return revision
 

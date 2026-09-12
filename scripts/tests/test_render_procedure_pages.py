@@ -3,9 +3,9 @@ from __future__ import annotations
 import importlib.util
 from html.parser import HTMLParser
 from pathlib import Path
-import re
 import tempfile
 import unittest
+from unittest import mock
 
 
 class _MarkupProbe(HTMLParser):
@@ -19,6 +19,38 @@ class _MarkupProbe(HTMLParser):
             self.svg += 1
         elif tag == "table":
             self.tables += 1
+
+
+class _TableProbe(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows: list[list[str]] = []
+        self._row: list[str] | None = None
+        self._cell: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "tr":
+            self._row = []
+        elif self._row is not None and tag in {"td", "th"}:
+            self._cell = []
+
+    def handle_data(self, data: str) -> None:
+        if self._cell is not None:
+            self._cell.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"td", "th"} and self._row is not None and self._cell is not None:
+            self._row.append("".join(self._cell).strip())
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            self.rows.append(self._row)
+            self._row = None
+
+
+def table_rows(path: Path) -> list[list[str]]:
+    parser = _TableProbe()
+    parser.feed(path.read_text(encoding="utf-8"))
+    return parser.rows
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,10 +71,15 @@ class ProcedurePageTests(unittest.TestCase):
             self.assertEqual(len(pages), len(procedure["revisions"]) + 1)
 
     def test_two_revisions_render_distinct_step_tables(self):
-        procedure = next(item for item in self.manifest["procedures"] if item["procedure"] == "smoke-localhost")
-        paths = [ROOT / "site/reports" / item["html"] for item in procedure["revisions"]]
-        tables = [re.search(r"<table>.*?</table>", path.read_text(), re.DOTALL).group(0) for path in paths[:2]]
-        self.assertNotEqual(tables[0], tables[1])
+        procedure = next(item for item in self.manifest["procedures"] if item["procedure"] == "smoke-thorough")
+        revisions = {item["rev"][:8]: item for item in procedure["revisions"]}
+        older = table_rows(ROOT / "site/reports" / revisions["93458691"]["html"])[1:]
+        newer = table_rows(ROOT / "site/reports" / revisions["513b3374"]["html"])[1:]
+        self.assertEqual(len(older), 26)
+        self.assertEqual(len(newer), 27)
+        self.assertNotEqual({row[1] for row in older}, {row[1] for row in newer})
+        self.assertIn("Execute `GRAFT-001`", {row[1] for row in newer})
+        self.assertNotIn("Execute `GRAFT-001`", {row[1] for row in older})
 
     def test_revision_entry_without_section_is_a_render_error(self):
         with tempfile.TemporaryDirectory() as tempdir:
@@ -79,8 +116,35 @@ class ProcedurePageTests(unittest.TestCase):
             revisions = [line.split(":", 1)[1].strip() for line in source.splitlines() if line.strip().startswith("- rev:")]
             self.assertEqual(revisions, [revision["rev"] for revision in item["revisions"]])
 
+    def test_front_matter_revisions_match_body_stamps(self):
+        for path in sorted((ROOT / "docs/procedures").glob("*.md")):
+            metadata, body, sections = MODULE.parse_document(path)
+            MODULE.validate_revision_stamps(path, metadata, body, sections)
+
     def test_check_mode_detects_stale_page(self):
-        self.assertEqual(MODULE.render(ROOT, check=True), 0)
+        with mock.patch.object(MODULE, "mermaid_svg", side_effect=AssertionError("check mode rendered Mermaid")):
+            self.assertEqual(MODULE.render(ROOT, check=True), 0)
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            docs = root / "docs/procedures"
+            docs.mkdir(parents=True)
+            revision = "a" * 40
+            (docs / "example.md").write_text(
+                "---\nprocedure: example\nfamily: smoke\nrunner: runner.py\n"
+                f"revisions:\n  - rev: {revision}\n    date: 2026-01-01\n    note: current\n---\n"
+                "\n## What this test proves\nA fixture.\n\n## Revision aaaaaaaa (2026-01-01)\n\n"
+                "The runner revision aaaaaaaa is current.\n\n```mermaid\nflowchart LR\n  a --> b\n```\n\n## Steps\n"
+                "| step | action | observable | evidence |\n| --- | --- | --- | --- |\n"
+                "| 1 | Run | PASS at revision `aaaaaaaa` | report |\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(MODULE, "compose", return_value="<html>generated</html>"), \
+                    mock.patch.object(MODULE, "mermaid_svg", return_value="<svg />"):
+                self.assertEqual(MODULE.render(root), 0)
+            source = docs / "example.md"
+            source.write_text(source.read_text(encoding="utf-8").replace("PASS at", "CHANGED at"), encoding="utf-8")
+            with mock.patch.object(MODULE, "mermaid_svg", side_effect=AssertionError("check mode rendered Mermaid")):
+                self.assertEqual(MODULE.render(root, check=True), 1)
 
 
 if __name__ == "__main__":

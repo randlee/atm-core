@@ -5,10 +5,10 @@
       "id": "colima-hermes-skills",
       "runner": "scripts/smoke/colima_skill_report.py",
       "sources": [
-        "site/reports/smoke/linux/hermes-testbed/20260908T162312Z-colima-hermes-skills/smoke.envelope.json",
-        "site/reports/smoke/linux/hermes-testbed/20260909T001110Z-colima-hermes-skills/smoke.envelope.json",
-        "site/reports/smoke/linux/hermes-testbed/20260909T062404Z-colima-hermes-skills/smoke.envelope.json",
-        "site/reports/smoke/linux/hermes-testbed/20260912T111004Z-colima-hermes-skills/smoke.envelope.json"
+        "site/reports/smoke/linux/hermes-testbed/20260908T162312Z-colima-hermes-skills/colima-hermes-skills.json",
+        "site/reports/smoke/linux/hermes-testbed/20260909T001110Z-colima-hermes-skills/colima-hermes-skills.json",
+        "site/reports/smoke/linux/hermes-testbed/20260909T062404Z-colima-hermes-skills/colima-hermes-skills.json",
+        "site/reports/smoke/linux/hermes-testbed/20260912T111004Z-colima-hermes-skills/colima-hermes-skills.json"
       ]
     },
     {
@@ -45,10 +45,10 @@
       "id": "graft-hermes",
       "runner": "scripts/phase-ai/run_hermes_graft_live.py",
       "sources": [
-        "site/reports/smoke/macos/rand-m5.local/20260912T111154112438Z-pid54682-graft-hermes/smoke.envelope.json",
-        "site/reports/smoke/macos/rand-m5.local/20260912T111535001097Z-pid57096-graft-hermes/smoke.envelope.json",
-        "site/reports/smoke/macos/rand-m5.local/20260912T111629034493Z-pid57481-graft-hermes/smoke.envelope.json",
-        "site/reports/smoke/macos/rand-m5.local/20260912T111722487420Z-pid57764-graft-hermes/smoke.envelope.json"
+        "site/reports/smoke/macos/rand-m5.local/20260912T111154112438Z-pid54682-graft-hermes/graft-hermes.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111535001097Z-pid57096-graft-hermes/graft-hermes.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111629034493Z-pid57481-graft-hermes/graft-hermes.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111722487420Z-pid57764-graft-hermes/graft-hermes.json"
       ]
     },
     {
@@ -81,6 +81,7 @@
       "runner": "scripts/smoke/run_feature_smoke.py",
       "sources": [
         "runner:feature:crosshost-ack",
+        "site/reports/smoke/macos/rand-m5.local/20260808T203610076893Z-pid39023-crosshost-ack/crosshost-ack.json",
         "site/reports/smoke/macos/rand-m5.local/20260808T203610076893Z-pid39023-crosshost-ack/smoke.envelope.json"
       ]
     },
@@ -98,6 +99,7 @@
       "runner": "scripts/smoke/run_feature_smoke.py",
       "sources": [
         "runner:feature:crosshost-curl-tls",
+        "site/reports/smoke/macos/rand-m4.local/20260820T222412780815Z-pid97059-crosshost-curl-tls/crosshost-curl-tls.json",
         "site/reports/smoke/macos/rand-m4.local/20260820T222412780815Z-pid97059-crosshost-curl-tls/smoke.envelope.json"
       ]
     },
@@ -107,7 +109,9 @@
       "runner": "scripts/smoke/run_feature_smoke.py",
       "sources": [
         "runner:feature:crosshost-send",
+        "site/reports/smoke/macos/rand-m5.local/20260808T191605199584Z-pid24045-crosshost-send/crosshost-send.json",
         "site/reports/smoke/macos/rand-m5.local/20260808T191605199584Z-pid24045-crosshost-send/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260811T001934627915Z-pid86365-crosshost-send/crosshost-send.json",
         "site/reports/smoke/macos/rand-m5.local/20260811T001934627915Z-pid86365-crosshost-send/smoke.envelope.json"
       ]
     },
@@ -116,7 +120,11 @@
       "id": "smoke-fast",
       "runner": "scripts/smoke/run_feature_smoke.py",
       "sources": [
-        "runner:feature:fast"
+        "runner:feature:fast",
+        "site/reports/smoke/macos/rand-m5.local/20260912T201045730410Z-pid38413-fast/fast.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T201045730410Z-pid38413-fast/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T204119754750Z-pid87697-fast/fast.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T204119754750Z-pid87697-fast/smoke.envelope.json"
       ]
     },
     {
@@ -125,12 +133,19 @@
       "runner": "scripts/smoke/run_feature_smoke.py",
       "sources": [
         "runner:feature:local-ip",
+        "site/reports/smoke/macos/rand-m5.local/20260808T191410895708Z-pid23245-local-ip/local-ip.json",
         "site/reports/smoke/macos/rand-m5.local/20260808T191410895708Z-pid23245-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260811T001002232093Z-pid82203-local-ip/local-ip.json",
         "site/reports/smoke/macos/rand-m5.local/20260811T001002232093Z-pid82203-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260831T203502835995Z-pid58124-local-ip/local-ip.json",
         "site/reports/smoke/macos/rand-m5.local/20260831T203502835995Z-pid58124-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111153900429Z-pid53990-local-ip/local-ip.json",
         "site/reports/smoke/macos/rand-m5.local/20260912T111153900429Z-pid53990-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111406709913Z-pid55422-local-ip/local-ip.json",
         "site/reports/smoke/macos/rand-m5.local/20260912T111406709913Z-pid55422-local-ip/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111456913562Z-pid55962-local-ip/local-ip.json",
         "site/reports/smoke/macos/rand-m5.local/20260912T111456913562Z-pid55962-local-ip/smoke.envelope.json",
+        "site/reports/smoke/windows/FastPC4/al14-cwin-local-ip-f3f66d6a-pid22492-local-ip/local-ip.json",
         "site/reports/smoke/windows/FastPC4/al14-cwin-local-ip-f3f66d6a-pid22492-local-ip/smoke.envelope.json"
       ]
     },
@@ -140,10 +155,15 @@
       "runner": "scripts/smoke/run_feature_smoke.py",
       "sources": [
         "runner:feature:localhost",
+        "site/reports/smoke/macos/rand-m5.local/20260808T191357786414Z-pid23030-localhost/localhost.json",
         "site/reports/smoke/macos/rand-m5.local/20260808T191357786414Z-pid23030-localhost/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260811T000951322910Z-pid81552-localhost/localhost.json",
         "site/reports/smoke/macos/rand-m5.local/20260811T000951322910Z-pid81552-localhost/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260831T203217630910Z-pid56376-localhost/localhost.json",
         "site/reports/smoke/macos/rand-m5.local/20260831T203217630910Z-pid56376-localhost/smoke.envelope.json",
+        "site/reports/smoke/macos/rand-m5.local/20260912T111012460075Z-pid53885-localhost/localhost.json",
         "site/reports/smoke/macos/rand-m5.local/20260912T111012460075Z-pid53885-localhost/smoke.envelope.json",
+        "site/reports/smoke/windows/FastPC4/al14-cwin-localhost-f3f66d6a-pid22832-localhost/localhost.json",
         "site/reports/smoke/windows/FastPC4/al14-cwin-localhost-f3f66d6a-pid22832-localhost/smoke.envelope.json"
       ]
     },
@@ -161,6 +181,7 @@
       "runner": "scripts/smoke/run_feature_smoke.py",
       "sources": [
         "runner:feature:peer-preflight",
+        "site/reports/smoke/macos/rand-m5.local/20260808T191457421442Z-pid23503-peer-preflight/peer-preflight.json",
         "site/reports/smoke/macos/rand-m5.local/20260808T191457421442Z-pid23503-peer-preflight/smoke.envelope.json"
       ]
     },

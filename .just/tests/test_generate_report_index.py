@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -75,6 +76,45 @@ def write_smoke_envelope(root: Path, platform: str, host: str, run: str) -> str:
 
 
 class GenerateReportIndexTests(unittest.TestCase):
+    def test_source_revision_resolves_to_newest_ancestor_without_inference(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            reports = root / "site/reports"
+            write_envelope(root, "ancestor", "benchmark", "2026-08-08T04:00:00Z", "host")
+            payload_path = reports / "ancestor.json"
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            payload.update({"procedure": "benchmark", "source_revision": "c" * 40})
+            payload_path.write_text(json.dumps(payload), encoding="utf-8")
+            manifest = {
+                "schema_version": 1,
+                "procedures": [{"procedure": "benchmark", "revisions": [
+                    {"rev": "a" * 40, "date": "2026-08-01", "html": "procedures/benchmark/aaaaaaaa.html"},
+                    {"rev": "b" * 40, "date": "2026-08-05", "html": "procedures/benchmark/bbbbbbbb.html"},
+                ]}],
+            }
+            for revision in ("aaaaaaaa", "bbbbbbbb"):
+                page = reports / "procedures/benchmark" / f"{revision}.html"
+                page.parent.mkdir(parents=True, exist_ok=True)
+                page.write_text("<html>procedure</html>\n", encoding="utf-8")
+            (reports / "procedures/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            def git_result(command, **kwargs):
+                is_repo_probe = command[:3] == ["git", "rev-parse", "--git-dir"]
+                is_newest_ancestor = len(command) > 3 and command[3] == "b" * 40
+                return mock.Mock(returncode=0 if is_repo_probe or is_newest_ancestor else 1)
+
+            with mock.patch("generate_report_index.subprocess.run", side_effect=git_result):
+                index = _build_index(reports)
+            self.assertIn('href="procedures/benchmark/bbbbbbbb.html"', index)
+            self.assertNotIn("inferred from run date", index)
+
+    def test_source_revision_absent_uses_inferred_date_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            write_smoke_envelope(root, "windows", "FastPC4", "20260808T032327Z-pid1-localhost")
+            index = build_index(root / "site/reports")
+            self.assertIn("inferred from run date", index)
+
     def test_links_report_to_procedure_by_source_revision(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)

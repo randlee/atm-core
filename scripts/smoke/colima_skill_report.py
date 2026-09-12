@@ -20,14 +20,15 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from feature_smoke_report import render_feature_pane  # noqa: E402
 from run_feature_smoke import update_master_report_index  # noqa: E402
-from run_inbound_peer_smoke import PANE_TEMPLATE, REPO_ROOT, compose  # noqa: E402
+from run_inbound_peer_smoke import PANE_TEMPLATE, REPO_ROOT  # noqa: E402
+from report_runtime import compose as _compose, source_revision as _git_source_revision  # noqa: E402
+from smoke_common import SmokeError  # noqa: E402
 
 FEATURE = "colima-hermes-skills"
 PLATFORM = "linux"
@@ -119,9 +120,11 @@ def render(run_dir: Path, out_dir: Path) -> Path:
 
 
 def _source_revision() -> str | None:
-    result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, check=False)
-    revision = result.stdout.strip()
-    return revision if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", revision) else None
+    return _git_source_revision(REPO_ROOT)
+
+
+def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
+    _compose(template, variables, output, root=REPO_ROOT, error_type=SmokeError)
 
 
 def main() -> int:

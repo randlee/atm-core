@@ -114,8 +114,10 @@ Before starting a sprint:
    `ruthless-boundary-qa` remains part of that loop unless the lead
    explicitly narrows the reviewer set for a specific task.
 8. If QA passes and CI is green, merge may proceed.
-9. If QA fails, the lead first runs `/triaging-findings` to correlate the
-   findings across worktrees and determine the promoted fix branch.
+9. After every QA round that reports any finding, at any severity, the lead
+   runs `/triaging-findings` the same way: every finding is recorded, correlated
+   across worktrees, and promoted to the current top layer of the stack. No
+   finding is skipped, deferred, or left without a fix dispatch.
 10. After triage completes, the lead routes concrete fixes back to
    `arch-ctm` using `fix-assignment.xml.j2`. Fix assignments must also include
    `sprint_doc`, and the sprint document remains authoritative if the task
@@ -130,6 +132,16 @@ govern layer ownership, rebase-at-task-start, freezing, PR-on-first-push,
 the CI-trigger PR, and the landing sequence. The orchestrator owns the stack;
 each dev owns exactly one layer. Fix and cleanup work goes to a new top layer
 with one QA pass, never to a frozen layer.
+
+The stack is append-only (guidelines §0). Every unit of work — a sprint, a
+fix round, a cleanup pass, a docs sprint — is a new worktree cut from the
+current top of the stack, with its PR opened on the first push and linked
+into the stack. Nothing below the top is ever edited again; a layer is
+frozen the moment its task closes. The lead never waits for a layer's QA or
+CI before cutting the next layer: the dev's next sprint starts on a layer
+cut from their just-pushed head, and QA findings for the lower layer arrive
+as a fix layer above it. This is the default for every phase, not an
+option the lead re-derives per sprint.
 
 ## Plan Review Flow
 
@@ -234,8 +246,13 @@ Use the Rust assignment templates from:
 
 ## Required Message Sequence
 
-Every ATM task message must follow:
-1. ACK
-2. Work
-3. Completion summary
-4. Completion ACK by receiver
+Every ATM task assignment follows:
+1. ACK — `atm ack <message-id> "accepted <task-id>: …"`; accepts the task, does not close it.
+2. Work — a plain `atm send <lead> --stdin` push report (branch + SHA) on the first push.
+3. Task close — `atm task close <task-id> completed --stdin <<'EOF' … EOF` with the
+   completion report as the body, or `atm task close <task-id> refused "<reason>"`
+   when the whole assignment cannot be done. The close is the terminal step: it
+   frees the assignee's queue and there is no completion ACK by the receiver.
+   The lead reads the daemon's close receipt (`atm read --message-id`) and
+   closes the mirror task on its own side; a plain reply is not part of the
+   sequence.
