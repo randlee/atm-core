@@ -263,18 +263,7 @@ impl HerdrQueueWakePump {
         .await;
         let dispatch = match dispatch {
             Ok(Some(dispatch)) => dispatch,
-            Ok(None) => {
-                let disposition = TaskDisposition::Hold("no delivery channel");
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "task_reminder_dispatch",
-                    outcome = "held",
-                    disposition = ?disposition,
-                    member = %candidate.member,
-                    "Herdr task reminder held: no delivery channel"
-                );
-                return;
-            }
+            Ok(None) => return,
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_render", outcome = "unrenderable", error = %error, member = %candidate.member, "Herdr task reminder could not render");
                 self.record_task_outcome(&context, &row, now, ReminderOutcome::Unrenderable, stats)

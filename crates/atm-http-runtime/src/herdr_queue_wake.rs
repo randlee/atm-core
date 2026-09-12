@@ -234,8 +234,7 @@ impl HerdrQueueWakePump {
         };
         self.prune_member_state(&candidates);
 
-        let (eligible, task_candidates, _list_complete) =
-            self.list_eligible(candidates, &mut stats).await;
+        let (eligible, task_candidates) = self.list_eligible(candidates, &mut stats).await;
         let prepared_task_pass = self.prepare_task_pass(&mut stats, &task_candidates).await;
         self.drain_eligible(pending_store, eligible, &mut stats)
             .await;
@@ -277,11 +276,10 @@ impl HerdrQueueWakePump {
         &self,
         candidates: Vec<HerdrCandidate>,
         stats: &mut HerdrQueueWakeStats,
-    ) -> (Vec<HerdrCandidate>, Vec<MemberObservation>, bool) {
+    ) -> (Vec<HerdrCandidate>, Vec<MemberObservation>) {
         let mut by_session: HashMap<Option<HerdrSession>, Vec<HerdrCandidate>> = HashMap::new();
         let mut eligible = Vec::new();
         let mut task_candidates = Vec::new();
-        let mut complete = true;
         for candidate in candidates {
             match &candidate.target {
                 CandidateTarget::Herdr(target) => {
@@ -328,7 +326,6 @@ impl HerdrQueueWakePump {
                     );
                 }
                 Err(error) => {
-                    complete = false;
                     self.record_unavailable_members(&members, (self.clock)());
                     if error.is_infrastructure() {
                         stats.breaker_open += 1;
@@ -339,7 +336,7 @@ impl HerdrQueueWakePump {
         }
         eligible.sort_by(|left, right| member_order(&left.key, &right.key));
         task_candidates.sort_by(|left, right| member_order(&left.member, &right.member));
-        (eligible, task_candidates, complete)
+        (eligible, task_candidates)
     }
 
     fn collect_idle_members(
@@ -1100,6 +1097,13 @@ mod tests {
         ));
     }
 
+    mod herdr_queue_no_delivery {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/herdr_queue_no_delivery.rs"
+        ));
+    }
+
     mod herdr_nudge_invariant {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1845,6 +1849,24 @@ mod tests {
         fail_reminders: bool,
     ) -> TaskOnlyPumpFixture {
         build_task_only_pump_with_template(statuses, fail_reminders, None)
+    }
+
+    fn build_task_only_pump_without_delivery_channel() -> TaskOnlyPumpFixture {
+        let fixture = build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+        let team = fixture.5[0].team().clone();
+        let agent = fixture.5[0].agent().clone();
+        let mut member = herdr_member(&team, agent.as_str());
+        member.metadata_json.clear();
+        fixture
+            .1
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team,
+                members: vec![member],
+                refreshed_at: None,
+            })
+            .expect("roster without delivery channel");
+        fixture
     }
 
     fn build_task_only_pump_with_template(
