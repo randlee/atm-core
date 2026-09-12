@@ -20,13 +20,34 @@ STACK_DISCIPLINE_TEMPLATES = (
     ".claude/skills/graph-orchestration/dev-task.xml.j2",
     ".claude/skills/graph-orchestration/dev-fix.xml.j2",
 )
-SEQUENCE_DOCS = (
-    "docs/team-protocol.md",
-    ".claude/skills/codex-orchestration/SKILL.md",
-    ".claude/skills/graph-orchestration/SKILL.md",
-    ".claude/skills/triaging-findings/SKILL.md",
+# Every agent-facing instruction file is swept; docs/plans/ is excluded because
+# sprint records quote the retired wording as finding text (BB2-017).
+SEQUENCE_DOC_ROOTS = ("AGENTS.md", "CLAUDE.md", "docs", ".claude")
+SEQUENCE_DOC_SUFFIXES = (".md", ".j2", ".txt")
+SEQUENCE_DOC_EXCLUDED = ("docs/plans/",)
+STALE_SEQUENCE = re.compile(
+    r"completion ack(nowledgement)? by (the )?receiver"
+    r"|receiver acknowledg"
+    r"|acknowledges completion"
+    r"|ack -> work -> completion",
+    re.IGNORECASE,
 )
 ELEMENT = re.compile(r"<stack-discipline>(.*?)</stack-discipline>", re.DOTALL)
+
+
+def sequence_docs() -> list[str]:
+    found: list[str] = []
+    for root in SEQUENCE_DOC_ROOTS:
+        base = ROOT / root
+        paths = [base] if base.is_file() else sorted(base.rglob("*"))
+        for path in paths:
+            if not path.is_file() or path.suffix not in SEQUENCE_DOC_SUFFIXES:
+                continue
+            rel = path.relative_to(ROOT).as_posix()
+            if rel.startswith(SEQUENCE_DOC_EXCLUDED):
+                continue
+            found.append(rel)
+    return found
 
 
 class DispatchTemplateParity(unittest.TestCase):
@@ -41,9 +62,17 @@ class DispatchTemplateParity(unittest.TestCase):
             self.assertEqual(body, reference, f"{rel}: <stack-discipline> text drifted from {STACK_DISCIPLINE_TEMPLATES[0]}")
 
     def test_no_receiver_completion_ack_survives(self) -> None:
-        stale = re.compile(r"completion ack by (the )?receiver|acknowledges completion", re.IGNORECASE)
-        for rel in SEQUENCE_DOCS:
-            self.assertIsNone(stale.search((ROOT / rel).read_text()), f"{rel}: retired receiver completion-ACK step is back")
+        offenders = []
+        for rel in sequence_docs():
+            if STALE_SEQUENCE.search((ROOT / rel).read_text(errors="replace")):
+                offenders.append(rel)
+        self.assertEqual(offenders, [], "retired receiver completion-ACK step is back in these files")
+
+    def test_sequence_sweep_covers_the_protocol_doc(self) -> None:
+        docs = set(sequence_docs())
+        for rel in ("docs/team-protocol.md", "AGENTS.md", "CLAUDE.md",
+                    ".claude/skills/quality-management-gh/SKILL.md"):
+            self.assertIn(rel, docs)
 
 
 if __name__ == "__main__":

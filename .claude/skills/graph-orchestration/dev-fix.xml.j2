@@ -44,7 +44,7 @@ metadata:
      All prior sprint branches have been merged forward into this branch before dispatch.
      The findings list covers the ENTIRE phase — not just one sprint. Fix all findings here;
      do not return any finding to its origin branch. #}
-  <description>Fix pass on sprint node {{ node_id }} (order {{ node_order }}) in {{ sprint }}. Address all open findings listed below before sending ATM completion to {{ lead }}.</description>
+  <description>Fix pass on sprint node {{ node_id }} (order {{ node_order }}) in {{ sprint }}. Address all open findings listed below, then close the task with `atm task close {{ task_id }}`.</description>
 
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
