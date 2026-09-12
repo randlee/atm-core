@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T23:34:12Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: replace the ad hoc AtmError -> ReadLaneError::Unavailable mapping at read_lane_error with a call to the crate's existing read_lane_storage_error helper, preserving AtmErrorCode/cause like sibling methods. Routed to solar on BB6-FIX-STORAGE-QA1-1789265000, branch fix/bb6-storage-qa1 cut from a7d4664d1, fence crates/atm-storage (+ rusqlite sibling)." ;
+  triage:deferredNote "Fix: replace the ad hoc AtmError -> ReadLaneError::Unavailable mapping at read_lane_error with a call to the crate's existing read_lane_storage_error helper, preserving AtmErrorCode/cause like sibling methods. Routed to solar on BB6-FIX-STORAGE-QA1-1789265000, branch fix/bb6-storage-qa1 cut from a7d4664d1, fence crates/atm-storage (+ rusqlite sibling). solar's BB6-FIX-STORAGE-QA1-1789265000 pushed fix/bb6-storage-qa1 @ 0c09c62b0, 2026-09-12T23:44:41Z; full gates running. Fixed-pending-QA." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-12T23:33:40Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-003/1> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB6-003/1>
   a triage:Occurrence ;
@@ -32,13 +32,13 @@
   triage:snippet "read_lane_error maps every AtmError to ReadLaneError::Unavailable, discarding AtmErrorCode/cause, instead of using the crate's existing read_lane_storage_error helper used by sibling methods" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/bb6-storage-prompt-handoffs" ;
-  triage:headSha "a7d4664d1" ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "0c09c62b0" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-003/1> .
 
 <urn:atm:triage:worktree/BB6-003/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1458, feature/bb6-storage-prompt-handoffs" ;
-  triage:branch "feature/bb6-storage-prompt-handoffs" ;
-  triage:headSha "a7d4664d1" ;
+  triage:path "fix/bb6-storage-qa1 (cut from a7d4664d1)" ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "0c09c62b0" ;
   triage:orderIndex 1 .

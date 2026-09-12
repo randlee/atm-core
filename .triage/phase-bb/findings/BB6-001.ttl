@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T23:34:12Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: route both column lists through task_sql.rs's existing one-owner convention instead of independent literals. Routed to solar on BB6-FIX-STORAGE-QA1-1789265000, branch fix/bb6-storage-qa1 cut from a7d4664d1, fence crates/atm-storage (+ rusqlite sibling)." ;
+  triage:deferredNote "Fix: route both column lists through task_sql.rs's existing one-owner convention instead of independent literals. Routed to solar on BB6-FIX-STORAGE-QA1-1789265000, branch fix/bb6-storage-qa1 cut from a7d4664d1, fence crates/atm-storage (+ rusqlite sibling). solar's BB6-FIX-STORAGE-QA1-1789265000 pushed fix/bb6-storage-qa1 @ 0c09c62b0, 2026-09-12T23:44:41Z; full gates running. Fixed-pending-QA." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-12T23:33:40Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-001/1> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB6-001/1>
   a triage:Occurrence ;
@@ -32,13 +32,13 @@
   triage:snippet "record_prompt_handoff's 8-column INSERT literal and list_prompt_handoffs's matching SELECT literal (task_ledger_reader.rs:188-189) duplicate the column list independently of task_sql.rs's one-owner self-test convention" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/bb6-storage-prompt-handoffs" ;
-  triage:headSha "a7d4664d1" ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "0c09c62b0" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-001/1> .
 
 <urn:atm:triage:worktree/BB6-001/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1458, feature/bb6-storage-prompt-handoffs" ;
-  triage:branch "feature/bb6-storage-prompt-handoffs" ;
-  triage:headSha "a7d4664d1" ;
+  triage:path "fix/bb6-storage-qa1 (cut from a7d4664d1)" ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "0c09c62b0" ;
   triage:orderIndex 1 .
