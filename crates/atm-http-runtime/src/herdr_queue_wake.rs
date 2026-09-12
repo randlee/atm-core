@@ -4313,7 +4313,7 @@ mod tests {
         clear_pending_markers(root.path(), &runtime, &key);
         let message_id = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
         let now = Arc::new(Mutex::new(
-            IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
         let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
         let pending_store = runtime.pending_nudge_store().expect("pending store");
@@ -4568,7 +4568,7 @@ mod tests {
         list_messages_calls.store(0, Ordering::SeqCst);
         let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
         let now = Arc::new(Mutex::new(
-            IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
         let pump = pump_with_clock(
             runtime.clone(),
@@ -4580,7 +4580,7 @@ mod tests {
             queue_idle_result(&fake, &key);
             pump.tick_once().await;
         }
-        assert_eq!(prompt_texts(&fake).len(), 50);
+        assert_eq!(prompt_texts(&fake).len(), 1);
         assert_eq!(
             list_messages_calls.load(Ordering::SeqCst),
             0,

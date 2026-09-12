@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::{MessageReceivedHookSelector, NudgeKind};
+use atm_core::boundary::MessageReceivedHookSelector;
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
@@ -708,43 +708,15 @@ impl StorageAndNudgeRouter {
         }
         let runtime = self.service_runtime.clone();
         let fifo = self.bare_cli_fifo.clone();
-        let observability = Arc::clone(&self.observability);
-        let daemon_home = self.daemon_home.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
                 validate_heartbeat_member(&runtime, &request.team, &request.member)?;
                 let member = atm_core::boundary::MemberKey::new(request.team, request.member);
-                let messages = drain_bare_cli_messages(&fifo, &member)?;
-                for message in messages
-                    .iter()
-                    .filter(|message| message.kind == NudgeKind::Queue)
-                {
-                    let message_id = message.msg_id.to_string();
-                    let query = ReadQuery::new(
-                        daemon_home.clone(),
-                        daemon_home.clone(),
-                        member.agent().clone(),
-                        Some(&format!("{}@{}", member.agent(), member.team())),
-                        member.team().clone(),
-                        atm_core::types::ReadSelection::All,
-                        false,
-                        true,
-                        Some(&message_id),
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                    )?;
-                    atm_core::read::read_mail_with_runtime(
-                        query,
-                        observability.as_ref(),
-                        &runtime,
-                    )?;
-                }
-                Ok(ApiResponse::new(ResponseEnvelope::QueueGetNext(
-                    atm_core::protocol::QueueGetNextResponse { messages },
-                )))
+                drain_bare_cli_messages(&fifo, &member).map(|messages| {
+                    ApiResponse::new(ResponseEnvelope::QueueGetNext(
+                        atm_core::protocol::QueueGetNextResponse { messages },
+                    ))
+                })
             })
             .await
     }
@@ -1088,6 +1060,7 @@ mod tests {
         QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
         RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
     };
+    use atm_core::read::ReadQuery;
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
@@ -2319,9 +2292,8 @@ mod tests {
         );
     }
 
-    /// A bare-CLI pull is a real queue handoff: the returned queue item is
-    /// closed through the read path, so the durable marker cannot be rearmed
-    /// after the in-memory FIFO entry has been removed.
+    /// A bare-CLI pull drains the in-memory FIFO while preserving the leased
+    /// durable marker; the member's subsequent read closes that marker.
     #[tokio::test]
     async fn bare_cli_pull_closes_item() {
         let fixture = fixture(true, None, None);
@@ -2343,6 +2315,12 @@ mod tests {
             .pending_nudge_store
             .mark_pending(&member, &message_id, IsoTimestamp::now())
             .expect("mark queue item pending");
+        let claim = fixture
+            .pending_nudge_store
+            .claim_next_pending(&member)
+            .expect("claim queue item")
+            .expect("queue item claim");
+        assert_eq!(claim.msg, message_id);
 
         let fifo: BareCliFifo = Default::default();
         let drops: BareCliQueueFullDrops = Default::default();
@@ -2379,8 +2357,49 @@ mod tests {
                 .pending_nudge_store
                 .list_pending_members()
                 .expect("list pending members")
+                .contains(&member),
+            "queue_get_next drains the FIFO but preserves the leased marker"
+        );
+
+        let message_id_text = message_id.to_string();
+        let read_query = ReadQuery::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            member.agent().clone(),
+            Some(&format!("{}@{}", member.agent(), member.team())),
+            member.team().clone(),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            Some(&message_id_text),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+        atm_core::read::read_mail_with_runtime(
+            read_query,
+            &NullObservability,
+            &fixture.router.service_runtime,
+        )
+        .expect("member reads pulled queue item");
+        assert!(
+            fixture
+                .pending_nudge_store
+                .list_pending_members()
+                .expect("list pending members after read")
                 .is_empty(),
-            "pull closes the stored nudge marker instead of rearming it"
+            "the member read closes the leased marker"
+        );
+        assert!(
+            fixture
+                .pending_nudge_store
+                .claim_next_pending(&member)
+                .expect("claim after read")
+                .is_none(),
+            "a closed item cannot be prompted by later queue ticks"
         );
     }
 
