@@ -570,6 +570,33 @@ fn ack_message(
     .expect("message acknowledgement");
 }
 
+/// Starts an assigned task the way `atm task start` does: the assignee writes
+/// a `TaskOp::Start` message back to the assigner
+/// (`atm-storage-rusqlite/src/writer/task_start.rs:17`).
+fn start_task(
+    root: &std::path::Path,
+    runtime: &LocalServiceRuntime,
+    key: &atm_core::boundary::MemberKey,
+    task_id: TaskId,
+) {
+    let home = root.join("home");
+    let mut request = WriteRequest::new(
+        home.clone(),
+        home,
+        key.agent().clone(),
+        &format!("sender@{}", key.team()),
+        key.team().clone(),
+        SendMessageSource::Inline("task started".to_owned()),
+        None,
+        false,
+        Some(task_id),
+        false,
+    )
+    .expect("task start request");
+    request.task_op = Some(atm_storage::TaskOp::Start);
+    write_mail_with_runtime(request, &NullObservability, runtime).expect("task start");
+}
+
 fn complete_task(
     root: &std::path::Path,
     runtime: &LocalServiceRuntime,
@@ -1168,10 +1195,14 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
 
     pump.tick_once().await;
     let prompts = prompt_texts(&fake);
+    // BB.5: the first prompt is the task pass `task_ready` naming the head
+    // task, not a queue drain of the assignment message
+    // (nudge_dispatch.rs:24-31, send/nudge_template.rs:138).
     assert!(prompts.iter().any(|text| {
-        text.starts_with("<atm from=\"")
-            && text.contains(&format!("message-id=\"{first_message_id}\""))
-            && !text.contains(first.as_str())
+        text.starts_with(&format!(
+            "<atm task=\"{}\" ready message=\"{first_message_id}\"",
+            first.as_str()
+        ))
     }));
     let prompts_after_first = prompts.len();
     assert_eq!(
@@ -1202,10 +1233,14 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
     pump.tick_once().await;
     let prompts = prompt_texts(&fake);
     assert!(prompts.len() > prompts_after_first);
+    // BB.5: completing the head advances the pass to the next task, whose own
+    // first prompt is `task_ready` again because its reminder count is still
+    // zero (nudge_dispatch.rs:24-31).
     assert!(prompts[prompts_after_first..].iter().any(|text| {
-        text.starts_with("<atm from=\"")
-            && text.contains(&format!("message-id=\"{second_message_id}\""))
-            && !text.contains(second.as_str())
+        text.starts_with(&format!(
+            "<atm task=\"{}\" ready message=\"{second_message_id}\"",
+            second.as_str()
+        ))
     }));
     assert_eq!(
         runtime
@@ -1223,24 +1258,33 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
 #[tokio::test]
 async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
     let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    // BB.5: an assignment writes no pending marker, so the fixture's own
+    // ordinary queue message is the only drain candidate. Clear it first, or
+    // the task pass holds on pending mail (herdr_task_disposition.rs:69) and
+    // the cadence below is never reached.
+    clear_pending_markers(root.path(), &runtime, &key);
     let task_id: TaskId = "AX5-BUDGET".parse().expect("task id");
     queue_task_message(
         root.path(),
         &runtime,
         key.team(),
         key.agent().as_str(),
-        task_id,
+        task_id.clone(),
     );
     let now = Arc::new(Mutex::new(
         IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
-    queue_idle_result(&fake, &key);
     pump.tick_once().await;
+    // BB.5: the task pass is the only source of the first prompt; it spends
+    // one unit of the shared per-tick prompt budget (task_pass.rs:287,424).
+    assert_eq!(pump.stats().prompted, 1);
+    assert_eq!(pump.stats().task_reminders, 1);
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
+    assert_eq!(pump.stats().task_reminders, 1);
 
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:02:00Z").expect("test timestamp");
@@ -1252,18 +1296,33 @@ async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
         1,
         "only the fresh queue nudge is emitted"
     );
-    assert_eq!(pump.stats().task_reminders, 1);
+    // BB.5: the drain prompt still takes the member's prompt for this tick,
+    // but it no longer counts as a task reminder — `record_queue_prompt_reminders`
+    // is gone and the pass holds while mail is pending
+    // (herdr_task_disposition.rs:69).
+    assert_eq!(pump.stats().task_reminders, 0);
 
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:03:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
     assert_eq!(pump.stats().task_reminders, 0);
+    let prompts = prompt_texts(&fake);
     assert_eq!(
-        prompt_texts(&fake).len(),
+        prompts.len(),
         3,
-        "the queue drains consume each tick while the assignment is open"
+        "two task prompts on the reminder cadence, then one queue drain"
     );
+    // BB.5: first prompt `task_ready`, later prompts `task_reminder` with a
+    // rising attempt; the drain prompt is an ordinary queue nudge that names
+    // no task (nudge_dispatch.rs:24-31, send/nudge_template.rs:138-143).
+    assert!(prompts[0].starts_with(&format!("<atm task=\"{}\" ready ", task_id.as_str())));
+    assert!(prompts[1].starts_with(&format!(
+        "<atm task=\"{}\" reminder=\"1\" ",
+        task_id.as_str()
+    )));
+    assert!(prompts[2].starts_with("<atm from=\""));
+    assert!(!prompts[2].contains(task_id.as_str()));
 }
 
 #[tokio::test]
@@ -1359,16 +1418,20 @@ async fn ax5_09_generic_emit_failure_counts_and_respects_cooldown() {
 #[tokio::test]
 async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
     let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    // BB.5: an assignment writes no pending marker, so the fixture's ordinary
+    // queue message is cleared first; otherwise the pass holds on pending mail
+    // (herdr_task_disposition.rs:69) and no task is ever prompted.
+    clear_pending_markers(root.path(), &runtime, &key);
     let first: TaskId = "AX5-ACTIVE".parse().expect("task id");
     let second: TaskId = "AX5-ASSIGNED-2".parse().expect("task id");
-    queue_task_message(
+    let first_message = queue_task_message(
         root.path(),
         &runtime,
         key.team(),
         key.agent().as_str(),
         first.clone(),
     );
-    let second_message = queue_task_message(
+    queue_task_message(
         root.path(),
         &runtime,
         key.team(),
@@ -1387,46 +1450,64 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
         .shared_roster_store_arc()
         .save_roster(&roster)
         .expect("add task sender to roster");
+    // BB.5: acknowledging an assignment no longer starts its task, so the
+    // active head is established through the `atm task start` write path
+    // (writer/task_start.rs:17), which also moves it to position 1.
+    start_task(root.path(), &runtime, &key, first.clone());
     let now = Arc::new(Mutex::new(
         IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
 
     pump.tick_once().await;
-    queue_idle_result(&fake, &key);
-    pump.tick_once().await;
-    queue_idle_result(&fake, &key);
-    pump.tick_once().await;
+    *now.lock().expect("test clock lock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
     *now.lock().expect("test clock lock") =
-        IsoTimestamp::from_str("2030-01-01T00:04:00Z").expect("test timestamp");
+        IsoTimestamp::from_str("2030-01-01T00:02:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
 
+    let store = runtime.task_store().expect("task store");
+    let active = store
+        .load_task(key.team(), &first)
+        .expect("load task")
+        .expect("first task");
+    assert_eq!(active.state, atm_storage::TaskState::Active);
     let reminders = prompt_texts(&fake);
-    assert!(!reminders.is_empty());
-    assert!(reminders.iter().all(|text| !text.contains("AX5-ACTIVE")));
-    assert!(reminders.iter().any(|text| {
-        text.starts_with("<atm from=\"")
-            && text.contains(&format!("message-id=\"{second_message}\""))
-            && !text.contains(second.as_str())
-    }));
+    // BB.5: every prompt comes from the task pass and names the active head;
+    // the newer assigned task is never prompted and never reminded
+    // (task_pass.rs:311-343 keeps one head per member).
+    assert_eq!(reminders.len(), 3);
+    assert!(
+        reminders
+            .iter()
+            .all(|text| text.contains(first.as_str()) && !text.contains(second.as_str()))
+    );
+    assert!(reminders[0].starts_with(&format!(
+        "<atm task=\"{}\" ready message=\"{first_message}\"",
+        first.as_str()
+    )));
+    assert_eq!(active.reminder_count, 3);
+    let queued = store
+        .load_task(key.team(), &second)
+        .expect("load task")
+        .expect("second task");
+    assert_eq!(queued.state, atm_storage::TaskState::Assigned);
     assert_eq!(
-        runtime
-            .task_store()
-            .expect("task store")
-            .load_task(key.team(), &second)
-            .expect("load task")
-            .expect("second task")
-            .state,
-        atm_storage::TaskState::Assigned
+        queued.reminder_count, 0,
+        "a reminder is recorded only against the task the prompt was rendered for"
     );
 }
 
 #[tokio::test]
 async fn ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
     let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    // BB.5: an assignment writes no pending marker, so the fixture's ordinary
+    // queue message is cleared first; otherwise the pass holds on pending mail
+    // (herdr_task_disposition.rs:69) and no prompt is ever attempted.
+    clear_pending_markers(root.path(), &runtime, &key);
     let task_id: TaskId = "AX5-RETRY".parse().expect("task id");
     queue_task_message(
         root.path(),
@@ -1451,6 +1532,9 @@ async fn ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
     fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentNotReady));
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
+    // BB.5: the two task-pass prompts at 00:00 and 00:01 are the only recorded
+    // reminders; the failed emit at 00:02 records nothing and is counted as a
+    // task-reminder failure instead (task_pass.rs:395-408).
     assert_eq!(
         runtime
             .task_store()
@@ -1461,16 +1545,29 @@ async fn ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
             .reminder_count,
         2
     );
-    assert_eq!(pump.stats().task_reminders_failed, 0);
+    assert_eq!(pump.stats().task_reminders_failed, 1);
+    assert_eq!(pump.stats().task_reminders, 0);
 
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:02:05Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
+    // BB.5: the failed emit left `last_reminded_at` at 00:01, so the very next
+    // tick is still due and retries the prompt (herdr_task_disposition.rs:76).
     assert_eq!(
         pump.stats().task_reminders,
-        0,
-        "the open assignment remains the only queue nudge"
+        1,
+        "the failed emit is retried on the next tick"
+    );
+    assert_eq!(
+        runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &task_id)
+            .expect("load task")
+            .expect("task row")
+            .reminder_count,
+        3
     );
 
     *now.lock().expect("test clock lock") =
@@ -1481,6 +1578,11 @@ async fn ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
         pump.stats().task_reminders,
         0,
         "the durable reminder timestamp rate-limits the later tick"
+    );
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        4,
+        "two prompts on cadence, one failed emit, one retry"
     );
 }
 
@@ -1526,6 +1628,10 @@ async fn ac04_breaker_and_absent_emitter_leave_no_reminder_audit() {
 #[tokio::test]
 async fn ax5_06_task_reminder_only_appends_audit_bookkeeping() {
     let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    // BB.5: an assignment writes no pending marker, so the fixture's ordinary
+    // queue message is cleared first; otherwise the pass holds on pending mail
+    // (herdr_task_disposition.rs:69) and records nothing at all.
+    clear_pending_markers(root.path(), &runtime, &key);
     let task_id: TaskId = "AX5-AUDIT-ONLY".parse().expect("task id");
     queue_task_message(
         root.path(),
@@ -1538,7 +1644,6 @@ async fn ax5_06_task_reminder_only_appends_audit_bookkeeping() {
         IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
     ));
     let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
-    queue_idle_result(&fake, &key);
     pump.tick_once().await;
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
@@ -1561,7 +1666,19 @@ async fn ax5_06_task_reminder_only_appends_audit_bookkeeping() {
         .list_task_events(key.team(), &task_id, Some(key.agent()))
         .expect("task events");
     assert_eq!(row.state, atm_storage::TaskState::Assigned);
-    assert_eq!(row.reminder_count, 2);
+    // BB.5: every prompt now comes from the task pass, so all three ticks on
+    // the 60s cadence record a reminder (task_pass.rs:419, task_store.rs:305);
+    // before BB.5 the first two ticks were queue drains of the assignment and
+    // the third found no due marker.
+    assert_eq!(row.reminder_count, 3);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event.event == atm_storage::TaskEventKind::Reminded)
+            .count(),
+        3,
+        "one `reminded` event per emitted prompt, against the prompted task"
+    );
     assert_eq!(
         events
             .iter()
@@ -1569,16 +1686,21 @@ async fn ax5_06_task_reminder_only_appends_audit_bookkeeping() {
             .count(),
         1
     );
-    assert!(
-        events
-            .iter()
-            .all(|event| event.event != atm_storage::TaskEventKind::Acked)
-    );
+    // BB.5: an assignment is never acknowledged and a prompt never starts the
+    // task, so the audit trail holds no `acked` or `started` row (D1, D3).
+    assert!(events.iter().all(|event| {
+        event.event != atm_storage::TaskEventKind::Acked
+            && event.event != atm_storage::TaskEventKind::Started
+    }));
 }
 
 #[tokio::test]
 async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
     let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    // BB.5: the assignment is written immediately and never enters the drain
+    // (send/mod.rs:376-385), so the drain half of this test is driven by an
+    // ordinary queue message whose id the test owns.
+    clear_pending_markers(root.path(), &runtime, &key);
     let task_id: TaskId = "AX5-REMINDER".parse().expect("task id");
     queue_task_message(
         root.path(),
@@ -1587,6 +1709,7 @@ async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
         key.agent().as_str(),
         task_id.clone(),
     );
+    let queue_message_id = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
     let now = Arc::new(Mutex::new(IsoTimestamp::now()));
     let clock_now = Arc::clone(&now);
     let selector = Arc::new(FakeSelector {
@@ -1599,34 +1722,40 @@ async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
         Arc::new(move || *clock_now.lock().expect("test clock lock")),
     );
 
-    // The pre-existing queue entry and then the task's own deferred
-    // marker consume the first two ticks. Neither may produce a second
-    // prompt from the reminder step in the same tick.
+    // The drain runs before the task pass and the pass holds while that queue
+    // item is open, so the tick emits exactly one prompt.
     pump.tick_once().await;
+    assert_eq!(pump.stats().prompted, 1);
+    // BB.5: a drained queue prompt never records a reminder against the task
+    // (`record_queue_prompt_reminders` was deleted from task_pass.rs).
+    assert_eq!(pump.stats().task_reminders, 0, "drain counts no reminder");
+    close_message(root.path(), &runtime, &key, queue_message_id);
+
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("future timestamp");
-    fake.queue_list_result(Ok(HerdrListOutcome {
-        agents: vec![AgentSnapshot {
-            name: Some(key.agent().to_string()),
-            pane_id: None,
-            status: HerdrAgentStatus::Idle,
-            workspace_id: None,
-        }],
-    }));
+    queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert_eq!(pump.stats().task_reminders, 1, "drain counts this tick");
+    assert_eq!(
+        pump.stats().task_reminders,
+        1,
+        "the task pass owns this tick"
+    );
+
+    *now.lock().expect("test clock lock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:30Z").expect("future timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(
+        pump.stats().task_reminders,
+        0,
+        "the clock rate-limits inside the reminder interval"
+    );
 
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("future timestamp");
-    fake.queue_list_result(Ok(HerdrListOutcome {
-        agents: vec![AgentSnapshot {
-            name: Some(key.agent().to_string()),
-            pane_id: None,
-            status: HerdrAgentStatus::Idle,
-            workspace_id: None,
-        }],
-    }));
+    queue_idle_result(&fake, &key);
     pump.tick_once().await;
+    assert_eq!(pump.stats().task_reminders, 1);
 
     let row = runtime
         .task_store()
@@ -1635,15 +1764,14 @@ async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
         .expect("load task")
         .expect("task row");
     assert_eq!(row.reminder_count, 2);
-    assert_eq!(pump.stats().task_reminders, 0);
-    assert_eq!(
-        fake.calls()
-            .iter()
-            .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
-            .count(),
-        2,
-        "the deferred assignment remains a queue nudge while its marker is open"
-    );
+    let prompts = prompt_texts(&fake);
+    assert_eq!(prompts.len(), 3, "one drain, then two task-pass prompts");
+    assert!(prompts[0].starts_with("<atm from=\"") && !prompts[0].contains(task_id.as_str()));
+    assert!(prompts[1].starts_with(&format!("<atm task=\"{}\" ready ", task_id.as_str())));
+    assert!(prompts[2].starts_with(&format!(
+        "<atm task=\"{}\" reminder=\"1\" ",
+        task_id.as_str()
+    )));
 }
 
 #[tokio::test]

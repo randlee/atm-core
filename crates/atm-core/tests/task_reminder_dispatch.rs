@@ -73,7 +73,10 @@ fn reminder_dispatch_renders_from_a_task_row_without_assignment_mail() {
         built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
         BuiltInNudgeTemplateKind::TaskReady
     );
-    assert!(dispatch.event.requires_ack);
+    // BB.5: the task pass is the only source of a ready/reminder prompt and it
+    // never asks for an acknowledgement — `build_task_reminder_dispatch` sets
+    // `requires_ack: false` (crates/atm-core/src/nudge_dispatch.rs:195).
+    assert!(!dispatch.event.requires_ack);
     assert!(!dispatch.event.is_ack);
 }
 
