@@ -63,7 +63,7 @@ from scripts.smoke.benchmark_account import (
     require_benchmark_account,
 )
 from scripts.smoke.benchmark_baselines import load_baselines
-from scripts.smoke.report_runtime import source_revision as _git_source_revision
+from scripts.report_runtime import source_revision as _git_source_revision
 from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_identity
 from scripts.smoke.benchmark_snapshot import (
     BenchmarkSnapshotError,

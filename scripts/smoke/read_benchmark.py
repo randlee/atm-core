@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover - Windows has no POSIX passwd database
 
 from scripts.smoke.benchmark_baselines import BenchmarkBaselineError, load_baselines
 from scripts.smoke.benchmark_report import BenchmarkReportError, regenerate_index, render_envelope
-from scripts.smoke.report_runtime import compose as _compose, source_revision as _git_source_revision
+from scripts.report_runtime import compose as _compose, source_revision as _git_source_revision
 from scripts.smoke.benchmark_policy import classify_status
 from scripts.smoke.benchmark_schema import (
     BaselineEntry,

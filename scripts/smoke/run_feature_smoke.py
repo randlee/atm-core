@@ -30,6 +30,10 @@ import tempfile
 import time
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from feature_smoke_report import (
     render_cross_host_section,
     render_feature_pane,
@@ -37,7 +41,7 @@ from feature_smoke_report import (
     summarize_cases,
 )
 from run_inbound_peer_smoke import PANE_TEMPLATE
-from report_runtime import (
+from scripts.report_runtime import (
     compose as _compose,
     resolve_procedure_page as _resolve_procedure_page,
     source_revision as _source_revision,
@@ -50,7 +54,6 @@ from smoke_common import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_FEATURES = frozenset({"fast", "normal", "thorough"})
 LOCALHOST = "localhost"
 LOCAL_IP = "local-ip"
