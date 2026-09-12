@@ -133,6 +133,31 @@
       "minor": null,
       "count_basis": "headline/reviewer",
       "evidence": "QA-1 assigned to quality-mgr; PR #1441, reviewed head e9731c06e; result pending."
+    },
+    {
+      "run_id": "BB2-QA2",
+      "aich_sprint": "BB2",
+      "phase_sprint": "BB.2",
+      "pass": null,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-12T20:39:37Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2BNHPAM31GGX93CZFH1XRN2",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB2-QA2-1789248000 dispatched by fenix to quality-mgr (repo-qa-task) for PR #1444, pinned head ef7572fd0 (fix/bb2-qa1-r1, top of stack #1443) -- BB.2 orchestration-templates-1516 QA-2 follow-up pass.",
+      "result_time_utc": null,
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": null,
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PENDING",
+      "blockers": null,
+      "important": null,
+      "minor": null,
+      "count_basis": "headline/reviewer",
+      "evidence": "QA-2 assigned to quality-mgr; PR #1444, fix/bb2-qa1-r1 (fenix's BB2-001..003 fix layer), pinned head ef7572fd0; result pending."
     }
   ]
 }
