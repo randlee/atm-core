@@ -321,10 +321,65 @@ async fn handoff_applies_start_and_sends_receipt_to_assigner() {
 
 #[tokio::test]
 async fn head_already_active_handoff_sends_no_receipt() {
-    let (_root, _runtime, fake, pump, _store, _keys, _now) =
-        build_task_only_pump(vec![HerdrAgentStatus::Working], false);
+    let (_root, runtime, fake, pump, key, task, now) = build_task_handoff_pump();
+    let team = key.team().clone();
     pump.tick_once().await;
-    assert!(prompt_texts(&fake).is_empty());
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:01Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    let store = runtime.task_store().expect("store");
+    assert_eq!(
+        store.load_task(&team, &task).expect("task").expect("row").state,
+        TaskState::Active
+    );
+    let starts_before = store
+        .list_task_events(&team, &task, None)
+        .expect("events")
+        .iter()
+        .filter(|event| event.event == atm_storage::TaskEventKind::Started)
+        .count();
+    let reader = runtime.async_mailbox_reader().expect("mailbox reader");
+    let receipt_query = || atm_storage::MessageQuery {
+        team: team.clone(),
+        agent: "sender".parse().expect("assigner"),
+        sender: Some("atm-daemon".parse().expect("daemon")),
+        task_id: Some(task.clone()),
+        limit: None,
+    };
+    let receipts_before = reader
+        .list_messages(
+            atm_storage::MailboxScope::new(team.clone(), "sender".parse().expect("assigner")),
+            receipt_query(),
+            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline"),
+        )
+        .await
+        .expect("receipts")
+        .len();
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:02Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 3, "the active head still receives its due reminder");
+    assert_eq!(
+        store
+            .list_task_events(&team, &task, None)
+            .expect("events")
+            .iter()
+            .filter(|event| event.event == atm_storage::TaskEventKind::Started)
+            .count(),
+        starts_before
+    );
+    let receipts_after = reader
+        .list_messages(
+            atm_storage::MailboxScope::new(team.clone(), "sender".parse().expect("assigner")),
+            receipt_query(),
+            atm_storage::ReadDeadline::new(std::time::Duration::from_secs(1)).expect("deadline"),
+        )
+        .await
+        .expect("receipts")
+        .len();
+    assert_eq!(receipts_after, receipts_before, "active tasks receive no second handoff receipt");
 }
 
 #[tokio::test]
