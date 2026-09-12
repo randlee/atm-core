@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM};
 use atm_storage::{MoveTarget, QueuePosition, TaskEventKind};
 use serial_test::serial;

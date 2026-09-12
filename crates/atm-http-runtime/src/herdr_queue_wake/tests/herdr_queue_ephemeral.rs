@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 // Behavioral coverage for the BA.5 ephemeral queue contract.
 
 use super::*;
@@ -44,9 +46,7 @@ async fn task_started_receipt_count(
     task_id: &TaskId,
 ) -> usize {
     let sender: atm_core::types::AgentName = "sender".parse().expect("sender");
-    let reader = runtime
-        .async_mailbox_reader()
-        .expect("mailbox reader");
+    let reader = runtime.async_mailbox_reader().expect("mailbox reader");
     let messages = reader
         .list_messages(
             atm_core::boundary::MailboxScope::new(team.clone(), sender.clone()),
@@ -307,8 +307,7 @@ async fn bare_cli_pull_closes_item() {
         )
         .await
         .expect("authorized queue-get");
-    let atm_core::protocol::ResponseEnvelope::QueueGetNext(response) = response.into_inner()
-    else {
+    let atm_core::protocol::ResponseEnvelope::QueueGetNext(response) = response.into_inner() else {
         panic!("expected a QueueGetNext response");
     };
     assert_eq!(response.messages.len(), 1);
@@ -404,7 +403,11 @@ async fn handoff_started_task_closed_without_read_acknowledges_assignment() {
         IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert_eq!(prompt_texts(&fake).len(), 1, "closed assignment is not nudged again");
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        1,
+        "closed assignment is not nudged again"
+    );
 }
 
 #[tokio::test]
@@ -564,7 +567,13 @@ async fn deferred_assignment_handoff_starts_head_task_once() {
     clear_pending_markers(root.path(), &runtime, &key);
     let first: TaskId = "BA5-HEAD-TASK".parse().expect("task id");
     let second: TaskId = "BA5-NONHEAD-TASK".parse().expect("task id");
-    queue_task_message(root.path(), &runtime, key.team(), key.agent().as_str(), first.clone());
+    queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        first.clone(),
+    );
     queue_task_message(
         root.path(),
         &runtime,

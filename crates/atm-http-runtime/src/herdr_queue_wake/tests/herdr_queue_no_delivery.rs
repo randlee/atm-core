@@ -1,10 +1,12 @@
+#![cfg(test)]
+
 // Behavioral coverage for the BA.3 no-delivery-channel Hold contract.
 
 use super::*;
 
 use atm_core::boundary::{MailboxScope, MessageQuery, ReadDeadline, TaskStore};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
@@ -46,18 +48,22 @@ async fn member_without_dispatchable_backend_holds_and_logs_once_per_tick() {
         );
     }
 
-    assert!(fake.calls().iter().all(|call| {
-        !matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. })
-    }));
+    assert!(
+        fake.calls()
+            .iter()
+            .all(|call| { !matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }) })
+    );
     let row = store
         .load_task(key.team(), &task_id)
         .expect("load task")
         .expect("task row");
     assert_eq!(row.reminder_count, 0, "a held task has no reminder audit");
-    assert!(store
-        .list_task_events(key.team(), &task_id, Some(key.agent()))
-        .expect("task events")
-        .is_empty());
+    assert!(
+        store
+            .list_task_events(key.team(), &task_id, Some(key.agent()))
+            .expect("task events")
+            .is_empty()
+    );
 
     let reader = runtime.async_mailbox_reader().expect("mailbox reader");
     let messages = reader

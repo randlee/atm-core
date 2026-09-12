@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use std::sync::Arc;
 
 use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM};

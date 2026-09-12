@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use atm_core::schema::AtmMessageId;
 use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 use atm_storage::{

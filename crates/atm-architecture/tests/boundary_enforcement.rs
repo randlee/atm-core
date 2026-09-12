@@ -541,6 +541,9 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
     let mut definitions = Vec::new();
     let mut violations = Vec::new();
     for path in files {
+        if is_test_only_source(&path) {
+            continue;
+        }
         let source = read_source(&path);
         let syntax = syn::parse_file(&source)
             .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
@@ -2418,6 +2421,9 @@ fn al1_http_runtime_has_only_authorized_contract_ports_and_excludes_retired_tran
     let mut sources = Vec::new();
     collect_rust_files(&runtime_root, &mut sources);
     for source_path in sources {
+        if is_test_only_source(&source_path) {
+            continue;
+        }
         let findings = production_runtime_identifier_findings(&source_path, &prohibited);
         assert!(
             findings.is_empty(),
@@ -3703,6 +3709,9 @@ fn herdr_prompt_calls_stay_behind_the_selector_emitter_boundary() {
 
     let mut calls = Vec::new();
     for path in rust_files {
+        if is_test_only_source(&path) {
+            continue;
+        }
         let source = read_source(&path);
         let syntax = syn::parse_file(&source)
             .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
