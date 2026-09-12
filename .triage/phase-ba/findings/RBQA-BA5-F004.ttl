@@ -19,13 +19,14 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
-  triage:deferredNote "fenix's BA.5 QA-1 ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916) folds this into BA.6, not BA.5 -- recorded as open against BA.6, though the occurrence below is where it was actually observed during BA.5's QA-1 pass." ;
-  triage:promoteTo triage:BA6 ;
+  triage:deferredNote "fenix's BA.5 QA-1 ruling (https://github.com/randlee/atm-core/pull/1407#issuecomment-5642806916) folds this into BA.6, not BA.5. Further promoted by fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z): worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer) -- arch-ctm's BA6-CLEANUP task is cancelled; fix lands once on the cleanup layer, not on docs/ba6." ;
+  triage:promoteTo "fix/phase-ba-cleanup" ;
   triage:foundIn triage:BA6 ;
   triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BA5-F004/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BA5-F004/2> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BA5-F004/3> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-BA5-F004/1>
   a triage:Occurrence ;
@@ -53,16 +54,37 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
   triage:line 1 ;
   triage:snippet "DummyPendingNudgeStore / FailingClearPendingStore / FailingMarkPendingStore / RecordingPendingNudgeStore -- 4 hand-rolled doubles across 4 crates" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:44:29Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "interim integrate/phase-ba tracking superseded; promoted to fix/phase-ba-cleanup" ;
   triage:branch "integrate/phase-ba" ;
   triage:headSha "15d2276c4" ;
   triage:occursIn <urn:atm:triage:worktree/RBQA-BA5-F004/2> .
 
 <urn:atm:triage:worktree/RBQA-BA5-F004/2>
   a triage:WorktreeSnapshot ;
-  triage:path "BA.6 fold-in interim tracking (BA.6 has no branch yet); carried on integrate/phase-ba per fenix" ;
+  triage:path "BA.6 fold-in interim tracking (superseded, see occurrence/3)" ;
   triage:branch "integrate/phase-ba" ;
   triage:headSha "15d2276c4" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RBQA-BA5-F004/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "DummyPendingNudgeStore / FailingClearPendingStore / FailingMarkPendingStore / RecordingPendingNudgeStore -- 4 hand-rolled doubles across 4 crates" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-BA5-F004/3> .
+
+<urn:atm:triage:worktree/RBQA-BA5-F004/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 5, cipher single writer" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:orderIndex 5 .
 

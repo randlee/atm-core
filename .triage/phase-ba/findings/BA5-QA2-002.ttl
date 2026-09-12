@@ -16,23 +16,47 @@
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T04:34:37Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z) adds worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer) -- arch-ctm's BA6-CLEANUP task is cancelled; fix lands once on the cleanup layer, not on docs/ba6." ;
+  triage:promoteTo "fix/phase-ba-cleanup" ;
   triage:foundIn triage:BA5 ;
   triage:foundAt "2026-09-12T04:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-002/BA6-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-002/CLEANUP-1> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BA5-QA2-002/BA6-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/herdr_queue_ephemeral.rs" ;
   triage:line 1 ;
   triage:snippet "include!(\"../../../tests/herdr_queue_ephemeral.rs\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:44:29Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "promoted to fix/phase-ba-cleanup; arch-ctm's BA6-CLEANUP task cancelled" ;
   triage:branch "docs/ba6-task-nudge-documentation" ;
   triage:headSha "a49b922aa" ;
   triage:occursIn <urn:atm:triage:worktree/BA6/a49b922aa> .
+
+<urn:atm:triage:occurrence/BA5-QA2-002/CLEANUP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/herdr_queue_ephemeral.rs" ;
+  triage:line 1 ;
+  triage:snippet "include!(\"../../../tests/herdr_queue_ephemeral.rs\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:occursIn <urn:atm:triage:worktree/BA5-QA2-002/cleanup> .
+
+<urn:atm:triage:worktree/BA5-QA2-002/cleanup>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 5, cipher single writer" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/ba0/0a18028a7>
   a triage:WorktreeSnapshot ;

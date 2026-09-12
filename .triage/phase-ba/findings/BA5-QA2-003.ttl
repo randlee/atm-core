@@ -18,13 +18,14 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T04:35:00Z"^^xsd:dateTime ;
-  triage:deferredNote "feature/ba5-queue-ephemeral-item frozen by fenix's ruling (2026-09-12T04:37:03Z, per Rand: a branch is not touched again once its minimum functionality for closure is complete); BA5-FIX-R2 cancelled, cipher told not to push. Fix promoted to docs/ba6-task-nudge-documentation, folded into arch-ctm's consolidated cleanup dispatch there." ;
-  triage:promoteTo triage:BA6 ;
+  triage:deferredNote "feature/ba5-queue-ephemeral-item frozen by fenix's ruling (2026-09-12T04:37:03Z, per Rand: a branch is not touched again once its minimum functionality for closure is complete); BA5-FIX-R2 cancelled, cipher told not to push. Further promoted by fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z): worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer) -- arch-ctm's BA6-CLEANUP task is cancelled; fix lands once on the cleanup layer, not on docs/ba6." ;
+  triage:promoteTo "fix/phase-ba-cleanup" ;
   triage:foundIn triage:BA5 ;
   triage:foundAt "2026-09-12T04:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-003/BA5-doc-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-003/BA6-1> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA5-QA2-003/CLEANUP-1> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BA5-QA2-003/BA5-doc-1>
   a triage:Occurrence ;
@@ -45,8 +46,11 @@
   triage:file "docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md" ;
   triage:line 51 ;
   triage:snippet "MAX_NUDGE_ATTEMPTS = 5 (contract.rs:1238)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:44:29Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "promoted to fix/phase-ba-cleanup; arch-ctm's BA6-CLEANUP task cancelled" ;
   triage:branch "docs/ba6-task-nudge-documentation" ;
   triage:headSha "a49b922aa" ;
   triage:occursIn <urn:atm:triage:worktree/ba6/a49b922aa-2> .
@@ -57,6 +61,24 @@
   triage:branch "docs/ba6-task-nudge-documentation" ;
   triage:headSha "a49b922aa" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:occurrence/BA5-QA2-003/CLEANUP-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md" ;
+  triage:line 51 ;
+  triage:snippet "MAX_NUDGE_ATTEMPTS = 5 (contract.rs:1238)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:occursIn <urn:atm:triage:worktree/ba5-qa2-003-cleanup-1> .
+
+<urn:atm:triage:worktree/ba5-qa2-003-cleanup-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 5, cipher single writer" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/ba0/0a18028a7>
   a triage:WorktreeSnapshot ;
