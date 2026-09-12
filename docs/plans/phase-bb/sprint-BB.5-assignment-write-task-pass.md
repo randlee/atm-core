@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 branch: feature/bb5-assignment-write-task-pass
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb5-assignment-write-task-pass
 ---

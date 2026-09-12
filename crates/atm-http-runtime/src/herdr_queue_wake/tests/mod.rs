@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+mod bb5_closure;
 mod herdr_nudge_invariant;
 mod herdr_queue_ephemeral;
 mod herdr_queue_no_delivery;
