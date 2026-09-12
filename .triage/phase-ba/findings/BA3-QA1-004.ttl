@@ -21,12 +21,14 @@
   triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
   triage:relatedFinding "BA3-QA1-002" ;
   triage:deferredNote "fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z) adds worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer, pushed at BA.6's then-current head a49b922aa; now dfd47edca). No longer folded into BA3-FIX-R3 on feature/ba3-nudge-invariant -- fixed once on fix/phase-ba-cleanup per the O(n^2) fix-multiplication avoidance rule; the ba3 occurrence will close by merge-forward, not a separate fix." ;
+  triage:deferredNote "fenix's disposition settled (ATM 2026-09-12T05:10:27Z): correction to the above -- BA.3 has carried the no-delivery-channel warn since 67ff0420f (herdr_queue_wake_reminders.rs:247, one warn per candidate per tick, bare return), so the production half was already present and is on BA.3 at c462c6977 (BA3-QA2 verifies it, tracked like BA3-QA1-001/002/003). Only the missing test still lands on fix/phase-ba-cleanup (cipher, BA-CLEANUP-FIXUP)." ;
   triage:promoteTo "fix/phase-ba-cleanup" ;
   triage:foundIn triage:BA3 ;
   triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-004/3> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BA3-QA1-004/1>
   a triage:Occurrence ;
@@ -53,7 +55,7 @@
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
   triage:line 1 ;
-  triage:snippet "build_task_reminder_dispatch's Ok(None) case is a bare return -- no Hold(\"no delivery channel\") disposition or log line" ;
+  triage:snippet "member_without_dispatchable_backend_holds_and_logs_once is still a hollow BA3-QA1-002 alias -- test-only gap; production warn already exists on BA.3 (see occurrence/3)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "fix/phase-ba-cleanup" ;
@@ -62,7 +64,25 @@
 
 <urn:atm:triage:worktree/BA3-QA1-004/2>
   a triage:WorktreeSnapshot ;
-  triage:path "gh-stack layer 5, cipher single writer" ;
+  triage:path "gh-stack layer 5, cipher single writer; test-only fix, BA-CLEANUP-FIXUP" ;
   triage:branch "fix/phase-ba-cleanup" ;
   triage:headSha "dfd47edca" ;
   triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/BA3-QA1-004/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake_reminders.rs" ;
+  triage:line 247 ;
+  triage:snippet "no-delivery-channel warn present since 67ff0420f (one warn per candidate per tick, bare return) -- production half already on BA.3" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-004/3> .
+
+<urn:atm:triage:worktree/BA3-QA1-004/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "frozen head after BA3-FIX-R3B (solar); BA3-QA2 dispatched to quality-mgr, merge-base with integrate fd242df7a" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c462c6977" ;
+  triage:orderIndex 1 .
