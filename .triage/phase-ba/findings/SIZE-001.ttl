@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SIZE-001>
+  a triage:Finding ;
+  triage:findingId "SIZE-001" ;
+  triage:title "crates/atm-http-runtime/src/herdr_queue_wake.rs at RULE-003 1000-prod-line ceiling" ;
+  triage:description "File sits at 998 prod-lines of the 1000-line RULE-003 ceiling with only 2 lines of margin remaining. fenix ruling (ATM 2026-09-12T05:58:05Z): post-landing review-findings stack, remediation = module split. Verified current state: prod=998/1000 on fix/phase-ba-cleanup-b@a2da4a570." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "sizing" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T06:08:00Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A33J3NNYGRTMQBDCS1XG4F, 2026-09-12T05:58:05Z): minor, post-landing review-findings stack; remediation = module split. No live gh-stack layer target; promoteTo intentionally unset." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T05:58:05Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SIZE-001/BA-CLEANUP-B-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SIZE-001/BA-CLEANUP-B-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 998 ;
+  triage:snippet "herdr_queue_wake.rs at prod-line 998 of 1000" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "a2da4a570" ;
+  triage:occursIn <urn:atm:triage:worktree/ba-cleanup-b/a2da4a570> .
+
+<urn:atm:triage:worktree/ba-cleanup-b/a2da4a570>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/phase-ba-cleanup-b" ;
+  triage:branch "fix/phase-ba-cleanup-b" ;
+  triage:headSha "a2da4a570" ;
+  triage:orderIndex 6 .
