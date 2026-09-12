@@ -19,7 +19,8 @@ use atm_core::nudge_dispatch::{
     load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
 };
 use atm_core::protocol::{
-    RosterRuntimeObservationUpdate, RuntimeMemberState, RuntimeObservationSource,
+    RosterRuntimeObservation, RosterRuntimeObservationUpdate, RuntimeMemberState,
+    RuntimeObservationSource,
 };
 use atm_core::types::IsoTimestamp;
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
@@ -351,39 +352,7 @@ impl HerdrQueueWakePump {
             .iter()
             .filter_map(|snapshot| snapshot.name.as_deref().map(|name| (name, snapshot)))
             .collect();
-        let mut updates_by_team = HashMap::new();
-        for member in &members {
-            let CandidateTarget::Herdr(target) = &member.target else {
-                continue;
-            };
-            let state = runtime_state(
-                snapshots
-                    .get(target.agent.as_str())
-                    .map(|snapshot| snapshot.status),
-            );
-            updates_by_team
-                .entry(member.key.team().clone())
-                .or_insert_with(Vec::new)
-                .push(RosterRuntimeObservationUpdate::observed(
-                    member.key.agent().clone(),
-                    state,
-                    RuntimeObservationSource::HerdrPoll,
-                    observed_at,
-                    None,
-                ));
-        }
-        let mut accepted = HashMap::new();
-        for (team, updates) in updates_by_team {
-            for outcome in self
-                .service_runtime
-                .apply_roster_runtime_observations(&team, &updates)
-            {
-                accepted.insert(
-                    MemberKey::new(team.clone(), outcome.agent.clone()),
-                    outcome.current,
-                );
-            }
-        }
+        let accepted = self.apply_herdr_observations(&snapshots, &members, observed_at);
         for member in members {
             let CandidateTarget::Herdr(target) = &member.target else {
                 continue;
@@ -421,6 +390,48 @@ impl HerdrQueueWakePump {
                 eligible.push(member);
             }
         }
+    }
+
+    fn apply_herdr_observations(
+        &self,
+        snapshots: &HashMap<&str, &AgentSnapshot>,
+        members: &[HerdrCandidate],
+        observed_at: IsoTimestamp,
+    ) -> HashMap<MemberKey, RosterRuntimeObservation> {
+        let mut updates_by_team = HashMap::new();
+        for member in members {
+            let CandidateTarget::Herdr(target) = &member.target else {
+                continue;
+            };
+            let state = runtime_state(
+                snapshots
+                    .get(target.agent.as_str())
+                    .map(|snapshot| snapshot.status),
+            );
+            updates_by_team
+                .entry(member.key.team().clone())
+                .or_insert_with(Vec::new)
+                .push(RosterRuntimeObservationUpdate::observed(
+                    member.key.agent().clone(),
+                    state,
+                    RuntimeObservationSource::HerdrPoll,
+                    observed_at,
+                    None,
+                ));
+        }
+        let mut accepted = HashMap::new();
+        for (team, updates) in updates_by_team {
+            for outcome in self
+                .service_runtime
+                .apply_roster_runtime_observations(&team, &updates)
+            {
+                accepted.insert(
+                    MemberKey::new(team.clone(), outcome.agent.clone()),
+                    outcome.current,
+                );
+            }
+        }
+        accepted
     }
 
     fn record_unavailable_members(&self, members: &[HerdrCandidate], observed_at: IsoTimestamp) {
