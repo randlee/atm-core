@@ -414,10 +414,11 @@ fn clear_delivered_marker<'a>(
     let health_for_clear = runtime_health.clone();
     async move {
         if let Err(error) = run_blocking("clear delivered queue marker", move || {
-            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+            atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                 &runtime_for_clear,
                 &member_for_clear,
                 &message_id,
+                atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
                 || health_for_clear.record_graft_queue_marker_clear_failure(),
             );
             Ok(())
@@ -636,7 +637,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&member),
+            "successful handoff rearms the open queue marker"
         );
         assert_eq!(health.snapshot().queue_messages_drained_total, 2);
     }
@@ -693,7 +695,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&member),
+            "the one successful concurrent handoff leaves its marker rearmed"
         );
     }
 
@@ -858,7 +861,11 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members"),
-            vec![failed_member]
+            vec![
+                failed_member,
+                MemberKey::new(team.clone(), first),
+                MemberKey::new(team, third),
+            ]
         );
         assert_ne!(failed_id, first_id);
     }

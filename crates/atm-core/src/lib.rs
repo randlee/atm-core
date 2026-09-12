@@ -102,6 +102,10 @@ pub mod send_to;
 pub(crate) mod service_runtime;
 /// Transitional legacy store adapters used by the retained service runtime.
 pub(crate) mod service_runtime_store;
+/// Deliver-then-close preflight helpers for task completion reports.
+pub mod task_close;
+/// Read-only query contracts for the closed `atm task` command set.
+pub mod task_query;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
 /// Pure resolution of template-declared workflow snapshots.

@@ -153,7 +153,7 @@ impl Harness {
 }
 
 #[test]
-fn assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues() {
+fn writer_assign_existing_open_id_reassigns_in_place() {
     let h = Harness::new();
     let old = h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
@@ -180,7 +180,7 @@ fn assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_
 }
 
 #[test]
-fn assign_closed_id_reopens_in_place_clearing_outcome_and_counters() {
+fn writer_assign_closed_id_reopens_same_row() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.close("T1", "lead", "alice", TaskCloseOutcome::Refused)
@@ -295,14 +295,14 @@ fn start_when_another_task_active_is_rejected_active_elsewhere() {
 }
 
 #[test]
-fn start_moves_task_to_position_one_and_resets_counters_preserving_last_reminded_at() {
+fn start_moves_task_to_position_one_and_preserves_reminder_count() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
     h.start("T2", "alice").unwrap();
     let row = h.row("T2");
     assert_eq!(row.position, Some(QueuePosition::HEAD));
-    assert_eq!(row.reminder_count, 0);
+    assert_eq!(row.reminder_count, 1);
     assert!(row.last_reminded_at.is_some());
 }
 
@@ -347,7 +347,7 @@ fn close_renumbers_remaining_queue_contiguously() {
 }
 
 #[test]
-fn close_each_outcome_persists_column_and_event() {
+fn writer_close_open_task_delivers_and_closes_in_one_write() {
     let h = Harness::new();
     for (task, outcome) in [
         ("T1", TaskCloseOutcome::Completed),
@@ -365,7 +365,42 @@ fn close_each_outcome_persists_column_and_event() {
 }
 
 #[test]
-fn close_of_complete_row_delivers_plain_mail_without_new_event() {
+fn writer_close_by_assigner_reports_to_assignee() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let report = h
+        .close("T1", "alice", "lead", TaskCloseOutcome::Cancelled)
+        .expect("assigner may close");
+    assert_eq!(report.agent.as_str(), "alice");
+    assert_eq!(
+        h.row("T1").state,
+        TaskState::Complete(TaskCloseOutcome::Cancelled)
+    );
+}
+
+#[test]
+fn writer_close_unknown_task_is_atomic() {
+    let h = Harness::new();
+    let mut report = h.message("lead", "alice", "unknown close");
+    report.envelope.task_id = Some("UNKNOWN".parse().expect("task id"));
+    report.envelope.task_op = Some(TaskOp::Close {
+        outcome: TaskCloseOutcome::Completed,
+        reason: Some("done".to_string()),
+    });
+    let key = report.message_key.clone();
+    h.save(&report)
+        .expect_err("unknown task must fail atomically");
+    assert!(
+        h.backend
+            .message_store()
+            .load_message(&key)
+            .expect("message lookup")
+            .is_none()
+    );
+}
+
+#[test]
+fn writer_close_already_closed_omits_task_event() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.close("T1", "lead", "alice", TaskCloseOutcome::Completed)
@@ -389,7 +424,7 @@ fn close_of_complete_row_delivers_plain_mail_without_new_event() {
 }
 
 #[test]
-fn close_by_third_party_is_not_authorized() {
+fn writer_close_by_third_party_is_rejected() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let error = h
@@ -400,7 +435,7 @@ fn close_by_third_party_is_not_authorized() {
 }
 
 #[test]
-fn close_by_stale_counterparty_is_rejected_atomically() {
+fn writer_stale_counterparty_is_rejected() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let error = h
@@ -408,6 +443,29 @@ fn close_by_stale_counterparty_is_rejected_atomically() {
         .expect_err("stale recipient");
     assert!(error.message().contains("no longer the counterparty"));
     assert_eq!(h.row("T1").state, TaskState::Assigned);
+}
+
+#[test]
+fn writer_refusal_releases_next_queued_task() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.assign("T2", "alice", "lead", None);
+    h.close("T1", "lead", "alice", TaskCloseOutcome::Refused)
+        .expect("refusal");
+    assert_eq!(h.positions("alice"), BTreeMap::from([("T2".into(), 1)]));
+}
+
+#[test]
+fn writer_assign_to_active_member_stays_queued() {
+    let h = Harness::new();
+    h.assign("ACTIVE", "alice", "lead", None);
+    h.start("ACTIVE", "alice").expect("start active task");
+    h.assign("QUEUED", "alice", "lead", None);
+    let queued = h.row("QUEUED");
+    assert_eq!(queued.state, TaskState::Assigned);
+    assert_eq!(queued.reminder_count, 0);
+    assert_eq!(queued.lead_notified_count, 0);
+    assert_eq!(queued.position.map(QueuePosition::get), Some(2));
 }
 
 #[test]

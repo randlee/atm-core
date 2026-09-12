@@ -47,7 +47,7 @@ pub(crate) use delivery_persistence::{
 #[doc(hidden)]
 pub use nudge_template::{
     default_template, qualified_sender_identity as qualified_nudge_sender_identity,
-    render_resolved_built_in_nudge,
+    render_resolved_built_in_nudge, render_task_started_template,
 };
 pub use outcome::{SendCommandOutcome, SendOutcome, WarningEntry};
 pub(crate) use peer_routing::direct_peer_destination;

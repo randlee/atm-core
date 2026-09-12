@@ -1,5 +1,6 @@
 [package]
 name = "agent-team-mail"
+autotests = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -26,6 +27,26 @@ fault-injection = ["sc-observability/fault-injection"]
 name = "cli_surface"
 path = "tests/cli_surface.rs"
 required-features = ["cli-surface-dump"]
+
+[[test]]
+name = "compose_passthrough"
+path = "tests/compose_passthrough.rs"
+
+[[test]]
+name = "escalation_cli"
+path = "tests/escalation_cli.rs"
+
+[[test]]
+name = "openapi_surface"
+path = "tests/openapi_surface.rs"
+
+[[test]]
+name = "peer_cli"
+path = "tests/peer_cli.rs"
+
+[[test]]
+name = "task_ledger_cli"
+path = "tests/task_ledger_cli.rs"
 
 [[example]]
 name = "gen_cli_docs"

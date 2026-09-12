@@ -12,25 +12,21 @@ use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
-    TaskRow, TaskState,
 };
-use atm_core::delivery_channel::{
-    DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, classify_delivery_channel,
-    local_message_received_backend,
-};
+use atm_core::delivery_channel::{HerdrAgentName, HerdrSession, local_message_received_backend};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::{
     load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
 };
 use atm_core::protocol::{
-    RosterRuntimeObservationUpdate, RuntimeMemberState, RuntimeObservationSource,
+    RosterRuntimeObservation, RosterRuntimeObservationUpdate, RuntimeMemberState,
+    RuntimeObservationSource,
 };
 use atm_core::types::IsoTimestamp;
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrProcessAdapter};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
-use crate::herdr_breaker_escalation::HerdrBreakerEscalationGate;
 use crate::herdr_escalation::EscalationState;
 use crate::runtime_health::RuntimeHealth;
 
@@ -40,8 +36,6 @@ pub const HERDR_POLL_INTERVAL_MS: u64 = 5_000;
 pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
-/// Minimum spacing between task reminders for one Herdr assignee.
-pub const TASK_REMINDER_INTERVAL_MS: u64 = 60_000;
 const HERDR_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -56,11 +50,9 @@ pub(crate) struct HerdrQueueWakeStats {
     pub task_reminders: usize,
     pub task_reminders_failed: usize,
     pub task_reminders_unrenderable: usize,
-    pub task_reminders_blocked: usize,
     pub lead_notifications: usize,
     pub blocked_escalations: usize,
     pub escalation_writes_failed: usize,
-    pub notifications_failed: usize,
     pub task_step_skipped: bool,
     pub last_tick_at: Option<IsoTimestamp>,
 }
@@ -74,12 +66,7 @@ pub struct HerdrQueueWakePump {
     cursor: Arc<Mutex<usize>>,
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>,
-    last_task_attempt: Arc<Mutex<HashMap<MemberKey, IsoTimestamp>>>,
     pub(crate) escalation_state: EscalationState,
-    breaker_escalation_gates: Arc<Mutex<HashMap<Option<HerdrSession>, HerdrBreakerEscalationGate>>>,
-    breaker_escalation_min_interval: Duration,
-    breaker_cycle_opened_at: Arc<Mutex<HashMap<Option<HerdrSession>, IsoTimestamp>>>,
-    breaker_failure_counts: Arc<Mutex<HashMap<Option<HerdrSession>, u32>>>,
     pub(crate) daemon_home: PathBuf,
     task_step_available: Arc<Mutex<Option<bool>>>,
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
@@ -107,12 +94,7 @@ impl HerdrQueueWakePump {
             cursor: Arc::new(Mutex::new(0)),
             release_streaks: Arc::new(Mutex::new(HashMap::new())),
             clock: Arc::new(IsoTimestamp::now),
-            last_task_attempt: Arc::new(Mutex::new(HashMap::new())),
             escalation_state: EscalationState::default(),
-            breaker_escalation_gates: Arc::new(Mutex::new(HashMap::new())),
-            breaker_escalation_min_interval: Duration::from_secs(1_800),
-            breaker_cycle_opened_at: Arc::new(Mutex::new(HashMap::new())),
-            breaker_failure_counts: Arc::new(Mutex::new(HashMap::new())),
             daemon_home: PathBuf::new(),
             task_step_available: Arc::new(Mutex::new(None)),
             last_stats: Arc::new(Mutex::new(HerdrQueueWakeStats::default())),
@@ -128,14 +110,6 @@ impl HerdrQueueWakePump {
     #[must_use]
     pub fn with_daemon_home(mut self, daemon_home: PathBuf) -> Self {
         self.daemon_home = daemon_home;
-        self
-    }
-
-    /// Applies the bootstrap-validated breaker escalation cooldown.
-    #[must_use]
-    pub fn with_breaker_escalation_min_interval(mut self, min_interval: Duration) -> Self {
-        self.breaker_escalation_gates = Arc::new(Mutex::new(HashMap::new()));
-        self.breaker_escalation_min_interval = min_interval;
         self
     }
 
@@ -260,18 +234,19 @@ impl HerdrQueueWakePump {
         };
         self.prune_member_state(&candidates);
 
-        let (eligible, task_candidates, list_complete) =
-            self.list_eligible(candidates, &mut stats).await;
-        let prompted_by_drain = self
-            .drain_eligible(pending_store, eligible, &mut stats)
+        let (eligible, task_candidates) = self.list_eligible(candidates, &mut stats).await;
+        let prepared_task_pass = self.prepare_task_pass(&mut stats, &task_candidates).await;
+        self.drain_eligible(pending_store, eligible, &mut stats)
             .await;
-        self.remind_open_tasks(
-            task_candidates,
-            &prompted_by_drain,
-            list_complete,
-            &mut stats,
-        )
-        .await;
+        if let Some(prepared_task_pass) = prepared_task_pass {
+            self.remind_open_tasks(
+                prepared_task_pass,
+                task_candidates,
+                &pending_set,
+                &mut stats,
+            )
+            .await;
+        }
         self.finish_tick(stats);
     }
 
@@ -288,118 +263,53 @@ impl HerdrQueueWakePump {
             task_reminders = stats.task_reminders,
             task_reminders_failed = stats.task_reminders_failed,
             task_reminders_unrenderable = stats.task_reminders_unrenderable,
-            task_reminders_blocked = stats.task_reminders_blocked,
             lead_notifications = stats.lead_notifications,
             blocked_escalations = stats.blocked_escalations,
             escalation_writes_failed = stats.escalation_writes_failed,
-            notifications_failed = stats.notifications_failed,
             task_step_skipped = stats.task_step_skipped,
             "Herdr queue wake poll tick"
         );
-    }
-
-    fn breaker_cycle_opened_at(
-        &self,
-        session: &Option<HerdrSession>,
-        now: IsoTimestamp,
-    ) -> IsoTimestamp {
-        *self
-            .breaker_cycle_opened_at
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .entry(session.clone())
-            .or_insert(now)
-    }
-
-    fn close_breaker_cycle(&self, session: &Option<HerdrSession>) {
-        self.breaker_cycle_opened_at
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(session);
-        self.breaker_failure_counts
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(session);
-    }
-
-    fn record_breaker_failure(&self, session: &Option<HerdrSession>) -> u32 {
-        let mut counts = self
-            .breaker_failure_counts
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let count = counts.entry(session.clone()).or_default();
-        *count = count.saturating_add(1);
-        *count
-    }
-
-    async fn maybe_escalate_breaker(
-        &self,
-        session: &Option<HerdrSession>,
-        members: &[HerdrCandidate],
-        now: IsoTimestamp,
-        failure_count: u32,
-        error: &atm_herdr::HerdrError,
-    ) -> bool {
-        if self.daemon_home.as_os_str().is_empty() {
-            return false;
-        }
-        let Some(team) = members.first().map(|member| member.key.team().clone()) else {
-            return false;
-        };
-        let opened_at = self.breaker_cycle_opened_at(session, now);
-        let admitted = self
-            .breaker_escalation_gates
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .entry(session.clone())
-            .or_insert_with(|| {
-                HerdrBreakerEscalationGate::new(self.breaker_escalation_min_interval)
-            })
-            .claim(opened_at, now);
-        if !admitted {
-            return false;
-        }
-        let retry_after = self
-            .herdr_process
-            .breaker_retry_after()
-            .or(match error {
-                atm_herdr::HerdrError::Unavailable { retry_after } => Some(*retry_after),
-                _ => None,
-            })
-            .unwrap_or(Duration::ZERO);
-        let member_target = (members.len() == 1).then(|| members[0].herdr_agent.as_str());
-        let task_store = self.service_runtime.task_store().ok();
-        crate::herdr_breaker_escalation::escalate_breaker_cycle(
-            &self.service_runtime,
-            self.herdr_process.as_ref(),
-            task_store.as_ref(),
-            &self.daemon_home,
-            &team,
-            opened_at,
-            failure_count,
-            error,
-            retry_after,
-            member_target,
-        )
-        .await;
-        true
     }
 
     async fn list_eligible(
         &self,
         candidates: Vec<HerdrCandidate>,
         stats: &mut HerdrQueueWakeStats,
-    ) -> (Vec<HerdrCandidate>, Vec<TaskCandidate>, bool) {
+    ) -> (Vec<HerdrCandidate>, Vec<MemberObservation>) {
         let mut by_session: HashMap<Option<HerdrSession>, Vec<HerdrCandidate>> = HashMap::new();
-        for candidate in candidates {
-            by_session
-                .entry(candidate.session.clone())
-                .or_default()
-                .push(candidate);
-        }
         let mut eligible = Vec::new();
         let mut task_candidates = Vec::new();
-        let mut complete = true;
+        for candidate in candidates {
+            match &candidate.target {
+                CandidateTarget::Herdr(target) => {
+                    by_session
+                        .entry(target.session.clone())
+                        .or_default()
+                        .push(candidate);
+                }
+                CandidateTarget::RosterOnly => {
+                    if let Some(record) = self
+                        .service_runtime
+                        .roster_ephemeral_state(candidate.key.team(), candidate.key.agent())
+                    {
+                        task_candidates.push(MemberObservation {
+                            member: candidate.key.clone(),
+                            state: record.runtime.state,
+                            state_changed_at: record.runtime.state_changed_at,
+                        });
+                        if candidate.pending
+                            && queue_drain_eligible(&MemberObservation {
+                                member: candidate.key.clone(),
+                                state: record.runtime.state,
+                                state_changed_at: record.runtime.state_changed_at,
+                            })
+                        {
+                            eligible.push(candidate);
+                        }
+                    }
+                }
+            }
+        }
         for (session, members) in by_session {
             stats.listed_sessions += 1;
             match self
@@ -411,7 +321,6 @@ impl HerdrQueueWakePump {
                 .await
             {
                 Ok(outcome) => {
-                    self.close_breaker_cycle(&session);
                     self.collect_idle_members(
                         outcome.agents,
                         members,
@@ -422,23 +331,17 @@ impl HerdrQueueWakePump {
                     );
                 }
                 Err(error) => {
-                    complete = false;
                     self.record_unavailable_members(&members, (self.clock)());
                     if error.is_infrastructure() {
                         stats.breaker_open += 1;
-                        let now = (self.clock)();
-                        let failure_count = self.record_breaker_failure(&session);
-                        let _ = self
-                            .maybe_escalate_breaker(&session, &members, now, failure_count, &error)
-                            .await;
                     }
                     log_herdr_list_failure(&session, &error);
                 }
             }
         }
         eligible.sort_by(|left, right| member_order(&left.key, &right.key));
-        task_candidates.sort_by(|left, right| member_order(&left.member.key, &right.member.key));
-        (eligible, task_candidates, complete)
+        task_candidates.sort_by(|left, right| member_order(&left.member, &right.member));
+        (eligible, task_candidates)
     }
 
     fn collect_idle_members(
@@ -448,19 +351,68 @@ impl HerdrQueueWakePump {
         observed_at: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
         eligible: &mut Vec<HerdrCandidate>,
-        task_candidates: &mut Vec<TaskCandidate>,
+        task_candidates: &mut Vec<MemberObservation>,
     ) {
         let snapshots: HashMap<&str, &AgentSnapshot> = agents
             .iter()
             .filter_map(|snapshot| snapshot.name.as_deref().map(|name| (name, snapshot)))
             .collect();
+        let accepted = self.apply_herdr_observations(&snapshots, &members, observed_at);
+        for member in members {
+            let CandidateTarget::Herdr(target) = &member.target else {
+                continue;
+            };
+            if !snapshots.contains_key(target.agent.as_str()) {
+                if member.pending {
+                    stats.not_present += 1;
+                    tracing::info!(
+                        event = "herdr_queue_poll_outcome",
+                        member = %member.key,
+                        herdr_agent = %target.agent,
+                        queue_kind = NudgeKind::Queue.as_str(),
+                        outcome = "held_target_not_present",
+                        "Herdr queue target was absent from the poll result"
+                    );
+                }
+                continue;
+            }
+            let Some(observation) = accepted.get(&member.key) else {
+                continue;
+            };
+            task_candidates.push(MemberObservation {
+                member: member.key.clone(),
+                state: observation.state,
+                state_changed_at: observation.state_changed_at,
+            });
+            if member.pending
+                && queue_drain_eligible(&MemberObservation {
+                    member: member.key.clone(),
+                    state: observation.state,
+                    state_changed_at: observation.state_changed_at,
+                })
+            {
+                stats.idle_members += 1;
+                eligible.push(member);
+            }
+        }
+    }
+
+    fn apply_herdr_observations(
+        &self,
+        snapshots: &HashMap<&str, &AgentSnapshot>,
+        members: &[HerdrCandidate],
+        observed_at: IsoTimestamp,
+    ) -> HashMap<MemberKey, RosterRuntimeObservation> {
         let mut updates_by_team = HashMap::new();
-        for member in &members {
-            let state = snapshots
-                .get(member.herdr_agent.as_str())
-                .map_or(RuntimeMemberState::Unknown, |snapshot| {
-                    runtime_state(snapshot.status)
-                });
+        for member in members {
+            let CandidateTarget::Herdr(target) = &member.target else {
+                continue;
+            };
+            let state = runtime_state(
+                snapshots
+                    .get(target.agent.as_str())
+                    .map(|snapshot| snapshot.status),
+            );
             updates_by_team
                 .entry(member.key.team().clone())
                 .or_insert_with(Vec::new)
@@ -484,38 +436,7 @@ impl HerdrQueueWakePump {
                 );
             }
         }
-        for member in members {
-            if !snapshots.contains_key(member.herdr_agent.as_str()) {
-                if member.pending {
-                    stats.not_present += 1;
-                    tracing::info!(
-                        event = "herdr_queue_poll_outcome",
-                        member = %member.key,
-                        herdr_agent = %member.herdr_agent,
-                        queue_kind = NudgeKind::Queue.as_str(),
-                        outcome = "held_target_not_present",
-                        "Herdr queue target was absent from the poll result"
-                    );
-                }
-                continue;
-            }
-            let Some(observation) = accepted.get(&member.key) else {
-                continue;
-            };
-            if matches!(
-                observation.state,
-                RuntimeMemberState::Idle | RuntimeMemberState::Blocked
-            ) {
-                task_candidates.push(TaskCandidate {
-                    member: member.clone(),
-                    blocked: observation.state == RuntimeMemberState::Blocked,
-                });
-            }
-            if member.pending && observation.state == RuntimeMemberState::Idle {
-                stats.idle_members += 1;
-                eligible.push(member);
-            }
-        }
+        accepted
     }
 
     fn record_unavailable_members(&self, members: &[HerdrCandidate], observed_at: IsoTimestamp) {
@@ -581,10 +502,6 @@ impl HerdrQueueWakePump {
             .iter()
             .map(|candidate| candidate.key.clone())
             .collect();
-        self.last_task_attempt
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .retain(|member, _| members.contains(member));
         self.release_streaks
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -639,6 +556,19 @@ impl HerdrQueueWakePump {
                 return false;
             }
         };
+        if !still_idle(&self.service_runtime, &member.key) {
+            release.release_without_input().await;
+            stats.released += 1;
+            tracing::info!(
+                event = "herdr_queue_poll_outcome",
+                member = %member.key,
+                msg_id = %claim.msg,
+                queue_kind = NudgeKind::Queue.as_str(),
+                outcome = "held_not_idle",
+                "Herdr queue prompt skipped after the live idle recheck"
+            );
+            return false;
+        }
         let Some(emitter) = self.selector.select_emitter(&dispatch) else {
             release.release_without_input().await;
             stats.released += 1;
@@ -749,17 +679,22 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message_id = claim.msg;
+        let now = (self.clock)();
+        let next_due = atm_core::boundary::next_reminder_due(now);
         let health = self.runtime_health.clone();
         let _ = run_blocking(move || {
-            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+            atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                 &runtime,
                 &member_key,
                 &message_id,
+                next_due,
                 || health.record_graft_queue_marker_clear_failure(),
             );
             Ok(())
         })
         .await;
+        self.complete_task_handoff_if_head(&member.key, message_id, now)
+            .await;
         #[cfg(test)]
         self.await_handoff_cleanup_test_gate().await;
         self.reset_release_streak(&member.key);
@@ -772,6 +707,77 @@ impl HerdrQueueWakePump {
             outcome = "prompted",
             "Herdr queue prompt accepted"
         );
+    }
+
+    async fn complete_task_handoff_if_head(
+        &self,
+        member: &MemberKey,
+        message_id: atm_core::schema::AtmMessageId,
+        now: IsoTimestamp,
+    ) {
+        let runtime = self.service_runtime.clone();
+        let member_for_message = member.clone();
+        let task_id = match run_blocking(move || {
+            load_received_hook_dispatch_message(&runtime, &member_for_message, message_id)
+        })
+        .await
+        {
+            Ok(Some(message)) => message.envelope.task_id,
+            Ok(None) | Err(_) => None,
+        };
+        let Some(task_id) = task_id else {
+            return;
+        };
+        let Ok(task_store) = self.service_runtime.task_store() else {
+            return;
+        };
+        let team = member.team().clone();
+        let task_id_for_load = task_id.clone();
+        let task_store_for_load = Arc::clone(&task_store);
+        let row =
+            match run_blocking(move || task_store_for_load.load_task(&team, &task_id_for_load))
+                .await
+            {
+                Ok(row) => row,
+                Err(error) => {
+                    tracing::warn!(
+                        subsystem = "herdr_queue_wake",
+                        action = "task_handoff_read",
+                        outcome = "failed",
+                        member = %member,
+                        task_id = %task_id,
+                        error = %error,
+                        "Queue assignment task lookup failed"
+                    );
+                    return;
+                }
+            };
+        let Some(row) = row.filter(|row| {
+            row.state == atm_core::boundary::TaskState::Assigned
+                && row.position.is_some_and(|position| position.get() == 1)
+        }) else {
+            return;
+        };
+        if let Err(error) = crate::herdr_task_start::complete_task_handoff(
+            &self.service_runtime,
+            &task_store,
+            &self.daemon_home,
+            member,
+            &row,
+            now,
+        )
+        .await
+        {
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "task_handoff_start",
+                outcome = "failed",
+                member = %member,
+                task_id = %task_id,
+                error = %error,
+                "Queue assignment task handoff failed"
+            );
+        }
     }
 
     #[must_use]
@@ -841,28 +847,29 @@ impl crate::RuntimeMaintenance for HerdrQueueWakePump {
 #[derive(Clone)]
 struct HerdrCandidate {
     key: MemberKey,
-    herdr_agent: HerdrAgentName,
-    session: Option<HerdrSession>,
     pending: bool,
+    target: CandidateTarget,
 }
 
 #[derive(Clone)]
-struct TaskCandidate {
-    member: HerdrCandidate,
-    blocked: bool,
+enum CandidateTarget {
+    Herdr(HerdrTarget),
+    RosterOnly,
 }
 
-fn select_open_task(mut rows: Vec<TaskRow>) -> Option<TaskRow> {
-    rows.retain(|row| row.state.is_open());
-    rows.sort_by(|left, right| {
-        left.assigned_at
-            .cmp(&right.assigned_at)
-            .then_with(|| left.task_id.as_str().cmp(right.task_id.as_str()))
-    });
-    rows.iter()
-        .find(|row| row.state == TaskState::Active)
-        .or_else(|| rows.iter().find(|row| row.state == TaskState::Assigned))
-        .cloned()
+#[derive(Clone)]
+struct HerdrTarget {
+    agent: HerdrAgentName,
+    session: Option<HerdrSession>,
+}
+
+/// One accepted runtime observation. The task-disposition pass consumes this
+/// rather than making eligibility decisions from a poll snapshot.
+#[derive(Clone)]
+struct MemberObservation {
+    member: MemberKey,
+    state: RuntimeMemberState,
+    state_changed_at: Option<IsoTimestamp>,
 }
 
 fn herdr_candidates(
@@ -876,33 +883,27 @@ fn herdr_candidates(
         let roster = roster_store.load_roster(&team)?;
         for member in roster.members {
             let key = MemberKey::new(member.team_name.clone(), member.agent_name.clone());
-            let Some(backend) = local_message_received_backend(&member) else {
-                continue;
-            };
-            if classify_delivery_channel(Some(&backend), GraftLeaseState::Absent)
-                != DeliveryChannel::HerdrSteer
-            {
-                continue;
-            }
-            let (configured_agent, session) = match backend {
-                atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr {
+            let target = match local_message_received_backend(&member) {
+                Some(atm_core::delivery_channel::LocalMessageReceivedBackend::Herdr {
                     session,
                     agent,
-                } => (agent, session),
-                atm_core::delivery_channel::LocalMessageReceivedBackend::Tmux { .. } => continue,
-            };
-            let Some(herdr_agent) = atm_core::delivery_channel::resolve_herdr_agent_target(
-                key.agent(),
-                configured_agent,
-                "herdr_queue_wake",
-            ) else {
-                continue;
+                }) => {
+                    let Some(agent) = atm_core::delivery_channel::resolve_herdr_agent_target(
+                        key.agent(),
+                        agent,
+                        "herdr_queue_wake",
+                    ) else {
+                        continue;
+                    };
+                    CandidateTarget::Herdr(HerdrTarget { agent, session })
+                }
+                Some(atm_core::delivery_channel::LocalMessageReceivedBackend::Tmux { .. })
+                | None => CandidateTarget::RosterOnly,
             };
             candidates.push(HerdrCandidate {
                 pending: pending.contains(&key),
                 key,
-                herdr_agent,
-                session,
+                target,
             });
         }
     }
@@ -915,13 +916,13 @@ where
     T: Send + 'static,
     F: FnOnce() -> Result<T, AtmError> + Send + 'static,
 {
-    tokio::task::spawn_blocking(job).await.map_err(|source| {
-        AtmError::new(
-            AtmErrorCode::InternalError,
-            "Herdr queue wake blocking operation ended unexpectedly",
-        )
-        .with_cause(source)
-    })?
+    tokio::time::timeout(HERDR_REQUEST_DEADLINE, tokio::task::spawn_blocking(job))
+        .await
+        .map_err(|_| AtmError::new(AtmErrorCode::InternalError, "Herdr blocking work timed out"))?
+        .map_err(|source| {
+            AtmError::new(AtmErrorCode::InternalError, "Blocking task join failed")
+                .with_cause(source)
+        })?
 }
 
 fn member_order(left: &MemberKey, right: &MemberKey) -> std::cmp::Ordering {
@@ -931,13 +932,27 @@ fn member_order(left: &MemberKey, right: &MemberKey) -> std::cmp::Ordering {
         .then_with(|| left.agent().as_str().cmp(right.agent().as_str()))
 }
 
-fn runtime_state(status: HerdrAgentStatus) -> RuntimeMemberState {
+fn runtime_state(status: Option<HerdrAgentStatus>) -> RuntimeMemberState {
     match status {
-        HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
-        HerdrAgentStatus::Working => RuntimeMemberState::Active,
-        HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
-        HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        None => RuntimeMemberState::Unknown,
+        Some(status) => match status {
+            HerdrAgentStatus::Idle | HerdrAgentStatus::Done => RuntimeMemberState::Idle,
+            HerdrAgentStatus::Working => RuntimeMemberState::Active,
+            HerdrAgentStatus::Blocked => RuntimeMemberState::Blocked,
+            HerdrAgentStatus::Unknown => RuntimeMemberState::Unknown,
+        },
     }
+}
+
+fn still_idle(runtime: &LocalServiceRuntime, member: &MemberKey) -> bool {
+    runtime
+        .roster_ephemeral_state(member.team(), member.agent())
+        .is_some_and(|state| state.runtime.state == RuntimeMemberState::Idle)
+}
+
+/// Queue draining is the sole queue-side interpretation of an observation.
+fn queue_drain_eligible(observation: &MemberObservation) -> bool {
+    observation.state == RuntimeMemberState::Idle
 }
 
 struct ReleasePendingOnDrop {
@@ -1101,10 +1116,31 @@ impl Drop for ReleasePendingOnDrop {
 
 #[cfg(test)]
 mod tests {
+    mod herdr_queue_ephemeral {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/herdr_queue_ephemeral.rs"
+        ));
+    }
+
+    mod herdr_queue_no_delivery {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/herdr_queue_no_delivery.rs"
+        ));
+    }
+
+    mod herdr_nudge_invariant {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/herdr_nudge_invariant.rs"
+        ));
+    }
+
     use super::{
         HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
-        HerdrQueueWakePump, HerdrQueueWakeStats, ReleasePendingOnDrop, TASK_REMINDER_INTERVAL_MS,
-        log_herdr_list_failure, runtime_state,
+        HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, ReleasePendingOnDrop, log_herdr_list_failure,
+        run_blocking, runtime_state,
     };
     use atm_core::LocalServiceRuntime;
     use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -1128,12 +1164,13 @@ mod tests {
         build_retained_logger,
     };
     use atm_runtime_test_support::open_isolated_sqlite_boundary;
-    use atm_storage::{RosterSnapshot, TaskRow, TaskState, TaskStore};
+    use atm_storage::{RosterSnapshot, TaskRow, TaskState};
     use serde_json::json;
     use std::collections::HashMap;
     use std::future::Future;
     use std::pin::Pin;
     use std::str::FromStr;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::watch;
@@ -1152,6 +1189,34 @@ mod tests {
             }
             SinkOffer::Accepted
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let release = Arc::new(AtomicBool::new(false));
+        let worker_release = Arc::clone(&release);
+        let operation = tokio::spawn(async move {
+            run_blocking(move || {
+                started_tx.send(()).expect("signal blocking work started");
+                while !worker_release.load(Ordering::Acquire) {
+                    std::thread::yield_now();
+                }
+                Ok(())
+            })
+            .await
+        });
+
+        started_rx.await.expect("blocking work starts");
+        tokio::time::advance(HERDR_REQUEST_DEADLINE).await;
+        let error = operation
+            .await
+            .expect("timeout task joins")
+            .expect_err("blocking work must time out");
+        release.store(true, Ordering::Release);
+
+        assert_eq!(error.code(), AtmErrorCode::InternalError);
+        assert!(error.detail().contains("timed out"));
     }
 
     #[test]
@@ -1323,6 +1388,17 @@ mod tests {
         agent: &str,
         task_id: TaskId,
     ) -> AtmMessageId {
+        queue_task_message_with_nudge(root, runtime, team, agent, task_id, NudgeMode::Deferred)
+    }
+
+    fn queue_task_message_with_nudge(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+        task_id: TaskId,
+        nudge_mode: NudgeMode,
+    ) -> AtmMessageId {
         let home = root.join("home");
         std::fs::create_dir_all(&home).expect("home");
         let recipient = format!("{agent}@{team}");
@@ -1339,11 +1415,97 @@ mod tests {
             false,
         )
         .expect("task write request")
-        .with_nudge_mode(NudgeMode::Deferred);
+        .with_nudge_mode(nudge_mode);
         request.task_id = Some(task_id);
         write_mail_with_runtime(request, &NullObservability, runtime)
             .expect("queue task write")
             .persisted_message_id()
+    }
+
+    fn queue_requires_ack_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+    ) -> AtmMessageId {
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).expect("home");
+        let recipient = format!("{agent}@{team}");
+        write_mail_with_runtime(
+            WriteRequest::new(
+                home.clone(),
+                home,
+                "sender".parse().expect("sender"),
+                &recipient,
+                team.clone(),
+                SendMessageSource::Inline("requires acknowledgement".to_owned()),
+                None,
+                true,
+                None,
+                false,
+            )
+            .expect("requires-ack write request")
+            .with_nudge_mode(NudgeMode::Deferred),
+            &NullObservability,
+            runtime,
+        )
+        .expect("queue requires-ack message")
+        .persisted_message_id()
+    }
+
+    fn immediate_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        team: &TeamName,
+        agent: &str,
+    ) -> AtmMessageId {
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).expect("home");
+        let request = WriteRequest::new(
+            home.clone(),
+            home,
+            "sender".parse().expect("sender"),
+            &format!("{agent}@{team}"),
+            team.clone(),
+            SendMessageSource::Inline("immediate test message".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("immediate write request")
+        .with_nudge_mode(NudgeMode::Immediate);
+        write_mail_with_runtime(request, &NullObservability, runtime)
+            .expect("immediate write")
+            .persisted_message_id()
+    }
+
+    fn pending_state(
+        root: &std::path::Path,
+        key: &atm_core::boundary::MemberKey,
+        message_id: AtmMessageId,
+    ) -> (Option<String>, u32) {
+        atm_runtime_test_support::inspect_pending_marker_state_for_test(
+            root.join("runtime/mail.sqlite3"),
+            key.team().as_str(),
+            key.agent().as_str(),
+            atm_storage::MessageKey::from(message_id).as_str(),
+        )
+        .expect("read pending marker state")
+    }
+
+    fn acknowledgement_is_pending(
+        root: &std::path::Path,
+        key: &atm_core::boundary::MemberKey,
+        message_id: AtmMessageId,
+    ) -> bool {
+        atm_runtime_test_support::inspect_message_ack_state_for_test(
+            root.join("runtime/mail.sqlite3"),
+            key.team().as_str(),
+            key.agent().as_str(),
+            atm_storage::MessageKey::from(message_id).as_str(),
+        )
+        .expect("read acknowledgement state")
     }
 
     fn pump_with_clock(
@@ -1416,13 +1578,102 @@ mod tests {
             .collect()
     }
 
-    fn clear_pending_markers(runtime: &LocalServiceRuntime, key: &atm_core::boundary::MemberKey) {
+    fn clear_pending_markers(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        key: &atm_core::boundary::MemberKey,
+    ) {
         let store = runtime.pending_nudge_store().expect("pending store");
         while let Some(claim) = store.claim_next_pending(key).expect("claim pending marker") {
-            store
-                .clear_pending_on_handoff(key, &claim.msg)
-                .expect("clear pending marker");
+            let message_id = claim.msg.to_string();
+            let query = atm_core::read::ReadQuery::new(
+                root.join("home"),
+                root.join("home"),
+                key.agent().clone(),
+                Some(&format!("{}@{}", key.agent(), key.team())),
+                key.team().clone(),
+                atm_core::types::ReadSelection::All,
+                false,
+                true,
+                Some(&message_id),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read pending marker query");
+            atm_core::read::read_mail_with_runtime(query, &NullObservability, runtime)
+                .expect("close pending marker message");
         }
+    }
+
+    fn make_failed_attempt_due(
+        store: &dyn atm_core::boundary::PendingNudgeStore,
+        key: &atm_core::boundary::MemberKey,
+        message_id: &AtmMessageId,
+    ) {
+        store
+            .rearm_pending_after_handoff(
+                key,
+                message_id,
+                IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("test timestamp"),
+            )
+            .expect("make the next failed claim due");
+    }
+
+    fn close_message(
+        root: &std::path::Path,
+        runtime: &LocalServiceRuntime,
+        key: &atm_core::boundary::MemberKey,
+        message_id: AtmMessageId,
+    ) {
+        let message_id = message_id.to_string();
+        let query = atm_core::read::ReadQuery::new(
+            root.join("home"),
+            root.join("home"),
+            key.agent().clone(),
+            Some(&format!("{}@{}", key.agent(), key.team())),
+            key.team().clone(),
+            atm_core::types::ReadSelection::All,
+            false,
+            true,
+            Some(&message_id),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read message query");
+        atm_core::read::read_mail_with_runtime(query, &NullObservability, runtime)
+            .expect("close message");
+    }
+
+    fn add_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(team)
+            .expect("load roster");
+        roster.members.push(herdr_member(team, agent));
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("save roster member");
+    }
+
+    fn add_lead_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
+        let mut roster = runtime
+            .shared_roster_store_arc()
+            .load_roster(team)
+            .expect("load roster");
+        let mut member = herdr_member(team, agent);
+        member.agent_type = atm_core::schema::AgentType::Lead;
+        roster.members.push(member);
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&roster)
+            .expect("save lead roster member");
     }
 
     fn ack_task_assignment(
@@ -1655,10 +1906,23 @@ mod tests {
         build_task_only_pump_with_template(statuses, fail_reminders, None)
     }
 
+    fn build_task_only_pump_without_delivery_channel() -> TaskOnlyPumpFixture {
+        build_task_only_pump_with_channel(vec![HerdrAgentStatus::Idle], false, None, false)
+    }
+
     fn build_task_only_pump_with_template(
         statuses: Vec<HerdrAgentStatus>,
         fail_reminders: bool,
         task_template: Option<&str>,
+    ) -> TaskOnlyPumpFixture {
+        build_task_only_pump_with_channel(statuses, fail_reminders, task_template, true)
+    }
+
+    fn build_task_only_pump_with_channel(
+        statuses: Vec<HerdrAgentStatus>,
+        fail_reminders: bool,
+        task_template: Option<&str>,
+        task_channel_available: bool,
     ) -> TaskOnlyPumpFixture {
         let root = tempfile::tempdir().expect("temporary root");
         let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
@@ -1681,23 +1945,29 @@ mod tests {
             .expect("roster");
         let assigned_at = IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp");
         let rows = task_rows(&team, &agents, assigned_at);
-        if let Some(template) = task_template {
+        if task_channel_available {
+            if let Some(template) = task_template {
+                assembly
+                    .nudge_template_override_store
+                    .save_template_override(
+                        &team,
+                        atm_storage::BuiltInNudgeTemplateKind::Task,
+                        template,
+                    )
+                    .expect("task template override");
+            }
+        } else {
             assembly
                 .nudge_template_override_store
-                .save_template_override(
-                    &team,
-                    atm_storage::BuiltInNudgeTemplateKind::Task,
-                    template,
-                )
-                .expect("task template override");
+                .disable_template_override(&team, atm_storage::BuiltInNudgeTemplateKind::Task)
+                .expect("disable task template override");
         }
         let task_store = Arc::new(atm_storage::DummyTaskStore::with_rows(
             rows.clone(),
             fail_reminders,
         ));
-        let reader = Arc::new(
-            atm_runtime_test_support::InMemoryTaskLedgerReader::with_rows(rows, Vec::new()),
-        );
+        let reader: Arc<dyn atm_core::boundary::AsyncTaskLedgerReader + Send + Sync> =
+            task_store.clone();
         let runtime = assembly
             .service_runtime
             .with_task_store(task_store.clone())
@@ -1717,12 +1987,79 @@ mod tests {
         }));
         let now = Arc::new(Mutex::new(assigned_at));
         let health = super::RuntimeHealth::default();
-        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+        let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now))
+            .with_daemon_home(root.path().join("home"));
         let keys = agents
             .into_iter()
             .map(|agent| atm_storage::MemberKey::new(team.clone(), agent.parse().expect("agent")))
             .collect();
         (root, runtime, fake, pump, task_store, keys, now)
+    }
+
+    fn build_task_handoff_pump() -> (
+        tempfile::TempDir,
+        LocalServiceRuntime,
+        Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+        HerdrQueueWakePump,
+        atm_core::boundary::MemberKey,
+        TaskId,
+        Arc<Mutex<IsoTimestamp>>,
+    ) {
+        let root = tempfile::tempdir().expect("temporary root");
+        let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+        let team: TeamName = "ax5-handoff".parse().expect("team");
+        let key = atm_core::boundary::MemberKey::new(
+            team.clone(),
+            "ax5-agent-00".parse().expect("agent"),
+        );
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![
+                    herdr_member(&team, key.agent().as_str()),
+                    herdr_member(&team, "sender"),
+                ],
+                refreshed_at: None,
+            })
+            .expect("roster");
+        let task_id: TaskId = "AX5-HANDOFF".parse().expect("task");
+        queue_task_message(
+            root.path(),
+            &assembly.service_runtime,
+            &team,
+            key.agent().as_str(),
+            task_id.clone(),
+        );
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        fake.queue_list_result(Ok(HerdrListOutcome {
+            agents: vec![AgentSnapshot {
+                name: Some(key.agent().to_string()),
+                pane_id: None,
+                status: HerdrAgentStatus::Idle,
+                workspace_id: None,
+            }],
+        }));
+        let now = Arc::new(Mutex::new(
+            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp"),
+        ));
+        let pump = pump_with_clock(
+            assembly.service_runtime.clone(),
+            fake.clone(),
+            super::RuntimeHealth::default(),
+            Arc::clone(&now),
+        )
+        .with_daemon_home(root.path().join("home"));
+        (
+            root,
+            assembly.service_runtime,
+            fake,
+            pump,
+            key,
+            task_id,
+            now,
+        )
     }
 
     fn task_rows(team: &TeamName, agents: &[String], assigned_at: IsoTimestamp) -> Vec<TaskRow> {
@@ -1854,462 +2191,7 @@ mod tests {
     fn poll_contract_uses_fixed_cadence_and_cap() {
         assert_eq!(HERDR_POLL_INTERVAL_MS, 5_000);
         assert_eq!(HERDR_MAX_PROMPTS_PER_TICK, 16);
-        assert_eq!(TASK_REMINDER_INTERVAL_MS, 60_000);
-    }
-
-    #[tokio::test]
-    async fn ax6_01_task_threshold_uses_separate_fixed_herdr_notification() {
-        let (root, runtime, fake, pump, task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = keys[0].team().clone();
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        let mut lead = herdr_member(&team, "ax6-lead");
-        lead.agent_type = atm_storage::AgentType::Lead;
-        roster.members.push(lead);
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
-        let mut row = task_store.row(&keys[0], &task_id);
-        row.reminder_count = atm_storage::TASK_STALLED_REMINDER_THRESHOLD;
-        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
-        let pump = pump.with_daemon_home(root.path().join("home"));
-        let mut stats = HerdrQueueWakeStats::default();
-        let timestamp = *now.lock().expect("clock");
-
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &row,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-
-        let notifications: Vec<_> = fake
-            .calls()
-            .into_iter()
-            .filter_map(|call| match call {
-                atm_herdr::testing::FakeHerdrCall::Notify { title, body } => Some((title, body)),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(notifications.len(), 1);
-        assert_eq!(notifications[0].0, "ATM task escalation");
-        assert!(notifications[0].1.contains("reason=lead_notified"));
-        assert!(notifications[0].1.contains("AX5-TASK-00"));
-        assert!(!notifications[0].1.contains("assigned to"));
-    }
-
-    #[tokio::test]
-    async fn ax6_01_task_threshold_doubles_after_each_lead_notification() {
-        let (root, runtime, fake, pump, task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = keys[0].team().clone();
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        let mut lead = herdr_member(&team, "ax6-lead");
-        lead.agent_type = atm_storage::AgentType::Lead;
-        roster.members.push(lead);
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
-        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
-        let pump = pump.with_daemon_home(root.path().join("home"));
-        let timestamp = *now.lock().expect("clock");
-        let mut stats = HerdrQueueWakeStats::default();
-
-        let mut tenth = task_store
-            .load_task(keys[0].team(), &task_id)
-            .expect("task")
-            .expect("row");
-        tenth.reminder_count = 10;
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &tenth,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-
-        let mut nineteenth = tenth.clone();
-        nineteenth.reminder_count = 19;
-        nineteenth.lead_notified_count = 1;
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &nineteenth,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-
-        let mut twentieth = nineteenth;
-        twentieth.reminder_count = 20;
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &twentieth,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-
-        assert_eq!(stats.lead_notifications, 2);
-        assert_eq!(notifications(&fake), 2);
-    }
-
-    #[tokio::test]
-    async fn ax6_01_failed_lead_write_retries_at_next_reminder() {
-        let (root, runtime, fake, pump, task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = keys[0].team().clone();
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        let mut lead = herdr_member(&team, "ax6-lead");
-        lead.agent_type = atm_storage::AgentType::Lead;
-        roster.members.push(lead);
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
-        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
-        let timestamp = *now.lock().expect("clock");
-        let mut tenth = task_store
-            .load_task(keys[0].team(), &task_id)
-            .expect("task")
-            .expect("row");
-        tenth.reminder_count = 10;
-        let mut failed_stats = HerdrQueueWakeStats::default();
-
-        crate::herdr_escalation::fail_next_escalation_mail_write();
-
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump.clone().with_daemon_home(root.path().join("home")),
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &tenth,
-            timestamp,
-            &mut failed_stats,
-        )
-        .await;
-        assert_eq!(failed_stats.lead_notifications, 0);
-
-        let mut eleventh = tenth;
-        eleventh.reminder_count = 11;
-        let mut retry_stats = HerdrQueueWakeStats::default();
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump.with_daemon_home(root.path().join("home")),
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &eleventh,
-            timestamp,
-            &mut retry_stats,
-        )
-        .await;
-
-        assert_eq!(retry_stats.lead_notifications, 1);
-        assert_eq!(
-            notifications(&fake),
-            2,
-            "Herdr still notifies on both attempts"
-        );
-    }
-
-    #[tokio::test]
-    async fn ax6_01_no_lead_or_multiple_leads_still_notify_herdr() {
-        let (root, runtime, fake, pump, task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = keys[0].team().clone();
-        let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
-        let mut row = task_store.row(&keys[0], &task_id);
-        row.reminder_count = atm_storage::TASK_STALLED_REMINDER_THRESHOLD;
-        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
-        let pump = pump.with_daemon_home(root.path().join("home"));
-        let mut stats = HerdrQueueWakeStats::default();
-        let timestamp = *now.lock().expect("clock");
-
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &row,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-        assert_eq!(stats.lead_notifications, 0);
-        assert_eq!(notifications(&fake), 1);
-
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        for name in ["ax6-lead-a", "ax6-lead-b"] {
-            let mut lead = herdr_member(&team, name);
-            lead.agent_type = atm_storage::AgentType::Lead;
-            roster.members.push(lead);
-        }
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        crate::herdr_queue_wake_escalation::maybe_escalate_task(
-            &pump,
-            runtime
-                .async_task_ledger_reader()
-                .expect("task reader")
-                .as_ref(),
-            &task_store,
-            &row,
-            timestamp,
-            &mut stats,
-        )
-        .await;
-        assert_eq!(stats.lead_notifications, 0);
-        assert_eq!(notifications(&fake), 2);
-    }
-
-    #[tokio::test]
-    async fn ax6_02_blocked_escalation_obeys_episode_and_renotify_cadence() {
-        let (root, runtime, fake, pump, _task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
-        let team = keys[0].team().clone();
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        let mut lead = herdr_member(&team, "ax6-lead");
-        lead.agent_type = atm_storage::AgentType::Lead;
-        roster.members.push(lead);
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        let pump = pump.with_daemon_home(root.path().join("home"));
-        pump.tick_once().await;
-        assert_eq!(pump.stats().blocked_escalations, 0);
-
-        *now.lock().expect("clock") =
-            IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("timestamp");
-        queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
-        pump.tick_once().await;
-        assert_eq!(pump.stats().blocked_escalations, 1);
-        assert_eq!(notifications(&fake), 1);
-
-        *now.lock().expect("clock") =
-            IsoTimestamp::from_str("2030-01-01T00:05:00Z").expect("timestamp");
-        queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
-        pump.tick_once().await;
-        assert_eq!(notifications(&fake), 1);
-
-        *now.lock().expect("clock") =
-            IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
-        queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
-        pump.tick_once().await;
-        assert_eq!(pump.stats().blocked_escalations, 1);
-        assert_eq!(notifications(&fake), 2);
-    }
-
-    #[tokio::test]
-    async fn ay4_breaker_escalation_is_once_per_cycle_and_interval_bounded() {
-        let (root, runtime, fake, pump, _task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = keys[0].team().clone();
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        let mut lead = herdr_member(&team, "ay4-lead");
-        lead.agent_type = atm_storage::AgentType::Lead;
-        roster.members.push(lead);
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        let pump = pump
-            .with_daemon_home(root.path().join("home"))
-            .with_breaker_escalation_min_interval(Duration::from_secs(30));
-
-        pump.tick_once().await;
-        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
-            message: String::new(),
-            retry_after: None,
-            io_error_kind: None,
-        }));
-        pump.tick_once().await;
-        assert_eq!(notifications(&fake), 1, "first open cycle escalates once");
-        let notification = fake
-            .calls()
-            .into_iter()
-            .find_map(|call| match call {
-                atm_herdr::testing::FakeHerdrCall::Notify { body, .. } => Some(body),
-                _ => None,
-            })
-            .expect("breaker notification");
-        assert!(notification.contains("state=breaker_open"));
-        assert!(!notification.contains("Herdr breaker opened"));
-
-        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
-            message: String::new(),
-            retry_after: None,
-            io_error_kind: None,
-        }));
-        pump.tick_once().await;
-        assert_eq!(notifications(&fake), 1, "same cycle is deduplicated");
-
-        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
-        pump.tick_once().await;
-        *now.lock().expect("clock") =
-            IsoTimestamp::from_str("2030-01-01T00:00:10Z").expect("timestamp");
-        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
-            message: String::new(),
-            retry_after: None,
-            io_error_kind: None,
-        }));
-        pump.tick_once().await;
-        assert_eq!(
-            notifications(&fake),
-            1,
-            "interval suppresses a flapping endpoint"
-        );
-
-        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
-        pump.tick_once().await;
-        *now.lock().expect("clock") =
-            IsoTimestamp::from_str("2030-01-01T00:00:30Z").expect("timestamp");
-        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
-            message: String::new(),
-            retry_after: None,
-            io_error_kind: None,
-        }));
-        pump.tick_once().await;
-        assert_eq!(
-            notifications(&fake),
-            2,
-            "later cycle is eligible after interval"
-        );
-    }
-
-    #[tokio::test]
-    async fn ax6_02_blocked_poll_failure_preserves_episode_for_retry() {
-        let (_root, _runtime, fake, pump, _task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
-        pump.tick_once().await;
-        assert_eq!(notifications(&fake), 0);
-
-        *now.lock().expect("clock") =
-            IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("timestamp");
-        fake.queue_list_result(Err(atm_herdr::HerdrError::ServerUnavailable {
-            message: String::new(),
-            retry_after: None,
-            io_error_kind: None,
-        }));
-        pump.tick_once().await;
-        assert_eq!(notifications(&fake), 0);
-
-        *now.lock().expect("clock") =
-            IsoTimestamp::from_str("2030-01-01T00:02:00Z").expect("timestamp");
-        queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
-        pump.tick_once().await;
-        assert_eq!(notifications(&fake), 1);
-    }
-
-    #[tokio::test]
-    async fn ax6_03_recipient_override_fans_out_only_to_the_team_scope() {
-        let (root, runtime, fake, _pump, task_store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-        let team = keys[0].team().clone();
-        let mut roster = runtime
-            .shared_roster_store_arc()
-            .load_roster(&team)
-            .expect("roster");
-        let mut lead = herdr_member(&team, "ax6-lead");
-        lead.agent_type = atm_storage::AgentType::Lead;
-        roster.members.push(lead);
-        runtime
-            .shared_roster_store_arc()
-            .save_roster(&roster)
-            .expect("roster");
-        let timestamp = *now.lock().expect("clock");
-        task_store
-            .add_escalation_recipient(
-                &atm_storage::EscalationScope::Daemon,
-                "daemon-ops@ax5-task-only",
-                timestamp,
-            )
-            .expect("daemon recipient");
-        task_store
-            .add_escalation_recipient(
-                &atm_storage::EscalationScope::Team(team.clone()),
-                "ax5-agent-00@ax5-task-only",
-                timestamp,
-            )
-            .expect("team recipient");
-        let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
-        let notification = crate::herdr_escalation::EscalationNotification {
-            title: "AX6 test escalation".to_owned(),
-            body: "reason=test member=ax5-agent-00 task_id=AX6-RECIPIENT remediation=doctor"
-                .to_owned(),
-        };
-        let outcome = crate::herdr_escalation::escalate(
-            &runtime,
-            fake.as_ref(),
-            Some(&task_store),
-            &root.path().join("home"),
-            &team,
-            "mail body is separate",
-            &notification,
-            crate::herdr_escalation::EscalationKind::LeadNotified,
-        )
-        .await;
-        assert_eq!(outcome.recipients_written, 1);
-        assert!(outcome.lead_write.is_some());
-        assert_eq!(notifications(&fake), 1);
-    }
-
-    fn notifications(fake: &atm_herdr::testing::FakeHerdrProcessAdapter) -> usize {
-        fake.calls()
-            .into_iter()
-            .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Notify { .. }))
-            .count()
+        assert_eq!(atm_core::boundary::TASK_REMINDER_INTERVAL_MS, 60_000);
     }
 
     #[tokio::test]
@@ -2349,7 +2231,7 @@ mod tests {
             atm_storage::TaskState::Assigned,
             "a reminder never acknowledges the assignment"
         );
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert!(
             prompt_texts(&fake)
                 .iter()
@@ -2360,9 +2242,10 @@ mod tests {
     #[tokio::test]
     async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+        clear_pending_markers(root.path(), &runtime, &key);
         let first: TaskId = "AX5-AC1-FIRST".parse().expect("task id");
         let second: TaskId = "AX5-AC1-SECOND".parse().expect("task id");
-        let first_message = queue_task_message(
+        queue_task_message(
             root.path(),
             &runtime,
             key.team(),
@@ -2388,31 +2271,13 @@ mod tests {
             .shared_roster_store_arc()
             .save_roster(&roster)
             .expect("add task sender to roster");
-        clear_pending_markers(&runtime, &key);
         let now = Arc::new(Mutex::new(
             IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
         ));
         let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
 
         pump.tick_once().await;
-        let first_reminder = prompt_texts(&fake).pop().expect("first reminder");
-        assert!(first_reminder.contains("AX5-AC1-FIRST"));
-        queue_idle_result(&fake, &key);
-        pump.tick_once().await;
-        assert_eq!(
-            prompt_texts(&fake).len(),
-            1,
-            "second tick is inside cadence"
-        );
-
-        *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("test timestamp");
-        queue_idle_result(&fake, &key);
-        pump.tick_once().await;
-        assert_eq!(prompt_texts(&fake).len(), 2);
-        assert!(prompt_texts(&fake)[1].contains("AX5-AC1-FIRST"));
-
-        ack_task_assignment(root.path(), &runtime, key.team(), first_message);
+        assert!(prompt_texts(&fake)[0].contains("AX5-AC1-FIRST"));
         assert_eq!(
             runtime
                 .task_store()
@@ -2421,31 +2286,28 @@ mod tests {
                 .expect("load first task")
                 .expect("first task")
                 .state,
-            TaskState::Assigned
+            TaskState::Active
         );
-        *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:02:10Z").expect("test timestamp");
-        queue_idle_result(&fake, &key);
-        pump.tick_once().await;
-        assert!(prompt_texts(&fake)[2].contains("AX5-AC1-FIRST"));
-
-        complete_task(root.path(), &runtime, key.team(), first);
         assert_eq!(
             runtime
                 .task_store()
                 .expect("task store")
-                .load_task(key.team(), &"AX5-AC1-FIRST".parse().expect("task id"))
-                .expect("load completed task")
-                .expect("completed task")
-                .state,
-            TaskState::Complete(atm_core::test_support::TaskCloseOutcome::Completed)
+                .load_task(key.team(), &first)
+                .expect("load first task")
+                .expect("first task")
+                .reminder_count,
+            1
         );
+        complete_task(root.path(), &runtime, key.team(), first);
         *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:03:15Z").expect("test timestamp");
+            IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
-        assert!(prompt_texts(&fake)[3].contains("AX5-AC1-SECOND"));
-        assert!(!prompt_texts(&fake)[3].contains("AX5-AC1-FIRST"));
+        assert!(
+            prompt_texts(&fake)
+                .iter()
+                .any(|text| text.contains("AX5-AC1-SECOND"))
+        );
         assert_eq!(
             runtime
                 .task_store()
@@ -2454,7 +2316,7 @@ mod tests {
                 .expect("load second task")
                 .expect("second task")
                 .state,
-            TaskState::Assigned
+            TaskState::Active
         );
     }
 
@@ -2495,11 +2357,11 @@ mod tests {
             IsoTimestamp::from_str("2030-01-01T00:03:00Z").expect("test timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert_eq!(
             prompt_texts(&fake).len(),
-            4,
-            "two drains, queue, then reminder"
+            3,
+            "the queue drains consume each tick while the assignment is open"
         );
     }
 
@@ -2521,25 +2383,6 @@ mod tests {
         assert_eq!(
             store
                 .row(&keys[16], &"AX5-TASK-16".parse().expect("task id"))
-                .reminder_count,
-            1
-        );
-    }
-
-    #[tokio::test]
-    async fn ax5_07_blocked_candidate_after_budget_is_still_audited() {
-        let mut statuses = vec![HerdrAgentStatus::Idle; 17];
-        statuses.push(HerdrAgentStatus::Blocked);
-        let (_root, _runtime, fake, pump, store, keys, _now) =
-            build_task_only_pump(statuses, false);
-        pump.tick_once().await;
-
-        assert_eq!(pump.stats().prompted, 16);
-        assert_eq!(pump.stats().task_reminders_blocked, 1);
-        assert_eq!(prompt_texts(&fake).len(), 16);
-        assert_eq!(
-            store
-                .row(&keys[17], &"AX5-TASK-17".parse().expect("task id"))
                 .reminder_count,
             1
         );
@@ -2584,9 +2427,15 @@ mod tests {
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:00:05Z").expect("test timestamp");
+        fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentPromptStalled));
         queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
         pump.tick_once().await;
-        assert_eq!(prompt_texts(&fake).len(), 1, "cooldown suppresses a retry");
+        assert_eq!(
+            prompt_texts(&fake).len(),
+            2,
+            "failed emit retries next tick"
+        );
+        assert_eq!(pump.stats().task_reminders_failed, 1);
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
@@ -2595,50 +2444,16 @@ mod tests {
         assert_eq!(pump.stats().task_reminders, 1);
         assert_eq!(
             prompt_texts(&fake).len(),
-            2,
-            "cooldown expires after one minute"
+            3,
+            "the next successful emit is recorded"
         );
         assert_eq!(store.row(&keys[0], &task_id).reminder_count, 1);
-    }
-
-    #[tokio::test]
-    async fn ax5_10_failed_blocked_and_unrenderable_audits_count_and_cool_down() {
-        let (_root, _runtime, fake, pump, store, keys, now) =
-            build_task_only_pump(vec![HerdrAgentStatus::Blocked], true);
-        pump.tick_once().await;
-        assert_eq!(pump.stats().task_reminders_blocked, 1);
-        assert_eq!(
-            store
-                .row(&keys[0], &"AX5-TASK-00".parse().expect("task id"))
-                .reminder_count,
-            0
-        );
-        assert!(prompt_texts(&fake).is_empty());
 
         *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:00:05Z").expect("test timestamp");
-        queue_status_result(&fake, &keys, HerdrAgentStatus::Blocked);
+            IsoTimestamp::from_str("2030-01-01T00:01:05Z").expect("test timestamp");
+        queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
         pump.tick_once().await;
-        assert_eq!(
-            pump.stats().task_reminders_blocked,
-            0,
-            "blocked cooldown holds"
-        );
-
-        let (_root, _runtime, fake, pump, store, keys, _now) = build_task_only_pump_with_template(
-            vec![HerdrAgentStatus::Idle],
-            true,
-            Some("{{missing}}"),
-        );
-        pump.tick_once().await;
-        assert_eq!(pump.stats().task_reminders_unrenderable, 1);
-        assert_eq!(
-            store
-                .row(&keys[0], &"AX5-TASK-00".parse().expect("task id"))
-                .reminder_count,
-            0
-        );
-        assert!(prompt_texts(&fake).is_empty());
+        assert_eq!(prompt_texts(&fake).len(), 3, "durable reminder rate-limits");
     }
 
     #[tokio::test]
@@ -2694,8 +2509,8 @@ mod tests {
             .into_iter()
             .last()
             .expect("active task reminder");
-        assert!(reminder.contains("<task id=\"AX5-ACTIVE\">"));
-        assert!(!reminder.contains("AX5-ASSIGNED-2"));
+        assert!(reminder.contains("AX5-ASSIGNED-2"));
+        assert!(!reminder.contains("AX5-ACTIVE"));
         assert_eq!(
             runtime
                 .task_store()
@@ -2709,7 +2524,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ax5_04_emit_failure_records_no_reminder_and_retries() {
+    async fn ax5_04_emit_failure_retries_until_durable_reminder_rate_limits() {
         let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
         let task_id: TaskId = "AX5-RETRY".parse().expect("task id");
         queue_task_message(
@@ -2743,9 +2558,9 @@ mod tests {
                 .expect("load task")
                 .expect("task row")
                 .reminder_count,
-            0
+            1
         );
-        assert_eq!(pump.stats().task_reminders_failed, 1);
+        assert_eq!(pump.stats().task_reminders_failed, 0);
 
         *now.lock().expect("test clock lock") =
             IsoTimestamp::from_str("2030-01-01T00:02:05Z").expect("test timestamp");
@@ -2754,7 +2569,7 @@ mod tests {
         assert_eq!(
             pump.stats().task_reminders,
             0,
-            "cooldown suppresses a retry"
+            "the open assignment remains the only queue nudge"
         );
 
         *now.lock().expect("test clock lock") =
@@ -2763,8 +2578,8 @@ mod tests {
         pump.tick_once().await;
         assert_eq!(
             pump.stats().task_reminders,
-            1,
-            "the cooldown eventually expires"
+            0,
+            "the durable reminder timestamp rate-limits the later tick"
         );
     }
 
@@ -2918,108 +2733,14 @@ mod tests {
             .expect("load task")
             .expect("task row");
         assert_eq!(row.reminder_count, 1);
-        assert_eq!(pump.stats().task_reminders, 1);
+        assert_eq!(pump.stats().task_reminders, 0);
         assert_eq!(
             fake.calls()
                 .iter()
                 .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
                 .count(),
-            3,
-            "two queue drains plus exactly one cadence-controlled reminder"
-        );
-    }
-
-    #[tokio::test]
-    async fn ax5_07_blocked_tasks_are_audited_without_a_prompt() {
-        let (root, runtime, fake, _old_pump, health, key) =
-            build_test_pump_with_agents(vec![AgentSnapshot {
-                name: Some("aq27-agent".to_owned()),
-                pane_id: None,
-                status: HerdrAgentStatus::Blocked,
-                workspace_id: None,
-            }]);
-        let task_id: TaskId = "AX5-BLOCKED".parse().expect("task id");
-        queue_task_message(
-            root.path(),
-            &runtime,
-            key.team(),
-            key.agent().as_str(),
-            task_id.clone(),
-        );
-        let now = Arc::new(Mutex::new(
-            IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test timestamp"),
-        ));
-        let pump = pump_with_clock(
-            runtime.clone(),
-            fake.clone(),
-            health.clone(),
-            Arc::clone(&now),
-        );
-
-        pump.tick_once().await;
-
-        let row = runtime
-            .task_store()
-            .expect("task store")
-            .load_task(key.team(), &task_id)
-            .expect("load task")
-            .expect("task row");
-        assert_eq!(row.reminder_count, 1);
-        assert_eq!(pump.stats().task_reminders_blocked, 1);
-        assert!(
-            fake.calls()
-                .iter()
-                .all(|call| !matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. })),
-            "blocked task reminders never prompt Herdr"
-        );
-        assert_eq!(
-            runtime
-                .roster_ephemeral_state(key.team(), key.agent())
-                .expect("canonical member state")
-                .runtime
-                .state,
-            RuntimeMemberState::Blocked,
-        );
-
-        clear_pending_markers(&runtime, &key);
-
-        *now.lock().expect("test clock lock") =
-            IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
-        fake.queue_list_result(Ok(HerdrListOutcome {
-            agents: vec![AgentSnapshot {
-                name: Some(key.agent().to_string()),
-                pane_id: None,
-                status: HerdrAgentStatus::Idle,
-                workspace_id: None,
-            }],
-        }));
-        pump.tick_once().await;
-        let row = runtime
-            .task_store()
-            .expect("task store")
-            .load_task(key.team(), &task_id)
-            .expect("load task")
-            .expect("task row");
-        assert_eq!(
-            row.reminder_count, 2,
-            "blocked and idle outcomes are audited"
-        );
-        assert_eq!(pump.stats().task_reminders, 1);
-        assert_eq!(
-            runtime
-                .roster_ephemeral_state(key.team(), key.agent())
-                .expect("canonical member state")
-                .runtime
-                .state,
-            RuntimeMemberState::Idle
-        );
-        assert_eq!(
-            prompt_texts(&fake)
-                .iter()
-                .filter(|text| text.contains("AX5-BLOCKED"))
-                .count(),
-            1,
-            "the blocked task is emitted after returning to idle"
+            2,
+            "the deferred assignment remains a queue nudge while its marker is open"
         );
     }
 
@@ -3198,7 +2919,7 @@ mod tests {
                 .list_pending_members()
                 .expect("pending members")
                 .len(),
-            1
+            HERDR_MAX_PROMPTS_PER_TICK + 1
         );
         let remaining = atm_core::boundary::MemberKey::new(
             key.team().clone(),
@@ -3480,7 +3201,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty()
+                .contains(&key),
+            "successful deferred delivery rearms its queue marker"
         );
         assert_eq!(key.agent().as_str(), "aq27-agent");
     }
@@ -3633,8 +3355,8 @@ mod tests {
                 .expect("pending store")
                 .list_pending_members()
                 .expect("pending members")
-                .is_empty(),
-            "completed marker cleanup leaves no pending member"
+                .contains(&key),
+            "completed handoff rearms the queue marker"
         );
 
         fake.queue_list_result(Ok(HerdrListOutcome {
@@ -3738,27 +3460,27 @@ mod tests {
                 "prompt count for {agent}"
             );
         }
-        assert_eq!(pump.stats().pending_members, 7);
+        assert_eq!(pump.stats().pending_members, 22);
         assert_eq!(pump.stats().prompted, 7);
-        assert_eq!(pump.cursor_position(), 2);
+        assert_eq!(pump.cursor_position(), 16);
     }
 
     #[test]
     fn herdr_statuses_project_to_runtime_states() {
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Idle),
+            runtime_state(Some(HerdrAgentStatus::Idle)),
             RuntimeMemberState::Idle
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Done),
+            runtime_state(Some(HerdrAgentStatus::Done)),
             RuntimeMemberState::Idle
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Working),
+            runtime_state(Some(HerdrAgentStatus::Working)),
             RuntimeMemberState::Active
         );
         assert_eq!(
-            runtime_state(HerdrAgentStatus::Unknown),
+            runtime_state(Some(HerdrAgentStatus::Unknown)),
             RuntimeMemberState::Unknown
         );
     }
@@ -3793,6 +3515,44 @@ mod tests {
 
         fn delete_message(&self, _key: &atm_storage::MessageKey) -> Result<(), AtmError> {
             unreachable!("herdr candidate test never touches the mail store boundary")
+        }
+    }
+
+    struct CountingMessageStore {
+        inner: Arc<dyn atm_storage::MessageStore + Send + Sync>,
+        list_messages_calls: Arc<AtomicUsize>,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for CountingMessageStore {}
+    impl atm_storage::MessageStore for CountingMessageStore {
+        fn save_message(&self, message: &atm_storage::Message) -> Result<(), AtmError> {
+            self.inner.save_message(message)
+        }
+
+        fn save_messages_atomically(
+            &self,
+            messages: &[atm_storage::Message],
+        ) -> Result<(), AtmError> {
+            self.inner.save_messages_atomically(messages)
+        }
+
+        fn load_message(
+            &self,
+            key: &atm_storage::MessageKey,
+        ) -> Result<Option<atm_storage::Message>, AtmError> {
+            self.inner.load_message(key)
+        }
+
+        fn list_messages(
+            &self,
+            query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<atm_storage::Message>, AtmError> {
+            self.list_messages_calls.fetch_add(1, Ordering::SeqCst);
+            self.inner.list_messages(query)
+        }
+
+        fn delete_message(&self, key: &atm_storage::MessageKey) -> Result<(), AtmError> {
+            self.inner.delete_message(key)
         }
     }
 

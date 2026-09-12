@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::sync::Arc;
 
 use super::team_scope::team_message;
@@ -6,7 +5,6 @@ use super::{
     DoctorFinding, DoctorSeverity, EscalationRecipientAddress, EscalationRecipientSource,
     EscalationRecipientsDoctorReport, TeamEscalationRecipientsDoctorReport,
 };
-use crate::address::AgentAddress;
 use crate::boundary::{DurableRosterStore, TaskState, TaskStore};
 use crate::error_codes::AtmErrorCode;
 use crate::service_runtime::LocalServiceRuntime;
@@ -61,7 +59,7 @@ fn daemon_recipients(
 ) -> Vec<EscalationRecipientAddress> {
     match task_store {
         Some(store) => match store.list_escalation_recipients(&EscalationScope::Daemon) {
-            Ok(recipients) => validated_recipients(recipients, findings),
+            Ok(recipients) => validated_recipients(recipients),
             Err(error) => {
                 push_storage_failure(findings, "daemon escalation recipients", error);
                 Vec::new()
@@ -72,19 +70,9 @@ fn daemon_recipients(
 }
 
 fn validated_recipients(
-    recipients: Vec<String>,
-    findings: &mut Vec<DoctorFinding>,
+    recipients: Vec<atm_storage::AgentAddress>,
 ) -> Vec<EscalationRecipientAddress> {
-    recipients
-        .into_iter()
-        .filter_map(|recipient| match AgentAddress::from_str(&recipient) {
-            Ok(address) => Some(address.into()),
-            Err(error) => {
-                push_storage_failure(findings, "escalation recipient address", error);
-                None
-            }
-        })
-        .collect()
+    recipients.into_iter().map(Into::into).collect()
 }
 
 fn team_report(
@@ -119,7 +107,7 @@ fn team_report(
         } else {
             EscalationRecipientSource::Team
         },
-        recipients: validated_recipients(effective, findings),
+        recipients: validated_recipients(effective),
     })
 }
 
@@ -127,7 +115,10 @@ fn team_recipients(
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     team: &TeamName,
     findings: &mut Vec<DoctorFinding>,
-) -> (Vec<String>, Vec<String>) {
+) -> (
+    Vec<atm_storage::AgentAddress>,
+    Vec<atm_storage::AgentAddress>,
+) {
     let Some(store) = task_store else {
         return (Vec::new(), Vec::new());
     };

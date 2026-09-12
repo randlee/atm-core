@@ -1,6 +1,7 @@
 //! Shared audited storage contract and canonical storage-facing domain types
 //! for ATM backends and their callers.
 
+pub mod address;
 pub mod analyst_query;
 pub mod contract;
 pub mod diagnostics;
@@ -34,6 +35,7 @@ pub mod roles {
     pub const ROLE_WORKER: &str = "worker";
 }
 
+pub use address::AgentAddress;
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
@@ -82,7 +84,8 @@ pub use task_state::{
 };
 pub use task_store::{
     DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,
-    ReminderOutcome, TASK_STALLED_REMINDER_THRESHOLD, TaskStore,
+    ReminderOutcome, TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS,
+    TASK_STALLED_REMINDER_THRESHOLD, TaskStore, next_reminder_due,
 };
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,

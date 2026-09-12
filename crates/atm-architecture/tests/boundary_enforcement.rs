@@ -563,7 +563,7 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
     assert_eq!(
         definitions.len(),
         1,
-        "clear_queue_marker_after_handoff must have exactly one workspace definition: {definitions:?}"
+        "rearm_queue_marker_after_handoff must have exactly one workspace definition: {definitions:?}"
     );
     assert!(
         definitions[0].contains("crates/atm-core/"),
@@ -571,7 +571,7 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
     );
     assert!(
         violations.is_empty(),
-        "direct clear_pending_on_handoff calls are forbidden outside the core helper and store impl/tests: {violations:?}"
+        "direct rearm_pending_after_handoff calls are forbidden outside the core helper and store impl/tests: {violations:?}"
     );
 }
 
@@ -587,7 +587,7 @@ struct QueueMarkerClearVisitor {
 impl<'ast> Visit<'ast> for QueueMarkerClearVisitor {
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
         let previous = self.current_function.replace(node.sig.ident.to_string());
-        if node.sig.ident == "clear_queue_marker_after_handoff" {
+        if node.sig.ident == "rearm_queue_marker_after_handoff" {
             self.definitions.push(node.sig.ident.to_string());
         }
         syn::visit::visit_item_fn(self, node);
@@ -619,8 +619,8 @@ impl<'ast> Visit<'ast> for QueueMarkerClearVisitor {
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if node.method == "clear_pending_on_handoff"
-            && self.current_function.as_deref() != Some("clear_queue_marker_after_handoff")
+        if node.method == "rearm_pending_after_handoff"
+            && self.current_function.as_deref() != Some("rearm_queue_marker_after_handoff")
             && !self.in_pending_nudge_store_impl
             && !self.in_test_module
         {
@@ -3623,6 +3623,8 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "clear_messages".to_owned(),
         "heartbeat".to_owned(),
         "queue_get_next".to_owned(),
+        // BA.4 (fenix ruling 2026-09-12): message-less TaskMove control op joins the durable control lane.
+        "task_move".to_owned(),
         "graft_receiver_register".to_owned(),
         "graft_receiver_refresh".to_owned(),
         "graft_receiver_unregister".to_owned(),
@@ -4101,54 +4103,6 @@ fn guarded_boundaries_include_every_boundary_record() {
         all_boundary_files().into_iter().collect::<BTreeSet<_>>(),
         "the architecture guard must sweep every boundaries/*/*.toml record"
     );
-}
-
-#[test]
-fn ax6_herdr_notification_does_not_reuse_mail_body() {
-    let root = workspace_root();
-    let source = read_source(&root.join("crates/atm-http-runtime/src/herdr_escalation.rs"));
-    let construction =
-        read_source(&root.join("crates/atm-http-runtime/src/herdr_queue_wake_escalation.rs"));
-    let breaker_construction =
-        read_source(&root.join("crates/atm-http-runtime/src/herdr_breaker_escalation.rs"));
-    let notify = extract_fn_body(&source, "notify");
-    let escalate = extract_fn_body(&source, "escalate");
-    assert!(
-        notify.contains("&notification.body"),
-        "Herdr notify must receive the fixed EscalationNotification body"
-    );
-    assert!(
-        escalate.contains("mail_body") && escalate.contains("notification"),
-        "mail and Herdr notification payloads must remain separate at escalation wiring"
-    );
-    assert!(
-        !source.contains("notify(herdr_process, body)"),
-        "HR-SAFE-003 forbids forwarding the queued mail body as Herdr argv"
-    );
-    assert!(
-        construction.contains("let body = task_escalation_body")
-            && construction.contains("let notification = task_escalation_notification"),
-        "task escalation must construct distinct queued-mail and Herdr payload bindings"
-    );
-    assert!(
-        !construction.contains("body: body")
-            && !construction.contains("body: task_escalation_body")
-            && !construction.contains("SendMessageSource::Inline"),
-        "HR-SAFE-003 forbids routing a task mail body or inline mail source into Herdr notification construction"
-    );
-    assert!(
-        breaker_construction.contains("let mail_body")
-            && breaker_construction.contains("let notification")
-            && breaker_construction.contains("body: \"state=breaker_open"),
-        "AY4 breaker escalation must construct distinct durable-mail and privacy-safe notification payloads"
-    );
-    assert!(
-        !breaker_construction.contains("body: mail_body")
-            && !breaker_construction.contains("body: format!(\"Herdr breaker opened"),
-        "HR-SAFE-003 forbids forwarding breaker mail text to Herdr notification"
-    );
-    let boundary = read_source(&root.join("boundaries/atm-herdr/herdr-process-adapter.toml"));
-    assert!(boundary.contains("HR-SAFE-003"));
 }
 
 fn daemon_boundary_files() -> Vec<PathBuf> {

@@ -217,15 +217,6 @@ impl HerdrProcessAdapter for BenchmarkNoopHerdrProcessAdapter {
     {
         Box::pin(async { Ok(atm_herdr::HerdrListOutcome { agents: Vec::new() }) })
     }
-
-    fn notify<'a>(
-        &'a self,
-        _title: &'a str,
-        _body: &'a str,
-        _deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>> {
-        Box::pin(async { Ok(()) })
-    }
 }
 
 /// Selects the receiver implementation from the post-persistence dispatch
@@ -614,10 +605,11 @@ async fn deliver_published_graft_hook(
             deadline,
         );
         if result.is_ok() && kind == NudgeKind::Queue {
-            atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+            atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                 &service_runtime,
                 &member,
                 &message_id,
+                atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
                 || runtime_health.record_graft_queue_marker_clear_failure(),
             );
         }
@@ -642,7 +634,7 @@ async fn deliver_published_graft_hook(
 /// with no scheduler ever revisiting it. A marker-clear failure must
 /// therefore never turn an already-successful append into a reported
 /// delivery failure; it is routed through the same
-/// `clear_queue_marker_after_handoff` retry-once-and-count helper AQ2's
+/// `rearm_queue_marker_after_handoff` retry-once-and-count helper AQ2's
 /// graft channel uses, so a clear failure is logged and counted (and
 /// retried once) while `emit_received_message` still returns `Success`.
 #[derive(Clone)]
@@ -698,10 +690,11 @@ impl AsyncMessageReceivedHookEmitter for PullPendingReceivedHook {
                 if target.kind == NudgeKind::Queue {
                     // A marker-clear failure is never allowed to fail an
                     // already-successful FIFO append; see the struct doc.
-                    atm_core::nudge_dispatch::clear_queue_marker_after_handoff(
+                    atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                         &service_runtime,
                         &member,
                         &target.msg_id,
+                        atm_storage::next_reminder_due(atm_core::types::IsoTimestamp::now()),
                         || runtime_health.record_graft_queue_marker_clear_failure(),
                     );
                 }
@@ -727,9 +720,9 @@ mod tests {
     use atm_core::boundary::MessageReceivedHookSelector;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, HerdrNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, NudgeClaim, NudgeKind,
-        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
-        QueuePullTarget, RosterEntry, RosterHarness, RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, NudgeKind, PostSendBuiltInTarget,
+        PostSendEmissionPath, PostSendHookEvent, QueuePullTarget, RosterEntry, RosterHarness,
+        RosterMemberKind,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::GraftReceiverListener;
@@ -743,7 +736,8 @@ mod tests {
         NudgeMode, SendMessageSource, WriteRequest, prepare_write_with_runtime,
         write_mail_with_runtime,
     };
-    use atm_core::types::{AgentName, IsoTimestamp, PaneId, TeamName};
+    use atm_core::test_support::testing::DummyPendingNudgeStore;
+    use atm_core::types::{AgentName, PaneId, TeamName};
     use atm_http_runtime::RuntimeHealth;
     use atm_runtime_test_support::{
         open_graft_receiver_endpoint_store, open_isolated_sqlite_boundary,
@@ -751,7 +745,6 @@ mod tests {
     use atm_storage::RosterSnapshot;
     use std::fs;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
 
     #[cfg(feature = "benchmark-harness")]
@@ -924,76 +917,6 @@ mod tests {
             .expect("graft dispatch")
     }
 
-    struct FailingClearPendingStore {
-        inner: Arc<dyn PendingNudgeStore + Send + Sync>,
-        clear_calls: AtomicUsize,
-        control_path_borrows: AtomicUsize,
-        sqlite_transactions: AtomicUsize,
-    }
-
-    impl atm_storage::contract::sealed::Sealed for FailingClearPendingStore {}
-
-    impl FailingClearPendingStore {
-        /// Every pending-nudge operation crosses the synchronous control path
-        /// and opens a SQLite transaction. These counters make the Immediate
-        /// bare-CLI admission contract observable without relying on timing.
-        fn record_operation(&self) {
-            self.control_path_borrows.fetch_add(1, Ordering::SeqCst);
-            self.sqlite_transactions.fetch_add(1, Ordering::SeqCst);
-        }
-    }
-
-    impl PendingNudgeStore for FailingClearPendingStore {
-        fn mark_pending(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-            at: IsoTimestamp,
-        ) -> Result<bool, AtmError> {
-            self.record_operation();
-            self.inner.mark_pending(member, msg, at)
-        }
-
-        fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-            self.record_operation();
-            self.inner.claim_next_pending(member)
-        }
-
-        fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.record_operation();
-            self.inner.requeue_pending(member, claim)
-        }
-
-        fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.record_operation();
-            self.inner.release_pending(member, claim)
-        }
-
-        fn clear_pending_on_read(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.record_operation();
-            self.inner.clear_pending_on_read(member, msg)
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.record_operation();
-            self.clear_calls.fetch_add(1, Ordering::SeqCst);
-            Err(AtmError::mailbox_write("clear marker test failure"))
-        }
-
-        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-            self.record_operation();
-            self.inner.list_pending_members()
-        }
-    }
-
     #[tokio::test]
     async fn bare_cli_queue_pull_appends_and_clears_the_exact_pending_marker() {
         let root = tempfile::tempdir().expect("temporary runtime root");
@@ -1107,12 +1030,9 @@ mod tests {
     async fn local_immediate_bare_cli_write_avoids_control_path_marker_work() {
         let root = tempfile::tempdir().expect("temporary runtime root");
         let (base_runtime, _endpoint_store, team, recipient) = queue_graft_runtime(root.path());
-        let counting_store = Arc::new(FailingClearPendingStore {
-            inner: base_runtime.pending_nudge_store().expect("pending store"),
-            clear_calls: AtomicUsize::new(0),
-            control_path_borrows: AtomicUsize::new(0),
-            sqlite_transactions: AtomicUsize::new(0),
-        });
+        let counting_store = Arc::new(DummyPendingNudgeStore::delegating(
+            base_runtime.pending_nudge_store().expect("pending store"),
+        ));
         let runtime = base_runtime.with_pending_nudge_store(counting_store.clone());
         let home = root.path().join("home");
         fs::create_dir_all(&home).expect("home");
@@ -1191,12 +1111,12 @@ mod tests {
         assert_eq!(drained[0].msg_id, queue_pull.msg_id);
 
         assert_eq!(
-            counting_store.control_path_borrows.load(Ordering::SeqCst),
+            counting_store.operation_call_count(),
             0,
             "an Immediate bare-CLI write never borrows the pending-marker control path"
         );
         assert_eq!(
-            counting_store.sqlite_transactions.load(Ordering::SeqCst),
+            counting_store.operation_call_count(),
             0,
             "an Immediate bare-CLI write never opens an extra marker SQLite transaction"
         );
@@ -1207,12 +1127,10 @@ mod tests {
         let root = tempfile::tempdir().expect("temporary runtime root");
         let (base_runtime, _endpoint_store, team, recipient) = queue_graft_runtime(root.path());
         let base_pending_store = base_runtime.pending_nudge_store().expect("pending store");
-        let failing_store = Arc::new(FailingClearPendingStore {
-            inner: base_pending_store,
-            clear_calls: AtomicUsize::new(0),
-            control_path_borrows: AtomicUsize::new(0),
-            sqlite_transactions: AtomicUsize::new(0),
-        });
+        let failing_store = Arc::new(
+            DummyPendingNudgeStore::delegating(base_pending_store)
+                .with_rearm_failure(AtmError::mailbox_write("rearm marker test failure")),
+        );
         let runtime = base_runtime.with_pending_nudge_store(failing_store.clone());
         let message_id = queue_write(root.path(), &runtime, &team);
         let member = MemberKey::new(team.clone(), recipient.clone());
@@ -1254,7 +1172,7 @@ mod tests {
         assert_eq!(drained[0].msg_id, message_id);
         assert_eq!(drained[0].body, "<atm><action>queue</action></atm>");
         assert_eq!(
-            failing_store.clear_calls.load(Ordering::SeqCst),
+            failing_store.rearm_call_count(),
             2,
             "the shared helper retries the marker clear exactly once"
         );
@@ -1351,12 +1269,10 @@ mod tests {
         let root = tempfile::tempdir().expect("temporary runtime root");
         let (base_runtime, endpoint_store, team, recipient) = queue_graft_runtime(root.path());
         let base_pending_store = base_runtime.pending_nudge_store().expect("pending store");
-        let failing_store = Arc::new(FailingClearPendingStore {
-            inner: base_pending_store,
-            clear_calls: AtomicUsize::new(0),
-            control_path_borrows: AtomicUsize::new(0),
-            sqlite_transactions: AtomicUsize::new(0),
-        });
+        let failing_store = Arc::new(
+            DummyPendingNudgeStore::delegating(base_pending_store)
+                .with_rearm_failure(AtmError::mailbox_write("rearm marker test failure")),
+        );
         let runtime = base_runtime.with_pending_nudge_store(failing_store.clone());
         let listener = GraftReceiverListener::bind(root.path(), &team, &recipient, None)
             .expect("bind graft receiver");
@@ -1417,7 +1333,7 @@ mod tests {
             result.is_ok(),
             "marker-clear failure must not fail delivery"
         );
-        assert_eq!(failing_store.clear_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(failing_store.rearm_call_count(), 2);
         assert_eq!(health.snapshot().graft_queue_handoff_failures_total, 0);
         assert_eq!(health.snapshot().graft_queue_marker_clear_failures_total, 2);
         let claim = runtime

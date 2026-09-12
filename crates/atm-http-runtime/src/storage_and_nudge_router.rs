@@ -24,7 +24,7 @@ use atm_core::observability::ObservabilityPort;
 use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
 use atm_core::protocol::{
     CompatibilityVerdict, GraftReceiverRegistration, GraftReceiverUnregistration, ReleaseVersion,
-    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope,
+    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope, TaskMoveOutcome,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
@@ -75,6 +75,20 @@ pub struct StorageAndNudgeRouter {
 }
 
 impl StorageAndNudgeRouter {
+    pub(crate) fn dispatch(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.dispatch_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
+    }
+
     pub(super) async fn list_messages(
         &self,
         query: ListQuery,
@@ -515,6 +529,7 @@ impl StorageAndNudgeRouter {
             ApiRequest::QueueGetNext(request) => {
                 self.queue_get_next(request, ingress, deadline).await
             }
+            ApiRequest::TaskMove(request) => self.task_move(request, ingress, deadline).await,
             ApiRequest::GraftReceiverRegister(request) => {
                 self.graft_receiver_register(request, ingress, deadline)
                     .await
@@ -552,6 +567,39 @@ impl StorageAndNudgeRouter {
                 )
                 .map(ResponseEnvelope::Clear)
                 .map(ApiResponse::new)
+            })
+            .await
+    }
+
+    async fn task_move(
+        &self,
+        request: atm_core::protocol::TaskMoveRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if ingress != AuthenticatedIngress::Local {
+            return Err(AtmError::validation(
+                "task move is available only through authenticated local HTTP adapters",
+            ));
+        }
+        let runtime = self.service_runtime.clone();
+        self.control_path_sync_bridge
+            .run(deadline, move || {
+                let (assignee, from, to) = runtime.task_store()?.move_task(
+                    &request.caller_team,
+                    &request.task_id,
+                    &request.caller_identity,
+                    &request.target,
+                    atm_core::types::IsoTimestamp::now(),
+                )?;
+                Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
+                    TaskMoveOutcome {
+                        task_id: request.task_id,
+                        assignee,
+                        from,
+                        to,
+                    },
+                )))
             })
             .await
     }
@@ -958,12 +1006,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        self.dispatch_with_request_id(
-            request,
-            ingress,
-            deadline,
-            atm_core::protocol::next_request_id(),
-        )
+        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
     }
 
     fn dispatch_with_request_id(
@@ -1033,7 +1076,7 @@ pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Resu
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
@@ -1047,9 +1090,9 @@ mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeClaim,
-        NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath,
-        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::observability_counters::{
@@ -1058,7 +1101,7 @@ mod tests {
     use atm_core::protocol::{
         GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
         QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
-        RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+        RuntimeReadinessState, SendResponseEnvelope, TaskMoveRequest, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
@@ -1076,8 +1119,9 @@ mod tests {
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
+    use atm_storage::testing::DummyPendingNudgeStore;
     use atm_storage::{
-        AsyncTaskLedgerReader, MessageKey, MessageQuery, MessageStore, RosterSnapshot,
+        AsyncTaskLedgerReader, MessageKey, MessageQuery, MessageStore, MoveTarget, RosterSnapshot,
         RosterStore as StorageRosterStore, TaskStore, TemplateFrontmatter, TemplateSha,
     };
     use axum::body::{Body, to_bytes};
@@ -1186,67 +1230,6 @@ mod tests {
             _dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             None
-        }
-    }
-
-    struct FailingMarkPendingStore {
-        inner: Arc<dyn PendingNudgeStore + Send + Sync>,
-        remaining_failures: AtomicUsize,
-    }
-
-    impl atm_storage::contract::sealed::Sealed for FailingMarkPendingStore {}
-
-    impl PendingNudgeStore for FailingMarkPendingStore {
-        fn mark_pending(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-            at: IsoTimestamp,
-        ) -> Result<bool, AtmError> {
-            let previous = self
-                .remaining_failures
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
-                    remaining.checked_sub(1)
-                })
-                .unwrap_or(0);
-            if previous > 0 {
-                return Err(AtmError::daemon_unavailable(
-                    "test pending-marker store failure",
-                ));
-            }
-            self.inner.mark_pending(member, msg, at)
-        }
-
-        fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-            self.inner.claim_next_pending(member)
-        }
-
-        fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.requeue_pending(member, claim)
-        }
-
-        fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.release_pending(member, claim)
-        }
-
-        fn clear_pending_on_read(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_read(member, msg)
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_handoff(member, msg)
-        }
-
-        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-            self.inner.list_pending_members()
         }
     }
 
@@ -1469,6 +1452,38 @@ mod tests {
         )
     }
 
+    #[tokio::test]
+    async fn router_peer_ingress_rejects_task_move() {
+        let fixture = fixture(true, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        let task_id = "T1".parse().expect("task id");
+        let before = fixture
+            .task_store
+            .list_task_events(&team, &task_id, None)
+            .expect("events before");
+        let error = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::TaskMove(TaskMoveRequest {
+                    caller_identity: "sender-a".parse().expect("agent"),
+                    caller_team: team.clone(),
+                    task_id: task_id.clone(),
+                    target: MoveTarget::Head,
+                })),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("peer ingress must reject task move");
+        assert!(error.message().contains("authenticated local HTTP"));
+        let after = fixture
+            .task_store
+            .list_task_events(&team, &task_id, None)
+            .expect("events after");
+        assert_eq!(after, before, "rejection must occur before the writer lane");
+    }
+
     fn fixture_with_selector<F>(
         with_recipient: bool,
         hook_failure: Option<AtmError>,
@@ -1608,10 +1623,12 @@ mod tests {
         failures: Option<usize>,
     ) -> Arc<dyn PendingNudgeStore + Send + Sync> {
         match failures {
-            Some(failures) => Arc::new(FailingMarkPendingStore {
-                inner: Arc::clone(store),
-                remaining_failures: AtomicUsize::new(failures),
-            }),
+            Some(failures) => Arc::new(
+                DummyPendingNudgeStore::delegating(Arc::clone(store)).with_mark_failure(
+                    AtmError::daemon_unavailable("test pending-marker store failure"),
+                    failures,
+                ),
+            ),
             None => Arc::clone(store),
         }
     }
@@ -2295,6 +2312,71 @@ mod tests {
             response.messages[0].body,
             "<atm><action>queue</action></atm>"
         );
+    }
+
+    pub(crate) struct BareCliPullFixture {
+        pub(crate) _temporary_root: TempDir,
+        pub(crate) router: StorageAndNudgeRouter,
+        pub(crate) runtime: LocalServiceRuntime,
+        pub(crate) pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+        pub(crate) home_dir: PathBuf,
+        pub(crate) current_dir: PathBuf,
+        pub(crate) member: MemberKey,
+        pub(crate) message_id: AtmMessageId,
+    }
+
+    pub(crate) fn bare_cli_pull_fixture() -> BareCliPullFixture {
+        let fixture = fixture(true, None, None);
+        let member = MemberKey::new(
+            "test-team".parse().expect("team"),
+            "recipient".parse().expect("agent"),
+        );
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_nudge_mode(NudgeMode::Deferred);
+        request.to = Some("recipient@test-team".parse().expect("recipient"));
+        let message_id = atm_core::send::write_mail_with_runtime(
+            request,
+            &NullObservability,
+            &fixture.router.service_runtime,
+        )
+        .expect("deferred queue write")
+        .persisted_message_id();
+        fixture
+            .pending_nudge_store
+            .mark_pending(&member, &message_id, IsoTimestamp::now())
+            .expect("mark queue item pending");
+        let claim = fixture
+            .pending_nudge_store
+            .claim_next_pending(&member)
+            .expect("claim queue item")
+            .expect("queue item claim");
+        assert_eq!(claim.msg, message_id);
+
+        let fifo: BareCliFifo = Default::default();
+        let drops: BareCliQueueFullDrops = Default::default();
+        append_bare_cli_message(
+            &fifo,
+            &drops,
+            member.clone(),
+            QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: message_id,
+                body: "queued".to_owned(),
+            },
+        )
+        .expect("seed FIFO");
+        let runtime = fixture.router.service_runtime.clone();
+        let router = fixture.router.with_bare_cli_fifo(fifo, drops);
+        BareCliPullFixture {
+            _temporary_root: fixture._temporary_root,
+            router,
+            runtime,
+            pending_nudge_store: fixture.pending_nudge_store,
+            home_dir: fixture.home_dir,
+            current_dir: fixture.current_dir,
+            member,
+            message_id,
+        }
     }
 
     /// AC6 migration case: a stale FIFO entry from an earlier bare-CLI

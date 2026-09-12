@@ -5,17 +5,21 @@ use crate::error::AtmError;
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, ChatId, HostName, PaneId, TaskId, TeamName};
-pub use atm_storage::TaskState;
 /// Durable roster store used by replacement-runtime maintenance projections.
 #[doc(inline)]
 pub use atm_storage::contract::RosterStore as DurableRosterStore;
-pub use atm_storage::contract::{AckTransition, Message, MessageKey};
+pub use atm_storage::contract::{
+    AckTransition, AsyncMailboxReader, MailboxScope, Message, MessageKey, MessageQuery,
+    ReadLaneError,
+};
 pub use atm_storage::{
     AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, DAEMON_ACTOR_NAME, EscalationScope,
     MAX_ESCALATION_RECIPIENTS, NudgeTemplateOverrideStore, ReadDeadline, ReminderOutcome,
-    TASK_STALLED_REMINDER_THRESHOLD, TaskEventKind, TaskEventRow, TaskRow, TaskStore,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+    TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS, TASK_STALLED_REMINDER_THRESHOLD,
+    TaskEventKind, TaskEventRow, TaskRow, TaskStore, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, next_reminder_due,
 };
+pub use atm_storage::{TaskOp, TaskState};
 
 /// Durable at-most-once delivery state for deferred (`atm queue`) nudges.
 ///
@@ -87,6 +91,8 @@ pub use atm_storage::TemplateOutputFormat;
 pub use herdr_breaker::HerdrBreakerDoctor;
 pub use herdr_endpoint::HerdrEndpointDoctor;
 pub use mail::*;
+#[cfg(any(test, feature = "test-utils"))]
+pub use message_received_hook_emitter::NoopMessageReceivedHookSelector;
 pub use message_received_hook_emitter::{
     AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter, MessageReceivedHookSelector,
 };

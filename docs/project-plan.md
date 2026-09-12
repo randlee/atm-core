@@ -1796,11 +1796,11 @@ closes the phase documentation.
 | Sprint | Status | Branch | Authoritative sprint doc |
 | --- | --- | --- | --- |
 | `BA.1` | `merged` | `feature/ba1-ack-task-separation` | `docs/plans/phase-ba/sprint-BA.1-ack-task-separation.md` |
-| `BA.2` | `complete; PR #1400 pending QA/merge` | `feature/ba2-task-identity-queue` | `docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md` |
-| `BA.3` | `planned` | `feature/ba3-nudge-invariant` | `docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md` |
-| `BA.4` | `planned` | `feature/ba4-atm-task-commands` | `docs/plans/phase-ba/sprint-BA.4-atm-task-commands.md` |
-| `BA.5` | `planned` | `feature/ba5-queue-ephemeral-item` | `docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md` |
-| `BA.6` | `planned` | `docs/ba6-task-nudge-documentation` | `docs/plans/phase-ba/sprint-BA.6-docs.md` |
+| `BA.2` | `merged` (#1400) | `feature/ba2-task-identity-queue` | `docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md` |
+| `BA.3` | `in progress` (#1402) | `feature/ba3-nudge-invariant` | `docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md` |
+| `BA.4` | `in progress` (#1408) | `feature/ba4-atm-task-commands` | `docs/plans/phase-ba/sprint-BA.4-atm-task-commands.md` |
+| `BA.5` | `in progress` (#1407) | `feature/ba5-queue-ephemeral-item` | `docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md` |
+| `BA.6` | `in progress` | `docs/ba6-task-nudge-documentation` | `docs/plans/phase-ba/sprint-BA.6-docs.md` |
 
 ## Daemon-Switch Scope Reduction
 

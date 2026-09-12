@@ -236,6 +236,16 @@ atm inbox
 | Inbox summary | `atm inbox` |
 | List teams | `atm teams` |
 | Team members | `atm members` |
+| Assign or reassign a task | `atm task assign <agent> [message source] [--task-id <id>] [--before <other-id> \| --head]` |
+| Close a task | `atm task close <task-id> <completed\|refused\|cancelled> [reason or report source]` |
+| Reorder a queued task | `atm task move <task-id> --before <other-id> \| --head \| --end` |
+| List open tasks | `atm task list [--all]` |
+| Show task history | `atm task events <task-id>` |
+
+`atm send <agent> --task-id <id> ...` is an alias for `atm task assign`.
+`atm send <assigner> --task-id <id> --task-complete ...` is an alias for
+`atm task close <id> completed`. Use `atm queue` for anything that must not
+interrupt the current task.
 
 ---
 

@@ -55,12 +55,13 @@ mod client;
 mod diagnostics_route;
 mod doctor_observability;
 mod health_route;
-mod herdr_breaker_escalation;
 mod herdr_escalation;
 mod herdr_queue_wake;
 mod herdr_queue_wake_escalation;
 #[cfg(test)]
 mod herdr_queue_wake_test_gates;
+mod herdr_task_disposition;
+mod herdr_task_start;
 mod http1_server;
 mod loopback_read;
 mod loopback_tcp;

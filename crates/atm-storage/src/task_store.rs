@@ -5,11 +5,12 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use crate::contract::sealed;
+use crate::contract::{AsyncTaskLedgerReader, ReadDeadline, ReadLaneError, sealed};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
-use crate::task_state::{TaskEventRow, TaskRow};
+use crate::task_state::{QueuePosition, TaskEventRow, TaskRow};
 use crate::types::{AgentName, IsoTimestamp, MemberKey, TaskId, TeamName};
+use crate::{AgentAddress, MoveTarget};
 
 /// Selects the daemon-wide or team-specific escalation recipient list.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +21,22 @@ pub enum EscalationScope {
 
 /// Reminder count at which an open task is considered stalled and escalated.
 pub const TASK_STALLED_REMINDER_THRESHOLD: u32 = 10;
+
+/// Minimum spacing between task reminders for one assignee.
+pub const TASK_REMINDER_INTERVAL_MS: i64 = 60_000;
+
+/// Computes the next due time for a deferred queue or task reminder.
+#[must_use]
+pub fn next_reminder_due(now: IsoTimestamp) -> IsoTimestamp {
+    IsoTimestamp::from_datetime(
+        now.into_inner() + chrono::Duration::milliseconds(TASK_REMINDER_INTERVAL_MS),
+    )
+}
+
+/// Consecutive refused closes that hold task prompting and escalate the run.
+///
+/// See Phase BA plan §2 R5.
+pub const TASK_CONSECUTIVE_REFUSAL_THRESHOLD: u32 = 3;
 
 /// Maximum recipients retained for one daemon or team escalation scope.
 pub const MAX_ESCALATION_RECIPIENTS: usize = 8;
@@ -77,6 +94,18 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         task_id: &TaskId,
         assignee: Option<&AgentName>,
     ) -> Result<Vec<TaskEventRow>, AtmError>;
+    fn move_task(
+        &self,
+        _team: &TeamName,
+        _task_id: &TaskId,
+        _actor: &AgentName,
+        _target: &MoveTarget,
+        _at: IsoTimestamp,
+    ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "task store does not implement ordered task movement",
+        ))
+    }
     fn record_reminder(
         &self,
         member: &MemberKey,
@@ -93,22 +122,28 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         message_id: &AtmMessageId,
     ) -> Result<(), AtmError>;
 
-    fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError>;
+    fn list_escalation_recipients(
+        &self,
+        scope: &EscalationScope,
+    ) -> Result<Vec<AgentAddress>, AtmError>;
 
     fn add_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &AgentAddress,
         at: IsoTimestamp,
     ) -> Result<bool, AtmError>;
 
     fn remove_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &AgentAddress,
     ) -> Result<bool, AtmError>;
 
-    fn effective_escalation_recipients(&self, team: &TeamName) -> Result<Vec<String>, AtmError> {
+    fn effective_escalation_recipients(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<AgentAddress>, AtmError> {
         let team_recipients =
             self.list_escalation_recipients(&EscalationScope::Team(team.clone()))?;
         if team_recipients.is_empty() {
@@ -123,7 +158,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
 #[derive(Debug, Default)]
 pub struct DummyTaskStore {
     rows: Mutex<HashMap<(TeamName, TaskId), TaskRow>>,
-    escalation_recipients: Mutex<HashMap<String, Vec<String>>>,
+    escalation_recipients: Mutex<HashMap<String, Vec<AgentAddress>>>,
     fail_reminders: bool,
 }
 
@@ -152,6 +187,78 @@ impl DummyTaskStore {
 }
 
 impl sealed::Sealed for DummyTaskStore {}
+
+#[async_trait::async_trait]
+impl AsyncTaskLedgerReader for DummyTaskStore {
+    async fn open_tasks_for_team(
+        &self,
+        team: TeamName,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        let mut rows = self
+            .rows
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "dummy task rows lock poisoned".to_owned(),
+            })?
+            .values()
+            .filter(|row| row.team == team && row.state.is_open())
+            .cloned()
+            .collect::<Vec<_>>();
+        rows.sort_by_key(|row| {
+            (
+                row.assignee.clone(),
+                row.position,
+                row.assigned_at,
+                row.task_id.clone(),
+            )
+        });
+        Ok(rows)
+    }
+
+    async fn refusal_run(
+        &self,
+        _team: TeamName,
+        _assignee: AgentName,
+        _deadline: ReadDeadline,
+    ) -> Result<crate::RefusalRun, ReadLaneError> {
+        Ok(crate::RefusalRun {
+            count: 0,
+            started_at: None,
+        })
+    }
+
+    async fn list_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        Ok(
+            TaskStore::list_tasks(self, &team, member.as_ref()).map_err(|error| {
+                ReadLaneError::Unavailable {
+                    message: error.to_string(),
+                }
+            })?,
+        )
+    }
+
+    async fn list_task_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        member: Option<AgentName>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        Ok(
+            TaskStore::list_task_events(self, &team, &task_id, member.as_ref()).map_err(
+                |error| ReadLaneError::Unavailable {
+                    message: error.to_string(),
+                },
+            )?,
+        )
+    }
+}
 
 impl TaskStore for DummyTaskStore {
     fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
@@ -233,7 +340,10 @@ impl TaskStore for DummyTaskStore {
         Ok(())
     }
 
-    fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError> {
+    fn list_escalation_recipients(
+        &self,
+        scope: &EscalationScope,
+    ) -> Result<Vec<AgentAddress>, AtmError> {
         Ok(self
             .escalation_recipients
             .lock()
@@ -246,7 +356,7 @@ impl TaskStore for DummyTaskStore {
     fn add_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &AgentAddress,
         _at: IsoTimestamp,
     ) -> Result<bool, AtmError> {
         let mut recipients = self
@@ -262,14 +372,14 @@ impl TaskStore for DummyTaskStore {
                 "escalation recipient scope already has the maximum of {MAX_ESCALATION_RECIPIENTS} recipients"
             )));
         }
-        list.push(address.to_owned());
+        list.push(address.clone());
         Ok(true)
     }
 
     fn remove_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &AgentAddress,
     ) -> Result<bool, AtmError> {
         let mut recipients = self
             .escalation_recipients

@@ -8,11 +8,35 @@ This protocol is mandatory for all ATM team communications.
 - Example: `ack, working on <task>`
 2. Execute the requested task.
 3. Send a completion message with a concise summary of what was done. When
-   closing a tracked task, use `atm send <assigner> --task-complete <id> --stdin`
-   before reporting completion.
+   closing a tracked task, use `atm task close <task-id> completed --stdin`
+   or its alias, `atm send <assigner> --task-id <task-id> --task-complete
+   --stdin`, to deliver the completion report and close the task atomically.
 - Example: `task complete: <summary>`
 4. Receiver immediately acknowledges completion if it requires ack.
 5. No silent processing. Every requires-ack message must receive a response.
+
+An acknowledgement is message hygiene only: an ack never changes task state.
+If work cannot be completed, close it with the typed outcome `refused` or
+`cancelled` and supply the reason as the optional third positional argument
+(or provide a report source such as `--stdin`). Never close a task as
+`reassigned`; reassign it in place with `atm task assign` and its existing id.
+
+## Task Commands
+
+The task surface is a closed set:
+
+```bash
+atm task assign solar --task-id BA-123 --stdin
+atm task close BA-123 completed --stdin
+atm task move BA-123 --head
+atm task list --all
+atm task events BA-123
+```
+
+`atm send <agent> --task-id <id> ...` aliases `atm task assign`.
+`atm send <assigner> --task-id <id> --task-complete ...` aliases
+`atm task close <id> completed`. Use `atm queue` for anything that must not
+interrupt the current task.
 
 Daemon escalation messages are informational system mail: they identify a
 repeated or blocked task and provide its run command. Read them with `atm

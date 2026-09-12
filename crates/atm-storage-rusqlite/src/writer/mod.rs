@@ -1,5 +1,6 @@
 mod ops;
 mod ops_envelope;
+mod read_display_state;
 mod shutdown_support;
 mod stmt_cache;
 mod task_ops;

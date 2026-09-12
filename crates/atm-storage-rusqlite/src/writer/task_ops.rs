@@ -415,7 +415,7 @@ fn apply_task_start(
     order.insert(0, task_id.clone());
     connection
         .execute(
-            "UPDATE tasks SET state=?3, reminder_count=0, lead_notified_count=0, updated_at=?4
+            "UPDATE tasks SET state=?3, lead_notified_count=0, updated_at=?4
              WHERE team=?1 AND task_id=?2",
             params![
                 record.team.as_str(),
@@ -649,7 +649,7 @@ pub(super) fn apply_task_move(
     at: IsoTimestamp,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<QueuePosition, AtmError> {
+) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
     let Some(row) = load_task_row(connection, target, team, task_id)? else {
         return Err(task_rejected(format!("no open task {task_id} for {actor}")));
     };
@@ -669,7 +669,7 @@ pub(super) fn apply_task_move(
         append_active_task_move(
             team, task_id, actor, &at, &row, next_state, connection, target,
         )?;
-        return Ok(QueuePosition::HEAD);
+        return Ok((row.assignee, QueuePosition::HEAD, QueuePosition::HEAD));
     }
     apply_queued_task_move(
         team, task_id, actor, target_pos, &at, &row, next_state, connection, target,
@@ -687,7 +687,7 @@ fn apply_queued_task_move(
     next_state: TaskState,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<QueuePosition, AtmError> {
+) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
     let from = row
         .position
         .ok_or_else(|| task_rejected("open task has no queue position"))?;
@@ -728,7 +728,7 @@ fn apply_queued_task_move(
         None,
         Some(&detail),
     )?;
-    Ok(to)
+    Ok((row.assignee.clone(), from, to))
 }
 
 #[allow(clippy::too_many_arguments)]

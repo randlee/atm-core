@@ -20,17 +20,18 @@ use crate::send::hook::build_built_in_dispatch;
 use crate::service_runtime::LocalServiceRuntime;
 use atm_storage::TaskRow;
 
-/// Clears the exact durable queue marker after a successful handoff.
+/// Re-arms the exact durable queue marker after a successful handoff.
 ///
 /// Marker cleanup is deliberately best-effort: the handoff has already
 /// succeeded, so cleanup must never turn that success into a failed delivery.
 /// A failed clear is logged and retried once. `record_failure` is invoked for
 /// each failed attempt so the composition layer can project the failure into
 /// its runtime-health counters without making core depend on that layer.
-pub fn clear_queue_marker_after_handoff(
+pub fn rearm_queue_marker_after_handoff(
     service_runtime: &LocalServiceRuntime,
     member: &MemberKey,
     message_id: &AtmMessageId,
+    next_due: atm_storage::types::IsoTimestamp,
     mut record_failure: impl FnMut(),
 ) {
     let store = match service_runtime.pending_nudge_store() {
@@ -48,7 +49,7 @@ pub fn clear_queue_marker_after_handoff(
             return;
         }
     };
-    if let Err(error) = store.clear_pending_on_handoff(member, message_id) {
+    if let Err(error) = store.rearm_pending_after_handoff(member, message_id, next_due) {
         record_failure();
         tracing::warn!(
             subsystem = "atm_core.queue",
@@ -58,7 +59,7 @@ pub fn clear_queue_marker_after_handoff(
             msg_id = %message_id,
             "queue delivery succeeded but pending marker clear failed; retrying"
         );
-        if let Err(retry_error) = store.clear_pending_on_handoff(member, message_id) {
+        if let Err(retry_error) = store.rearm_pending_after_handoff(member, message_id, next_due) {
             record_failure();
             tracing::warn!(
                 subsystem = "atm_core.queue",
@@ -164,12 +165,6 @@ pub fn build_task_reminder_dispatch(
         member.team(),
         member.agent(),
     )?;
-    // The reminder pump is deliberately Herdr-only. A recipient may have
-    // changed backends since the task was assigned; leave that case to its
-    // normal delivery path rather than synthesizing a different local nudge.
-    if !delivery_snapshot.local_herdr_post_send {
-        return Ok(None);
-    }
     let sender_host = runtime
         .message_store
         .load_message(&MessageKey::from(row.assignment_message_id))?

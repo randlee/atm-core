@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{
-    AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, ReminderOutcome,
-    TaskActor, TaskCloseOutcome, TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState,
-    TaskStateTag, TaskStore,
+    AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, MoveTarget,
+    QueuePosition, ReminderOutcome, TaskActor, TaskCloseOutcome, TaskEventKind, TaskEventMarker,
+    TaskEventRow, TaskRow, TaskState, TaskStateTag, TaskStore,
 };
 use rusqlite::{Connection, Row, params};
 
@@ -280,6 +280,28 @@ impl TaskStore for SqliteTaskStore {
         })
     }
 
+    fn move_task(
+        &self,
+        team: &TeamName,
+        task_id: &TaskId,
+        actor: &AgentName,
+        target: &MoveTarget,
+        at: IsoTimestamp,
+    ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+        match self.db.submit_writer_op(crate::writer::WriteOp::TaskMove {
+            team: team.clone(),
+            task_id: task_id.clone(),
+            actor: actor.clone(),
+            target: target.clone(),
+            at,
+        })? {
+            crate::writer::WriteOpResult::TaskMoved(outcome) => Ok(outcome),
+            _ => Err(AtmError::mailbox_write(
+                "task move writer returned an unexpected result",
+            )),
+        }
+    }
+
     fn record_reminder(
         &self,
         member: &MemberKey,
@@ -341,7 +363,10 @@ impl TaskStore for SqliteTaskStore {
         })
     }
 
-    fn list_escalation_recipients(&self, scope: &EscalationScope) -> Result<Vec<String>, AtmError> {
+    fn list_escalation_recipients(
+        &self,
+        scope: &EscalationScope,
+    ) -> Result<Vec<atm_storage::AgentAddress>, AtmError> {
         let scope_key = scope.key();
         self.db.with_connection(|connection| {
             let mut statement = connection
@@ -357,9 +382,14 @@ impl TaskStore for SqliteTaskStore {
                 .query_map([scope_key], |row| row.get(0))
                 .map_err(|error| self.db.error("failed to list escalation recipients", error))?;
             rows.map(|row| {
-                row.map_err(|error| {
+                let address: String = row.map_err(|error| {
                     self.db
                         .error("failed to decode escalation recipient", error)
+                })?;
+                address.parse().map_err(|error| {
+                    AtmError::validation(format!(
+                        "stored escalation recipient address is invalid: {error}"
+                    ))
                 })
             })
             .collect()
@@ -369,10 +399,11 @@ impl TaskStore for SqliteTaskStore {
     fn add_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &atm_storage::AgentAddress,
         at: atm_storage::types::IsoTimestamp,
     ) -> Result<bool, AtmError> {
         let scope_key = scope.key();
+        let address = address.to_string();
         self.db.with_transaction(|connection| {
             let already_present: bool = connection
                 .query_row(
@@ -411,9 +442,10 @@ impl TaskStore for SqliteTaskStore {
     fn remove_escalation_recipient(
         &self,
         scope: &EscalationScope,
-        address: &str,
+        address: &atm_storage::AgentAddress,
     ) -> Result<bool, AtmError> {
         let scope_key = scope.key();
+        let address = address.to_string();
         self.db.with_connection(|connection| {
             let removed = connection
                 .execute(
@@ -542,6 +574,10 @@ mod tests {
     const DAEMON_RECIPIENT: &str = "ops@ax6-recipient-test";
     const TEAM_RECIPIENT: &str = "team-ops@ax6-recipient-test";
 
+    fn address(value: &str) -> atm_storage::AgentAddress {
+        value.parse().expect("valid test recipient address")
+    }
+
     #[test]
     fn escalation_recipients_are_scoped_deduplicated_and_capped() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
@@ -550,62 +586,66 @@ mod tests {
         let team_name: TeamName = TEST_TEAM.parse().expect("team");
         let team = EscalationScope::Team(team_name.clone());
         let now = IsoTimestamp::now();
+        let daemon_recipient = address(DAEMON_RECIPIENT);
+        let team_recipient = address(TEAM_RECIPIENT);
 
         assert!(
             store
-                .add_escalation_recipient(&daemon, DAEMON_RECIPIENT, now)
+                .add_escalation_recipient(&daemon, &daemon_recipient, now)
                 .expect("daemon add")
         );
         assert!(
             !store
-                .add_escalation_recipient(&daemon, DAEMON_RECIPIENT, now)
+                .add_escalation_recipient(&daemon, &daemon_recipient, now)
                 .expect("duplicate add")
         );
         assert_eq!(
             store
                 .list_escalation_recipients(&daemon)
                 .expect("daemon list"),
-            vec![DAEMON_RECIPIENT]
+            vec![daemon_recipient.clone()]
         );
         assert_eq!(
             store
                 .effective_escalation_recipients(&team_name)
                 .expect("daemon fallback"),
-            vec![DAEMON_RECIPIENT]
+            vec![daemon_recipient.clone()]
         );
 
         assert!(
             store
-                .add_escalation_recipient(&team, TEAM_RECIPIENT, now)
+                .add_escalation_recipient(&team, &team_recipient, now)
                 .expect("team add")
         );
         assert_eq!(
             store
                 .effective_escalation_recipients(&team_name)
                 .expect("team override"),
-            vec![TEAM_RECIPIENT]
+            vec![team_recipient.clone()]
         );
         assert!(
             store
-                .remove_escalation_recipient(&team, TEAM_RECIPIENT)
+                .remove_escalation_recipient(&team, &team_recipient)
                 .expect("team remove")
         );
         assert_eq!(
             store
                 .effective_escalation_recipients(&team_name)
                 .expect("fallback after remove"),
-            vec![DAEMON_RECIPIENT]
+            vec![daemon_recipient]
         );
 
         for index in 0..MAX_ESCALATION_RECIPIENTS.saturating_sub(1) {
+            let recipient = address(&format!("ops-{index}@{TEST_TEAM}"));
             assert!(
                 store
-                    .add_escalation_recipient(&daemon, &format!("ops-{index}@{TEST_TEAM}"), now,)
+                    .add_escalation_recipient(&daemon, &recipient, now)
                     .expect("recipient add")
             );
         }
+        let overflow = address(&format!("overflow@{TEST_TEAM}"));
         let error = store
-            .add_escalation_recipient(&daemon, &format!("overflow@{TEST_TEAM}"), now)
+            .add_escalation_recipient(&daemon, &overflow, now)
             .expect_err("scope cap");
         assert!(error.message().contains("maximum"));
     }
@@ -619,20 +659,22 @@ mod tests {
         let scope = EscalationScope::Daemon;
         let now = IsoTimestamp::now();
         for index in 0..MAX_ESCALATION_RECIPIENTS.saturating_sub(1) {
+            let recipient = address(&format!("seed-{index}@ax6-test"));
             store
-                .add_escalation_recipient(&scope, &format!("seed-{index}@ax6-test"), now)
+                .add_escalation_recipient(&scope, &recipient, now)
                 .expect("seed recipient");
         }
         let start = Arc::new(Barrier::new(2));
         let handles: Vec<_> = ["first@ax6-test", "second@ax6-test"]
             .into_iter()
-            .map(|address| {
+            .map(|raw_address| {
                 let store = Arc::clone(&store);
                 let start = Arc::clone(&start);
                 let scope = scope.clone();
+                let address = address(raw_address);
                 std::thread::spawn(move || {
                     start.wait();
-                    store.add_escalation_recipient(&scope, address, now)
+                    store.add_escalation_recipient(&scope, &address, now)
                 })
             })
             .collect();

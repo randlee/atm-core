@@ -4,9 +4,13 @@ use atm_storage::contract::{MessageKey, NudgeClaim};
 use atm_storage::error::AtmError;
 use atm_storage::schema::AtmMessageId;
 use atm_storage::types::{IsoTimestamp, MemberKey};
-use atm_storage::{MAX_NUDGE_ATTEMPTS, PendingNudgeStore};
+use atm_storage::{MAX_NUDGE_ATTEMPTS, PendingNudgeStore, next_reminder_due};
 use rusqlite::{OptionalExtension, params};
 use std::sync::Arc;
+
+/// A queue item is open while unread, or while an acknowledgement is owed.
+const OPEN_ITEM_SQL: &str =
+    "(read = 0 OR (pending_ack_at IS NOT NULL AND acknowledged_at IS NULL)) AND deleted_at IS NULL";
 
 impl SqlitePendingNudgeStore {
     pub(crate) fn new(db: Arc<SharedDb>) -> Self {
@@ -49,7 +53,9 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
     }
 
     fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-        let at_raw = IsoTimestamp::now().to_string();
+        let now = IsoTimestamp::now();
+        let at_raw = now.to_string();
+        let next_due = next_reminder_due(now).to_string();
         // THE at-most-once mechanism: an IMMEDIATE transaction acquires the
         // write lock up front so a second concurrent claimant blocks under
         // busy_timeout and observes the first claimant's committed row
@@ -57,20 +63,23 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
         self.db.with_transaction(|connection| {
             connection
                 .query_row(
-                    "UPDATE mail_message_states
-                     SET nudge_pending_at = NULL, updated_at = ?4
+                    &format!(
+                        "UPDATE mail_message_states
+                     SET nudge_pending_at = ?5, updated_at = ?4
                      WHERE rowid = (
                          SELECT rowid FROM mail_message_states
                          WHERE team = ?1 AND agent = ?2 AND nudge_pending_at IS NOT NULL
-                           AND read = 0 AND deleted_at IS NULL AND nudge_attempts < ?3
+                           AND nudge_pending_at <= ?4 AND {OPEN_ITEM_SQL} AND nudge_attempts < ?3
                          ORDER BY message_key ASC LIMIT 1
                      )
-                     RETURNING message_key, nudge_attempts;",
+                     RETURNING message_key, nudge_attempts;"
+                    ),
                     params![
                         member.team().as_str(),
                         member.agent().as_str(),
                         MAX_NUDGE_ATTEMPTS,
                         &at_raw,
+                        &next_due,
                     ],
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?)),
                 )
@@ -86,15 +95,18 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
 
     fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
         let message_key = MessageKey::from(claim.msg);
-        let at_raw = IsoTimestamp::now().to_string();
+        let now = IsoTimestamp::now();
+        let at_raw = now.to_string();
+        let next_due = next_reminder_due(now).to_string();
         let next_attempt = claim.attempt + 1;
         self.db.with_transaction(|connection| {
             connection
                 .execute(
-                    "UPDATE mail_message_states
-                     SET nudge_pending_at = ?4, nudge_attempts = ?5, updated_at = ?4
+                    &format!("UPDATE mail_message_states
+                     SET nudge_pending_at = CASE WHEN ?5 >= ?7 THEN ?8 ELSE ?4 END,
+                         nudge_attempts = CASE WHEN ?5 >= ?7 THEN 0 ELSE ?5 END, updated_at = ?4
                      WHERE team = ?1 AND agent = ?2 AND message_key = ?3
-                       AND nudge_pending_at IS NULL AND nudge_attempts = ?6;",
+                       AND nudge_pending_at IS NOT NULL AND nudge_attempts = ?6 AND {OPEN_ITEM_SQL};"),
                     params![
                         member.team().as_str(),
                         member.agent().as_str(),
@@ -102,6 +114,8 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
                         &at_raw,
                         next_attempt,
                         claim.attempt,
+                        MAX_NUDGE_ATTEMPTS,
+                        &next_due,
                     ],
                 )
                 .map_err(|error| self.db.error("failed to requeue pending nudge", error))?;
@@ -115,10 +129,10 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
         self.db.with_transaction(|connection| {
             connection
                 .execute(
-                    "UPDATE mail_message_states
+                    &format!("UPDATE mail_message_states
                      SET nudge_pending_at = ?4, updated_at = ?4
                      WHERE team = ?1 AND agent = ?2 AND message_key = ?3
-                       AND nudge_pending_at IS NULL AND nudge_attempts = ?5;",
+                       AND nudge_pending_at IS NOT NULL AND nudge_attempts = ?5 AND {OPEN_ITEM_SQL};"),
                     params![
                         member.team().as_str(),
                         member.agent().as_str(),
@@ -132,30 +146,47 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
         })
     }
 
-    fn clear_pending_on_read(
+    fn rearm_pending_after_handoff(
         &self,
         member: &MemberKey,
         msg: &AtmMessageId,
+        next_due: IsoTimestamp,
     ) -> Result<(), AtmError> {
-        self.clear_pending(member, msg, "failed to clear pending nudge on read")
-    }
-
-    fn clear_pending_on_handoff(
-        &self,
-        member: &MemberKey,
-        msg: &AtmMessageId,
-    ) -> Result<(), AtmError> {
-        self.clear_pending(member, msg, "failed to clear pending nudge on handoff")
+        let message_key = MessageKey::from(*msg);
+        let next_due_raw = next_due.to_string();
+        let now_raw = IsoTimestamp::now().to_string();
+        self.db.with_transaction(|connection| {
+            connection
+                .execute(
+                    &format!(
+                        "UPDATE mail_message_states
+                     SET nudge_pending_at = ?4, updated_at = ?5
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3 AND {OPEN_ITEM_SQL};"
+                    ),
+                    params![
+                        member.team().as_str(),
+                        member.agent().as_str(),
+                        message_key.as_str(),
+                        &next_due_raw,
+                        &now_raw,
+                    ],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to rearm pending nudge after handoff", error)
+                })?;
+            Ok(())
+        })
     }
 
     fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
         let db = Arc::clone(&self.db);
         self.db.read(move |connection| {
             let mut statement = connection
-                .prepare(
+                .prepare(&format!(
                     "SELECT DISTINCT team, agent FROM mail_message_states
-                     WHERE nudge_pending_at IS NOT NULL AND read = 0 AND deleted_at IS NULL;",
-                )
+                     WHERE nudge_pending_at IS NOT NULL AND {OPEN_ITEM_SQL};"
+                ))
                 .map_err(|error| db.error("failed to list pending members", error))?;
             let rows = statement
                 .query_map([], |row| {
@@ -183,39 +214,11 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
     }
 }
 
-impl SqlitePendingNudgeStore {
-    fn clear_pending(
-        &self,
-        member: &MemberKey,
-        msg: &AtmMessageId,
-        error_message: &'static str,
-    ) -> Result<(), AtmError> {
-        let message_key = MessageKey::from(*msg);
-        let at_raw = IsoTimestamp::now().to_string();
-        self.db.with_transaction(|connection| {
-            connection
-                .execute(
-                    "UPDATE mail_message_states
-                     SET nudge_pending_at = NULL, updated_at = ?4
-                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
-                    params![
-                        member.team().as_str(),
-                        member.agent().as_str(),
-                        message_key.as_str(),
-                        &at_raw,
-                    ],
-                )
-                .map_err(|error| self.db.error(error_message, error))?;
-            Ok(())
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::SqliteStorageBackend;
     use atm_storage::MAX_NUDGE_ATTEMPTS;
-    use atm_storage::contract::{Message, MessageKey};
+    use atm_storage::contract::{MailboxScope, Message, MessageKey};
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, IsoTimestamp, MemberKey, TeamName};
     use chrono::Utc;
@@ -320,6 +323,430 @@ mod tests {
         .expect("mark read");
     }
 
+    fn state_row(
+        backend: &SqliteStorageBackend,
+        id: AtmMessageId,
+    ) -> (i64, Option<String>, Option<String>, Option<String>, i64) {
+        let db = backend.shared_db_for_test();
+        db.with_connection(|connection| {
+            connection
+                .query_row(
+                    "SELECT read, nudge_pending_at, pending_ack_at, acknowledged_at, nudge_attempts
+                     FROM mail_message_states
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                    rusqlite::params![
+                        team().as_str(),
+                        agent().as_str(),
+                        MessageKey::from(id).as_str(),
+                    ],
+                    |row| {
+                        Ok((
+                            row.get(0)?,
+                            row.get(1)?,
+                            row.get(2)?,
+                            row.get(3)?,
+                            row.get(4)?,
+                        ))
+                    },
+                )
+                .map_err(|error| db.error("read pending state for test", error))
+        })
+        .expect("pending state row")
+    }
+
+    fn mark_ack_pending(backend: &SqliteStorageBackend, id: AtmMessageId) {
+        let db = backend.shared_db_for_test();
+        db.with_connection(|connection| {
+            connection
+                .execute(
+                    "UPDATE mail_message_states
+                     SET pending_ack_at = ?4, acknowledged_at = NULL
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                    rusqlite::params![
+                        team().as_str(),
+                        agent().as_str(),
+                        MessageKey::from(id).as_str(),
+                        IsoTimestamp::now().to_string(),
+                    ],
+                )
+                .map_err(|error| db.error("mark ack pending for test", error))
+        })
+        .expect("mark ack pending");
+    }
+
+    fn mark_acknowledged(backend: &SqliteStorageBackend, id: AtmMessageId) {
+        let db = backend.shared_db_for_test();
+        db.with_connection(|connection| {
+            connection
+                .execute(
+                    "UPDATE mail_message_states
+                     SET read = 1, acknowledged_at = ?4
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                    rusqlite::params![
+                        team().as_str(),
+                        agent().as_str(),
+                        MessageKey::from(id).as_str(),
+                        IsoTimestamp::now().to_string(),
+                    ],
+                )
+                .map_err(|error| db.error("mark acknowledged for test", error))
+        })
+        .expect("mark acknowledged");
+    }
+
+    fn set_marker(backend: &SqliteStorageBackend, id: AtmMessageId, at: IsoTimestamp) {
+        let db = backend.shared_db_for_test();
+        db.with_connection(|connection| {
+            connection
+                .execute(
+                    "UPDATE mail_message_states SET nudge_pending_at = ?4
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                    rusqlite::params![
+                        team().as_str(),
+                        agent().as_str(),
+                        MessageKey::from(id).as_str(),
+                        at.to_string(),
+                    ],
+                )
+                .map_err(|error| db.error("set pending marker for test", error))
+        })
+        .expect("set pending marker");
+    }
+
+    #[test]
+    fn claim_skips_items_not_yet_due() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        let store = backend.pending_nudge_store();
+        set_marker(
+            &backend,
+            msg,
+            IsoTimestamp::from_datetime(Utc::now() + chrono::Duration::seconds(30)),
+        );
+        assert!(
+            store
+                .claim_next_pending(&member)
+                .expect("early claim")
+                .is_none()
+        );
+        set_marker(&backend, msg, IsoTimestamp::now());
+        assert_eq!(
+            store
+                .claim_next_pending(&member)
+                .expect("due claim")
+                .map(|claim| claim.msg),
+            Some(msg)
+        );
+        assert!(
+            store
+                .claim_next_pending(&member)
+                .expect("leased claim")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn restart_after_claim_reexposes_unread_item() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        let store = backend.pending_nudge_store();
+        store
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        let claim = store
+            .claim_next_pending(&member)
+            .expect("claim")
+            .expect("claimed");
+        assert_eq!(claim.attempt, 0);
+        set_marker(&backend, msg, IsoTimestamp::now());
+        assert_eq!(
+            store.list_pending_members().expect("list"),
+            vec![member.clone()]
+        );
+        let reclaimed = store
+            .claim_next_pending(&member)
+            .expect("reclaim")
+            .expect("reclaimed");
+        assert_eq!(reclaimed.msg, msg);
+        assert_eq!(reclaimed.attempt, 0);
+    }
+
+    #[test]
+    fn rearm_after_handoff_sets_next_due_and_keeps_attempts() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        let store = backend.pending_nudge_store();
+        store
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        let claim = store
+            .claim_next_pending(&member)
+            .expect("claim")
+            .expect("claimed");
+        store.requeue_pending(&member, &claim).expect("retry");
+        let retry = store
+            .claim_next_pending(&member)
+            .expect("retry claim")
+            .expect("retry claimed");
+        let next_due = IsoTimestamp::from_datetime(Utc::now() + chrono::Duration::seconds(60));
+        store
+            .rearm_pending_after_handoff(&member, &msg, next_due)
+            .expect("rearm");
+        let (_, marker, _, _, attempts) = state_row(&backend, msg);
+        assert_eq!(marker, Some(next_due.to_string()));
+        assert_eq!(attempts, i64::from(retry.attempt));
+    }
+
+    #[tokio::test]
+    async fn rearm_after_handoff_is_noop_when_read_meanwhile() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        let store = backend.pending_nudge_store();
+        store
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        let _ = store
+            .claim_next_pending(&member)
+            .expect("claim")
+            .expect("claimed");
+        backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![MessageKey::from(msg)],
+                None,
+            )
+            .await
+            .expect("read");
+        store
+            .rearm_pending_after_handoff(&member, &msg, IsoTimestamp::now())
+            .expect("rearm");
+        assert!(state_row(&backend, msg).1.is_none());
+    }
+
+    #[tokio::test]
+    async fn mark_message_read_closes_item_without_ack_requirement() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        backend
+            .pending_nudge_store()
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![MessageKey::from(msg)],
+                None,
+            )
+            .await
+            .expect("read");
+        assert!(state_row(&backend, msg).1.is_none());
+    }
+
+    #[tokio::test]
+    async fn mark_message_read_rearms_item_when_ack_owed() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        mark_ack_pending(&backend, msg);
+        backend
+            .pending_nudge_store()
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![MessageKey::from(msg)],
+                None,
+            )
+            .await
+            .expect("read");
+        let (read, marker, pending_ack, acknowledged, _) = state_row(&backend, msg);
+        assert_eq!(read, 1);
+        assert!(marker.is_some());
+        assert!(pending_ack.is_some());
+        assert!(acknowledged.is_none());
+    }
+
+    #[tokio::test]
+    async fn mark_message_read_leaves_unmarked_message_null() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![MessageKey::from(msg)],
+                None,
+            )
+            .await
+            .expect("read");
+        assert!(state_row(&backend, msg).1.is_none());
+    }
+
+    #[test]
+    fn claim_selects_read_but_unacked_item() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        mark_ack_pending(&backend, msg);
+        backend
+            .pending_nudge_store()
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        mark_read_without_clearing_marker(&backend, msg);
+        assert_eq!(
+            backend
+                .pending_nudge_store()
+                .claim_next_pending(&member)
+                .expect("claim")
+                .expect("claim")
+                .msg,
+            msg
+        );
+    }
+
+    #[test]
+    fn list_pending_members_includes_read_but_unacked_member() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        mark_ack_pending(&backend, msg);
+        backend
+            .pending_nudge_store()
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        mark_read_without_clearing_marker(&backend, msg);
+        assert_eq!(
+            backend
+                .pending_nudge_store()
+                .list_pending_members()
+                .expect("list"),
+            vec![member]
+        );
+    }
+
+    #[test]
+    fn requeue_and_release_keep_closed_items_closed() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let closed_due = IsoTimestamp::from_datetime(Utc::now() - chrono::Duration::seconds(60));
+        let read_closed = AtmMessageId::new();
+        seed_message(&backend, read_closed, true);
+        set_marker(&backend, read_closed, closed_due);
+        let ack_closed = AtmMessageId::new();
+        seed_message(&backend, ack_closed, true);
+        mark_ack_pending(&backend, ack_closed);
+        set_marker(&backend, ack_closed, closed_due);
+        mark_acknowledged(&backend, ack_closed);
+        let open_requeue = AtmMessageId::new();
+        seed_message(&backend, open_requeue, false);
+        set_marker(&backend, open_requeue, closed_due);
+        let open_release = AtmMessageId::new();
+        seed_message(&backend, open_release, false);
+        set_marker(&backend, open_release, closed_due);
+        let store = backend.pending_nudge_store();
+        let read_closed_claim = atm_storage::NudgeClaim {
+            msg: read_closed,
+            attempt: 0,
+        };
+        let ack_closed_claim = atm_storage::NudgeClaim {
+            msg: ack_closed,
+            attempt: 0,
+        };
+        let open_requeue_claim = atm_storage::NudgeClaim {
+            msg: open_requeue,
+            attempt: 0,
+        };
+        let open_release_claim = atm_storage::NudgeClaim {
+            msg: open_release,
+            attempt: 0,
+        };
+        store
+            .requeue_pending(&member, &read_closed_claim)
+            .expect("read-closed requeue");
+        store
+            .release_pending(&member, &ack_closed_claim)
+            .expect("ack-closed release");
+        store
+            .requeue_pending(&member, &open_requeue_claim)
+            .expect("open requeue");
+        store
+            .release_pending(&member, &open_release_claim)
+            .expect("open release");
+
+        let read_closed_state = state_row(&backend, read_closed);
+        assert_eq!(read_closed_state.0, 1, "read-closed item stays read");
+        assert_eq!(
+            read_closed_state.1,
+            Some(closed_due.to_string()),
+            "read-closed item keeps its stale marker without reopening"
+        );
+        let ack_closed_state = state_row(&backend, ack_closed);
+        assert_eq!(ack_closed_state.0, 1, "ack-closed item stays read");
+        assert!(
+            ack_closed_state.3.is_some(),
+            "ack-closed item keeps its acknowledgement"
+        );
+        assert_eq!(
+            ack_closed_state.1,
+            Some(closed_due.to_string()),
+            "ack-closed item keeps its stale marker without reopening"
+        );
+        let open_requeue_state = state_row(&backend, open_requeue);
+        assert_eq!(open_requeue_state.0, 0, "open requeue sibling stays unread");
+        assert!(open_requeue_state.1.is_some(), "open sibling is requeued");
+        assert_eq!(
+            open_requeue_state.4, 1,
+            "open sibling records the failed attempt"
+        );
+        let open_release_state = state_row(&backend, open_release);
+        assert_eq!(open_release_state.0, 0, "open release sibling stays unread");
+        assert!(open_release_state.1.is_some(), "open sibling is released");
+        assert_ne!(
+            open_release_state.1,
+            Some(closed_due.to_string()),
+            "open sibling receives a fresh release marker"
+        );
+        assert_eq!(
+            open_release_state.4, 0,
+            "release does not increment attempts"
+        );
+    }
+
+    #[test]
+    fn immediate_send_never_carries_marker() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        for _ in 0..20 {
+            let msg = AtmMessageId::new();
+            seed_message(&backend, msg, false);
+            assert!(
+                backend
+                    .pending_nudge_store()
+                    .claim_next_pending(&member)
+                    .expect("claim")
+                    .is_none()
+            );
+        }
+    }
+
     #[test]
     fn mark_then_claim_returns_the_marked_message() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
@@ -418,7 +845,7 @@ mod tests {
     }
 
     #[test]
-    fn requeue_pending_increments_attempts_until_max_then_claim_returns_none_with_marker_set() {
+    fn requeue_at_max_attempts_backs_off_to_interval_and_resets() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let member = member();
         let msg = AtmMessageId::new();
@@ -452,6 +879,9 @@ mod tests {
             store.list_pending_members().expect("list pending"),
             vec![member]
         );
+        let (_, marker, _, _, attempts) = state_row(&backend, msg);
+        assert!(marker.is_some());
+        assert_eq!(attempts, 0);
     }
 
     #[test]
@@ -484,7 +914,7 @@ mod tests {
     }
 
     #[test]
-    fn clear_pending_on_handoff_clears_only_the_named_message() {
+    fn rearm_after_handoff_keeps_only_open_items_pending() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let member = member();
         let mut ids: Vec<AtmMessageId> = (0..3).map(|_| AtmMessageId::new()).collect();
@@ -502,9 +932,10 @@ mod tests {
 
         // Hand off the newest (last-FIFO) message directly, leaving the
         // oldest still marked and still claimable.
+        let next_due = atm_storage::next_reminder_due(IsoTimestamp::from_datetime(Utc::now()));
         store
-            .clear_pending_on_handoff(&member, &ids[2])
-            .expect("clear handoff");
+            .rearm_pending_after_handoff(&member, &ids[2], next_due)
+            .expect("rearm handoff");
 
         let first_claim = store
             .claim_next_pending(&member)
@@ -521,7 +952,7 @@ mod tests {
         assert_eq!(second_claim.msg, ids[1]);
         assert!(
             store.claim_next_pending(&member).expect("claim").is_none(),
-            "the handed-off message must not itself be claimable"
+            "the handed-off message must wait for its next due time"
         );
     }
 
@@ -552,14 +983,11 @@ mod tests {
             "read and deleted rows must not keep a member listed as pending"
         );
 
-        store
-            .clear_pending_on_handoff(&member, &visible_msg)
-            .expect("clear visible marker");
-        assert!(
+        assert_eq!(
             store
                 .list_pending_members()
-                .expect("list pending after clear")
-                .is_empty()
+                .expect("list pending after rearm"),
+            vec![member]
         );
     }
 
@@ -598,7 +1026,7 @@ mod tests {
     }
 
     #[test]
-    fn read_path_upsert_clears_the_pending_marker() {
+    fn ack_clears_marker_via_existing_upsert() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let member = member();
         let msg = AtmMessageId::new();
