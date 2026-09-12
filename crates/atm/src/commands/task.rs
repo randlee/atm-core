@@ -1,6 +1,6 @@
 //! Closed task command surface.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use anyhow::Result;
@@ -438,8 +438,8 @@ fn resolve_context(
 fn composition<'a>(
     command: &'static str,
     observability: &'a CliObservability,
-    home_dir: &PathBuf,
-    current_dir: &PathBuf,
+    home_dir: &Path,
+    current_dir: &Path,
 ) -> Result<CliComposition<'a>, atm_core::error::AtmError> {
     CliComposition::bootstrap(
         command,
