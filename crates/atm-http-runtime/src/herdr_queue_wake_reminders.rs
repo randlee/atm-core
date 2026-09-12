@@ -1,6 +1,6 @@
 //! Task-reminder and escalation pass for the Herdr queue wake pump.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use atm_core::api::RequestDeadline;
@@ -13,7 +13,7 @@ use atm_core::types::IsoTimestamp;
 
 use super::{
     HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_DEADLINE, HerdrQueueWakePump, HerdrQueueWakeStats,
-    MemberObservation, TASK_REMINDER_INTERVAL_MS, run_blocking, select_open_task,
+    MemberObservation, TASK_REMINDER_INTERVAL_MS, run_blocking,
 };
 
 impl HerdrQueueWakePump {
@@ -54,6 +54,7 @@ impl HerdrQueueWakePump {
         }
 
         if let (Some(reader), Some(task_store)) = (reader.as_ref(), task_store.as_ref()) {
+            let heads = self.open_task_heads(reader.as_ref(), &candidates).await;
             for candidate in candidates {
                 if candidate.state != atm_core::protocol::RuntimeMemberState::Blocked
                     && stats.prompted >= HERDR_MAX_PROMPTS_PER_TICK
@@ -64,9 +65,12 @@ impl HerdrQueueWakePump {
                     self.stamp_task_attempt(&candidate.member, now);
                     continue;
                 }
-                let Some(row) = self.read_due_task(reader.as_ref(), &candidate, now).await else {
+                let Some(row) = heads.get(&candidate.member).cloned() else {
                     continue;
                 };
+                if !self.reminder_due(&candidate.member, &row, now) {
+                    continue;
+                }
                 self.emit_task_reminder(reader.as_ref(), task_store, candidate, row, now, stats)
                     .await;
             }
@@ -81,36 +85,38 @@ impl HerdrQueueWakePump {
         .await;
     }
 
-    async fn read_due_task(
+    async fn open_task_heads(
         &self,
         reader: &dyn AsyncTaskLedgerReader,
-        candidate: &MemberObservation,
-        now: IsoTimestamp,
-    ) -> Option<TaskRow> {
+        candidates: &[MemberObservation],
+    ) -> HashMap<MemberKey, TaskRow> {
+        let teams: HashSet<_> = candidates
+            .iter()
+            .map(|candidate| candidate.member.team().clone())
+            .collect();
+        let mut heads = HashMap::new();
         let deadline = match ReadDeadline::new(HERDR_REQUEST_DEADLINE) {
             Ok(deadline) => deadline,
             Err(error) => {
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "deadline_invalid", error = %error, member = %candidate.member, "Herdr task reminder read skipped");
-                return None;
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "deadline_invalid", error = %error, "Herdr task reminder read skipped");
+                return heads;
             }
         };
-        let rows = match reader
-            .list_tasks(
-                candidate.member.team().clone(),
-                Some(candidate.member.agent().clone()),
-                deadline,
-            )
-            .await
-        {
-            Ok(rows) => rows,
-            Err(error) => {
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "failed", error = %error, member = %candidate.member, "Herdr task reminder read failed");
-                return None;
+        for team in teams {
+            match reader.open_tasks_for_team(team.clone(), deadline).await {
+                Ok(rows) => {
+                    for row in rows {
+                        heads
+                            .entry(MemberKey::new(team.clone(), row.assignee.clone()))
+                            .or_insert(row);
+                    }
+                }
+                Err(error) => {
+                    tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "failed", error = %error, team = %team, "Herdr open-task read failed");
+                }
             }
-        };
-        let row = select_open_task(rows)?;
-        self.reminder_due(&candidate.member, &row, now)
-            .then_some(row)
+        }
+        heads
     }
 
     async fn emit_task_reminder(
