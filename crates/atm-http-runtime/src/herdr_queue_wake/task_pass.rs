@@ -279,16 +279,12 @@ impl HerdrQueueWakePump {
         stats: &mut HerdrQueueWakeStats,
     ) {
         let head = heads.get(&candidate.member);
-        let disposition = dispose(
-            open_mail.contains(&candidate.member),
-            candidate.state,
-            head,
-            now,
-            self.escalation_state
-                .observe(&candidate.member, candidate.state),
-            0,
-        );
-        if disposition != TaskDisposition::Nudge {
+        let mail_pending = open_mail.contains(&candidate.member);
+        let new_episode = self
+            .escalation_state
+            .observe(&candidate.member, candidate.state);
+        let provisional = dispose(mail_pending, candidate.state, head, now, new_episode, 0);
+        if provisional != TaskDisposition::Nudge {
             self.apply_task_disposition(
                 task_store,
                 reader,
@@ -296,7 +292,7 @@ impl HerdrQueueWakePump {
                 candidate,
                 now,
                 stats,
-                disposition,
+                provisional,
             )
             .await;
             return;
@@ -327,8 +323,15 @@ impl HerdrQueueWakePump {
                 stats,
             )
             .await;
-            return;
         }
+        let disposition = dispose(
+            mail_pending,
+            candidate.state,
+            head,
+            now,
+            new_episode,
+            refusal_count,
+        );
         self.apply_task_disposition(task_store, reader, head, candidate, now, stats, disposition)
             .await;
     }
