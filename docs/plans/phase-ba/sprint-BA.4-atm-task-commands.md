@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba4-atm-task-commands
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba4-atm-task-commands
+---
+
 # BA.4 — `atm task` closed command set
 
 | Field | Value |

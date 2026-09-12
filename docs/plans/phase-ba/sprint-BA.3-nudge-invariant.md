@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba3-nudge-invariant
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba3-nudge-invariant
+---
+
 # BA.3 — Nudge invariant and terminal escalation
 
 | Field | Value |

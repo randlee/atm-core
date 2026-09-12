@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba5-queue-ephemeral-item
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba5-queue-ephemeral-item
+---
+
 # BA.5 — `atm queue` as an ephemeral item
 
 | Field | Value |
