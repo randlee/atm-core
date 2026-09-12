@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use atm_storage::{
-    AgentName, AtmMessageId, BuiltInNudgeTemplateKind, IsoTimestamp, Message, MessageEnvelope,
-    MessageKey, PromptHandoff, PromptTrigger, ReadDeadline, TaskCloseOutcome, TaskId, TaskOp,
-    TaskState, TeamName,
+    AgentName, AtmErrorCode, AtmMessageId, BuiltInNudgeTemplateKind, IsoTimestamp, Message,
+    MessageEnvelope, MessageKey, PromptHandoff, PromptTrigger, ReadDeadline, ReadLaneError,
+    TaskCloseOutcome, TaskId, TaskOp, TaskState, TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 use chrono::{DateTime, Utc};
@@ -212,10 +212,15 @@ async fn prompt_handoff_row_with_unknown_trigger_fails_decode() {
         .await
         .expect_err("unknown trigger must fail decode");
     assert!(
-        error
-            .to_string()
-            .contains("failed to decode prompt handoff"),
-        "{error}"
+        matches!(
+            &error,
+            ReadLaneError::Storage {
+                code: AtmErrorCode::MailboxWriteFailed,
+                message,
+                cause: Some(cause),
+        } if message.starts_with("failed to decode prompt handoff") && !cause.is_empty()
+        ),
+        "{error:?}"
     );
 }
 

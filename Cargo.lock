@@ -387,6 +387,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tokio",
  "toml",
  "ulid",
  "x509-parser",
