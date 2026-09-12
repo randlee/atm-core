@@ -374,6 +374,26 @@ mod tests {
         .expect("mark ack pending");
     }
 
+    fn mark_acknowledged(backend: &SqliteStorageBackend, id: AtmMessageId) {
+        let db = backend.shared_db_for_test();
+        db.with_connection(|connection| {
+            connection
+                .execute(
+                    "UPDATE mail_message_states
+                     SET read = 1, acknowledged_at = ?4
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                    rusqlite::params![
+                        team().as_str(),
+                        agent().as_str(),
+                        MessageKey::from(id).as_str(),
+                        IsoTimestamp::now().to_string(),
+                    ],
+                )
+                .map_err(|error| db.error("mark acknowledged for test", error))
+        })
+        .expect("mark acknowledged");
+    }
+
     fn set_marker(backend: &SqliteStorageBackend, id: AtmMessageId, at: IsoTimestamp) {
         let db = backend.shared_db_for_test();
         db.with_connection(|connection| {
@@ -626,22 +646,87 @@ mod tests {
     fn requeue_and_release_keep_closed_items_closed() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let member = member();
-        let msg = AtmMessageId::new();
-        seed_message(&backend, msg, true);
-        set_marker(&backend, msg, IsoTimestamp::now());
-        let claim = atm_storage::NudgeClaim { msg, attempt: 0 };
+        let closed_due = IsoTimestamp::from_datetime(Utc::now() - chrono::Duration::seconds(60));
+        let read_closed = AtmMessageId::new();
+        seed_message(&backend, read_closed, true);
+        set_marker(&backend, read_closed, closed_due);
+        let ack_closed = AtmMessageId::new();
+        seed_message(&backend, ack_closed, true);
+        mark_ack_pending(&backend, ack_closed);
+        set_marker(&backend, ack_closed, closed_due);
+        mark_acknowledged(&backend, ack_closed);
+        let open_requeue = AtmMessageId::new();
+        seed_message(&backend, open_requeue, false);
+        set_marker(&backend, open_requeue, closed_due);
+        let open_release = AtmMessageId::new();
+        seed_message(&backend, open_release, false);
+        set_marker(&backend, open_release, closed_due);
         let store = backend.pending_nudge_store();
+        let read_closed_claim = atm_storage::NudgeClaim {
+            msg: read_closed,
+            attempt: 0,
+        };
+        let ack_closed_claim = atm_storage::NudgeClaim {
+            msg: ack_closed,
+            attempt: 0,
+        };
+        let open_requeue_claim = atm_storage::NudgeClaim {
+            msg: open_requeue,
+            attempt: 0,
+        };
+        let open_release_claim = atm_storage::NudgeClaim {
+            msg: open_release,
+            attempt: 0,
+        };
         store
-            .requeue_pending(&member, &claim)
-            .expect("closed requeue");
+            .requeue_pending(&member, &read_closed_claim)
+            .expect("read-closed requeue");
         store
-            .release_pending(&member, &claim)
-            .expect("closed release");
+            .release_pending(&member, &ack_closed_claim)
+            .expect("ack-closed release");
+        store
+            .requeue_pending(&member, &open_requeue_claim)
+            .expect("open requeue");
+        store
+            .release_pending(&member, &open_release_claim)
+            .expect("open release");
+
+        let read_closed_state = state_row(&backend, read_closed);
+        assert_eq!(read_closed_state.0, 1, "read-closed item stays read");
+        assert_eq!(
+            read_closed_state.1,
+            Some(closed_due.to_string()),
+            "read-closed item keeps its stale marker without reopening"
+        );
+        let ack_closed_state = state_row(&backend, ack_closed);
+        assert_eq!(ack_closed_state.0, 1, "ack-closed item stays read");
         assert!(
-            store
-                .list_pending_members()
-                .expect("closed list")
-                .is_empty()
+            ack_closed_state.3.is_some(),
+            "ack-closed item keeps its acknowledgement"
+        );
+        assert_eq!(
+            ack_closed_state.1,
+            Some(closed_due.to_string()),
+            "ack-closed item keeps its stale marker without reopening"
+        );
+        let open_requeue_state = state_row(&backend, open_requeue);
+        assert_eq!(open_requeue_state.0, 0, "open requeue sibling stays unread");
+        assert!(open_requeue_state.1.is_some(), "open sibling is requeued");
+        assert_eq!(
+            open_requeue_state.4, 1,
+            "open sibling records the failed attempt"
+        );
+        let open_release_state = state_row(&backend, open_release);
+        assert_eq!(open_release_state.0, 0, "open release sibling stays unread");
+        assert!(open_release_state.1.is_some(), "open sibling is released");
+        assert_ne!(
+            open_release_state.1,
+            Some(closed_due.to_string()),
+            "open sibling receives a fresh release marker"
+        );
+        assert_eq!(
+            open_release_state.4, 0,
+            "release does not increment attempts"
         );
     }
 
