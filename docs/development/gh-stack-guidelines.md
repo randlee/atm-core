@@ -11,6 +11,24 @@ stacks); **layer** = one branch with one PR whose base is the layer below;
 single agent allowed to push a layer; **frozen** = a layer whose minimum
 functionality is complete and which nobody touches again.
 
+## 0. The stack is append-only
+
+Every unit of work — sprint, fix round, cleanup, docs — is a **new worktree
+cut from the current top of the stack**. Its PR opens on the first push with
+base = the layer below and is linked into the stack at once. **Nothing below
+the top is ever edited again**: a layer is frozen the moment its task
+closes, and anything found on it later is fixed on a new layer above. Nobody
+waits for a lower layer's QA or CI: a dev's next sprint starts on a layer cut
+from their just-pushed head, and QA verdicts for a lower layer arrive as fix
+layers at the top. One agent working this way moves through every sprint of
+a phase back-to-back without stopping; every rule below is a consequence of
+this one. Every QA finding, at every severity, is recorded through
+`/triaging-findings` the same way and dispatched to the top layer; none is
+deferred. *Why:* Phase BB reintroduced serial waits (a sprint queued behind
+a fix round, fix rounds on frozen layers, a layer cut from a stale head) and
+each cost an hour; the rule had to be re-explained because it lived in a
+person's head instead of in the templates.
+
 ## 1. Shape the stack for parallel work
 
 1. **Stack the next sprint the moment the critical code exists.** When a

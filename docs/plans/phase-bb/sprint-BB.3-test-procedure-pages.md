@@ -1,7 +1,7 @@
 ---
-status: planned
-branch: feature/bb3-test-procedure-pages
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb3-test-procedure-pages
+status: complete
+branch: fix/bb3-qa2-r2
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/fix/bb3-qa2-r2
 ---
 
 # BB.3 — Test-procedure pages (PARALLEL with BB.1)
@@ -12,7 +12,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb3-test-pr
 | Schedule | **PARALLEL. Wave 1, starts with BB.1.** `parallel_safe` with BB.1 and BB.2 (plan §4); waited on by nothing. |
 | Owner | cipher |
 | Branch | `feature/bb3-test-procedure-pages` off `integrate/phase-bb`; PR targets `integrate/phase-bb` |
-| File overlap with BB.1, BB.2 | none. BB.1 touches `crates/**`; BB.2 touches `.claude/skills/**`. This sprint touches `docs/procedures/**`, `scripts/procedures/**`, `templates/procedure-report/**`, `site/reports/procedures/**`, `.just/generate_report_index.py`, the three evidence writers named in D3, and their tests. |
+| File overlap with BB.1, BB.2 | BB.1 touches `crates/**`. BB.2 owns the skill bundle, but BB.3 intentionally updates the shared fuzz report template under `.claude/skills/html-report/templates/` because it is the only fuzz-page shell named by D5; this is the sole documented overlap. BB.3 otherwise touches `docs/procedures/**`, `scripts/procedures/**`, `templates/procedure-report/**`, `site/reports/procedures/**`, `.just/generate_report_index.py`, the three evidence writers named in D3, and their tests. |
 | Rulings | Rand 2026-09-12: "When I read through the current reports (smoke, integration, fuzz, ...), there is no way for me to see what the test did. i.e. every test has a test procedure and that procedure should be linked from the test. Ideally the test procedure would contain diagrams and good explanation for the user reviewing and available in html. (I expect we would only need a single page for each procedure version which would change slowly over time)." / "I am not asking you to rewrite tests, I just want info to help me understand exactly what procedure is done." / "we may need to dig up some older procedures from git history" |
 | Requirements / ADRs edited | none |
 | Governed interfaces (ADR-061) | none. Evidence JSON, the report index and the procedure manifest are not one of the three governed interfaces; their contract is pinned in §2 D3 and D5 of this doc. |
@@ -59,9 +59,9 @@ at `281e6f546`, derives each one's procedure id by the D5 rule, and writes
 `smoke-{fast,normal,thorough,localhost,local-ip,peer-preflight,crosshost-send,crosshost-ack,crosshost-curl-plain,crosshost-curl-tls,admission-capacity}`,
 `graft-hermes`, `colima-hermes-skills`, `read-query-benchmark`,
 `send-message-benchmark`, and one `fuzz-<target>` per distinct campaign
-target under `site/reports/fuzz/` and the four `site/reports/2026*-fuzz-report`
-directories (`an15-checked-emission`, `an15-http-framing`, `an15-sc-compose`,
-and the 2026-08-01 campaign targets read from their JSON). Where two ids
+target under `site/reports/fuzz/` and the five `site/reports/2026*-fuzz-report`
+directories (the campaign targets are read from their JSON; the two
+`an15-sc-compose` publish-verification files are not fuzz evidence). Where two ids
 share byte-identical steps the doc says so and links; there is no
 many-to-one mapping in the manifest.
 
@@ -199,13 +199,24 @@ Record the command output in the PR body so QA can re-run it.
 
 ### D5 Index linking and the gate — `.just/generate_report_index.py`
 
+R2 amendment (lead ruling, fenix, 2026-09-12): when `source_revision` is
+present, exact revision matching is preferred and the newest manifest entry
+that is an ancestor of that source revision is selected otherwise. A source
+revision with no exact or ancestor page is an error; only reports without a
+source revision use the inferred run-date path and its visible note.
+
 - `discover_envelopes` (L227) also loads `site/reports/procedures/manifest.json`
   (absent manifest ⇒ `ReportIndexError`, the site is not publishable without
   procedures once this lands).
 - For every `Envelope`, resolve its procedure page:
-  1. `procedure` field present → must name a manifest procedure; the entry
-     whose `rev` equals `source_revision` (if present) else the newest entry
-     dated ≤ `generated_at`; no entry ⇒ `ReportIndexError`.
+  1. `procedure` field present → must name a manifest procedure. If
+     `source_revision` is present, select the exact `rev` when available;
+     otherwise select the newest manifest entry for which
+     `git merge-base --is-ancestor <rev> <source_revision>` succeeds. If Git
+     is unavailable, fall back to the newest entry dated ≤ `generated_at`.
+     This ancestor rule is exact provenance, not an inferred link. A
+     `source_revision` with no matching or ancestor page ⇒ `ReportIndexError`
+     (lead ruling, fenix, PR #1436 review).
   2. no `procedure` field → derive it: `report_type == "smoke"` ⇒
      `smoke-<feature>` for `run_feature_smoke` runs (`local-up` ⇒
      `local-ip`), `graft-hermes` and `colima-hermes-skills` for those feature
@@ -282,9 +293,11 @@ L62–330):
    "inferred from run date"; no runner-written evidence file has changed
    (`git diff --stat develop -- site/reports` shows additions plus only the
    regenerated `site/reports/index.html`; the D3 diff-gate test proves it).
-4. A fresh `just smoke fast` run on the PR head writes `source_revision` into
-   both its JSON and envelope and its index entry links without the inferred
-   note.
+4. A fresh `just smoke fast` run on the final branch head writes
+   `source_revision` into
+   both its JSON and envelope and its index entry links to the newest
+   manifest revision that is an ancestor of that source revision, without the
+   inferred note (lead ruling, fenix, PR #1436 review).
 5. All tests in §2 D6 exist, pass, and are named exactly as listed.
 6. `just lint spell`, `just lint lines`, `just lint pytests` pass. No
    `cfg(test)` shims, no unused code, no edits under `crates/`.

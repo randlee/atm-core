@@ -112,6 +112,9 @@ When assigning work to a teammate:
 - No ACK means the work is not being done.
 - Codex agents such as `arch-ctm` only see new ATM messages when they check
   mail after their current task completes.
+- On atm 1.5.16, the assignee's `atm task close <task-id> completed` report
+  closes the assigner's mirror task too. Team-lead reads that report and does
+  not separately close the mirror with `--task-complete`.
 - Use native `atm send` / `atm read` / `atm ack` for all teammate messaging.
   See `atm help identity` for how caller identity resolves for these
   commands.

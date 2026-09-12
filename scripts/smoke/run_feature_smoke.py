@@ -36,7 +36,8 @@ from feature_smoke_report import (
     render_host_header,
     summarize_cases,
 )
-from run_inbound_peer_smoke import PANE_TEMPLATE, compose
+from run_inbound_peer_smoke import PANE_TEMPLATE
+from report_runtime import compose as _compose, source_revision as _source_revision
 from smoke_common import (
     SmokeError,
     advertised_host_from_value as advertised_host_from_json,
@@ -108,6 +109,15 @@ def branch_version() -> str:
     if set(selected) != {"agent-team-mail", "atm-daemon"} or len(versions) != 1 or not isinstance(next(iter(versions)), str):
         raise SmokeError("cargo metadata did not expose one shared atm/atm-daemon version")
     return next(iter(versions))
+
+
+def source_revision() -> str | None:
+    """Record the exact checkout that produced evidence; never guess on failure."""
+    return _source_revision(ROOT)
+
+
+def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
+    _compose(template, variables, output, root=ROOT, error_type=SmokeError)
 
 
 def selected_message(value: Any, expected: str) -> dict[str, Any] | None:
@@ -809,11 +819,19 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     report = directory / f"{identity['feature']}.json"
     passed = all(case["status"] == "PASS" for case in cases)
+    revision = source_revision()
+    procedure = "graft-hermes" if feature == "graft-hermes" else f"smoke-{feature}"
+    procedure_href = os.path.relpath(
+        ROOT / "site/reports/procedures" / procedure / f"{revision[:8] if revision else 'unresolved'}.html",
+        directory,
+    )
     report.write_text(
         json.dumps(
             {
                 **identity,
                 "status": "PASS" if passed else "FAIL",
+                "source_revision": revision,
+                **({"procedure": "graft-hermes"} if feature == "graft-hermes" else {}),
                 "cases": cases,
             },
             indent=2,
@@ -846,6 +864,8 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
             "title": f"ATM smoke — {feature}",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pane_src": local_pane.name,
+            "procedure_label": f"{procedure} @ {revision[:8] if revision else 'unresolved'}",
+            "procedure_href": procedure_href,
         },
         report.with_suffix(".html"),
     )
@@ -863,6 +883,8 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
             "title": "ATM cross-host smoke",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pane_html": pane_html,
+            "procedure_label": f"{procedure} @ {revision[:8] if revision else 'unresolved'}",
+            "procedure_href": procedure_href,
         },
         directory / "index.html",
     )
@@ -877,6 +899,8 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
                 "host_label": host,
                 "report_html": (directory / "index.html").relative_to(reports_root).as_posix(),
                 "status": "PASS" if passed else "FAIL",
+                "source_revision": revision,
+                **({"procedure": "graft-hermes"} if feature == "graft-hermes" else {}),
             },
             indent=2,
         )
@@ -1032,7 +1056,28 @@ def main() -> int:
     if args.feature in FIXTURE_FEATURES:
         if args.peers:
             raise SmokeError(f"fixture smoke `{args.feature}` does not accept hostnames")
-        return subprocess.run([sys.executable, str(ROOT / "scripts" / "smoke" / "run.py"), args.feature, "--write-artifacts"], check=False).returncode
+        from phase_ad_suite import run_suite
+        if args.feature == "thorough":
+            from run_thorough import THOROUGH_ROWS
+            specs = THOROUGH_ROWS
+        else:
+            from run import FAST_ROWS, NORMAL_ROWS
+            specs = FAST_ROWS if args.feature == "fast" else NORMAL_ROWS
+        payload = run_suite(args.feature, specs, write_artifacts=False)
+        cases = [
+            {
+                "name": row["id"],
+                "status": row["verdict"],
+                "detail": row["flow"],
+                "origin": platform.node(),
+                "destination": platform.node(),
+            }
+            for row in payload["rows"]
+        ]
+        report = write_report(args.feature, cases)
+        passed = payload["status"] == "passed"
+        print(f"{'PASS' if passed else 'FAIL'} evidence: {report}")
+        return 0 if passed else 1
     feature = LOCAL_IP if args.feature == LOCAL_IP_ALIAS else args.feature
     # `crosshost` remains a compatibility alias for the first explicit
     # cross-host stage; new automation should use `crosshost-send`.
