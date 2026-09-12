@@ -65,7 +65,7 @@ pub(crate) async fn maybe_escalate_task(
         &row.team,
         &body,
         &notification,
-        EscalationKind::LeadNotified,
+        EscalationKind::TaskStalled,
     )
     .await;
     record_escalation_stats(stats, &outcome);

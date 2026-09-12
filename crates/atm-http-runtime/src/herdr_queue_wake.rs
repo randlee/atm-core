@@ -2304,7 +2304,7 @@ mod tests {
             &team,
             "mail body is separate",
             &notification,
-            crate::herdr_escalation::EscalationKind::LeadNotified,
+            crate::herdr_escalation::EscalationKind::TaskStalled,
         )
         .await;
         assert_eq!(outcome.recipients_written, 1);
