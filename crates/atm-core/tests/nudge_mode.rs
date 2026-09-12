@@ -544,7 +544,7 @@ fn failing_marker_store_does_not_fail_the_deferred_write() {
 }
 
 #[test]
-fn task_tagged_sync_prepare_forces_deferred_mode() {
+fn task_tagged_sync_prepare_forces_immediate_mode() {
     let (root, runtime, _recording_store, team) = setup();
     let home_dir = root.path().join("home");
     std::fs::create_dir_all(&home_dir).expect("home dir");
@@ -558,15 +558,16 @@ fn task_tagged_sync_prepare_forces_deferred_mode() {
 
     let prepared =
         prepare_write_with_runtime(request, &NullObservability, &runtime).expect("prepare write");
+    // BB.5: a task-linked send is immediate, never deferred (crates/atm-core/src/send/mod.rs:381)
     assert_eq!(
         prepared.outbound_request().nudge_mode,
-        NudgeMode::Deferred,
-        "task-tagged sync writes are always queued"
+        NudgeMode::Immediate,
+        "task-tagged sync writes are written immediately"
     );
 }
 
 #[test]
-fn task_tagged_async_prepare_forces_deferred_mode() {
+fn task_tagged_async_prepare_forces_immediate_mode() {
     let (root, runtime, _recording_store, team) = setup();
     let home_dir = root.path().join("home");
     std::fs::create_dir_all(&home_dir).expect("home dir");
@@ -587,10 +588,11 @@ fn task_tagged_async_prepare_forces_deferred_mode() {
         source_preflight,
     ))
     .expect("prepare async write");
+    // BB.5: the async prepare path selects the same immediate mode (crates/atm-core/src/send/mod.rs:381)
     assert_eq!(
         prepared.outbound_request().nudge_mode,
-        NudgeMode::Deferred,
-        "task-tagged async writes are always queued"
+        NudgeMode::Immediate,
+        "task-tagged async writes are written immediately"
     );
 }
 
@@ -630,8 +632,21 @@ fn assert_herdr_rendered_default(
                 .map(ToString::to_string)
                 .unwrap_or_default()
                 .as_str(),
-        );
+        )
+        // BB.5: the task_queued template also carries the landed queue
+        // position (crates/atm-core/src/send/nudge_template.rs:135).
+        .replace("{{position}}", &queued_position_text(dispatch));
     assert_eq!(target.rendered_nudge, expected);
+}
+
+/// Renders the `{{position}}` placeholder exactly as the production value
+/// map does: the landed position for a `Queued` transition, otherwise empty
+/// (`crates/atm-core/src/send/nudge_template.rs:69`).
+fn queued_position_text(dispatch: &atm_core::boundary::BuiltInPostSendDispatch) -> String {
+    match dispatch.event.task_transition {
+        Some(atm_core::boundary::TaskTransition::Queued { position }) => position.to_string(),
+        _ => String::new(),
+    }
 }
 
 fn assert_local_matrix(herdr: bool) {
@@ -758,8 +773,12 @@ fn assert_local_matrix(herdr: bool) {
     queued(false, atm_core::boundary::BuiltInNudgeTemplateKind::Queue);
     queued(true, atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck);
 
-    let task = |mode| {
-        let message_id = AtmMessageId::new();
+    // BB.5: an assignment is written immediately and its one write-time
+    // dispatch is the `task_queued` line carrying the landed queue position;
+    // nothing is queued and no marker is written
+    // (crates/atm-core/src/send/mod.rs:381).
+    let assignment = |mode, expected_position: u32| {
+        let task_id: TaskId = "task-ax1".parse().expect("task id");
         let mut prepared = prepare_write_with_runtime(
             write_request_for(
                 &home_dir,
@@ -768,61 +787,74 @@ fn assert_local_matrix(herdr: bool) {
                 WriteRequestOptions {
                     nudge_mode: mode,
                     requires_ack: false,
-                    task_id: Some("task-ax1".parse().expect("task id")),
+                    task_id: Some(task_id.clone()),
                 },
-                message_id,
+                AtmMessageId::new(),
                 IsoTimestamp::now(),
             ),
             &NullObservability,
             &runtime,
         )
-        .expect("prepare task write");
+        .expect("prepare assignment write");
+        // BB.5: a task-linked send is immediate whatever the caller asked for
+        // (crates/atm-core/src/send/mod.rs:381).
         assert_eq!(
             prepared.outbound_request().nudge_mode,
-            NudgeMode::Deferred,
-            "task writes are deferred for every local backend"
+            NudgeMode::Immediate,
+            "assignments are immediate for every local backend"
         );
-        assert!(
-            prepared
-                .build_received_hook_dispatches(&runtime)
-                .expect("deferred task dispatch")
-                .is_empty()
+        // BB.5: the write-time planner emits the assignment dispatch itself
+        // instead of suppressing it for a later queue claim
+        // (crates/atm-core/src/write/pipeline.rs:268).
+        let dispatches = prepared
+            .build_received_hook_dispatches(&runtime)
+            .expect("immediate assignment dispatch");
+        assert_eq!(dispatches.len(), 1, "one line per assignment");
+        let dispatch = &dispatches[0];
+        assert_local_target(dispatch, herdr);
+        // BB.5: an immediate dispatch carries the steer kind
+        // (crates/atm-core/src/send/hook.rs:131).
+        assert_eq!(dispatch.kind, NudgeKind::Steer);
+        assert_eq!(dispatch.event.task_id, Some(task_id));
+        // BB.5: every assignment carries its landed queue position
+        // (crates/atm-core/src/delivery_plan.rs:88).
+        assert_eq!(
+            dispatch.event.task_transition,
+            Some(atm_core::boundary::TaskTransition::Queued {
+                position: expected_position
+            }),
         );
-        prepared
-            .finish(&runtime, &NullObservability)
-            .expect("finish task write");
-        prepared
-            .mark_pending_if_deferred(&runtime)
-            .expect("mark task write");
-        let member = MemberKey::new(team.clone(), "recipient".parse().expect("recipient"));
-        let message = load_received_hook_dispatch_message(&runtime, &member, message_id)
-            .expect("load task message")
-            .expect("task message belongs to recipient");
-        let dispatch = rebuild_received_hook_dispatch(
-            &runtime,
-            &member,
-            message_id,
-            NudgeKind::Queue,
-            &message,
-        )
-        .expect("rebuild task dispatch")
-        .expect("task dispatch");
-        assert_local_target(&dispatch, herdr);
-        assert_eq!(dispatch.kind, NudgeKind::Queue);
-        assert!(dispatch.event.task_id.is_some());
-        assert_eq!(dispatch.event.task_transition, None);
+        // BB.5: a `Queued` transition selects the task_queued template
+        // (crates/atm-core/src/boundary/mod.rs:163).
         assert_eq!(
             built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind),
-            atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck,
+            atm_core::boundary::BuiltInNudgeTemplateKind::TaskQueued,
         );
+        if herdr {
+            assert_herdr_rendered_default(
+                dispatch,
+                atm_core::boundary::BuiltInNudgeTemplateKind::TaskQueued,
+            );
+        }
+        prepared
+            .finish(&runtime, &NullObservability)
+            .expect("finish assignment write");
+        // BB.5: the marker seam is a no-op for an immediate write, so an
+        // assignment leaves no pending-nudge marker behind
+        // (crates/atm-core/src/write/pipeline.rs:138).
+        prepared
+            .mark_pending_if_deferred(&runtime)
+            .expect("marker seam is a no-op for an assignment");
     };
-    task(NudgeMode::Immediate);
-    task(NudgeMode::Deferred);
+    assignment(NudgeMode::Immediate, 1);
+    assignment(NudgeMode::Deferred, 1);
 
+    // BB.5: only the two ordinary deferred writes above set a marker; neither
+    // assignment does (crates/atm-core/src/write/pipeline.rs:138).
     assert_eq!(
         recording_store.mark_pending_call_count(),
-        4,
-        "every deferred local write sets one durable marker"
+        2,
+        "only a deferred non-task write sets a durable marker"
     );
 }
 
@@ -832,7 +864,7 @@ fn actual_dispatch_matrix_covers_tmux_and_herdr_members() {
     assert_local_matrix(true);
 }
 
-fn assert_graft_task_dispatch(async_path: bool) {
+fn assert_graft_assignment_dispatch(async_path: bool) {
     let team: TeamName = "test-team".parse().expect("team");
     let (root, runtime, _recording_store, _) = setup_with_roster(
         false,
@@ -871,36 +903,71 @@ fn assert_graft_task_dispatch(async_path: bool) {
         prepare_write_with_runtime(request, &NullObservability, &runtime)
             .expect("prepare sync graft task write")
     };
+    // BB.5: a graft assignment is immediate like every other task-linked
+    // send (crates/atm-core/src/send/mod.rs:381).
     assert_eq!(
         prepared.outbound_request().nudge_mode,
-        NudgeMode::Deferred,
-        "graft task writes are deferred before queue handoff"
+        NudgeMode::Immediate,
+        "graft assignments are written immediately"
     );
+    // BB.5: the graft branch of the built-in dispatch builder renders the
+    // immediate dispatch at write time (crates/atm-core/src/send/hook.rs:51).
     let dispatches = prepared
         .build_received_hook_dispatches(&runtime)
-        .expect("build graft task dispatch");
-    assert_eq!(dispatches.len(), 1);
+        .expect("build graft assignment dispatch");
+    assert_eq!(dispatches.len(), 1, "one line per assignment");
     assert!(matches!(
         dispatches[0].target,
         PostSendBuiltInTarget::Graft(_)
     ));
-    assert_eq!(dispatches[0].kind, NudgeKind::Queue);
+    // BB.5: an immediate dispatch carries the steer kind
+    // (crates/atm-core/src/send/hook.rs:131).
+    assert_eq!(dispatches[0].kind, NudgeKind::Steer);
     assert_eq!(
-        built_in_nudge_template_kind_from_post_send_event(&dispatches[0].event, dispatches[0].kind,),
-        atm_core::boundary::BuiltInNudgeTemplateKind::QueueAck,
+        dispatches[0].event.task_id,
+        Some("task-ax1".parse().expect("task id"))
     );
+    // BB.5: the position is attached from the durable admission result
+    // (crates/atm-core/src/delivery_plan.rs:87). This fixture's async store
+    // (`InMemoryAsyncStore`) admits nothing, so only the synchronous path
+    // lands an assignment row a position can come from; the async path proves
+    // the write mode and the dispatch kind.
+    if async_path {
+        assert_eq!(
+            dispatches[0].event.task_transition, None,
+            "this fixture's async store admits no assignment row to take a position from"
+        );
+    } else {
+        // BB.5: every assignment carries its landed queue position
+        // (crates/atm-core/src/delivery_plan.rs:88).
+        assert_eq!(
+            dispatches[0].event.task_transition,
+            Some(atm_core::boundary::TaskTransition::Queued { position: 1 }),
+        );
+        // BB.5: a `Queued` transition selects the task_queued template
+        // (crates/atm-core/src/boundary/mod.rs:163).
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(
+                &dispatches[0].event,
+                dispatches[0].kind,
+            ),
+            atm_core::boundary::BuiltInNudgeTemplateKind::TaskQueued,
+        );
+    }
     prepared
         .finish(&runtime, &NullObservability)
-        .expect("finish graft task write");
+        .expect("finish graft assignment write");
+    // BB.5: an assignment never reaches the pending-marker seam
+    // (crates/atm-core/src/write/pipeline.rs:138).
     prepared
         .mark_pending_if_deferred(&runtime)
-        .expect("mark graft task write");
+        .expect("marker seam is a no-op for a graft assignment");
 }
 
 #[test]
-fn sync_and_async_graft_task_writes_use_the_queue_dispatch_kind() {
-    assert_graft_task_dispatch(false);
-    assert_graft_task_dispatch(true);
+fn sync_and_async_graft_task_writes_dispatch_task_queued_immediately() {
+    assert_graft_assignment_dispatch(false);
+    assert_graft_assignment_dispatch(true);
 }
 
 #[test]
