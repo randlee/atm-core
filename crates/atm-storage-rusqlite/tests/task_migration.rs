@@ -398,6 +398,47 @@ fn replay_of_migrated_history_reproduces_row_state() {
             Some(state),
         );
     }
+    task(
+        &connection,
+        "D",
+        "winner",
+        "complete",
+        "2026-01-01T00:00:00Z",
+    );
+    event(
+        &connection,
+        "D",
+        "winner",
+        1,
+        "2026-01-01T00:00:00Z",
+        "completed",
+        Some("assigned"),
+        Some("complete"),
+    );
+    task(&connection, "D", "loser", "active", "2026-01-02T00:00:00Z");
+    event(
+        &connection,
+        "D",
+        "loser",
+        1,
+        "2026-01-02T00:00:00Z",
+        "started",
+        Some("assigned"),
+        Some("active"),
+    );
+    for (id, at) in [("E", "2026-01-03T00:00:00Z"), ("F", "2026-01-04T00:00:00Z")] {
+        task(&connection, id, "shared", "active", at);
+        event(
+            &connection,
+            id,
+            "shared",
+            1,
+            at,
+            "started",
+            Some("assigned"),
+            Some("active"),
+        );
+    }
     drop(connection);
     let _backend = migrate(&path);
     let connection = Connection::open(path).unwrap();
@@ -406,6 +447,32 @@ fn replay_of_migrated_history_reproduces_row_state() {
         [], |row| row.get(0)
     ).unwrap();
     assert_eq!(mismatches, 0);
+    let rows: Vec<(String, String, String)> = connection
+        .prepare("SELECT task_id, assignee, state FROM tasks ORDER BY task_id")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        rows,
+        vec![
+            ("A".into(), "a".into(), "assigned".into()),
+            ("B".into(), "b".into(), "active".into()),
+            ("C".into(), "c".into(), "complete".into()),
+            ("D".into(), "winner".into(), "complete".into()),
+            ("E".into(), "shared".into(), "active".into()),
+            ("F".into(), "shared".into(), "assigned".into()),
+        ]
+    );
+    let migrated: Vec<String> = connection
+        .prepare("SELECT task_id FROM task_events WHERE event = 'migrated' ORDER BY task_id")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(migrated, vec!["D".to_owned(), "F".to_owned()]);
 }
 
 #[test]

@@ -1139,9 +1139,10 @@ mod tests {
         for task in ["T1", "T2", "T3"] {
             seed_move_task(&backend, task, "test-agent");
         }
+        start_task(&backend, &"T1".parse().unwrap());
         assert_eq!(
             move_task(&backend, "T3", MoveTarget::Head).unwrap().get(),
-            1
+            2
         );
         assert_eq!(move_task(&backend, "T3", MoveTarget::End).unwrap().get(), 3);
         assert_eq!(
@@ -1159,6 +1160,15 @@ mod tests {
         assert_eq!(
             task_positions(&backend, "test-agent"),
             vec![("T1".into(), 1), ("T3".into(), 2), ("T2".into(), 3)]
+        );
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        for task in ["T1", "T2"] {
+            seed_move_task(&backend, task, "test-agent");
+        }
+        assert_eq!(
+            move_task(&backend, "T2", MoveTarget::Head).unwrap().get(),
+            1
         );
     }
 

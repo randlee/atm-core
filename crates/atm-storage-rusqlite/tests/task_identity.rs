@@ -153,7 +153,7 @@ impl Harness {
 }
 
 #[test]
-fn writer_assign_existing_open_id_reassigns_in_place() {
+fn assign_existing_open_id_to_other_agent_reassigns_in_place_and_renumbers_both_queues() {
     let h = Harness::new();
     let old = h.assign("T1", "alice", "lead", None);
     h.assign("T2", "alice", "lead", None);
@@ -180,7 +180,7 @@ fn writer_assign_existing_open_id_reassigns_in_place() {
 }
 
 #[test]
-fn writer_assign_closed_id_reopens_same_row() {
+fn assign_closed_id_reopens_in_place_clearing_outcome_and_counters() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.close("T1", "lead", "alice", TaskCloseOutcome::Refused)
@@ -349,7 +349,7 @@ fn close_renumbers_remaining_queue_contiguously() {
 }
 
 #[test]
-fn writer_close_open_task_delivers_and_closes_in_one_write() {
+fn close_each_outcome_persists_column_and_event() {
     let h = Harness::new();
     for (task, outcome) in [
         ("T1", TaskCloseOutcome::Completed),
@@ -404,7 +404,7 @@ fn writer_close_unknown_task_is_atomic() {
 }
 
 #[test]
-fn writer_close_already_closed_omits_task_event() {
+fn close_of_complete_row_delivers_plain_mail_without_new_event() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     h.close("T1", "lead", "alice", TaskCloseOutcome::Completed)
@@ -428,11 +428,11 @@ fn writer_close_already_closed_omits_task_event() {
 }
 
 #[test]
-fn writer_close_by_third_party_is_rejected() {
+fn close_by_third_party_is_not_authorized() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let before = h.row("T1");
-    let event_count = h.events("T1").len();
+    let before_events = h.events("T1");
     let mut report = h.message("lead", "intruder", "third-party report");
     report.envelope.task_id = Some("T1".parse().unwrap());
     report.envelope.task_op = Some(TaskOp::Close {
@@ -445,8 +445,14 @@ fn writer_close_by_third_party_is_rejected() {
     assert!(error.message().contains("report delivered"));
     assert_eq!(h.row("T1"), before);
     let events = h.events("T1");
-    assert_eq!(events.len(), event_count + 1);
-    assert_eq!(events.last().unwrap().event, TaskEventKind::Rejected);
+    assert_eq!(events.len(), before_events.len() + 1);
+    let rejected = events.last().expect("rejected event");
+    assert_eq!(rejected.event, TaskEventKind::Rejected);
+    assert_eq!(rejected.assignee.as_str(), "alice");
+    assert_eq!(
+        rejected.actor,
+        atm_storage::TaskActor::Member("intruder".parse().unwrap())
+    );
     let stored = h
         .backend
         .message_store()
@@ -459,32 +465,40 @@ fn writer_close_by_third_party_is_rejected() {
 }
 
 #[test]
-fn writer_stale_counterparty_is_rejected() {
+fn close_by_stale_counterparty_is_rejected_atomically() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
+    h.assign("T1", "bob", "interim-lead", None);
+    h.assign("T1", "alice", "new-lead", None);
     let before = h.row("T1");
-    let event_count = h.events("T1").len();
-    let mut report = h.message("other-lead", "alice", "stale-counterparty report");
+    let before_events = h.events("T1");
+    let mut report = h.message("lead", "alice", "stale close report");
     report.envelope.task_id = Some("T1".parse().unwrap());
     report.envelope.task_op = Some(TaskOp::Close {
         outcome: TaskCloseOutcome::Completed,
-        reason: Some("reason".to_owned()),
+        reason: Some("done".to_owned()),
     });
-    let error = h.save(&report).expect_err("stale recipient");
+    let error = h.save(&report).expect_err("superseded assigner is stale");
     assert_eq!(error.code(), AtmErrorCode::TaskStaleCounterparty);
     assert!(error.message().contains("no longer the counterparty"));
     assert!(error.message().contains("report delivered"));
     assert_eq!(h.row("T1"), before);
     let events = h.events("T1");
-    assert_eq!(events.len(), event_count + 1);
-    assert_eq!(events.last().unwrap().event, TaskEventKind::Rejected);
+    assert_eq!(events.len(), before_events.len() + 1);
+    let rejected = events.last().expect("rejected event");
+    assert_eq!(rejected.event, TaskEventKind::Rejected);
+    assert_eq!(rejected.assignee.as_str(), "alice");
+    assert_eq!(
+        rejected.actor,
+        atm_storage::TaskActor::Member("alice".parse().unwrap())
+    );
     let stored = h
         .backend
         .message_store()
         .load_message(&report.message_key)
         .unwrap()
         .expect("plain rejected report");
-    assert_eq!(stored.envelope.text, "stale-counterparty report");
+    assert_eq!(stored.envelope.text, "stale close report");
     assert_eq!(stored.envelope.task_id, None);
     assert_eq!(stored.envelope.task_op, None);
 }
