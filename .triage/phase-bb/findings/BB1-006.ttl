@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-006>
+  a triage:Finding ;
+  triage:findingId "BB1-006" ;
+  triage:title "docs/atm-daemon/http-api.md still documents API version 1.7.0 after the 1.8.0 bump" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. docs/atm-daemon/http-api.md:12,16,160 and the version table at :164 still say 1.7.0. ADR-061 D3 minor-bump rule requires \"updated documentation (openapi.yaml and surface baseline ...)\"; precedent commit 0b4911c5a updated this same file for a prior minor bump." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/atm-daemon/http-api.md:12,16,160,164" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: add the 1.8.0 row (PostSendHookEvent.task_transition, optional, default None) and move the baseline line to 1.8.0. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-006/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-006/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/http-api.md" ;
+  triage:line 12 ;
+  triage:snippet "http-api.md baseline and version table still read 1.7.0 despite HTTP_API_VERSION bumping to 1.8.0 for PostSendHookEvent.task_transition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-006/1> .
+
+<urn:atm:triage:worktree/BB1-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

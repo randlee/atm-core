@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-009>
+  a triage:Finding ;
+  triage:findingId "BB1-009" ;
+  triage:title "AX5 pump tests weakened from identity assertions to bare counts" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs:1169-1170,1196 (ac01: AX5-AC1-FIRST/SECOND identity assertions replaced by len() > 0 / len() > before), and :1394 (ax5_03: positive AX5-ASSIGNED-2 assertion dropped). ax5_01 (:1119-1121) shows the correct re-pin pattern (P14 shape: starts with <atm from=\", no task id) that the weakened tests should have followed instead." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs:1169-1170,1196,1394" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: re-pin each prompt to its expected shape -- claimed assignment renders as an ordinary template without a task id; task-pass prompt carries task=\"<id>\". Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-009/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-009/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:line 1169 ;
+  triage:snippet "AX5 pump test assertions weakened from exact prompt-identity checks to bare length/count comparisons" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-009/1> .
+
+<urn:atm:triage:worktree/BB1-009/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .
