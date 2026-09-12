@@ -865,6 +865,19 @@ struct TaskCandidate {
     blocked: bool,
 }
 
+/// One accepted runtime observation. The task-disposition pass consumes this
+/// rather than making eligibility decisions from a poll snapshot.
+#[derive(Clone)]
+#[expect(
+    dead_code,
+    reason = "the disposition-driven task pass is wired in task 4"
+)]
+struct MemberObservation {
+    member: MemberKey,
+    state: RuntimeMemberState,
+    state_changed_at: Option<IsoTimestamp>,
+}
+
 fn select_open_task(mut rows: Vec<TaskRow>) -> Option<TaskRow> {
     rows.retain(|row| row.state.is_open());
     rows.sort_by(|left, right| {
