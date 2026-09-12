@@ -20,7 +20,8 @@ use atm_storage::task_state::{
 };
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{MessageWriteOrigin, MoveTarget, TaskOp};
-use rusqlite::{Connection, OptionalExtension, params};
+pub(super) use rusqlite::params;
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::task_sql::select_task_row;
 
@@ -244,42 +245,11 @@ fn apply_task_assignment(
         .filter(|row| row.state.is_open() && row.assignee != record.agent)
         .map(|row| row.assignee.clone());
 
-    let was_closed = row
-        .as_ref()
-        .is_some_and(|row| matches!(row.state, TaskState::Complete(_)));
-    release_previous_assignment(record, task_id, row.as_ref(), connection, target)?;
-
-    let mut order = queue_order(connection, target, &record.team, &record.agent)?;
-    order.retain(|id| id != task_id);
-    insert_at_placement(
-        &mut order,
-        task_id,
-        placement.unwrap_or(&MoveTarget::End),
-        connection,
-        target,
-        &record.team,
-        &record.agent,
-    )?;
-    let temporary =
-        u32::try_from(order.len()).map_err(|_| task_move_invalid("task queue too large"))?;
-    apply_task_assignment_row(
+    let order = persist_task_assignment(
         record,
         task_id,
+        placement,
         row.as_ref(),
-        temporary,
-        message_id,
-        at,
-        next_state,
-        connection,
-        target,
-    )?;
-    renumber_previous_assignment(record, row.as_ref(), connection, target)?;
-    renumber_queue(&record.team, &record.agent, &order, connection, target)?;
-    append_assignment_event(
-        record,
-        task_id,
-        row.as_ref(),
-        was_closed,
         message_id,
         at,
         next_state,
@@ -307,6 +277,44 @@ fn apply_task_assignment(
         queued_position,
         reassign_notice,
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn persist_task_assignment(
+    record: &Message,
+    task_id: &TaskId,
+    placement: Option<&MoveTarget>,
+    row: Option<&TaskRow>,
+    message_id: AtmMessageId,
+    at: IsoTimestamp,
+    next_state: TaskState,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<Vec<TaskId>, AtmError> {
+    let was_closed = row.is_some_and(|row| matches!(row.state, TaskState::Complete(_)));
+    release_previous_assignment(record, task_id, row, connection, target)?;
+    let mut order = queue_order(connection, target, &record.team, &record.agent)?;
+    order.retain(|id| id != task_id);
+    insert_at_placement(
+        &mut order,
+        task_id,
+        placement.unwrap_or(&MoveTarget::End),
+        connection,
+        target,
+        &record.team,
+        &record.agent,
+    )?;
+    let temporary =
+        u32::try_from(order.len()).map_err(|_| task_move_invalid("task queue too large"))?;
+    apply_task_assignment_row(
+        record, task_id, row, temporary, message_id, at, next_state, connection, target,
+    )?;
+    renumber_previous_assignment(record, row, connection, target)?;
+    renumber_queue(&record.team, &record.agent, &order, connection, target)?;
+    append_assignment_event(
+        record, task_id, row, was_closed, message_id, at, next_state, connection, target,
+    )?;
+    Ok(order)
 }
 
 #[allow(clippy::too_many_arguments)]

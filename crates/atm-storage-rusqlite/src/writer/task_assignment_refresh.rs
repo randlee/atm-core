@@ -1,9 +1,9 @@
 //! Same-assignee assignment refresh without a task-state event.
 
 use atm_storage::{AtmError, AtmMessageId, Message, QueuePosition, TaskId, TaskRow};
-use rusqlite::{Connection, params};
 
-use crate::shared_db::{SharedDbTarget, sqlite_error};
+use super::task_ops::params;
+use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn refresh_same_assignment(
@@ -11,7 +11,7 @@ pub(super) fn refresh_same_assignment(
     task_id: &TaskId,
     row: Option<&TaskRow>,
     message_id: AtmMessageId,
-    connection: &Connection,
+    connection: &SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<Option<u32>, AtmError> {
     let Some(row) = row.filter(|row| row.state.is_open() && row.assignee == record.agent) else {

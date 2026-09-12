@@ -32,7 +32,6 @@ mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod shared_db_support;
-mod task_assignment_migration;
 mod task_ledger_reader;
 mod task_migration;
 mod task_sql;

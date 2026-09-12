@@ -1,12 +1,11 @@
 //! Open-time normalization for pre-Phase-BB assignment marker state.
 
 use atm_storage::AtmError;
-use rusqlite::Connection;
 
-use crate::shared_db::{SharedDbTarget, sqlite_error};
+use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
 
 pub(crate) fn normalize_legacy_assignment_markers(
-    connection: &Connection,
+    connection: &SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<u64, AtmError> {
     let affected = connection
@@ -36,12 +35,12 @@ pub(crate) fn normalize_legacy_assignment_markers(
 #[cfg(test)]
 mod tests {
     use super::normalize_legacy_assignment_markers;
-    use crate::shared_db::SharedDbTarget;
-    use rusqlite::{Connection, params};
+    use crate::shared_db::{SharedDbTarget, SqliteConnection};
+    use crate::writer::task_ops::params;
 
     #[test]
     fn ba_fixture_with_pending_assignments_opens_with_zero_pending_ack_and_no_markers() {
-        let connection = Connection::open_in_memory().expect("fixture database");
+        let connection = SqliteConnection::open_in_memory().expect("fixture database");
         connection
             .execute_batch(
                 "CREATE TABLE mail_messages (

@@ -2,17 +2,16 @@
 
 use atm_storage::contract::{Message, MessageKey};
 use atm_storage::{AgentName, AtmError, AtmMessageId, TaskId};
-use rusqlite::Connection;
 
 use super::ops::insert_message_canonical;
 use super::stmt_cache::WriterStatementCache;
-use crate::shared_db::SharedDbTarget;
+use crate::shared_db::{SharedDbTarget, SqliteConnection};
 
 pub(super) fn insert_reassign_notice(
     record: &Message,
     task_id: &TaskId,
     old_assignee: AgentName,
-    connection: &Connection,
+    connection: &SqliteConnection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<Message, AtmError> {

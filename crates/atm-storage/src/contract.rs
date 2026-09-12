@@ -233,7 +233,7 @@ pub struct Message {
 
 /// Result of admitting one immutable message and applying any governed task
 /// operation carried by that newly inserted local message.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct MessageAdmissionOutcome {
     pub existing: Option<Message>,
     pub already_closed: Option<TaskCloseOutcome>,
@@ -254,11 +254,7 @@ impl MessageAdmissionOutcome {
     pub fn passive(existing: Option<Message>) -> Self {
         Self {
             existing,
-            already_closed: None,
-            task_assignee: None,
-            queued_position: None,
-            reassign_notice: None,
-            task_rejection: None,
+            ..Self::default()
         }
     }
 }
