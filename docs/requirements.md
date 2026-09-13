@@ -1590,6 +1590,8 @@ Required behavior:
 
 If `--task-id` is present:
 - treat the message as task-linked mail
+- task-linked mail never requires acknowledgement; readiness is signalled by
+  `task_ready`, and the assignee starts the task with `atm task start`
 - reject `--requires-ack` because it conflicts with `--task-id`
 
 `--task-complete` closes the task named by `--task-id` with outcome
@@ -3479,7 +3481,8 @@ The rewrite is ready when:
   lint`
 
 Cross-document invariants that must remain true:
-- `taskId` implies ack-required behavior at send time
+- `taskId` implies task-linked mail that never requires acknowledgement;
+  readiness is signalled by `task_ready`, and start by `atm task start`
 - a displayed message with `mutation_applied = true` has had its legal
   read/seen transition accepted into the supervised non-blocking handoff;
   durable `read = true` visibility may follow later

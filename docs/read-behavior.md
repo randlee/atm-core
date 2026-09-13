@@ -35,7 +35,7 @@ The current queue behavior already has useful properties that should survive
 the rewrite:
 - default view shows actionable work only
 - pending-ack messages stay visible until they are acknowledged
-- task-linked ack-required messages arrive already actionable
+- task-linked messages are never ack-required and are actionable on `task_ready`
 - duplicate deliveries should collapse by `message_id` instead of showing the
   same message repeatedly
 - history can still be expanded explicitly without hiding actionable work
@@ -247,7 +247,8 @@ Disallowed transitions:
 Notes:
 - `read = true` is the base mutation on owner-only `atm read`
 - `atm peek` performs inspection only and applies no mutation
-- task-linked messages are required-ack messages and remain in the pending-ack queue until acknowledged
+- task-linked messages never enter the pending-ack queue; only mail sent with
+  `--requires-ack` does
 
 ## 7. Seen-State Rules
 
@@ -454,7 +455,7 @@ Cross-document invariants:
   transition was accepted into the supervised non-blocking handoff, not that
   `read = true` is already durable; consumers use a bounded later `atm list`
   poll when durable visibility matters
-- task-linked messages are ack-required from send time
+- task-linked messages are never ack-required
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
 - `atm clear` never removes pending-ack messages
@@ -492,7 +493,7 @@ An implementation of the queue-inspection surface is acceptable only if:
 - it keeps display buckets separate from the canonical axes
 - it preserves default actionable-queue behavior
 - it preserves the current pending-ack lifecycle
-- it preserves task-linked pending-ack visibility until acknowledgement
+- it never creates pending-ack state for task-linked messages
 - `atm list` stays metadata-only and bounded by query behavior
 - `atm read` returns one message and reports additional matches in metadata
 - no daemon-only logic survives in core queue behavior

@@ -12,7 +12,7 @@ Repeated open-task reminders also produce daemon escalation notifications.
 At reminders 10, 20, and later multiples of 10, the unique roster lead is
 notified. A blocked member is escalated after 60 seconds and re-notified every
 10 minutes while the blocked episode continues. These daemon messages are
-system-generated and are not controlled by the seven built-in template kinds.
+system-generated and are not controlled by the eleven built-in template kinds.
 
 ## Purpose
 
@@ -24,22 +24,26 @@ attention.
 This document covers supported template usage and override behavior. It does
 not authorize direct database edits or unsupported template engines.
 
-## Seven Built-In Template Kinds
+## Eleven Built-In Template Kinds
 
-ATM ships exactly seven built-in template kinds:
+ATM ships exactly eleven built-in template kinds:
 
 - `delivery`
 - `delivery_ack`
 - `queue`
 - `queue_ack`
-- `task`
 - `acknowledge`
-- `acknowledge_task`
+- `task_queued`
+- `task_ready`
+- `task_reminder`
+- `task_started`
+- `task_complete`
+- `task_closed`
 
 `NudgeKind` selects the delivery (`delivery`, `delivery_ack`) or queue
-(`queue`, `queue_ack`) family. Task-tagged messages always use `task` and are
-always queued; their durable state and event audit are defined in ADR-062. The `acknowledge*` forms are intentionally compact
-acknowledgement nudges.
+(`queue`, `queue_ack`) family. Task transitions select one of the six task
+kinds; their durable state and event audit are defined in ADR-062. The
+`acknowledge` form is an intentionally compact acknowledgement nudge.
 
 ## Supported Placeholders
 
@@ -130,25 +134,24 @@ Queue with required acknowledgement:
 </atm>
 ```
 
-Task messages are always queued and require acknowledgement:
+Task-ready messages are emitted by the task pass and never require
+acknowledgement:
 
 ```xml
-<atm from="{{from}}" message-id="{{message_id}}">
+<atm task="{{task_id}}" ready message="{{message_id}}" from="{{from}}">
   <action>atm read --message-id {{message_id}}</action>
-  <action>ack the message</action>
-  <task id="{{task_id}}">{{description}}</task>
+  <action>atm task start {{task_id}}</action>
   <action>execute the assigned task</action>
   <console announce="concise" pause="false"/>
 </atm>
 ```
 
-Two former task steer kinds were retired in phase AX and are rejected on
-input; see the ADR-019 amendment for their names and the migration.
+The former `task` and `acknowledge_task` kinds are retired and rejected on
+input; task transitions use the six named kinds above.
 
-On database open, ATM upgrades the override table to the seven-kind constraint,
+On database open, ATM upgrades the override table to the eleven-kind constraint,
 preserves every supported row, and removes only retired rows. The migration is
-idempotent and accepts new `queue`, `queue_ack`, and `task` overrides after the
-upgrade.
+idempotent and accepts new task-transition overrides after the upgrade.
 
 Compact acknowledgement defaults:
 
