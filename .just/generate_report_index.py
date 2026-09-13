@@ -19,6 +19,10 @@ import re
 import sys
 from typing import Any, Iterable
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
 from scripts.report_runtime import ReportRuntimeError, resolve_procedure_revision
 
 
