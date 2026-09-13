@@ -19,12 +19,13 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: document the task_transition: Some + task_id: None defensive branch in D3's narrative and add a named test exercising it. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468). arch-ctm's fix/bb6-handoff-identity first push (2026-09-13T02:14:48Z, @ 113d9021b) also touches this finding. Fenix's ruling (2026-09-13T02:16:38Z): deliberate split, not duplication -- the runtime test task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing lives on arch-ctm's code layer (113d9021b); the D3 narrative citing it lives on solar's docs layer (0d249fa5a). Different files, no rebase collision, nobody re-touches the other's file. Keep both occurrences; close when landing-head QA verifies the test exists and the narrative names it." ;
+  triage:deferredNote "Fix: document the task_transition: Some + task_id: None defensive branch in D3's narrative and add a named test exercising it. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468). arch-ctm's fix/bb6-handoff-identity first push (2026-09-13T02:14:48Z, @ 113d9021b) also touches this finding. Fenix's ruling (2026-09-13T02:16:38Z): deliberate split, not duplication -- the runtime test task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing lives on arch-ctm's code layer (113d9021b); the D3 narrative citing it lives on solar's docs layer (0d249fa5a). Different files, no rebase collision, nobody re-touches the other's file. Keep both occurrences; close when landing-head QA verifies the test exists and the narrative names it. arch-ctm's code-side developer work complete (2026-09-13T02:38:40Z), frozen final head c86eca234; lint 36/36, tests green. Code-side fixed-pending-QA at c86eca234; docs-side (solar) still tracked separately." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/2> ;
-  triage:triageRecordVersion "3" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/3> ;
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/BB6-020/1>
   a triage:Occurrence ;
@@ -61,3 +62,21 @@
   triage:branch "fix/bb6-handoff-identity" ;
   triage:headSha "113d9021b" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB6-020/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
+  triage:line 1 ;
+  triage:snippet "arch-ctm's code-side developer work complete, frozen final head; lint 36/36, tests green; code-side fixed-pending-QA at fix/bb6-handoff-identity @ c86eca234" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-handoff-identity" ;
+  triage:headSha "c86eca234" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-020/3> .
+
+<urn:atm:triage:worktree/BB6-020/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1472, fix/bb6-handoff-identity" ;
+  triage:branch "fix/bb6-handoff-identity" ;
+  triage:headSha "c86eca234" ;
+  triage:orderIndex 3 .
