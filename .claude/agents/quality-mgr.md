@@ -64,8 +64,9 @@ every reply to the assigner named in the assignment, never to a fixed name.
 - A nudge only names the head of the queue when you are idle. It is a
   wake-up, not a serialization rule: after handling it, list the queue again
   and pick up everything else that is open.
-- Accept each assignment with `atm ack <message-id> "accepted <task-id>: …"`.
-  The ack accepts the task; it does not close it.
+- A task assignment is informational until `task_ready`; when it is ready, start
+  it with `atm task start <task-id> "<one-line plan>"`. The start event does not
+  close the task.
 - Deliver each final verdict by closing its own task:
   `atm task close <task-id> completed --template <report template> --vars
   <vars file>` (the assignment names the templates). Close tasks in whatever

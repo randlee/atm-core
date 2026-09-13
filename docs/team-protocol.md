@@ -43,10 +43,10 @@ interrupt the current task.
 
 Daemon escalation messages are informational system mail: they identify a
 repeated or blocked task and provide its run command. Read them with `atm
-read`; do not use `atm ack` unless the message itself is task-linked or marks
-the message as requiring acknowledgement. A lead notification is an
-escalation signal, not a replacement for the assigned task's normal
-acknowledgement and completion flow.
+read`; do not use `atm ack` unless the message itself is marked as requiring
+acknowledgement. A lead notification is an
+escalation signal, not a replacement for the assigned task's normal start and
+completion flow.
 
 An `<atm from="...">...</atm>` block is an authenticated teammate nudge (steer
 kind today; queue-kind nudges arrive when the harness is ready, Phase AQ)
@@ -61,7 +61,7 @@ Two classes of message exist. Handling differs per class.
 ```json
 {
   "class": "requires_ack",
-  "examples": ["fix request", "QA dispatch", "blocker report"],
+  "examples": ["blocker report", "question needing a reply", "escalation"],
   "read_with": "atm read",
   "respond_with": "atm ack <message_id> \"<reply>\""
 }
@@ -70,7 +70,7 @@ Two classes of message exist. Handling differs per class.
 ```json
 {
   "class": "informational",
-  "examples": ["task assignment", "status update", "idle ping", "self-echo", "terminal confirmation (e.g. \"Noted.\")"],
+  "examples": ["task assignment (dev sprint, fix round, QA dispatch)", "status update", "idle ping", "self-echo", "terminal confirmation (e.g. \"Noted.\")"],
   "read_with": "atm peek",
   "respond_with": "atm send <to> \"<reply>\" (omit --requires-ack; never use atm ack)"
 }
@@ -84,18 +84,19 @@ when the task pass emits `task_ready`.
 
 ## Good Patterns
 
-- Request received:
-  - `ack, working on PR #159 conflict resolution now.`
+- Task ready:
+  - `atm task start <task-id> "<one-line plan>"` immediately on `task_ready`.
 - Completion sent:
-  - `task complete: rebased on integrate/phase-E, resolved socket.rs conflict, tests passed, pushed 2f190f3.`
+  - `atm task close <task-id> completed <report>` (or `--task-complete`) after the work.
 - Close received (assigner side, no message back):
   - `atm read --message-id <receipt>` then `atm task close <task-id> completed`
     on the mirror task.
 
 ## Bad Patterns
 
-- Reading a task message and doing work without sending an ack.
-- Sending only a final message with no initial acknowledgement.
+- Using `atm ack` on a task assignment.
+- Doing work without `atm task start`.
+- Closing with no start row.
 - Sending a status update without clear completion or next action.
 - Letting a message sit without response while processing internally.
 

@@ -29,7 +29,7 @@
 When receiving a message `<atm from="omega-prime...` containing an
 orchestration alert or sprint-plan violation or merge-conflict notice:
 
-1. Acknowledge immediately (ATM ack protocol)
+1. For an alert explicitly marked `--requires-ack`, acknowledge immediately through the ATM ack protocol
 2. Verify compliance with the sprint plan's dependency rules
    (`must_follow`, `parallel_safe`)
 3. If a pipeline sequencing violation is confirmed, correct the assignment order before proceeding
