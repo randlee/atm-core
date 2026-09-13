@@ -16,7 +16,7 @@
   triage:source "qa" ;
   triage:repeatable true ;
   triage:sweepScope "AGENTS.md" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: rewrite AGENTS.md's Quick Rule to the corrected 3-step terminal-close flow (ack, work, task-close; no further receiver ack), and add AGENTS.md to SEQUENCE_DOCS with a regex that actually matches its wording. Routed to fenix on fix/bb2-qa3-r3 (fenix, new top layer, cut from BB.5 @ f232a104c)." ;
@@ -24,15 +24,18 @@
   triage:foundIn triage:BB2 ;
   triage:foundAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB2-012/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasResolution <urn:atm:triage:resolution/BB2-012/1> ;
+  triage:closedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB2-012/1>
   a triage:Occurrence ;
   triage:file "AGENTS.md" ;
   triage:line 18 ;
   triage:snippet "MUST-READ Quick Rule states the retired sequence verbatim as an active numbered instruction, ending in step 4 'Immediate completion acknowledgement by receiver' -- invisible to SEQUENCE_DOCS and its regex" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb2-qa2-r2" ;
   triage:headSha "d2a9b6cc5" ;
   triage:occursIn <urn:atm:triage:worktree/BB2-012/1> .
@@ -43,3 +46,30 @@
   triage:branch "fix/bb2-qa2-r2" ;
   triage:headSha "d2a9b6cc5" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB2-012/2>
+  a triage:Occurrence ;
+  triage:file "AGENTS.md" ;
+  triage:line 18 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. AGENTS.md:15-20 Quick Rule now reads \"ack, work, task close. A task close is terminal; the receiver never acknowledges it.\"; .just/tests/test_dispatch_template_parity.py:73 now includes AGENTS.md in the sequence-doc list." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-012/2> .
+
+<urn:atm:triage:worktree/BB2-012/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1470, fix/bb6-docs-qa1" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB2-012/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:fixCommit "0b9b3e4f3" ;
+  triage:fixBranch "fix/bb6-docs-qa1" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch1" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. AGENTS.md:15-20 Quick Rule now reads \"ack, work, task close. A task close is terminal; the receiver never acknowledges it.\"; .just/tests/test_dispatch_template_parity.py:73 now includes AGENTS.md in the sequence-doc list." .

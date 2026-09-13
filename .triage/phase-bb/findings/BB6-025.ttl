@@ -16,7 +16,7 @@
   triage:source "fenix, observed by solar at fix/bb6-docs-qa1 in a fresh arm64 colima image" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/task_sql.rs (DDL); crates/atm-http-runtime/src/prompt_handoff_record.rs (record_prompt_handoff, test task_pass_records_handoff_with_kind_and_attempt)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T02:02:27Z"^^xsd:dateTime ;
   triage:deferredNote "Root cause: prompt_handoffs UNIQUE (team, agent, message_key, attempt) does not distinguish handoff kind, so task_queued and task_ready for the same assignment (same message_key, attempt 0) collide and record_prompt_handoff's INSERT OR IGNORE silently drops the second (task_ready) row. Evidence: site/reports/bb6-prompt-handoffs/20260913T015759104883Z (uncommitted, on solar's host). Fenix's ruling (2026-09-13T02:04:09Z): handoff identity becomes (team, agent, message_key, kind, attempt); UNIQUE gains the kind column. An unreleased table carrying the legacy shape on dev hosts is detected via sqlite_master and dropped+recreated at open (no migration machinery exists yet; ADR-061 D1 has no schema version). Sprint D1 DDL and the ADR-061 BB.6 entry are amended in the same layer, and task_pass_records_handoff_with_kind_and_attempt is fixed to seed the preceding task_queued row so the collision is covered. Dispatched as BB6-FIX-HANDOFF-IDENTITY-1789286000 to arch-ctm at the head of his queue, branch fix/bb6-handoff-identity cut from fix/bb6-cli-qa2 @ f0758be06 (stack position: above cli-qa2, below fix/bb-flaky-reader-pool; docs-qa1 lands on top). First push by arch-ctm (2026-09-13T02:14:48Z) at fix/bb6-handoff-identity @ 113d9021b: focused storage/runtime tests, clippy, RULE-002/003, and boundaries green; negative mutation proof confirmed. Developer work complete (2026-09-13T02:38:40Z), frozen final head c86eca234; implementation commit 113d9021b; lint 36/36, just test/workspace tests green. Fixed-pending-QA at c86eca234." ;
@@ -25,15 +25,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-025/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-025/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-025/3> ;
-  triage:triageRecordVersion "4" .
+  triage:hasResolution <urn:atm:triage:resolution/BB6-025/1> ;
+  triage:closedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "5" .
 
 <urn:atm:triage:occurrence/BB6-025/1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/task_sql.rs" ;
   triage:line 0 ;
   triage:snippet "prompt_handoffs UNIQUE (team, agent, message_key, attempt) collides task_queued/task_ready for one assignment; record_prompt_handoff's INSERT OR IGNORE silently drops task_ready" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-docs-qa1" ;
   triage:headSha "9429a9971" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-025/1> .
@@ -50,8 +53,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_sql.rs" ;
   triage:line 0 ;
   triage:snippet "BB6-FIX-HANDOFF-IDENTITY first push: focused tests/clippy/RULE-002/003/boundaries green, negative mutation proof confirmed; fixed-pending-QA at fix/bb6-handoff-identity @ 113d9021b" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-handoff-identity" ;
   triage:headSha "113d9021b" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-025/2> .
@@ -68,8 +71,8 @@
   triage:file "crates/atm-storage-rusqlite/src/task_sql.rs" ;
   triage:line 0 ;
   triage:snippet "Developer work complete, frozen final head; lint 36/36, just test/workspace tests green; fixed-pending-QA at fix/bb6-handoff-identity @ c86eca234" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-handoff-identity" ;
   triage:headSha "c86eca234" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-025/3> .
@@ -80,3 +83,30 @@
   triage:branch "fix/bb6-handoff-identity" ;
   triage:headSha "c86eca234" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/BB6-025/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_sql.rs" ;
+  triage:line 0 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. crates/atm-storage-rusqlite/src/task_store.rs:55-65 UNIQUE constraint now includes the kind column, matching fenix's ruling exactly, plus drop_legacy_prompt_handoffs (line 103, sqlite_master-detected legacy-table drop+recreate); crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs:1422 task_pass_records_handoff_with_kind_and_attempt now seeds the preceding task_queued row and asserts both rows distinctly." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-025/4> .
+
+<urn:atm:triage:worktree/BB6-025/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1470, fix/bb6-docs-qa1" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:resolution/BB6-025/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:fixCommit "0b9b3e4f3" ;
+  triage:fixBranch "fix/bb6-docs-qa1" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch1" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. crates/atm-storage-rusqlite/src/task_store.rs:55-65 UNIQUE constraint now includes the kind column, matching fenix's ruling exactly, plus drop_legacy_prompt_handoffs (line 103, sqlite_master-detected legacy-table drop+recreate); crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs:1422 task_pass_records_handoff_with_kind_and_attempt now seeds the preceding task_queued row and asserts both rows distinctly." .
