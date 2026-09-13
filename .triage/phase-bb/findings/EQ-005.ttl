@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-005>
+  a triage:Finding ;
+  triage:findingId "EQ-005" ;
+  triage:title "Procedure link on every smoke/colima report is unreachable from a browser -- BB.3 acceptance criterion (browser path to review the test procedure for every test) not actually met" ;
+  triage:description "Rand (2026-09-13, reviewing prerelease 1.5.17 smoke evidence): the 'Procedure: smoke-thorough @ 7475fed9' link rendered on every smoke/colima report (scripts/smoke/run_feature_smoke.py:672-753 write_report, scripts/smoke/colima_skill_report.py:90-122) is computed via os.path.relpath(procedure_target, directory), producing a link that climbs several directory levels up from the report's own folder (e.g. '../../../../procedures/smoke-thorough/7475fed9.html') before descending into site/reports/procedures/. Confirmed by filesystem check that the target file exists and the path arithmetic is correct, but Rand confirmed directly the link does not work when actually opened in a browser: 'that path does NOT work in w web browser. you can not have a relative path outside the base url of the site.' Likely mechanism: browsers restrict file:// navigation from climbing above the directory of the originally opened document (Chrome/Safari file-access sandboxing), and the same constraint generalizes to any hosted hosting of site/ where the link must never assume more than the site's own base URL. Rand: 'the requirement for phase-bb was to provide path to review test procedure for every test from web browser' and 'this was 1/3 of the work for phase-bb' -- this is an unmet BB.3 (sprint-BB.3-test-procedure-pages.md) acceptance criterion, not a cosmetic defect, despite Phase BB's triage store having closed at 0/0/0 and merged to develop (PR #1482, db6250b23). Publishing/hosting of site/ itself (GitHub Pages config) is explicitly out of scope for this finding -- alpha-prime@hermes owns making site/ live. This finding is scoped to: every report producer's Procedure link must resolve correctly both as a bare file:// open and once site/ is served, for every report type (smoke, colima, and any other producer sharing scripts/report_runtime.py::resolve_procedure_page), not just the smoke-thorough case Rand happened to open." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "testing" ;
+  triage:severity "blocking" ;
+  triage:source "Rand, direct review of prerelease 1.5.17 smoke evidence, 2026-09-13" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/run_feature_smoke.py:672-753 (write_report); scripts/smoke/colima_skill_report.py:90-122; scripts/report_runtime.py (shared resolve_procedure_page/procedure-href plumbing); any other report producer rendering a Procedure link from the same helper" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-005/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/EQ-005/1>
+  a triage:Occurrence ;
+  triage:file "site/reports/smoke/macos/rand-m5.local/20260913T075849269287Z-pid38592-thorough/thorough.html" ;
+  triage:line 1 ;
+  triage:snippet "Procedure: <a href=\"../../../../procedures/smoke-thorough/7475fed9.html\">smoke-thorough @ 7475fed9</a> -- target exists on disk but the link does not work when opened in a real browser per Rand's direct confirmation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "db6250b23" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-005/1> .
+
+<urn:atm:triage:worktree/EQ-005/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "db6250b23" ;
+  triage:orderIndex 1 .
