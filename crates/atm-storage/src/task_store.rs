@@ -426,7 +426,10 @@ impl TaskStore for DummyTaskStore {
         }
         let delay_millis = self.prompt_handoff_delay_millis.load(Ordering::SeqCst);
         if delay_millis != 0 {
-            std::thread::sleep(Duration::from_millis(delay_millis));
+            let started = std::time::Instant::now();
+            while started.elapsed() < Duration::from_millis(delay_millis) {
+                std::thread::yield_now();
+            }
         }
         let mut rows = self
             .prompt_handoffs
