@@ -164,7 +164,7 @@ CLI — `crates/atm/src/commands/task/tests`:
   and exit status 1 assigned by `main.rs`; no preflight-derived wording exists
   in the command (lead ruling, fenix, BB4-TASK-START).
 
-Integration (colima, every roster shape):
+Integration (colima, using the committed fixture roster named by phase plan §9):
 
 - `task_start_line_reaches_assigner_at_write_time` — assigner busy for the whole cycle still sees `<atm task=… started agent=… message=…/>` immediately (SMK-004).
 - `task_start_out_of_order_reorders_queue` — start task 3 of 3: `atm task list` shows it first and active.

@@ -202,7 +202,9 @@ Nothing outside this list is added; deletions are listed per sprint.
    level its sprint doc places that test (BB.1 D5 unit; BB.4 and BB.5
    writer/runtime tests; BB.5 colima for rows 6–7), and every one passes on
    the integrate head; the colima integration lists of BB.4, BB.5 and BB.6
-   pass on the fixture for every roster shape.
+   pass on the committed fixture roster `{hermes, oversight, stub-alpha,
+   stub-beta, tester}`. Phase BB integration evidence exercises this one
+   roster shape only.
 2. `grep -rn "AcknowledgeTask\|K::Task\b\|start_assigned_task\|start_reminder_was_emitted\|queue_prompt_is_head_assignment\|record_queue_prompt_reminders" crates/` returns nothing.
 3. A three-task assignment to an idle agent on the live team shows exactly
    one `queued="2"`, one `queued="3"`, one `ready` (SMK-006 closed).
