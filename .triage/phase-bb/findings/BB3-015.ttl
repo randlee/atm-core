@@ -53,8 +53,8 @@
   triage:file "scripts/smoke/report_runtime.py" ;
   triage:line 1 ;
   triage:snippet "residual (ATM-QA-002): source_revision()'s subprocess-failure branch and resolve_procedure_page()'s GIT_REVISION regex on a malformed string remain untested" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "a7d4664d1" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-015/2> .
@@ -71,8 +71,8 @@
   triage:file "scripts/smoke/report_runtime.py" ;
   triage:line 1 ;
   triage:snippet "cipher's BB3 R5 final push; fixed-pending-QA at fix/bb3-qa4-r5 @ 5da523f81" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "5da523f81" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-015/3> .

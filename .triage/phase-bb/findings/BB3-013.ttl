@@ -37,8 +37,8 @@
   triage:file "scripts/smoke/colima_skill_report.py" ;
   triage:line 90 ;
   triage:snippet "procedure_href built from the exact source_revision() short SHA with no ancestor fallback; live 404 in committed evidence site/reports/smoke/macos/rand-m5.local/20260912T204119754750Z-pid87697-fast/index.html:18 -> procedures/smoke-fast/fe5dac5c.html (does not exist)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa3-r4" ;
   triage:headSha "f94125cf5" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-013/1> .
@@ -55,8 +55,8 @@
   triage:file "scripts/report_runtime.py" ;
   triage:line 65 ;
   triage:snippet "resolve_procedure_page (lines 65-92) is a NEW third ancestor-resolution implementation diverging from .just/generate_report_index.py:204-261 -- first-match-in-manifest-order + raise-on-nonzero-git vs the other's git-unavailable dated fallback + max-by-date; two implementations of the same rule still exist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa3-r4" ;
   triage:headSha "f94125cf5" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-013/2> .
@@ -73,8 +73,8 @@
   triage:file "scripts/report_runtime.py" ;
   triage:line 65 ;
   triage:snippet "routed to BB3-FIX-R5-1789264000 (cipher) on fix/bb3-qa4-r5, cut from a7d4664d1 (feature/bb6-storage-prompt-handoffs, top of stack #1457)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "a7d4664d1" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-013/3> .
@@ -91,8 +91,8 @@
   triage:file "scripts/report_runtime.py" ;
   triage:line 65 ;
   triage:snippet "cipher's BB3 R5 final push; fixed-pending-QA at fix/bb3-qa4-r5 @ 5da523f81" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "5da523f81" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-013/4> .

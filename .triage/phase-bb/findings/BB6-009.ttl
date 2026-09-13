@@ -35,8 +35,8 @@
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 827 ;
   triage:snippet "render_task_event_line/render_prompt_handoff_line wrap infallible String writes in Result<()>/? instead of a plain signature" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-cli-prompt-handoffs" ;
   triage:headSha "40ccd403e" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-009/1> .
@@ -53,8 +53,8 @@
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 827 ;
   triage:snippet "render_task_event_line/render_prompt_handoff_line changed to plain infallible signatures, dropping the Result<()>/? wrapping; fixed-pending-QA" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "8fc3b9ef2" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-009/2> .
@@ -71,8 +71,8 @@
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 827 ;
   triage:snippet "BB6-FIX-CLI-QA1 complete and self-validated; fixed-pending-QA at fix/bb6-cli-qa1 final head adda7e3f9" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "adda7e3f9" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-009/3> .

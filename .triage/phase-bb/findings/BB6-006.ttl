@@ -34,8 +34,8 @@
   triage:file "openapi.yaml" ;
   triage:line 446 ;
   triage:snippet "handoffs field documented on MessageList schema instead of the real task-events response type" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-cli-prompt-handoffs" ;
   triage:headSha "40ccd403e" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-006/1> .
@@ -52,8 +52,8 @@
   triage:file "openapi.yaml" ;
   triage:line 446 ;
   triage:snippet "BB6-FIX-CLI-QA1 complete and self-validated (implementation commit 35c759ef4); fixed-pending-QA at fix/bb6-cli-qa1 final head adda7e3f9" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "adda7e3f9" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-006/2> .

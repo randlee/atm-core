@@ -34,8 +34,8 @@
   triage:file "crates/atm-core/src/list.rs" ;
   triage:line 321 ;
   triage:snippet "list_task_ledger_with_runtime is dead sync code (only caller is a test, per AX4-QA-001) extended with handoffs plumbing instead of deleted" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-cli-prompt-handoffs" ;
   triage:headSha "40ccd403e" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-007/1> .
@@ -52,8 +52,8 @@
   triage:file "crates/atm-core/src/list.rs" ;
   triage:line 321 ;
   triage:snippet "BB6-FIX-CLI-QA1 complete and self-validated (implementation commit 5b77d158c); fixed-pending-QA at fix/bb6-cli-qa1 final head adda7e3f9" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "adda7e3f9" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-007/2> .
