@@ -333,6 +333,7 @@ def run(container: str, out_dir: Path) -> int:
     source = run_command(["git", "rev-parse", "HEAD"])
     source_revision = source["stdout"].strip() if source["exit_code"] == 0 else "unknown"
     image = inspect_container(container)
+    version = run_cli(container, ASSIGNER, ["--version"])
     members = run_cli(container, ASSIGNER, ["members", "--json", "--team", TEAM])
     payload = json_value(members, "member roster")
     roster = [member.get("name") for member in payload.get("members", []) if isinstance(member, dict) and member.get("name")]
@@ -343,6 +344,7 @@ def run(container: str, out_dir: Path) -> int:
         "feature": "bb5-assignment", "generated_at": generated_at.isoformat().replace("+00:00", "Z"),
         "source_revision": source_revision, "container": container, "image": image,
         "image_sha256": image.get("image_sha256"),
+        "atm_version": version,
         "roster": roster, "cases": [], "setup": {"members": members},
     }
     scenarios = (

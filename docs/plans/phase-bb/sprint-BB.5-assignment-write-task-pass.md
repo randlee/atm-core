@@ -158,7 +158,7 @@ Runtime — `crates/atm-http-runtime/src/herdr_queue_wake/`:
 - `task_pass_records_reminder_against_prompted_task_only` — two open tasks, the head is prompted, the other's `reminder_count` stays 0 (SMK-006).
 - `pump_never_claims_an_assignment` — assignment written, pump ticks, no claim.
 
-Integration (colima, every roster shape):
+Integration (colima, using the committed fixture roster named by phase plan §9):
 
 - `three_assignments_show_queued_1_2_3_then_one_ready` — terminal shows exactly `queued="1"`, `queued="2"`, `queued="3"`, one `ready` for task 1, no `execute` line for tasks 2 and 3.
 - `pending_ack_header_stays_zero_across_assignments` — `atm read` header `Unread 3 / Pending-Ack 0`.
