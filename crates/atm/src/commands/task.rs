@@ -295,16 +295,6 @@ impl TaskStartCommand {
                     ),
                 )
             })?;
-        if row.assignee != caller.caller_identity {
-            return Err(atm_core::error::AtmError::new(
-                atm_core::error::AtmErrorCode::TaskNotCounterparty,
-                format!(
-                    "task {} is not assigned to {}",
-                    self.task_id, caller.caller_identity
-                ),
-            )
-            .into());
-        }
         let mut report = self.report;
         if !report.is_present() {
             report.text = Some(format!("started {}", self.task_id));

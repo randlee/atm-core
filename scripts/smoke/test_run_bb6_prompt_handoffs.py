@@ -128,6 +128,18 @@ class Bb6PromptHandoffRunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "timed out waiting for ready"):
                 RUNNER.wait_for_pane("fixture", lambda _text: False, "ready")
 
+    def test_observed_interval_uses_ready_and_reminder_timestamps(self) -> None:
+        self.assertEqual(RUNNER.observed_reminder_interval(10.0, 72.5), 62.5)
+        self.assertEqual(RUNNER.observed_reminder_interval(72.5, 10.0), 0.0)
+
+    def test_disabled_reminder_deadline_is_at_least_twice_observed_interval(self) -> None:
+        self.assertEqual(RUNNER.reminder_wait_seconds(30.0), 120.0)
+        self.assertEqual(RUNNER.reminder_wait_seconds(75.0), 150.0)
+
+    def test_missing_observed_interval_is_rejected(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "did not observe"):
+            RUNNER.require_observed_interval(0.0)
+
     def test_fresh_fixture_refuses_existing_handoffs(self) -> None:
         count = {"exit_code": 0, "stdout": "1\n", "stderr": ""}
         with mock.patch.object(RUNNER, "sqlite_count", return_value=count):
