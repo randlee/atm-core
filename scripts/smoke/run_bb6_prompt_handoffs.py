@@ -39,6 +39,12 @@ def reminder_wait_seconds(observed_interval: float) -> float:
     return max(2 * observed_interval, 2 * 60.0)
 
 
+def require_observed_interval(observed_interval: float) -> float:
+    if observed_interval <= 0:
+        raise RuntimeError("task event scenario did not observe a reminder interval")
+    return observed_interval
+
+
 def run_command(command: list[str], timeout: float = 45.0) -> dict[str, Any]:
     result = subprocess.run(
         command, capture_output=True, text=True, timeout=timeout, check=False
@@ -476,9 +482,7 @@ def run(container: str, out_dir: Path) -> int:
         raise RuntimeError(f"fresh fixture required; prompt_handoffs starts at {baseline_count}")
     first = scenario_task_events(container, run_id)
     cleanup = release_first_scenario(container, first["task_ids"])
-    observed_interval = first["observed"].get("observed_interval", 0.0)
-    if observed_interval <= 0:
-        raise RuntimeError("task event scenario did not observe a reminder interval")
+    observed_interval = require_observed_interval(first["observed"].get("observed_interval", 0.0))
     second = scenario_disabled_reminder(container, run_id, observed_interval)
     final_pane = pane_text(container)
     if final_pane["exit_code"] != 0:

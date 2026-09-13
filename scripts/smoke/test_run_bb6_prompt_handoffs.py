@@ -138,8 +138,7 @@ class Bb6PromptHandoffRunnerTests(unittest.TestCase):
 
     def test_missing_observed_interval_is_rejected(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "did not observe"):
-            if 0.0 <= 0:
-                raise RuntimeError("task event scenario did not observe a reminder interval")
+            RUNNER.require_observed_interval(0.0)
 
     def test_fresh_fixture_refuses_existing_handoffs(self) -> None:
         count = {"exit_code": 0, "stdout": "1\n", "stderr": ""}
