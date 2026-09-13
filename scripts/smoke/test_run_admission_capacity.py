@@ -1313,7 +1313,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             status = healthy_managed_status()
             status["doctor"][field] = value
             command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
-            with mock.patch.object(RUNNER, "command_result", return_value=command):
+            with mock.patch.object(SUPPORT, "command_result", return_value=command):
                 with self.assertRaisesRegex(RUNNER.SmokeError, expected):
                     RUNNER.daemon_switch_result("status", options, doctor=True)
 
@@ -1323,13 +1323,13 @@ class AdmissionCapacityTests(unittest.TestCase):
         status["doctor"].pop("runtime_status")
         status["doctor"].pop("daemon_context")
         command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
-        with mock.patch.object(RUNNER, "command_result", return_value=command):
+        with mock.patch.object(SUPPORT, "command_result", return_value=command):
             self.assertEqual(RUNNER.daemon_switch_result("status", options, doctor=True), status)
 
     def test_daemon_switch_timeout_covers_its_bounded_owner_repair_window(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         with mock.patch.object(
-            RUNNER,
+            SUPPORT,
             "command_result",
             return_value={"exit_code": 0, "stdout": "", "stderr": ""},
         ) as command:
@@ -1346,7 +1346,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         status = healthy_managed_status()
         status.pop("live_pair")
         command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
-        with mock.patch.object(RUNNER, "command_result", return_value=command):
+        with mock.patch.object(SUPPORT, "command_result", return_value=command):
             with self.assertRaisesRegex(RUNNER.SmokeError, "selected release"):
                 RUNNER.daemon_switch_result("status", options, doctor=True)
 
@@ -1960,7 +1960,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         atm = Path(tempfile.gettempdir()) / "atm"
         capacity_home = Path(tempfile.gettempdir()) / "capacity-home"
         result = {"exit_code": 0, "stdout": "", "stderr": ""}
-        with mock.patch.object(RUNNER, "command_result", return_value=result) as command:
+        with mock.patch.object(TRANSPORT, "command_result", return_value=result) as command:
             RUNNER.prepare_capacity_roster(
                 atm, {"ATM_HOME": str(Path(tempfile.gettempdir()) / "atm-capacity-test")}, capacity_home
             )
@@ -2031,7 +2031,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 status = 201 if calls != 7 else 503
             return [RUNNER.AdmissionResult(status, 0.1, None if status == 201 else "HTTP 503")]
 
-        with mock.patch.object(RUNNER, "ADMISSIONS_PER_INTERVAL", 10):
+        with mock.patch.object(TRANSPORT, "ADMISSIONS_PER_INTERVAL", 10):
             result = RUNNER.run_interval(submit, 0, 1, 2, 10)
         self.assertEqual(result["accepted_count"], 9)
         self.assertEqual(result["response_count"], 10)

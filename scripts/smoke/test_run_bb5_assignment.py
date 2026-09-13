@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
-from run_bb5_assignment import SCENARIO_NAMES, blocks_for
+from scripts.smoke import run_bb5_assignment as RUNNER
 
 
 class Bb5AssignmentRunnerTests(unittest.TestCase):
     def test_bb5_scenario_inventory_is_complete_and_ordered(self) -> None:
-        self.assertEqual(SCENARIO_NAMES, (
+        self.assertEqual(RUNNER.SCENARIO_NAMES, (
             "three_assignments_show_queued_1_2_3_then_one_ready",
             "pending_ack_header_stays_zero_across_assignments",
             "close_shows_ready_for_next_task_within_one_pass",
@@ -29,8 +30,65 @@ class Bb5AssignmentRunnerTests(unittest.TestCase):
             f'<atm task="{task}" ready message="ready" />\n'
         )
 
-        blocks = blocks_for(text, task)
+        blocks = RUNNER.blocks_for(text, task)
 
         self.assertEqual(len(blocks), 2)
         self.assertTrue(all(task in block for block in blocks))
         self.assertNotIn(other, "\n".join(blocks))
+
+    def test_json_value_rejects_failed_and_malformed_cli_results(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "member list failed"):
+            RUNNER.json_value({"exit_code": 1, "stdout": "", "stderr": "member list failed"}, "member list")
+        with self.assertRaisesRegex(RuntimeError, "did not return JSON"):
+            RUNNER.json_value({"exit_code": 0, "stdout": "not-json", "stderr": ""}, "member list")
+
+    def test_task_rows_rejects_non_object_and_non_list_payloads(self) -> None:
+        self.assertEqual(RUNNER.task_rows(None), [])
+        self.assertEqual(RUNNER.task_rows({"rows": ["bad", 1]}), [])
+        self.assertEqual(RUNNER.task_rows({"rows": [{"task_id": "ok"}, "bad"]}), [{"task_id": "ok"}])
+
+    def test_agent_pane_rejects_a_roster_without_the_assignee(self) -> None:
+        result = {"exit_code": 0, "stdout": '{"result":{"agents":[]}}', "stderr": ""}
+        with mock.patch.object(RUNNER, "run_herdr", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "no pane"):
+                RUNNER.agent_pane("fixture")
+
+    def test_wait_for_pane_reports_timeout_when_predicate_never_matches(self) -> None:
+        result = {"exit_code": 0, "stdout": "unchanged", "stderr": ""}
+        with mock.patch.object(RUNNER, "WAIT_SECONDS", 0), mock.patch.object(RUNNER, "pane_text", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "timed out waiting for ready"):
+                RUNNER.wait_for_pane("fixture", lambda _text: False, "ready")
+
+    def test_cleanup_tasks_retains_failed_close_results_and_drains_mailboxes(self) -> None:
+        failed = {"exit_code": 1, "stdout": "", "stderr": "close failed"}
+        with mock.patch.object(RUNNER, "close", return_value=failed), mock.patch.object(
+            RUNNER, "drain_mailbox", return_value=[]
+        ) as drain:
+            results = RUNNER.cleanup_tasks("fixture", ["task-1", "task-1"])
+        self.assertEqual(results, [{"task_id": "task-1", "result": failed}])
+        self.assertEqual([call.args for call in drain.call_args_list], [("fixture", RUNNER.ASSIGNEE), ("fixture", "stub-beta")])
+
+    def test_inspect_container_surfaces_docker_inspect_failure(self) -> None:
+        failed = {"exit_code": 1, "stdout": "", "stderr": "container missing"}
+        with mock.patch.object(RUNNER, "run_command", return_value=failed):
+            with self.assertRaisesRegex(RuntimeError, "container missing"):
+                RUNNER.inspect_container("missing")
+
+    def test_render_html_marks_a_failed_case_and_escapes_its_detail(self) -> None:
+        html = RUNNER.render_html({
+            "status": "FAIL", "source_revision": "abc", "container": "fixture",
+            "image": {"image_id": "sha256:test"}, "roster": [],
+            "cases": [{"status": "FAIL", "name": "bad <case>", "detail": "<unsafe>"}],
+        })
+        self.assertIn('class="fail"', html)
+        self.assertIn("✗", html)
+        self.assertIn("&lt;unsafe&gt;", html)
+
+    def test_scenario_records_fail_when_an_assignment_command_fails(self) -> None:
+        failed = {"exit_code": 1, "stdout": "", "stderr": "assignment rejected"}
+        read = {"exit_code": 0, "stdout": '{"bucket_counts":{"unread":0,"pending_ack":0}}', "stderr": ""}
+        with mock.patch.object(RUNNER, "assign", return_value=failed), mock.patch.object(
+            RUNNER, "run_cli", return_value=read
+        ), mock.patch.object(RUNNER, "cleanup_tasks"):
+            result = RUNNER.scenario_pending_ack("fixture", "20260913T000000Z")
+        self.assertEqual(result["status"], "FAIL")

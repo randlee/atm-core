@@ -101,7 +101,7 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_admission_capacity_reuses_the_feature_smoke_dispatcher(self):
         completed = mock.Mock(returncode=0)
-        with mock.patch.object(NETWORK_SUPPORT.subprocess, "run", return_value=completed) as run:
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
             with mock.patch.object(RUNNER.sys, "argv", ["smoke", "admission-capacity"]):
                 self.assertEqual(RUNNER.main(), 0)
         self.assertEqual(Path(run.call_args.args[0][1]).name, "run_admission_capacity.py")
@@ -600,7 +600,7 @@ class FeatureSmokeTests(unittest.TestCase):
             NETWORK_SUPPORT,
             "remote_shell",
             side_effect=lambda _peer, script, timeout=20.0: remote_command_result(script, timeout),
-        ), mock.patch.object(
+        ) as network_remote_shell, mock.patch.object(
             RUNNER, "command", side_effect=local_command
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
@@ -629,7 +629,7 @@ class FeatureSmokeTests(unittest.TestCase):
         local_ca_path = curl_calls[0][curl_calls[0].index("--cacert") + 1]
         self.assertEqual(Path(local_ca_path).name, "remote-public.pem")
         self.assertTrue(any("unauthenticated mTLS" in case["name"] for case in cases))
-        cleanup_script = remote_shell.call_args_list[-1].args[1]
+        cleanup_script = network_remote_shell.call_args_list[-1].args[1]
         self.assertIn("rm -f", cleanup_script)
         self.assertIn("local-public.pem", cleanup_script)
         self.assertIn("peer-public.pem", cleanup_script)

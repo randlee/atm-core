@@ -19,7 +19,7 @@ import re
 import sys
 from typing import Any, Iterable
 
-from scripts.report_runtime import resolve_procedure_revision
+from scripts.report_runtime import ReportRuntimeError, resolve_procedure_revision
 
 
 SCHEMA_VERSION = 1
@@ -223,7 +223,7 @@ def resolve_procedures(envelopes: list[Envelope], reports_root: Path) -> list[En
                     root=reports_root.parent.parent,
                     generated_at=envelope.generated_at_text,
                 )
-            except ValueError as error:
+            except ReportRuntimeError as error:
                 raise ReportIndexError(f"{envelope.source}: {error}") from error
         if selected is None and inferred:
             dated = [item for item in revisions if isinstance(item.get("date"), str) and item["date"] <= envelope.generated_at_text[:10]]
