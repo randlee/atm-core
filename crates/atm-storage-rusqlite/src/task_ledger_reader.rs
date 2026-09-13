@@ -12,6 +12,7 @@ use rusqlite::{Connection, params};
 use std::sync::Arc;
 
 use crate::SqliteTaskStore;
+use crate::mailbox_reader::read_lane_storage_error;
 use crate::reader_pool::ReaderPool;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use crate::task_sql;
@@ -54,7 +55,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
             .submit(deadline.remaining(), move |connection, target| {
                 task_sql::select_task_row(connection, &team, &task_id)
                     .map_err(|error| sqlite_error(target, "failed to load task row", error))
-                    .map_err(read_lane_error)
+                    .map_err(read_lane_storage_error)
             })
             .await
     }
@@ -68,7 +69,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
             .submit(deadline.remaining(), move |connection, target| {
                 task_sql::select_open_tasks_for_team(connection, &team)
                     .map_err(|error| sqlite_error(target, "failed to list open team tasks", error))
-                    .map_err(read_lane_error)
+                    .map_err(read_lane_storage_error)
             })
             .await
     }
@@ -83,7 +84,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
             .submit(deadline.remaining(), move |connection, target| {
                 task_sql::trailing_refusal_run(connection, &team, &assignee)
                     .map_err(|error| sqlite_error(target, "failed to read refusal run", error))
-                    .map_err(read_lane_error)
+                    .map_err(read_lane_storage_error)
             })
             .await
     }
@@ -96,7 +97,8 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
     ) -> Result<Vec<TaskRow>, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                list_tasks(connection, target, &team, member.as_ref()).map_err(read_lane_error)
+                list_tasks(connection, target, &team, member.as_ref())
+                    .map_err(read_lane_storage_error)
             })
             .await
     }
@@ -111,7 +113,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
                 list_task_events(connection, target, &team, &task_id, member.as_ref())
-                    .map_err(read_lane_error)
+                    .map_err(read_lane_storage_error)
             })
             .await
     }
@@ -124,7 +126,8 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
     ) -> Result<Vec<PromptHandoff>, ReadLaneError> {
         self.pool
             .submit(deadline.remaining(), move |connection, target| {
-                list_prompt_handoffs(connection, target, &team, &task_id).map_err(read_lane_error)
+                list_prompt_handoffs(connection, target, &team, &task_id)
+                    .map_err(read_lane_storage_error)
             })
             .await
     }
@@ -184,11 +187,11 @@ fn list_prompt_handoffs(
     task_id: &TaskId,
 ) -> Result<Vec<PromptHandoff>, AtmError> {
     let mut statement = connection
-        .prepare(
-            "SELECT team, agent, message_key, kind, task_id, attempt, trigger, at
-             FROM prompt_handoffs WHERE team = ?1 AND task_id = ?2
+        .prepare(&format!(
+            "SELECT {} FROM prompt_handoffs WHERE team = ?1 AND task_id = ?2
              ORDER BY at ASC, rowid ASC",
-        )
+            task_sql::PROMPT_HANDOFF_COLUMNS
+        ))
         .map_err(|error| {
             sqlite_error(target, "failed to prepare async prompt handoff list", error)
         })?;
@@ -202,12 +205,6 @@ fn list_prompt_handoffs(
             row.map_err(|error| sqlite_error(target, "failed to decode prompt handoff", error))
         })
         .collect()
-}
-
-fn read_lane_error(error: AtmError) -> ReadLaneError {
-    ReadLaneError::Unavailable {
-        message: error.message().to_owned(),
-    }
 }
 
 #[cfg(test)]

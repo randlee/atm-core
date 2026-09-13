@@ -308,11 +308,14 @@ impl TaskStore for SqliteTaskStore {
 
     fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<(), AtmError> {
         self.db.with_connection(|connection| {
+            let sql = format!(
+                "INSERT OR IGNORE INTO prompt_handoffs({})
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                task_sql::PROMPT_HANDOFF_COLUMNS
+            );
             connection
                 .execute(
-                    "INSERT OR IGNORE INTO prompt_handoffs(
-                         team, agent, message_key, kind, task_id, attempt, trigger, at
-                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    &sql,
                     params![
                         handoff.team.as_str(),
                         handoff.agent.as_str(),

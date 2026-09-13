@@ -19,7 +19,7 @@ use crate::contract::{
 };
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
-use crate::task_state::{TaskEventRow, TaskRow};
+use crate::task_state::{PromptHandoff, TaskEventRow, TaskRow};
 use crate::types::{AgentName, IsoTimestamp, MemberKey, OwnerGeneration, TaskId, TeamName};
 
 pub use crate::contract::DummyPendingNudgeStore;
@@ -227,6 +227,7 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
 pub struct InMemoryTaskLedgerReader {
     tasks: std::sync::Mutex<Vec<TaskRow>>,
     events: std::sync::Mutex<Vec<TaskEventRow>>,
+    prompt_handoffs: std::sync::Mutex<Vec<PromptHandoff>>,
     delegate: Option<Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
     open_tasks_hook: std::sync::Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     refusal_error: std::sync::Mutex<Option<ReadLaneError>>,
@@ -237,6 +238,7 @@ impl Default for InMemoryTaskLedgerReader {
         Self {
             tasks: std::sync::Mutex::new(Vec::new()),
             events: std::sync::Mutex::new(Vec::new()),
+            prompt_handoffs: std::sync::Mutex::new(Vec::new()),
             delegate: None,
             open_tasks_hook: std::sync::Mutex::new(None),
             refusal_error: std::sync::Mutex::new(None),
@@ -250,6 +252,7 @@ impl InMemoryTaskLedgerReader {
         Self {
             tasks: std::sync::Mutex::new(tasks),
             events: std::sync::Mutex::new(events),
+            prompt_handoffs: std::sync::Mutex::new(Vec::new()),
             delegate: None,
             open_tasks_hook: std::sync::Mutex::new(None),
             refusal_error: std::sync::Mutex::new(None),
@@ -271,6 +274,21 @@ impl InMemoryTaskLedgerReader {
     pub fn replace_rows(&self, tasks: Vec<TaskRow>, events: Vec<TaskEventRow>) {
         *self.tasks.lock().expect("in-memory task rows lock") = tasks;
         *self.events.lock().expect("in-memory task events lock") = events;
+    }
+
+    /// Seeds prompt handoffs while preserving the existing task/event row
+    /// constructor used by runtime fixtures.
+    #[must_use]
+    pub fn with_prompt_handoffs(mut self, prompt_handoffs: Vec<PromptHandoff>) -> Self {
+        self.prompt_handoffs = std::sync::Mutex::new(prompt_handoffs);
+        self
+    }
+
+    pub fn replace_prompt_handoffs(&self, prompt_handoffs: Vec<PromptHandoff>) {
+        *self
+            .prompt_handoffs
+            .lock()
+            .expect("in-memory prompt handoff rows lock") = prompt_handoffs;
     }
 
     /// Injects a refusal-history read outcome without affecting the other
@@ -465,11 +483,22 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
         team: TeamName,
         task_id: TaskId,
         deadline: ReadDeadline,
-    ) -> Result<Vec<crate::PromptHandoff>, ReadLaneError> {
+    ) -> Result<Vec<PromptHandoff>, ReadLaneError> {
         if let Some(delegate) = &self.delegate {
             return delegate.list_prompt_handoffs(team, task_id, deadline).await;
         }
-        Ok(Vec::new())
+        self.prompt_handoffs
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader prompt handoff lock poisoned".to_owned(),
+            })
+            .map(|handoffs| {
+                handoffs
+                    .iter()
+                    .filter(|handoff| handoff.team == team && handoff.task_id == task_id)
+                    .cloned()
+                    .collect()
+            })
     }
 }
 
