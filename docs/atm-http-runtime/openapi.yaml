@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: 1.8.0
+  version: 1.9.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
@@ -449,6 +449,19 @@ components:
       properties:
         messages: { type: array, items: { $ref: '#/components/schemas/Message' } }
         cursor: { type: string }
+        handoffs: { type: array, items: { $ref: '#/components/schemas/PromptHandoff' }, default: [] }
+    PromptHandoff:
+      type: object
+      required: [team, agent, message_key, kind, task_id, attempt, trigger, at]
+      properties:
+        team: { type: string }
+        agent: { type: string }
+        message_key: { type: string }
+        kind: { type: string, enum: [delivery, delivery_ack, queue, queue_ack, acknowledge, task_queued, task_ready, task_reminder, task_started, task_complete, task_closed] }
+        task_id: { type: string }
+        attempt: { type: integer, format: uint32 }
+        trigger: { type: string, enum: [steer, task_pass] }
+        at: { type: string, format: date-time }
     AtmError:
       type: object
       required: [code, message]

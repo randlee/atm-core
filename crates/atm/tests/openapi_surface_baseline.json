@@ -438,6 +438,7 @@
     "MessageList": {
       "properties": [
         "cursor",
+        "handoffs",
         "messages"
       ],
       "required": [
@@ -447,6 +448,28 @@
     "PeekQuery": {
       "properties": [],
       "required": []
+    },
+    "PromptHandoff": {
+      "properties": [
+        "agent",
+        "at",
+        "attempt",
+        "kind",
+        "message_key",
+        "task_id",
+        "team",
+        "trigger"
+      ],
+      "required": [
+        "agent",
+        "at",
+        "attempt",
+        "kind",
+        "message_key",
+        "task_id",
+        "team",
+        "trigger"
+      ]
     },
     "QueueGetNextRequest": {
       "properties": [
