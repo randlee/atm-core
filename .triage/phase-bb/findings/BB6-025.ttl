@@ -17,13 +17,13 @@
   triage:repeatable true ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/task_sql.rs (DDL); crates/atm-http-runtime/src/prompt_handoff_record.rs (record_prompt_handoff, test task_pass_records_handoff_with_kind_and_attempt)" ;
   triage:status "open" ;
-  triage:dispatchReady false ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T02:02:27Z"^^xsd:dateTime ;
-  triage:deferredNote "Root cause: prompt_handoffs UNIQUE (team, agent, message_key, attempt) does not distinguish handoff kind, so task_queued and task_ready for the same assignment (same message_key, attempt 0) collide and record_prompt_handoff's INSERT OR IGNORE silently drops the second (task_ready) row. Fix must include the kind in the uniqueness scope (or otherwise disambiguate), and the unit test task_pass_records_handoff_with_kind_and_attempt must seed the preceding task_queued row so this collision is covered. Evidence: site/reports/bb6-prompt-handoffs/20260913T015759104883Z (uncommitted, on solar's host). fenix's ruling and dispatch to arch-ctm on a new layer to follow once this finding id is sent back to fenix; dispatchReady left false pending that ruling/branch assignment." ;
+  triage:deferredNote "Root cause: prompt_handoffs UNIQUE (team, agent, message_key, attempt) does not distinguish handoff kind, so task_queued and task_ready for the same assignment (same message_key, attempt 0) collide and record_prompt_handoff's INSERT OR IGNORE silently drops the second (task_ready) row. Evidence: site/reports/bb6-prompt-handoffs/20260913T015759104883Z (uncommitted, on solar's host). Fenix's ruling (2026-09-13T02:04:09Z): handoff identity becomes (team, agent, message_key, kind, attempt); UNIQUE gains the kind column. An unreleased table carrying the legacy shape on dev hosts is detected via sqlite_master and dropped+recreated at open (no migration machinery exists yet; ADR-061 D1 has no schema version). Sprint D1 DDL and the ADR-061 BB.6 entry are amended in the same layer, and task_pass_records_handoff_with_kind_and_attempt is fixed to seed the preceding task_queued row so the collision is covered. Dispatched as BB6-FIX-HANDOFF-IDENTITY-1789286000 to arch-ctm at the head of his queue, branch fix/bb6-handoff-identity cut from fix/bb6-cli-qa2 @ f0758be06 (stack position: above cli-qa2, below fix/bb-flaky-reader-pool; docs-qa1 lands on top)." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T02:02:27Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-025/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-025/1>
   a triage:Occurrence ;
