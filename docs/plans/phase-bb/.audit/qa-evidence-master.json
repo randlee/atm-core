@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-12T19:00:24Z",
-    "end": "2026-09-13T00:19:54Z"
+    "end": "2026-09-13T00:26:25Z"
   },
   "scope": "BB.1 (PR #1438, feature/bb1-transition-templates) and BB.2 (PR #1439, feature/bb2-orchestration-templates-1516) each have one QA-1 round in flight (assigned, no result yet -- verdict/pass/result_* fields are null/empty until quality-mgr reports). BB.3 (PR #1436, feature/bb3-test-procedure-pages) has one QA-1 FAIL round closed and a QA-2 round in flight on the fix-round push (BB3-FIX-R1, cipher, head 8a8b29640). fenix's parallel critical reviews (on BB.1 and BB.3 so far) are not dispatched quality-mgr QA runs; their findings are recorded separately under .triage/phase-bb/findings/ (BB1-001..021, BB3-001..012), correlated with QA findings on the same commit rather than duplicated. Phase BB is orchestrated with plain atm send (codex-orchestration), not graph-orchestration Assignment/Completion events, but .sprints/BB/events.ttl records dev Assignment/Completion events anyway per fenix's ruling so /triage-report's DEV column works.",
   "count_basis": "headline/reviewer",
@@ -383,6 +383,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "PASS (PR #1460 comment, 2026-09-13T00:19:54Z): all seven named colima scenarios confirmed correctly implemented via the public CLI/Herdr surface only; evidence at site/reports/bb5-assignment/20260912T234940144098Z confirmed runner-written; RULE-003/cargo gates clean; zero crates/ changes. BB5-004 closed. 1 important non-blocking finding (test_run_bb5_assignment.py lacks negative/failure-path coverage of the runner helpers, unlike sibling test_run_inbound_peer_smoke.py) filed by fenix's ruling as BB5-009, routed to cipher as item (5) of BB3-FIX-R5-1789264000."
+    },
+    {
+      "run_id": "BB6-QA-STORAGE-FIX",
+      "aich_sprint": "BB6",
+      "phase_sprint": "BB.6",
+      "pass": true,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-13T00:05:04Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2C19W2P9EVCX4KT66ZMMRHM",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB6-QA-STORAGE-FIX-1789267000 dispatched by fenix to quality-mgr for PR #1459, pinned head 35b733c09 (fix/bb6-storage-qa1, solar's BB6-FIX-STORAGE-QA1 closure). Review scope: BB6-001, BB6-002, BB6-003, BB6-004, diffed against a7d4664d1 (feature/bb6-storage-prompt-handoffs, PR #1458).",
+      "result_time_utc": "2026-09-13T00:26:25Z",
+      "result_time_pst": null,
+      "result_message_id": "01M2C2GZ05WGF5HWJ5HDBFXD4C",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "PASS (PR #1459 comment, 2026-09-13T00:26:25Z): BB6-001/002/003/004 all confirmed fixed, 5/5 reviewers agree; quality-mgr independently re-verified each directly against the pinned diff (35b733c09 vs a7d4664d1) -- single column-list owner + self-test (BB6-001), real filtering in InMemoryTaskLedgerReader (BB6-002), read_lane_storage_error used everywhere with the old local helper deleted (BB6-003), only Cargo.toml delta is a dev-only atm-storage test-utils feature with no tokio/new dependency (BB6-004). All four closed. Two informational notes (format!-built SQL vs a precompiled helper; no explicit allowed_dev_dependencies entry for the rusqlite->atm-storage test-utils dev-dep) ruled not findings by fenix -- no defect, no gate tripped; carried in the phase ledger as BB.7 debt, no triage record."
     }
   ]
 }
