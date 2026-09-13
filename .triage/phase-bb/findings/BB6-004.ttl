@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-004>
+  a triage:Finding ;
+  triage:findingId "BB6-004" ;
+  triage:title "BB6-002's InMemoryTaskLedgerReader test adds tokio as an atm-storage dev-dependency, violating the crate's manifest-dependency-allowlist boundary" ;
+  triage:description "CI on PR #1459 (fix/bb6-storage-qa1 @ 0c09c62b0), run 34726244032, job 103640739342: 'just lint' fails on the boundaries check (.just/logs/20260912234715-boundaries.log): 'crates/atm-storage/Cargo.toml [manifest-dependency-allowlist]: Cargo dependency 'tokio' is not allowlisted'. .just/lint-config.toml's manifest_dependency_allowlists for crates/atm-storage/Cargo.toml (allowed_dependencies = [async-trait, atm-error, base64, chrono, getrandom, rustls, serde, serde_json, sha2, toml, ulid, x509-parser, zeroize]) deliberately excludes tokio -- every sibling storage-adjacent crate (atm-storage-rusqlite, atm-runtime, atm-daemon-bootstrap, atm-graft, atm-herdr, peer-tls) explicitly allowlists tokio, but atm-storage (the sync trait/domain-type crate) never has. Solar's BB6-002 fix (list_prompt_handoffs backing-field fix) added a #[cfg(test)] mod with a #[tokio::test] async fn in crates/atm-storage/src/testing.rs, requiring `tokio.workspace = true` under a new [dev-dependencies] section in crates/atm-storage/Cargo.toml. This is a capability-adding change to a boundary-fenced crate (first async-runtime dependency of any kind, even dev-only) discovered directly by team-lead from CI, not from a quality-mgr QA pass. Self-discovered; independently confirmed by omega-prime's CI-failure alert (incident, 2026-09-12T23:51Z)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:source "team-lead CI investigation, PR #1459 run 34726244032" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/Cargo.toml;crates/atm-storage/src/testing.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T23:56:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Per design-ruling-before-capability-adding-fix: do not allowlist tokio for atm-storage (a policy relaxation on a deliberately sync/runtime-free crate) without a ruling. Team-lead's recommended hand-rolled poll-to-completion helper was NOT the ruling issued. Fenix's ruling (issued to solar at 2026-09-12T23:50:00Z, ahead of team-lead's report, as a same-task follow-up on BB6-FIX-STORAGE-QA1-1789265000, no new dispatch): no tokio and no hand-rolled poll helper either (test-only machinery would violate no-unused-code). Instead the seeded-double test moves out of crates/atm-storage/src/testing.rs into crates/atm-storage-rusqlite/tests/prompt_handoffs.rs -- inside solar's existing fence, already depends on tokio, and reaches atm_storage::testing the same way sibling double methods are exercised only from consumer crates. InMemoryTaskLedgerReader keeps its real backing state (the prompt_handoffs field and replace/with_prompt_handoffs methods) in testing.rs; only the #[tokio::test] itself relocates. Fenix's stated closure bar was met verbatim: solar's follow-up landed on fix/bb6-storage-qa1 @ 35b733c09, 2026-09-12T23:58:56Z, self-reporting lint 36/36 and just test exit 0. Closed per that bar, same evidentiary standard as BB5-005 (dev's quoted gate lines accepted without a separate QA rerun when the lead has pre-declared the closing criterion)." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-12T23:51:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-004/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-004/1> ;
+  triage:closedAt "2026-09-12T23:59:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:resolution/BB6-004/1>
+  a triage:Resolution ;
+  triage:resolutionNote "Fenix pre-declared the closure bar when issuing the ruling: 'closes when solar's follow-up commit lands with just lint 36/36.' Solar's push report (message 01M2C0YN5QCR5Q2HKVKJK1E378, 2026-09-12T23:58:56Z) reports exactly that: fix/bb6-storage-qa1 @ 35b733c09, lint 36/36, just test exit 0. Head verified via gh pr view 1459 (headRefOid 35b733c09f1479b3d7936ba6b59280203f7f816a)." .
+
+<urn:atm:triage:occurrence/BB6-004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/Cargo.toml" ;
+  triage:line 29 ;
+  triage:snippet "[dev-dependencies]\ntokio.workspace = true  -- not allowlisted for crates/atm-storage/Cargo.toml in .just/lint-config.toml" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "35b733c09" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-004/1> .
+
+<urn:atm:triage:worktree/BB6-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1459, fix/bb6-storage-qa1" ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "35b733c09" ;
+  triage:orderIndex 1 .

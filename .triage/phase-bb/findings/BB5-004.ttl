@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB5-004>
+  a triage:Finding ;
+  triage:findingId "BB5-004" ;
+  triage:title "None of the seven named colima integration scenarios for BB.5 exist as script, test, or evidence" ;
+  triage:description "fenix BB.5 completeness review of feature/bb-collapsed @ b74f0d6ef, 2026-09-12T22:27:39Z. None of the seven colima integration scenarios required by the BB.5 sprint doc exist as a script, a test, or committed evidence; site/reports/ contains only the unrelated bb4-task-start colima evidence. Same class of gap as BB4-001 (colima integration evidence required, not narrowed by an in-process fixture substitute)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:source "fenix completeness review" ;
+  triage:repeatable true ;
+  triage:sweepScope "site/reports/" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: run the seven named colima integration scenarios against the colima hermes testbed and commit runner-written evidence under site/reports/, per the BB4-001 precedent ruling (three colima smoke scenarios, CLI-driven, evidence committed), or obtain an explicit lead ruling narrowing this requirement. Routed to cipher on fix/bb5-colima-r1 (BB5-COLIMA-R1-1789258000, queued behind cipher's BB.3 round). Cipher's BB5-COLIMA-R1-1789258000 closed 2026-09-13T01:27:00Z: fixed at fix/bb5-colima-r1 @ 0cbc4adc6 (scripts/smoke/run_bb5_assignment.py + tests + runner evidence site/reports/bb5-assignment/20260912T234940144098Z -- verified present on the pushed branch, all seven scenarios PASS, source_revision f94125cf5). Gates quoted: just lint 36/36, just test exit 0, pytests 1165 OK. QA dispatched: BB5-QA-COLIMA-1789266000 on PR #1460 @ 0cbc4adc6. BB5-QA-COLIMA-1789266000 verdict PASS 0/1/0, 2026-09-13T00:19:54Z (PR #1460 comment): all seven scenarios confirmed correctly implemented via public CLI/Herdr surface only, evidence confirmed runner-written, RULE-003/cargo gates clean, zero crates/ changes. Closed per fenix's ruling. The Important gap (test_run_bb5_assignment.py lacks negative/failure-path coverage) filed separately as BB5-009." ;
+  triage:foundIn triage:BB5 ;
+  triage:foundAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-004/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB5-004/1> ;
+  triage:closedAt "2026-09-13T00:19:54Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:resolution/BB5-004/1>
+  a triage:Resolution ;
+  triage:resolutionNote "BB5-QA-COLIMA-1789266000 (PR #1460 comment, 2026-09-13T00:19:54Z): PASS 0/1/0. All seven named colima scenarios confirmed correctly implemented via the public CLI/Herdr surface only; evidence at site/reports/bb5-assignment/20260912T234940144098Z confirmed runner-written; RULE-003/cargo gates clean; zero crates/ changes. Reviewed pin 0cbc4adc6 vs sole parent f94125cf5 per fenix's scope note." .
+
+<urn:atm:triage:occurrence/BB5-004/1>
+  a triage:Occurrence ;
+  triage:file "site/reports/" ;
+  triage:line 1 ;
+  triage:snippet "no colima-testbed evidence artifact exists for any of the seven named BB.5 integration scenarios; site/reports/ contains only unrelated bb4-task-start evidence" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb5-colima-r1" ;
+  triage:headSha "0cbc4adc6" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-004/1> .
+
+<urn:atm:triage:worktree/BB5-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1460, fix/bb5-colima-r1" ;
+  triage:branch "fix/bb5-colima-r1" ;
+  triage:headSha "0cbc4adc6" ;
+  triage:orderIndex 1 .

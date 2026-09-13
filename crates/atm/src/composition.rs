@@ -1301,7 +1301,7 @@ pub(crate) mod tests {
 
     #[tokio::test]
     #[serial(env)]
-    async fn loopback_transport_send_preserves_ack_and_task_metadata_without_daemon() {
+    async fn loopback_transport_task_send_keeps_task_metadata_without_ack_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let composition_observability = CliObservability::fallback();
         let composition = CliComposition::from_loopback_transport(
@@ -1320,7 +1320,9 @@ pub(crate) mod tests {
             .await
             .expect("send outcome");
 
-        assert!(outcome.requires_ack);
+        // BB.5: a task-linked send never requires acknowledgement; readiness is
+        // signalled by the task pass, not by a pending-ack marker.
+        assert!(!outcome.requires_ack);
         assert_eq!(
             outcome.task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")
@@ -1332,7 +1334,7 @@ pub(crate) mod tests {
             inbox[0].task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")
         );
-        assert!(inbox[0].pending_ack_at.is_some());
+        assert!(inbox[0].pending_ack_at.is_none());
     }
 
     #[tokio::test]
@@ -1363,7 +1365,7 @@ pub(crate) mod tests {
         assert!(ack_required_outcome.requires_ack);
         let ack_required_message_id = ack_required_outcome.message_id;
 
-        // Task send also persists durable pending-ack state.
+        // Task send keeps its task link but never requires acknowledgement (BB.5).
         let task_outcome = composition
             .send(fixture.send_request_with_flags(
                 "task payload",
@@ -1372,7 +1374,7 @@ pub(crate) mod tests {
             ))
             .await
             .expect("task send outcome");
-        assert!(task_outcome.requires_ack);
+        assert!(!task_outcome.requires_ack);
         let task_message_id = task_outcome.message_id;
 
         // Peek is the explicit non-mutating inspection path.
@@ -1467,7 +1469,7 @@ pub(crate) mod tests {
             .iter()
             .find(|message| message.message_id == Some(task_message_id))
             .expect("task inbox message");
-        assert!(task_after_send.pending_ack_at.is_some());
+        assert!(task_after_send.pending_ack_at.is_none());
         assert_eq!(
             task_after_send.task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")

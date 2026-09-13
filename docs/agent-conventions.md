@@ -31,6 +31,15 @@ the dispatch envelope and does not replace the message body. This is the
 contract implemented by `GraftReceiveHook` in
 `crates/atm-graft/src/nudge_sink.rs`.
 
+## Task lines (Phase BB)
+
+- `task_queued`: informational; do nothing.
+- `task_ready`: read the assignment, start the task, and execute it.
+- `task_reminder`: read the reminder, start the task if needed, and execute it.
+- `task_started`: do nothing; the mailbox row is the record.
+- `task_complete`: do nothing; the mailbox row is the record.
+- `task_closed`: do nothing; the mailbox row is the record.
+
 ## Send-To attachments (R8)
 
 Any path under `$ATM_TEMP/send-to/` named in an ATM Send-To message is

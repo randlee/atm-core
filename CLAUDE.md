@@ -29,7 +29,7 @@
 When receiving a message `<atm from="omega-prime...` containing an
 orchestration alert or sprint-plan violation or merge-conflict notice:
 
-1. Acknowledge immediately (ATM ack protocol)
+1. For an alert explicitly marked `--requires-ack`, acknowledge immediately through the ATM ack protocol
 2. Verify compliance with the sprint plan's dependency rules
    (`must_follow`, `parallel_safe`)
 3. If a pipeline sequencing violation is confirmed, correct the assignment order before proceeding
@@ -70,7 +70,7 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 - Agent team execution: Scrum Master → Dev(s) + QA(s), Opus Architect on escalation
 - All work on dedicated worktrees via `sc-git-worktree`
 
-**Current Status**: Phase AX merged to develop (PR #1253, 98661ea18, 2026-09-06 — 7 sprints incl. task-state tracking and every-backend nudge templates; AX.7 live-evidence sprint superseded 2026-09-05, moved to release readiness). Phase AY (native-IPC transport cutover for Herdr) has all sprints merged into `integrate/phase-ay`; its phase-ending gate is in progress and the merge to `develop` is pending Rand approval.
+**Current Status**: Phase AX merged to develop (PR #1253, 98661ea18, 2026-09-06 — 7 sprints incl. task-state tracking and every-backend nudge templates; AX.7 live-evidence sprint superseded 2026-09-05, moved to release readiness). Phase AY (native-IPC transport cutover for Herdr) has all sprints merged into `integrate/phase-ay`; its phase-ending gate is in progress and the merge to `develop` is pending Rand approval. Phase BB has all seven sprints merged into `integrate/phase-bb`; its phase-ending gate and readiness review are in progress, with the merge to `develop` pending.
 
 ---
 
@@ -78,10 +78,9 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 
 **Primary references — read as needed:**
 
-- [`docs/team-protocol.md`](./docs/team-protocol.md) - **MUST READ** ATM dogfooding messaging protocol (ack -> work -> completion -> acknowledgement)
+- [`docs/team-protocol.md`](./docs/team-protocol.md) - **MUST READ** ATM dogfooding messaging protocol (task start -> work -> task close; the close is terminal)
 - [`docs/requirements.md`](./docs/requirements.md) - System requirements, architecture, plugin design
 - [`docs/project-plan.md`](./docs/project-plan.md) - Phased sprint plan with dependency graphs
-- [`docs/agent-team-api.md`](./docs/agent-team-api.md) - Claude agent team API reference (schema baseline: Claude Code 2.1.39)
 - [`docs/cross-platform-guidelines.md`](./docs/cross-platform-guidelines.md) - Mandatory Windows CI compliance patterns
 
 **Rust development reference — read only when implementation decisions are needed:**
@@ -107,7 +106,7 @@ Every sprint follows this pattern:
 1. **Create worktree** using `sc-git-worktree` skill
 2. **Dev work** by assigned dev agent(s)
 3. **QA validation** by assigned QA agent(s)
-4. **Retry loop** if QA fails (max attempts configurable)
+4. **Fix round** for each QA verdict with findings, on a new layer cut from the top of the phase stack; the reviewed layer stays frozen (`docs/development/gh-stack-guidelines.md` §0)
 5. **Commit/Push/PR** to phase integration branch
 6. **Agent-teams review** documenting what worked/didn't
 
@@ -133,9 +132,8 @@ main
 
 **Rules:**
 - Always merge PRs with a merge commit (`gh pr merge --merge`); never squash
-- Sprint PRs target `integrate/phase-N` (not `develop` directly)
-- After each sprint merges to the integration branch, subsequent sprints merge latest `integrate/phase-N` into their feature branch before creating their PR
-- When all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
+- The phase's sprint and fix PRs form one append-only `gh stack` above `integrate/phase-N`: every unit of work is a new worktree cut from the current top of the stack, its PR opens on the first push with base = the layer below, nothing below the top is ever edited again, and nobody waits for a lower layer's QA or CI. The single definition is [`docs/development/gh-stack-guidelines.md`](./docs/development/gh-stack-guidelines.md) §0.
+- The stack lands into `integrate/phase-N` once, from the top; when all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
 - Phase integration branch is then cleaned up
 
 ### Worktree Cleanup Policy
@@ -237,10 +235,14 @@ atm inbox
 | List teams | `atm teams` |
 | Team members | `atm members` |
 | Assign or reassign a task | `atm task assign <agent> [message source] [--task-id <id>] [--before <other-id> \| --head]` |
+| Start an assigned task | `atm task start <task-id> "<one-line plan>"` |
 | Close a task | `atm task close <task-id> <completed\|refused\|cancelled> [reason or report source]` |
 | Reorder a queued task | `atm task move <task-id> --before <other-id> \| --head \| --end` |
 | List open tasks | `atm task list [--all]` |
 | Show task history | `atm task events <task-id>` |
+
+`atm task start` is the only assigned-to-active task transition; `atm ack`
+never changes task state.
 
 `atm send <agent> --task-id <id> ...` is an alias for `atm task assign`.
 `atm send <assigner> --task-id <id> --task-complete ...` is an alias for

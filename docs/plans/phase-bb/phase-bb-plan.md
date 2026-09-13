@@ -92,7 +92,7 @@ against a task the prompt was not for.
 | P9 | `task_queued` is emitted at every position, including head. Design §4.3 said "nothing at head"; one rule (every assignment prints one line) is simpler than a head special case, and the idle agent gets `task_ready` on the next pass anyway. Design §4.3 amended. | this plan; BB.5 D2 |
 | P8 | State machine rule for this phase: no new state, no new event kind, no new counter. A sprint that needs one is a plan defect (Rand: "all state machines stay simple w/ clear observable transitions"). | §1 |
 | P10 | Critical review PLAN-CRIT-003: `prompt_handoffs` records **task-linked prompts only** (`task_id NOT NULL`). Its only reader is `atm task events`; a row for a plain steer prompt would be unread data. It therefore stays a task-ledger audit record owned by `TaskStore` (doc comment widened to say so); no seventh optional storage capability, so ADR-054's capability count is untouched. | BB.6 D2 |
-| P11 | Critical review PLAN-CRIT-001: the handoff row is an observation written after sink success, not a second phase of the emission. A record failure logs `prompt_handoff_record_failed` and never fails or retries the emission; the unique key `(team, agent, message_key, attempt)` makes a repeat a no-op. No outbox, no recovery protocol (P8). The colima acceptance counts rows against terminal lines **and** asserts zero `prompt_handoff_record_failed` lines. | BB.6 D1/D3; design §4.6 |
+| P11 | Critical review PLAN-CRIT-001: the handoff row is an observation written after sink success, not a second phase of the emission. A record failure logs `prompt_handoff_record_failed` and never fails or retries the emission; the unique key `(team, agent, message_key, kind, attempt)` makes a repeat a no-op. No outbox, no recovery protocol (P8). The colima acceptance counts rows against terminal lines **and** asserts zero `prompt_handoff_record_failed` lines. | BB.6 D1/D3; design §4.6 |
 | P12 | Critical review PLAN-CRIT-006/017 (run 2 revision): a second `atm task start` of an `active` task is a writer rejection with a new stable code `ATM_TASK_ALREADY_ACTIVE` and behaves like every other start rejection — write fails, message rolled back, nothing delivered, one `rejected` audit row (`batch.rs:432-438`). No retained-report path is added for starts (only closes carry a report). The CLI never decides idempotency from its preflight read. The new code is additive (MINOR) and rides BB.1's 1.8.0 entry. | BB.4 D2; design §4.4 |
 | P13 | Critical review PLAN-CRIT-002/011/012 (run 2 revision): after BB.5 no task-linked message is deferred, so the queue claim, idle drain and recovery sweep never carry a task link. Triggers are two — `steer` (`storage_and_nudge_router.rs:487`) and `task_pass` (`task_pass.rs:483`); `queue_drain.rs::drain_one` is untouched. The recorder is `pub(crate)` in `atm-http-runtime` and every call runs the synchronous `TaskStore` method through the caller's existing `BoundedBlockingBridge` with its existing deadline (the pattern of `record_task_reminder`, `task_pass.rs:552-580`). | BB.6 D3 |
 | P14 | Critical review PLAN-CRIT-011: pre-BB durable assignments still carry `pending_ack_at` / `nudge_pending_at` state. BB.5 D6 normalizes them once at storage open (idempotent statement beside the existing template-override migrations, `shared_db.rs:756-770`), and BB.1's kind decision renders a task-linked event without a transition as an ordinary non-task kind instead of a validation error, so a legacy row claimed before normalization is harmless. No compatibility claim lane. | BB.5 D6; BB.1 D3 |
@@ -102,7 +102,7 @@ against a task the prompt was not for.
 | sprint | doc | wave | parallel | recommended |
 | --- | --- | --- | --- | --- |
 | BB.1 | [Transition templates and kind decision](./sprint-BB.1-transition-templates.md) | 1 | with BB.2, BB.3 | arch-ctm / deep-reasoning |
-| BB.2 | [Orchestration templates at 1.5.16](./sprint-BB.2-orchestration-templates-1516.md) | 1 | **PARALLEL with BB.1** | cipher / fast |
+| BB.2 | [Orchestration templates at 1.5.16](./sprint-BB.2-orchestration-templates-1516.md) | 1 | **PARALLEL with BB.1** | solar / fast |
 | BB.3 | [Test-procedure pages](./sprint-BB.3-test-procedure-pages.md) | 1 | **PARALLEL with BB.1** (starts with BB.1) | cipher / fast |
 | BB.4 | [`atm task start`](./sprint-BB.4-task-start.md) | 2 | — | arch-ctm / deep-reasoning |
 | BB.5 | [Assignment write and task pass](./sprint-BB.5-assignment-write-task-pass.md) | 3 | — | arch-ctm / deep-reasoning |
@@ -140,11 +140,11 @@ BB.6 and BB.2 have merged.
 | sprint | interface | change | class |
 | --- | --- | --- | --- |
 | BB.1 | HTTP/peer API (graft loopback `GraftPostSendRequest`, `ATM_INTERNAL_NUDGE` envelope) | `PostSendHookEvent.task_transition: Option<TaskTransition>`, `#[serde(default, skip_serializing_if = "Option::is_none")]`; `atm-graft` and `atm-graft-python` decode with default and ignore it; `HTTP_API_VERSION` 1.7.0 → 1.8.0 | MINOR |
-| BB.1 | SQLite | none — override rows keep `kind TEXT`; stale `task` rows are reported, not migrated | none |
+| BB.1 | SQLite | `team_nudge_template_overrides` is rebuilt at open without a `template_kind` `CHECK` (validation remains in Rust); no global storage version exists yet (ADR-061 D6) — lead ruling: fenix, 2026-09-12 | MINOR (additive accepted kind spellings; existing rows preserved) |
 | BB.4 | HTTP/peer API | route/envelope: none — `TaskOp::Start` already exists on `WriteRequest` (P1). Error contract: new stable code `ATM_TASK_ALREADY_ACTIVE` (`AtmErrorCode::TaskAlreadyActive`), additive; recorded under the 1.8.0 D5 entry BB.1 opens (BB.4 stacks on BB.1) with the OpenAPI / surface fixtures updated | MINOR (additive error code) |
 | BB.4 | SQLite | none | none |
 | BB.5 | SQLite | one-time open-time normalization of pre-BB assignment ack/nudge markers (state columns only; no DDL change; envelopes untouched) | none (data normalization, recorded in ADR-061 D6 as a note) |
-| BB.6 | SQLite | new table `prompt_handoffs` (unique key on `team, agent, message_key, attempt`) via `CREATE TABLE IF NOT EXISTS` in `TASK_TABLES_DDL`; additive, a pre-BB binary ignores it; previous-consumer proof `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created` | MINOR |
+| BB.6 | SQLite | new table `prompt_handoffs` (unique key on `team, agent, message_key, kind, attempt`) via `CREATE TABLE IF NOT EXISTS` in `TASK_TABLES_DDL`; additive, a pre-BB binary ignores it; previous-consumer proof `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created` | MINOR |
 | BB.6 | HTTP/peer API | `TaskEventRow` gains no field; handoffs are read by `atm task events` through a new optional `handoffs` array on the existing task-events list response | MINOR, `HTTP_API_VERSION` 1.8.0 → 1.9.0 |
 | BB.3 | none | evidence JSON and the report index are not governed interfaces; BB.3 pins their contract in its own doc | n/a |
 
@@ -188,7 +188,7 @@ Nothing outside this list is added; deletions are listed per sprint.
 
 | sprint | addition |
 | --- | --- |
-| BB.1 | `TaskTransition` enum; `PostSendHookEvent.task_transition`; six `BuiltInNudgeTemplateKind` variants; six default bodies; render values `position`, `attempt`, `assignee`, `outcome`, `by`; `TaskClosedOutcome { Cancelled, Reassigned }`; doctor findings `stale_nudge_template_override` and `disabled_task_nudge_template`; `NudgeTemplateOverrideStore::list_stale_template_override_kinds`; `clear_template_override(team, kind: &str)` (parameter type change, sealed trait, both boundary manifests updated — BB.1 D6); `HTTP_API_VERSION` 1.8.0 |
+| BB.1 | `TaskTransition` enum; `PostSendHookEvent.task_transition`; `MessageAdmissionOutcome.task_assignee: Option<AgentName>` (internal assignee snapshot; lead ruling: fenix, 2026-09-12); six `BuiltInNudgeTemplateKind` variants; six default bodies; render values `position`, `attempt`, `assignee`, `outcome`, `by`; `TaskClosedOutcome { Cancelled, Reassigned }`; doctor findings `stale_nudge_template_override` and `disabled_task_nudge_template`; `NudgeTemplateOverrideStore::list_stale_template_override_kinds`; `clear_template_override(team, kind: &str)` (parameter type change, sealed trait, both boundary manifests updated — BB.1 D6); `HTTP_API_VERSION` 1.8.0 |
 | BB.2 | nothing in `crates/`; template steps only |
 | BB.3 | `scripts/procedures/render_procedure_pages.py`; `templates/procedure-report/procedure.html.j2`; `docs/procedures/*.md`; `site/reports/procedures/**`; `source_revision` on two evidence writers; `procedure`/`source_revision` optional envelope fields |
 | BB.4 | clap `TaskSubcommand::Start(TaskStartCommand)`; `SendCommand::build_task_start_request`; writer `admit` arm for `Started` (actor = assignee); `AtmErrorCode::TaskAlreadyActive` / `ATM_TASK_ALREADY_ACTIVE` in `atm-error` + `task_rejection.rs::task_already_active` + the `is_task_rejection` arm |
@@ -202,7 +202,9 @@ Nothing outside this list is added; deletions are listed per sprint.
    level its sprint doc places that test (BB.1 D5 unit; BB.4 and BB.5
    writer/runtime tests; BB.5 colima for rows 6–7), and every one passes on
    the integrate head; the colima integration lists of BB.4, BB.5 and BB.6
-   pass on the fixture for every roster shape.
+   pass on the committed fixture roster `{hermes, oversight, stub-alpha,
+   stub-beta, tester}`. Phase BB integration evidence exercises this one
+   roster shape only.
 2. `grep -rn "AcknowledgeTask\|K::Task\b\|start_assigned_task\|start_reminder_was_emitted\|queue_prompt_is_head_assignment\|record_queue_prompt_reminders" crates/` returns nothing.
 3. A three-task assignment to an idle agent on the live team shows exactly
    one `queued="2"`, one `queued="3"`, one `ready` (SMK-006 closed).

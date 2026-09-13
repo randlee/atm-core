@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB4-005>
+  a triage:Finding ;
+  triage:findingId "BB4-005" ;
+  triage:title "ADR-062 line 126 says active x Started writes 'no event or delivery', contradicting its own Replay row and the actual writer" ;
+  triage:description "quality-mgr BB4-QA2-1789254000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1446#issuecomment-5649061544, 2026-09-12T22:19:10Z; ARCH-001), reviewed at a66fbcbb3. docs/adr/ADR-062-task-state-machine.md:126 (table) states the active x Started transition is 'reject ATM_TASK_ALREADY_ACTIVE (\"task <id> is already active\"); no event or delivery'. This is factually wrong: independently verified that apply_task_start (crates/atm-storage-rusqlite/src/writer/task_ops.rs:399-402) returns Err(task_already_active(...)), which the batch writer (crates/atm-storage-rusqlite/src/writer/batch.rs:433-436) catches and passes to append_rejected_task_event, appending exactly one Rejected event row. This contradicts the ADR's own Replay row (line 115-116), which explicitly lists rejected as a recognized state-neutral event kind in the fold semantics." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/adr/ADR-062-task-state-machine.md:126" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T22:19:10Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: correct line 126 to state that a Rejected event is appended (matching line 115-116 and the actual writer), removing 'no event or delivery' for this cell. Correction (fenix, 2026-09-12T22:27:39Z): not solar's -- Phase BB resumed in collapsed form and fenix fixed this directly on the bottom feature/bb-collapsed @ b74f0d6ef (docs commit); routed to fenix, fixed-pending-QA. Solar has no open BB task; do not route anything to him." ;
+  triage:foundIn triage:BB4 ;
+  triage:foundAt "2026-09-12T22:19:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB4-005/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB4-005/1> ;
+  triage:closedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB4-005/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-062-task-state-machine.md" ;
+  triage:line 126 ;
+  triage:snippet "active x Started row says 'no event or delivery', contradicting the ADR's own Replay row (115-116) and the writer (task_ops.rs:399-402, batch.rs:433-436), which appends one Rejected event" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb4-qa1-r1" ;
+  triage:headSha "a66fbcbb3" ;
+  triage:occursIn <urn:atm:triage:worktree/BB4-005/1> .
+
+<urn:atm:triage:worktree/BB4-005/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1446, fix/bb4-qa1-r1" ;
+  triage:branch "fix/bb4-qa1-r1" ;
+  triage:headSha "a66fbcbb3" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB4-005/2>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-062-task-state-machine.md" ;
+  triage:line 126 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at f23d87928. docs/adr/ADR-062-task-state-machine.md:126 active x Started now: reject ATM_TASK_ALREADY_ACTIVE, one state-neutral rejected event appended." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:occursIn <urn:atm:triage:worktree/BB4-005/2> .
+
+<urn:atm:triage:worktree/BB4-005/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1468, fix/bb3-qa5-r6" ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB4-005/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:fixCommit "f23d87928" ;
+  triage:fixBranch "fix/bb3-qa5-r6" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch2" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at f23d87928. docs/adr/ADR-062-task-state-machine.md:126 active x Started now: reject ATM_TASK_ALREADY_ACTIVE, one state-neutral rejected event appended." .

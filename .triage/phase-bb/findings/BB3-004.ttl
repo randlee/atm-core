@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-004>
+  a triage:Finding ;
+  triage:findingId "BB3-004" ;
+  triage:title "procedure.html.j2 missing leading '---': YAML frontmatter leaks into every rendered page" ;
+  triage:description "fenix critical review B4, reviewed at 27e21224c. templates/procedure-report/procedure.html.j2:1 lacks the leading '---', so sc-compose treats the frontmatter header as page body: all 37 site/reports/procedures/*/<rev8>.html begin with leaked YAML ('metadata:\n  name: procedure-report...---\n<!doctype html>'). required_variables is never enforced; note (template L17) is undeclared. The D6 minidom-parse assertion would fail against this output, which is why the shipped test uses assertIn(\"<svg\" instead of actually parsing the document. Prepending '---' fixes it (verified by hand render)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "templates/procedure-report/procedure.html.j2" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1. Also declare `note` in required_variables/optional_variables per D2/D6." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-004/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB3-004/1> ;
+  triage:closedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-004/1>
+  a triage:Occurrence ;
+  triage:file "templates/procedure-report/procedure.html.j2" ;
+  triage:line 1 ;
+  triage:snippet "template lacks the leading '---' frontmatter delimiter; sc-compose renders the YAML header as literal page body across all 37 generated procedure pages" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-004/1> .
+
+<urn:atm:triage:worktree/BB3-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB3-004/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:fixCommit "791680c2ae8155bced4fd5fd2888c5a607228f01" ;
+  triage:fixBranch "feature/bb3-test-procedure-pages" ;
+  triage:verifiedInRound "BB3-FIX-R1" ;
+  triage:resolutionNote "Confirmed fixed in BB3-QA2 (11/12 deliverables complete): procedure.html.j2's leading '---' restored, frontmatter no longer leaks into rendered pages." .

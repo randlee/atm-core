@@ -274,6 +274,74 @@ class PrereleaseTests(unittest.TestCase):
         ):
             PRERELEASE.wait_for_archive("prerelease/v1.5.11", "new-sha")
 
+    def test_wait_for_archive_polls_once_per_minute_until_success(self) -> None:
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        def sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        success = {"headSha": "new-sha", "status": "completed", "conclusion": "success"}
+        with (
+            mock.patch.object(PRERELEASE, "gh_json", side_effect=[[], [], [success]]) as gh_json,
+            mock.patch.object(PRERELEASE.time, "monotonic", side_effect=lambda: clock[0]),
+            mock.patch.object(PRERELEASE.time, "sleep", side_effect=sleep),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            PRERELEASE.wait_for_archive("prerelease/v1.5.11", "new-sha")
+        self.assertEqual(gh_json.call_count, 3)
+        self.assertEqual(sleeps, [60, 60])
+        self.assertEqual(
+            stdout.getvalue().splitlines(),
+            [
+                "waiting for prerelease-archive.yml (0.0 min elapsed)",
+                "waiting for prerelease-archive.yml (1.0 min elapsed)",
+                "waiting for prerelease-archive.yml (2.0 min elapsed)",
+            ],
+        )
+
+    def test_wait_for_archive_times_out_after_twenty_minutes(self) -> None:
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        def sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        with (
+            mock.patch.object(PRERELEASE, "gh_json", return_value=[]),
+            mock.patch.object(PRERELEASE.time, "monotonic", side_effect=lambda: clock[0]),
+            mock.patch.object(PRERELEASE.time, "sleep", side_effect=sleep),
+            mock.patch("sys.stdout", new_callable=io.StringIO),
+        ):
+            with self.assertRaisesRegex(
+                SystemExit,
+                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.11 after 20.0 minutes",
+            ):
+                PRERELEASE.wait_for_archive("prerelease/v1.5.11", "new-sha")
+        self.assertEqual(clock, [20 * 60])
+        self.assertEqual(sleeps, [60] * 20)
+
+    def test_wait_for_archive_clamps_the_final_sleep_to_the_remaining_time(self) -> None:
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        def sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        with (
+            mock.patch.object(PRERELEASE, "ARCHIVE_WAIT_SECONDS", 150),
+            mock.patch.object(PRERELEASE, "gh_json", return_value=[]),
+            mock.patch.object(PRERELEASE.time, "monotonic", side_effect=lambda: clock[0]),
+            mock.patch.object(PRERELEASE.time, "sleep", side_effect=sleep),
+            mock.patch("sys.stdout", new_callable=io.StringIO),
+        ):
+            with self.assertRaisesRegex(SystemExit, "after 2.5 minutes"):
+                PRERELEASE.wait_for_archive("prerelease/v1.5.11", "new-sha")
+        self.assertEqual(sleeps, [60, 60, 30])
+
     def test_help_documents_install_and_publish(self) -> None:
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--help"],

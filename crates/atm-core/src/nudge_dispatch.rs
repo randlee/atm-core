@@ -11,6 +11,7 @@
 
 use crate::boundary::{
     BuiltInPostSendDispatch, MemberKey, Message, MessageKey, NudgeKind, PostSendHookEvent,
+    TaskTransition,
 };
 use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
@@ -19,6 +20,16 @@ use crate::send::NudgeMode;
 use crate::send::hook::build_built_in_dispatch;
 use crate::service_runtime::LocalServiceRuntime;
 use atm_storage::TaskRow;
+
+const fn task_pass_transition(reminder_count: u32) -> TaskTransition {
+    if reminder_count == 0 {
+        TaskTransition::Ready
+    } else {
+        TaskTransition::Reminder {
+            attempt: reminder_count,
+        }
+    }
+}
 
 /// Re-arms the exact durable queue marker after a successful handoff.
 ///
@@ -140,6 +151,7 @@ pub fn rebuild_received_hook_dispatch(
         requires_ack: message.envelope.requires_ack,
         is_ack: message.envelope.acknowledges_message_id.is_some(),
         task_id: message.envelope.task_id.clone(),
+        task_transition: None,
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };
 
@@ -180,9 +192,10 @@ pub fn build_task_reminder_dispatch(
         recipient_team: row.team.clone(),
         message_id: row.assignment_message_id,
         description: row.description.clone(),
-        requires_ack: true,
+        requires_ack: false,
         is_ack: false,
         task_id: Some(row.task_id.clone()),
+        task_transition: Some(task_pass_transition(row.reminder_count)),
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };
     build_built_in_dispatch(runtime, &delivery_snapshot, &event, NudgeMode::Deferred)

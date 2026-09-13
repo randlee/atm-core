@@ -29,7 +29,7 @@ forbidden = []
 
 [contracts]
 request_types = ["Message", "MessageKey", "MessageQuery"]
-response_types = ["Message", "Vec<Message>"]
+response_types = ["Message", "Vec<Message>", "MessageAdmissionOutcome (task_assignee: Option<AgentName>)"]
 error_types = ["AtmError"]
 
 [testing]

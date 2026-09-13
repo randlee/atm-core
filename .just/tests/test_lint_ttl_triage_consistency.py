@@ -71,6 +71,118 @@ class LintTtlTriageConsistencyTests(unittest.TestCase):
             self.assertEqual(len(violations), 1)
             self.assertIn("aggregate=fixed but branch status remains open", violations[0].message)
 
+    def test_flags_closed_finding_whose_status_still_reads_open(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".sprints/R").mkdir(parents=True)
+            write_ttl(
+                repo_root / ".triage/phase-R/findings/F010.ttl",
+                """
+                triage:F010
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:hasResolution <urn:atm:triage:resolution/F010/1> ;
+                  triage:closedAt "2026-09-12T22:18:29Z"^^xsd:dateTime ;
+                  triage:closedBy "quality-mgr" .
+                """,
+            )
+
+            violations = collect_ttl_triage_violations(repo_root)
+
+            self.assertEqual(len(violations), 1)
+            self.assertIn("closed finding still reads open", violations[0].message)
+
+    def test_flags_duplicate_status_line_on_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".sprints/R").mkdir(parents=True)
+            write_ttl(
+                repo_root / ".triage/phase-R/findings/F011.ttl",
+                """
+                triage:F011
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:status "fixed" ;
+                  triage:closedBy "quality-mgr" .
+                """,
+            )
+
+            violations = collect_ttl_triage_violations(repo_root)
+
+            messages = [violation.message for violation in violations]
+            self.assertTrue(any("duplicate triage:status" in m for m in messages), messages)
+            self.assertTrue(any("closed finding still reads open" in m for m in messages), messages)
+
+    def test_nested_branch_status_blocks_are_not_finding_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            write_ttl(
+                repo_root / ".triage/phase-R/findings/F013.ttl",
+                """
+                triage:F013
+                  a triage:Finding ;
+                  triage:status "fixed" ;
+                  triage:branchStatus [
+                      triage:branch "R.15" ;
+                      triage:status "fixed" ;
+                      triage:sha "d2d76a0"
+                  ] ;
+                  triage:branchStatus [
+                      triage:branch "R.16" ;
+                      triage:status "absent"
+                  ] .
+                """,
+            )
+
+            self.assertEqual(collect_ttl_triage_violations(repo_root), [])
+
+    def test_closure_predicate_quoted_in_prose_is_not_a_closure(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            write_ttl(
+                repo_root / ".triage/phase-S/findings/F014.ttl",
+                """
+                triage:F014
+                  a triage:Finding ;
+                  triage:description "records lack triage:closedAt and triage:closedBy" ;
+                  triage:status "open" .
+                """,
+            )
+
+            self.assertEqual(collect_ttl_triage_violations(repo_root), [])
+
+    def test_unmanaged_legacy_phase_is_not_held_to_closure_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".sprints/AICH").mkdir(parents=True)
+            write_ttl(
+                repo_root / ".triage/phase-AI/findings/F015.ttl",
+                """
+                triage:F015
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:closedBy "quality-mgr" .
+                """,
+            )
+
+            self.assertEqual(collect_ttl_triage_violations(repo_root), [])
+
+    def test_passes_closed_finding_with_replaced_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            write_ttl(
+                repo_root / ".triage/phase-R/findings/F012.ttl",
+                """
+                triage:F012
+                  a triage:Finding ;
+                  triage:status "fixed" ;
+                  triage:hasResolution <urn:atm:triage:resolution/F012/1> ;
+                  triage:closedBy "quality-mgr" .
+                """,
+            )
+
+            self.assertEqual(collect_ttl_triage_violations(repo_root), [])
+
     def test_passes_consistent_fixed_record(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

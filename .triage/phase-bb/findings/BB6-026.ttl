@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-026>
+  a triage:Finding ;
+  triage:findingId "BB6-026" ;
+  triage:title "run_bb6_prompt_handoffs.py scenario_disabled_reminder uses a fixed sleep instead of a bounded poll to prove a disabled reminder never fires" ;
+  triage:description "flaky-test-qa (2026-09-13T04:33:21Z), found during BB-POST-MORTEM-1789304000 phase-ending gate on integrate/phase-bb. scripts/smoke/run_bb6_prompt_handoffs.py:384 scenario_disabled_reminder uses a fixed time.sleep(REMINDER_WAIT_SECONDS) (65.0s, line 26) to prove a disabled task_reminder never fires. Production reminder cadence is TASK_REMINDER_INTERVAL_MS = 60_000 (crates/atm-storage/src/task_store.rs:32) -- only ~5s/8% margin, and that margin only starts after real wall-clock time already spent on assign()+wait_for_pane('ready') inside a live colima container. This is a fixed-sleep standing in for real synchronization (no-flaky-test-tolerance standard): can false-pass if daemon cadence shifts, or false-fail/flake if colima/docker latency shifts. Not a regression of BB6-024 (reader_pool.rs harness race, separately re-confirmed fixed by the same reviewer in this same gate) -- a distinct, newly-discovered gap in the BB6.7 colima smoke script." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-quality" ;
+  triage:severity "important" ;
+  triage:source "flaky-test-qa via quality-mgr, BB-POST-MORTEM-1789304000 phase-ending gate" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/run_bb6_prompt_handoffs.py (scenario_disabled_reminder, line 384; REMINDER_WAIT_SECONDS, line 26; existing wait_for_pane/deadline poll pattern at line 117)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T04:33:21Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, not blocking -- Phase BB stack is already fully landed (all 19 PRs merged into integrate/phase-bb); this is a smoke-script test-hardening gap, not a production defect or an observed flake. Does not block the integrate/phase-bb -> develop merge. Filed as fast-follow: replace the fixed sleep with a bounded poll mirroring the wait_for_pane/deadline pattern already used at line 117 -- any reminder=\"...\" block appearing for the task is an immediate hard failure; deadline elapsing (derived from TASK_REMINDER_INTERVAL_MS + an explicit multiplier, not a bare literal) is the pass condition. Land in the same fast-follow branch as BB6-028 (prompt_handoff_record.rs log_failure() missing outcome= field) -- same colima/prompt-handoff observability surface." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T04:33:21Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-026/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-026/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-026/1> ;
+  triage:closedAt "2026-09-13T05:24:15Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/BB6-026/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_bb6_prompt_handoffs.py" ;
+  triage:line 384 ;
+  triage:snippet "scenario_disabled_reminder uses fixed time.sleep(REMINDER_WAIT_SECONDS) (65.0s) instead of a bounded poll to prove a disabled task_reminder never fires; ~8% margin against TASK_REMINDER_INTERVAL_MS" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4b1bf0e63" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-026/1> .
+
+<urn:atm:triage:worktree/BB6-026/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4b1bf0e63" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-026/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_bb6_prompt_handoffs.py" ;
+  triage:line 402 ;
+  triage:snippet "quality-mgr BB6-GATE-FIX-QA2-1789328500 (report 01M2CKJDZCEWVM3J8A37ZPY0HA, PR #1477), verified at fix/bb6-taskstart-counterparty-authz @ a2491a6c6. Bounded poll at lines 402-410; colima evidence site/reports/bb6-prompt-handoffs/20260913T050015564593Z/bb6-prompt-handoffs.json: observed_interval 59.9158s, wait_seconds 120.0 (= max(2x, 120)). Confirmed independently by req-qa and arch-qa." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:headSha "a2491a6c6" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-026/2> .
+
+<urn:atm:triage:worktree/BB6-026/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1477, fix/bb6-taskstart-counterparty-authz" ;
+  triage:branch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:headSha "a2491a6c6" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB6-026/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T05:24:15Z"^^xsd:dateTime ;
+  triage:fixCommit "a2491a6c6" ;
+  triage:fixBranch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:verifiedInRound "BB6-GATE-FIX-QA2-1789328500" ;
+  triage:resolutionNote "quality-mgr BB6-GATE-FIX-QA2-1789328500 Final Quality Report (PR #1477, report 01M2CKJDZCEWVM3J8A37ZPY0HA). Bounded poll replaces the fixed sleep at scripts/smoke/run_bb6_prompt_handoffs.py:402-410; colima runner evidence observed_interval 59.9158s, wait_seconds 120.0 (= max(2x, 120)). Confirmed independently by req-qa and arch-qa at a2491a6c6." .

@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 branch: feature/bb7-docs
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb7-docs
 ---

@@ -49,7 +49,7 @@ defaults:
   </references>
 
   <workflow>
-    <step id="a">ACK this message immediately.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line&gt;"`.</step>
     <step id="b">Reject the task immediately if the assignment is not an XML payload rendered from this template. Read `{{ sprint_doc }}` first and treat it as the authoritative source for QA scope. Render structured JSON assignments for `req-qa` and `arch-qa` using the templates in `.claude/skills/codex-orchestration/`. Do not send free-form reviewer prompts.</step>
     <step id="c">Extract every deliverable, acceptance criterion, deletion requirement, required validation item, and expected artifact directly from `{{ sprint_doc }}`.</step>
     <step id="d">Treat the sprint doc and planning artifacts as explicit acceptance-gate items: verify `{{ sprint_doc }}` exists, the sprint doc frontmatter sets `status: complete`, `branch:`, and `worktree:`, and `docs/project-plan.md` includes the sprint entry before QA can PASS.</step>

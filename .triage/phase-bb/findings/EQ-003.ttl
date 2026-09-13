@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-003>
+  a triage:Finding ;
+  triage:findingId "EQ-003" ;
+  triage:title "bb5-assignment evidence has no explicit atm --version / doctor-version capture proving the container binary is 1.5.17" ;
+  triage:description "req-qa, independently confirmed by quality-mgr, BB-EVIDENCE-QA-1789287034 (PR #1483, report 2026-09-13T11:10:00Z). bb5-assignment evidence has no explicit atm --version / doctor-version-field capture proving the container binary is 1.5.17, unlike bb4 (bb4-task-start.json:492-498, direct atm --version output) and bb6 (bb6-prompt-handoffs.json:311-313, doctor client_context/daemon_context version field). bb5's 1.5.17 identity is only implied by the image tag string." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "testing" ;
+  triage:severity "minor" ;
+  triage:source "req-qa, verified by quality-mgr, BB-EVIDENCE-QA-1789287034" ;
+  triage:repeatable false ;
+  triage:sweepScope "scripts/smoke/run_bb5_assignment.py (version capture)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, not blocking. Fix dispatched by fenix: solar (runner capture + bb5 re-run on the retained 1.5.17 image), fix/bb-evidence-findings from origin/integrate/phase-bb. CLOSED (2026-09-13T09:21:22Z): quality-mgr BB-EVIDENCE-QA3-1789291900 (PR #1488 @ cfa8d2ec4, report 01M2D140JCDAW8E81MBX2VFT1D) confirms fixed -- bb5 runner now captures atm_version, evidence 20260913T084626438924Z PASS 7/7 atm 1.5.17." ;
+  triage:foundIn triage:BB5 ;
+  triage:foundAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-003/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-003/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/EQ-003/1> ;
+  triage:closedAt "2026-09-13T09:21:22Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/EQ-003/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_bb5_assignment.py" ;
+  triage:line 1 ;
+  triage:snippet "no atm --version / doctor version-field capture, unlike bb4 (bb4-task-start.json:492-498) and bb6 (bb6-prompt-handoffs.json:311-313); 1.5.17 identity only implied by the image tag string" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-003/1> .
+
+<urn:atm:triage:worktree/EQ-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1483, evidence/bb-smoke-1.5.17" ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/EQ-003/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_bb5_assignment.py" ;
+  triage:line 1 ;
+  triage:snippet "fix verified by quality-mgr BB-EVIDENCE-QA3-1789291900: atm_version capture added, evidence 20260913T084626438924Z PASS 7/7 atm 1.5.17" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb-evidence-findings" ;
+  triage:headSha "cfa8d2ec4" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-003/2> .
+
+<urn:atm:triage:worktree/EQ-003/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1488, fix/bb-evidence-findings" ;
+  triage:branch "fix/bb-evidence-findings" ;
+  triage:headSha "cfa8d2ec4" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/EQ-003/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T09:21:22Z"^^xsd:dateTime ;
+  triage:fixCommit "cfa8d2ec4" ;
+  triage:fixBranch "fix/bb-evidence-findings" ;
+  triage:verifiedInRound "BB-EVIDENCE-QA3-1789291900" ;
+  triage:resolutionNote "quality-mgr BB-EVIDENCE-QA3-1789291900 (PR #1488, report 01M2D140JCDAW8E81MBX2VFT1D): run_bb5_assignment.py now captures atm_version; re-run evidence 20260913T084626438924Z PASS 7/7 confirming atm 1.5.17." .

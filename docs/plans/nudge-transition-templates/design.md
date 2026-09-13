@@ -284,11 +284,23 @@ prompt, written by the path that emitted it after the sink reported success
 (exact one-to-one holds for any run whose log shows zero record failures):
 
 ```
-prompt_handoffs(team, agent, message_key TEXT, kind, task_id NOT NULL,
-                attempt NOT NULL DEFAULT 0, trigger, at)
-UNIQUE (team, agent, message_key, attempt)
-trigger ∈ steer | task_pass
+CREATE TABLE IF NOT EXISTS prompt_handoffs (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    message_key TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
+    trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'task_pass')),
+    at TEXT NOT NULL,
+    UNIQUE (team, agent, message_key, kind, attempt)
+);
 ```
+
+At open, a legacy four-column table is dropped and recreated with this
+five-column identity; `legacy_prompt_handoff_shape_is_recreated_with_kind_identity`
+and `record_prompt_handoff_keeps_kinds_distinct` pin the migration and
+distinct-kind behavior.
 
 Two triggers, because after §4.7 no task-linked message is ever deferred:
 assignments, starts and closes are all immediate (`steer`), and the task pass

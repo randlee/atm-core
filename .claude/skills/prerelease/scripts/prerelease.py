@@ -21,6 +21,8 @@ from typing import Any, Sequence
 
 STABLE_VERSION_PARTS = 3
 ARCHIVE_WORKFLOW = "prerelease-archive.yml"
+ARCHIVE_WAIT_SECONDS = 20 * 60
+ARCHIVE_POLL_SECONDS = 60
 
 
 def command(args: Sequence[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -328,7 +330,14 @@ def require_publish_preconditions(config: dict[str, Any]) -> None:
 
 
 def wait_for_archive(tag: str, source_sha: str) -> None:
-    for _attempt in range(60):
+    started_at = time.monotonic()
+    deadline = started_at + ARCHIVE_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        elapsed_minutes = (time.monotonic() - started_at) / 60
+        print(
+            f"waiting for {ARCHIVE_WORKFLOW} ({elapsed_minutes:.1f} min elapsed)",
+            flush=True,
+        )
         runs = gh_json(["run", "list", "--workflow", ARCHIVE_WORKFLOW, "--branch", tag, "--limit", "20", "--json", "status,conclusion,headSha"])
         if isinstance(runs, list):
             run = next(
@@ -344,8 +353,13 @@ def wait_for_archive(tag: str, source_sha: str) -> None:
                 if run.get("conclusion") == "success":
                     return
                 raise SystemExit(f"{ARCHIVE_WORKFLOW} failed for {tag}")
-        time.sleep(5)
-    raise SystemExit(f"timed out waiting for {ARCHIVE_WORKFLOW} for {tag}")
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(ARCHIVE_POLL_SECONDS, remaining))
+    elapsed_minutes = (time.monotonic() - started_at) / 60
+    raise SystemExit(
+        f"timed out waiting for {ARCHIVE_WORKFLOW} for {tag} after {elapsed_minutes:.1f} minutes"
+    )
 
 
 def publish(manifest: dict[str, Any]) -> tuple[str, str]:

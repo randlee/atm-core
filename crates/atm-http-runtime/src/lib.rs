@@ -61,7 +61,6 @@ mod herdr_queue_wake_escalation;
 #[cfg(test)]
 mod herdr_queue_wake_test_gates;
 mod herdr_task_disposition;
-mod herdr_task_start;
 mod http1_server;
 mod loopback_read;
 mod loopback_tcp;
@@ -70,6 +69,7 @@ mod peer_connection_pool;
 mod peer_dial;
 mod peer_stream;
 mod private_staging;
+mod prompt_handoff_record;
 mod router_support;
 mod runtime_health;
 mod runtime_listener;

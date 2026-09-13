@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 branch: feature/bb4-task-start
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb4-task-start
 ---
@@ -13,7 +13,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb4-task-st
 | Depends on | `must_follow` BB.1 (dev push) — emits `TaskTransition::Started`; stacks on `feature/bb1-transition-templates` |
 | Worktree | `feature/bb4-task-start` |
 | Governed interfaces | route/envelope: none — `TaskOp::Start` already exists on `WriteRequest` (`crates/atm-storage/src/task_op.rs:10-17`); this sprint changes who may send it. Error contract: new additive stable code `ATM_TASK_ALREADY_ACTIVE` (MINOR), appended to the ADR-061 D5 1.8.0 entry BB.1 opens; schema-reviewer sign-off |
-| Requirements / ADRs edited | `docs/requirements.md` 2996–2997, 3010–3013; ADR-062 134–137 → Phase BB amendment |
+| Requirements / ADRs edited | `docs/requirements.md` 2999–3001, 3016–3018; ADR-062 134–141 → Phase BB amendment |
 
 After this sprint the only actor that applies `Started` is the assignee,
 by command. The daemon never starts a task. Nothing else about the state
@@ -29,7 +29,7 @@ machine changes (plan P8).
 
 ## Deliverables
 
-- [ ] D1 — `crates/atm/src/commands/task.rs:42-55` `TaskSubcommand` gains
+- [x] D1 — `crates/atm/src/commands/task.rs:42-55` `TaskSubcommand` gains
   `Start(TaskStartCommand)` between `Assign` and `Close`:
 
 ```rust
@@ -61,12 +61,14 @@ struct TaskStartCommand {
   Output: `started {id}` on an applied start; on a writer rejection the
   write fails and the CLI prints the daemon's error (`ATM_TASK_ALREADY_ACTIVE`
   `task {id} is already active`, `… is already complete`,
-  `… already has an active task`, `… is not assigned to …`) and exits 1,
-  exactly as any failed `atm send` does. Nothing is delivered on rejection.
+  `… already has an active task`, `… is not assigned to …`) and fails exactly
+  as a failed `atm send` does: the same typed error code and the exit status
+  `main.rs` already assigns to that code (lead ruling, fenix,
+  BB4-TASK-START). Nothing is delivered on rejection.
   The preflight row is used only for the fast-fail above; it never decides
   idempotency (plan P12). JSON: the `SendResult`.
 
-- [ ] D2 — `crates/atm-storage-rusqlite/src/writer/task_ops.rs`:
+- [x] D2 — `crates/atm-storage-rusqlite/src/writer/task_ops.rs`:
   - `load_startable_task` (`:454-478`): replace the `DAEMON_ACTOR_NAME`
     check (`:472-476`) with
     `if record.envelope.from != row.assignee { return Err(task_not_counterparty(format!("task {task_id} is not assigned to {}", record.envelope.from))); }`.
@@ -103,7 +105,7 @@ struct TaskStartCommand {
     rejection above fires before `transition` is consulted),
     `(complete, Started) → reject "task {id} is already complete"`.
 
-- [ ] D3 — delete `start_assigned_task` and the call in
+- [x] D3 — delete `start_assigned_task` and the call in
   `complete_task_handoff` (`crates/atm-http-runtime/src/herdr_task_start.rs:19-71`);
   `complete_task_handoff` now only records the reminder (BB.5 deletes it);
   delete `render_task_started_template` (`crates/atm-core/src/send/nudge_template.rs:50-58`)
@@ -111,11 +113,11 @@ struct TaskStartCommand {
   `task_started:` summary literal and its tests. `DAEMON_ACTOR_NAME` stays
   (escalation mail).
 
-- [ ] D4 — `docs/requirements.md:2996-2997` item 4 → "Starting a task MUST be
+- [x] D4 — `docs/requirements.md:2999-3001` item 4 → "Starting a task MUST be
   `atm task start <id>` by the assignee; it MUST move the task from
   `assigned` to `active`, MUST move it to the head of the queue, and MUST
   send the assigner a start message. The daemon MUST NOT start a task."
-  `:3010-3013` item 9 closed set → `assign`, `start`, `close`, `move`,
+  `:3016-3018` item 9 closed set → `assign`, `start`, `close`, `move`,
   `list`, `events`. ADR-062 `:134-137` replaced by:
 
   > **Phase BB amendment (2026-09-xx).** BA R1 is superseded. `Started` is
@@ -157,9 +159,12 @@ CLI — `crates/atm/src/commands/task/tests`:
 - `task_start_sends_to_assigner_with_start_op`.
 - `task_start_defaults_message_when_omitted`.
 - `task_start_by_non_assignee_fails_before_sending`.
-- `task_start_prints_writer_error_for_active_task` — the daemon's `ATM_TASK_ALREADY_ACTIVE` error is printed verbatim, exit 1; no preflight-derived wording exists in the command.
+- `task_start_prints_writer_error_for_active_task` — the daemon's
+  `ATM_TASK_ALREADY_ACTIVE` error is printed verbatim with the same typed code
+  and exit status 1 assigned by `main.rs`; no preflight-derived wording exists
+  in the command (lead ruling, fenix, BB4-TASK-START).
 
-Integration (colima, every roster shape):
+Integration (colima, using the committed fixture roster named by phase plan §9):
 
 - `task_start_line_reaches_assigner_at_write_time` — assigner busy for the whole cycle still sees `<atm task=… started agent=… message=…/>` immediately (SMK-004).
 - `task_start_out_of_order_reorders_queue` — start task 3 of 3: `atm task list` shows it first and active.

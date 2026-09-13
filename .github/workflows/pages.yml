@@ -30,6 +30,27 @@ jobs:
       - name: Install just
         uses: taiki-e/install-action@just
 
+      - name: Set up Node.js for Mermaid rendering
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve Puppeteer version
+        id: puppeteer
+        run: echo "version=$(npm view puppeteer version)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Puppeteer Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: ${{ runner.os }}-puppeteer-chrome-${{ steps.puppeteer.outputs.version }}
+
+      - name: Provision Puppeteer Chromium
+        run: npx -y puppeteer@${{ steps.puppeteer.outputs.version }} browsers install chrome
+
+      - name: Verify generated procedure pages
+        run: just procedures --check
+
       - name: Verify generated report index
         run: just reports-index --check
 

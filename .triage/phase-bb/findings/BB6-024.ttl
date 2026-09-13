@@ -1,0 +1,93 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-024>
+  a triage:Finding ;
+  triage:findingId "BB6-024" ;
+  triage:title "atm-storage-rusqlite reader_pool test flakes under full-suite load: interrupted worker not reclaimed within its wait-queue deadline" ;
+  triage:description "fenix (2026-09-13T01:37:27Z), observed during solar's full `just test` on fix/bb6-docs-qa1 (205 passed, 1 failed; isolated rerun passed). atm-storage-rusqlite::reader_pool::tests::active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed panicked at crates/atm-storage-rusqlite/src/reader_pool.rs:1621 with 'interrupted worker remains reusable: DeadlineExpired { stage: \"waiting in queue\" }'. Pre-existing at the frozen heads (not introduced by this phase's changes), surfaced incidentally by full-suite timing/load during BB6 docs QA layer work. Per no-flaky-test-tolerance convention: root-caused and fixed, not rerun-to-green. Solar producing --test-threads=1 and under-load reproduction data." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "reliability" ;
+  triage:severity "blocking" ;
+  triage:source "fenix, observed during solar's full `just test` on fix/bb6-docs-qa1" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/reader_pool.rs:1621 (active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T01:37:27Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: root-cause why an interrupted reader-pool worker isn't reclaimed within its wait-queue deadline under full-suite timing/load, and fix the underlying race -- no rerun-to-green. Dispatched (reassigned to cipher) as BB-FLAKY-READER-POOL-1789288000, branch fix/bb-flaky-reader-pool cut from f0758be06, linked between fix/bb6-cli-qa2 and fix/bb6-docs-qa1 (PR #1474). Cipher's completion (2026-09-13T02:38:13Z) at @ 637c12263: root cause classified as harness wall-clock timing after interrupt, not a reclaim defect; test now waits for explicit reclamation metrics before reuse with a 5s bound, sibling reclaim bounds swept. Base exact test 50/50, pre-fix package under-load 50/50 locally, corrected test 200/200 under parallel workspace load. just lint 36/36, just test exit 0, parent f23d87928 an ancestor, worktree clean. Fixed-pending-QA at 637c12263." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T01:37:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-024/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-024/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-024/1> ;
+  triage:closedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "4" .
+
+<urn:atm:triage:occurrence/BB6-024/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1621 ;
+  triage:snippet "active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed panicked: interrupted worker remains reusable: DeadlineExpired { stage: \"waiting in queue\" } (full-suite run, 205 passed 1 failed; isolated rerun passed)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0efb1a582" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-024/1> .
+
+<urn:atm:triage:worktree/BB6-024/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1470, fix/bb6-docs-qa1" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0efb1a582" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-024/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1621 ;
+  triage:snippet "BB-FLAKY-READER-POOL complete: root cause was harness wall-clock timing after interrupt (not a reclaim defect); test waits for explicit reclamation metrics with a 5s bound, corrected test 200/200 under parallel workspace load; fixed-pending-QA at fix/bb-flaky-reader-pool @ 637c12263" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb-flaky-reader-pool" ;
+  triage:headSha "637c12263" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-024/2> .
+
+<urn:atm:triage:worktree/BB6-024/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1474, fix/bb-flaky-reader-pool" ;
+  triage:branch "fix/bb-flaky-reader-pool" ;
+  triage:headSha "637c12263" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB6-024/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1621 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. crates/atm-storage-rusqlite/src/reader_pool.rs:1607-1631 + wait_for_metrics helper (line 1659): test now polls real reclaim metrics (interrupted_while_active/in_flight/queue_depth/pool_size) via tokio::time::timeout(30s)+yield_now, not a fixed-sleep pass/fail gate." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-024/3> .
+
+<urn:atm:triage:worktree/BB6-024/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1470, fix/bb6-docs-qa1" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/BB6-024/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:fixCommit "0b9b3e4f3" ;
+  triage:fixBranch "fix/bb6-docs-qa1" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch1" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. crates/atm-storage-rusqlite/src/reader_pool.rs:1607-1631 + wait_for_metrics helper (line 1659): test now polls real reclaim metrics (interrupted_while_active/in_flight/queue_depth/pool_size) via tokio::time::timeout(30s)+yield_now, not a fixed-sleep pass/fail gate." .

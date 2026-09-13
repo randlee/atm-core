@@ -46,6 +46,7 @@ metadata:
   <branch>{{ branch }}</branch>
   <worktree>{{ worktree_path }}</worktree>
   <commits>{{ commits }}</commits>
+  <stack-discipline>`{{ branch }}` is a frozen layer of the phase stack at the commits above. Review exactly that head (`git show &lt;sha&gt;:&lt;path&gt;`), never a moving checkout. Report every finding, at every severity, in this one verdict; none is deferred. {{ lead }} records each one through `/triaging-findings` the same way and every finding is fixed on a new layer above this one, which the next QA round reviews.</stack-discipline>
 
   <review-targets>
 {{ review_targets }}
@@ -64,8 +65,8 @@ metadata:
   </references>
 
   <workflow>
-    <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"` (the message id is in the nudge line and the `atm read` header). The ack accepts the task; it does not close it.</step>
-    <step id="a1">Your queue runs in parallel: QA tasks never wait for each other. Right after the ack run `atm task list --json` and treat every open task assigned to quality-mgr as live now — its assignment body is the `description` field — and run each one concurrently with its own background reviewers. Close each task with its own `atm task close &lt;task-id&gt; completed …` the moment that verdict is ready, in any order; a queued position is ordering, not a wait, and a task can be closed without ever being started.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line: what you will do first&gt;"`, then begin the QA review in the same work session.</step>
+    <step id="a1">Your queue runs in parallel: QA tasks never wait for each other. Right after the task start run `atm task list --json` and treat every open task assigned to quality-mgr as live now — its assignment body is the `description` field — and run each one concurrently with its own background reviewers. Close each task with its own `atm task close &lt;task-id&gt; completed …` the moment that verdict is ready, in any order; a queued position is ordering, not a wait, and a task can be closed without ever being started.</step>
     <step id="b">Reject the task immediately if the assignment is not an XML payload rendered from this template. Read `{{ sprint_doc }}` first and treat it as the authoritative source for QA scope. Render structured JSON assignments for `req-qa` and `arch-qa` using the templates in `.claude/skills/codex-orchestration/`. Do not send free-form reviewer prompts.</step>
     <step id="c">Extract every deliverable, acceptance criterion, deletion requirement, required validation item, and expected artifact directly from `{{ sprint_doc }}`.</step>
     <step id="d">Treat the sprint doc and planning artifacts as explicit acceptance-gate items: verify `{{ sprint_doc }}` exists, the sprint doc frontmatter sets `status: complete`, `branch:`, and `worktree:`, and `docs/project-plan.md` includes the sprint entry before QA can PASS.</step>

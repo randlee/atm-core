@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB5-006>
+  a triage:Finding ;
+  triage:findingId "BB5-006" ;
+  triage:title "BB.5's task-send ack-contract change (70adbf12d) broke 19 pre-existing tests asserting the old contract" ;
+  triage:description "fenix, FYI relayed at stack-collapse time (message 01M2BV5FMEMVVYX7M8KD5WF8MK, 2026-09-12T22:24:22Z): BB.5 (70adbf12d) changed the task-send ack contract and left 19 tests asserting the old one, across atm-core (nudge_mode, task_reminder_dispatch, task_state) and atm-http-runtime (herdr_queue_wake). 4 were fixed as part of the stack collapse; 15 remained outstanding, root cause of red CI on the collapsed stack's layers alongside BB3-023. team-lead independently observed 4 of the 15 (nudge_mode.rs:561,590,780,874: actual_dispatch_matrix_covers_tmux_and_herdr_members, sync_and_async_graft_task_writes_use_the_queue_dispatch_kind, task_tagged_async_prepare_forces_deferred_mode, task_tagged_sync_prepare_forces_deferred_mode) failing in PR #1452's Test (ubuntu-latest) job 103631559165 with 'assertion left == right failed' panics, consistent with an unmigrated ack-contract assertion." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:source "fenix (stack-collapse root-cause analysis)" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/tests/nudge_mode.rs; task_reminder_dispatch; task_state; crates/atm-http-runtime herdr_queue_wake" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T22:24:22Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: migrate the 15 remaining test assertions to BB.5's new ack contract. Fixed by fenix on fix/bb5-contract-tests @ d1969185f (PR #1456, stack: #1452 feature/bb-collapsed (frozen) -> #1456 fix/bb5-contract-tests -> #1453 fix/bb5-closure-r1 -> #1455 fix/bb3-qa3-r4); 15 contract tests fixed, just lint 36/36, just test green. Verified fixed at d1969185f by req-qa/arch-qa/rust-qa-agent under BB5-QA-CT1-1789259000 (PASS, PR #1456 comment 2026-09-12T23:01:51Z); closed." ;
+  triage:foundIn triage:BB5 ;
+  triage:foundAt "2026-09-12T22:24:22Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-006/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB5-006/1> ;
+  triage:closedAt "2026-09-12T23:01:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:resolution/BB5-006/1>
+  a triage:Resolution ;
+  triage:resolutionNote "15 remaining contract-test assertions migrated on fix/bb5-contract-tests @ d1969185f; verified PASS by BB5-QA-CT1-1789259000 (req-qa/arch-qa/rust-qa-agent), PR #1456." ;
+  triage:resolvedAt "2026-09-12T23:01:51Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/BB5-006/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/nudge_mode.rs" ;
+  triage:line 561 ;
+  triage:snippet "15 tests across nudge_mode/task_reminder_dispatch/task_state/herdr_queue_wake still assert BB.5's pre-70adbf12d ack contract; 4 of these confirmed panicking in PR #1452's Test (ubuntu-latest) job with 'assertion left == right failed'" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-006/1> .
+
+<urn:atm:triage:worktree/BB5-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1456, fix/bb5-contract-tests" ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
+  triage:orderIndex 1 .

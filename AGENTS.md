@@ -15,13 +15,8 @@ The messaging protocol in that document is mandatory for all ATM communications.
 
 ## Quick Rule
 
-Always follow this sequence for every ATM message:
-1. Immediate acknowledgement
-2. Do the work
-3. Completion summary
-4. Immediate completion acknowledgement by receiver
-
-No silent processing.
+Follow the Required Flow in `docs/team-protocol.md`: acknowledge messages that require it; start assigned work at its `task_ready` line with `atm task start`; do the work; close with `atm task close`.
+A task close is terminal and is never acknowledged; no silent processing.
 
 ## Rust Guidance
 

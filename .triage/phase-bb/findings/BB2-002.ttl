@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-002>
+  a triage:Finding ;
+  triage:findingId "BB2-002" ;
+  triage:title "Stale Completion ACK by receiver step in both edited SKILL.md files, unreconciled with the sprint's own task-close model" ;
+  triage:description "quality-mgr BB2-QA1-1789243200 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1439#issuecomment-5648494400, 2026-09-12T20:28:31Z), reviewed at 67a6a3fe4. .claude/skills/graph-orchestration/SKILL.md:544-551 and .claude/skills/codex-orchestration/SKILL.md:235-242 -- both files' Required Message Sequence section still lists a generic 4-step protocol ending in a distinct 'Completion ACK by receiver' step, unchanged by this sprint. But every dispatch template (the two this sprint edited, plus the four pre-existing ones) now treats `atm task close {{ task_id }} completed ...` as the terminal, self-sufficient completion signal -- no template instructs the lead/assigner to send back a separate ack, and D5's own new prose says the lead 'reads that report and proceeds,' not that it acks it. Confirmed independently by both req-qa and arch-qa (req-qa finding 4, arch-qa ARCH-002). A future team-lead session reading only the stale section could conclude a manual ack/close step is still owed on the mirror task, contradicting D5." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".claude/skills/graph-orchestration/SKILL.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to fix/bb2-qa1-r1 (fenix, owner, cut from the top of stack #1443, 2026-09-12T20:29:38Z). Reconcile the stale Required Message Sequence / Completion ACK by receiver step in both graph-orchestration/SKILL.md and codex-orchestration/SKILL.md with the task-close-is-terminal model documented elsewhere in the same files." ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-002/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB2-002/1> ;
+  triage:closedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB2-002/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/graph-orchestration/SKILL.md" ;
+  triage:line 544 ;
+  triage:snippet "Required Message Sequence section still lists a generic 4-step protocol ending in a distinct Completion ACK by receiver step, contradicting the new task-close-is-terminal model" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-002/1> .
+
+<urn:atm:triage:worktree/BB2-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1444, fix/bb2-qa1-r1" ;
+  triage:branch "fix/bb2-qa1-r1" ;
+  triage:headSha "ef7572fd0" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB2-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:fixCommit "ef7572fd072a505986101c6ae34717f5d0e82262" ;
+  triage:fixBranch "fix/bb2-qa1-r1" ;
+  triage:verifiedInRound "BB2-QA2" ;
+  triage:resolutionNote "Confirmed fixed by all 3 reviewers (req-qa, arch-qa, ruthless-boundary-qa) in BB2-QA2: the Required Message Sequence in both SKILL.md files now ends at task close, no receiver-side completion ACK." .

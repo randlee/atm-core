@@ -422,6 +422,20 @@ struct NoopNudgeTemplateOverrideStore;
 impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
 
 impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+    fn list_stale_template_override_kinds(
+        &self,
+        _team: &TeamName,
+    ) -> Result<Vec<crate::boundary::StaleNudgeTemplateOverrideKind>, AtmError> {
+        Ok(Vec::new())
+    }
+
+    fn list_template_overrides(
+        &self,
+        _team: &TeamName,
+    ) -> Result<Vec<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+        Ok(Vec::new())
+    }
+
     fn load_template_override(
         &self,
         _team: &TeamName,
@@ -447,11 +461,7 @@ impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideSt
         unreachable!("admission entry tests never touch the override-store boundary")
     }
 
-    fn clear_template_override(
-        &self,
-        _team: &TeamName,
-        _kind: crate::boundary::BuiltInNudgeTemplateKind,
-    ) -> Result<bool, AtmError> {
+    fn clear_template_override(&self, _team: &TeamName, _kind: &str) -> Result<bool, AtmError> {
         unreachable!("admission entry tests never touch the override-store boundary")
     }
 }

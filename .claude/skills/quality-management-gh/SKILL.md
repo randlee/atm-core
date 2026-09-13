@@ -159,10 +159,8 @@ Use the final template only for `PASS` closeout.
 
 ## ATM Coordination Protocol
 
-For each task:
-1. immediate acknowledgement
-2. execute QA work
-3. send completion or status summary
-4. receiver acknowledgement
-
-No silent processing.
+The sequence for every QA task assignment is defined once in
+[`docs/team-protocol.md`](../../../docs/team-protocol.md) (Required Flow):
+task start, work, task close. The verdict travels in the `atm task close` report
+above; the close is terminal and the lead never acknowledges it. No silent
+processing.

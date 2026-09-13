@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-001>
+  a triage:Finding ;
+  triage:findingId "EQ-001" ;
+  triage:title "PR #1483 body falsely claimed every evidence JSON carries source_revision 5f2b1bb3d" ;
+  triage:description "req-qa, independently confirmed by quality-mgr, BB-EVIDENCE-QA-1789287034 (PR #1483, report 2026-09-13T11:10:00Z). PR #1483's body claimed 'Every evidence JSON carries source_revision 5f2b1bb3d' -- confirmed false for 2 of 9 evidence files: the second graft-hermes FAIL run and the final PASS run both record source_revision = 4cb8be1cee7b7f0d5b42a76aa83344128f861164, one triage-only commit above the pin (git diff --stat 5f2b1bb3d 4cb8be1ce touches only .triage/phase-bb/findings/BB-READY-004.ttl, zero code diff), because the integrate worktree had fast-forwarded to team-lead's triage push between smoke runs. This is the same benign worktree-drift pattern already documented this phase, not evidence fabrication -- the PASS result remains valid proof of the code's actual behavior -- but the PR body's claim was factually wrong." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "process" ;
+  triage:severity "important" ;
+  triage:source "req-qa, verified by quality-mgr, BB-EVIDENCE-QA-1789287034" ;
+  triage:repeatable false ;
+  triage:sweepScope "PR #1483 body (source_revision claim)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, closed-on-write per fenix -- fenix corrected PR #1483's body immediately with a disclosure of the benign drift (no re-run needed, since the code exercised is byte-identical), independently confirmed via gh pr view 1483 --json body. No fix branch/dev dispatch needed. RE-VERIFIED (2026-09-13T08:56:12Z): quality-mgr BB-EVIDENCE-QA2-1789290100 (PR #1483 @ 4c57a786d, report 01M2CZKQ79599VG80XP44J0TD5) confirms the corrected body byte-for-byte accurate -- req-qa read all 7 evidence JSONs (source_revision grouping matches), quality-mgr independently re-ran git diff --stat 5f2b1bb3d 4cb8be1ce confirming BB-READY-004.ttl only, zero code diff." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-001/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/EQ-001/1> ;
+  triage:closedAt "2026-09-13T08:37:04Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/EQ-001/1>
+  a triage:Occurrence ;
+  triage:file "PR #1483 (evidence/bb-smoke-1.5.17)" ;
+  triage:line 1 ;
+  triage:snippet "PR body claimed uniform source_revision 5f2b1bb3d across all 9 evidence JSONs; 2 graft-hermes runs actually recorded 4cb8be1ce (zero code diff from the pin)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-001/1> .
+
+<urn:atm:triage:worktree/EQ-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1483, evidence/bb-smoke-1.5.17" ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/EQ-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-13T08:37:04Z"^^xsd:dateTime ;
+  triage:fixCommit "4c57a786d" ;
+  triage:fixBranch "evidence/bb-smoke-1.5.17" ;
+  triage:verifiedInRound "BB-EVIDENCE-QA-1789287034" ;
+  triage:resolutionNote "fenix corrected PR #1483's body directly with a disclosure of the benign one-commit drift (zero code diff, triage-only) in place of the false uniformity claim; independently confirmed via gh pr view 1483 --json body. No re-run of the affected smoke passes was needed." .

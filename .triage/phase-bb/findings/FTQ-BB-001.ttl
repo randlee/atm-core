@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-BB-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-BB-001" ;
+  triage:title "concurrent_starts_admit_exactly_one_started_event joins its writer thread with no timeout" ;
+  triage:description "flaky-test-qa, BB-GATE-RERUN-1789285688 (phase-ending gate re-run, PR #1477, report 2026-09-13T10:40:00Z), fenix-verified at integrate/phase-bb @ 4cb8be1ce. crates/atm-storage-rusqlite/tests/task_identity.rs's concurrent_starts_admit_exactly_one_started_event (~line 718-742) spawns two threads racing a Barrier::new(3) and calls handle.join().expect(\"writer thread\") with no timeout -- confirmed via direct read. Violates harness-bounds-on-product-observables discipline; a hang here would stall CI indefinitely rather than fail fast. The test function itself was added by 8d000fc80 (feat(tasks): add explicit assignee task start), matching sprint-BB.4-task-start.md's own row-to-test map (phase-bb-plan.md:63 lists it under BB.4) -- the file predates Phase BB (added in BA.2), but this specific test does not." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "phase_end" ;
+  triage:category "testing" ;
+  triage:severity "minor" ;
+  triage:source "flaky-test-qa, verified by quality-mgr, BB-GATE-RERUN-1789285688 phase-ending gate re-run" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/tests/task_identity.rs (concurrent_starts_admit_exactly_one_started_event, ~line 718-740)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, not blocking merge. foundIn confirmed as BB4 via git log -S (the test function was added by 8d000fc80, matching phase-bb-plan.md:63's own BB.4 attribution) rather than fenix's hedged 'BB1 (or where task_identity.rs was added)' -- the file itself predates Phase BB (BA.2) but this test does not. Bundled by quality-mgr's own next-action guidance into the same fix round as the BB7-TEMPLATE-CONTRADICTION-001 occurrence 30 / QA-BB-001 / RBQA-BB-GATE2-002 fixes. CLOSED (2026-09-13T08:47:00Z): quality-mgr BB-GATE2-QA1-1789288411 (PR #1485, report 01M2CZ2MNJ14WHNB6FW75G1CS4) confirms fixed at fix/bb-gate2-findings @ 39850f06c -- bounded 5s recv_timeout join, 39/39 task_identity tests pass, no hang." ;
+  triage:foundIn triage:BB4 ;
+  triage:foundAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-BB-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-BB-001/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/FTQ-BB-001/1> ;
+  triage:closedAt "2026-09-13T08:47:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FTQ-BB-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/tests/task_identity.rs" ;
+  triage:line 718 ;
+  triage:snippet "concurrent_starts_admit_exactly_one_started_event spawns two threads racing a Barrier::new(3) and calls handle.join().expect(\"writer thread\") with no timeout -- a hang would stall CI indefinitely" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4cb8be1ce" ;
+  triage:occursIn <urn:atm:triage:worktree/FTQ-BB-001/1> .
+
+<urn:atm:triage:worktree/FTQ-BB-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4cb8be1ce" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/FTQ-BB-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/tests/task_identity.rs" ;
+  triage:line 719 ;
+  triage:snippet "fix verified by quality-mgr BB-GATE2-QA1-1789288411: bounded 5s recv_timeout join (719-781), 39/39 task_identity tests pass, no hang" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb-gate2-findings" ;
+  triage:headSha "39850f06c" ;
+  triage:occursIn <urn:atm:triage:worktree/FTQ-BB-001/2> .
+
+<urn:atm:triage:worktree/FTQ-BB-001/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1485, fix/bb-gate2-findings" ;
+  triage:branch "fix/bb-gate2-findings" ;
+  triage:headSha "39850f06c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/FTQ-BB-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T08:47:00Z"^^xsd:dateTime ;
+  triage:fixCommit "39850f06c" ;
+  triage:fixBranch "fix/bb-gate2-findings" ;
+  triage:verifiedInRound "BB-GATE2-QA1-1789288411" ;
+  triage:resolutionNote "quality-mgr BB-GATE2-QA1-1789288411 (PR #1485, report 01M2CZ2MNJ14WHNB6FW75G1CS4): join replaced with a bounded 5s recv_timeout join, 39/39 task_identity tests pass, no hang. req-qa + arch-qa both PASS, PR #1485 CI green." .

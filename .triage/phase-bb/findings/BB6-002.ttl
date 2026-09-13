@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-002>
+  a triage:Finding ;
+  triage:findingId "BB6-002" ;
+  triage:title "InMemoryTaskLedgerReader::list_prompt_handoffs is a silent no-op stub, unlike its siblings" ;
+  triage:description "rust-qa-agent via BB6-QA-L1-1789263000 (PR #1458, feature/bb6-storage-prompt-handoffs @ a7d4664d1), verdict PASS 0/3/0, 2026-09-12T23:33:40Z. InMemoryTaskLedgerReader::list_prompt_handoffs (testing.rs:463-472) returns Ok(vec![]) unconditionally, with no backing field and no filtering of in-memory rows, unlike its sibling list methods which delegate to an actual in-memory store. A caller using the in-memory test double will silently observe zero handoffs regardless of what was recorded. Independently verified by quality-mgr; ruled genuine by fenix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "rust-qa-agent via BB6-QA-L1-1789263000, ruled genuine by fenix" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/testing.rs:463-472" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T23:34:12Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: give InMemoryTaskLedgerReader a backing field for recorded prompt handoffs and have list_prompt_handoffs filter/return real in-memory rows like its sibling methods, instead of an unconditional Ok(vec![]) stub. Routed to solar on BB6-FIX-STORAGE-QA1-1789265000, branch fix/bb6-storage-qa1 cut from a7d4664d1, fence crates/atm-storage (+ rusqlite sibling). solar's BB6-FIX-STORAGE-QA1-1789265000 pushed fix/bb6-storage-qa1 @ 0c09c62b0, 2026-09-12T23:44:41Z; full gates running. Fixed-pending-QA. Solar's same-task follow-up (BB6-004 boundary fix: the seeded-double test moved into crates/atm-storage-rusqlite/tests/prompt_handoffs.rs, unrelated to this finding's substance) landed on the same branch at 35b733c09, 2026-09-12T23:58:56Z, self-reported lint 36/36 and just test exit 0. BB6-QA-STORAGE-FIX-1789267000 verdict PASS (PR #1459 comment, 2026-09-13T00:26:25Z): quality-mgr independently re-verified real filtering in InMemoryTaskLedgerReader against the pinned diff 35b733c09 vs a7d4664d1, 5/5 reviewers agree. Closed." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-12T23:33:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-002/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-002/1> ;
+  triage:closedAt "2026-09-13T00:26:25Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "5" .
+
+<urn:atm:triage:resolution/BB6-002/1>
+  a triage:Resolution ;
+  triage:resolutionNote "BB6-QA-STORAGE-FIX-1789267000 (PR #1459 comment, 2026-09-13T00:26:25Z): PASS 0/0/0. quality-mgr independently re-verified directly against the pinned diff (35b733c09 vs a7d4664d1): InMemoryTaskLedgerReader::list_prompt_handoffs now filters and returns real in-memory rows via the relocated consumer-owned test." .
+
+<urn:atm:triage:occurrence/BB6-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/testing.rs" ;
+  triage:line 463 ;
+  triage:snippet "InMemoryTaskLedgerReader::list_prompt_handoffs returns Ok(vec![]) without a delegate instead of filtering in-memory rows like its sibling list methods" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "35b733c09" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-002/1> .
+
+<urn:atm:triage:worktree/BB6-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1459, fix/bb6-storage-qa1" ;
+  triage:branch "fix/bb6-storage-qa1" ;
+  triage:headSha "35b733c09" ;
+  triage:orderIndex 1 .

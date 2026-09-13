@@ -40,6 +40,7 @@ metadata:
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
   <pr-target>{{ pr_target }}</pr-target>
+  <stack-discipline>`{{ branch }}` is a layer cut from the current top of the phase stack; `{{ pr_target }}` is the layer directly below it. Work only on this layer. Never edit, push to, rebase, or open a PR against any layer below, and never wait for a lower layer's QA or CI. If `{{ pr_target }}` gains commits while you work, run `git fetch origin && git merge origin/{{ pr_target }}` once at task start and once before the final push; the parent wins where copies differ. Once this task closes the layer is frozen: every later finding against it is fixed on a new layer cut from the top of the stack, never here.</stack-discipline>
   <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
 
   <dependency-relations>
@@ -66,8 +67,7 @@ metadata:
   </references>
 
   <workflow>
-    <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"` (the message id is in the nudge line and the `atm read` header). The ack accepts the task; it does not close it. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
-    <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line: what you will do first&gt;"`, then begin executing it in the same work session. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="c">Read `{{ sprint_doc }}` before coding. Treat it as the authoritative source for scope, deliverables, deletion targets, validation, and acceptance criteria. If this assignment summary and the sprint doc differ, the sprint doc wins and the mismatch must be reported.</step>
     <step id="d">Before coding, update the worktree from the sprint target branch and include prior fixes already merged to that target.</step>
     <step id="d1">Honor `<dependency-relations>`: must-follow merge-forward trigger is parent dev push, not QA; merge parent → child before every round. PR-completion trigger is parent PR merge first. Stop if a parallel-safe relation intersects.</step>

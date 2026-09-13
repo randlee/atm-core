@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseBB a triage:Phase .
+
+# Order follows docs/plans/phase-bb/phase-bb-plan.md sec.3/5: wave 1 is
+# BB.1/BB.2/BB.3 in parallel off integrate/phase-bb; BB.4 stacks on BB.1
+# (must_follow dev push), BB.5 on BB.4, BB.6 on BB.5; BB.7 branches from
+# integrate/phase-bb once BB.6 and BB.2 have merged (must_follow PR
+# completion). Sprint order below is declaration order, not a strict
+# dependency chain -- see the plan's sec.4 dependency-relations table for
+# the actual must_follow/parallel_safe edges.
+triage:BB1 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 1 ; triage:branch "feature/bb-collapsed" ; triage:criteria "docs/plans/phase-bb/sprint-BB.1-transition-templates.md" .
+triage:BB2 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 2 ; triage:branch "feature/bb-collapsed" ; triage:criteria "docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md" .
+triage:BB3 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 3 ; triage:branch "fix/bb-ready-004-adopt" ; triage:criteria "docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md" .
+# NOTE (2026-09-13, team-lead): repointed from fix/bb3-qa5-r6 (PR #1468,
+# merged; all BB3 findings closed) to track BB-READY-003's fix branch --
+# a bookkeeping reuse of a fully-closed sprint's branch slot, not a claim
+# that BB-READY-003 originated in BB.3's work. See BB-READY-003.ttl.
+# NOTE (2026-09-13, team-lead): re-pointed again from fix/bb-bootstrap-shear-pin
+# (BB-READY-003, closed) to fix/bb-ready-004-adopt (PR #1487) -- the live
+# delivery branch for BB-READY-004 and ATM-QA-BB004-1/2 (sc-publish PR #93
+# adoption + pin advance), superseding the closed PR #1484. Same bookkeeping-
+# reuse convention, per fenix.
+triage:BB4 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 4 ; triage:branch "fix/bb-evidence-findings" ; triage:criteria "docs/plans/phase-bb/sprint-BB.4-task-start.md" .
+triage:BB5 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 5 ; triage:branch "fix/bb-evidence-findings" ; triage:criteria "docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md" .
+# NOTE (2026-09-13, team-lead): both re-pointed from feature/bb-collapsed
+# (dev delivery branch, long since merged) to fix/bb-evidence-findings
+# (PR #1488) -- the live delivery branch for EQ-004 (BB4) and EQ-003 (BB5),
+# per fenix.
+triage:BB6 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 6 ; triage:branch "fix/bb-readiness-docs" ; triage:criteria "docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md" .
+triage:BB7 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 7 ; triage:branch "fix/bb-readiness-docs" ; triage:criteria "docs/plans/phase-bb/sprint-BB.7-docs.md" .
+# NOTE (2026-09-13, team-lead): re-pointed from fix/bb7-openapi-message-bodies
+# (BB7-DOCS-NONDELIVERY-001) -- that branch/PR #1467 is an unrelated OpenAPI
+# doc fix (finding BB7-OPENAPI-001) mis-tagged into the BB7 slot; it never
+# delivered sprint-BB.7-docs.md's D1-D6. feature/bb7-docs was the sprint's
+# actual planned branch (dispatched to cipher, delivered and closed).
+# NOTE (2026-09-13, team-lead): BB6 and BB7 both re-pointed again to
+# fix/bb-readiness-docs -- the single fix branch dispatched to cipher
+# (BB-READY-DOCS-FIX-1789281196) that serves both BB-READY-002 (foundIn
+# BB.6) and BB-READY-001 (foundIn BB.7); BB6's prior fix/bb6-docs-qa1 and
+# BB7's feature/bb7-docs delivery work are both already merged/closed.

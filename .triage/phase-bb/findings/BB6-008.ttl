@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-008>
+  a triage:Finding ;
+  triage:findingId "BB6-008" ;
+  triage:title "ADR-061 lacks the 1.9.0 D5/D6 ledger entry for the prompt_handoffs additive schema change" ;
+  triage:description "rust-best-practices-agent via BB6-QA-L3-1789269000 (PR #1462, feature/bb6-cli-prompt-handoffs @ 40ccd403e), verdict PASS 0/4/2, 2026-09-13T00:38:04Z. ADR-061-governed-interface-schema-versioning.md lacks a ledger entry recording the 1.9.0 D5/D6 prompt_handoffs additive schema change, as of the CLI layer (feature/bb6-cli-prompt-handoffs @ 40ccd403e). Ruled genuine by fenix (PR #1462 comment, 2026-09-13T00:38:04Z); resolved by construction on the docs layer rather than requiring a separate fix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "rust-best-practices-agent via BB6-QA-L3-1789269000, ruled genuine by fenix" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/adr/ADR-061-governed-interface-schema-versioning.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: add the 1.9.0 D5/D6 ledger entry recording the prompt_handoffs additive-table schema change to ADR-061. Not routed as a new fix task -- L4 (feature/bb6-docs-prompt-handoffs) already adds it. Pin per fenix (2026-09-13T00:38:43Z, verified via git show): at feature/bb6-docs-prompt-handoffs @ 4b0f6661c, lines 101-110 carry the D5 1.9.0 ledger entry (proof names 106-109) and lines 153-160 the D6 prompt_handoffs additive-table approval (proof names 158-160). Fixed-pending-QA at 4b0f6661c; verified by L4 QA." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-008/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-008/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-008/1> ;
+  triage:closedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/BB6-008/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-061-governed-interface-schema-versioning.md" ;
+  triage:snippet "no 1.9.0 D5/D6 ledger entry present for the prompt_handoffs additive schema change" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb6-cli-prompt-handoffs" ;
+  triage:headSha "40ccd403e" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-008/1> .
+
+<urn:atm:triage:worktree/BB6-008/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1462, feature/bb6-cli-prompt-handoffs" ;
+  triage:branch "feature/bb6-cli-prompt-handoffs" ;
+  triage:headSha "40ccd403e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-008/2>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-061-governed-interface-schema-versioning.md" ;
+  triage:line 101 ;
+  triage:snippet "L4 D5 docs add the 1.9.0 ledger entry (lines 101-110, proof names 106-109) and the D6 prompt_handoffs additive-table approval (lines 153-160, proof names 158-160); verified via git show by fenix. Fixed-pending-QA." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "4b0f6661c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-008/2> .
+
+<urn:atm:triage:worktree/BB6-008/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "4b0f6661c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB6-008/3>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-061-governed-interface-schema-versioning.md" ;
+  triage:line 101 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at 7bb8f4a49. docs/adr/ADR-061-governed-interface-schema-versioning.md:101-114 1.9.0 D5 ledger entry present." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-cli-qa2" ;
+  triage:headSha "7bb8f4a49" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-008/3> .
+
+<urn:atm:triage:worktree/BB6-008/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1469, fix/bb6-cli-qa2" ;
+  triage:branch "fix/bb6-cli-qa2" ;
+  triage:headSha "7bb8f4a49" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/BB6-008/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:fixCommit "7bb8f4a49" ;
+  triage:fixBranch "fix/bb6-cli-qa2" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch2" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at 7bb8f4a49. docs/adr/ADR-061-governed-interface-schema-versioning.md:101-114 1.9.0 D5 ledger entry present." .

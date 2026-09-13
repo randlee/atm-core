@@ -773,6 +773,7 @@ mod tests {
                 requires_ack: false,
                 is_ack: false,
                 task_id: None,
+                task_transition: None,
                 recipient_pane_id: Some(PaneId::from_cli("%1").expect("pane")),
             },
             target: PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(

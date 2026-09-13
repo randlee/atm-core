@@ -1,0 +1,93 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-003>
+  a triage:Finding ;
+  triage:findingId "BB2-003" ;
+  triage:title "docs/agent-team-api.md, referenced in CLAUDE.md's Key Documentation list, does not exist in the repo" ;
+  triage:description "quality-mgr BB2-QA1-1789243200 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1439#issuecomment-5648494400, 2026-09-12T20:28:31Z), reviewed at 67a6a3fe4. Confirmed via Glob: no such file anywhere in the repo or worktree. CLAUDE.md itself is unchanged by this diff, so this is a pre-existing broken reference, not introduced by this sprint (req-qa finding 6). Does not block this sprint." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "CLAUDE.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
+  triage:deferredNote "Pre-existing, out of BB.2's scope -- not required for this sprint's fix round. Left open for a future doc-hygiene pass. UPDATE (2026-09-13T05:43:56Z): folded into BB7's fix layer -- cipher's BB7-DOCS-FIX-R1-1789329000 second push (feature/bb7-docs @ 84ea982ee) removed the stale docs/agent-team-api.md reference from CLAUDE.md, closing occurrence 1. quality-mgr BB7-DOCS-QA2-1789332000 confirmed the fix but also confirmed a second, previously-flagged occurrence of the same broken-reference defect class still live (docs/claude-code-message-schema.md:18) -- correlated below as occurrence 2 rather than filed as a new record. STAYS OPEN. UPDATE (2026-09-13T06:10:25Z): quality-mgr BB7-DOCS-QA3 (PR #1478, round 3) confirms occurrence 2 fixed at feature/bb7-docs @ caf73bc34, no new occurrences found. CLOSED." ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-003/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-003/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB2-003/1> ;
+  triage:closedAt "2026-09-13T06:10:25Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/BB2-003/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 1 ;
+  triage:snippet "Key Documentation list references docs/agent-team-api.md, which does not exist anywhere in the repo (pre-existing, unrelated to this sprint's diff)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb2-orchestration-templates-1516" ;
+  triage:headSha "67a6a3fe4" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-003/1> .
+
+<urn:atm:triage:worktree/BB2-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1439, feature/bb2-orchestration-templates-1516" ;
+  triage:branch "feature/bb2-orchestration-templates-1516" ;
+  triage:headSha "67a6a3fe4" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB2-003/2>
+  a triage:Occurrence ;
+  triage:file "docs/claude-code-message-schema.md" ;
+  triage:line 18 ;
+  triage:snippet "ATM-QA-BB7-103 (quality-mgr, BB7-DOCS-QA2-1789332000): line 18 references agent-team-mail/docs/agent-team-api.md, which does not exist repo-wide; same broken-reference defect class as occurrence 1, missed by cipher's CLAUDE.md-only fix, verified via git show at 84ea982ee" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "84ea982ee" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-003/2> .
+
+<urn:atm:triage:worktree/BB2-003/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1478, feature/bb7-docs" ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "84ea982ee" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB2-003/3>
+  a triage:Occurrence ;
+  triage:file "docs/claude-code-message-schema.md" ;
+  triage:line 18 ;
+  triage:snippet "quality-mgr BB7-DOCS-QA3 (PR #1478, round 3, report on PR): occurrence 2's broken reference confirmed fixed at feature/bb7-docs @ caf73bc34; no new occurrences found" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "caf73bc34" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-003/3> .
+
+<urn:atm:triage:worktree/BB2-003/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1478, feature/bb7-docs" ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "caf73bc34" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/BB2-003/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T06:10:25Z"^^xsd:dateTime ;
+  triage:fixCommit "caf73bc34" ;
+  triage:fixBranch "feature/bb7-docs" ;
+  triage:verifiedInRound "BB7-DOCS-QA3" ;
+  triage:resolutionNote "quality-mgr BB7-DOCS-QA3 Final Quality Report (PR #1478, round 3). Both occurrences of the stale docs/agent-team-api.md broken reference (CLAUDE.md and docs/claude-code-message-schema.md:18) are fixed at feature/bb7-docs @ caf73bc34; no new occurrences found." .

@@ -7,6 +7,7 @@ use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use crate::{BuiltInNudgeTemplateKind, MessageKey};
 
 use crate::task_store::ReminderOutcome;
 
@@ -36,6 +37,53 @@ pub enum TaskCloseOutcome {
     Completed,
     Refused,
     Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskClosedOutcome {
+    Cancelled,
+    Reassigned,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", tag = "transition")]
+pub enum TaskTransition {
+    Queued { position: u32 },
+    Ready,
+    Reminder { attempt: u32 },
+    Started,
+    Complete { outcome: TaskCloseOutcome },
+    Closed { outcome: TaskClosedOutcome },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptTrigger {
+    Steer,
+    TaskPass,
+}
+
+impl PromptTrigger {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Steer => "steer",
+            Self::TaskPass => "task_pass",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PromptHandoff {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub message_key: MessageKey,
+    pub kind: BuiltInNudgeTemplateKind,
+    pub task_id: TaskId,
+    pub attempt: u32,
+    pub trigger: PromptTrigger,
+    pub at: IsoTimestamp,
 }
 
 impl TaskCloseOutcome {
