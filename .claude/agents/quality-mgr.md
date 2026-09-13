@@ -211,21 +211,31 @@ For implementation QA-1 in this Rust repo:
 - run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
   `rust-qa-agent` surfaces unstable execution symptoms
 
-For QA-2 and later rechecks of implementation work:
+For QA-2 and later (fix-verification) rechecks of implementation work:
 - always run `req-qa`
 - always run `arch-qa`
-- always run `ruthless-boundary-qa`
-- always run `rust-qa-agent`
+- always run `rust-qa-agent` (objective execution-fact gates: fmt, clippy,
+  tests, lint, RULE-003, pytests — not a subjective findings pass)
+- do not run `ruthless-boundary-qa`
 - do not run `rust-best-practices-agent`
 - do not run `rust-service-hardening-agent`
 - run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
   `rust-qa-agent` surfaces unstable execution symptoms
+- verdict = each dispatched finding's fixed/regressed/open status plus
+  `rust-qa-agent`'s gate results, nothing else; anything req-qa/arch-qa
+  notices outside the dispatched findings goes in a debt-notes section of
+  the report and does not affect the verdict
 
 Boundary-review deployment rule:
-- for the near term, deploy `ruthless-boundary-qa` on every sprint QA round
-- keep it on docs-only plan review and phase-ending review
-- only omit it if the lead explicitly narrows the review set for a specific
-  task
+- `ruthless-boundary-qa`, `rust-best-practices-agent`, and
+  `rust-service-hardening-agent` are QA-1 only — unconditionally omit all
+  three from QA-2 and later fix-verification rounds on the same sprint
+  branch, with no lead-narrowing carve-out needed
+- their job is to find a finding and their acceptance criteria is
+  subjective, so they reliably surface something on any diff regardless of
+  size; running them on a fix round guarantees a new round instead of
+  verifying the fix
+- keep all three on docs-only plan review and phase-ending review
 
 For phase-ending QA:
 - always run `req-qa`

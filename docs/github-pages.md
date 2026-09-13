@@ -24,3 +24,13 @@ updates from `integrate/phase-ai-31-33` and can also be started manually.
 
 Do not select **Deploy from a branch**: that would create an alternate
 publisher and bypass the generated-index check.
+
+## Link verification
+
+Run `just lint site-links` to check every local link and asset reference in
+the generated `site/` tree. The check rejects missing targets, links that
+escape the site tree, root-absolute paths, and directory links without an
+`index.html`.
+
+Rendered pages under `site/reports/` may be edited only to repair links;
+runner-written JSON and envelope artifacts are never edited.

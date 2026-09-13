@@ -101,6 +101,55 @@ class ReportRuntimeTests(unittest.TestCase):
                     )
             self.assertEqual(list(temp.glob("*.json")), [])
 
+    def test_copy_procedure_page_uses_a_safe_local_href_and_copy_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            procedure = root / "site/reports/procedures/example/first.html"
+            procedure.parent.mkdir(parents=True)
+            procedure.write_bytes(b"procedure bytes\n")
+            page = MODULE.ProcedurePage(revision="a" * 40, html="procedures/example/first.html")
+            linking_page = root / "site/reports/run/report.html"
+            linking_page.parent.mkdir(parents=True)
+
+            self.assertEqual(
+                MODULE.copy_procedure_page(
+                    page, linking_page=linking_page, copy_dir=linking_page.parent, root=root
+                ),
+                "procedure.html",
+            )
+            self.assertEqual(
+                (linking_page.parent / "procedure.html").read_bytes(), procedure.read_bytes()
+            )
+
+            nested = linking_page.parent / "nested"
+            self.assertEqual(
+                MODULE.copy_procedure_page(
+                    page, linking_page=linking_page, copy_dir=nested, root=root
+                ),
+                "nested/procedure.html",
+            )
+            self.assertEqual((nested / "procedure.html").read_bytes(), procedure.read_bytes())
+
+            for outside in (root / "site/reports", linking_page.parent.parent):
+                with self.assertRaisesRegex(
+                    FixtureError, "linking page directory or a descendant"
+                ):
+                    MODULE.copy_procedure_page(
+                        page,
+                        linking_page=linking_page,
+                        copy_dir=outside,
+                        root=root,
+                        error_type=FixtureError,
+                    )
+
+            empty = root / "site/reports/empty"
+            self.assertIsNone(
+                MODULE.copy_procedure_page(
+                    None, linking_page=linking_page, copy_dir=empty, root=root
+                )
+            )
+            self.assertFalse(empty.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

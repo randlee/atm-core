@@ -54,7 +54,11 @@ class HermesGraftLiveSmokeTests(unittest.TestCase):
             self.assertEqual(json.loads((report.parent / "smoke.envelope.json").read_text())["procedure"], "graft-hermes")
             self.assertEqual(json.loads(report.read_text())["source_revision"], "a" * 40)
             procedure_href = compose.call_args_list[1].args[1]["procedure_href"]
-            self.assertEqual((report.parent / procedure_href).resolve(), procedure.resolve())
+            self.assertEqual(procedure_href, "procedure.html")
+            self.assertNotIn("..", Path(procedure_href).parts)
+            copied = report.parent / procedure_href
+            self.assertTrue(copied.is_file())
+            self.assertEqual(copied.read_bytes(), procedure.read_bytes())
 
     def test_graft_missing_git_writes_null_source_revision(self) -> None:
         with mock.patch.object(self.module.feature_smoke.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
