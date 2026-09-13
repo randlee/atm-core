@@ -384,12 +384,14 @@ def discover_envelopes(reports_root: Path) -> list[Envelope]:
 
 @dataclass(frozen=True)
 class Classification:
-    """One kind of test run: every envelope that executed the same procedure."""
+    """One major kind of test run (a procedure family): every run of every procedure in it."""
 
-    procedure: str
     family: str
-    title: str
     runs: tuple[Envelope, ...]  # newest first
+
+    @property
+    def title(self) -> str:
+        return self.family.capitalize()
 
     @property
     def latest(self) -> Envelope:
@@ -397,7 +399,7 @@ class Classification:
 
     @property
     def history_html(self) -> str:
-        return f"{HISTORY_DIRECTORY}/{self.procedure}.html"
+        return f"{HISTORY_DIRECTORY}/{self.family}.html"
 
 
 def _procedure_families(reports_root: Path) -> dict[str, str]:
@@ -416,33 +418,29 @@ def _procedure_families(reports_root: Path) -> dict[str, str]:
     }
 
 
-def _title_for(procedure: str, family: str) -> str:
-    """``smoke-local-ip`` -> ``Smoke · local ip``; ``send-message-benchmark`` -> ``Benchmark · send message``."""
-    words = procedure.split("-")
+def _lane(procedure: str | None, family: str) -> str:
+    """The test within its family: ``smoke-local-ip`` -> ``local ip``; ``send-message-benchmark`` -> ``send message``."""
+    words = (procedure or "unknown").split("-")
     if words and words[0] == family:
         words = words[1:]
     elif words and words[-1] == family:
         words = words[:-1]
-    label = family.capitalize()
-    return f"{label} · {' '.join(words)}" if words else label
+    return " ".join(words) or family
 
 
 def classify(envelopes: Iterable[Envelope], reports_root: Path) -> list[Classification]:
     families = _procedure_families(reports_root)
     grouped: dict[str, list[Envelope]] = {}
     for envelope in envelopes:
-        grouped.setdefault(envelope.procedure or "unknown", []).append(envelope)
-    classifications: list[Classification] = []
-    for procedure, runs in grouped.items():
-        family = families.get(procedure, runs[0].report_type)
-        ordered = tuple(sorted(runs, key=lambda item: (item.generated_at, item.source.name), reverse=True))
-        classifications.append(Classification(procedure=procedure, family=family, title=_title_for(procedure, family), runs=ordered))
+        family = families.get(envelope.procedure or "", envelope.report_type)
+        grouped.setdefault(family, []).append(envelope)
+    classifications = [
+        Classification(family=family, runs=tuple(sorted(runs, key=lambda item: (item.generated_at, item.source.name), reverse=True)))
+        for family, runs in grouped.items()
+    ]
     return sorted(
         classifications,
-        key=lambda item: (
-            REPORT_TYPES.index(item.family) if item.family in REPORT_TYPES else len(REPORT_TYPES),
-            item.title,
-        ),
+        key=lambda item: (REPORT_TYPES.index(item.family) if item.family in REPORT_TYPES else len(REPORT_TYPES), item.family),
     )
 
 
@@ -515,10 +513,9 @@ def render_index(classifications: Iterable[Classification]) -> str:
         latest = item.latest
         rows.append(
             "    <tr>"
-            f'<td class="family">{html.escape(item.family)}</td>'
-            f"<td><strong>{html.escape(item.title)}</strong></td>"
+            f'<td class="family"><strong>{html.escape(item.title)}</strong></td>'
             f'<td><a href="{html.escape(latest.report_html, quote=True)}">{_time_html(latest)}</a>'
-            f'<span class="meta"> · {html.escape(latest.host_label)}</span></td>'
+            f'<span class="meta"> · {html.escape(_lane(latest.procedure, item.family))} · {html.escape(latest.host_label)}</span></td>'
             f"<td>{_result_html(latest)}</td>"
             f"<td>{_procedure_html(latest, '')}</td>"
             f'<td><a href="{html.escape(item.history_html, quote=True)}">{_run_count(item)}</a></td>'
@@ -527,7 +524,7 @@ def render_index(classifications: Iterable[Classification]) -> str:
     if rows:
         table = (
             "  <table>\n"
-            "    <thead><tr><th>Family</th><th>Test</th><th>Latest run</th><th>Result</th><th>Procedure executed</th><th>History</th></tr></thead>\n"
+            "    <thead><tr><th>Test</th><th>Latest run</th><th>Result</th><th>Procedure executed</th><th>History</th></tr></thead>\n"
             "    <tbody>\n" + "\n".join(rows) + "\n    </tbody>\n"
             "  </table>\n"
         )
@@ -535,7 +532,7 @@ def render_index(classifications: Iterable[Classification]) -> str:
         table = '  <p class="empty">No reports available.</p>\n'
     body = (
         "  <h1>ATM verification reports</h1>\n"
-        '  <p class="lead">One row per kind of test run. Open the latest run, the procedure it executed, or the full run history (newest first). Generated from schema-validated public report envelopes.</p>\n'
+        '  <p class="lead">One row per test family. Open the latest run, the procedure it executed, or the full run history (newest first). Generated from schema-validated public report envelopes.</p>\n'
         + table
     )
     return _page("ATM verification reports", body)
@@ -546,6 +543,7 @@ def render_history(classification: Classification) -> str:
     rows = "\n".join(
         "    <tr>"
         f'<td><a href="{html.escape(prefix + run.report_html, quote=True)}">{_time_html(run)}</a></td>'
+        f"<td>{html.escape(_lane(run.procedure, classification.family))}</td>"
         f"<td>{html.escape(run.host_label)}</td>"
         f"<td>{_result_html(run)}</td>"
         f"<td>{_procedure_html(run, prefix)}</td>"
@@ -556,9 +554,9 @@ def render_history(classification: Classification) -> str:
     body = (
         f'  <nav><a href="{prefix}index.html">← All reports</a></nav>\n'
         f"  <h1>{html.escape(classification.title)}</h1>\n"
-        f'  <p class="lead">{html.escape(_run_count(classification))}, newest first. Procedure: {html.escape(classification.procedure)}.</p>\n'
+        f'  <p class="lead">{html.escape(_run_count(classification))}, newest first.</p>\n'
         "  <table>\n"
-        "    <thead><tr><th>Run</th><th>Host</th><th>Result</th><th>Procedure executed</th><th>Report path</th></tr></thead>\n"
+        "    <thead><tr><th>Run</th><th>Test</th><th>Host</th><th>Result</th><th>Procedure executed</th><th>Report path</th></tr></thead>\n"
         f"    <tbody>\n{rows}\n    </tbody>\n"
         "  </table>\n"
     )

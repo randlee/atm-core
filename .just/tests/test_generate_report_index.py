@@ -268,13 +268,13 @@ class GenerateReportIndexTests(unittest.TestCase):
             build_index(root / "site/reports")  # seeds the fixture manifest
             pages = build_pages(root / "site/reports")
             index = pages["index.html"]
-            self.assertEqual(index.count('<td class="family">smoke</td>'), 1)
-            self.assertIn("Smoke · localhost", index)
+            self.assertEqual(index.count('<td class="family"><strong>Smoke</strong></td>'), 1)
+            self.assertIn(" · localhost · rand-m5</span>", index)
             self.assertIn(f'href="{newer}"', index)
             self.assertNotIn(f'href="{older}"', index)
             self.assertIn('<span class="result fail">FAIL</span>', index)
-            self.assertIn('href="history/smoke-localhost.html">2 runs<', index)
-            history = pages["history/smoke-localhost.html"]
+            self.assertIn('href="history/smoke.html">2 runs<', index)
+            history = pages["history/smoke.html"]
             self.assertIn('href="../index.html"', history)
             self.assertLess(history.index(newer), history.index(older))
             self.assertIn('href="../procedures/smoke-localhost/00000000.html"', history)
@@ -474,11 +474,14 @@ class GenerateReportIndexTests(unittest.TestCase):
 
             index = build_index(root / "site/reports")
 
-            self.assertEqual(index.count('<td class="family">smoke</td>'), 2)
-            self.assertIn(f'href="{first}"', index)
-            self.assertIn(f'href="{second}"', index)
-            self.assertIn(first.removesuffix("/index.html"), index)
-            self.assertIn(second.removesuffix("/index.html"), index)
+            self.assertEqual(index.count('<td class="family"><strong>Smoke</strong></td>'), 1)
+            self.assertIn(f'href="{second}"', index)  # newest run of the family
+            self.assertNotIn(f'href="{first}"', index)
+            history = build_pages(root / "site/reports")["history/smoke.html"]
+            self.assertIn(f'href="../{first}"', history)
+            self.assertIn(f'href="../{second}"', history)
+            self.assertIn("<td>local ip</td>", history)
+            self.assertIn("<td>localhost</td>", history)
 
     def test_rejects_smoke_envelope_outside_its_run_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
