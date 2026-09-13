@@ -133,6 +133,9 @@ class ProcedurePageTests(unittest.TestCase):
                 MODULE.validate_revision_order(path, metadata, {"bbbbbbbb": "", "aaaaaaaa": ""})
 
     def test_check_mode_detects_stale_page(self):
+        def fake_compose(_template, vars_obj, _destination):
+            return f'<html><head><meta name="procedure-input-sha256" content="{vars_obj["input_hash"]}"></head><body>generated</body></html>'
+
         with mock.patch.object(MODULE, "mermaid_svg", side_effect=AssertionError("check mode rendered Mermaid")):
             self.assertEqual(MODULE.render(ROOT, check=True), 0)
         with tempfile.TemporaryDirectory() as tempdir:
@@ -149,9 +152,18 @@ class ProcedurePageTests(unittest.TestCase):
                 "| 1 | Run | PASS at revision `aaaaaaaa` | report |\n",
                 encoding="utf-8",
             )
-            with mock.patch.object(MODULE, "compose", return_value="<html>generated</html>"), \
+            with mock.patch.object(MODULE, "compose", side_effect=fake_compose), \
                     mock.patch.object(MODULE, "mermaid_svg", return_value="<svg />"):
                 self.assertEqual(MODULE.render(root), 0)
+            index_page = root / "site/reports/procedures/example/index.html"
+            index_page.write_text(
+                index_page.read_text(encoding="utf-8").replace(
+                    "<body>", "<body><!-- atm-nav:start --><nav>stamped by just reports-index</nav><!-- atm-nav:end -->\n"
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.object(MODULE, "mermaid_svg", side_effect=AssertionError("check mode rendered Mermaid")):
+                self.assertEqual(MODULE.render(root, check=True), 0)
             source = docs / "example.md"
             source.write_text(source.read_text(encoding="utf-8").replace("PASS at", "CHANGED at"), encoding="utf-8")
             with mock.patch.object(MODULE, "mermaid_svg", side_effect=AssertionError("check mode rendered Mermaid")):
