@@ -98,7 +98,7 @@ pub struct PromptHandoff {
 pub(crate) async fn record_prompt_handoff(
     bridge: &BoundedBlockingBridge,          // router_support.rs:81
     deadline: RequestDeadline,
-    store: Arc<dyn TaskStore + Send + Sync>,
+    store: Result<Arc<dyn TaskStore + Send + Sync>, AtmError>,
     dispatch: &BuiltInPostSendDispatch,
     trigger: PromptTrigger,
     at: IsoTimestamp,
@@ -106,10 +106,15 @@ pub(crate) async fn record_prompt_handoff(
 ```
 
   It returns without writing when `dispatch.event.task_transition` is
-  `None` (not task-linked; plan P10). Otherwise it builds the row (`kind`
-  via the BB.1 decision, `task_id`, `attempt` from `Reminder { attempt }`
-  else `0`) and runs the synchronous store call through the caller's
-  bridge exactly as `record_task_reminder` does
+  `None` (not task-linked; plan P10). It owns task-store acquisition failure
+  handling so both callers use the same structured failure path. A persisted
+  message can defensively reach this helper with `task_transition: Some(_)`
+  and `task_id: None` because the message table has no constraint tying those
+  columns together; that data-integrity guard logs one storage failure and
+  records no row. Otherwise it builds the row (`kind` via the BB.1 decision,
+  `task_id`, `attempt` from `Reminder { attempt }` else `0`) and runs the
+  synchronous store call through the caller's bridge exactly as
+  `record_task_reminder` does
   (`task_pass.rs:552-580`: `bridge.run(deadline, move || store.record_prompt_handoff(&row)).await`).
   Any `Err` — storage, bridge timeout, bridge saturation — emits one
   `tracing::error!(subsystem, action = "prompt_handoff_record_failed", reason, message_id, kind, trigger)`
@@ -166,6 +171,9 @@ Runtime — `crates/atm-http-runtime/`:
 - `task_pass_records_handoff_with_kind_and_attempt`.
 - `steer_emit_records_handoff_with_trigger_steer`.
 - `steer_of_non_task_message_records_no_handoff` (P10).
+- `task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing`
+  — a stored task transition with a null task id reaches the defensive
+  data-integrity guard, logs one storage failure, and writes no row.
 - `failed_steer_sink_records_no_handoff`.
 - `failed_task_pass_sink_records_no_handoff`.
 - `record_failure_logs_prompt_handoff_record_failed_and_emission_succeeds` — a failing `TaskStore` stub; the sink result is unchanged and the log line carries `reason = storage`, message id, kind, trigger.
