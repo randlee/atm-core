@@ -29,7 +29,7 @@ forbidden = []
 
 [contracts]
 request_types = ["TeamName", "AgentName", "TaskId", "ReadDeadline"]
-response_types = ["TaskRow", "TaskEventRow", "RefusalRun"]
+response_types = ["TaskRow", "TaskEventRow", "PromptHandoff", "RefusalRun"]
 error_types = ["ReadLaneError"]
 
 [testing]
