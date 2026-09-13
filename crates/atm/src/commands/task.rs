@@ -287,18 +287,23 @@ impl TaskStartCommand {
             .into_iter()
             .find(|row| row.task_id == self.task_id)
             .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "task {} does not exist on team {}",
-                    self.task_id,
-                    caller.caller_team
+                atm_core::error::AtmError::new(
+                    atm_core::error::AtmErrorCode::TaskNotFound,
+                    format!(
+                        "task {} does not exist on team {}",
+                        self.task_id, caller.caller_team
+                    ),
                 )
             })?;
         if row.assignee != caller.caller_identity {
-            return Err(anyhow::anyhow!(
-                "task {} is not assigned to {}",
-                self.task_id,
-                caller.caller_identity
-            ));
+            return Err(atm_core::error::AtmError::new(
+                atm_core::error::AtmErrorCode::TaskNotCounterparty,
+                format!(
+                    "task {} is not assigned to {}",
+                    self.task_id, caller.caller_identity
+                ),
+            )
+            .into());
         }
         let mut report = self.report;
         if !report.is_present() {
@@ -402,11 +407,14 @@ impl TaskCloseCommand {
         let row = match preflight_close(rows, &self.task_id) {
             ClosePreflight::Proceed { row } => row,
             ClosePreflight::Unknown => {
-                return Err(anyhow::anyhow!(
-                    "task {} does not exist on team {}",
-                    self.task_id,
-                    caller.caller_team
-                ));
+                return Err(atm_core::error::AtmError::new(
+                    atm_core::error::AtmErrorCode::TaskNotFound,
+                    format!(
+                        "task {} does not exist on team {}",
+                        self.task_id, caller.caller_team
+                    ),
+                )
+                .into());
             }
         };
         let recipient = report_recipient(&row, &caller.caller_identity);
@@ -812,8 +820,8 @@ fn render_task_events(
     entries.sort_by_key(|(at, source, rowid, _)| (*at, *source, *rowid));
     for (_, _, _, entry) in entries {
         match entry {
-            TaskEventDisplay::Event(row) => render_task_event_line(&mut output, row)?,
-            TaskEventDisplay::Prompt(row) => render_prompt_handoff_line(&mut output, row)?,
+            TaskEventDisplay::Event(row) => render_task_event_line(&mut output, row),
+            TaskEventDisplay::Prompt(row) => render_prompt_handoff_line(&mut output, row),
         }
     }
     Ok(output)
@@ -824,7 +832,7 @@ enum TaskEventDisplay<'a> {
     Prompt(&'a PromptHandoff),
 }
 
-fn render_task_event_line(output: &mut String, row: &TaskEventRow) -> Result<()> {
+fn render_task_event_line(output: &mut String, row: &TaskEventRow) {
     let actor = match &row.actor {
         TaskActor::Member(member) => member.as_str(),
         TaskActor::Daemon => DAEMON_ACTOR_NAME,
@@ -849,11 +857,11 @@ fn render_task_event_line(output: &mut String, row: &TaskEventRow) -> Result<()>
         to,
         actor,
         detail,
-    )?;
-    Ok(())
+    )
+    .expect("writing to String cannot fail");
 }
 
-fn render_prompt_handoff_line(output: &mut String, row: &PromptHandoff) -> Result<()> {
+fn render_prompt_handoff_line(output: &mut String, row: &PromptHandoff) {
     let message_id = row
         .message_key
         .as_atm_message_id()
@@ -868,8 +876,8 @@ fn render_prompt_handoff_line(output: &mut String, row: &PromptHandoff) -> Resul
         row.attempt,
         row.trigger.as_str(),
         message_id,
-    )?;
-    Ok(())
+    )
+    .expect("writing to String cannot fail");
 }
 
 #[cfg(test)]

@@ -128,6 +128,12 @@ const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
         AtmErrorCode::DaemonConnectionSaturated => {
             Some("Wait for the daemon to finish an in-flight request, then retry.")
         }
+        AtmErrorCode::BlockingBridgeDeadlineBeforeStart => Some(
+            "Wait for bounded blocking capacity to become available, then retry within a fresh request deadline.",
+        ),
+        AtmErrorCode::BlockingBridgeDeadlineAfterStart => Some(
+            "Inspect the stalled blocking operation and retry only after its bounded capacity recovers.",
+        ),
         AtmErrorCode::PeerWireModeInvalid => Some(
             "Use `mutual-tls` or `plaintext-test` with --peer-wire-security, then restart the daemon.",
         ),
