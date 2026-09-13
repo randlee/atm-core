@@ -19,22 +19,24 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T04:35:38Z"^^xsd:dateTime ;
-  triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, confirmed -- do not merge to develop with the live dispatch templates telling every assignee the wrong protocol. Resolved by BB.7 D1/D3/D4 exactly as scoped in sprint-BB.7-docs.md (team-protocol.md rewrite, agent-conventions.md task-lines section, ack step deleted from all six templates + replaced with `atm task start {{ task_id }} \"...\"` as step one). Dispatched to cipher together with BB7-DOCS-NONDELIVERY-001 as one BB.7 fix layer, not a separate branch -- they are the same sprint's deliverables. UPDATE (2026-09-13T05:19:57Z): quality-mgr BB7-DOCS-QA1-1789320500 (report 01M2CKA77FGJHZ9E1M0QY55MYV, PR #1478) confirms D1/D4's core edits landed but 3 occurrences of the same defect class were missed by the sprint's file scope -- correlated below as occurrences 2-4 rather than filed as new records. STAYS OPEN. Fix round BB7-DOCS-FIX-R1-1789329000 dispatched to cipher on the same branch (feature/bb7-docs); re-verification follows on his final SHA. ATM-QA-BB7-004 (minor, host-only ~/.atm/templates/codex-orchestration/dev-template-cipher/solar.xml.j2 still ack-first) is fenix's own post-merge host-sync item, not tracked as a separate triage record." ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, confirmed -- do not merge to develop with the live dispatch templates telling every assignee the wrong protocol. Resolved by BB.7 D1/D3/D4 exactly as scoped in sprint-BB.7-docs.md (team-protocol.md rewrite, agent-conventions.md task-lines section, ack step deleted from all six templates + replaced with `atm task start {{ task_id }} \"...\"` as step one). Dispatched to cipher together with BB7-DOCS-NONDELIVERY-001 as one BB.7 fix layer, not a separate branch -- they are the same sprint's deliverables. UPDATE (2026-09-13T05:19:57Z): quality-mgr BB7-DOCS-QA1-1789320500 (report 01M2CKA77FGJHZ9E1M0QY55MYV, PR #1478) confirms D1/D4's core edits landed but 3 occurrences of the same defect class were missed by the sprint's file scope -- correlated below as occurrences 2-4 rather than filed as new records. STAYS OPEN. Fix round BB7-DOCS-FIX-R1-1789329000 dispatched to cipher on the same branch (feature/bb7-docs); re-verification follows on his final SHA. ATM-QA-BB7-004 (minor, host-only ~/.atm/templates/codex-orchestration/dev-template-cipher/solar.xml.j2 still ack-first) is fenix's own post-merge host-sync item, not tracked as a separate triage record. UPDATE (2026-09-13T05:43:56Z): quality-mgr BB7-DOCS-QA2-1789332000 (PR #1478, round 2) confirms occurrences 1-4 genuinely fixed by cipher's BB7-DOCS-FIX-R1-1789329000 push (feature/bb7-docs @ 9167bd479, compose_passthrough re-verified 3/3) -- closed below. But req-qa's mandated sweep found 2 NEW live occurrences of the same task-linked-ack defect class (ATM-QA-BB7-101/102), personally verified by quality-mgr via git show at 84ea982ee -- correlated below as occurrences 5-6 rather than filed as new records. STAYS OPEN pending next fix layer." ;
   triage:foundIn triage:BB7 ;
   triage:foundAt "2026-09-13T04:35:38Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/4> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/6> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/1>
   a triage:Occurrence ;
   triage:file "docs/team-protocol.md" ;
   triage:line 61 ;
   triage:snippet "team-protocol.md:61-66 still classes 'task assignment' under requires_ack; all six live dispatch templates still emit atm ack and never atm task start, contradicting BB.4/BB.5's shipped behavior" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-bb" ;
   triage:headSha "4b1bf0e63" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/1> .
@@ -51,8 +53,8 @@
   triage:file "docs/team-protocol.md" ;
   triage:line 61 ;
   triage:snippet "ARCH-001 (quality-mgr, BB7-DOCS-QA1-1789320500): requires_ack examples still list 'fix request'/'QA dispatch', same defect class D4 missed" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "4e100e299" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/2> .
@@ -69,8 +71,8 @@
   triage:file "docs/team-protocol.md" ;
   triage:line 87 ;
   triage:snippet "ATM-QA-BB7-001 (quality-mgr, BB7-DOCS-QA1-1789320500): the Good/Bad Patterns section (87-98) still models an initial ack, same defect class D4 missed" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "4e100e299" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/3> .
@@ -87,8 +89,8 @@
   triage:file "docs/plans/phase-an/fixtures/task-assignment.xml.j2" ;
   triage:line 54 ;
   triage:snippet "ATM-QA-BB7-002 (quality-mgr, BB7-DOCS-QA1-1789320500): the live worked example team-protocol.md tells readers to run still says 'ACK this message immediately' (54-55); test-anchored by crates/atm/tests/compose_passthrough.rs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "4e100e299" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/4> .
@@ -99,3 +101,39 @@
   triage:branch "feature/bb7-docs" ;
   triage:headSha "4e100e299" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/5>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 3471 ;
+  triage:snippet "ATM-QA-BB7-101 (quality-mgr, BB7-DOCS-QA2-1789332000, req-qa mandated sweep): requirements.md:3471-3472 contradicts its own Sec 15.4 on the ack/task-start protocol, same defect class D4 missed, verified via git show at 84ea982ee" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "84ea982ee" ;
+  triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/5> .
+
+<urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/5>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1478, feature/bb7-docs" ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "84ea982ee" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/6>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/team-lead/SKILL.md" ;
+  triage:line 100 ;
+  triage:snippet "ATM-QA-BB7-102 (quality-mgr, BB7-DOCS-QA2-1789332000, req-qa mandated sweep): SKILL.md:100-118 'require immediate ACK', same defect class D4 missed, verified via git show at 84ea982ee" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "84ea982ee" ;
+  triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/6> .
+
+<urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/6>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1478, feature/bb7-docs" ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "84ea982ee" ;
+  triage:orderIndex 6 .

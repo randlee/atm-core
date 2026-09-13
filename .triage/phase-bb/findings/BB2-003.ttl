@@ -19,19 +19,20 @@
   triage:status "open" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
-  triage:deferredNote "Pre-existing, out of BB.2's scope -- not required for this sprint's fix round. Left open for a future doc-hygiene pass." ;
+  triage:deferredNote "Pre-existing, out of BB.2's scope -- not required for this sprint's fix round. Left open for a future doc-hygiene pass. UPDATE (2026-09-13T05:43:56Z): folded into BB7's fix layer -- cipher's BB7-DOCS-FIX-R1-1789329000 second push (feature/bb7-docs @ 84ea982ee) removed the stale docs/agent-team-api.md reference from CLAUDE.md, closing occurrence 1. quality-mgr BB7-DOCS-QA2-1789332000 confirmed the fix but also confirmed a second, previously-flagged occurrence of the same broken-reference defect class still live (docs/claude-code-message-schema.md:18) -- correlated below as occurrence 2 rather than filed as a new record. STAYS OPEN." ;
   triage:foundIn triage:BB2 ;
   triage:foundAt "2026-09-12T20:28:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB2-003/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-003/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB2-003/1>
   a triage:Occurrence ;
   triage:file "CLAUDE.md" ;
   triage:line 1 ;
   triage:snippet "Key Documentation list references docs/agent-team-api.md, which does not exist anywhere in the repo (pre-existing, unrelated to this sprint's diff)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb2-orchestration-templates-1516" ;
   triage:headSha "67a6a3fe4" ;
   triage:occursIn <urn:atm:triage:worktree/BB2-003/1> .
@@ -42,3 +43,21 @@
   triage:branch "feature/bb2-orchestration-templates-1516" ;
   triage:headSha "67a6a3fe4" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB2-003/2>
+  a triage:Occurrence ;
+  triage:file "docs/claude-code-message-schema.md" ;
+  triage:line 18 ;
+  triage:snippet "ATM-QA-BB7-103 (quality-mgr, BB7-DOCS-QA2-1789332000): line 18 references agent-team-mail/docs/agent-team-api.md, which does not exist repo-wide; same broken-reference defect class as occurrence 1, missed by cipher's CLAUDE.md-only fix, verified via git show at 84ea982ee" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "84ea982ee" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-003/2> .
+
+<urn:atm:triage:worktree/BB2-003/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1478, feature/bb7-docs" ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "84ea982ee" ;
+  triage:orderIndex 2 .
