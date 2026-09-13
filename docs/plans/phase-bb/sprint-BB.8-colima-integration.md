@@ -152,6 +152,23 @@ Rules:
 - The smoke history loses the four colima rows; the integration history
   gains twelve rows.
 
+## Layers (append-only stack, one PR each)
+
+The first dispatch was refused as too large for one execution window, so the
+sprint lands as two layers. Nothing in the contract above changes.
+
+| Layer | Branch | Contents | Needs colima |
+| --- | --- | --- | --- |
+| BB.8.1 | `feature/bb8-colima-integration` (PR #1500) | templates (D3), procedures (D4), index family (D5), the render path from a payload to `integration.json` + panel + run page + envelope, historical backfill of the 12 runs (D6), guard relaxation (D7), tests for those (D9 part) | no |
+| BB.8.2 | `feature/bb8-2-colima-driver`, cut from the top of BB.8.1 | the live driver (D1), step-runner refactor (D2), one real run (D8), driver tests (D9 rest), plan row (D10) | yes |
+
+BB.8.1 delivers the render path as a module the driver reuses in BB.8.2;
+its entry point is `python3 scripts/integration/render_colima.py
+--payload <step.json> --step <name> --out <run-dir>` (the backfill loops
+over the twelve historical payloads with it). Rand's stated purpose for the
+backfill is to judge whether what is collected is adequate, so BB.8.1 is the
+layer that must be visible first.
+
 ## Tasks
 
 1. Driver + step-runner refactor + templates (D1–D3).
