@@ -16,22 +16,26 @@
   triage:source "req-qa, verified by quality-mgr, BB-POST-MORTEM-1789304000 phase-ending gate" ;
   triage:repeatable true ;
   triage:sweepScope "docs/plans/phase-bb/sprint-BB.7-docs.md (D1-D6); docs/team-protocol.md:24-41,54-80; CLAUDE.md:239-247; docs/agent-conventions.md; .claude/skills/graph-orchestration/{dev-task,dev-fix}.xml.j2; .claude/skills/codex-orchestration/{dev-template,fix-assignment,review-template,qa-template}.xml.j2; docs/requirements.md, ADR-054, ADR-061, ADR-062, docs/adr/INDEX.md; docs/plans/phase-bb/*.md frontmatter; docs/project-plan.md section 60" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T04:35:38Z"^^xsd:dateTime ;
   triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, confirmed -- this phase cannot merge to develop until BB.7 lands. The sprint was fully scoped and hardened already per its own sprint doc; it simply never ran. Dispatched to cipher (the sprint doc's own recommended assignee) as a fresh worktree feature/bb7-docs cut from integrate/phase-bb @ d5058b27f (includes BB6-026/BB6-027), per the sprint doc's own D1-D6 deliverable list and acceptance criteria verbatim. See also BB7-TEMPLATE-CONTRADICTION-001 for the specific downstream consequence of this gap that BB.7 D4 must resolve." ;
   triage:foundIn triage:BB7 ;
   triage:foundAt "2026-09-13T04:35:38Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB7-DOCS-NONDELIVERY-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB7-DOCS-NONDELIVERY-001/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB7-DOCS-NONDELIVERY-001/1> ;
+  triage:closedAt "2026-09-13T05:19:57Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB7-DOCS-NONDELIVERY-001/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-bb/sprint-BB.7-docs.md" ;
   triage:line 1 ;
   triage:snippet "frontmatter status: planned, branch: feature/bb7-docs -- sprint never dispatched; zero triage records reference feature/bb7-docs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-bb" ;
   triage:headSha "4b1bf0e63" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-DOCS-NONDELIVERY-001/1> .
@@ -42,3 +46,30 @@
   triage:branch "integrate/phase-bb" ;
   triage:headSha "4b1bf0e63" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB7-DOCS-NONDELIVERY-001/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/sprint-BB.7-docs.md" ;
+  triage:line 1 ;
+  triage:snippet "quality-mgr BB7-DOCS-QA1-1789320500 (report 01M2CKA77FGJHZ9E1M0QY55MYV, PR #1478, 2026-09-13T05:19:57Z), verified at feature/bb7-docs @ 4e100e299. Sprint BB.7 fully dispatched and delivered: D2/D3/D5/D6 verified landed, D1/D4 core edits landed." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "4e100e299" ;
+  triage:occursIn <urn:atm:triage:worktree/BB7-DOCS-NONDELIVERY-001/2> .
+
+<urn:atm:triage:worktree/BB7-DOCS-NONDELIVERY-001/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1478, feature/bb7-docs" ;
+  triage:branch "feature/bb7-docs" ;
+  triage:headSha "4e100e299" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB7-DOCS-NONDELIVERY-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T05:19:57Z"^^xsd:dateTime ;
+  triage:fixCommit "4e100e299" ;
+  triage:fixBranch "feature/bb7-docs" ;
+  triage:verifiedInRound "BB7-DOCS-QA1-1789320500" ;
+  triage:resolutionNote "quality-mgr BB7-DOCS-QA1-1789320500 (report 01M2CKA77FGJHZ9E1M0QY55MYV, PR #1478), verified at feature/bb7-docs @ 4e100e299. Sprint BB.7 fully dispatched and delivered: D2, D3, D5, D6 verified landed; D1/D4 core edits landed. See BB7-TEMPLATE-CONTRADICTION-001 (stays open) for the 3 residual occurrences of the same defect class D4 missed." .
