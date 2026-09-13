@@ -1,5 +1,10 @@
 {
-  "review": "Reviewed removals for retired endpoints that have no live canonical router route.",
+  "review": "Reviewed OpenAPI removals and changed values for the BB.7 message-body documentation correction.",
+  "changes": [
+    "openapi/paths//messages/get/responses/200/schema",
+    "openapi/paths//messages/inspect/post/responses/200/schema",
+    "openapi/paths//messages/read/post/responses/200/schema"
+  ],
   "removals": [
     "openapi/paths//team/{teamName}",
     "openapi/paths//teams",
@@ -10,6 +15,7 @@
     "openapi/schemas/Team",
     "openapi/paths//peers/{peer}/sync",
     "openapi/schemas/PeerSyncOutcome",
-    "openapi/schemas/PeerSyncRequest"
+    "openapi/schemas/PeerSyncRequest",
+    "openapi/schemas/MessageList"
   ]
 }

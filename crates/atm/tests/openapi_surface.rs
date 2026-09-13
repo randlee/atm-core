@@ -38,27 +38,35 @@ fn reviewed_removals_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/openapi_surface_reviewed_removals.json")
 }
 
-fn reviewed_removals() -> BTreeSet<String> {
+fn reviewed_surface_changes(key: &str) -> BTreeSet<String> {
     let source =
         std::fs::read_to_string(reviewed_removals_path()).expect("read reviewed OpenAPI removals");
     let document: Value = serde_json::from_str(&source).expect("parse reviewed OpenAPI removals");
-    document["removals"]
+    document[key]
         .as_array()
-        .expect("reviewed OpenAPI removals must be an array")
+        .unwrap_or_else(|| panic!("reviewed OpenAPI {key} must be an array"))
         .iter()
         .map(|value| {
             value
                 .as_str()
-                .expect("reviewed OpenAPI removal must be a string")
+                .unwrap_or_else(|| panic!("reviewed OpenAPI {key} entry must be a string"))
                 .to_owned()
         })
         .collect()
 }
 
-fn is_reviewed_breaking(entry: &str, reviewed_removals: &BTreeSet<String>) -> bool {
+fn is_reviewed_breaking(
+    entry: &str,
+    reviewed_removals: &BTreeSet<String>,
+    reviewed_changes: &BTreeSet<String>,
+) -> bool {
     entry
         .strip_prefix("removed OpenAPI contract entry ")
         .is_some_and(|path| reviewed_removals.contains(path))
+        || entry
+            .strip_prefix("changed OpenAPI contract value ")
+            .and_then(|path| path.split_once(": "))
+            .is_some_and(|(path, _)| reviewed_changes.contains(path))
 }
 
 fn object(value: &Value) -> &serde_json::Map<String, Value> {
@@ -238,7 +246,7 @@ fn compare_value(
             }
         }
         _ if baseline != live => breaking.push(format!(
-            "changed OpenAPI contract entry {path}: {baseline} -> {live}"
+            "changed OpenAPI contract value {path}: {baseline} -> {live}"
         )),
         _ => {}
     }
@@ -269,10 +277,11 @@ fn openapi_surface_is_additions_only() {
     let mut breaking = Vec::new();
     let mut additions = Vec::new();
     compare_value("openapi", &baseline, &live, &mut breaking, &mut additions);
-    let reviewed_removals = reviewed_removals();
+    let reviewed_removals = reviewed_surface_changes("removals");
+    let reviewed_changes = reviewed_surface_changes("changes");
     let unreviewed_breaking = breaking
         .iter()
-        .filter(|entry| !is_reviewed_breaking(entry, &reviewed_removals))
+        .filter(|entry| !is_reviewed_breaking(entry, &reviewed_removals, &reviewed_changes))
         .collect::<Vec<_>>();
     assert!(
         unreviewed_breaking.is_empty(),
@@ -298,18 +307,114 @@ fn openapi_surface_is_additions_only() {
 
 #[test]
 fn reviewed_removals_allow_only_exact_removed_entries() {
-    let reviewed = reviewed_removals();
+    let reviewed = reviewed_surface_changes("removals");
+    let changes = reviewed_surface_changes("changes");
 
     assert!(is_reviewed_breaking(
         "removed OpenAPI contract entry openapi/paths//teams",
-        &reviewed
+        &reviewed,
+        &changes
     ));
     assert!(!is_reviewed_breaking(
         "removed OpenAPI contract entry openapi/paths//teams/get",
-        &reviewed
+        &reviewed,
+        &changes
     ));
     assert!(!is_reviewed_breaking(
-        "changed OpenAPI contract entry openapi/paths//teams: old -> new",
-        &reviewed
+        "changed OpenAPI contract value openapi/paths//teams: old -> new",
+        &reviewed,
+        &changes
     ));
+}
+
+#[test]
+fn reviewed_changes_allow_only_exact_changed_values() {
+    let reviewed = reviewed_surface_changes("removals");
+    let changes = reviewed_surface_changes("changes");
+
+    assert!(is_reviewed_breaking(
+        "changed OpenAPI contract value openapi/paths//messages/get/responses/200/schema: old -> new",
+        &reviewed,
+        &changes
+    ));
+    assert!(!is_reviewed_breaking(
+        "changed OpenAPI contract value openapi/paths//messages/get/responses/201/schema: old -> new",
+        &reviewed,
+        &changes
+    ));
+}
+
+fn operation_response_schema<'a>(document: &'a Value, path: &str, method: &str) -> &'a Value {
+    document
+        .pointer(&format!("/paths/{}/{}", path.replace('/', "~1"), method))
+        .and_then(|operation| operation.pointer("/responses/200/content/application~1json/schema"))
+        .expect("documented operation must have a JSON 200 schema")
+}
+
+fn assert_required_properties_are_serialized(
+    document: &Value,
+    path: &str,
+    method: &str,
+    emitted: &Value,
+) {
+    let reference = operation_response_schema(document, path, method)
+        .get("$ref")
+        .and_then(Value::as_str)
+        .expect("documented 200 schema must be a component reference");
+    let schema_name = reference
+        .strip_prefix("#/components/schemas/")
+        .expect("documented 200 schema must reference a component");
+    let schema = &document["components"]["schemas"][schema_name];
+    for property in required(schema) {
+        assert!(
+            emitted.get(&property).is_some(),
+            "{method} {path} documents required property {property:?}, but the wire value omitted it"
+        );
+    }
+}
+
+#[test]
+fn documented_message_bodies_match_serialized_outcomes() {
+    let source = std::fs::read_to_string(document_path()).expect("read OpenAPI contract");
+    let document: Value = serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
+    let list = atm_core::list::ListOutcome {
+        action: atm_core::types::CommandAction::List,
+        team: "team".parse().expect("team"),
+        agent: "agent".parse().expect("agent"),
+        selection_mode: atm_core::types::ReadSelection::All,
+        history_collapsed: false,
+        count: 0,
+        rows: Vec::new(),
+        bucket_counts: atm_core::read::BucketCounts {
+            unread: 0,
+            pending_ack: 0,
+            history: 0,
+        },
+        task_rows: Vec::new(),
+        task_event_rows: Vec::new(),
+        handoffs: Vec::new(),
+    };
+    let read = atm_core::read::ReadOutcome {
+        action: atm_core::types::CommandAction::Read,
+        team: "team".parse().expect("team"),
+        agent: "agent".parse().expect("agent"),
+        selection_mode: atm_core::types::ReadSelection::All,
+        mutation_applied: false,
+        count: 0,
+        message: None,
+        selected_message_id: None,
+        match_count: 0,
+        additional_match_count: 0,
+        bucket_counts: atm_core::read::BucketCounts {
+            unread: 0,
+            pending_ack: 0,
+            history: 0,
+        },
+    };
+    let list_json = serde_json::to_value(list).expect("serialize ListOutcome");
+    let read_json = serde_json::to_value(read).expect("serialize ReadOutcome");
+
+    assert_required_properties_are_serialized(&document, "/messages", "get", &list_json);
+    assert_required_properties_are_serialized(&document, "/messages/inspect", "post", &read_json);
+    assert_required_properties_are_serialized(&document, "/messages/read", "post", &read_json);
 }
