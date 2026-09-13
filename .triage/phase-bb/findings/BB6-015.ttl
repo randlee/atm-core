@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-015>
+  a triage:Finding ;
+  triage:findingId "BB6-015" ;
+  triage:title "Stale sprint-doc test name implies a nonexistent PromptTrigger::QueueClaim variant" ;
+  triage:description "ATM-QA-002 via BB6-QA-L2-1789268000 (PR #1461, feature/bb6-runtime-prompt-handoffs @ 0d2cc1142), verdict FAIL 0/3/2 (req-qa deliverable gate only, 0 blocking), 2026-09-13T00:42:20Z. A sprint-doc test name, queue_claim_records_handoff_with_trigger_queue_claim, implies a PromptTrigger::QueueClaim variant that does not exist in the shipped enum. Ruled genuine by fenix (PR #1461 comment, 2026-09-13T00:42:20Z); doc fix only." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "ATM-QA-002 via BB6-QA-L2-1789268000, ruled genuine by fenix" ;
+  triage:repeatable false ;
+  triage:sweepScope "sprint-bb.6 doc (queue_claim_records_handoff_with_trigger_queue_claim test name reference)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: correct the stale sprint-doc test-name reference so it no longer implies a nonexistent PromptTrigger::QueueClaim variant. Correction from fenix (2026-09-13T00:43:17Z): already fixed at feature/bb6-docs-prompt-handoffs @ 4b0f6661c -- sprint-BB.6-prompt-handoffs.md:174 names queue_claim_records_no_handoff, the stale name is absent, verified via git show. Fixed-pending-QA at 4b0f6661c on L4; not a pending fix." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-015/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-015/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB6-015/1>
+  a triage:Occurrence ;
+  triage:snippet "sprint-doc test name queue_claim_records_handoff_with_trigger_queue_claim implies a nonexistent PromptTrigger::QueueClaim variant" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-runtime-prompt-handoffs" ;
+  triage:headSha "0d2cc1142" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-015/1> .
+
+<urn:atm:triage:worktree/BB6-015/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1461, feature/bb6-runtime-prompt-handoffs" ;
+  triage:branch "feature/bb6-runtime-prompt-handoffs" ;
+  triage:headSha "0d2cc1142" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-015/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md" ;
+  triage:line 174 ;
+  triage:snippet "sprint-doc now names queue_claim_records_no_handoff; stale queue_claim_records_handoff_with_trigger_queue_claim name absent; fixed-pending-QA" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "4b0f6661c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-015/2> .
+
+<urn:atm:triage:worktree/BB6-015/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "4b0f6661c" ;
+  triage:orderIndex 2 .
