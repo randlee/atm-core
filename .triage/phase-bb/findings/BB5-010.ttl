@@ -16,7 +16,7 @@
   triage:source "quality-mgr BB3-QA-R5-1789273000 (ATM-QA-005), ruled genuine by fenix" ;
   triage:repeatable false ;
   triage:sweepScope "scripts/smoke/test_run_bb5_assignment.py" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: add negative/failure-path tests for the remaining 6 scenario_* functions (scenario_three_assignments, scenario_close_ready, scenario_reassign, scenario_move_head, scenario_cancel, scenario_busy_assigner), matching scenario_pending_ack's existing coverage pattern, or obtain explicit sign-off narrowing scope. Dispatched to cipher as BB3-FIX-R6-1789277000, branch fix/bb3-qa5-r6 cut from cipher's BB7 head 35e135673 (stack layer 15 above PR #1467). R6 complete and self-validated by cipher (2026-09-13T02:12:58Z) at final merge head f23d87928 (BB7 b56b35ba7 an ancestor); smoke fast 8/8, evidence archived outside the tree. Fixed-pending-QA at f23d87928." ;
@@ -25,15 +25,18 @@
   triage:foundAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-010/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-010/2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasResolution <urn:atm:triage:resolution/BB5-010/1> ;
+  triage:closedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB5-010/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/test_run_bb5_assignment.py" ;
   triage:line 1 ;
   triage:snippet "only scenario_pending_ack has negative-path coverage; scenario_three_assignments, scenario_close_ready, scenario_reassign, scenario_move_head, scenario_cancel, scenario_busy_assigner remain untested" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "5da523f81" ;
   triage:occursIn <urn:atm:triage:worktree/BB5-010/1> .
@@ -50,8 +53,8 @@
   triage:file "scripts/smoke/test_run_bb5_assignment.py" ;
   triage:line 1 ;
   triage:snippet "BB3-FIX-R6 complete and self-validated by cipher; fixed-pending-QA at final merge head f23d87928" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa5-r6" ;
   triage:headSha "f23d87928" ;
   triage:occursIn <urn:atm:triage:worktree/BB5-010/2> .
@@ -62,3 +65,30 @@
   triage:branch "fix/bb3-qa5-r6" ;
   triage:headSha "f23d87928" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB5-010/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_bb5_assignment.py" ;
+  triage:line 1 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at f23d87928. scripts/smoke/test_run_bb5_assignment.py: all 7 scenario_* functions now have failure-path tests, closing the BB5-009 residual." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-010/3> .
+
+<urn:atm:triage:worktree/BB5-010/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1468, fix/bb3-qa5-r6" ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/BB5-010/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:fixCommit "f23d87928" ;
+  triage:fixBranch "fix/bb3-qa5-r6" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch2" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at f23d87928. scripts/smoke/test_run_bb5_assignment.py: all 7 scenario_* functions now have failure-path tests, closing the BB5-009 residual." .
