@@ -733,6 +733,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "quality-mgr BB-LANDING-QA-1789301000 (Final Quality Report PASS, https://github.com/randlee/atm-core/pull/1470#issuecomment-5650596185, 2026-09-13T03:10:05Z). Frozen-stack landing verification of 33 previously-filed phase-BB triage findings across 5 head groups (A: f23d87928, B: 7bb8f4a49, C: c86eca234, D: 637c12263, E: 11ff6e997), unified at 0b9b3e4f3. 32 FIXED, 1 DEFERRED (BB2-003, lead-ruled out of scope), 0 NOT FIXED, 0 NOT REPRODUCED. Independently corroborated by req-qa and arch-qa background reviewers (both ran the full 33-id set, both PASS). Merge readiness: ready."
+    },
+    {
+      "run_id": "BB6-GATE-FIX-QA-1789320000",
+      "aich_sprint": "BB6",
+      "phase_sprint": "BB.6",
+      "pass": false,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-13T04:56:22Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB6-GATE-FIX-QA-1789320000 dispatched by fenix to quality-mgr: fix-verification of BB-POST-MORTEM-1789304000's two gate blockers (BB6-027 counterparty authz, BB6-026 fixed-sleep) on fix/bb6-taskstart-counterparty-authz.",
+      "result_time_utc": "2026-09-13T05:06:06Z",
+      "result_time_pst": null,
+      "result_message_id": "01M2CJH2QZ965NCC82ZZQXKQBN",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PARTIAL",
+      "blockers": 0,
+      "important": 1,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "quality-mgr BB6-GATE-FIX-QA-1789320000 fix-verification (PR #1477 verdict comment, https://github.com/randlee/atm-core/pull/1477, 2026-09-13T05:20:00Z). BB6-027 FIXED (both reviewers; arch-qa PASS, req-qa present/closed) at fix/bb6-taskstart-counterparty-authz @ 1d86bd608, re-verified at 2cc19c18d: task.rs's client-side counterparty branch removed, test_start_by_non_assignee_is_rejected_by_writer_and_audited drives the CLI path and asserts exactly one rejected audit row. BB6-026 NOT FIXED: production fixed-sleep -> bounded-poll logic is correct, but its required fail-path unit test test_missing_observed_interval_is_rejected is vacuous (re-implements the guard inline instead of invoking RUNNER.run()); filed as BB6-029 (important), needs one more fix-round."
     }
   ]
 }

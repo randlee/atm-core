@@ -16,22 +16,26 @@
   triage:source "ruthless-boundary-qa, verified by quality-mgr, BB-POST-MORTEM-1789304000 phase-ending gate" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm/src/commands/task.rs (TaskStartCommand::execute, lines 283-307); crates/atm-storage-rusqlite/src/writer/task_start.rs (load_startable_task, lines 94-98, unchanged reference authority); crates/atm-storage-rusqlite/tests (start_by_non_assignee_is_rejected*, add CLI-path coverage)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T04:34:52Z"^^xsd:dateTime ;
   triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, confirmed. Recommendation (reviewer + quality-mgr, adopted): delete the client-side `if row.assignee != caller.caller_identity` branch at task.rs:298-307. Keep the preflight list lookup only to resolve TaskNotFound and the assigner's address for the outbound notification -- the same pattern TaskCloseCommand already uses. Let the write request travel to the writer in all cases and surface the writer's typed rejection. This removes a redundant/divergent client-side guard rather than adding capability, so no separate design ruling is required beyond this one. Dispatched to arch-ctm as a new top fix layer above the landing head, branch fix/bb6-taskstart-counterparty-authz cut from integrate/phase-bb @ d5058b27f." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T04:34:52Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-027/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-027/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-027/1> ;
+  triage:closedAt "2026-09-13T05:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-027/1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 298 ;
   triage:snippet "TaskStartCommand::execute rejects locally with TaskNotCounterparty from a client-side preflight read before the writer (which already enforces the same decision) ever sees the request" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-bb" ;
   triage:headSha "4b1bf0e63" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-027/1> .
@@ -42,3 +46,30 @@
   triage:branch "integrate/phase-bb" ;
   triage:headSha "4b1bf0e63" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-027/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task.rs" ;
+  triage:line 298 ;
+  triage:snippet "quality-mgr BB6-GATE-FIX-QA-1789320000 (PR #1477, 2026-09-13T05:20:00Z), verified at fix/bb6-taskstart-counterparty-authz @ 1d86bd608, re-verified at 2cc19c18d. Client-side branch removed from TaskStartCommand; test_start_by_non_assignee_is_rejected_by_writer_and_audited drives the CLI path and asserts exactly one rejected audit row. arch-qa PASS, req-qa present/closed." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:headSha "2cc19c18d" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-027/2> .
+
+<urn:atm:triage:worktree/BB6-027/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1477, fix/bb6-taskstart-counterparty-authz" ;
+  triage:branch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:headSha "2cc19c18d" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB6-027/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T05:20:00Z"^^xsd:dateTime ;
+  triage:fixCommit "2cc19c18d" ;
+  triage:fixBranch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:verifiedInRound "BB6-GATE-FIX-QA-1789320000" ;
+  triage:resolutionNote "quality-mgr BB6-GATE-FIX-QA-1789320000 (PR #1477, verdict comment 05:20Z), verified at fix/bb6-taskstart-counterparty-authz @ 1d86bd608, re-verified at 2cc19c18d. task.rs's client-side counterparty branch removed; test_start_by_non_assignee_is_rejected_by_writer_and_audited now drives the CLI path and asserts exactly one rejected audit row. Both reviewers PASS: arch-qa PASS, req-qa present/closed." .
