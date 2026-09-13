@@ -19,11 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: document the task_transition: Some + task_id: None defensive branch in D3's narrative and add a named test exercising it. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468)." ;
+  triage:deferredNote "Fix: document the task_transition: Some + task_id: None defensive branch in D3's narrative and add a named test exercising it. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468). arch-ctm's fix/bb6-handoff-identity first push (2026-09-13T02:14:48Z, @ 113d9021b, layer below fix/bb6-docs-qa1) also reports fixing this finding while implementing BB6-025's handoff-identity change. Overlap flagged to fenix for a ruling on which layer's fix is authoritative / whether solar's assignment is superseded; not closed pending that ruling." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-020/1>
   a triage:Occurrence ;
@@ -42,3 +43,21 @@
   triage:branch "feature/bb6-docs-prompt-handoffs" ;
   triage:headSha "3aa1954e8" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-020/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
+  triage:line 1 ;
+  triage:snippet "arch-ctm's fix/bb6-handoff-identity first push also reports fixing this finding as an incidental effect of the handoff-identity change; overlap with solar's fix/bb6-docs-qa1 assignment flagged to fenix, not yet ruled" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-handoff-identity" ;
+  triage:headSha "113d9021b" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-020/2> .
+
+<urn:atm:triage:worktree/BB6-020/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb6-handoff-identity" ;
+  triage:branch "fix/bb6-handoff-identity" ;
+  triage:headSha "113d9021b" ;
+  triage:orderIndex 2 .
