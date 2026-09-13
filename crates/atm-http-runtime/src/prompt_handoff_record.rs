@@ -85,6 +85,7 @@ pub(crate) fn log_failure(
     tracing::error!(
         subsystem = "prompt_handoff",
         action = "prompt_handoff_record_failed",
+        outcome = "failed",
         reason = reason.as_str(),
         message_id = %dispatch.event.message_id,
         kind = %kind,
