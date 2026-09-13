@@ -25,7 +25,11 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-020/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-020/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-020/3> ;
-  triage:triageRecordVersion "5" .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "6" .
 
 <urn:atm:triage:occurrence/BB3-020/1>
   a triage:Occurrence ;
@@ -85,4 +89,10 @@
   a triage:Resolution ;
   triage:resolutionNote "report_runtime.py moved to top-level scripts/, matching scripts/public_redaction.py's placement; all real import sites updated. Residual minor cosmetic leftovers noted (test file not yet moved to the sibling-test convention; a stale comment at scripts/phase-ai/test_run_hermes_graft_live.py:32 still names the old path) -- non-blocking, recommended for a future layer." ;
   triage:resolvedAt "2026-09-12T23:24:52Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .
+
+<urn:atm:triage:resolution/BB3-020/2>
+  a triage:Resolution ;
+  triage:resolutionNote "quality-mgr BB3-QA-R5-1789273000 (PR #1463 comment, 'Verified fixed (no residual action)', 2026-09-13T01:11:21Z): confirmed fully fixed and independently verified this round. Test file relocated to .just/tests/test_report_runtime.py, matching the sibling-test convention, and the stale path comment at scripts/phase-ai/test_run_hermes_graft_live.py:32 is fixed. No residual action; this record's prior carry-forward text describing the test-location/comment residual is now historical only -- both items are resolved." ;
+  triage:resolvedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
   triage:resolvedBy "quality-mgr" .

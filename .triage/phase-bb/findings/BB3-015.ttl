@@ -25,7 +25,11 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-015/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-015/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-015/3> ;
-  triage:triageRecordVersion "5" .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "6" .
 
 <urn:atm:triage:occurrence/BB3-015/1>
   a triage:Occurrence ;
@@ -85,4 +89,10 @@
   a triage:Resolution ;
   triage:resolutionNote "genuinely FIXED by two dedicated commits this round (59ebfad08, 16d97d4b6) adding scripts/smoke/test_report_runtime.py, resolving the core 'zero coverage' defect -- confirmed independently by req-qa and arch-qa. quality-mgr's BB3-QA4 explicitly corrected cipher's own close report, which had mislabeled this 'not-reproducible'; the code is fine, only that label was wrong. Residual gap (Important, non-blocking): two of the four originally-named behaviors are still untested (source_revision()'s subprocess-failure branch; resolve_procedure_page()'s GIT_REVISION regex on a malformed string) -- recommended for the next layer, does not block this closure." ;
   triage:resolvedAt "2026-09-12T23:24:52Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .
+
+<urn:atm:triage:resolution/BB3-015/2>
+  a triage:Resolution ;
+  triage:resolutionNote "quality-mgr BB3-QA-R5-1789273000 (PR #1463 comment, 'Verified fixed (no residual action)', 2026-09-13T01:11:21Z): confirmed fully fixed and independently verified this round -- both residual unit tests named in the reopen (source_revision()'s subprocess-failure branch and resolve_procedure_page()'s GIT_REVISION regex on a malformed string) are now present and passing in scripts/smoke/test_report_runtime.py. No residual action." ;
+  triage:resolvedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
   triage:resolvedBy "quality-mgr" .

@@ -23,7 +23,8 @@
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-013/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-013/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-013/1>
   a triage:Occurrence ;
@@ -42,3 +43,21 @@
   triage:branch "feature/bb6-runtime-prompt-handoffs" ;
   triage:headSha "0d2cc1142" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-013/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/storage_and_nudge_router.rs" ;
+  triage:line 493 ;
+  triage:snippet "arch-ctm's fix push for BB6-FIX-RUNTIME-QA1-1789271000; fixed-pending-QA at fix/bb6-runtime-qa1 @ 6f7579d32 (PR #1466, stack layer 13)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "6f7579d32" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-013/2> .
+
+<urn:atm:triage:worktree/BB6-013/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1466, fix/bb6-runtime-qa1" ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "6f7579d32" ;
+  triage:orderIndex 2 .

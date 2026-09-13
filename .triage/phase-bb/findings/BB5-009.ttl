@@ -19,12 +19,13 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:20:14Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add negative/failure-path unit tests for json_value, task_rows, agent_pane, wait_for_pane, cleanup_tasks, inspect_container, render_html, and the scenario_* functions, matching test_run_inbound_peer_smoke.py's coverage pattern. Routed to cipher as item (5) of BB3-FIX-R5-1789264000 on fix/bb3-qa4-r5 (same Python fence, tests only). cipher's BB3 R5 final push landed at fix/bb3-qa4-r5 @ 5da523f81 (parent merge-forward 16f2ab124), 2026-09-13T00:45:41Z, self-reported fresh just smoke fast 8/8, evidence archived outside tree, reports index unchanged. Fixed-pending-QA. Per cipher's task-close (relayed by fenix, 2026-09-13T00:52:35Z), this finding's fix landed at e2ae2c84c. QA-R5 dispatched (BB3-QA-R5-1789273000) on PR #1463 @ 5da523f81, frozen, base ref for the diff 40ccd403e." ;
+  triage:deferredNote "Fix: add negative/failure-path unit tests for json_value, task_rows, agent_pane, wait_for_pane, cleanup_tasks, inspect_container, render_html, and the scenario_* functions, matching test_run_inbound_peer_smoke.py's coverage pattern. Routed to cipher as item (5) of BB3-FIX-R5-1789264000 on fix/bb3-qa4-r5 (same Python fence, tests only). cipher's BB3 R5 final push landed at fix/bb3-qa4-r5 @ 5da523f81 (parent merge-forward 16f2ab124), 2026-09-13T00:45:41Z, self-reported fresh just smoke fast 8/8, evidence archived outside tree, reports index unchanged. Fixed-pending-QA. Per cipher's task-close (relayed by fenix, 2026-09-13T00:52:35Z), this finding's fix landed at e2ae2c84c. QA-R5 dispatched (BB3-QA-R5-1789273000) on PR #1463 @ 5da523f81, frozen, base ref for the diff 40ccd403e. quality-mgr BB3-QA-R5-1789273000 (ATM-QA-005, PR #1463 comment, 2026-09-13T01:11:21Z, verdict FAIL, Important): coverage is PARTIAL, not full -- of the 7 named scenario_* functions specifically, only scenario_pending_ack got a negative test; the other 6 (scenario_three_assignments, scenario_close_ready, scenario_reassign, scenario_move_head, scenario_cancel, scenario_busy_assigner) remain untested. json_value/task_rows/agent_pane/wait_for_pane/cleanup_tasks/inspect_container/render_html coverage was not disputed. Residual filed separately as BB5-010 per fenix's instruction rather than reopening this record; this finding stays fixed-pending-QA at 5da523f81 reflecting the non-scenario_* portion, correlated forward to BB5-010 for the scenario_* residual." ;
   triage:foundIn triage:BB5 ;
   triage:foundAt "2026-09-13T00:19:54Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-009/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-009/2> ;
-  triage:triageRecordVersion "2" .
+  triage:relatedFinding "BB5-010" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB5-009/1>
   a triage:Occurrence ;

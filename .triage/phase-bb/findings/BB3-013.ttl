@@ -27,7 +27,11 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/4> ;
-  triage:triageRecordVersion "5" .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "6" .
 
 <urn:atm:triage:occurrence/BB3-013/1>
   a triage:Occurrence ;
@@ -100,3 +104,9 @@
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "5da523f81" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:resolution/BB3-013/1>
+  a triage:Resolution ;
+  triage:resolutionNote "quality-mgr BB3-QA-R5-1789273000 (PR #1463 comment, 'Verified fixed (no residual action)', 2026-09-13T01:11:21Z): confirmed fully fixed and independently verified this round. resolve_procedure_page and generate_report_index.py's resolver now share a single resolution implementation, including the git-unavailable dated-fallback branch and a disk-existence check on the selected candidate before it is linked -- the two-implementations-of-the-same-rule divergence and the live-404 risk are both eliminated." ;
+  triage:resolvedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .

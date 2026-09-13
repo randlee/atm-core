@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-025>
+  a triage:Finding ;
+  triage:findingId "BB3-025" ;
+  triage:title "run_admission_capacity.py re-declares constants already owned by admission_capacity_support.py before importing from it" ;
+  triage:description "quality-mgr BB3-QA-R5-1789273000 (ARCH-002, arch-qa, independently confirmed), PR #1463 comment (fix/bb3-qa4-r5 @ 5da523f81), verdict FAIL, 2026-09-13T01:11:21Z. scripts/smoke/run_admission_capacity.py:26-28,73 re-declares ROOT, DEFAULT_EVIDENCE_DIR, DEFAULT_RAW_EVIDENCE_DIR, DEFAULT_WORKERS with identical values to admission_capacity_support.py before a later explicit import block from the same module -- reintroducing the exact drift risk BB3-022 was raised to eliminate. Ruled genuine by fenix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "maintainability" ;
+  triage:severity "blocking" ;
+  triage:source "quality-mgr BB3-QA-R5-1789273000 (ARCH-002), ruled genuine by fenix" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/run_admission_capacity.py:26-28,73" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: import ROOT, DEFAULT_EVIDENCE_DIR, DEFAULT_RAW_EVIDENCE_DIR, DEFAULT_WORKERS from admission_capacity_support.py instead of re-declaring them ahead of the existing import block. Dispatched to cipher as BB3-FIX-R6-1789277000, branch fix/bb3-qa5-r6 cut from cipher's BB7 head 35e135673 (stack layer 15 above PR #1467)." ;
+  triage:relatedFinding "BB3-022" ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-025/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-025/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 26 ;
+  triage:snippet "re-declares ROOT, DEFAULT_EVIDENCE_DIR, DEFAULT_RAW_EVIDENCE_DIR, DEFAULT_WORKERS with identical values to admission_capacity_support.py before a later explicit import block from the same module" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-025/1> .
+
+<urn:atm:triage:worktree/BB3-025/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1463, fix/bb3-qa4-r5" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:orderIndex 1 .

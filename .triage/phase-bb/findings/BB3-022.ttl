@@ -25,7 +25,11 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-022/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-022/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-022/3> ;
-  triage:triageRecordVersion "5" .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "6" .
 
 <urn:atm:triage:occurrence/BB3-022/1>
   a triage:Occurrence ;
@@ -80,3 +84,9 @@
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "5da523f81" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/BB3-022/1>
+  a triage:Resolution ;
+  triage:resolutionNote "quality-mgr BB3-QA-R5-1789273000 (PR #1463 comment, 'Verified fixed (no residual action)', 2026-09-13T01:11:21Z): confirmed fully fixed and independently verified this round. Zero occurrences of globals().update( or _PUBLIC_NAMESPACE remain anywhere in the tree -- the circular re-export-everything-back shim is fully removed, replaced with explicit function parameters/an injected context object. Both split files now have genuine module boundaries and are under the 1000-line target: admission_capacity_support.py is 968 lines, feature_smoke_network_support.py is 145 lines. This record's prior carry-forward text describing the globals()/_PUBLIC_NAMESPACE coupling is now historical only; that defect is resolved. (Note: run_admission_capacity.py and run_feature_smoke.py themselves separately trend back over 1000 lines post-split -- tracked as its own new finding, BB3-026, not part of this closure.)" ;
+  triage:resolvedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .
