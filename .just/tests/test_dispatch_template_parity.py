@@ -26,7 +26,8 @@ SEQUENCE_DOC_ROOTS = ("AGENTS.md", "CLAUDE.md", "docs", ".claude")
 SEQUENCE_DOC_SUFFIXES = (".md", ".j2", ".txt")
 SEQUENCE_DOC_EXCLUDED = ("docs/plans/",)
 STALE_SEQUENCE = re.compile(
-    r"completion ack(nowledgement)? by (the )?receiver"
+    r"\back(?:\s*,\s*|\s+then\s+)work(?:\s*,\s+|\s+then\s+)(?:task\s+)?close\b"
+    r"|completion ack(nowledgement)? by (the )?receiver"
     r"|receiver acknowledg"
     r"|acknowledges completion"
     r"|ack -> work -> completion",

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-003>
+  a triage:Finding ;
+  triage:findingId "EQ-003" ;
+  triage:title "bb5-assignment evidence has no explicit atm --version / doctor-version capture proving the container binary is 1.5.17" ;
+  triage:description "req-qa, independently confirmed by quality-mgr, BB-EVIDENCE-QA-1789287034 (PR #1483, report 2026-09-13T11:10:00Z). bb5-assignment evidence has no explicit atm --version / doctor-version-field capture proving the container binary is 1.5.17, unlike bb4 (bb4-task-start.json:492-498, direct atm --version output) and bb6 (bb6-prompt-handoffs.json:311-313, doctor client_context/daemon_context version field). bb5's 1.5.17 identity is only implied by the image tag string." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "testing" ;
+  triage:severity "minor" ;
+  triage:source "req-qa, verified by quality-mgr, BB-EVIDENCE-QA-1789287034" ;
+  triage:repeatable false ;
+  triage:sweepScope "scripts/smoke/run_bb5_assignment.py (version capture)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, not blocking. Fix dispatched by fenix: solar (runner capture + bb5 re-run on the retained 1.5.17 image), fix/bb-evidence-findings from origin/integrate/phase-bb." ;
+  triage:foundIn triage:BB5 ;
+  triage:foundAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/EQ-003/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_bb5_assignment.py" ;
+  triage:line 1 ;
+  triage:snippet "no atm --version / doctor version-field capture, unlike bb4 (bb4-task-start.json:492-498) and bb6 (bb6-prompt-handoffs.json:311-313); 1.5.17 identity only implied by the image tag string" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-003/1> .
+
+<urn:atm:triage:worktree/EQ-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1483, evidence/bb-smoke-1.5.17" ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:orderIndex 1 .

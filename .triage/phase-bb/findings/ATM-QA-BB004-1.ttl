@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-BB004-1>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-BB004-1" ;
+  triage:title "wait_for_archive clamp branch min(ARCHIVE_POLL_SECONDS, remaining) has no test coverage" ;
+  triage:description "quality-mgr, BB-READY-004-QA1-1789287640 (PR #1484 @ 052773738, report 01M2CYJT9NJT20JAJD41R548ES). .claude/skills/prerelease/scripts/prerelease.py::wait_for_archive's clamp branch (min(ARCHIVE_POLL_SECONDS, remaining), taken when the remaining budget is shorter than the normal poll interval) has no test exercising it, so a regression in the clamp itself would not be caught." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "fix_verification" ;
+  triage:category "testing" ;
+  triage:severity "minor" ;
+  triage:source "quality-mgr, BB-READY-004-QA1-1789287640, verdict FAIL" ;
+  triage:repeatable false ;
+  triage:sweepScope ".claude/skills/prerelease/scripts/prerelease.py::wait_for_archive (clamp branch test)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T08:43:30Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, not blocking on its own -- folded into the same upstream sc-publish PR as ATM-QA-BB004-2 per fenix ('same change + kit tests covering the clamp branch'). Will close alongside ATM-QA-BB004-2/BB-READY-004 once the pin-advance layer passes fix-round QA. foundIn BB3 as bookkeeping reuse, consistent with ATM-QA-BB004-2." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-13T08:43:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-BB004-1/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-BB004-1/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/prerelease/scripts/prerelease.py" ;
+  triage:line 330 ;
+  triage:snippet "clamp branch min(ARCHIVE_POLL_SECONDS, remaining) is untested" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb-prerelease-archive-wait" ;
+  triage:headSha "052773738" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-BB004-1/1> .
+
+<urn:atm:triage:worktree/ATM-QA-BB004-1/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1484, fix/bb-prerelease-archive-wait" ;
+  triage:branch "fix/bb-prerelease-archive-wait" ;
+  triage:headSha "052773738" ;
+  triage:orderIndex 1 .
