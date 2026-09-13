@@ -11,6 +11,9 @@ from types import SimpleNamespace
 from unittest import mock
 import unittest
 
+from scripts.smoke import feature_smoke_network_support as NETWORK_SUPPORT
+from scripts import report_runtime as REPORT_RUNTIME
+
 
 def load_runner():
     path = Path(__file__).with_name("run_feature_smoke.py")
@@ -53,7 +56,7 @@ class FeatureSmokeTests(unittest.TestCase):
             self.assertEqual(compose.call_args_list[1].args[1]["procedure_label"], "graft-hermes @ bbbbbbbb")
 
     def test_missing_git_writes_null_source_revision(self):
-        with mock.patch.object(RUNNER.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+        with mock.patch.object(REPORT_RUNTIME.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
             self.assertIsNone(RUNNER.source_revision())
 
     def test_local_ip_alias_is_supported(self):
@@ -98,7 +101,7 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_admission_capacity_reuses_the_feature_smoke_dispatcher(self):
         completed = mock.Mock(returncode=0)
-        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
+        with mock.patch.object(NETWORK_SUPPORT.subprocess, "run", return_value=completed) as run:
             with mock.patch.object(RUNNER.sys, "argv", ["smoke", "admission-capacity"]):
                 self.assertEqual(RUNNER.main(), 0)
         self.assertEqual(Path(run.call_args.args[0][1]).name, "run_admission_capacity.py")
@@ -528,6 +531,7 @@ class FeatureSmokeTests(unittest.TestCase):
             "m5.example",
             "192.0.2.20",
             lambda _hostname: ["2001:db8::20"],
+            RUNNER.add_case,
         )
         self.assertEqual(cases[0]["status"], "FAIL")
         self.assertIn("missing advertised IP 192.0.2.20", cases[0]["detail"])
@@ -538,7 +542,7 @@ class FeatureSmokeTests(unittest.TestCase):
             os.environ,
             {"ATM_SMOKE_REMOTE_IDENTITY": "cm5:smoke", "ATM_SMOKE_REMOTE_TEAM": "atm-m5"},
             clear=False,
-        ), mock.patch.object(RUNNER, "command", return_value=result) as command:
+        ), mock.patch.object(NETWORK_SUPPORT, "command", return_value=result) as command:
             self.assertEqual(RUNNER.remote_command("m5", "/opt/homebrew/bin/atm", ["doctor", "--json"]), result)
         self.assertEqual(
             command.call_args.args[0],
@@ -593,6 +597,10 @@ class FeatureSmokeTests(unittest.TestCase):
             "remote_shell",
             side_effect=lambda _peer, script, timeout=20.0: remote_command_result(script, timeout),
         ) as remote_shell, mock.patch.object(
+            NETWORK_SUPPORT,
+            "remote_shell",
+            side_effect=lambda _peer, script, timeout=20.0: remote_command_result(script, timeout),
+        ), mock.patch.object(
             RUNNER, "command", side_effect=local_command
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]

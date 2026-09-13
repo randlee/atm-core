@@ -4,15 +4,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 from scripts import report_runtime as MODULE  # noqa: E402
 
@@ -23,11 +20,7 @@ class FixtureError(RuntimeError):
 
 def git(repository: Path, *args: str) -> str:
     result = subprocess.run(
-        ["git", *args],
-        cwd=repository,
-        check=True,
-        capture_output=True,
-        text=True,
+        ["git", *args], cwd=repository, check=True, capture_output=True, text=True
     )
     return result.stdout.strip()
 
@@ -56,14 +49,11 @@ class ReportRuntimeTests(unittest.TestCase):
                 "schema_version": 1,
                 "procedures": [{
                     "procedure": "example",
-                    "revisions": [{
-                        "rev": procedure_revision,
-                        "date": "2026-09-12",
-                        "html": procedure_html,
-                    }],
+                    "revisions": [{"rev": procedure_revision, "date": "2026-09-12", "html": procedure_html}],
                 }],
             }
             manifest_path = root / "site/reports/procedures/manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
             self.assertEqual(MODULE.source_revision(root), source_revision)
@@ -73,16 +63,26 @@ class ReportRuntimeTests(unittest.TestCase):
             self.assertEqual(selected.revision, procedure_revision)
             self.assertEqual(selected.html, procedure_html)
 
+    def test_source_revision_returns_none_when_git_is_unavailable(self) -> None:
+        with mock.patch.object(
+            MODULE.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 1, "", "git unavailable"),
+        ):
+            self.assertIsNone(MODULE.source_revision(Path("/unavailable")))
+
+    def test_resolve_procedure_page_rejects_malformed_revision(self) -> None:
+        with self.assertRaisesRegex(MODULE.ReportRuntimeError, "invalid source revision"):
+            MODULE.resolve_procedure_page("example", "not-a-git-revision", root=ROOT)
+
     def test_compose_renders_and_cleans_its_temporary_variables_file(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             temp = Path(tempdir)
             output = temp / "frame.html"
             template = ROOT / "templates/smoke-report/inbound-peer-frame.html.j2"
             variables = {
-                "title": "Fixture title",
-                "generated_at": "2026-09-12T00:00:00Z",
-                "pane_src": "pane.xhtml",
-                "procedure_label": "fixture @ 00000000",
+                "title": "Fixture title", "generated_at": "2026-09-12T00:00:00Z",
+                "pane_src": "pane.xhtml", "procedure_label": "fixture @ 00000000",
                 "procedure_href": "procedures/fixture/00000000.html",
             }
             with mock.patch.object(MODULE.tempfile, "tempdir", tempdir):
@@ -96,11 +96,8 @@ class ReportRuntimeTests(unittest.TestCase):
             with mock.patch.object(MODULE.tempfile, "tempdir", tempdir):
                 with self.assertRaisesRegex(FixtureError, "sc-compose render failed"):
                     MODULE.compose(
-                        temp / "missing-template.j2",
-                        {"value": "fixture"},
-                        temp / "out.html",
-                        root=ROOT,
-                        error_type=FixtureError,
+                        temp / "missing-template.j2", {"value": "fixture"}, temp / "out.html",
+                        root=ROOT, error_type=FixtureError,
                     )
             self.assertEqual(list(temp.glob("*.json")), [])
 

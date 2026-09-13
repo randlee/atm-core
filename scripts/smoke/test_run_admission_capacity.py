@@ -21,6 +21,9 @@ from unittest import mock
 
 from scripts.smoke.benchmark_schema import compact_evidence, distribution, percentile
 from scripts.smoke import benchmark_snapshot as SNAPSHOT
+from scripts.smoke import admission_capacity_support as SUPPORT
+from scripts.smoke import admission_capacity_transport as TRANSPORT
+from scripts import report_runtime as REPORT_RUNTIME
 
 
 def load_runner():
@@ -330,8 +333,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         probe = RUNNER.ROOT / "target" / "release" / f"atm-daemon-benchmark{suffix}"
         completed = subprocess.CompletedProcess(["cargo"], 0, "", "")
         with (
-            mock.patch.object(RUNNER.Path, "is_file", return_value=True),
-            mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as command,
+            mock.patch.object(SUPPORT.Path, "is_file", return_value=True),
+            mock.patch.object(SUPPORT.subprocess, "run", return_value=completed) as command,
         ):
             self.assertEqual(RUNNER.sqlite_writer_probe(), probe)
             self.assertEqual(RUNNER.sqlite_writer_probe(), probe)
@@ -485,7 +488,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         roster = RUNNER.CapacityRoster(
             run_id="target", team="target-team", agent="target-agent", recipient="target-recipient",
         )
-        with mock.patch.object(RUNNER.sqlite3, "connect") as connect:
+        with mock.patch.object(SUPPORT.sqlite3, "connect") as connect:
             with self.assertRaisesRegex(RUNNER.SmokeError, "must not be negative"):
                 RUNNER.verify_durability_after_restart(account, roster, -1)
         connect.assert_not_called()
@@ -932,7 +935,7 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_home_rejects_production_or_non_temporary_paths(self):
         with tempfile.TemporaryDirectory() as temp:
             production_home = Path(temp) / "capacity-user"
-            with mock.patch.object(RUNNER, "os_account_home", return_value=production_home):
+            with mock.patch.object(SUPPORT, "os_account_home", return_value=production_home):
                 with self.assertRaisesRegex(RUNNER.SmokeError, "production"):
                     RUNNER.validate_capacity_home(production_home / ".atm")
         with self.assertRaisesRegex(RUNNER.SmokeError, "basename"):
@@ -950,7 +953,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "is retired"):
                 RUNNER.require_capacity_benchmark_account()
         account = mock.Mock(durable_state_root=Path("/benchmark/.atm/db"))
-        with mock.patch.object(RUNNER, "require_benchmark_account", return_value=account):
+        with mock.patch.object(SUPPORT, "require_benchmark_account", return_value=account):
             self.assertEqual(RUNNER.require_capacity_benchmark_account(), account)
 
     def test_host_state_backup_refuses_without_changing_the_primary_database(self):
@@ -1541,9 +1544,9 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_source_revision_requires_a_resolved_git_head(self):
         completed = mock.Mock(returncode=0, stdout="a" * 40 + "\n")
-        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed):
+        with mock.patch.object(REPORT_RUNTIME.subprocess, "run", return_value=completed):
             self.assertEqual(RUNNER.source_revision(), "a" * 40)
-        with mock.patch.object(RUNNER.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+        with mock.patch.object(REPORT_RUNTIME.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
             with self.assertRaisesRegex(RUNNER.SmokeError, "resolved HEAD"):
                 RUNNER.source_revision()
 
@@ -1694,7 +1697,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             tls_server_name="capacity.example.test",
             tls_certificate_bundle=Path("/tmp/capacity-identity.pem"),
         )
-        context = mock.Mock(spec=RUNNER.ssl.SSLContext)
+        context = mock.Mock(spec=TRANSPORT.ssl.SSLContext)
 
         def timed_interval(submit, _interval, _frames, _workers, _messages, **_kwargs):
             responses = submit(0, 2) + submit(2, 2)
@@ -1734,13 +1737,13 @@ class AdmissionCapacityTests(unittest.TestCase):
             tls_server_name="capacity.example.test",
             tls_certificate_bundle=Path("/tmp/capacity-identity.pem"),
         )
-        context = mock.Mock(spec=RUNNER.ssl.SSLContext)
-        with mock.patch.object(RUNNER.ssl, "create_default_context", return_value=context) as create:
+        context = mock.Mock(spec=TRANSPORT.ssl.SSLContext)
+        with mock.patch.object(TRANSPORT.ssl, "create_default_context", return_value=context) as create:
             actual = RUNNER.tls_client_context(endpoint)
 
         self.assertIs(actual, context)
         create.assert_called_once_with(
-            RUNNER.ssl.Purpose.SERVER_AUTH,
+            TRANSPORT.ssl.Purpose.SERVER_AUTH,
             cafile=str(endpoint.tls_certificate_bundle),
         )
         context.load_cert_chain.assert_called_once_with(str(endpoint.tls_certificate_bundle))
@@ -1882,7 +1885,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_disposable_peer_authority_falls_back_from_reverse_dns_artifact(self):
         roster = RUNNER.CapacityRoster("run", "team", "agent", "recipient")
-        with mock.patch.object(RUNNER.socket, "getfqdn", return_value="1.0.0.0." + "x" * 70 + ".ip6.arpa"), mock.patch.object(RUNNER.socket, "gethostname", return_value="rand-m5.local"):
+        with mock.patch.object(TRANSPORT.socket, "getfqdn", return_value="1.0.0.0." + "x" * 70 + ".ip6.arpa"), mock.patch.object(TRANSPORT.socket, "gethostname", return_value="rand-m5.local"):
             self.assertEqual(RUNNER.disposable_peer_host(roster), "capacity-run.rand-m5.local")
 
     def test_disposable_peer_authority_rejects_oversized_configured_host(self):
@@ -2053,11 +2056,11 @@ class AdmissionCapacityTests(unittest.TestCase):
         limited_resource.RLIMIT_NOFILE = 7
         limited_resource.RLIM_INFINITY = -1
         limited_resource.getrlimit.return_value = (256, 256)
-        with mock.patch.object(RUNNER, "resource", limited_resource):
+        with mock.patch.object(TRANSPORT, "resource", limited_resource):
             self.assertEqual(RUNNER.admission_connection_worker_limit(512), 192)
 
     def test_connection_worker_limit_keeps_requested_workers_without_rlimit_support(self):
-        with mock.patch.object(RUNNER, "resource", None):
+        with mock.patch.object(TRANSPORT, "resource", None):
             self.assertEqual(RUNNER.admission_connection_worker_limit(512), 512)
 
     def test_connection_worker_limit_keeps_requested_workers_for_an_unbounded_limit(self):
@@ -2065,7 +2068,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         unlimited_resource.RLIMIT_NOFILE = 7
         unlimited_resource.RLIM_INFINITY = -1
         unlimited_resource.getrlimit.return_value = (-1, -1)
-        with mock.patch.object(RUNNER, "resource", unlimited_resource):
+        with mock.patch.object(TRANSPORT, "resource", unlimited_resource):
             self.assertEqual(RUNNER.admission_connection_worker_limit(512), 512)
 
     def test_interval_uses_the_published_application_wire_metric_names(self):
@@ -2202,7 +2205,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         process = mock.Mock()
         process.pid = 42
         process.wait.return_value = 0
-        with mock.patch.object(RUNNER, "terminate_process") as terminate:
+        with mock.patch.object(SUPPORT, "terminate_process") as terminate:
             # The runner must use Popen.wait(), not pid probing: an exited child
             # is a zombie until its owner reaps it.
             RUNNER.reap_owned_daemon(process)
@@ -2214,11 +2217,11 @@ class AdmissionCapacityTests(unittest.TestCase):
         output = mock.Mock()
         output.evidence.return_value = {"stdout_tail": ["starting"], "stderr_tail": ["config failed"]}
         with (
-            mock.patch.object(RUNNER.subprocess, "Popen", return_value=process),
-            mock.patch.object(RUNNER.DaemonOutputCapture, "start", return_value=output),
-            mock.patch.object(RUNNER, "await_daemon_ready", side_effect=RUNNER.SmokeError("not ready")),
-            mock.patch.object(RUNNER, "reap_owned_daemon") as reap,
-            mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            mock.patch.object(TRANSPORT.subprocess, "Popen", return_value=process),
+            mock.patch.object(TRANSPORT.DaemonOutputCapture, "start", return_value=output),
+            mock.patch.object(TRANSPORT, "await_daemon_ready", side_effect=RUNNER.SmokeError("not ready")),
+            mock.patch.object(TRANSPORT, "reap_owned_daemon") as reap,
+            mock.patch.object(TRANSPORT, "require_clean_host_daemon_state"),
         ):
             with self.assertRaisesRegex(RUNNER.SmokeError, "not ready.*config failed"):
                 RUNNER.start_capacity_daemon(
@@ -2233,10 +2236,10 @@ class AdmissionCapacityTests(unittest.TestCase):
         process.stderr = mock.Mock()
         output = mock.Mock()
         with (
-            mock.patch.object(RUNNER.subprocess, "Popen", return_value=process) as popen,
-            mock.patch.object(RUNNER.DaemonOutputCapture, "start", return_value=output),
-            mock.patch.object(RUNNER, "await_daemon_ready"),
-            mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            mock.patch.object(TRANSPORT.subprocess, "Popen", return_value=process) as popen,
+            mock.patch.object(TRANSPORT.DaemonOutputCapture, "start", return_value=output),
+            mock.patch.object(TRANSPORT, "await_daemon_ready"),
+            mock.patch.object(TRANSPORT, "require_clean_host_daemon_state"),
         ):
             RUNNER.start_capacity_daemon(
                 Path("/release/atm-daemon"), Path("/tmp/atm-capacity-proof"),
