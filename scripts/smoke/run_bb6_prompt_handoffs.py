@@ -29,6 +29,16 @@ SCENARIO_NAMES = (
 )
 
 
+def observed_reminder_interval(ready_at: float, reminder_at: float) -> float:
+    """Return the measured ready-to-first-reminder wall-clock interval."""
+    return max(0.0, reminder_at - ready_at)
+
+
+def reminder_wait_seconds(observed_interval: float) -> float:
+    """Bound the disabled-reminder observation using a real observed cadence."""
+    return max(2 * observed_interval, 2 * 60.0)
+
+
 def run_command(command: list[str], timeout: float = 45.0) -> dict[str, Any]:
     result = subprocess.run(
         command, capture_output=True, text=True, timeout=timeout, check=False
@@ -312,7 +322,7 @@ def scenario_task_events(container: str, run_id: str) -> dict[str, Any]:
         lambda text: any('reminder="1"' in block for block in blocks_for(text, tasks[0])),
         "task one reminder attempt one",
     )
-    observed_interval = time.monotonic() - ready_at
+    observed_interval = observed_reminder_interval(ready_at, time.monotonic())
     start = run_cli(
         container,
         ASSIGNEE,
@@ -383,7 +393,7 @@ def scenario_disabled_reminder(container: str, run_id: str, observed_interval: f
         lambda text: any(" ready" in block for block in blocks_for(text, task)),
         "disabled-reminder task ready",
     )
-    wait_seconds = max(2 * observed_interval, 2 * 60.0)
+    wait_seconds = reminder_wait_seconds(observed_interval)
     deadline = time.monotonic() + wait_seconds
     after = pane_text(container)
     while time.monotonic() < deadline:
