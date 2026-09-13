@@ -19,11 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add a failure-injection knob to DummyTaskStore::record_prompt_handoff and rewrite the storage-failure test to exercise it; rewrite the timeout test to go through record_prompt_handoff itself instead of hand-calling log_failure. Routed to arch-ctm on BB6-FIX-RUNTIME-QA1-1789271000, branch fix/bb6-runtime-qa1 cut from 4b0f6661c. PR #1461, base feature/bb6-runtime-prompt-handoffs." ;
+  triage:deferredNote "Fix: add a failure-injection knob to DummyTaskStore::record_prompt_handoff and rewrite the storage-failure test to exercise it; rewrite the timeout test to go through record_prompt_handoff itself instead of hand-calling log_failure. Routed to arch-ctm on BB6-FIX-RUNTIME-QA1-1789271000, branch fix/bb6-runtime-qa1 cut from 4b0f6661c. PR #1461, base feature/bb6-runtime-prompt-handoffs. Fixed by arch-ctm's first push to fix/bb6-runtime-qa1 @ 08584a4aa (2026-09-13T00:52:35Z, self-reported focused tests + just test/fmt/clippy green). Fixed-pending-QA." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-011/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-011/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-011/1>
   a triage:Occurrence ;
@@ -41,3 +42,20 @@
   triage:branch "feature/bb6-runtime-prompt-handoffs" ;
   triage:headSha "0d2cc1142" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-011/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:snippet "arch-ctm's first BB6-FIX-RUNTIME-QA1 push; fixed-pending-QA at fix/bb6-runtime-qa1 @ 08584a4aa" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "08584a4aa" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-011/2> .
+
+<urn:atm:triage:worktree/BB6-011/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb6-runtime-qa1" ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "08584a4aa" ;
+  triage:orderIndex 2 .

@@ -19,7 +19,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: move the handoffs field documentation to the correct task-events response schema in both openapi.yaml copies at lines 446-452. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c." ;
+  triage:deferredNote "Fix: move the handoffs field documentation to the correct task-events response schema in both openapi.yaml copies at lines 446-452. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. Solar's ruling on this fix (fenix, 2026-09-13T00:52:35Z): GET /messages ref unchanged; ListOutcome schema added additively; handoffs removed from MessageList and from the never-shipped L3 baseline entry. New BB.7 debt surfaced by this fix, not part of this finding's fence: OpenAPI documents MessageList for GET /messages, /messages/inspect, /messages/read while the runtime returns an externally-tagged ResponseEnvelope (List/Peek/Receive variants); the surface gate has no reviewed path for a CHANGED response ref (is_reviewed_breaking only accepts removals) -- needs a schema-reviewer ruling and a gate extension. Carried in the phase ledger as BB.7 debt, not a new triage finding." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-006/1> ;
