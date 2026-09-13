@@ -152,6 +152,9 @@ from scripts.smoke.admission_capacity_transport import (
     validate_peer_wire_security,
     validate_transport,
 )
+from admission_capacity_reporting import evidence_filename, selected_profiles, write_evidence, write_raw_evidence
+
+
 def run_profile(
     endpoint: LocalEndpoint,
     home: Path,
@@ -378,56 +381,6 @@ def run_cached_roster_heartbeat_probe(
         "warmup": {"status": warmup[0].status, "passed": True},
         "profile": profile,
     }
-
-
-def evidence_filename(directory: Path, evidence: dict[str, Any]) -> Path:
-    """Return the stable path used by both raw and public run artifacts."""
-    directory.mkdir(parents=True, exist_ok=True)
-    host_label = re.sub(r"[^A-Za-z0-9._-]+", "-", str(evidence["host_label"])).strip("-") or "host"
-    # The report renderer derives its immutable artifact id from generated_at.
-    # Derive this filename from the same value so aggregate JSON/XHTML links
-    # cannot point to a different, merely wall-clock-adjacent filename.
-    generated_at = str(evidence.get("generated_at") or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
-    timestamp = generated_at.replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
-    return directory / (
-        f"{timestamp}-{host_label}-{evidence['transport']}-"
-        f"f{evidence['frames_per_connection']}.json"
-    )
-
-
-def write_raw_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
-    """Write the full local-only trace; this directory is intentionally ignored."""
-    path = evidence_filename(directory, evidence)
-    path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return path
-
-
-def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
-    """Write a legacy v3 diagnostic artifact for read-only compatibility.
-
-    The ordinary matrix path supplies ``V4EmissionContext`` to ``run_capacity``
-    and therefore bypasses this compatibility writer entirely.
-    """
-    path = evidence_filename(directory, evidence)
-    try:
-        summary = compact_evidence(evidence).model_dump(mode="json")
-    except BenchmarkSchemaError as error:
-        raise SmokeError(f"could not summarize benchmark evidence: {error}") from error
-    path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return path
-
-
-def selected_profiles(
-    sparse_profiles: tuple[int, ...], sustained_profiles: tuple[int, ...],
-) -> tuple[tuple[int, int], ...]:
-    """Keep sparse samples ahead of each requested sustained transport profile."""
-    profiles = [(frames, ADMISSIONS_PER_INTERVAL) for frames in sparse_profiles]
-    profiles.extend(
-        (frames, messages)
-        for messages in sustained_profiles
-        for frames in sparse_profiles
-    )
-    return tuple(profiles)
 
 
 def run_capacity(
