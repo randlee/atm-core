@@ -30,6 +30,7 @@ SCHEMA_VERSION = 1
 REPORT_TYPES = ("benchmark", "fuzz", "smoke")
 REPORTS_RELATIVE = Path("site/reports")
 INDEX_NAME = "index.html"
+HISTORY_DIRECTORY = "history"
 HOST_LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 REPORT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 REQUIRED_FIELDS = frozenset(
@@ -42,6 +43,7 @@ OPTIONAL_FIELDS = frozenset({
     "source_revision", "procedure",
 })
 SMOKE_STATUS_VALUES = frozenset({"PASS", "FAIL"})
+FUZZ_STATUS_VALUES = frozenset({"PASS", "FAIL", "ERROR"})
 
 
 class ReportIndexError(ValueError):
@@ -62,20 +64,6 @@ class Envelope:
     procedure: str | None = None
     procedure_html: str | None = None
     procedure_inferred: bool = False
-
-
-@dataclass(frozen=True)
-class ReportEntry:
-    report_type: str
-    report_html: str
-    generated_at: datetime
-    generated_at_text: str
-    host_labels: tuple[str, ...]
-    run_count: int
-    status: str | None
-    procedure: str
-    procedure_html: str
-    procedure_inferred: bool
 
 
 def _ensure_inside(path: Path, root: Path, description: str) -> None:
@@ -154,6 +142,17 @@ def _source_revision(value: Any, source: Path) -> str | None:
     if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
         raise ReportIndexError(f"{source}: source_revision must be a lowercase Git object ID")
     return value
+
+
+def _fuzz_status(html_path: Path) -> str | None:
+    """A fuzz report's verdict lives in its runner-written ``<stem>/<stem>.json`` payload."""
+    payload_path = html_path.parent / html_path.stem / f"{html_path.stem}.json"
+    try:
+        payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    status = payload.get("status") if isinstance(payload, dict) else None
+    return status if status in FUZZ_STATUS_VALUES else None
 
 
 def _sibling_feature(source: Path) -> str | None:
@@ -316,7 +315,11 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
         host_label=host_label,
         report_html=report_html,
         source=source,
-        status=_smoke_status(payload["status"], source) if report_type == "smoke" else None,
+        status=(
+            _smoke_status(payload["status"], source) if report_type == "smoke"
+            else _fuzz_status(html_path) if report_type == "fuzz"
+            else None
+        ),
         source_revision=_source_revision(payload.get("source_revision"), source),
         procedure=procedure,
     )
@@ -395,116 +398,347 @@ def discover_envelopes(reports_root: Path) -> list[Envelope]:
     return resolve_procedures(envelopes, reports_root)
 
 
-def aggregate_entries(envelopes: Iterable[Envelope]) -> list[ReportEntry]:
-    grouped: dict[tuple[str, str], list[Envelope]] = {}
+@dataclass(frozen=True)
+class Classification:
+    """One major kind of test run (a procedure family): every run of every procedure in it."""
+
+    family: str
+    runs: tuple[Envelope, ...]  # newest first
+
+    @property
+    def title(self) -> str:
+        return self.family.capitalize()
+
+    @property
+    def latest(self) -> Envelope:
+        return self.runs[0]
+
+    @property
+    def history_html(self) -> str:
+        return f"{HISTORY_DIRECTORY}/{self.family}.html"
+
+
+def _procedure_families(reports_root: Path) -> dict[str, str]:
+    path = reports_root / "procedures" / "manifest.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    procedures = payload.get("procedures") if isinstance(payload, dict) else None
+    if not isinstance(procedures, list):
+        return {}
+    return {
+        item["procedure"]: item["family"]
+        for item in procedures
+        if isinstance(item, dict) and isinstance(item.get("procedure"), str) and isinstance(item.get("family"), str)
+    }
+
+
+def _lane(procedure: str | None, family: str) -> str:
+    """The test within its family: ``smoke-local-ip`` -> ``local ip``; ``send-message-benchmark`` -> ``send message``."""
+    words = (procedure or "unknown").split("-")
+    if words and words[0] == family:
+        words = words[1:]
+    elif words and words[-1] == family:
+        words = words[:-1]
+    return " ".join(words) or family
+
+
+def classify(envelopes: Iterable[Envelope], reports_root: Path) -> list[Classification]:
+    families = _procedure_families(reports_root)
+    grouped: dict[str, list[Envelope]] = {}
     for envelope in envelopes:
-        grouped.setdefault((envelope.report_type, envelope.report_html), []).append(envelope)
-    entries: list[ReportEntry] = []
-    for (report_type, report_html), group in grouped.items():
-        newest = max(group, key=lambda item: (item.generated_at, item.source.name))
-        entries.append(
-            ReportEntry(
-                report_type=report_type,
-                report_html=report_html,
-                generated_at=newest.generated_at,
-                generated_at_text=newest.generated_at_text,
-                host_labels=tuple(sorted({item.host_label for item in group})),
-                run_count=len(group),
-                status=newest.status,
-                procedure=newest.procedure or "unknown",
-                procedure_html=newest.procedure_html or "",
-                procedure_inferred=newest.procedure_inferred,
-            )
-        )
+        family = families.get(envelope.procedure or "", envelope.report_type)
+        grouped.setdefault(family, []).append(envelope)
+    classifications = [
+        Classification(family=family, runs=tuple(sorted(runs, key=lambda item: (item.generated_at, item.source.name), reverse=True)))
+        for family, runs in grouped.items()
+    ]
     return sorted(
-        entries,
-        key=lambda item: (REPORT_TYPES.index(item.report_type), -item.generated_at.timestamp(), item.report_html),
+        classifications,
+        key=lambda item: (REPORT_TYPES.index(item.family) if item.family in REPORT_TYPES else len(REPORT_TYPES), item.family),
     )
 
 
-def _entry_html(entry: ReportEntry) -> str:
-    report_name = (
-        entry.report_html.removesuffix("/index.html")
-        if entry.report_type == "smoke"
-        else Path(entry.report_html).stem
-    )
-    details = [html.escape(entry.report_type)]
-    if entry.run_count != 1:
-        details.append(f"{entry.run_count} runs")
-    if entry.status is not None:
-        details.append(entry.status)
-    details.append("hosts: " + ", ".join(html.escape(label) for label in entry.host_labels))
-    inferred = " (inferred from run date)" if entry.procedure_inferred else ""
-    procedure = (
-        f'<a class="procedure" href="{html.escape(entry.procedure_html, quote=True)}">procedure {html.escape(entry.procedure)} @ {html.escape(entry.procedure_html.rsplit("/", 1)[-1][:8])}</a>{inferred}'
-        if entry.procedure_html else ""
-    )
+def _when(envelope: Envelope) -> str:
+    return envelope.generated_at.strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _time_html(envelope: Envelope) -> str:
     return (
-        "      <li>"
-        f'<a href="{html.escape(entry.report_html, quote=True)}">{html.escape(report_name)}</a>'
-        f'<time datetime="{html.escape(entry.generated_at_text, quote=True)}">'
-        f"{html.escape(entry.generated_at_text)}</time>"
-        f'<span class="report-meta">{" · ".join(details)}{" · " + procedure if procedure else ""}</span>'
-        "</li>"
+        f'<time datetime="{html.escape(envelope.generated_at_text, quote=True)}">'
+        f"{html.escape(_when(envelope))}</time>"
     )
 
 
-def render_index(entries: Iterable[ReportEntry]) -> str:
-    entries_by_type = {report_type: [] for report_type in REPORT_TYPES}
-    for entry in entries:
-        entries_by_type[entry.report_type].append(entry)
-    sections: list[str] = []
-    for report_type in REPORT_TYPES:
-        title = report_type.capitalize()
-        report_entries = entries_by_type[report_type]
-        if report_entries:
-            rows = "\n".join(_entry_html(entry) for entry in report_entries)
-            body = f"\n    <ul>\n{rows}\n    </ul>"
-        else:
-            body = "\n    <p class=\"empty\">No reports available.</p>"
-        sections.append(f"  <section><h2>{title}</h2>{body}\n  </section>")
+def _result_html(envelope: Envelope) -> str:
+    if envelope.status is None:
+        return '<span class="result">—</span>'
+    tone = "pass" if envelope.status == "PASS" else "fail"
+    return f'<span class="result {tone}">{html.escape(envelope.status)}</span>'
+
+
+def _procedure_html(envelope: Envelope, prefix: str) -> str:
+    if not envelope.procedure_html:
+        return ""
+    revision = envelope.procedure_html.rsplit("/", 1)[-1][:8]
+    inferred = ' <span class="inferred">(inferred from run date)</span>' if envelope.procedure_inferred else ""
+    return (
+        f'<a class="procedure" href="{html.escape(prefix + envelope.procedure_html, quote=True)}">'
+        f"{html.escape(envelope.procedure or 'unknown')} @ {html.escape(revision)}</a>{inferred}"
+    )
+
+
+def _run_count(classification: Classification) -> str:
+    count = len(classification.runs)
+    return f"{count} run" if count == 1 else f"{count} runs"
+
+
+STYLE = (
+    "body{font:16px system-ui,sans-serif;max-width:72rem;margin:2rem auto;padding:0 1rem;line-height:1.5;color:#1b1b1b}"
+    "h1{margin-bottom:.25rem}p.lead{color:#555;margin-top:0}"
+    "table{border-collapse:collapse;width:100%;margin:1rem 0}"
+    "th{text-align:left;font-weight:600;color:#555;font-size:.85em;border-bottom:2px solid #c9c9c9;padding:.4rem .6rem}"
+    "td{padding:.55rem .6rem;border-bottom:1px solid #e3e3e3;vertical-align:top}"
+    "td.family{color:#555;white-space:nowrap}"
+    "a{color:#0b57d0}a:visited{color:#6a3fb5}"
+    ".result{font-weight:600}.result.pass{color:#1a7f37}.result.fail{color:#c62828}"
+    ".inferred,.meta{color:#777;font-size:.85em}.empty{color:#666;font-style:italic}"
+    "nav{margin-bottom:1rem}"
+)
+
+
+def _page(title: str, body: str) -> str:
     return (
         "<!doctype html>\n"
         '<html lang="en">\n'
         "<head>\n"
         '  <meta charset="utf-8">\n'
         '  <meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        "  <title>ATM verification reports</title>\n"
-        "  <style>body{font:16px system-ui,sans-serif;max-width:64rem;margin:2rem auto;padding:0 1rem;line-height:1.5}"
-        "h1{margin-bottom:.25rem}ul{padding:0;list-style:none}li{display:grid;grid-template-columns:minmax(12rem,2fr) auto 1fr;gap:1rem;padding:.55rem 0;border-bottom:1px solid #ddd}"
-        "time,.report-meta{color:#555;font-size:.9em}.empty{color:#666;font-style:italic}</style>\n"
+        f"  <title>{html.escape(title)}</title>\n"
+        f"  <style>{STYLE}</style>\n"
         "</head>\n"
         "<body>\n"
-        "  <h1>ATM verification reports</h1>\n"
-        "  <p>Generated from schema-validated public report envelopes.</p>\n"
-        + "\n".join(sections)
-        + "\n</body>\n</html>\n"
+        f"{body}"
+        "</body>\n</html>\n"
     )
 
 
+def render_index(classifications: Iterable[Classification]) -> str:
+    rows: list[str] = []
+    for item in classifications:
+        latest = item.latest
+        rows.append(
+            "    <tr>"
+            f'<td class="family"><strong>{html.escape(item.title)}</strong></td>'
+            f'<td><a href="{html.escape(latest.report_html, quote=True)}">{_time_html(latest)}</a>'
+            f'<span class="meta"> · {html.escape(_lane(latest.procedure, item.family))} · {html.escape(latest.host_label)}</span></td>'
+            f"<td>{_result_html(latest)}</td>"
+            f"<td>{_procedure_html(latest, '')}</td>"
+            f'<td><a href="{html.escape(item.history_html, quote=True)}">{_run_count(item)}</a></td>'
+            "</tr>"
+        )
+    if rows:
+        table = (
+            "  <table>\n"
+            "    <thead><tr><th>Test</th><th>Latest run</th><th>Result</th><th>Procedure executed</th><th>History</th></tr></thead>\n"
+            "    <tbody>\n" + "\n".join(rows) + "\n    </tbody>\n"
+            "  </table>\n"
+        )
+    else:
+        table = '  <p class="empty">No reports available.</p>\n'
+    body = (
+        "  <h1>ATM verification reports</h1>\n"
+        '  <p class="lead">One row per test family. Open the latest run, the procedure it executed, or the full run history (newest first). Generated from schema-validated public report envelopes.</p>\n'
+        + table
+    )
+    return _page("ATM verification reports", body)
+
+
+def render_history(classification: Classification) -> str:
+    prefix = "../"
+    rows = "\n".join(
+        "    <tr>"
+        f'<td><a href="{html.escape(prefix + run.report_html, quote=True)}">{_time_html(run)}</a></td>'
+        f"<td>{html.escape(_lane(run.procedure, classification.family))}</td>"
+        f"<td>{html.escape(run.host_label)}</td>"
+        f"<td>{_result_html(run)}</td>"
+        f"<td>{_procedure_html(run, prefix)}</td>"
+        f'<td class="meta">{html.escape(run.report_html.removesuffix("/index.html"))}</td>'
+        "</tr>"
+        for run in classification.runs
+    )
+    body = (
+        f"  <h1>{html.escape(classification.title)}</h1>\n"
+        f'  <p class="lead">{html.escape(_run_count(classification))}, newest first.</p>\n'
+        "  <table>\n"
+        "    <thead><tr><th>Run</th><th>Test</th><th>Host</th><th>Result</th><th>Procedure executed</th><th>Report path</th></tr></thead>\n"
+        f"    <tbody>\n{rows}\n    </tbody>\n"
+        "  </table>\n"
+    )
+    return _page(f"{classification.title} — run history", body)
+
+
+
+
+NAV_START = "<!-- atm-nav:start -->"
+NAV_END = "<!-- atm-nav:end -->"
+NAV_STYLE = (
+    "font:14px system-ui,sans-serif;line-height:1.6;padding:.45rem 1rem;margin:0 0 .5rem;"
+    "background:#f3f5f7;border-bottom:1px solid #d5d9de;color:#333"
+)
+_BODY_OPEN = re.compile(r"<body[^>]*>", re.IGNORECASE)
+_HTML_OPEN = re.compile(r"<html[^>]*>", re.IGNORECASE)
+_NAV_BLOCK = re.compile(re.escape(NAV_START) + r".*?" + re.escape(NAV_END) + r"\n?", re.DOTALL)
+
+
+@dataclass(frozen=True)
+class Crumb:
+    label: str
+    href: str | None = None
+
+
+def _crumbs_html(crumbs: list[Crumb]) -> str:
+    parts = []
+    for crumb in crumbs:
+        label = html.escape(crumb.label)
+        parts.append(f'<a href="{html.escape(crumb.href, quote=True)}">{label}</a>' if crumb.href else f"<span>{label}</span>")
+    return " › ".join(parts)
+
+
+def render_nav(crumbs: list[Crumb], *, result: str | None = None, plan_html: str | None = None, plan_label: str | None = None, plan_inferred: bool = False) -> str:
+    extras = []
+    if result is not None:
+        tone = "#1a7f37" if result == "PASS" else "#c62828"
+        extras.append(f'<span style="margin-left:1.25rem">Result: <strong style="color:{tone}">{html.escape(result)}</strong></span>')
+    if plan_html and plan_label:
+        note = ' <span style="color:#777">(inferred from run date)</span>' if plan_inferred else ""
+        extras.append(
+            f'<span style="margin-left:1.25rem">Test plan: <a href="{html.escape(plan_html, quote=True)}">{html.escape(plan_label)}</a>{note}</span>'
+        )
+    return f'{NAV_START}<nav class="atm-nav" style="{NAV_STYLE}">{_crumbs_html(crumbs)}{"".join(extras)}</nav>{NAV_END}\n'
+
+
+def stamp_nav(content: str, nav: str) -> str:
+    """Insert or replace the navigation block directly after ``<body>`` (idempotent)."""
+    stripped = _NAV_BLOCK.sub("", content)
+    anchor = _BODY_OPEN.search(stripped) or _HTML_OPEN.search(stripped)
+    if anchor is None:
+        return nav + stripped
+    at = anchor.end()
+    if stripped[at:at + 1] == "\n":
+        at += 1
+    return stripped[:at] + nav + stripped[at:]
+
+
+def _up(depth: int) -> str:
+    return "../" * depth
+
+
+def nav_for(page: str, classifications: list[Classification]) -> str:
+    """Breadcrumb + verdict + test-plan line for one page path relative to site/reports."""
+    parts = page.split("/")
+    depth = len(parts) - 1
+    root = _up(depth + 1)
+    reports = _up(depth) if depth else "./"
+    crumbs = [Crumb("ATM", root), Crumb("Reports", reports)]
+    if page == INDEX_NAME:
+        return render_nav([Crumb("ATM", root), Crumb("Reports")])
+    by_family = {item.family: item for item in classifications}
+    if parts[0] == HISTORY_DIRECTORY and len(parts) == 2:
+        family = parts[1].removesuffix(".html")
+        title = by_family[family].title if family in by_family else family.capitalize()
+        return render_nav(crumbs + [Crumb(f"{title} history")])
+    if parts[0] == "procedures" and len(parts) == 3:
+        procedure = parts[1]
+        if parts[2] == INDEX_NAME:
+            return render_nav(crumbs + [Crumb("Test plans"), Crumb(procedure)])
+        return render_nav(crumbs + [Crumb("Test plans"), Crumb(procedure, "./"), Crumb(f"revision {parts[2].removesuffix('.html')}")])
+    for item in classifications:
+        for run in item.runs:
+            run_dir = run.report_html.rsplit("/", 1)[0] if "/" in run.report_html else run.report_html.removesuffix(".html")
+            in_run = page == run.report_html or page.startswith(run_dir + "/")
+            if not in_run:
+                continue
+            history = reports + item.history_html
+            label = f"{_when(run)} · {_lane(run.procedure, item.family)} · {run.host_label}"
+            plan = reports + run.procedure_html if run.procedure_html else None
+            plan_label = f"{run.procedure} @ {run.procedure_html.rsplit('/', 1)[-1][:8]}" if run.procedure_html else None
+            return render_nav(
+                crumbs + [Crumb(f"{item.title} history", history), Crumb(label)],
+                result=run.status,
+                plan_html=plan,
+                plan_label=plan_label,
+                plan_inferred=run.procedure_inferred,
+            )
+    # A page outside every indexed run (for example phase evidence without an envelope).
+    trail = [Crumb(part) for part in parts[:-1]] if depth else [Crumb(parts[0].removesuffix(".html"))]
+    return render_nav(crumbs + trail)
+
+
+def stamp_all(reports_root: Path, classifications: list[Classification], generated: dict[str, str]) -> dict[str, str]:
+    """Every HTML page under ``site/reports`` with its navigation stamped, keyed by relative path."""
+    pages: dict[str, str] = {}
+    on_disk = sorted(path for path in reports_root.rglob("*.html") if path.is_file())
+    for path in on_disk:
+        relative = path.relative_to(reports_root).as_posix()
+        if relative in generated or relative.startswith(HISTORY_DIRECTORY + "/"):
+            continue  # generated pages come from `generated`; an orphaned history page is reported separately
+        try:
+            pages[relative] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise ReportIndexError(f"unreadable report page: {path}") from exc
+    pages.update(generated)
+    return {relative: stamp_nav(content, nav_for(relative, classifications)) for relative, content in pages.items()}
+
+def build_pages(reports_root: Path) -> dict[str, str]:
+    """Every page under ``site/reports`` as it must be on disk: generated index and history pages plus every existing report page with its navigation stamped."""
+    classifications = classify(discover_envelopes(reports_root), reports_root)
+    generated = {INDEX_NAME: render_index(classifications)}
+    for item in classifications:
+        generated[item.history_html] = render_history(item)
+    return stamp_all(reports_root, classifications, generated)
+
+
 def build_index(reports_root: Path) -> str:
-    return render_index(aggregate_entries(discover_envelopes(reports_root)))
+    return build_pages(reports_root)[INDEX_NAME]
 
 
 def write_or_check(repo_root: Path, check: bool) -> int:
     reports_root = repo_root / REPORTS_RELATIVE
-    expected = build_index(reports_root)
-    index_path = reports_root / INDEX_NAME
+    expected = build_pages(reports_root)
+    history_root = reports_root / HISTORY_DIRECTORY
+    stale = sorted(
+        path.relative_to(reports_root).as_posix()
+        for path in (history_root.glob("*.html") if history_root.is_dir() else ())
+        if path.relative_to(reports_root).as_posix() not in expected
+    )
     if check:
-        try:
-            actual = index_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
-            raise ReportIndexError(f"missing or unreadable generated index: {index_path}") from exc
-        if actual != expected:
-            raise ReportIndexError(f"stale generated index: {index_path}")
+        for relative, content in expected.items():
+            path = reports_root / relative
+            try:
+                actual = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                raise ReportIndexError(f"missing or unreadable generated page: {path}") from exc
+            if actual != content:
+                kind = "generated page" if relative == INDEX_NAME or relative.startswith(HISTORY_DIRECTORY + "/") else "report page navigation"
+                raise ReportIndexError(f"stale {kind}: {path} (run `just reports-index`)")
+        if stale:
+            raise ReportIndexError(f"stale history pages without a report: {', '.join(stale)}")
         return 0
     reports_root.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(expected, encoding="utf-8")
+    for relative, content in expected.items():
+        path = reports_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.is_file() or path.read_text(encoding="utf-8") != content:
+            path.write_text(content, encoding="utf-8")
+    for relative in stale:
+        (reports_root / relative).unlink()
     return 0
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="Generate or check the durable report index.")
+    parser = argparse.ArgumentParser(description="Generate or check the durable report index and per-test run history pages.")
     parser.add_argument("--check", action="store_true", help="fail if the generated index is stale")
     parser.add_argument("--root", type=Path, help="repository root (defaults to the parent of .just)")
     args = parser.parse_args(argv[1:])

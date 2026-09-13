@@ -25,6 +25,9 @@ TEMPLATE = ROOT / "templates" / "procedure-report" / "procedure.html.j2"
 SHA = re.compile(r"^[0-9a-f]{40}$")
 REVISION_STAMP = re.compile(r"\brevision\s+`?([0-9a-f]{8})`?", re.IGNORECASE)
 INPUT_HASH = re.compile(r'<meta name="procedure-input-sha256" content="([0-9a-f]{64})">')
+# Navigation stamp owned by .just/generate_report_index.py (`just reports-index`); the check
+# compares page content beneath it.
+NAV_STAMP = re.compile(r"<!-- atm-nav:start -->.*?<!-- atm-nav:end -->\n?", re.DOTALL)
 
 
 class ProcedureRenderError(ValueError):
@@ -252,7 +255,7 @@ def render(root: Path = ROOT, check: bool = False) -> int:
                 match = INPUT_HASH.search(existing[path])
                 if match is None or match.group(1) != expected_hashes[path]:
                     return 1
-            elif existing[path] != content:
+            elif NAV_STAMP.sub("", existing[path]) != content:
                 return 1
         return 0
     for path, content in expected.items():
