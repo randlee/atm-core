@@ -15,7 +15,7 @@ if str(JUST_DIR) not in sys.path:
 
 from generate_report_index import ReportIndexError
 from generate_report_index import build_index as _build_index
-from generate_report_index import build_pages
+from generate_report_index import build_pages, stamp_nav, NAV_START, NAV_END
 from generate_report_index import write_or_check
 from scripts import report_runtime
 
@@ -275,9 +275,50 @@ class GenerateReportIndexTests(unittest.TestCase):
             self.assertIn('<span class="result fail">FAIL</span>', index)
             self.assertIn('href="history/smoke.html">2 runs<', index)
             history = pages["history/smoke.html"]
-            self.assertIn('href="../index.html"', history)
+            self.assertIn('<a href="../">Reports</a>', history)
             self.assertLess(history.index(newer), history.index(older))
             self.assertIn('href="../procedures/smoke-localhost/00000000.html"', history)
+
+    def test_stamp_inserts_after_body_once_and_replaces_an_old_stamp(self) -> None:
+        nav = f"{NAV_START}<nav>one</nav>{NAV_END}\n"
+        page = "<html>\n<body class=\"x\">\n<h1>r</h1>\n</body>\n</html>\n"
+        stamped = stamp_nav(page, nav)
+        self.assertEqual(stamped, "<html>\n<body class=\"x\">\n" + nav + "<h1>r</h1>\n</body>\n</html>\n")
+        self.assertEqual(stamp_nav(stamped, nav), stamped)
+        replaced = stamp_nav(stamped, f"{NAV_START}<nav>two</nav>{NAV_END}\n")
+        self.assertEqual(replaced.count("<nav>"), 1)
+        self.assertIn("<nav>two</nav>", replaced)
+
+    def test_every_page_of_a_run_carries_result_and_test_plan_link(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            run = write_smoke_envelope(root, "macos", "rand-m5", "20260809T050000Z-pid2-localhost")
+            run_dir = root / "site/reports" / Path(run).parent
+            (run_dir / "localhost.html").write_text("<html><body><p>detail</p></body></html>\n", encoding="utf-8")
+            build_index(root / "site/reports")  # seeds the fixture manifest
+            pages = build_pages(root / "site/reports")
+            for relative in (run, run.replace("index.html", "localhost.html")):
+                page = pages[relative]
+                self.assertIn(NAV_START, page)
+                self.assertIn('href="../../../../history/smoke.html">Smoke history</a>', page)
+                self.assertIn("Result: <strong", page)
+                self.assertIn('Test plan: <a href="../../../../procedures/smoke-localhost/00000000.html">smoke-localhost @ 00000000</a>', page)
+            self.assertIn('<a href="../">ATM</a> › <span>Reports</span>', pages["index.html"])
+            self.assertIn('<a href="../">Reports</a> › <span>Smoke history</span>', pages["history/smoke.html"])
+
+    def test_check_rejects_a_report_page_without_the_current_navigation(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            run = write_smoke_envelope(root, "macos", "rand-m5", "20260809T050000Z-pid2-localhost")
+            build_index(root / "site/reports")
+            write_or_check(root, check=False)
+            self.assertEqual(write_or_check(root, check=True), 0)
+            page = root / "site/reports" / run
+            page.write_text("<html><body>regenerated without nav</body></html>\n", encoding="utf-8")
+            with self.assertRaisesRegex(ReportIndexError, "stale report page navigation"):
+                write_or_check(root, check=True)
+            write_or_check(root, check=False)
+            self.assertEqual(write_or_check(root, check=True), 0)
 
     def test_check_rejects_a_history_page_whose_report_is_gone(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

@@ -43,6 +43,7 @@ OPTIONAL_FIELDS = frozenset({
     "source_revision", "procedure",
 })
 SMOKE_STATUS_VALUES = frozenset({"PASS", "FAIL"})
+FUZZ_STATUS_VALUES = frozenset({"PASS", "FAIL", "ERROR"})
 
 
 class ReportIndexError(ValueError):
@@ -141,6 +142,17 @@ def _source_revision(value: Any, source: Path) -> str | None:
     if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
         raise ReportIndexError(f"{source}: source_revision must be a lowercase Git object ID")
     return value
+
+
+def _fuzz_status(html_path: Path) -> str | None:
+    """A fuzz report's verdict lives in its runner-written ``<stem>/<stem>.json`` payload."""
+    payload_path = html_path.parent / html_path.stem / f"{html_path.stem}.json"
+    try:
+        payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    status = payload.get("status") if isinstance(payload, dict) else None
+    return status if status in FUZZ_STATUS_VALUES else None
 
 
 def _sibling_feature(source: Path) -> str | None:
@@ -303,7 +315,11 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
         host_label=host_label,
         report_html=report_html,
         source=source,
-        status=_smoke_status(payload["status"], source) if report_type == "smoke" else None,
+        status=(
+            _smoke_status(payload["status"], source) if report_type == "smoke"
+            else _fuzz_status(html_path) if report_type == "fuzz"
+            else None
+        ),
         source_revision=_source_revision(payload.get("source_revision"), source),
         procedure=procedure,
     )
@@ -457,8 +473,9 @@ def _time_html(envelope: Envelope) -> str:
 
 def _result_html(envelope: Envelope) -> str:
     if envelope.status is None:
-        return '<span class="result">report</span>'
-    return f'<span class="result {html.escape(envelope.status.lower())}">{html.escape(envelope.status)}</span>'
+        return '<span class="result">—</span>'
+    tone = "pass" if envelope.status == "PASS" else "fail"
+    return f'<span class="result {tone}">{html.escape(envelope.status)}</span>'
 
 
 def _procedure_html(envelope: Envelope, prefix: str) -> str:
@@ -552,7 +569,6 @@ def render_history(classification: Classification) -> str:
         for run in classification.runs
     )
     body = (
-        f'  <nav><a href="{prefix}index.html">← All reports</a></nav>\n'
         f"  <h1>{html.escape(classification.title)}</h1>\n"
         f'  <p class="lead">{html.escape(_run_count(classification))}, newest first.</p>\n'
         "  <table>\n"
@@ -563,13 +579,125 @@ def render_history(classification: Classification) -> str:
     return _page(f"{classification.title} — run history", body)
 
 
-def build_pages(reports_root: Path) -> dict[str, str]:
-    """Every generated page under ``site/reports``, keyed by its relative path."""
-    classifications = classify(discover_envelopes(reports_root), reports_root)
-    pages = {INDEX_NAME: render_index(classifications)}
+
+
+NAV_START = "<!-- atm-nav:start -->"
+NAV_END = "<!-- atm-nav:end -->"
+NAV_STYLE = (
+    "font:14px system-ui,sans-serif;line-height:1.6;padding:.45rem 1rem;margin:0 0 .5rem;"
+    "background:#f3f5f7;border-bottom:1px solid #d5d9de;color:#333"
+)
+_BODY_OPEN = re.compile(r"<body[^>]*>", re.IGNORECASE)
+_HTML_OPEN = re.compile(r"<html[^>]*>", re.IGNORECASE)
+_NAV_BLOCK = re.compile(re.escape(NAV_START) + r".*?" + re.escape(NAV_END) + r"\n?", re.DOTALL)
+
+
+@dataclass(frozen=True)
+class Crumb:
+    label: str
+    href: str | None = None
+
+
+def _crumbs_html(crumbs: list[Crumb]) -> str:
+    parts = []
+    for crumb in crumbs:
+        label = html.escape(crumb.label)
+        parts.append(f'<a href="{html.escape(crumb.href, quote=True)}">{label}</a>' if crumb.href else f"<span>{label}</span>")
+    return " › ".join(parts)
+
+
+def render_nav(crumbs: list[Crumb], *, result: str | None = None, plan_html: str | None = None, plan_label: str | None = None, plan_inferred: bool = False) -> str:
+    extras = []
+    if result is not None:
+        tone = "#1a7f37" if result == "PASS" else "#c62828"
+        extras.append(f'<span style="margin-left:1.25rem">Result: <strong style="color:{tone}">{html.escape(result)}</strong></span>')
+    if plan_html and plan_label:
+        note = ' <span style="color:#777">(inferred from run date)</span>' if plan_inferred else ""
+        extras.append(
+            f'<span style="margin-left:1.25rem">Test plan: <a href="{html.escape(plan_html, quote=True)}">{html.escape(plan_label)}</a>{note}</span>'
+        )
+    return f'{NAV_START}<nav class="atm-nav" style="{NAV_STYLE}">{_crumbs_html(crumbs)}{"".join(extras)}</nav>{NAV_END}\n'
+
+
+def stamp_nav(content: str, nav: str) -> str:
+    """Insert or replace the navigation block directly after ``<body>`` (idempotent)."""
+    stripped = _NAV_BLOCK.sub("", content)
+    anchor = _BODY_OPEN.search(stripped) or _HTML_OPEN.search(stripped)
+    if anchor is None:
+        return nav + stripped
+    at = anchor.end()
+    if stripped[at:at + 1] == "\n":
+        at += 1
+    return stripped[:at] + nav + stripped[at:]
+
+
+def _up(depth: int) -> str:
+    return "../" * depth
+
+
+def nav_for(page: str, classifications: list[Classification]) -> str:
+    """Breadcrumb + verdict + test-plan line for one page path relative to site/reports."""
+    parts = page.split("/")
+    depth = len(parts) - 1
+    root = _up(depth + 1)
+    reports = _up(depth) if depth else "./"
+    crumbs = [Crumb("ATM", root), Crumb("Reports", reports)]
+    if page == INDEX_NAME:
+        return render_nav([Crumb("ATM", root), Crumb("Reports")])
+    by_family = {item.family: item for item in classifications}
+    if parts[0] == HISTORY_DIRECTORY and len(parts) == 2:
+        family = parts[1].removesuffix(".html")
+        title = by_family[family].title if family in by_family else family.capitalize()
+        return render_nav(crumbs + [Crumb(f"{title} history")])
+    if parts[0] == "procedures" and len(parts) == 3:
+        procedure = parts[1]
+        if parts[2] == INDEX_NAME:
+            return render_nav(crumbs + [Crumb("Test plans"), Crumb(procedure)])
+        return render_nav(crumbs + [Crumb("Test plans"), Crumb(procedure, "./"), Crumb(f"revision {parts[2].removesuffix('.html')}")])
     for item in classifications:
-        pages[item.history_html] = render_history(item)
-    return pages
+        for run in item.runs:
+            run_dir = run.report_html.rsplit("/", 1)[0] if "/" in run.report_html else run.report_html.removesuffix(".html")
+            in_run = page == run.report_html or page.startswith(run_dir + "/")
+            if not in_run:
+                continue
+            history = reports + item.history_html
+            label = f"{_when(run)} · {_lane(run.procedure, item.family)} · {run.host_label}"
+            plan = reports + run.procedure_html if run.procedure_html else None
+            plan_label = f"{run.procedure} @ {run.procedure_html.rsplit('/', 1)[-1][:8]}" if run.procedure_html else None
+            return render_nav(
+                crumbs + [Crumb(f"{item.title} history", history), Crumb(label)],
+                result=run.status,
+                plan_html=plan,
+                plan_label=plan_label,
+                plan_inferred=run.procedure_inferred,
+            )
+    # A page outside every indexed run (for example phase evidence without an envelope).
+    trail = [Crumb(part) for part in parts[:-1]] if depth else [Crumb(parts[0].removesuffix(".html"))]
+    return render_nav(crumbs + trail)
+
+
+def stamp_all(reports_root: Path, classifications: list[Classification], generated: dict[str, str]) -> dict[str, str]:
+    """Every HTML page under ``site/reports`` with its navigation stamped, keyed by relative path."""
+    pages: dict[str, str] = {}
+    on_disk = sorted(path for path in reports_root.rglob("*.html") if path.is_file())
+    for path in on_disk:
+        relative = path.relative_to(reports_root).as_posix()
+        if relative in generated or relative.startswith(HISTORY_DIRECTORY + "/"):
+            continue  # generated pages come from `generated`; an orphaned history page is reported separately
+        try:
+            pages[relative] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise ReportIndexError(f"unreadable report page: {path}") from exc
+    pages.update(generated)
+    return {relative: stamp_nav(content, nav_for(relative, classifications)) for relative, content in pages.items()}
+
+def build_pages(reports_root: Path) -> dict[str, str]:
+    """Every page under ``site/reports`` as it must be on disk: generated index and history pages plus every existing report page with its navigation stamped."""
+    classifications = classify(discover_envelopes(reports_root), reports_root)
+    generated = {INDEX_NAME: render_index(classifications)}
+    for item in classifications:
+        generated[item.history_html] = render_history(item)
+    return stamp_all(reports_root, classifications, generated)
 
 
 def build_index(reports_root: Path) -> str:
@@ -593,7 +721,8 @@ def write_or_check(repo_root: Path, check: bool) -> int:
             except (OSError, UnicodeError) as exc:
                 raise ReportIndexError(f"missing or unreadable generated page: {path}") from exc
             if actual != content:
-                raise ReportIndexError(f"stale generated page: {path}")
+                kind = "generated page" if relative == INDEX_NAME or relative.startswith(HISTORY_DIRECTORY + "/") else "report page navigation"
+                raise ReportIndexError(f"stale {kind}: {path} (run `just reports-index`)")
         if stale:
             raise ReportIndexError(f"stale history pages without a report: {', '.join(stale)}")
         return 0
@@ -601,7 +730,8 @@ def write_or_check(repo_root: Path, check: bool) -> int:
     for relative, content in expected.items():
         path = reports_root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        if not path.is_file() or path.read_text(encoding="utf-8") != content:
+            path.write_text(content, encoding="utf-8")
     for relative in stale:
         (reports_root / relative).unlink()
     return 0
