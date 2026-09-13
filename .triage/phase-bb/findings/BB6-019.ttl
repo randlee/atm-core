@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-019>
+  a triage:Finding ;
+  triage:findingId "BB6-019" ;
+  triage:title "task-store-sqlite.toml boundary manifest doesn't explicitly name record_prompt_handoff/list_prompt_handoffs, contradicting the sprint doc's claim" ;
+  triage:description "quality-mgr BB6-QA-L4-1789275000 (ATM-QA-BB6-003, req-qa), PR #1464 comment, verdict FAIL, 2026-09-13T02:00:00Z. boundaries/atm-storage-rusqlite/task-store-sqlite.toml doesn't name record_prompt_handoff/list_prompt_handoffs explicitly (only the atm-storage manifest does), though the sprint doc claims both manifests list both methods. Ruled genuine by fenix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "quality-mgr BB6-QA-L4-1789275000 (ATM-QA-BB6-003), ruled genuine by fenix" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundaries/atm-storage-rusqlite/task-store-sqlite.toml" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: either add record_prompt_handoff/list_prompt_handoffs explicitly to boundaries/atm-storage-rusqlite/task-store-sqlite.toml to match the sprint doc's claim, or correct the sprint doc's claim to match the manifest's actual coverage. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468)." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-019/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-019/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/task-store-sqlite.toml" ;
+  triage:line 1 ;
+  triage:snippet "doesn't name record_prompt_handoff/list_prompt_handoffs explicitly, though the sprint doc claims both manifests list both methods" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-019/1> .
+
+<urn:atm:triage:worktree/BB6-019/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-016>
+  a triage:Finding ;
+  triage:findingId "BB6-016" ;
+  triage:title "project-plan.md's BB.6=complete edit leaves must_follow dependency BB.5's row at planned, contradicting BB.5's own sprint-doc frontmatter" ;
+  triage:description "quality-mgr BB6-QA-L4-1789275000 (ARCH-001/RBQA-F003, arch-qa + ruthless-boundary-qa, independently confirmed), PR #1464 comment, verdict FAIL, 2026-09-13T02:00:00Z. docs/project-plan.md's own diff for this round flips BB.6's status-table row from planned to complete, but leaves BB.5's row at planned even though BB.5's own sprint-doc frontmatter (docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md:2) says status: complete, and BB.5's code (task_pass.rs rewrite) is confirmed present and consumed by BB.6. BB.6's own sprint doc names BB.5 as a hard must_follow dependency, so the table is now internally self-contradictory about whether that dependency is done. Ruled genuine by fenix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:source "quality-mgr BB6-QA-L4-1789275000 (ARCH-001/RBQA-F003), ruled genuine by fenix" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/project-plan.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: correct BB.5's row in the same status table to complete, matching BB.5's own sprint-doc frontmatter and its code's confirmed presence/consumption by BB.6. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468)." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-016/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-016/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1 ;
+  triage:snippet "BB.6 status flipped to complete while BB.5's row stays planned, contradicting BB.5's own sprint-doc frontmatter (status: complete) and its must_follow relationship to BB.6" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-016/1> .
+
+<urn:atm:triage:worktree/BB6-016/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:orderIndex 1 .

@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-12T19:00:24Z",
-    "end": "2026-09-13T01:17:09Z"
+    "end": "2026-09-13T02:00:00Z"
   },
   "scope": "BB.1 (PR #1438, feature/bb1-transition-templates) and BB.2 (PR #1439, feature/bb2-orchestration-templates-1516) each have one QA-1 round in flight (assigned, no result yet -- verdict/pass/result_* fields are null/empty until quality-mgr reports). BB.3 (PR #1436, feature/bb3-test-procedure-pages) has one QA-1 FAIL round closed and a QA-2 round in flight on the fix-round push (BB3-FIX-R1, cipher, head 8a8b29640). fenix's parallel critical reviews (on BB.1 and BB.3 so far) are not dispatched quality-mgr QA runs; their findings are recorded separately under .triage/phase-bb/findings/ (BB1-001..021, BB3-001..012), correlated with QA findings on the same commit rather than duplicated. Phase BB is orchestrated with plain atm send (codex-orchestration), not graph-orchestration Assignment/Completion events, but .sprints/BB/events.ttl records dev Assignment/Completion events anyway per fenix's ruling so /triage-report's DEV column works.",
   "count_basis": "headline/reviewer",
@@ -508,6 +508,31 @@
       "minor": null,
       "count_basis": "headline/reviewer",
       "evidence": "Dispatch in flight, result not yet reported. quality-mgr queue order: BB6-QA-L4 (#1464, accepted) then BB6-QA-CLI-FIX (#1465)."
+    },
+    {
+      "run_id": "BB6-QA-L4",
+      "aich_sprint": "BB6",
+      "phase_sprint": "BB.6",
+      "pass": false,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-13T00:52:35Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2C4AJTDTCDKXCQY8951HJW1",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB6-QA-L4-1789275000 dispatched by fenix to quality-mgr for PR #1464, pinned head 3aa1954e8 (feature/bb6-docs-prompt-handoffs, BB.6 L4 docs layer).",
+      "result_time_utc": "2026-09-13T02:00:00Z",
+      "result_time_pst": null,
+      "result_message_id": "01M2C5MYCVJ73NEZHDHDY69JT4",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 2,
+      "important": 2,
+      "minor": 3,
+      "count_basis": "headline/reviewer",
+      "evidence": "Deliverables 17/19 (89%) (PR #1464 comment, 2026-09-13T02:00:00Z). Blocking: ARCH-001/RBQA-F003 (project-plan.md BB.6=complete edit leaves must_follow dependency BB.5's row at planned despite BB.5's own sprint-doc frontmatter saying complete, filed BB6-016); ATM-QA-BB6-001 (two sprint-doc-named colima integration tests plus their evidence artifact do not exist anywhere, same class as BB4-001/ATM-QA-002, filed BB6-017). Important: ARCH-002 (new ADR-061 D6 entry omits approving party/channel, filed BB6-018); RBQA-F001 (substring-matched AtmError classification, already fixed via BB6-013/014 on fix/bb6-runtime-qa1, this L4 pin predates that merge, no new dispatch). Minor: ATM-QA-BB6-003 (task-store-sqlite.toml manifest omits record_prompt_handoff/list_prompt_handoffs contrary to sprint-doc claim, filed BB6-019); ATM-QA-BB6-004 (D3 narrative undocuments task_transition Some/task_id None defensive branch, no named test, filed BB6-020); RBQA-F002 (no lint guard against reintroducing RBQA-F001's substring-classification pattern, BB.7 debt noted on BB6-014, not dispatched this phase). Resolved by this round: ATM-QA-BB6-002 (missing schema-reviewer sign-off, satisfied by this round's own schema-reviewer PASS on D5/D6, filed already-closed as BB6-021). All five open items -> solar BB6-FIX-DOCS-QA1-1789280000 on fix/bb6-docs-qa1, cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468). PR #1464 mergeable, CI green, stack #1457 re-registered via gh stack checkout."
     }
   ]
 }

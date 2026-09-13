@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-020>
+  a triage:Finding ;
+  triage:findingId "BB6-020" ;
+  triage:title "D3's narrative doesn't document prompt_handoff_record.rs's defensive branch for task_transition Some + task_id None, and has no named test" ;
+  triage:description "quality-mgr BB6-QA-L4-1789275000 (ATM-QA-BB6-004, req-qa), PR #1464 comment, verdict FAIL, 2026-09-13T02:00:00Z. D3's narrative doesn't document the defensive branch in prompt_handoff_record.rs for task_transition: Some + task_id: None; no named test for it. Ruled genuine by fenix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "quality-mgr BB6-QA-L4-1789275000 (ATM-QA-BB6-004), ruled genuine by fenix" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/prompt_handoff_record.rs; D3 sprint-doc narrative" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: document the task_transition: Some + task_id: None defensive branch in D3's narrative and add a named test exercising it. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468)." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-020/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
+  triage:line 1 ;
+  triage:snippet "defensive branch for task_transition: Some + task_id: None undocumented in D3's narrative, no named test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-020/1> .
+
+<urn:atm:triage:worktree/BB6-020/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:orderIndex 1 .

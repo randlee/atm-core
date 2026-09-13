@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-017>
+  a triage:Finding ;
+  triage:findingId "BB6-017" ;
+  triage:title "Two sprint-doc-named colima integration tests plus their evidence artifact do not exist anywhere in the repository" ;
+  triage:description "quality-mgr BB6-QA-L4-1789275000 (ATM-QA-BB6-001, req-qa, independently confirmed), PR #1464 comment, verdict FAIL, 2026-09-13T02:00:00Z. The sprint doc's Tests section names two Integration (colima) tests -- task_events_shows_ready_reminders_and_started_for_prompted_task_only and disabled_task_reminder_override_yields_no_handoff_and_doctor_finding -- and Acceptance Criterion 1 requires a colima run proving zero prompt_handoff_record_failed lines. Neither test exists anywhere in the repository (confirmed via workspace-wide grep) and no BB.6 colima evidence artifact exists under site/reports/ or reports/colima/. Same defect class already ruled Blocking by fenix for BB4-001/ATM-QA-002 on this phase (in-process fixture substitutes do not satisfy the colima-evidence requirement). Ruled genuine per the BB4-001 precedent, no waiver." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:source "quality-mgr BB6-QA-L4-1789275000 (ATM-QA-BB6-001), ruled genuine per BB4-001 precedent by fenix" ;
+  triage:repeatable false ;
+  triage:sweepScope "colima integration tests (Herdr/hermes testbed); site/reports/, reports/colima/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: implement the two named colima scenarios (task_events_shows_ready_reminders_and_started_for_prompted_task_only, disabled_task_reminder_override_yields_no_handoff_and_doctor_finding) against the hermes testbed and commit their evidence, matching the BB4-001 precedent. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468)." ;
+  triage:relatedFinding "BB4-001" ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-017/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-017/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/sprint-BB.6-runtime-prompt-handoffs.md" ;
+  triage:line 1 ;
+  triage:snippet "task_events_shows_ready_reminders_and_started_for_prompted_task_only and disabled_task_reminder_override_yields_no_handoff_and_doctor_finding do not exist anywhere; no BB.6 colima evidence artifact exists" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-017/1> .
+
+<urn:atm:triage:worktree/BB6-017/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-018>
+  a triage:Finding ;
+  triage:findingId "BB6-018" ;
+  triage:title "New ADR-061 D6 entry omits the approving party/channel that every other approved D6 row names" ;
+  triage:description "quality-mgr BB6-QA-L4-1789275000 (ARCH-002, arch-qa), PR #1464 comment, verdict FAIL, 2026-09-13T02:00:00Z. The new ADR-061 D6 entry ('2026-09-12 -- Phase BB.6 (approved)') breaks from the ledger's established convention -- every other '(approved)' D6 entry names the approving party/channel; this one names neither. Ruled genuine by fenix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "quality-mgr BB6-QA-L4-1789275000 (ARCH-002), ruled genuine by fenix" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/adr/ADR-061 (D6 ledger)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: add the approving party/channel to the '2026-09-12 -- Phase BB.6 (approved)' D6 row to match the format of the other D6 rows. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468)." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-018/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-018/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-061.md" ;
+  triage:line 1 ;
+  triage:snippet "D6 entry '2026-09-12 -- Phase BB.6 (approved)' names neither approving party nor channel, unlike every other approved D6 row" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-018/1> .
+
+<urn:atm:triage:worktree/BB6-018/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:orderIndex 1 .
