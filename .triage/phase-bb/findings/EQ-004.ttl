@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-004>
+  a triage:Finding ;
+  triage:findingId "EQ-004" ;
+  triage:title "phase-bb-plan.md and sprint-BB.4/BB.5 docs overclaim colima coverage 'for every roster shape'" ;
+  triage:description "req-qa, independently confirmed by quality-mgr, BB-EVIDENCE-QA-1789287034 (PR #1483, report 2026-09-13T11:10:00Z), pre-existing upstream doc issue, not introduced by PR #1483. docs/plans/phase-bb/phase-bb-plan.md:201-205 and sprint-BB.4-task-start.md:167 / sprint-BB.5-assignment-write-task-pass.md:161 assert their colima integration lists pass 'for every roster shape', but every colima evidence run (this PR's and all prior committed runs) exercises exactly one fixture roster (hermes, oversight, stub-alpha, stub-beta, tester) -- the exact false-generalization pattern feedback_integration_tests_cover_every_roster_shape flags. The evidence artifacts in PR #1483 do not themselves repeat the false claim; they are being used to close phase-acceptance language that overclaims." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "req-qa, verified by quality-mgr, BB-EVIDENCE-QA-1789287034" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/plans/phase-bb/phase-bb-plan.md:201-205; docs/plans/phase-bb/sprint-BB.4-task-start.md:167; docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md:161" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, not blocking merge -- a pre-existing wording overclaim, not a functional defect; the actual colima evidence (BB.4/BB.5/BB.6) is genuinely clean against the one fixture roster exercised. Spans both BB.4 and BB.5 docs plus the phase-level plan doc; foundIn attributed to BB4 (listed first in fenix's citation) with BB5's sprint doc covered by the same fix. Fix dispatched by fenix: solar -- wording states the one shape actually exercised (no new fixture shapes added in Phase BB), fix/bb-evidence-findings from origin/integrate/phase-bb." ;
+  triage:foundIn triage:BB4 ;
+  triage:foundAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-004/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-004/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-004/3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/EQ-004/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/phase-bb-plan.md" ;
+  triage:line 201 ;
+  triage:snippet "asserts colima integration lists pass 'for every roster shape'; every committed run exercises exactly one fixture roster (hermes, oversight, stub-alpha, stub-beta, tester)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-004/1> .
+
+<urn:atm:triage:worktree/EQ-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1483, evidence/bb-smoke-1.5.17" ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/EQ-004/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/sprint-BB.4-task-start.md" ;
+  triage:line 167 ;
+  triage:snippet "same 'for every roster shape' overclaim in BB.4's own sprint doc" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-004/2> .
+
+<urn:atm:triage:worktree/EQ-004/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1483, evidence/bb-smoke-1.5.17" ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/EQ-004/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md" ;
+  triage:line 161 ;
+  triage:snippet "same 'for every roster shape' overclaim in BB.5's own sprint doc" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-004/3> .
+
+<urn:atm:triage:worktree/EQ-004/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1483, evidence/bb-smoke-1.5.17" ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:orderIndex 3 .

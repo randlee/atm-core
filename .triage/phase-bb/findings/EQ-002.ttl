@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-002>
+  a triage:Finding ;
+  triage:findingId "EQ-002" ;
+  triage:title "PR #1483 body falsely claimed host smoke thorough 33/33; the evidence has 32 cases" ;
+  triage:description "req-qa, independently confirmed by quality-mgr, BB-EVIDENCE-QA-1789287034 (PR #1483, report 2026-09-13T11:10:00Z). PR body claimed 'Host smoke thorough 33/33 PASS on 1.5.17', but site/reports/smoke/macos/rand-m5.local/20260913T075849269287Z-pid38592-thorough/thorough.json contains exactly 32 case entries (independently re-counted via direct JSON parse and a name: grep, both giving 32). All 32 present cases are PASS at the correct source_revision -- the discrepancy is in the claimed count, not a missing PASS." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "process" ;
+  triage:severity "important" ;
+  triage:source "req-qa, verified by quality-mgr, BB-EVIDENCE-QA-1789287034" ;
+  triage:repeatable false ;
+  triage:sweepScope "PR #1483 body (thorough smoke count claim)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, closed-on-write per fenix -- fenix corrected PR #1483's body from 33/33 to 32/32 immediately, independently confirmed via gh pr view 1483 --json body. No fix branch/dev dispatch needed." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-002/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/EQ-002/1> ;
+  triage:closedAt "2026-09-13T08:37:04Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/EQ-002/1>
+  a triage:Occurrence ;
+  triage:file "PR #1483 (evidence/bb-smoke-1.5.17)" ;
+  triage:line 1 ;
+  triage:snippet "PR body claimed 'Host smoke thorough 33/33 PASS'; thorough.json contains exactly 32 case entries, all PASS" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-002/1> .
+
+<urn:atm:triage:worktree/EQ-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1483, evidence/bb-smoke-1.5.17" ;
+  triage:branch "evidence/bb-smoke-1.5.17" ;
+  triage:headSha "4c57a786d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/EQ-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-13T08:37:04Z"^^xsd:dateTime ;
+  triage:fixCommit "4c57a786d" ;
+  triage:fixBranch "evidence/bb-smoke-1.5.17" ;
+  triage:verifiedInRound "BB-EVIDENCE-QA-1789287034" ;
+  triage:resolutionNote "fenix corrected PR #1483's body from 33/33 to 32/32 (the accurate case count), independently confirmed via gh pr view 1483 --json body. No re-run needed; all 32 present cases were already PASS." .
