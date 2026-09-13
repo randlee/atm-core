@@ -84,9 +84,11 @@ pub struct PromptHandoff {
   (ADR-054 capability count unchanged; stated in the PR body);
   `AsyncTaskLedgerReader` gains
   `async fn list_prompt_handoffs(&self, team: TeamName, task_id: TaskId, deadline: ReadDeadline) -> Result<Vec<PromptHandoff>, ReadLaneError>`
-  (ordered by `at`, then rowid). Boundary manifests
-  `boundaries/atm-storage/task-store.toml` and
-  `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` list both.
+  (ordered by `at`, then rowid). The
+  `boundaries/atm-storage/task-store.toml` manifest explicitly lists
+  `record_prompt_handoff` and `list_prompt_handoffs`.
+  `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` records the SQLite
+  `TaskStore` implementation boundary without naming individual methods.
 
 - [x] D3 — one helper in `crates/atm-http-runtime/src/prompt_handoff_record.rs`
   (new, ≤ 80 lines), `pub(crate)`: both emit paths that can carry a task
