@@ -16,7 +16,7 @@
   triage:source "quality-mgr BB6-QA-L4-1789275000 (ATM-QA-BB6-004), ruled genuine by fenix" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/prompt_handoff_record.rs; D3 sprint-doc narrative" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: document the task_transition: Some + task_id: None defensive branch in D3's narrative and add a named test exercising it. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468). arch-ctm's fix/bb6-handoff-identity first push (2026-09-13T02:14:48Z, @ 113d9021b) also touches this finding. Fenix's ruling (2026-09-13T02:16:38Z): deliberate split, not duplication -- the runtime test task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing lives on arch-ctm's code layer (113d9021b); the D3 narrative citing it lives on solar's docs layer (0d249fa5a). Different files, no rebase collision, nobody re-touches the other's file. Keep both occurrences; close when landing-head QA verifies the test exists and the narrative names it. arch-ctm's code-side developer work complete (2026-09-13T02:38:40Z), frozen final head c86eca234; lint 36/36, tests green. Code-side fixed-pending-QA at c86eca234; docs-side (solar) still tracked separately." ;
@@ -25,15 +25,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/3> ;
-  triage:triageRecordVersion "4" .
+  triage:hasResolution <urn:atm:triage:resolution/BB6-020/1> ;
+  triage:closedAt "2026-09-13T03:09:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "5" .
 
 <urn:atm:triage:occurrence/BB6-020/1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
   triage:line 1 ;
   triage:snippet "defensive branch for task_transition: Some + task_id: None undocumented in D3's narrative, no named test" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-docs-prompt-handoffs" ;
   triage:headSha "3aa1954e8" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-020/1> .
@@ -50,8 +53,8 @@
   triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
   triage:line 1 ;
   triage:snippet "task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing (the code-side test for this branch) added on arch-ctm's layer; deliberate split from solar's docs-layer narrative fix per fenix's ruling, not duplication" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-handoff-identity" ;
   triage:headSha "113d9021b" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-020/2> .
@@ -68,8 +71,8 @@
   triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
   triage:line 1 ;
   triage:snippet "arch-ctm's code-side developer work complete, frozen final head; lint 36/36, tests green; code-side fixed-pending-QA at fix/bb6-handoff-identity @ c86eca234" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-handoff-identity" ;
   triage:headSha "c86eca234" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-020/3> .
@@ -80,3 +83,30 @@
   triage:branch "fix/bb6-handoff-identity" ;
   triage:headSha "c86eca234" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/BB6-020/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
+  triage:line 1 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 3/3 (2026-09-13T03:09:11Z), verified: code at c86eca234 + docs at 11ff6e997 (both ancestors of unified head 0b9b3e4f3). herdr_queue_wake/tests/mod.rs:1467-1504 task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing test present, guard kept as data-integrity check per lead ruling; sprint doc:111-117,176 documents the branch and names the test. Deliberate split confirmed resolved on both layers." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "11ff6e997" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-020/4> .
+
+<urn:atm:triage:worktree/BB6-020/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb6-docs-qa1 (2 commits above unified head 0b9b3e4f3)" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "11ff6e997" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:resolution/BB6-020/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:09:11Z"^^xsd:dateTime ;
+  triage:fixCommit "11ff6e997" ;
+  triage:fixBranch "fix/bb6-docs-qa1" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch3" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 3/3 (2026-09-13T03:09:11Z), verified: code at c86eca234 + docs at 11ff6e997 (both ancestors of unified head 0b9b3e4f3). herdr_queue_wake/tests/mod.rs:1467-1504 task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing test present, guard kept as data-integrity check per lead ruling; sprint doc:111-117,176 documents the branch and names the test. Deliberate split confirmed resolved on both layers." .
