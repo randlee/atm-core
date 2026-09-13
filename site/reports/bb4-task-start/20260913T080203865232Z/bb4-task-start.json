@@ -1,0 +1,547 @@
+{
+  "feature": "bb4-task-start",
+  "generated_at": "2026-09-13T08:02:03.865440Z",
+  "source_revision": "5f2b1bb3d0820dce5aaedf02a5d047379186740e",
+  "container": "hermes-testbed-bb-1517-bb4",
+  "cases": [
+    {
+      "name": "task_start_line_reaches_assigner_at_write_time",
+      "status": "PASS",
+      "task_id": "BB4A-80203865440Z-start",
+      "assigner_was_not_read_until_after_start": true,
+      "assignment": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task assign tester --task-id BB4A-80203865440Z-start --team testbed BB4 immediate start line",
+        "exit_code": 0,
+        "stdout": "assigned BB4A-80203865440Z-start to tester\n",
+        "stderr": ""
+      },
+      "start": {
+        "command": "docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task start BB4A-80203865440Z-start --team testbed BB4 started at write time",
+        "exit_code": 0,
+        "stdout": "started BB4A-80203865440Z-start\n",
+        "stderr": ""
+      },
+      "mailbox": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm list --json",
+        "exit_code": 0,
+        "stdout": "{\n  \"action\": \"list\",\n  \"team\": \"testbed\",\n  \"agent\": \"stub-alpha\",\n  \"selection_mode\": \"actionable\",\n  \"history_collapsed\": false,\n  \"count\": 1,\n  \"rows\": [\n    {\n      \"message_id\": \"01M2CWK93H6G6V142873XTYFAJ\",\n      \"summary\": \"BB4 started at write time\",\n      \"from\": \"tester\",\n      \"timestamp\": \"2026-09-13T08:02:04.017915819Z\",\n      \"read\": false,\n      \"pending_ack\": false,\n      \"task_id\": \"BB4A-80203865440Z-start\"\n    }\n  ],\n  \"bucket_counts\": {\n    \"unread\": 1,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
+        "stderr": ""
+      },
+      "selected_message": {
+        "message_id": "01M2CWK93H6G6V142873XTYFAJ",
+        "summary": "BB4 started at write time",
+        "from": "tester",
+        "timestamp": "2026-09-13T08:02:04.017915819Z",
+        "read": false,
+        "pending_ack": false,
+        "task_id": "BB4A-80203865440Z-start"
+      },
+      "read": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm read --message-id 01M2CWK93H6G6V142873XTYFAJ --team testbed --json",
+        "exit_code": 0,
+        "stdout": "{\n  \"action\": \"read\",\n  \"team\": \"testbed\",\n  \"agent\": \"stub-alpha\",\n  \"selection_mode\": \"actionable\",\n  \"mutation_applied\": true,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"tester\",\n    \"text\": \"BB4 started at write time\",\n    \"timestamp\": \"2026-09-13T08:02:04.017915819Z\",\n    \"read\": false,\n    \"source_team\": \"testbed\",\n    \"summary\": \"BB4 started at write time\",\n    \"message_id\": \"01M2CWK93H6G6V142873XTYFAJ\",\n    \"requires_ack\": false,\n    \"taskId\": \"BB4A-80203865440Z-start\",\n    \"taskOp\": {\n      \"op\": \"start\"\n    }\n  },\n  \"selected_message_id\": \"01M2CWK93H6G6V142873XTYFAJ\",\n  \"match_count\": 1,\n  \"additional_match_count\": 0,\n  \"bucket_counts\": {\n    \"unread\": 1,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
+        "stderr": ""
+      },
+      "observed_task_op": {
+        "op": "start"
+      }
+    },
+    {
+      "name": "task_start_out_of_order_reorders_queue",
+      "status": "PASS",
+      "task_ids_in_assignment_order": [
+        "BB4B-80203865440Z-one",
+        "BB4B-80203865440Z-two",
+        "BB4B-80203865440Z-three"
+      ],
+      "assignments": [
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task assign tester --task-id BB4B-80203865440Z-one --team testbed BB4 queue task 1",
+          "exit_code": 0,
+          "stdout": "assigned BB4B-80203865440Z-one to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task assign tester --task-id BB4B-80203865440Z-two --team testbed BB4 queue task 2",
+          "exit_code": 0,
+          "stdout": "assigned BB4B-80203865440Z-two to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task assign tester --task-id BB4B-80203865440Z-three --team testbed BB4 queue task 3",
+          "exit_code": 0,
+          "stdout": "assigned BB4B-80203865440Z-three to tester\n",
+          "stderr": ""
+        }
+      ],
+      "start": {
+        "command": "docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task start BB4B-80203865440Z-three --team testbed BB4 task three started",
+        "exit_code": 0,
+        "stdout": "started BB4B-80203865440Z-three\n",
+        "stderr": ""
+      },
+      "listing": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task list --all --json",
+        "exit_code": 0,
+        "stdout": "[\n  {\n    \"team\": \"testbed\",\n    \"task_id\": \"BB4B-80203865440Z-three\",\n    \"assignee\": \"tester\",\n    \"assigner\": \"stub-alpha\",\n    \"state\": \"active\",\n    \"position\": 1,\n    \"assignment_message_id\": \"01M2CWK99JR60J0XW3BCW4R02B\",\n    \"description\": \"BB4 queue task 3\",\n    \"assigned_at\": \"2026-09-13T08:02:04.210748829Z\",\n    \"updated_at\": \"2026-09-13T08:02:04.244947520Z\",\n    \"reminder_count\": 0,\n    \"lead_notified_count\": 0\n  },\n  {\n    \"team\": \"testbed\",\n    \"task_id\": \"BB4B-80203865440Z-one\",\n    \"assignee\": \"tester\",\n    \"assigner\": \"stub-alpha\",\n    \"state\": \"assigned\",\n    \"position\": 2,\n    \"assignment_message_id\": \"01M2CWK97HZVSAW3XKATJYWHYW\",\n    \"description\": \"BB4 queue task 1\",\n    \"assigned_at\": \"2026-09-13T08:02:04.145598075Z\",\n    \"updated_at\": \"2026-09-13T08:02:04.145598075Z\",\n    \"reminder_count\": 0,\n    \"lead_notified_count\": 0\n  },\n  {\n    \"team\": \"testbed\",\n    \"task_id\": \"BB4B-80203865440Z-two\",\n    \"assignee\": \"tester\",\n    \"assigner\": \"stub-alpha\",\n    \"state\": \"assigned\",\n    \"position\": 3,\n    \"assignment_message_id\": \"01M2CWK98HWZB5B44XA8V62SS4\",\n    \"description\": \"BB4 queue task 2\",\n    \"assigned_at\": \"2026-09-13T08:02:04.177721848Z\",\n    \"updated_at\": \"2026-09-13T08:02:04.177721848Z\",\n    \"reminder_count\": 0,\n    \"lead_notified_count\": 0\n  }\n]\n",
+        "stderr": ""
+      },
+      "relevant_rows": [
+        {
+          "team": "testbed",
+          "task_id": "BB4B-80203865440Z-three",
+          "assignee": "tester",
+          "assigner": "stub-alpha",
+          "state": "active",
+          "position": 1,
+          "assignment_message_id": "01M2CWK99JR60J0XW3BCW4R02B",
+          "description": "BB4 queue task 3",
+          "assigned_at": "2026-09-13T08:02:04.210748829Z",
+          "updated_at": "2026-09-13T08:02:04.244947520Z",
+          "reminder_count": 0,
+          "lead_notified_count": 0
+        },
+        {
+          "team": "testbed",
+          "task_id": "BB4B-80203865440Z-one",
+          "assignee": "tester",
+          "assigner": "stub-alpha",
+          "state": "assigned",
+          "position": 2,
+          "assignment_message_id": "01M2CWK97HZVSAW3XKATJYWHYW",
+          "description": "BB4 queue task 1",
+          "assigned_at": "2026-09-13T08:02:04.145598075Z",
+          "updated_at": "2026-09-13T08:02:04.145598075Z",
+          "reminder_count": 0,
+          "lead_notified_count": 0
+        },
+        {
+          "team": "testbed",
+          "task_id": "BB4B-80203865440Z-two",
+          "assignee": "tester",
+          "assigner": "stub-alpha",
+          "state": "assigned",
+          "position": 3,
+          "assignment_message_id": "01M2CWK98HWZB5B44XA8V62SS4",
+          "description": "BB4 queue task 2",
+          "assigned_at": "2026-09-13T08:02:04.177721848Z",
+          "updated_at": "2026-09-13T08:02:04.177721848Z",
+          "reminder_count": 0,
+          "lead_notified_count": 0
+        }
+      ]
+    },
+    {
+      "name": "prompted_task_never_started_stays_assigned_and_keeps_reminding",
+      "status": "PASS",
+      "task_id": "BB4C-80203865440Z-reminder",
+      "assignment": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task assign tester --task-id BB4C-80203865440Z-reminder --team testbed BB4 prompted but never started",
+        "exit_code": 0,
+        "stdout": "assigned BB4C-80203865440Z-reminder to tester\n",
+        "stderr": ""
+      },
+      "poll_interval_seconds": 5.0,
+      "snapshots": [
+        {
+          "observed_at": "2026-09-13T08:02:04.434546+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:04.412463971Z",
+            "reminder_count": 0,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:09.479885+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:14.523267+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:19.615315+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:24.779007+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:29.891488+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:34.922190+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:40.068148+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:45.144597+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:50.322902+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:02:55.528544+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:03:00.737702+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:03:05.948855+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:02:06.113299717Z",
+            "last_reminded_at": "2026-09-13T08:02:06.113299717Z",
+            "reminder_count": 1,
+            "lead_notified_count": 0
+          }
+        },
+        {
+          "observed_at": "2026-09-13T08:03:11.158413+00:00",
+          "row": {
+            "team": "testbed",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "assignee": "tester",
+            "assigner": "stub-alpha",
+            "state": "assigned",
+            "position": 1,
+            "assignment_message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "description": "BB4 prompted but never started",
+            "assigned_at": "2026-09-13T08:02:04.412463971Z",
+            "updated_at": "2026-09-13T08:03:06.116568556Z",
+            "last_reminded_at": "2026-09-13T08:03:06.116568556Z",
+            "reminder_count": 2,
+            "lead_notified_count": 0
+          }
+        }
+      ],
+      "reminder_counts_observed": [
+        0,
+        1,
+        2
+      ],
+      "events": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task events BB4C-80203865440Z-reminder --team testbed --json",
+        "exit_code": 0,
+        "stdout": "{\n  \"events\": [\n    {\n      \"actor\": {\n        \"member\": \"stub-alpha\"\n      },\n      \"assignee\": \"tester\",\n      \"at\": \"2026-09-13T08:02:04.412463971Z\",\n      \"event\": \"assigned\",\n      \"message_id\": \"01M2CWK9FWW1J58FARA2YHYHYW\",\n      \"seq\": 1,\n      \"task_id\": \"BB4C-80203865440Z-reminder\",\n      \"team\": \"testbed\",\n      \"to_state\": \"assigned\"\n    },\n    {\n      \"actor\": \"daemon\",\n      \"assignee\": \"tester\",\n      \"at\": \"2026-09-13T08:02:06.113299717Z\",\n      \"event\": \"reminded\",\n      \"from_state\": \"assigned\",\n      \"outcome\": \"emitted\",\n      \"seq\": 2,\n      \"task_id\": \"BB4C-80203865440Z-reminder\",\n      \"team\": \"testbed\",\n      \"to_state\": \"assigned\"\n    },\n    {\n      \"actor\": \"daemon\",\n      \"assignee\": \"tester\",\n      \"at\": \"2026-09-13T08:03:06.116568556Z\",\n      \"event\": \"reminded\",\n      \"from_state\": \"assigned\",\n      \"outcome\": \"emitted\",\n      \"seq\": 3,\n      \"task_id\": \"BB4C-80203865440Z-reminder\",\n      \"team\": \"testbed\",\n      \"to_state\": \"assigned\"\n    }\n  ],\n  \"handoffs\": [\n    {\n      \"agent\": \"tester\",\n      \"at\": \"2026-09-13T08:02:04.412Z\",\n      \"attempt\": 0,\n      \"kind\": \"task_queued\",\n      \"message_key\": \"atm:01M2CWK9FWW1J58FARA2YHYHYW\",\n      \"task_id\": \"BB4C-80203865440Z-reminder\",\n      \"team\": \"testbed\",\n      \"trigger\": \"steer\"\n    },\n    {\n      \"agent\": \"tester\",\n      \"at\": \"2026-09-13T08:02:06.113299717Z\",\n      \"attempt\": 0,\n      \"kind\": \"task_ready\",\n      \"message_key\": \"atm:01M2CWK9FWW1J58FARA2YHYHYW\",\n      \"task_id\": \"BB4C-80203865440Z-reminder\",\n      \"team\": \"testbed\",\n      \"trigger\": \"task_pass\"\n    },\n    {\n      \"agent\": \"tester\",\n      \"at\": \"2026-09-13T08:03:06.116568556Z\",\n      \"attempt\": 1,\n      \"kind\": \"task_reminder\",\n      \"message_key\": \"atm:01M2CWK9FWW1J58FARA2YHYHYW\",\n      \"task_id\": \"BB4C-80203865440Z-reminder\",\n      \"team\": \"testbed\",\n      \"trigger\": \"task_pass\"\n    }\n  ]\n}\n",
+        "stderr": ""
+      },
+      "event_rows": {
+        "events": [
+          {
+            "actor": {
+              "member": "stub-alpha"
+            },
+            "assignee": "tester",
+            "at": "2026-09-13T08:02:04.412463971Z",
+            "event": "assigned",
+            "message_id": "01M2CWK9FWW1J58FARA2YHYHYW",
+            "seq": 1,
+            "task_id": "BB4C-80203865440Z-reminder",
+            "team": "testbed",
+            "to_state": "assigned"
+          },
+          {
+            "actor": "daemon",
+            "assignee": "tester",
+            "at": "2026-09-13T08:02:06.113299717Z",
+            "event": "reminded",
+            "from_state": "assigned",
+            "outcome": "emitted",
+            "seq": 2,
+            "task_id": "BB4C-80203865440Z-reminder",
+            "team": "testbed",
+            "to_state": "assigned"
+          },
+          {
+            "actor": "daemon",
+            "assignee": "tester",
+            "at": "2026-09-13T08:03:06.116568556Z",
+            "event": "reminded",
+            "from_state": "assigned",
+            "outcome": "emitted",
+            "seq": 3,
+            "task_id": "BB4C-80203865440Z-reminder",
+            "team": "testbed",
+            "to_state": "assigned"
+          }
+        ],
+        "handoffs": [
+          {
+            "agent": "tester",
+            "at": "2026-09-13T08:02:04.412Z",
+            "attempt": 0,
+            "kind": "task_queued",
+            "message_key": "atm:01M2CWK9FWW1J58FARA2YHYHYW",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "team": "testbed",
+            "trigger": "steer"
+          },
+          {
+            "agent": "tester",
+            "at": "2026-09-13T08:02:06.113299717Z",
+            "attempt": 0,
+            "kind": "task_ready",
+            "message_key": "atm:01M2CWK9FWW1J58FARA2YHYHYW",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "team": "testbed",
+            "trigger": "task_pass"
+          },
+          {
+            "agent": "tester",
+            "at": "2026-09-13T08:03:06.116568556Z",
+            "attempt": 1,
+            "kind": "task_reminder",
+            "message_key": "atm:01M2CWK9FWW1J58FARA2YHYHYW",
+            "task_id": "BB4C-80203865440Z-reminder",
+            "team": "testbed",
+            "trigger": "task_pass"
+          }
+        ]
+      },
+      "started_events": []
+    }
+  ],
+  "container_image": "sha256:a5bf8c79a74f8cedb32d646a86b22ced5e8cb766ecbe60bff5d294b0239f93b5",
+  "atm_version": {
+    "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm --version",
+    "exit_code": 0,
+    "stdout": "atm 1.5.17\n",
+    "stderr": ""
+  },
+  "roster": [
+    "hermes",
+    "oversight",
+    "stub-alpha",
+    "stub-beta",
+    "tester"
+  ],
+  "cleanup": [
+    {
+      "task_id": "BB4A-80203865440Z-start",
+      "result": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task close BB4A-80203865440Z-start cancelled BB4 smoke cleanup",
+        "exit_code": 0,
+        "stdout": "closed BB4A-80203865440Z-start (cancelled)\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "BB4B-80203865440Z-one",
+      "result": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task close BB4B-80203865440Z-one cancelled BB4 smoke cleanup",
+        "exit_code": 0,
+        "stdout": "closed BB4B-80203865440Z-one (cancelled)\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "BB4B-80203865440Z-two",
+      "result": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task close BB4B-80203865440Z-two cancelled BB4 smoke cleanup",
+        "exit_code": 0,
+        "stdout": "closed BB4B-80203865440Z-two (cancelled)\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "BB4B-80203865440Z-three",
+      "result": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task close BB4B-80203865440Z-three cancelled BB4 smoke cleanup",
+        "exit_code": 0,
+        "stdout": "closed BB4B-80203865440Z-three (cancelled)\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "BB4C-80203865440Z-reminder",
+      "result": {
+        "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb4 atm task close BB4C-80203865440Z-reminder cancelled BB4 smoke cleanup",
+        "exit_code": 0,
+        "stdout": "closed BB4C-80203865440Z-reminder (cancelled)\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "status": "PASS"
+}
