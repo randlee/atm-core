@@ -11,6 +11,7 @@
 repository = "https://github.com/randlee/sc-publish"
 # The org-blessed, consumer-qualified kit revision (full 40-character SHA).
 revision = "25668ecc164261be676c9414c4f603b18ab74c91"
-# Prerelease kit files are temporarily vendored from unmerged sc-publish PR #90
-# at cd6c52d477d01991e4f2fb90ae853816e2c429c2. Before this PR merges, land #90
-# and advance this revision to its merge commit; the qualified pin above remains authoritative.
+# The consumer tree is an unchanged installer output of sc-publish 5da1f71db
+# (dry-run clean there). The three prerelease kit files are adopted from
+# sc-publish #93 merge commit 390cc9ff1a93d0be509227adc1c6c27ef526ec75.
+# The full pin advance to sc-publish main is tracked in atm-core issue #1486.

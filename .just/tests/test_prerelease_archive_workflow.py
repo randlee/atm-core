@@ -37,6 +37,13 @@ def workflow_text(name: str) -> str:
     return (discover_repo_root() / ".github" / "workflows" / name).read_text(encoding="utf-8")
 
 
+def prerelease_script():
+    return load_script(
+        "atm_prerelease_wait_helper",
+        discover_repo_root() / ".claude" / "skills" / "prerelease" / "scripts" / "prerelease.py",
+    )
+
+
 def packaging_script(workflow: str, step_name: str) -> str:
     """Extract the Python heredoc used to package one release archive."""
     step = workflow.split(f"      - name: {step_name}\n", 1)[1].split("\n      - name:", 1)[0]
@@ -48,6 +55,83 @@ def packaging_script(workflow: str, step_name: str) -> str:
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
+    def test_wait_for_archive_returns_after_a_successful_run(self) -> None:
+        prerelease = prerelease_script()
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        def monotonic() -> float:
+            return clock[0]
+
+        def sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        with (
+            mock.patch.object(prerelease, "gh_json", side_effect=[[], [{
+                "headSha": "source-sha",
+                "status": "completed",
+                "conclusion": "success",
+            }]]) as gh_json,
+            mock.patch.object(prerelease.time, "monotonic", side_effect=monotonic),
+            mock.patch.object(prerelease.time, "sleep", side_effect=sleep),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            prerelease.wait_for_archive("prerelease/v1.5.17", "source-sha")
+
+        self.assertEqual(gh_json.call_count, 2)
+        self.assertEqual(sleeps, [60])
+        self.assertEqual(
+            stdout.getvalue().splitlines(),
+            [
+                "waiting for prerelease-archive.yml (0.0 min elapsed)",
+                "waiting for prerelease-archive.yml (1.0 min elapsed)",
+            ],
+        )
+
+    def test_wait_for_archive_raises_for_a_failed_run(self) -> None:
+        prerelease = prerelease_script()
+
+        with (
+            mock.patch.object(prerelease, "gh_json", return_value=[{
+                "headSha": "source-sha",
+                "status": "completed",
+                "conclusion": "failure",
+            }]),
+            mock.patch.object(prerelease.time, "monotonic", return_value=0.0),
+            mock.patch.object(prerelease.time, "sleep") as sleep,
+        ):
+            with self.assertRaisesRegex(SystemExit, "prerelease-archive.yml failed for prerelease/v1.5.17"):
+                prerelease.wait_for_archive("prerelease/v1.5.17", "source-sha")
+
+        sleep.assert_not_called()
+
+    def test_wait_for_archive_raises_after_twenty_minutes_without_real_sleep(self) -> None:
+        prerelease = prerelease_script()
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        def monotonic() -> float:
+            return clock[0]
+
+        def sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        with (
+            mock.patch.object(prerelease, "gh_json", return_value=[]),
+            mock.patch.object(prerelease.time, "monotonic", side_effect=monotonic),
+            mock.patch.object(prerelease.time, "sleep", side_effect=sleep),
+        ):
+            with self.assertRaisesRegex(
+                SystemExit,
+                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.17 after 20.0 minutes",
+            ):
+                prerelease.wait_for_archive("prerelease/v1.5.17", "source-sha")
+
+        self.assertEqual(clock, [20 * 60])
+        self.assertEqual(sleeps, [60] * 20)
+
     def test_consumer_input_is_the_prerelease_manifest_source_of_truth(self) -> None:
         root = discover_repo_root()
         source = json.loads(
