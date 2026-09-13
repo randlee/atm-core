@@ -365,6 +365,10 @@ fn assert_required_properties_are_serialized(
         .strip_prefix("#/components/schemas/")
         .expect("documented 200 schema must reference a component");
     let schema = &document["components"]["schemas"][schema_name];
+    assert!(
+        schema.is_object(),
+        "documented 200 schema {schema_name:?} must be defined"
+    );
     for property in required(schema) {
         assert!(
             emitted.get(&property).is_some(),
