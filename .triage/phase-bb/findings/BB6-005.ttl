@@ -19,12 +19,13 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: replace the anyhow string errors at task.rs:289-301 and :404-410 with structured AtmErrorCode::TaskNotFound, matching the crate's existing error convention. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. Fixed by solar's second commit (catalog-backed TaskNotFound/TaskNotCounterparty + per-command JSON code tests), pushed to fix/bb6-cli-qa1 @ 8086e5362 (2026-09-13T00:45:06Z, per fenix). Fixed-pending-QA." ;
+  triage:deferredNote "Fix: replace the anyhow string errors at task.rs:289-301 and :404-410 with structured AtmErrorCode::TaskNotFound, matching the crate's existing error convention. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. Fixed by solar's second commit (catalog-backed TaskNotFound/TaskNotCounterparty + per-command JSON code tests), pushed to fix/bb6-cli-qa1 @ 8086e5362 (2026-09-13T00:45:06Z, per fenix). Fixed-pending-QA. BB6-FIX-CLI-QA1-1789270000 complete and self-validated by solar (2026-09-13T01:10:38Z) at fix/bb6-cli-qa1 final head adda7e3f9, parent 3aa1954e8 (BB6 L4 final); closing-triage tasklist confirms implementation commit 8086e536. Fixed-pending-QA at adda7e3f9." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/3> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB6-005/1>
   a triage:Occurrence ;
@@ -61,3 +62,21 @@
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "8086e5362" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB6-005/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task.rs" ;
+  triage:line 289 ;
+  triage:snippet "BB6-FIX-CLI-QA1 complete and self-validated; fixed-pending-QA at fix/bb6-cli-qa1 final head adda7e3f9" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "adda7e3f9" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-005/3> .
+
+<urn:atm:triage:worktree/BB6-005/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1465, fix/bb6-cli-qa1" ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "adda7e3f9" ;
+  triage:orderIndex 3 .

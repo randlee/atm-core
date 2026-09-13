@@ -19,11 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add #[serde(skip_serializing_if = \"Vec::is_empty\")] to the handoffs field at list.rs:196-201, matching its sibling collection fields. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c." ;
+  triage:deferredNote "Fix: add #[serde(skip_serializing_if = \"Vec::is_empty\")] to the handoffs field at list.rs:196-201, matching its sibling collection fields. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. BB6-FIX-CLI-QA1-1789270000 complete and self-validated by solar (2026-09-13T01:10:38Z); implementation commit 78647d54. Final layer head fix/bb6-cli-qa1 @ adda7e3f9, parent 3aa1954e8 (BB6 L4 final). Fixed-pending-QA at adda7e3f9." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-010/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-010/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-010/1>
   a triage:Occurrence ;
@@ -42,3 +43,21 @@
   triage:branch "feature/bb6-cli-prompt-handoffs" ;
   triage:headSha "40ccd403e" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-010/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/list.rs" ;
+  triage:line 196 ;
+  triage:snippet "BB6-FIX-CLI-QA1 complete and self-validated (implementation commit 78647d54); fixed-pending-QA at fix/bb6-cli-qa1 final head adda7e3f9" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "adda7e3f9" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-010/2> .
+
+<urn:atm:triage:worktree/BB6-010/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1465, fix/bb6-cli-qa1" ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "adda7e3f9" ;
+  triage:orderIndex 2 .
