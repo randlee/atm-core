@@ -30,9 +30,15 @@ happen elsewhere, after you push.
 - `.claude/skills/closing-triage/scripts/query_open_findings.py` is reachable
   (present on this branch, or merged forward from wherever it landed).
 - `rdflib` is installed (`pip install rdflib`) — required by the query script.
-- Exactly one sibling `integrate/*` worktree exists — the query script
-  auto-discovers it via `git worktree list`. Pass `--integration-root` only
-  if discovery reports zero or multiple candidates.
+- A sibling `integrate/*` worktree exists — the query script auto-discovers
+  it via `git worktree list`. With several integration worktrees, `--phase`
+  selects the one on `integrate/phase-<phase>`; pass `--integration-root`
+  only if discovery still reports zero or multiple candidates.
+- You know your sprint id when your branch is a stacked layer. A phase
+  structure declares one `triage:branch` per sprint, but an append-only stack
+  cuts every fix round as a new branch above it, and those branches are never
+  declared. Your assignment names the sprint (`--sprint BB6`); without it the
+  query fails closed for an undeclared branch.
 
 ## Why the loop needs a local task list
 
@@ -81,19 +87,27 @@ Run the canonical query once:
 BRANCH="$(git branch --show-current)"
 python3 /path/to/.claude/skills/closing-triage/scripts/query_open_findings.py \
   --branch "$BRANCH" \
+  --sprint <SPRINT-ID> --phase <PHASE> \
   --json
 ```
+
+`--sprint` is the sprint's local name in the phase structure (`BB6`, the
+`triage:foundIn` of its findings) and is what scopes the query on a stacked
+layer; `--phase` is the phase's local name (`BB`). Both come from your
+assignment. Omit `--sprint` only on a branch the phase structure declares.
 
 Run this from your sprint worktree — do not move to the integrate worktree.
 The script auto-discovers the sibling `integrate/*` worktree via
 `git worktree list` and queries its triage store, never a sprint worktree's
-own (potentially stale) copy. It maps your branch to its declaring sprint
-via the phase structure, so results are scoped to findings **found in your
-own sprint** (`triage:foundIn`): findings from earlier sprints whose
+own (potentially stale) copy. It scopes results to findings **found in your
+own sprint** (`triage:foundIn`), the sprint named by `--sprint` or, on a
+declared branch, the one the phase structure maps your branch to: findings from earlier sprints whose
 defects also exist in your checkout are the upstream developer's work and
-arrive fixed via merge — never fix them here. Pass `--integration-root`
-only if worktree auto-discovery reports ambiguity, and `--phase` only if
-your branch is declared in more than one phase structure.
+arrive fixed via merge — never fix them here. A finding the store already
+records as closed (a terminal `triage:status`, `triage:closed true`, or a
+`triage:Resolution`) is never returned, even when a stale open occurrence
+still sits beneath it. Pass `--integration-root` only if worktree
+auto-discovery still reports ambiguity with `--phase` given.
 
 Diff the result against your task list by `finding_id`: for every finding in
 the query result that is **not already present** in your task list (under

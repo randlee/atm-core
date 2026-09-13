@@ -33,6 +33,15 @@ Usage (from your sprint worktree; integrate worktree is auto-discovered):
     python3 query_open_findings.py --branch feature/pAJ-s6-runtime-observation-snapshot
     python3 query_open_findings.py --branch <name> --integration-root /path/to/integrate-worktree
     python3 query_open_findings.py --branch <name> --phase AJ --json
+    python3 query_open_findings.py --branch fix/bb6-cli-qa2 --sprint BB6 --phase BB --json
+
+Stacked layers: a phase structure declares one ``triage:branch`` per sprint,
+but an append-only stack cuts every fix round as a new branch above it.
+Those branches are never declared, so pass ``--sprint <sprint local name>``
+(the ``triage:<ID>`` the findings' ``triage:foundIn`` points at, e.g.
+``BB6``) to select the sprint directly; ``--branch`` then only labels the
+output. ``--phase`` also picks the matching ``integrate/phase-<phase>``
+worktree when several integration worktrees exist.
 """
 
 from __future__ import annotations
@@ -79,16 +88,39 @@ def _current_branch(cwd: Path) -> str:
     return _git(cwd, "branch", "--show-current")
 
 
-def resolve_integration_root(explicit_root: Path | None, cwd: Path) -> Path:
+def choose_integration_candidate(
+    candidates: list[tuple[Path, str]], phase: str | None
+) -> Path | None:
+    """Pick the one integration worktree to query, or None when ambiguous.
+
+    Exactly one candidate wins outright. With several, ``phase`` selects the
+    worktree on ``integrate/phase-<phase>`` (case-insensitive) when exactly
+    one candidate matches; anything else stays ambiguous.
+    """
+    if len(candidates) == 1:
+        return candidates[0][0]
+    if phase is None:
+        return None
+    wanted = f"integrate/phase-{phase.removeprefix('phase-').lower()}"
+    matching = [path for path, branch in candidates if branch.lower() == wanted]
+    if len(matching) == 1:
+        return matching[0]
+    return None
+
+
+def resolve_integration_root(
+    explicit_root: Path | None, cwd: Path, phase: str | None = None
+) -> Path:
     """Return a worktree root whose branch begins with 'integrat'.
 
     Findings only live in integration worktrees (branch prefix ``integrat``,
     matching both integrate/* and integration/*). Resolution order:
     1. An explicit --integration-root (validated to be on an integrat* branch).
     2. The current worktree, if it is already on an integrat* branch.
-    3. Auto-discovery via ``git worktree list --porcelain``: succeeds only if
-       exactly one worktree of this repo is on an integrat* branch; zero or
-       multiple candidates fail closed and require --integration-root.
+    3. Auto-discovery via ``git worktree list --porcelain``: succeeds if
+       exactly one worktree of this repo is on an integrat* branch, or if
+       ``phase`` names exactly one of several (``integrate/phase-<phase>``);
+       anything else fails closed and requires --integration-root.
     A sprint worktree's own (potentially stale) triage copy is never queried.
     """
     if explicit_root is not None:
@@ -129,15 +161,16 @@ def resolve_integration_root(explicit_root: Path | None, cwd: Path) -> Path:
             ):
                 candidates.append((current_path, current_branch))
             current_path = current_branch = None
-    if len(candidates) != 1:
+    chosen = choose_integration_candidate(candidates, phase)
+    if chosen is None:
         names = ", ".join(f"{path} ({br})" for path, br in candidates) or "none"
         raise QueryError(
             f"current branch {branch!r} does not begin with 'integrat' and "
             f"auto-discovery found {len(candidates)} integration worktree(s) "
-            f"({names}); pass --integration-root /path/to/integrate-worktree "
-            "to name one explicitly."
+            f"({names}); pass --phase <PHASE> to select integrate/phase-<phase>, "
+            "or --integration-root /path/to/integrate-worktree to name one explicitly."
         )
-    return candidates[0][0]
+    return chosen
 
 
 def _branch_from_criteria(criteria: str) -> str | None:
@@ -157,17 +190,22 @@ def _branch_from_criteria(criteria: str) -> str | None:
 
 
 def _sprint_for_branch(
-    root: Path, branch: str, requested_phase: str | None
+    root: Path,
+    branch: str,
+    requested_phase: str | None,
+    sprint_id: str | None = None,
 ) -> tuple[str, Path, "URIRef"]:
-    """Map the sprint branch to its declaring phase and sprint IRI.
+    """Map the sprint branch (or an explicit sprint id) to its phase and IRI.
 
     Scans ``.sprints/*/structure.ttl`` for a ``triage:Sprint`` whose
     ``triage:branch`` (or branch derived from its criteria filename, for
     older phases without an explicit branch) equals the requested branch.
-    Exactly one match is required across the searched phases; anything else
-    fails closed. This mapping is what scopes results to the branch's own
-    sprint (``triage:foundIn``) rather than to every finding whose defect
-    happens to occur on the branch's checkout.
+    With ``sprint_id`` the sprint whose IRI local name equals it is selected
+    instead, so a stacked fix layer that no structure declares still scopes
+    to its sprint. Exactly one match is required across the searched phases;
+    anything else fails closed. This mapping is what scopes results to the
+    branch's own sprint (``triage:foundIn``) rather than to every finding
+    whose defect happens to occur on the branch's checkout.
     """
     sprints_dir = root / ".sprints"
     if requested_phase:
@@ -189,6 +227,10 @@ def _sprint_for_branch(
         except Exception as exc:  # noqa: BLE001 - convert parser failures
             raise QueryError(f"{structure_path}: malformed Turtle ({exc})") from exc
         for sprint in structure.subjects(RDF.type, TRIAGE.Sprint):
+            if sprint_id is not None:
+                if str(sprint) == str(TRIAGE[sprint_id]):
+                    matches.append((phase_path.name, phase_path, sprint))
+                continue
             declared = [str(value) for value in structure.objects(sprint, TRIAGE.branch)]
             if branch in declared:
                 matches.append((phase_path.name, phase_path, sprint))
@@ -199,13 +241,44 @@ def _sprint_for_branch(
     if len(matches) != 1:
         searched = ", ".join(path.name for path in candidates)
         found = ", ".join(f"{phase}:{sprint}" for phase, _, sprint in matches) or "none"
+        subject = f"sprint {sprint_id!r}" if sprint_id is not None else f"branch {branch!r}"
         raise QueryError(
-            f"branch {branch!r} must map to exactly one declared sprint; searched "
+            f"{subject} must map to exactly one declared sprint; searched "
             f"phase(s) [{searched}] under {sprints_dir} and found {len(matches)} "
             f"({found}). Is this branch part of the current integration phase? "
-            "Pass --phase to narrow the search, or fix the phase structure."
+            "Pass --phase to narrow the search, --sprint <ID> when this branch is a "
+            "stacked layer the structure does not declare, or fix the phase structure."
         )
     return matches[0]
+
+
+TERMINAL_STATUSES = frozenset(
+    {
+        "absent", "accepted", "closed", "dismissed", "false_positive",
+        "fixed", "fixed-ci-green", "inherited-fix", "invalid", "merged", "waived",
+    }
+)
+
+
+def is_closed_finding(graph: "Graph", finding: "URIRef") -> bool:
+    """True when the store records the finding as closed in any accepted form.
+
+    Closure is written three ways in practice: a terminal ``triage:status``
+    (sometimes appended next to the original ``"open"`` rather than replacing
+    it, which leaves two status values on one finding), ``triage:closed
+    true`` on the finding, or a ``triage:Resolution`` that ``triage:resolves``
+    it. The shared SPARQL sees one row per status value, so a finding carrying
+    both ``"open"`` and ``"fixed"`` still yields an open row; this check reads
+    every closure signal so a fixed finding is never handed back to a
+    developer as work.
+    """
+    for status in graph.objects(finding, TRIAGE.status):
+        if str(status).strip().lower() in TERMINAL_STATUSES:
+            return True
+    for closed in graph.objects(finding, TRIAGE.closed):
+        if str(closed).strip().lower() == "true":
+            return True
+    return any(True for _ in graph.subjects(TRIAGE.resolves, finding))
 
 
 def _graph_runner(script_dir: Path):
@@ -233,11 +306,12 @@ def query_open_findings(
     branch: str,
     phase: str | None,
     script_dir: Path,
+    sprint_id: str | None = None,
 ) -> list[dict[str, Any]]:
     if _RDFLIB_ERROR:
         raise QueryError(f"rdflib is required; install it with pip install rdflib ({_RDFLIB_ERROR})")
 
-    phase_name, phase_path, sprint = _sprint_for_branch(root, branch, phase)
+    phase_name, phase_path, sprint = _sprint_for_branch(root, branch, phase, sprint_id)
     runner = _graph_runner(script_dir)
     try:
         source = runner.resolve_phase_source(phase_name, str(phase_path))
@@ -267,8 +341,12 @@ def query_open_findings(
     # then important, then minor; invalid severities sort first, fail-closed)
     # and, within a severity, by foundAt. Preserve that order as-is.
     findings: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for row in rows:
         finding_uri, finding_id, severity, raw_severity, status, found_at, description = row
+        if str(finding_uri) in seen or is_closed_finding(graph, finding_uri):
+            continue
+        seen.add(str(finding_uri))
         findings.append(
             {
                 "finding": str(finding_uri),
@@ -316,12 +394,20 @@ def main(argv: list[str] | None = None) -> int:
         help="phase name (e.g. AJ); narrows the branch-to-sprint search when the "
         "branch is declared in more than one phase structure (normally auto-detected)",
     )
+    parser.add_argument(
+        "--sprint",
+        default=None,
+        help="sprint local name (e.g. BB6) to scope by directly; required for a "
+        "stacked fix layer whose branch no phase structure declares",
+    )
     parser.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     args = parser.parse_args(argv)
 
     try:
-        root = resolve_integration_root(args.integration_root, Path.cwd())
-        findings = query_open_findings(root, args.branch, args.phase, Path(__file__).parent)
+        root = resolve_integration_root(args.integration_root, Path.cwd(), args.phase)
+        findings = query_open_findings(
+            root, args.branch, args.phase, Path(__file__).parent, args.sprint
+        )
     except QueryError as exc:
         payload = {"kind": "error", "message": str(exc)}
         if args.json:
