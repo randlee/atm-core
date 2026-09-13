@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-BB-001>
+  a triage:Finding ;
+  triage:findingId "QA-BB-001" ;
+  triage:title "BB6-028's log_failure() outcome= fix has no regression-test coverage in storage_and_nudge_router.rs" ;
+  triage:description "rust-qa-agent, BB-GATE-RERUN-1789285688 (phase-ending gate re-run, PR #1477, report 2026-09-13T10:40:00Z), fenix-verified at integrate/phase-bb @ 4cb8be1ce. BB6-028's fix added outcome = \"failed\" to prompt_handoff_record.rs's log_failure() tracing::error! call (confirmed present at line 88), but the Rust test harness that asserts this log call's fields (PromptHandoffErrorFields/PromptHandoffErrorEvent in crates/atm-http-runtime/src/storage_and_nudge_router.rs:1183-1224, and assert_prompt_handoff_error() :2138-2150) does not capture or assert an outcome field at all -- independently confirmed by direct read: the struct's 8 captured fields (subsystem/action/reason/message_id/kind/trigger/error_code/error) omit outcome. Same class of gap as the already-fixed BB6-029 (doc/smoke test with zero regression protection): the code fix is correct, but nothing in the automated Rust suite would catch a regression if outcome were dropped again." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "phase_end" ;
+  triage:category "testing" ;
+  triage:severity "important" ;
+  triage:source "rust-qa-agent, verified by quality-mgr, BB-GATE-RERUN-1789285688 phase-ending gate re-run" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/storage_and_nudge_router.rs:1183-1224 (PromptHandoffErrorFields/PromptHandoffErrorEvent), ~2138-2151 (assert_prompt_handoff_error)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, not a reopening of the closed BB6-028 (the code fix itself remains correct and verified) -- a new, narrower regression-coverage gap in the same fix. Filed as its own record so the two stay individually accountable, same pattern used for BB6-028 vs BB6-026." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-BB-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-BB-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1183 ;
+  triage:snippet "PromptHandoffErrorFields/PromptHandoffErrorEvent's 8 captured fields (subsystem/action/reason/message_id/kind/trigger/error_code/error) omit outcome; assert_prompt_handoff_error() (:2138-2150) does not assert it either" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4cb8be1ce" ;
+  triage:occursIn <urn:atm:triage:worktree/QA-BB-001/1> .
+
+<urn:atm:triage:worktree/QA-BB-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4cb8be1ce" ;
+  triage:orderIndex 1 .

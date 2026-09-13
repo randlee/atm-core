@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-BB-GATE2-002>
+  a triage:Finding ;
+  triage:findingId "RBQA-BB-GATE2-002" ;
+  triage:title "test_dispatch_template_parity.py's STALE_SEQUENCE lint has a gap that let AGENTS.md's stale ack/work/task-close text slip through" ;
+  triage:description "ruthless-boundary-qa, BB-GATE-RERUN-1789285688 (phase-ending gate re-run, PR #1477, report 2026-09-13T10:40:00Z), fenix-verified at integrate/phase-bb @ 4cb8be1ce. .just/tests/test_dispatch_template_parity.py:28-33's STALE_SEQUENCE regex does not match the 'ack, work, task close' wording, so the guard missed AGENTS.md even though SEQUENCE_DOC_ROOTS already lists it -- the automated guard meant to catch exactly this pattern (see BB7-TEMPLATE-CONTRADICTION-001 occurrence 30) has a gap in its own regex, not its file scope." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "phase_end" ;
+  triage:category "tooling" ;
+  triage:severity "minor" ;
+  triage:source "ruthless-boundary-qa, verified by quality-mgr, BB-GATE-RERUN-1789285688 phase-ending gate re-run" ;
+  triage:repeatable false ;
+  triage:sweepScope ".just/tests/test_dispatch_template_parity.py:28-33 (STALE_SEQUENCE lint)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, companion fix to BB7-TEMPLATE-CONTRADICTION-001 occurrence 30 -- widening the STALE_SEQUENCE regex alongside the AGENTS.md text fix closes both the symptom and the detection gap in one fix round." ;
+  triage:foundIn triage:BB7 ;
+  triage:foundAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BB-GATE2-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-BB-GATE2-002/1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_dispatch_template_parity.py" ;
+  triage:line 28 ;
+  triage:snippet "STALE_SEQUENCE regex (28-33) does not match the 'ack, work, task close' wording, so it missed AGENTS.md's occurrence even though SEQUENCE_DOC_ROOTS already lists it" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4cb8be1ce" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-BB-GATE2-002/1> .
+
+<urn:atm:triage:worktree/RBQA-BB-GATE2-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4cb8be1ce" ;
+  triage:orderIndex 1 .
