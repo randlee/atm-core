@@ -123,7 +123,7 @@ States: `assigned`, `active`, `complete`. Events: `Assigned`, `Started`,
 | --- | --- | --- | --- |
 | ∅ | assigned | reject | reject |
 | assigned | assigned (resend) — no event | active; reject when another task is active for the assignee | complete |
-| active | active (resend) — no event | active | complete |
+| active | active (resend) — no event | reject `ATM_TASK_ALREADY_ACTIVE` (`task <id> is already active`); the write fails and nothing is delivered; one state-neutral `rejected` event is appended | complete |
 | complete | assign reopens the same id | reject | no transition; deliver and inform already complete |
 
 `Started` notifies the assigner. `Completed(outcome)` dequeues the task (no
@@ -131,10 +131,32 @@ further reminders) and appends one timestamped event carrying the outcome;
 these are two facts recorded together. A close that fails never discards the
 carried message.
 
-Phase BA R1 is decided: `Started` is applied when the runtime hands the head
-task's deferred assignment or reminder nudge to an `Idle` member. The daemon is
-the actor and sends the `task_started` receipt to the assigner; there is no
-public `start` command.
+**Phase BB amendment (2026-09-12).** BA R1 is superseded. `Started` is applied
+only by the assignee through `atm task start <id> [message]`
+(`WriteRequest.task_op = Start`). Its event actor is always the assignee
+(`TaskActor::Member`), never the daemon. Any `assigned` position may be
+started; the task moves to the head. A prompt (`task_ready`,
+`task_reminder`) never transitions a task; a task that is prompted and never
+started stays `assigned` and keeps its reminder count. The daemon writes no
+`task_started` receipt; the assigner sees the assignee's start message rendered
+as `task_started`.
+
+### Prompt handoffs (Phase BB)
+
+`prompt_handoffs` is a task-ledger audit table for successfully emitted,
+task-linked prompts. Each row retains the team, recipient, message key,
+template kind, task id, attempt, trigger, and emission timestamp. It has two
+triggers: `steer` for an immediate send's receiver prompt and `task_pass` for
+the reminder pump. Those are the only two task-linked prompt emitters; queue
+claim and queue drain cannot receive a task link after BB.5 (plan P13).
+
+The emitter writes the handoff after the sink reports success. Recording is
+best effort: a storage, timeout, or saturation failure logs one structured
+`prompt_handoff_record_failed` error and neither fails nor retries the already
+successful emission (plan P11). Non-task messages write no handoff (plan P10),
+so this extends the existing task-ledger capability rather than adding a new
+ADR-054 capability. `task_events.reminded` remains the task-side counter;
+`prompt_handoffs` is the emission record.
 
 ### Reminder and escalation
 
@@ -146,7 +168,8 @@ public `start` command.
 | `reminder_count` reaches `TASK_STALLED_REMINDER_THRESHOLD` (10) | escalate once; reminders stop until the task changes state (start or close) or is reassigned or reopened; a change in the assignee's runtime state alone does not resume nudging. |
 
 Task selection for an idle member: the active task, else the first `assigned`
-task in queue order.
+task in queue order. A `reminded` event is recorded only against the task the
+prompt was rendered for.
 
 ## Consequences
 

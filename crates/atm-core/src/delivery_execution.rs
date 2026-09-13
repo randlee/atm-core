@@ -213,6 +213,7 @@ mod tests {
             },
             false,
             false,
+            None,
         )
         .expect("logical message")
     }

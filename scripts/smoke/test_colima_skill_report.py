@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 from unittest import mock
 import unittest
 
@@ -52,19 +53,43 @@ class ParseTests(unittest.TestCase):
         self.assertTrue(all(c["origin"] == c["destination"] == MODULE.HOST for c in cases))
 
     def test_header_carries_version_and_transport(self):
-        doctor, advertised, transport = MODULE.header_cases(RESULT, MODULE.parse_report(REPORT))
+        doctor, advertised, transport, testbed = MODULE.header_cases(RESULT, MODULE.parse_report(REPORT))
         self.assertEqual((doctor["status"], doctor["detail"]), ("PASS", "ATM 1.5.9"))
         self.assertEqual(advertised["name"], "advertised host")
         self.assertEqual((transport["status"], transport["detail"]), ("PASS", "socket ({'kind': 'ready'})"))
+        self.assertEqual(testbed["name"], "testbed ref")
 
     def test_header_doctor_fails_without_a_passing_doctor_step(self):
-        doctor, _, transport = MODULE.header_cases(
+        doctor, _, transport, _ = MODULE.header_cases(
             RESULT.replace("socket (", "cli ("), MODULE.parse_report(REPORT.replace("2 PASS Doctor", "2 FAIL Doctor")))
         self.assertEqual(doctor["status"], "FAIL")
         self.assertEqual(transport["status"], "FAIL")
 
 
 class RenderTests(unittest.TestCase):
+    def test_payload_and_envelope_carry_source_revision_and_testbed_ref_case(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            run_dir.mkdir()
+            (run_dir / "result.txt").write_text(RESULT, encoding="utf-8")
+            (run_dir / "report-1.txt").write_text(REPORT, encoding="utf-8")
+            (run_dir / "herdr-doctor.json").write_text("{}", encoding="utf-8")
+            out_dir = Path(tmp) / "site" / "reports" / "smoke" / "linux" / MODULE.HOST / "out"
+            procedure = Path(tmp) / "site/reports/procedures/colima-hermes-skills/selected.html"
+            procedure.parent.mkdir(parents=True)
+            procedure.write_text("<html>procedure</html>\n", encoding="utf-8")
+            with mock.patch.object(MODULE, "_source_revision", return_value="b" * 40), mock.patch.object(MODULE, "compose"), \
+                    mock.patch.object(MODULE, "_resolve_procedure_page", return_value=SimpleNamespace(
+                        revision="a" * 40, html="procedures/colima-hermes-skills/selected.html"
+                    )), mock.patch.object(MODULE, "update_master_report_index"), \
+                    mock.patch.object(MODULE, "REPO_ROOT", Path(tmp)):
+                report = MODULE.render(run_dir, out_dir)
+            payload = json.loads(report.read_text())
+            envelope = json.loads((out_dir / "smoke.envelope.json").read_text())
+            self.assertEqual(payload["source_revision"], "b" * 40)
+            self.assertEqual(envelope["source_revision"], "b" * 40)
+            self.assertIn("testbed ref", [item["name"] for item in payload["cases"]])
+
     def test_render_writes_the_smoke_evidence_set(self):
         with tempfile.TemporaryDirectory() as tmp:
             run_dir = Path(tmp) / "20260908T162312Z"
@@ -80,13 +105,14 @@ class RenderTests(unittest.TestCase):
                 output.write_text(variables.get("body_html", variables.get("pane_src", variables.get("pane_html", ""))), encoding="utf-8")
 
             with mock.patch.object(MODULE, "compose", side_effect=fake_compose), \
+                    mock.patch.object(MODULE, "_resolve_procedure_page", return_value=None), \
                     mock.patch.object(MODULE, "update_master_report_index") as index, \
                     mock.patch.object(MODULE, "REPO_ROOT", Path(tmp)):
                 report = MODULE.render(run_dir, out_dir)
             payload = json.loads(report.read_text(encoding="utf-8"))
             self.assertEqual((payload["feature"], payload["host"], payload["platform"], payload["run_id"], payload["status"]),
                              (MODULE.FEATURE, MODULE.HOST, "linux", "20260908T162312Z", "PASS"))
-            self.assertEqual(len(payload["cases"]), 6)
+            self.assertEqual(len(payload["cases"]), 7)
             self.assertEqual([name for name, _ in composed],
                              ["inbound-peer-pane.xhtml.j2", "inbound-peer-frame.html.j2", "inbound-peer-review.html.j2"])
             self.assertEqual({p.name for _, p in composed},
@@ -97,6 +123,23 @@ class RenderTests(unittest.TestCase):
             for name in ("result.txt", "report-1.txt", "herdr-doctor.json"):
                 self.assertEqual((out_dir / name).read_bytes(), (run_dir / name).read_bytes())
             index.assert_called_once()
+
+    def test_documented_steps_match_the_runner_case_order(self):
+        root = Path(__file__).resolve().parents[2]
+        header_names = [item["name"] for item in MODULE.header_cases(RESULT, MODULE.parse_report(REPORT))]
+
+        source = (root / "docs/procedures/colima-hermes-skills.md").read_text(encoding="utf-8")
+        sections = source.split("## Steps\n")[1:]
+        self.assertEqual(len(sections), 2)
+        for section in sections:
+            table = section.split("\n## ", 1)[0]
+            documented = [
+                line.split("`", 2)[1]
+                for line in table.splitlines()
+                if line.startswith("| ") and "Execute `" in line
+            ]
+            self.assertEqual(len(documented), 49)
+            self.assertEqual(documented[: len(header_names)], header_names)
 
 
 if __name__ == "__main__":

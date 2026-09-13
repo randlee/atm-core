@@ -8,6 +8,8 @@ use crate::SqliteTaskStore;
 
 pub(crate) const TASK_COLUMNS: &str = "team, task_id, assignee, assigner, state, close_outcome, position, assignment_message_id, description, assigned_at, updated_at, last_reminded_at, reminder_count, lead_notified_count";
 pub(crate) const TASK_EVENT_COLUMNS: &str = "team, task_id, assignee, seq, at, event, from_state, to_state, close_outcome, actor, message_id, outcome, marker, detail";
+pub(crate) const PROMPT_HANDOFF_COLUMNS: &str =
+    "team, agent, message_key, kind, task_id, attempt, trigger, at";
 
 pub(crate) fn select_tasks_for_team_sql() -> String {
     format!(
@@ -164,6 +166,30 @@ mod tests {
                 .sum::<usize>(),
             1,
             "task event column projection must remain owned by task_sql",
+        );
+        assert_eq!(
+            task_sources
+                .iter()
+                .map(|source| {
+                    source
+                        .matches(concat!("const PROMPT_HANDOFF_", "COLUMNS: &str ="))
+                        .count()
+                })
+                .sum::<usize>(),
+            1,
+            "prompt handoff column projection must remain owned by task_sql",
+        );
+        assert_eq!(
+            task_sources
+                .iter()
+                .map(|source| {
+                    source
+                        .matches(concat!("task_sql::PROMPT_HANDOFF_", "COLUMNS"))
+                        .count()
+                })
+                .sum::<usize>(),
+            2,
+            "prompt handoff insert and select must use the shared projection",
         );
     }
 }

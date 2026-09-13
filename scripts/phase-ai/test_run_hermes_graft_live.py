@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 from pathlib import Path
 import sys
+import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -22,6 +26,39 @@ def load_module():
 class HermesGraftLiveSmokeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_module()
+
+    def test_graft_report_and_envelope_carry_source_revision_and_procedure(self) -> None:
+        # BB.3: a resolved source revision must select a procedure page from
+        # the manifest (scripts/report_runtime.py resolve_procedure_page),
+        # so the fixture supplies the selected page instead of an empty root.
+        feature_smoke = self.module.feature_smoke
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            procedure = root / "site/reports/procedures/graft-hermes/selected.html"
+            procedure.parent.mkdir(parents=True)
+            procedure.write_text("<html>procedure</html>\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "run-1"}), \
+                    mock.patch.object(feature_smoke, "ROOT", root), \
+                    mock.patch.object(feature_smoke, "source_revision", return_value="a" * 40), \
+                    mock.patch.object(feature_smoke, "platform") as platform, \
+                    mock.patch.object(feature_smoke.os, "getpid", return_value=1), \
+                    mock.patch.object(feature_smoke, "_resolve_procedure_page", return_value=SimpleNamespace(
+                        revision="b" * 40, html="procedures/graft-hermes/selected.html"
+                    )), \
+                    mock.patch.object(feature_smoke, "compose") as compose, \
+                    mock.patch.object(feature_smoke, "update_master_report_index"):
+                platform.system.return_value = "Darwin"
+                platform.node.return_value = "m5"
+                report = feature_smoke.write_report("graft-hermes", [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "m5", "destination": "m5"}])
+            self.assertEqual(json.loads(report.read_text())["procedure"], "graft-hermes")
+            self.assertEqual(json.loads((report.parent / "smoke.envelope.json").read_text())["procedure"], "graft-hermes")
+            self.assertEqual(json.loads(report.read_text())["source_revision"], "a" * 40)
+            procedure_href = compose.call_args_list[1].args[1]["procedure_href"]
+            self.assertEqual((report.parent / procedure_href).resolve(), procedure.resolve())
+
+    def test_graft_missing_git_writes_null_source_revision(self) -> None:
+        with mock.patch.object(self.module.feature_smoke.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+            self.assertIsNone(self.module.feature_smoke.source_revision())
 
     def test_ready_pair_runs_backend_and_registers_graft_report(self) -> None:
         doctor = {"summary": {"status": "healthy"}, "runtime_status": {"readiness": "ready"}, "client_context": {"version": "1.4.1-beta-ai-1"}, "daemon_context": {"version": "1.4.1-beta-ai-1"}}

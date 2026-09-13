@@ -12,6 +12,8 @@ defaults:
   generated_at: ""
   recommendations_html: ""
   footer_html: ""
+  procedure_label: ""
+  procedure_href: ""
 metadata:
   purpose: Main HTML report template for architecture view index
 ---
@@ -62,6 +64,9 @@ metadata:
     <p class="generated-at">Generated: {{ generated_at }}</p>
 {% endif %}
     <div class="status {{ status_class }}">{{ status }}</div>
+{% if procedure_label and procedure_href %}
+    <p class="procedure">Procedure: <a href="{{ procedure_href | e }}">{{ procedure_label | e }}</a></p>
+{% endif %}
   </header>
 
   <section class="summary">

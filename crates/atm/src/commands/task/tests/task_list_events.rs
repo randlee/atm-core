@@ -1,7 +1,14 @@
 #![cfg(test)]
 
-use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM};
-use atm_storage::{MoveTarget, QueuePosition, TaskEventKind};
+use atm_core::list::ListOutcome;
+use atm_core::read::BucketCounts;
+use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
+use atm_core::types::{CommandAction, ReadSelection};
+use atm_storage::{
+    BuiltInNudgeTemplateKind, MessageKey, MoveTarget, PromptHandoff, PromptTrigger, QueuePosition,
+    TaskActor, TaskEventKind, TaskEventRow,
+};
+use serde::Deserialize;
 use serial_test::serial;
 
 use super::*;
@@ -159,8 +166,8 @@ async fn events_are_seq_ordered_and_include_moved_and_started() {
     let mut start = atm_core::send::SendRequest::new(
         f.home_dir.clone(),
         f.current_dir.clone(),
-        "atm-daemon".parse().unwrap(),
-        TEST_RECIPIENT_ADDRESS,
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
         TEST_TEAM.parse().unwrap(),
         atm_core::send::SendMessageSource::Inline("start".into()),
         None,
@@ -188,7 +195,9 @@ async fn events_are_seq_ordered_and_include_moved_and_started() {
         )
         .await
         .unwrap();
-    let events: Vec<atm_storage::TaskEventRow> = serde_json::from_str(&output).unwrap();
+    let output: serde_json::Value = serde_json::from_str(&output).unwrap();
+    let events: Vec<atm_storage::TaskEventRow> =
+        serde_json::from_value(output["events"].clone()).unwrap();
     assert!(events.windows(2).all(|pair| pair[0].seq < pair[1].seq));
     assert!(
         events
@@ -200,4 +209,134 @@ async fn events_are_seq_ordered_and_include_moved_and_started() {
             .iter()
             .any(|event| event.event == TaskEventKind::Started)
     );
+    assert_eq!(output["handoffs"], serde_json::json!([]));
+}
+
+fn event_at(at: &str) -> TaskEventRow {
+    TaskEventRow {
+        team: TEST_TEAM.parse().unwrap(),
+        task_id: "T1".parse().unwrap(),
+        assignee: "recipient".parse().unwrap(),
+        seq: 1,
+        at: at.parse().unwrap(),
+        event: TaskEventKind::Assigned,
+        from_state: None,
+        to_state: None,
+        actor: TaskActor::Member(TEST_SENDER.parse().unwrap()),
+        message_id: None,
+        outcome: None,
+        marker: None,
+        detail: None,
+    }
+}
+
+fn handoff_at(at: &str, message_key: &str) -> PromptHandoff {
+    PromptHandoff {
+        team: TEST_TEAM.parse().unwrap(),
+        agent: "recipient".parse().unwrap(),
+        message_key: MessageKey::new(message_key).unwrap(),
+        kind: BuiltInNudgeTemplateKind::TaskReady,
+        task_id: "T1".parse().unwrap(),
+        attempt: 0,
+        trigger: PromptTrigger::TaskPass,
+        at: at.parse().unwrap(),
+    }
+}
+
+#[test]
+fn task_events_interleaves_handoffs_by_time() {
+    let event = event_at("2026-09-12T15:27:34Z");
+    let earlier = handoff_at("2026-09-12T15:27:33Z", "01M2EARLIER000000000000000");
+    let tied = handoff_at("2026-09-12T15:27:34Z", "01M2TIED00000000000000000");
+
+    let output = render_task_events(&[event], &[earlier, tied], false).unwrap();
+    let earlier_at = output.find("msg=01M2EARLIER").unwrap();
+    let event_at = output.find("assigned").unwrap();
+    let tied_at = output.find("msg=01M2TIED").unwrap();
+
+    assert!(earlier_at < event_at);
+    assert!(event_at < tied_at, "task events must win an equal-at tie");
+    assert!(output.contains(
+        "2026-09-12T15:27:34Z  prompt  task_ready  attempt=0  trigger=task_pass  msg=01M2TIED"
+    ));
+}
+
+fn task_events_outcome(handoffs: Vec<PromptHandoff>) -> ListOutcome {
+    ListOutcome {
+        action: CommandAction::List,
+        team: TEST_TEAM.parse().unwrap(),
+        agent: "recipient".parse().unwrap(),
+        selection_mode: ReadSelection::Actionable,
+        history_collapsed: false,
+        count: 1 + handoffs.len(),
+        rows: Vec::new(),
+        bucket_counts: BucketCounts {
+            unread: 0,
+            pending_ack: 0,
+            history: 0,
+        },
+        task_rows: Vec::new(),
+        task_event_rows: vec![event_at("2026-09-12T15:27:34Z")],
+        handoffs,
+    }
+}
+
+#[test]
+fn task_events_decodes_response_without_handoffs_field() {
+    let mut value = serde_json::to_value(task_events_outcome(vec![handoff_at(
+        "2026-09-12T15:27:34Z",
+        "01M2HANDOFF00000000000000",
+    )]))
+    .unwrap();
+    assert!(value.as_object_mut().unwrap().remove("handoffs").is_some());
+
+    let decoded: ListOutcome = serde_json::from_value(value).unwrap();
+
+    assert!(decoded.handoffs.is_empty());
+    assert_eq!(decoded.task_event_rows.len(), 1);
+}
+
+#[test]
+fn task_events_omits_empty_handoffs_from_json() {
+    let value = serde_json::to_value(task_events_outcome(Vec::new())).unwrap();
+
+    assert!(value.get("handoffs").is_none());
+}
+
+#[derive(Deserialize)]
+struct Frozen18TaskEventsResponse {
+    action: CommandAction,
+    team: atm_core::types::TeamName,
+    agent: atm_core::types::AgentName,
+    selection_mode: ReadSelection,
+    history_collapsed: bool,
+    count: usize,
+    rows: Vec<atm_core::list::ListRow>,
+    bucket_counts: BucketCounts,
+    #[serde(default)]
+    task_rows: Vec<atm_storage::TaskRow>,
+    #[serde(default)]
+    task_event_rows: Vec<TaskEventRow>,
+}
+
+#[test]
+fn frozen_1_8_task_events_response_decodes_1_9_payload_with_handoffs() {
+    let payload = serde_json::to_value(task_events_outcome(vec![handoff_at(
+        "2026-09-12T15:27:34Z",
+        "01M2HANDOFF00000000000000",
+    )]))
+    .unwrap();
+
+    let frozen: Frozen18TaskEventsResponse = serde_json::from_value(payload).unwrap();
+
+    assert_eq!(frozen.action, CommandAction::List);
+    assert_eq!(frozen.team.as_str(), TEST_TEAM);
+    assert_eq!(frozen.agent.as_str(), "recipient");
+    assert_eq!(frozen.selection_mode, ReadSelection::Actionable);
+    assert!(!frozen.history_collapsed);
+    assert_eq!(frozen.count, 2);
+    assert!(frozen.rows.is_empty());
+    assert_eq!(frozen.bucket_counts.unread, 0);
+    assert!(frozen.task_rows.is_empty());
+    assert_eq!(frozen.task_event_rows.len(), 1);
 }

@@ -1827,9 +1827,9 @@ team-lead lands the final status when the phase PR merges.
 | `BB.1` | `planned` | `feature/bb1-transition-templates` | `docs/plans/phase-bb/sprint-BB.1-transition-templates.md` |
 | `BB.2` | `planned` | `feature/bb2-orchestration-templates-1516` | `docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md` |
 | `BB.3` | `planned` | `feature/bb3-test-procedure-pages` | `docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md` |
-| `BB.4` | `planned` | `feature/bb4-task-start` | `docs/plans/phase-bb/sprint-BB.4-task-start.md` |
+| `BB.4` | `complete` | `feature/bb4-task-start` | `docs/plans/phase-bb/sprint-BB.4-task-start.md` |
 | `BB.5` | `planned` | `feature/bb5-assignment-write-task-pass` | `docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md` |
-| `BB.6` | `planned` | `feature/bb6-prompt-handoffs` | `docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md` |
+| `BB.6` | `complete` | `feature/bb6-docs-prompt-handoffs` | `docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md` |
 | `BB.7` | `planned` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
 
 ## Daemon-Switch Scope Reduction

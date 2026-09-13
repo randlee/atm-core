@@ -329,7 +329,8 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_sqlite_state() {
         .expect("task inbox message");
     assert_eq!(task_message.task_id.as_deref(), Some("TASK-123"));
     assert_eq!(task_message.summary.as_deref(), Some("manual summary"));
-    assert!(task_message.pending_ack_at.is_some());
+    // BB.5: a task-linked send never carries a pending-ack marker.
+    assert!(task_message.pending_ack_at.is_none());
     assert!(plain_message.task_id.is_none());
     assert!(plain_message.pending_ack_at.is_none());
 
@@ -347,10 +348,14 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_sqlite_state() {
         "plain SQLite state should not require ack: {state:?}"
     );
     assert!(
-        state["messages"][task_state_key]["pendingAckAt"]
-            .as_str()
+        state["messages"][task_state_key.clone()]
+            .as_object()
             .is_some(),
-        "task SQLite state should preserve pending ack: {state:?}"
+        "task SQLite state missing: {state:?}"
+    );
+    assert!(
+        state["messages"][task_state_key]["pendingAckAt"].is_null(),
+        "task SQLite state must not carry a pending-ack marker (BB.5): {state:?}"
     );
 }
 

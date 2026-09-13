@@ -1,7 +1,7 @@
 ---
-status: planned
-branch: feature/bb6-prompt-handoffs
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb6-prompt-handoffs
+status: complete
+branch: feature/bb6-docs-prompt-handoffs
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb6-docs-prompt-handoffs
 ---
 
 # BB.6 — `prompt_handoffs`
@@ -11,7 +11,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb6-prompt-
 | Design | [`design.md`](../nudge-transition-templates/design.md) §4.6 (SMK-005); plan P2 |
 | Recommended | arch-ctm / deep-reasoning |
 | Depends on | `must_follow` BB.5 (dev push) — the `task_pass` trigger is written from the task pass BB.5 rewrites; stacks on `feature/bb5-assignment-write-task-pass` |
-| Worktree | `feature/bb6-prompt-handoffs` |
+| Worktree | `feature/bb6-docs-prompt-handoffs` (top of the four crate-boundary layers) |
 | Governed interfaces | SQLite MINOR (additive table); HTTP/peer API MINOR: optional `handoffs` on the task-events list response, `HTTP_API_VERSION` 1.8.0 → 1.9.0; schema-reviewer sign-off |
 | Requirements / ADRs edited | ADR-062 new subsection; ADR-061 D5 (1.9.0) and D6 (additive table entry) |
 
@@ -25,7 +25,7 @@ record failures, which is what the colima acceptance asserts. With it the
 
 ## Deliverables
 
-- [ ] D1 — DDL appended to `TASK_TABLES_DDL`
+- [x] D1 — DDL appended to `TASK_TABLES_DDL`
   (`crates/atm-storage-rusqlite/src/task_store.rs:17-52`), exactly:
 
 ```sql
@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id
   pre-BB binary ignores the table (MINOR). No `STORAGE_SCHEMA_VERSION`
   exists yet (ADR-061 D1); the D6 entry records the addition.
 
-- [ ] D2 — `crates/atm-storage/src/task_state.rs`:
+- [x] D2 — `crates/atm-storage/src/task_state.rs`:
 
 ```rust
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -88,7 +88,7 @@ pub struct PromptHandoff {
   `boundaries/atm-storage/task-store.toml` and
   `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` list both.
 
-- [ ] D3 — one helper in `crates/atm-http-runtime/src/prompt_handoff_record.rs`
+- [x] D3 — one helper in `crates/atm-http-runtime/src/prompt_handoff_record.rs`
   (new, ≤ 80 lines), `pub(crate)`: both emit paths that can carry a task
   link live in this crate (plan P13):
 
@@ -126,7 +126,7 @@ pub(crate) async fn record_prompt_handoff(
   `request.nudge_mode` for every task request). A failed sink writes no
   row. Exact lines pinned in the PR body.
 
-- [ ] D4 — `atm task events <id>` (`crates/atm/src/commands/task.rs:437+`,
+- [x] D4 — `atm task events <id>` (`crates/atm/src/commands/task.rs:437+`,
   `render_task_events`): the response (`TaskLedgerQuery` list outcome) gains
   `#[serde(default)] handoffs: Vec<PromptHandoff>`; the renderer
   interleaves handoffs with events ordered by `(at, source, rowid)` where
@@ -138,7 +138,7 @@ pub(crate) async fn record_prompt_handoff(
   `openapi.yaml` and surface baseline updated; a 1.8.0 client omits the
   field and still decodes.
 
-- [ ] D5 — ADR-062 new subsection "Prompt handoffs (Phase BB)": the table,
+- [x] D5 — ADR-062 new subsection "Prompt handoffs (Phase BB)": the table,
   the two triggers and why only two (P13), task-linked only (P10),
   best-effort after sink success with the logged failure line (P11), and
   "`task_events.reminded` remains the task-side counter; `prompt_handoffs`
@@ -163,14 +163,15 @@ Runtime — `crates/atm-http-runtime/`:
 
 - `task_pass_records_handoff_with_kind_and_attempt`.
 - `steer_emit_records_handoff_with_trigger_steer`.
-- `queue_claim_records_handoff_with_trigger_queue_claim`.
 - `steer_of_non_task_message_records_no_handoff` (P10).
-- `failed_sink_records_no_handoff` — one per path (steer, queue claim, task pass).
+- `failed_steer_sink_records_no_handoff`.
+- `failed_task_pass_sink_records_no_handoff`.
 - `record_failure_logs_prompt_handoff_record_failed_and_emission_succeeds` — a failing `TaskStore` stub; the sink result is unchanged and the log line carries `reason = storage`, message id, kind, trigger.
 - `record_bridge_timeout_logs_and_emission_succeeds` — a store stub that sleeps past the deadline: `reason = timeout`, sink result unchanged, the Tokio worker is not blocked (the test's own timer keeps firing).
 - `record_bridge_saturated_logs_and_emission_succeeds` — bridge permits exhausted: `reason = saturated`, sink result unchanged.
 - `steer_with_exhausted_deadline_skips_record_with_failure_log`.
 - `deferred_task_linked_message_is_impossible_after_bb5` — every task request goes through `send_mode_for_task_request` as `Immediate`; the claim path is asserted never to see `task_transition.is_some()`.
+- `queue_claim_records_no_handoff` — the claim path never receives a task link.
 
 CLI:
 

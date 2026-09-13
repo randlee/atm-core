@@ -1072,27 +1072,18 @@ mod tests {
     }
 
     fn start_task(backend: &SqliteStorageBackend, task_id: &atm_storage::TaskId) {
-        let member = MemberKey::new(team(), agent());
-        backend
-            .task_store()
-            .record_reminder(
-                &member,
-                task_id,
-                IsoTimestamp::now(),
-                atm_storage::ReminderOutcome::Emitted,
-            )
-            .expect("record reminder");
-
         let message_id = AtmMessageId::new();
         let mut start = message(&format!("atm:{message_id}"), "start");
         start.envelope.message_id = Some(message_id);
-        start.envelope.from = "atm-daemon".parse().expect("daemon actor");
+        start.envelope.from = agent();
+        start.agent = "lead".parse().expect("assigner");
         start.envelope.task_id = Some(task_id.clone());
         start.envelope.task_op = Some(TaskOp::Start);
-        backend
+        let admission = backend
             .message_store()
-            .save_message(&start)
+            .admit_message_with_provenance(&start, MessageWriteOrigin::Local)
             .expect("start task");
+        assert_eq!(admission.task_assignee, Some(agent()));
     }
 
     fn move_task(
@@ -1198,20 +1189,11 @@ mod tests {
     fn move_of_active_task_is_a_noop_with_moved_event() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         seed_move_task(&backend, "T1", "test-agent");
-        let member = MemberKey::new(team(), agent());
-        backend
-            .task_store()
-            .record_reminder(
-                &member,
-                &"T1".parse().unwrap(),
-                IsoTimestamp::now(),
-                atm_storage::ReminderOutcome::Emitted,
-            )
-            .unwrap();
         let id = AtmMessageId::new();
         let mut start = message(&format!("atm:{id}"), "start");
         start.envelope.message_id = Some(id);
-        start.envelope.from = "atm-daemon".parse().unwrap();
+        start.envelope.from = agent();
+        start.agent = "lead".parse().unwrap();
         start.envelope.task_id = Some("T1".parse().unwrap());
         start.envelope.task_op = Some(TaskOp::Start);
         backend.message_store().save_message(&start).unwrap();
@@ -1257,10 +1239,11 @@ mod tests {
             outcome: TaskCloseOutcome::Completed,
             reason: None,
         });
-        backend
+        let first_admission = backend
             .message_store()
-            .save_message(&first_close)
+            .admit_message_with_provenance(&first_close, MessageWriteOrigin::Local)
             .expect("first close");
+        assert_eq!(first_admission.task_assignee, Some(agent()));
 
         let move_error =
             move_task(&backend, "T1", MoveTarget::End).expect_err("complete task cannot move");
@@ -1272,7 +1255,8 @@ mod tests {
         // Complete rows are intercepted by the writer before the state
         // authority's deliberately unreachable complete-row Start arm.
         let mut late_start = message("atm:late-start", "start");
-        late_start.envelope.from = "atm-daemon".parse().expect("daemon actor");
+        late_start.envelope.from = agent();
+        late_start.agent = "lead".parse().expect("assigner");
         late_start.envelope.task_id = Some(task_id.clone());
         late_start.envelope.task_op = Some(TaskOp::Start);
         let start_error = backend
@@ -1305,6 +1289,7 @@ mod tests {
 
         assert!(admission.existing.is_none());
         assert_eq!(admission.already_closed, Some(TaskCloseOutcome::Completed));
+        assert_eq!(admission.task_assignee, None);
         assert_eq!(
             backend
                 .task_store()
@@ -2994,6 +2979,7 @@ mod tests {
             .await
             .expect("rejected report admission commits");
         assert!(outcome.task_rejection.is_some());
+        assert_eq!(outcome.task_assignee, None);
 
         let retained = backend
             .message_store()
@@ -3984,7 +3970,7 @@ mod tests {
     }
 
     #[test]
-    fn ack_of_assignment_message_leaves_task_row_and_events_untouched() {
+    fn ack_of_assignment_writes_no_task_event() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.message_store();
         let tasks = backend.task_store();

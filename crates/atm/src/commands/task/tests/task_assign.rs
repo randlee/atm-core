@@ -68,8 +68,8 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
     let mut start_active = atm_core::send::SendRequest::new(
         fixture.home_dir.clone(),
         fixture.current_dir.clone(),
-        "atm-daemon".parse().unwrap(),
-        TEST_RECIPIENT_ADDRESS,
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
         team.clone(),
         atm_core::send::SendMessageSource::Inline("start ACTIVE".into()),
         None,
@@ -133,8 +133,8 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
     let mut start = atm_core::send::SendRequest::new(
         fixture.home_dir.clone(),
         fixture.current_dir.clone(),
-        "atm-daemon".parse().unwrap(),
-        TEST_RECIPIENT_ADDRESS,
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
         team.clone(),
         atm_core::send::SendMessageSource::Inline("start".into()),
         None,

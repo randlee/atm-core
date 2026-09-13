@@ -1,0 +1,385 @@
+{
+  "feature": "bb5-assignment",
+  "generated_at": "2026-09-12T23:49:40.144295Z",
+  "source_revision": "f94125cf5f20fd2d187623746d70f8bb91104cbf",
+  "container": "hermes-testbed-bb5-evidence4-f94125cf5",
+  "image": {
+    "container": "hermes-testbed-bb5-evidence4-f94125cf5",
+    "image_tag": "loki/hermes-testbed:bb5-colima-f94125cf5",
+    "image_id": "sha256:332e9ea1e4502404756a3e3146b47dbceba63e111866729c92c3081e6b26a4b2",
+    "image_sha256": "sha256:332e9ea1e4502404756a3e3146b47dbceba63e111866729c92c3081e6b26a4b2",
+    "image_architecture": "arm64",
+    "image_repo_digests": [
+      "loki/hermes-testbed@sha256:332e9ea1e4502404756a3e3146b47dbceba63e111866729c92c3081e6b26a4b2"
+    ]
+  },
+  "image_sha256": "sha256:332e9ea1e4502404756a3e3146b47dbceba63e111866729c92c3081e6b26a4b2",
+  "roster": [
+    "hermes",
+    "oversight",
+    "stub-alpha",
+    "stub-beta",
+    "tester"
+  ],
+  "cases": [
+    {
+      "name": "three_assignments_show_queued_1_2_3_then_one_ready",
+      "status": "PASS",
+      "detail": "three queued positions and exactly one ready prompt for task one",
+      "origin": "stub-alpha@testbed",
+      "destination": "tester@testbed",
+      "attempt": 1,
+      "task_ids": [
+        "BB5-T234940144295Z-queued-one",
+        "BB5-T234940144295Z-queued-two",
+        "BB5-T234940144295Z-queued-three"
+      ],
+      "commands": [
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-queued-one --team testbed BB5 queued task 1",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-queued-one to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-queued-two --team testbed BB5 queued task 2",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-queued-two to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-queued-three --team testbed BB5 queued task 3",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-queued-three to tester\n",
+          "stderr": ""
+        }
+      ],
+      "observed": {
+        "blocks": {
+          "BB5-T234940144295Z-queued-one": [
+            "<atm task=\"BB5-T234940144295Z-queued-one\"\n  queued=\"1\"\n  message=\"01M2C0DNVGB4VCSYZ7MX9MHSNY\"\n  from=\"stub-alpha@testbed\"/>",
+            "<atm task=\"BB5-T234940144295Z-queued-one\"\n  ready message=\"01M2C0DNVGB4VCSYZ7MX9MHSNY\"\n  from=\"stub-alpha@testbed\">\n    <action>atm read --message-id\n  01M2C0DNVGB4VCSYZ7MX9MHSNY</action>\n    <action>atm task start\n  BB5-T234940144295Z-queued-one</action>\n    <action>execute the assigned task</action>\n    <console announce=\"concise\"\n  pause=\"false\"/>"
+          ],
+          "BB5-T234940144295Z-queued-two": [
+            "<atm\n  task=\"BB5-T234940144295Z-queued-two\"\n  queued=\"2\"\n  message=\"01M2C0DNWN57XAT38M9K53JHP1\"\n  from=\"stub-alpha@testbed\"/>"
+          ],
+          "BB5-T234940144295Z-queued-three": [
+            "<atm\n  task=\"BB5-T234940144295Z-queued-three\"\n  queued=\"3\"\n  message=\"01M2C0DNXYH25XMJNDGHB8QGH0\"\n  from=\"stub-alpha@testbed\"/>"
+          ]
+        },
+        "ready_counts": {
+          "BB5-T234940144295Z-queued-one": 1,
+          "BB5-T234940144295Z-queued-two": 0,
+          "BB5-T234940144295Z-queued-three": 0
+        },
+        "queued_positions": {
+          "BB5-T234940144295Z-queued-one": [
+            1
+          ],
+          "BB5-T234940144295Z-queued-two": [
+            2
+          ],
+          "BB5-T234940144295Z-queued-three": [
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "pending_ack_header_stays_zero_across_assignments",
+      "status": "PASS",
+      "detail": "assignment mailbox header is Unread 3 / Pending-Ack 0",
+      "origin": "stub-alpha@testbed",
+      "destination": "tester@testbed",
+      "attempt": 1,
+      "task_ids": [
+        "BB5-T234940144295Z-pending-one",
+        "BB5-T234940144295Z-pending-two",
+        "BB5-T234940144295Z-pending-three"
+      ],
+      "commands": [
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-pending-one --team testbed BB5 pending-ack header",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-pending-one to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-pending-two --team testbed BB5 pending-ack header",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-pending-two to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-pending-three --team testbed BB5 pending-ack header",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-pending-three to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm read --team testbed",
+          "exit_code": 0,
+          "stdout": "Queue: tester@testbed\nUnread: 3 | Pending-Ack: 0 | History: 0\nSelected: 01M2C0DRCWAS7245DP2NC32KD2 | Matches: 3 | Additional: 2\n\nFrom: stub-alpha\nAt: 2026-09-12T23:49:42.940792502+00:00\nTask: BB5-T234940144295Z-pending-three\nSummary: BB5 pending-ack header\nBody:\nBB5 pending-ack header\n\nAdditional matches remain. Use `atm list` with the same filters to inspect them.\n",
+          "stderr": ""
+        }
+      ],
+      "observed": {
+        "header": "Queue: tester@testbed\nUnread: 3 | Pending-Ack: 0 | History: 0\nSelected: 01M2C0DRCWAS7245DP2NC32KD2 | Matches: 3 | Additional: 2"
+      }
+    },
+    {
+      "name": "close_shows_ready_for_next_task_within_one_pass",
+      "status": "PASS",
+      "detail": "closing task one yields one ready prompt for task two",
+      "origin": "stub-alpha@testbed",
+      "destination": "tester@testbed",
+      "attempt": 1,
+      "task_ids": [
+        "BB5-T234940144295Z-close-one",
+        "BB5-T234940144295Z-close-two"
+      ],
+      "commands": [
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-close-one --team testbed BB5 close readiness",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-close-one to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-close-two --team testbed BB5 close readiness",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-close-two to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task close BB5-T234940144295Z-close-one completed --team testbed BB5 completed first task",
+          "exit_code": 0,
+          "stdout": "closed BB5-T234940144295Z-close-one (completed)\n",
+          "stderr": ""
+        }
+      ],
+      "observed": {
+        "next_task_block": "<atm task=\"BB5-T234940144295Z-close-two\"\n  ready message=\"01M2C0DRT2RSWZJTWCBN5K4BGS\"\n  from=\"stub-alpha@testbed\">\n    <action>atm read --message-id\n  01M2C0DRT2RSWZJTWCBN5K4BGS</action>\n    <action>atm task start\n  BB5-T234940144295Z-close-two</action>\n    <action>execute the assigned task</action>\n    <console announce=\"concise\"\n  pause=\"false\"/>"
+      }
+    },
+    {
+      "name": "reassign_shows_closed_reassigned_to_old_and_queued_to_new",
+      "status": "PASS",
+      "detail": "old assignee receives closed=reassigned and new assignee owns queued position one",
+      "origin": "stub-alpha@testbed",
+      "destination": "tester@testbed",
+      "attempt": 1,
+      "task_ids": [
+        "BB5-T234940144295Z-reassign-reassign"
+      ],
+      "commands": [
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-reassign-reassign --team testbed BB5 reassignment",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-reassign-reassign to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign stub-beta --task-id BB5-T234940144295Z-reassign-reassign --team testbed BB5 moved to stub-beta",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-reassign-reassign to stub-beta\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task list --all --json",
+          "exit_code": 0,
+          "stdout": "[\n  {\n    \"team\": \"testbed\",\n    \"task_id\": \"BB5-T234940144295Z-reassign-reassign\",\n    \"assignee\": \"stub-beta\",\n    \"assigner\": \"stub-alpha\",\n    \"state\": \"assigned\",\n    \"position\": 1,\n    \"assignment_message_id\": \"01M2C0E23XWFC71QEZAACPB4CY\",\n    \"description\": \"BB5 moved to stub-beta\",\n    \"assigned_at\": \"2026-09-12T23:49:52.893698891Z\",\n    \"updated_at\": \"2026-09-12T23:49:52.893698891Z\",\n    \"reminder_count\": 0,\n    \"lead_notified_count\": 0\n  }\n]\n",
+          "stderr": ""
+        }
+      ],
+      "observed": {
+        "old_assignee_block": "<atm\n  task=\"BB5-T234940144295Z-reassign-reassign\"\n  queued=\"1\"\n  message=\"01M2C0E1XT37CJ53PVJH5EN11M\"\n  from=\"stub-alpha@testbed\"/>\n<atm\n  task=\"BB5-T234940144295Z-reassign-reassign\"\n  closed by=\"stub-alpha@testbed\"\n  outcome=\"reassigned\"\n  message=\"01M2C0E23Y278A0Z4CQ1HPYSMV\"/>",
+        "new_assignee_row": {
+          "team": "testbed",
+          "task_id": "BB5-T234940144295Z-reassign-reassign",
+          "assignee": "stub-beta",
+          "assigner": "stub-alpha",
+          "state": "assigned",
+          "position": 1,
+          "assignment_message_id": "01M2C0E23XWFC71QEZAACPB4CY",
+          "description": "BB5 moved to stub-beta",
+          "assigned_at": "2026-09-12T23:49:52.893698891Z",
+          "updated_at": "2026-09-12T23:49:52.893698891Z",
+          "reminder_count": 0,
+          "lead_notified_count": 0
+        }
+      }
+    },
+    {
+      "name": "move_to_head_while_idle_shows_ready_next_pass_and_no_extra_line",
+      "status": "PASS",
+      "detail": "moving task three to head while busy yields its single ready line on the next idle pass",
+      "origin": "stub-alpha@testbed",
+      "destination": "tester@testbed",
+      "attempt": 1,
+      "task_ids": [
+        "BB5-T234940144295Z-move-one",
+        "BB5-T234940144295Z-move-two",
+        "BB5-T234940144295Z-move-three"
+      ],
+      "commands": [
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-move-one --team testbed BB5 move-to-head",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-move-one to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-move-two --team testbed BB5 move-to-head",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-move-two to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-move-three --team testbed BB5 move-to-head",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-move-three to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task move --head --team testbed BB5-T234940144295Z-move-three",
+          "exit_code": 0,
+          "stdout": "moved BB5-T234940144295Z-move-three for tester from 3 to 1\n",
+          "stderr": ""
+        }
+      ],
+      "observed": {
+        "blocks": {
+          "BB5-T234940144295Z-move-one": "<atm task=\"BB5-T234940144295Z-move-one\"\n  queued=\"1\"\n  message=\"01M2C0E2FD7K952C2FE9TQSQNP\"\n  from=\"stub-alpha@testbed\"/>",
+          "BB5-T234940144295Z-move-two": "<atm\n  task=\"BB5-T234940144295Z-move-two\"\n  queued=\"2\"\n  message=\"01M2C0E2GD8YQKSNHPXPVQ5V9T\"\n  from=\"stub-alpha@testbed\"/>",
+          "BB5-T234940144295Z-move-three": "<atm\n  task=\"BB5-T234940144295Z-move-three\"\n  queued=\"3\"\n  message=\"01M2C0E2HCC6XVKFER2GJ8PSSP\"\n  from=\"stub-alpha@testbed\"/>\n<atm task=\"BB5-T234940144295Z-move-three\"\n  ready message=\"01M2C0E2HCC6XVKFER2GJ8PSSP\"\n  from=\"stub-alpha@testbed\">\n    <action>atm read --message-id\n  01M2C0E2HCC6XVKFER2GJ8PSSP</action>\n    <action>atm task start\n  BB5-T234940144295Z-move-three</action>\n    <action>execute the assigned task</action>\n    <console announce=\"concise\"\n  pause=\"false\"/>"
+        }
+      }
+    },
+    {
+      "name": "cancel_shows_closed_cancelled_to_assignee",
+      "status": "PASS",
+      "detail": "assignee receives the cancelled terminal line",
+      "origin": "stub-alpha@testbed",
+      "destination": "tester@testbed",
+      "attempt": 1,
+      "task_ids": [
+        "BB5-T234940144295Z-cancel-cancel"
+      ],
+      "commands": [
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-cancel-cancel --team testbed BB5 cancellation",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-cancel-cancel to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task close BB5-T234940144295Z-cancel-cancel cancelled --team testbed BB5 runner cleanup",
+          "exit_code": 0,
+          "stdout": "closed BB5-T234940144295Z-cancel-cancel (cancelled)\n",
+          "stderr": ""
+        }
+      ],
+      "observed": {
+        "block": "<atm task=\"BB5-T234940144295Z-cancel-cancel\"\n  queued=\"1\"\n  message=\"01M2C0E6ZE3NJRYDXPZX18N34Z\"\n  from=\"stub-alpha@testbed\"/>\n<atm task=\"BB5-T234940144295Z-cancel-cancel\"\n  closed by=\"stub-alpha@testbed\"\n  outcome=\"cancelled\"\n  message=\"01M2C0E70N47GPN0FES1JS14MX\"/>"
+      }
+    },
+    {
+      "name": "busy_assigner_receives_started_and_complete_at_write_time",
+      "status": "PASS",
+      "detail": "busy assigner mailbox contains start and complete notices immediately after writes",
+      "origin": "stub-alpha@testbed",
+      "destination": "tester@testbed",
+      "attempt": 1,
+      "task_ids": [
+        "BB5-T234940144295Z-busy-assigner-active",
+        "BB5-T234940144295Z-busy-busy"
+      ],
+      "commands": [
+        {
+          "command": "docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign stub-alpha --task-id BB5-T234940144295Z-busy-assigner-active --team testbed BB5 active task keeps assigner busy",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-busy-assigner-active to stub-alpha\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task start BB5-T234940144295Z-busy-assigner-active --team testbed BB5 assigner became busy",
+          "exit_code": 0,
+          "stdout": "started BB5-T234940144295Z-busy-assigner-active\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task assign tester --task-id BB5-T234940144295Z-busy-busy --team testbed BB5 busy assigner",
+          "exit_code": 0,
+          "stdout": "assigned BB5-T234940144295Z-busy-busy to tester\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task start BB5-T234940144295Z-busy-busy --team testbed BB5 started while assigner is busy",
+          "exit_code": 0,
+          "stdout": "started BB5-T234940144295Z-busy-busy\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm task close BB5-T234940144295Z-busy-busy completed --team testbed BB5 completed while assigner is busy",
+          "exit_code": 0,
+          "stdout": "closed BB5-T234940144295Z-busy-busy (completed)\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm list --json --team testbed",
+          "exit_code": 0,
+          "stdout": "{\n  \"action\": \"list\",\n  \"team\": \"testbed\",\n  \"agent\": \"stub-alpha\",\n  \"selection_mode\": \"actionable\",\n  \"history_collapsed\": false,\n  \"count\": 3,\n  \"rows\": [\n    {\n      \"message_id\": \"01M2C0E7AHJ04RZJKWCXTRBH7Y\",\n      \"summary\": \"BB5 completed while assigner is busy\",\n      \"from\": \"tester\",\n      \"timestamp\": \"2026-09-12T23:49:58.225751064Z\",\n      \"read\": false,\n      \"pending_ack\": false,\n      \"task_id\": \"BB5-T234940144295Z-busy-busy\"\n    },\n    {\n      \"message_id\": \"01M2C0E79CMQB7NSK25JFDYNMX\",\n      \"summary\": \"BB5 started while assigner is busy\",\n      \"from\": \"tester\",\n      \"timestamp\": \"2026-09-12T23:49:58.188540724Z\",\n      \"read\": false,\n      \"pending_ack\": false,\n      \"task_id\": \"BB5-T234940144295Z-busy-busy\"\n    },\n    {\n      \"message_id\": \"01M2C0E768C8VR12JVNCR2AKKE\",\n      \"summary\": \"BB5 active task keeps assigner busy\",\n      \"from\": \"tester\",\n      \"timestamp\": \"2026-09-12T23:49:58.088854506Z\",\n      \"read\": false,\n      \"pending_ack\": false,\n      \"task_id\": \"BB5-T234940144295Z-busy-assigner-active\"\n    }\n  ],\n  \"bucket_counts\": {\n    \"unread\": 3,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm read --message-id 01M2C0E7AHJ04RZJKWCXTRBH7Y --team testbed --json",
+          "exit_code": 0,
+          "stdout": "{\n  \"action\": \"read\",\n  \"team\": \"testbed\",\n  \"agent\": \"stub-alpha\",\n  \"selection_mode\": \"actionable\",\n  \"mutation_applied\": true,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"tester\",\n    \"text\": \"BB5 completed while assigner is busy\",\n    \"timestamp\": \"2026-09-12T23:49:58.225751064Z\",\n    \"read\": false,\n    \"source_team\": \"testbed\",\n    \"summary\": \"BB5 completed while assigner is busy\",\n    \"message_id\": \"01M2C0E7AHJ04RZJKWCXTRBH7Y\",\n    \"requires_ack\": false,\n    \"taskId\": \"BB5-T234940144295Z-busy-busy\",\n    \"taskOp\": {\n      \"op\": \"close\",\n      \"outcome\": \"completed\",\n      \"reason\": \"BB5 completed while assigner is busy\"\n    }\n  },\n  \"selected_message_id\": \"01M2C0E7AHJ04RZJKWCXTRBH7Y\",\n  \"match_count\": 1,\n  \"additional_match_count\": 0,\n  \"bucket_counts\": {\n    \"unread\": 3,\n    \"pending_ack\": 0,\n    \"history\": 0\n  }\n}\n",
+          "stderr": ""
+        },
+        {
+          "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm read --message-id 01M2C0E79CMQB7NSK25JFDYNMX --team testbed --json",
+          "exit_code": 0,
+          "stdout": "{\n  \"action\": \"read\",\n  \"team\": \"testbed\",\n  \"agent\": \"stub-alpha\",\n  \"selection_mode\": \"actionable\",\n  \"mutation_applied\": true,\n  \"count\": 1,\n  \"message\": {\n    \"bucket\": \"unread\",\n    \"class\": \"unread\",\n    \"from\": \"tester\",\n    \"text\": \"BB5 started while assigner is busy\",\n    \"timestamp\": \"2026-09-12T23:49:58.188540724Z\",\n    \"read\": false,\n    \"source_team\": \"testbed\",\n    \"summary\": \"BB5 started while assigner is busy\",\n    \"message_id\": \"01M2C0E79CMQB7NSK25JFDYNMX\",\n    \"requires_ack\": false,\n    \"taskId\": \"BB5-T234940144295Z-busy-busy\",\n    \"taskOp\": {\n      \"op\": \"start\"\n    }\n  },\n  \"selected_message_id\": \"01M2C0E79CMQB7NSK25JFDYNMX\",\n  \"match_count\": 1,\n  \"additional_match_count\": 0,\n  \"bucket_counts\": {\n    \"unread\": 2,\n    \"pending_ack\": 0,\n    \"history\": 1\n  }\n}\n",
+          "stderr": ""
+        }
+      ],
+      "observed": {
+        "messages": [
+          {
+            "message_id": "01M2C0E7AHJ04RZJKWCXTRBH7Y",
+            "summary": "BB5 completed while assigner is busy",
+            "from": "tester",
+            "timestamp": "2026-09-12T23:49:58.225751064Z",
+            "read": false,
+            "pending_ack": false,
+            "task_id": "BB5-T234940144295Z-busy-busy"
+          },
+          {
+            "message_id": "01M2C0E79CMQB7NSK25JFDYNMX",
+            "summary": "BB5 started while assigner is busy",
+            "from": "tester",
+            "timestamp": "2026-09-12T23:49:58.188540724Z",
+            "read": false,
+            "pending_ack": false,
+            "task_id": "BB5-T234940144295Z-busy-busy"
+          }
+        ],
+        "observed_operations": [
+          "close",
+          "start"
+        ]
+      }
+    }
+  ],
+  "setup": {
+    "members": {
+      "command": "docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb5-evidence4-f94125cf5 atm members --json --team testbed",
+      "exit_code": 0,
+      "stdout": "{\n  \"members\": [\n    {\n      \"agent_id\": \"hermes@testbed\",\n      \"agent_type\": \"hermes\",\n      \"availability\": \"unobserved\",\n      \"extra\": {},\n      \"harness\": \"claude-code\",\n      \"home_dir\": \"/opt/data\",\n      \"joined_at\": 1789256968715,\n      \"model\": \"unknown\",\n      \"name\": \"hermes\",\n      \"revision\": 0,\n      \"state\": \"unknown\",\n      \"tmux_pane_id\": null\n    },\n    {\n      \"agent_id\": \"oversight@testbed\",\n      \"agent_type\": \"stub\",\n      \"availability\": \"unobserved\",\n      \"extra\": {},\n      \"harness\": \"claude-code\",\n      \"home_dir\": \"/opt/testbed\",\n      \"joined_at\": 1789256968719,\n      \"model\": \"unknown\",\n      \"name\": \"oversight\",\n      \"revision\": 0,\n      \"state\": \"unknown\",\n      \"tmux_pane_id\": null\n    },\n    {\n      \"agent_id\": \"stub-alpha@testbed\",\n      \"agent_type\": \"lead\",\n      \"availability\": \"unobserved\",\n      \"extra\": {},\n      \"harness\": \"claude-code\",\n      \"home_dir\": \"/opt/testbed\",\n      \"joined_at\": 1789256968703,\n      \"live_cwd\": \"/opt/testbed\",\n      \"model\": \"unknown\",\n      \"name\": \"stub-alpha\",\n      \"revision\": 0,\n      \"state\": \"unknown\",\n      \"tmux_pane_id\": null\n    },\n    {\n      \"agent_id\": \"stub-beta@testbed\",\n      \"agent_type\": \"stub\",\n      \"availability\": \"unobserved\",\n      \"extra\": {},\n      \"harness\": \"claude-code\",\n      \"home_dir\": \"/opt/testbed\",\n      \"joined_at\": 1789256968707,\n      \"model\": \"unknown\",\n      \"name\": \"stub-beta\",\n      \"revision\": 0,\n      \"state\": \"unknown\",\n      \"tmux_pane_id\": null\n    },\n    {\n      \"agent_id\": \"tester@testbed\",\n      \"agent_type\": \"claude\",\n      \"availability\": \"fresh\",\n      \"backend\": \"herdr\",\n      \"extra\": {\n        \"backendType\": \"herdr\",\n        \"herdrSession\": \"default\"\n      },\n      \"harness\": \"claude-code\",\n      \"herdrSession\": \"default\",\n      \"home_dir\": \"/opt/testbed\",\n      \"joined_at\": 1789256968711,\n      \"last_observation_attempt_at\": \"2026-09-12T23:49:36.696579629Z\",\n      \"last_observation_attempt_by\": \"herdr_poll\",\n      \"last_observed_at\": \"2026-09-12T23:49:36.696579629Z\",\n      \"last_observed_by\": \"herdr_poll\",\n      \"model\": \"unknown\",\n      \"name\": \"tester\",\n      \"revision\": 2,\n      \"state\": \"unknown\",\n      \"tmux_pane_id\": null\n    }\n  ],\n  \"team\": \"testbed\"\n}\n",
+      "stderr": ""
+    }
+  },
+  "status": "PASS"
+}

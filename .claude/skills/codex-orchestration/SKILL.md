@@ -68,8 +68,9 @@ Before starting a sprint:
 7. `quality-mgr` must also read:
    - `.claude/skills/quality-management-gh/SKILL.md`
 8. Every ATM assignment is sent with
-   `atm send <agent> --template <template> --vars <json>`; never render a
-   template yourself and send the output as message text or via `--stdin`.
+   `atm send <agent> --task-id "$TASK_ID" --template <template> --vars <json>`;
+   the same `TASK_ID` is supplied as the template's `task_id` variable. Never
+   render a template yourself and send the output as message text or via `--stdin`.
    To view or validate the exact body before sending, use
    `atm compose --template <template> --vars <json>` (same renderer, same
    vars). The template path goes through the daemon-owned admission path
@@ -113,8 +114,10 @@ Before starting a sprint:
    `ruthless-boundary-qa` remains part of that loop unless the lead
    explicitly narrows the reviewer set for a specific task.
 8. If QA passes and CI is green, merge may proceed.
-9. If QA fails, the lead first runs `/triaging-findings` to correlate the
-   findings across worktrees and determine the promoted fix branch.
+9. After every QA round that reports any finding, at any severity, the lead
+   runs `/triaging-findings` the same way: every finding is recorded, correlated
+   across worktrees, and promoted to the current top layer of the stack. No
+   finding is skipped, deferred, or left without a fix dispatch.
 10. After triage completes, the lead routes concrete fixes back to
    `arch-ctm` using `fix-assignment.xml.j2`. Fix assignments must also include
    `sprint_doc`, and the sprint document remains authoritative if the task
@@ -122,13 +125,14 @@ Before starting a sprint:
 
 ## Stacked Phases
 
-When a phase runs as a `gh stack` of sprint and fix layers above
-`integrate/phase-N`, the stack rules in
+Every phase runs as one append-only `gh stack` of sprint and fix layers
+above `integrate/phase-N`. The rule is defined once, in
 [`docs/development/gh-stack-guidelines.md`](../../../docs/development/gh-stack-guidelines.md)
-govern layer ownership, rebase-at-task-start, freezing, PR-on-first-push,
-the CI-trigger PR, and the landing sequence. The orchestrator owns the stack;
-each dev owns exactly one layer. Fix and cleanup work goes to a new top layer
-with one QA pass, never to a frozen layer.
+§0, and is not restated here. What it means for this skill: the lead owns
+the stack and each dev owns exactly one layer; every dispatch below — dev,
+fix, cleanup — is a new worktree cut from the current top, and the
+`<stack-discipline>` element every template carries is the dev-facing copy
+of §0.
 
 ## Plan Review Flow
 
@@ -199,8 +203,24 @@ Do not assume ATM-specific PR monitoring commands exist.
 Dispatch form (mandatory for every assignment below):
 
 ```bash
-atm send <agent> --template <path/to/template.j2> --vars <vars.json>
+TASK_ID="<task-id>"
+atm send <agent> \
+  --task-id "$TASK_ID" \
+  --template <path/to/template.j2> \
+  --vars <vars.json> \
+  --var task_id="$TASK_ID"
 ```
+
+Install the repository templates on the daemon host after this change merges:
+
+```bash
+mkdir -p ~/.atm/templates/codex-orchestration && cp .claude/skills/codex-orchestration/*.j2 ~/.atm/templates/codex-orchestration/
+```
+
+On atm 1.5.16, closing an assignee task with its final report also closes the
+assigner's mirror task. The lead must not issue a second `--task-complete` for
+that mirror; it reads the assignee's close report and proceeds with QA or the
+next orchestration step.
 
 Use the templates in this skill directory:
 - `dev-template.xml.j2`
@@ -217,8 +237,7 @@ Use the Rust assignment templates from:
 
 ## Required Message Sequence
 
-Every ATM task message must follow:
-1. ACK
-2. Work
-3. Completion summary
-4. Completion ACK by receiver
+The sequence for every ATM task assignment — ack, work, task close; the
+receiver never acks a close — is defined once in
+[`docs/team-protocol.md`](../../../docs/team-protocol.md) (Required Flow).
+This skill adds nothing to it and restates none of it.

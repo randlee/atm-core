@@ -1,11 +1,17 @@
+mod message_admission;
 mod ops;
 mod ops_envelope;
 mod read_display_state;
 mod shutdown_support;
 mod stmt_cache;
+mod task_assignment_migration;
+mod task_assignment_refresh;
+mod task_close;
 mod task_ops;
+mod task_reassign_notice;
 mod task_rejection;
 mod task_report;
+mod task_start;
 
 use crate::DIAGNOSTIC_PRUNE_CHECK_EVERY;
 use crate::observability::{
@@ -16,12 +22,14 @@ use crate::shared_db::{
     sqlite_error,
 };
 use atm_storage::{AtmError, AtmErrorCode, DiagnosticEvent};
-pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
+pub(crate) use message_admission::validate_upsert_message_request;
+pub(crate) use ops::{WriteOp, WriteOpResult};
 use rusqlite::TransactionBehavior;
 use shutdown_support::{
     checkpoint_writer_connection, drain_submit_replies, writer_channel_closed_error,
     writer_queue_timeout_error, writer_reply_channel_closed_error, writer_reply_timeout_error,
 };
+
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -29,6 +37,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+pub(crate) use task_assignment_migration::normalize_legacy_assignment_markers;
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
 /// A diagnostic producer owns at most one bounded batch at a time.

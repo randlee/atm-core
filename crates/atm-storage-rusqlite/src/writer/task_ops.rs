@@ -1,41 +1,75 @@
 //! The rusqlite writer's sole task-ledger mutation site.
 
+use super::message_admission::execute_upsert_message;
 use super::ops::{
-    WriteOp, execute_upsert_message, load_existing_message, load_pending_ack_source,
-    mark_source_acknowledged,
+    WriteOp, load_existing_message, load_pending_ack_source, mark_source_acknowledged,
 };
 use super::stmt_cache::WriterStatementCache;
+use super::task_close::apply_task_close;
 use super::task_rejection::{
-    is_task_rejection, task_already_closed, task_move_invalid, task_not_counterparty,
-    task_not_found, task_stale_counterparty,
+    is_task_rejection, task_already_closed, task_move_invalid, task_not_found,
 };
-use super::task_report::drop_task_link_from_mail;
+use super::task_start::apply_task_start;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::AtmMessageId;
 use atm_storage::task_state::{
-    DAEMON_ACTOR_NAME, QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskRow,
-    TaskState, TaskStateTag, Transition, admit, transition,
+    QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskRow, TaskState, TaskStateTag,
+    Transition, transition,
 };
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{MessageWriteOrigin, MoveTarget, TaskOp};
-use rusqlite::{Connection, OptionalExtension, params};
+pub(super) use rusqlite::params;
+use rusqlite::{Connection, OptionalExtension};
 
-use crate::task_sql;
+use crate::task_sql::select_task_row;
 
 pub(super) enum TaskMessageResult {
-    Applied(Option<TaskCloseOutcome>),
+    Applied {
+        already_closed: Option<TaskCloseOutcome>,
+        task_assignee: Option<AgentName>,
+        queued_position: Option<u32>,
+        reassign_notice: Option<Box<Message>>,
+    },
     RejectedReportDelivered(AtmError),
 }
 
-fn load_task_row(
+impl TaskMessageResult {
+    pub(super) fn into_admission_parts(self) -> TaskAdmissionParts {
+        match self {
+            Self::Applied {
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice,
+            } => (
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice,
+                None,
+            ),
+            Self::RejectedReportDelivered(error) => (None, None, None, None, Some(error)),
+        }
+    }
+}
+
+type TaskAdmissionParts = (
+    Option<TaskCloseOutcome>,
+    Option<AgentName>,
+    Option<u32>,
+    Option<Box<Message>>,
+    Option<AtmError>,
+);
+
+pub(super) fn load_task_row(
     connection: &Connection,
     target: &SharedDbTarget,
     team: &TeamName,
     task_id: &TaskId,
 ) -> Result<Option<TaskRow>, AtmError> {
-    task_sql::select_task_row(connection, team, task_id)
+    select_task_row(connection, team, task_id)
         .map_err(|error| sqlite_error(target, "failed to load task row", error))
 }
 
@@ -119,9 +153,22 @@ pub(super) fn apply_task_message(
     target: &SharedDbTarget,
 ) -> Result<TaskMessageResult, AtmError> {
     let Some(task_id) = record.envelope.task_id.as_ref() else {
-        return Ok(TaskMessageResult::Applied(None));
+        return Ok(TaskMessageResult::Applied {
+            already_closed: None,
+            task_assignee: None,
+            queued_position: None,
+            reassign_notice: None,
+        });
     };
     match record.envelope.task_op.as_ref() {
+        None if is_non_assigner_report(record, task_id, connection, target)? => {
+            Ok(TaskMessageResult::Applied {
+                already_closed: None,
+                task_assignee: None,
+                queued_position: None,
+                reassign_notice: None,
+            })
+        }
         None => apply_task_assignment(
             record,
             task_id,
@@ -130,9 +177,22 @@ pub(super) fn apply_task_message(
             cache,
             target,
         )
-        .map(|()| TaskMessageResult::Applied(None)),
-        Some(TaskOp::Start) => apply_task_start(record, task_id, connection, target)
-            .map(|()| TaskMessageResult::Applied(None)),
+        .map(|applied| TaskMessageResult::Applied {
+            already_closed: None,
+            task_assignee: None,
+            queued_position: Some(applied.queued_position),
+            reassign_notice: applied.reassign_notice.map(Box::new),
+        }),
+        Some(TaskOp::Start) => {
+            apply_task_start(record, task_id, connection, target).map(|task_assignee| {
+                TaskMessageResult::Applied {
+                    already_closed: None,
+                    task_assignee: Some(task_assignee),
+                    queued_position: None,
+                    reassign_notice: None,
+                }
+            })
+        }
         Some(TaskOp::Close { outcome, reason }) => apply_task_close(
             record,
             task_id,
@@ -145,6 +205,21 @@ pub(super) fn apply_task_message(
     }
 }
 
+fn is_non_assigner_report(
+    record: &Message,
+    task_id: &TaskId,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<bool, AtmError> {
+    Ok(load_task_row(connection, target, &record.team, task_id)?
+        .is_some_and(|row| record.envelope.from != row.assigner))
+}
+
+struct TaskAssignmentApplied {
+    queued_position: u32,
+    reassign_notice: Option<Message>,
+}
+
 fn apply_task_assignment(
     record: &Message,
     task_id: &TaskId,
@@ -152,7 +227,7 @@ fn apply_task_assignment(
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-) -> Result<(), AtmError> {
+) -> Result<TaskAssignmentApplied, AtmError> {
     let row = load_task_row(connection, target, &record.team, task_id)?;
     let Transition(next_state) = transition(
         row.as_ref().map(|row| row.state),
@@ -169,23 +244,73 @@ fn apply_task_assignment(
         .message_id
         .ok_or_else(|| task_move_invalid("task assignment is missing message id"))?;
 
-    if refresh_same_assignment(
+    if let Some(queued_position) = super::task_assignment_refresh::refresh_same_assignment(
         record,
         task_id,
         row.as_ref(),
         message_id,
         connection,
-        cache,
         target,
     )? {
-        return Ok(());
+        return Ok(TaskAssignmentApplied {
+            queued_position,
+            reassign_notice: None,
+        });
     }
 
-    let was_closed = row
+    let previous_assignee = row
         .as_ref()
-        .is_some_and(|row| matches!(row.state, TaskState::Complete(_)));
-    release_previous_assignment(record, task_id, row.as_ref(), connection, cache, target)?;
+        .filter(|row| row.state.is_open() && row.assignee != record.agent)
+        .map(|row| row.assignee.clone());
 
+    let order = persist_task_assignment(
+        record,
+        task_id,
+        placement,
+        row.as_ref(),
+        message_id,
+        at,
+        next_state,
+        connection,
+        target,
+    )?;
+    let queued_position = order
+        .iter()
+        .position(|id| id == task_id)
+        .and_then(|index| u32::try_from(index + 1).ok())
+        .ok_or_else(|| task_move_invalid("assigned task is absent from its normalized queue"))?;
+    let reassign_notice = previous_assignee
+        .map(|old_assignee| {
+            super::task_reassign_notice::insert_reassign_notice(
+                record,
+                task_id,
+                old_assignee,
+                connection,
+                cache,
+                target,
+            )
+        })
+        .transpose()?;
+    Ok(TaskAssignmentApplied {
+        queued_position,
+        reassign_notice,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn persist_task_assignment(
+    record: &Message,
+    task_id: &TaskId,
+    placement: Option<&MoveTarget>,
+    row: Option<&TaskRow>,
+    message_id: AtmMessageId,
+    at: IsoTimestamp,
+    next_state: TaskState,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<Vec<TaskId>, AtmError> {
+    let was_closed = row.is_some_and(|row| matches!(row.state, TaskState::Complete(_)));
+    release_previous_assignment(record, task_id, row, connection, target)?;
     let mut order = queue_order(connection, target, &record.team, &record.agent)?;
     order.retain(|id| id != task_id);
     insert_at_placement(
@@ -200,59 +325,14 @@ fn apply_task_assignment(
     let temporary =
         u32::try_from(order.len()).map_err(|_| task_move_invalid("task queue too large"))?;
     apply_task_assignment_row(
-        record,
-        task_id,
-        row.as_ref(),
-        temporary,
-        message_id,
-        at,
-        next_state,
-        connection,
-        target,
+        record, task_id, row, temporary, message_id, at, next_state, connection, target,
     )?;
-    renumber_previous_assignment(record, row.as_ref(), connection, target)?;
+    renumber_previous_assignment(record, row, connection, target)?;
     renumber_queue(&record.team, &record.agent, &order, connection, target)?;
     append_assignment_event(
-        record,
-        task_id,
-        row.as_ref(),
-        was_closed,
-        message_id,
-        at,
-        next_state,
-        connection,
-        target,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn refresh_same_assignment(
-    record: &Message,
-    task_id: &TaskId,
-    row: Option<&TaskRow>,
-    message_id: AtmMessageId,
-    connection: &Connection,
-    cache: &mut WriterStatementCache,
-    target: &SharedDbTarget,
-) -> Result<bool, AtmError> {
-    let Some(row) = row.filter(|row| row.state.is_open() && row.assignee == record.agent) else {
-        return Ok(false);
-    };
-    acknowledge_assignment(connection, cache, target, record, row)?;
-    connection
-        .execute(
-            "UPDATE tasks SET assignment_message_id=?3, description=?4, updated_at=?5
-             WHERE team=?1 AND task_id=?2",
-            params![
-                record.team.as_str(),
-                task_id.as_str(),
-                message_id.to_string(),
-                record.envelope.text,
-                record.envelope.timestamp.to_string()
-            ],
-        )
-        .map_err(|error| sqlite_error(target, "failed to refresh task assignment", error))?;
-    Ok(true)
+        record, task_id, row, was_closed, message_id, at, next_state, connection, target,
+    )?;
+    Ok(order)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -261,13 +341,11 @@ fn release_previous_assignment(
     task_id: &TaskId,
     row: Option<&TaskRow>,
     connection: &Connection,
-    cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     let Some(row) = row.filter(|row| row.state.is_open()) else {
         return Ok(());
     };
-    acknowledge_assignment(connection, cache, target, record, row)?;
     let old_order = queue_order(connection, target, &record.team, &row.assignee)?
         .into_iter()
         .filter(|id| id != task_id)
@@ -390,275 +468,6 @@ fn append_assignment_event(
         None,
         None,
         None,
-    )
-}
-
-fn apply_task_start(
-    record: &Message,
-    task_id: &TaskId,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let row = load_startable_task(record, task_id, connection, target)?;
-    let Transition(next_state) = transition(
-        Some(row.state),
-        TaskEvent::Started,
-        task_id,
-        &record.envelope.from,
-        Some(&row.assignee),
-        &row.assignee,
-    )
-    .map_err(|error| error.into_atm_error())?;
-    if !start_reminder_was_emitted(record, task_id, connection, target)?
-        || row.state == TaskState::Active
-    {
-        return Ok(());
-    }
-    reject_concurrent_active_task(record, task_id, &row, connection, target)?;
-
-    let mut order = queue_order(connection, target, &record.team, &row.assignee)?;
-    order.retain(|id| id != task_id);
-    order.insert(0, task_id.clone());
-    connection
-        .execute(
-            "UPDATE tasks SET state=?3, lead_notified_count=0, updated_at=?4
-             WHERE team=?1 AND task_id=?2",
-            params![
-                record.team.as_str(),
-                task_id.as_str(),
-                next_state.as_str(),
-                record.envelope.timestamp.to_string()
-            ],
-        )
-        .map_err(|error| sqlite_error(target, "failed to start task", error))?;
-    renumber_queue(&record.team, &row.assignee, &order, connection, target)?;
-    append_task_event(
-        connection,
-        target,
-        &record.team,
-        task_id,
-        &row.assignee,
-        &record.envelope.timestamp,
-        TaskEventKind::Started,
-        Some(row.state.tag()),
-        Some(next_state.tag()),
-        None,
-        &record.envelope.from,
-        record.envelope.message_id,
-        None,
-        None,
-        None,
-    )
-}
-
-fn load_startable_task(
-    record: &Message,
-    task_id: &TaskId,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<TaskRow, AtmError> {
-    let Some(row) = load_task_row(connection, target, &record.team, task_id)? else {
-        return Err(task_not_found(format!(
-            "no open task {task_id} for {}",
-            record.envelope.from
-        )));
-    };
-    if !row.state.is_open() {
-        return Err(task_already_closed(format!(
-            "no open task {task_id} for {}",
-            record.envelope.from
-        )));
-    }
-    if record.envelope.from.as_str() != DAEMON_ACTOR_NAME {
-        return Err(task_not_counterparty(format!(
-            "task {task_id} start requires {DAEMON_ACTOR_NAME}"
-        )));
-    }
-    Ok(row)
-}
-
-fn start_reminder_was_emitted(
-    record: &Message,
-    task_id: &TaskId,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<bool, AtmError> {
-    let reminder: Option<String> = connection
-        .query_row(
-            "SELECT outcome FROM task_events WHERE team=?1 AND task_id=?2 AND event='reminded'
-             AND rowid > (SELECT COALESCE(MAX(rowid),0) FROM task_events WHERE team=?1 AND task_id=?2
-               AND event IN ('assigned','reassigned','reopened'))
-             ORDER BY rowid DESC LIMIT 1",
-            params![record.team.as_str(), task_id.as_str()],
-            |raw| raw.get(0),
-        )
-        .optional()
-        .map_err(|error| sqlite_error(target, "failed to load task reminder gate", error))?;
-    Ok(reminder.as_deref() == Some("emitted"))
-}
-
-fn reject_concurrent_active_task(
-    record: &Message,
-    task_id: &TaskId,
-    row: &TaskRow,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let active: Option<String> = connection
-        .query_row(
-            "SELECT task_id FROM tasks
-             WHERE team=?1 AND assignee=?2 AND state='active' AND task_id<>?3",
-            params![
-                record.team.as_str(),
-                row.assignee.as_str(),
-                task_id.as_str()
-            ],
-            |raw| raw.get(0),
-        )
-        .optional()
-        .map_err(|error| sqlite_error(target, "failed to check active task", error))?;
-    if active.is_some() {
-        return Err(task_move_invalid(format!(
-            "task {task_id}: {} already has an active task",
-            row.assignee
-        )));
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn apply_task_close(
-    record: &Message,
-    task_id: &TaskId,
-    outcome: TaskCloseOutcome,
-    reason: Option<&str>,
-    connection: &Connection,
-    cache: &mut WriterStatementCache,
-    target: &SharedDbTarget,
-) -> Result<TaskMessageResult, AtmError> {
-    let Some(row) = load_task_row(connection, target, &record.team, task_id)? else {
-        return Err(task_not_found(format!(
-            "no open task {task_id} for {}",
-            record.envelope.from
-        )));
-    };
-    if let TaskState::Complete(already) = row.state {
-        drop_task_link_from_mail(record, connection, target)?;
-        return Ok(TaskMessageResult::Applied(Some(already)));
-    }
-    if let Err(error) = admit(
-        Some(&row),
-        TaskEvent::Completed(outcome),
-        task_id,
-        &record.envelope.from,
-    )
-    .map_err(|error| error.into_atm_error())
-    {
-        return deliver_rejected_close_report(record, task_id, &row, error, connection, target);
-    }
-    let Transition(next_state) = transition(
-        Some(row.state),
-        TaskEvent::Completed(outcome),
-        task_id,
-        &record.envelope.from,
-        Some(&row.assignee),
-        &row.assignee,
-    )
-    .map_err(|error| error.into_atm_error())?;
-    let expected = if record.envelope.from == row.assignee {
-        &row.assigner
-    } else {
-        &row.assignee
-    };
-    if &record.agent != expected {
-        let error = task_stale_counterparty(format!(
-            "task {task_id}: {} is no longer the counterparty — re-run the command",
-            record.agent
-        ));
-        return deliver_rejected_close_report(record, task_id, &row, error, connection, target);
-    }
-    persist_task_close(
-        record, task_id, outcome, reason, &row, next_state, connection, cache, target,
-    )?;
-    Ok(TaskMessageResult::Applied(None))
-}
-
-fn deliver_rejected_close_report(
-    record: &Message,
-    task_id: &TaskId,
-    row: &TaskRow,
-    error: AtmError,
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<TaskMessageResult, AtmError> {
-    drop_task_link_from_mail(record, connection, target)?;
-    append_task_event(
-        connection,
-        target,
-        &record.team,
-        task_id,
-        &row.assignee,
-        &IsoTimestamp::now(),
-        TaskEventKind::Rejected,
-        Some(row.state.tag()),
-        Some(row.state.tag()),
-        row.state.close_outcome(),
-        &record.envelope.from,
-        record.envelope.message_id,
-        None,
-        None,
-        Some(error.message()),
-    )?;
-    Ok(TaskMessageResult::RejectedReportDelivered(AtmError::new(
-        error.code(),
-        format!("{}; report delivered", error.detail()),
-    )))
-}
-
-#[allow(clippy::too_many_arguments)]
-fn persist_task_close(
-    record: &Message,
-    task_id: &TaskId,
-    outcome: TaskCloseOutcome,
-    reason: Option<&str>,
-    row: &TaskRow,
-    next_state: TaskState,
-    connection: &Connection,
-    cache: &mut WriterStatementCache,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    acknowledge_assignment(connection, cache, target, record, row)?;
-    connection
-        .execute(
-            "UPDATE tasks SET state=?3, close_outcome=?4, position=NULL, updated_at=?5
-         WHERE team=?1 AND task_id=?2",
-            params![
-                record.team.as_str(),
-                task_id.as_str(),
-                next_state.as_str(),
-                outcome.as_str(),
-                record.envelope.timestamp.to_string()
-            ],
-        )
-        .map_err(|error| sqlite_error(target, "failed to close task", error))?;
-    let order = queue_order(connection, target, &record.team, &row.assignee)?;
-    renumber_queue(&record.team, &row.assignee, &order, connection, target)?;
-    append_task_event(
-        connection,
-        target,
-        &record.team,
-        task_id,
-        &row.assignee,
-        &record.envelope.timestamp,
-        close_event_kind(outcome),
-        Some(row.state.tag()),
-        Some(next_state.tag()),
-        Some(outcome),
-        &record.envelope.from,
-        record.envelope.message_id,
-        None,
-        None,
-        reason,
     )
 }
 
@@ -786,7 +595,7 @@ fn append_active_task_move(
     )
 }
 
-fn queue_order(
+pub(super) fn queue_order(
     connection: &Connection,
     target: &SharedDbTarget,
     team: &TeamName,
@@ -856,7 +665,7 @@ fn insert_at_placement(
 /// Renumbers one member's open queue without transient unique-index overlap.
 /// Phase one adds `MAX(current position) + order.len()` so every old value is
 /// above the occupied range; phase two writes the exact `1..=n` order.
-fn renumber_queue(
+pub(super) fn renumber_queue(
     team: &TeamName,
     assignee: &AgentName,
     order: &[TaskId],
@@ -919,7 +728,7 @@ fn write_queue_positions(
     Ok(())
 }
 
-fn acknowledge_assignment(
+pub(super) fn acknowledge_assignment(
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
@@ -964,7 +773,7 @@ fn acknowledge_assignment(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn append_task_event(
+pub(super) fn append_task_event(
     connection: &Connection,
     target: &SharedDbTarget,
     team: &TeamName,
@@ -1021,13 +830,5 @@ const fn task_state_tag_name(state: TaskStateTag) -> &'static str {
         TaskStateTag::Assigned => "assigned",
         TaskStateTag::Active => "active",
         TaskStateTag::Complete => "complete",
-    }
-}
-
-const fn close_event_kind(outcome: TaskCloseOutcome) -> TaskEventKind {
-    match outcome {
-        TaskCloseOutcome::Completed => TaskEventKind::Completed,
-        TaskCloseOutcome::Refused => TaskEventKind::Refused,
-        TaskCloseOutcome::Cancelled => TaskEventKind::Cancelled,
     }
 }

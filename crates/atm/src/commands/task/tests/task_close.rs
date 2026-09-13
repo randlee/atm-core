@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use atm_core::error::AtmErrorCode;
 use atm_core::schema::AtmMessageId;
 use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 use atm_storage::{
@@ -53,8 +54,8 @@ fn seed_assignment(f: &LoopbackFixture, task: &str, assignee: &str, assigner: &s
                 destination_chat_id: None,
                 summary: None,
                 message_id: Some(message_id),
-                requires_ack: true,
-                pending_ack_at: Some(timestamp),
+                requires_ack: false,
+                pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
                 parent_message_id: None,
@@ -155,7 +156,14 @@ async fn close_unknown_task_sends_nothing_and_exits_one() {
     let error = run_close(&f, close("UNKNOWN", "recipient", OutcomeArg::Completed))
         .await
         .unwrap_err();
-    assert_eq!(crate::exit_code_for_error(&error), 1);
+    let typed = error
+        .downcast_ref::<atm_core::error::AtmError>()
+        .expect("task lookup error remains typed");
+    assert_eq!(typed.code(), AtmErrorCode::TaskNotFound);
+    let json = serde_json::to_value(typed).expect("serialize --json task close error");
+    assert_eq!(json["code"], "ATM_TASK_NOT_FOUND");
+    assert!(typed.message().contains("Recovery:"));
+    assert_eq!(crate::exit_code_for_error(&error), 3);
     assert_eq!(f.inbox_contents(TEST_SENDER).len(), before);
 }
 
@@ -384,7 +392,9 @@ async fn refusal_releases_next_queued_task() {
             .state,
         TaskState::Complete(TaskCloseOutcome::Refused)
     );
-    let t2_nudges = f
+    // BB.5: the released assignment stays in the inbox unread and unacknowledged
+    // with no pending-ack marker; the task pass, not a marker, prompts T2 next.
+    let t2_assignments = f
         .inbox_contents("recipient")
         .into_iter()
         .filter(|message| {
@@ -392,8 +402,10 @@ async fn refusal_releases_next_queued_task() {
                 .task_id
                 .as_ref()
                 .is_some_and(|id| id.as_str() == "T2")
-                && message.pending_ack_at.is_some()
         })
-        .count();
-    assert_eq!(t2_nudges, 1);
+        .collect::<Vec<_>>();
+    assert_eq!(t2_assignments.len(), 1);
+    assert!(t2_assignments[0].pending_ack_at.is_none());
+    assert!(t2_assignments[0].acknowledged_at.is_none());
+    assert!(!t2_assignments[0].read);
 }

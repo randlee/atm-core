@@ -5,16 +5,16 @@ use std::collections::HashMap;
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
 #[cfg(any(test, feature = "test-utils"))]
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+#[cfg(any(test, feature = "test-utils"))]
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::contract::sealed;
-#[cfg(any(test, feature = "test-utils"))]
-use crate::contract::{AsyncTaskLedgerReader, ReadDeadline, ReadLaneError};
+use crate::contract::{ReadDeadline, ReadLaneError, sealed};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
-use crate::task_state::{QueuePosition, TaskEventRow, TaskRow};
+use crate::task_state::{PromptHandoff, QueuePosition, TaskEventRow, TaskRow};
 use crate::types::{AgentName, IsoTimestamp, MemberKey, TaskId, TeamName};
 use crate::{AgentAddress, MoveTarget};
 
@@ -57,6 +57,53 @@ impl EscalationScope {
     }
 }
 
+/// Bounded, read-only task-ledger projection, separate from mailbox messages.
+/// Implementations use a storage-owned reader lane, never the ordered writer.
+#[async_trait::async_trait]
+pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
+    async fn load_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Option<TaskRow>, ReadLaneError>;
+
+    async fn open_tasks_for_team(
+        &self,
+        team: TeamName,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError>;
+
+    async fn refusal_run(
+        &self,
+        team: TeamName,
+        assignee: AgentName,
+        deadline: ReadDeadline,
+    ) -> Result<crate::RefusalRun, ReadLaneError>;
+
+    async fn list_tasks(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError>;
+
+    async fn list_task_events(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        member: Option<AgentName>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
+
+    async fn list_prompt_handoffs(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<PromptHandoff>, ReadLaneError>;
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ReminderOutcome {
@@ -84,8 +131,9 @@ pub enum MessageWriteOrigin {
     Peer,
 }
 
-/// Read and audit capability for the task ledger. Message-state transitions
-/// are intentionally applied only in a backend writer transaction.
+/// Read and audit capability for the task ledger, including the prompt-handoff
+/// audit record. Message-state transitions are intentionally applied only in a
+/// backend writer transaction.
 pub trait TaskStore: sealed::Sealed + Send + Sync {
     fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError>;
     fn open_tasks(&self, member: &MemberKey) -> Result<Vec<TaskRow>, AtmError>;
@@ -100,6 +148,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         task_id: &TaskId,
         assignee: Option<&AgentName>,
     ) -> Result<Vec<TaskEventRow>, AtmError>;
+    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<(), AtmError>;
     fn move_task(
         &self,
         _team: &TeamName,
@@ -165,8 +214,11 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
 #[derive(Debug, Default)]
 pub struct DummyTaskStore {
     rows: Mutex<HashMap<(TeamName, TaskId), TaskRow>>,
+    prompt_handoffs: Mutex<Vec<PromptHandoff>>,
     escalation_recipients: Mutex<HashMap<String, Vec<AgentAddress>>>,
     fail_reminders: bool,
+    fail_prompt_handoffs: AtomicBool,
+    prompt_handoff_delay_millis: AtomicU64,
     fail_escalation_recipient_reads: AtomicBool,
 }
 
@@ -180,10 +232,24 @@ impl DummyTaskStore {
             .collect();
         Self {
             rows: Mutex::new(rows),
+            prompt_handoffs: Mutex::new(Vec::new()),
             escalation_recipients: Mutex::new(HashMap::new()),
             fail_reminders,
+            fail_prompt_handoffs: AtomicBool::new(false),
+            prompt_handoff_delay_millis: AtomicU64::new(0),
             fail_escalation_recipient_reads: AtomicBool::new(false),
         }
+    }
+
+    pub fn set_fail_prompt_handoffs(&self, fail: bool) {
+        self.fail_prompt_handoffs.store(fail, Ordering::SeqCst);
+    }
+
+    pub fn set_prompt_handoff_delay(&self, delay: Duration) {
+        self.prompt_handoff_delay_millis.store(
+            u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
+            Ordering::SeqCst,
+        );
     }
 
     pub fn set_fail_escalation_recipient_reads(&self, fail: bool) {
@@ -286,6 +352,24 @@ impl AsyncTaskLedgerReader for DummyTaskStore {
             )?,
         )
     }
+
+    async fn list_prompt_handoffs(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<PromptHandoff>, ReadLaneError> {
+        Ok(self
+            .prompt_handoffs
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "dummy prompt handoffs lock poisoned".to_owned(),
+            })?
+            .iter()
+            .filter(|row| row.team == team && row.task_id == task_id)
+            .cloned()
+            .collect())
+    }
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -332,6 +416,34 @@ impl TaskStore for DummyTaskStore {
         _assignee: Option<&AgentName>,
     ) -> Result<Vec<TaskEventRow>, AtmError> {
         Ok(Vec::new())
+    }
+
+    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<(), AtmError> {
+        if self.fail_prompt_handoffs.load(Ordering::SeqCst) {
+            return Err(AtmError::mailbox_write(
+                "injected prompt-handoff bookkeeping failure",
+            ));
+        }
+        let delay_millis = self.prompt_handoff_delay_millis.load(Ordering::SeqCst);
+        if delay_millis != 0 {
+            let started = std::time::Instant::now();
+            while started.elapsed() < Duration::from_millis(delay_millis) {
+                std::thread::yield_now();
+            }
+        }
+        let mut rows = self
+            .prompt_handoffs
+            .lock()
+            .map_err(|_| AtmError::mailbox_write("dummy prompt handoffs lock poisoned"))?;
+        if !rows.iter().any(|row| {
+            row.team == handoff.team
+                && row.agent == handoff.agent
+                && row.message_key == handoff.message_key
+                && row.attempt == handoff.attempt
+        }) {
+            rows.push(handoff.clone());
+        }
+        Ok(())
     }
 
     fn record_reminder(

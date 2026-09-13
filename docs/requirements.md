@@ -1365,21 +1365,24 @@ Post-send-hook rules:
   `home_dir` metadata rather than the caller's live process working directory
 - if no matching external `[[atm.post_send_hooks]]` rule is configured, ATM
   must still attempt the shipped built-in in-process post-send path
-- the built-in shipped nudge path must support exactly seven named template
+- the built-in shipped nudge path must support exactly eleven named template
   cases:
   - `delivery`
   - `delivery_ack`
   - `queue`
   - `queue_ack`
-  - `task`
   - `acknowledge`
-  - `acknowledge_task`
-  `NudgeKind` selects the delivery or queue family; task-tagged messages select
-  `task` in either family.
+  - `task_queued`
+  - `task_ready`
+  - `task_reminder`
+  - `task_started`
+  - `task_complete`
+  - `task_closed`
+  `NudgeKind` selects the delivery or queue family; a task-linked message
+  selects the kind named by its `task_transition`.
 - the default built-in acknowledge nudge shapes are intentionally compact:
   - `<atm kind="ack" from="..." message-id="..."/>`
-  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
-- teams may override any subset of those seven built-in template bodies through
+- teams may override any subset of those eleven built-in template bodies through
   host-scoped, team-keyed ATM-managed override rows resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract
 - built-in precedence is:
@@ -1582,13 +1585,12 @@ Required behavior:
 
 Required behavior:
 - persist `taskId`
-- require acknowledgement for any task-linked message
 - reject blank task ids
 - acknowledgement MUST NOT read, gate on, or change task state
 
 If `--task-id` is present:
 - treat the message as task-linked mail
-- imply `--requires-ack`
+- reject `--requires-ack` because it conflicts with `--task-id`
 
 `--task-complete` closes the task named by `--task-id` with outcome
 `completed`; it requires `--task-id` and carries the mandatory completion
@@ -2972,10 +2974,8 @@ The implementation must encode legal transitions in code structure, not only in 
 Messages with `taskId` are task-linked messages.
 
 Required rules:
-- every task-linked message must require acknowledgement
-- a task-linked message remains actionable until acknowledged
-- a task-linked message must continue to appear in `atm read` until acknowledged
-- a task-linked message must never be removed by `atm clear` before acknowledgement
+- a task-linked message never requires acknowledgement; readiness is signalled
+  by the task pass (`task_ready`), and start by `atm task start`
 - acknowledgement is message hygiene only: `atm ack` MUST NOT read, gate on,
   or change task state, and task admission MUST NOT reject a message ack
 - every transition, rejection, and reminder is append-only audit data; a
@@ -2993,8 +2993,9 @@ Task lifecycle (Phase BA):
    `assigned → active` move; rejected as `ActiveElsewhere`), never at
    `atm task assign` admission — any number of `assigned` rows may queue
    behind the active one.
-4. Starting a task MUST move it from `assigned` to `active` and MUST send the
-   assigner a start notification.
+4. Starting a task MUST be `atm task start <id>` by the assignee; it MUST move
+   the task from `assigned` to `active`, MUST move it to the head of the queue,
+   and MUST send the assigner a start message. The daemon MUST NOT start a task.
 5. An agent's queue MUST be ordered by `(position, assigned_at, task_id)`;
    `assigned_at` MUST be the time of the current assignment; it is reset only by reassignment or reopen and never by a queue move; a new task's default position MUST be the
    end of the queue.
@@ -3009,8 +3010,8 @@ Task lifecycle (Phase BA):
    neither operation creates a second row or permits simultaneous assignees.
    Every transition MUST append exactly one `task_events` row under that id;
    `reassigned` and `reopened` are event kinds, not outcomes.
-9. `atm task` MUST be the closed subcommand set `assign`, `close`, `move`,
-   `list`, `events`; `atm send <agent> --task-id <id>` MUST alias `assign`
+9. `atm task` MUST be the closed subcommand set `assign`, `start`, `close`,
+   `move`, `list`, `events`; `atm send <agent> --task-id <id>` MUST alias `assign`
    and `atm send <assigner> --task-complete --task-id <id>` MUST alias
    `close <id> completed` with a mandatory report.
 10. Close MUST deliver the report message before applying the close; an
@@ -3032,7 +3033,9 @@ Nudge invariant (Phase BA):
     `PickerMemberStatus`, a `RuntimeHealth` projection, raw Herdr output, or
     heartbeat DTOs.
 15. `Idle` with an open task MUST be nudged, no more than once per 60 seconds
-    per task.
+    per task. The first prompt is `task_ready`; later prompts are
+    `task_reminder` with a rising attempt. Every assignment produces one
+    `task_queued` line at write time.
 16. `Active` MUST never be nudged or diverted to another task.
 17. `Blocked` or `Offline` MUST escalate once per episode and MUST receive
     zero nudges.
@@ -4968,7 +4971,7 @@ Task ledger shape (Phase BA):
     persistence
   - the shipped default post-send path is the built-in in-process
     implementation
-  - teams may override any subset of the seven built-in nudge template bodies
+  - teams may override any subset of the eleven built-in nudge template bodies
     through host-scoped, team-keyed ATM-managed override rows resolved through
     the storage-neutral `NudgeTemplateOverrideStore` contract
   - emission failure must be logged and surfaced as a sender-visible warning

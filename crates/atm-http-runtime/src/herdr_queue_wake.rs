@@ -267,12 +267,9 @@ impl HerdrQueueWakePump {
         if let Some(prepared) = prepared_task_pass.as_ref() {
             eligible.retain(|candidate| prepared.queue_drain_allowed(&candidate.key));
         }
-        let prompted = self
-            .drain_eligible(pending_store, eligible, &mut stats)
+        self.drain_eligible(pending_store, eligible, &mut stats)
             .await;
         if let Some(prepared_task_pass) = prepared_task_pass {
-            self.record_queue_prompt_reminders(&prepared_task_pass, &prompted, &mut stats)
-                .await;
             self.remind_open_tasks(
                 prepared_task_pass,
                 task_candidates,
@@ -472,10 +469,9 @@ impl HerdrQueueWakePump {
         pending_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         eligible: Vec<HerdrCandidate>,
         stats: &mut HerdrQueueWakeStats,
-    ) -> HashMap<MemberKey, atm_core::schema::AtmMessageId> {
-        let mut prompted = HashMap::new();
+    ) {
         if eligible.is_empty() {
-            return prompted;
+            return;
         }
         let start = *self
             .cursor
@@ -488,25 +484,18 @@ impl HerdrQueueWakePump {
                 break;
             }
             visited += 1;
-            if let Some(message_id) = self
+            let _ = self
                 .process_candidate(
                     &pending_store,
                     &eligible[(start + offset) % eligible.len()],
                     stats,
                 )
-                .await
-            {
-                prompted.insert(
-                    eligible[(start + offset) % eligible.len()].key.clone(),
-                    message_id,
-                );
-            }
+                .await;
         }
         *self
             .cursor
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = (start + visited) % eligible.len();
-        prompted
     }
 
     fn prune_member_state(&self, candidates: &[HerdrCandidate]) {

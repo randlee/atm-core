@@ -7,8 +7,13 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 from unittest import mock
 import unittest
+
+from scripts.smoke import feature_smoke_network_support as NETWORK_SUPPORT
+from scripts.smoke import feature_smoke_paths as PATHS
+from scripts import report_runtime as REPORT_RUNTIME
 
 
 def load_runner():
@@ -27,6 +32,36 @@ TEST_TEAM = "test-team"
 
 
 class FeatureSmokeTests(unittest.TestCase):
+    def test_report_and_envelope_carry_source_revision(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            procedure = root / "site/reports/procedures/graft-hermes/selected.html"
+            procedure.parent.mkdir(parents=True)
+            procedure.write_text("<html>procedure</html>\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "run-1"}), \
+                    mock.patch.object(RUNNER, "ROOT", root), mock.patch.object(RUNNER, "source_revision", return_value="a" * 40), \
+                    mock.patch.object(PATHS, "platform") as platform, mock.patch.object(PATHS, "os") as paths_os, \
+                    mock.patch.object(paths_os, "getpid", return_value=1), \
+                    mock.patch.object(RUNNER, "_resolve_procedure_page", return_value=SimpleNamespace(
+                        revision="b" * 40, html="procedures/graft-hermes/selected.html"
+                    )), mock.patch.object(RUNNER, "compose") as compose, \
+                    mock.patch.object(RUNNER, "update_master_report_index"):
+                platform.system.return_value = "Darwin"
+                platform.node.return_value = "m5"
+                paths_os.environ = os.environ
+                report = RUNNER.write_report("graft-hermes", [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "m5", "destination": "m5"}])
+            self.assertEqual(json.loads(report.read_text())["source_revision"], "a" * 40)
+            self.assertEqual(json.loads((report.parent / "smoke.envelope.json").read_text())["source_revision"], "a" * 40)
+            self.assertEqual(json.loads(report.read_text())["procedure"], "graft-hermes")
+            procedure_href = compose.call_args_list[1].args[1]["procedure_href"]
+            self.assertEqual((report.parent / procedure_href).resolve(), procedure.resolve())
+            self.assertTrue((report.parent / procedure_href).is_file())
+            self.assertEqual(compose.call_args_list[1].args[1]["procedure_label"], "graft-hermes @ bbbbbbbb")
+
+    def test_missing_git_writes_null_source_revision(self):
+        with mock.patch.object(REPORT_RUNTIME.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+            self.assertIsNone(RUNNER.source_revision())
+
     def test_local_ip_alias_is_supported(self):
         with mock.patch.object(RUNNER, "run_live", return_value=0) as run_live:
             with mock.patch.object(RUNNER.sys, "argv", ["smoke", "local-up"]):
@@ -57,11 +92,15 @@ class FeatureSmokeTests(unittest.TestCase):
                 RUNNER.main()
 
     def test_fixture_level_retains_existing_runner(self):
-        completed = mock.Mock(returncode=0)
-        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
+        with mock.patch("phase_ad_suite.run_suite", return_value={"status": "passed", "rows": [{"id": "AD-1", "verdict": "PASS", "flow": "fixture"}]}) as suite, \
+                mock.patch.object(RUNNER, "write_report", return_value=Path("report.json")) as report:
             with mock.patch.object(RUNNER.sys, "argv", ["smoke", "thorough"]):
                 self.assertEqual(RUNNER.main(), 0)
-        self.assertEqual(Path(run.call_args.args[0][1]).name, "run.py")
+        suite.assert_called_once()
+        report.assert_called_once_with("thorough", [{
+            "name": "AD-1", "status": "PASS", "detail": "fixture",
+            "origin": RUNNER.platform.node(), "destination": RUNNER.platform.node(),
+        }])
 
     def test_admission_capacity_reuses_the_feature_smoke_dispatcher(self):
         completed = mock.Mock(returncode=0)
@@ -115,8 +154,8 @@ class FeatureSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "smoke-42"}, clear=False):
                 with mock.patch.object(RUNNER, "ROOT", Path(temp)):
-                    with mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(
-                        RUNNER, "os"
+                    with mock.patch.object(PATHS, "platform") as platform, mock.patch.object(
+                        PATHS, "os"
                     ) as os_module, mock.patch.object(RUNNER, "compose") as compose, mock.patch.object(
                         RUNNER, "update_master_report_index"
                     ) as update_index:
@@ -147,16 +186,16 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_report_directory_includes_platform_host_and_process_qualified_run_id(self):
         with tempfile.TemporaryDirectory() as temp:
-            with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(RUNNER, "ROOT", Path(temp)), mock.patch.object(
-                RUNNER, "platform"
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(
+                PATHS, "platform"
             ) as platform, mock.patch.object(RUNNER, "os") as os_module:
                 platform.system.return_value = "Windows"
                 platform.node.return_value = "cwin"
                 os_module.environ = {}
                 os_module.getpid.return_value = 99
-                with mock.patch.object(RUNNER, "datetime") as datetime:
+                with mock.patch.object(PATHS, "os", os_module), mock.patch.object(PATHS, "datetime") as datetime:
                     datetime.now.return_value.strftime.return_value = "20260808T001234567890Z"
-                    directory, identity = RUNNER.smoke_report_directory("local-ip")
+                    directory, identity = PATHS.smoke_report_directory(Path(temp), "local-ip")
         self.assertEqual(
             identity,
             {
@@ -200,7 +239,7 @@ class FeatureSmokeTests(unittest.TestCase):
 
             with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "run-1"}, clear=False), mock.patch.object(
                 RUNNER, "ROOT", root
-            ), mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(RUNNER, "os") as os_module, mock.patch.object(
+            ), mock.patch.object(PATHS, "platform") as platform, mock.patch.object(PATHS, "os") as os_module, mock.patch.object(
                 RUNNER, "compose", side_effect=compose_side_effect
             ), mock.patch.object(RUNNER, "update_master_report_index") as update_index:
                 platform.system.return_value = "Windows"
@@ -220,6 +259,7 @@ class FeatureSmokeTests(unittest.TestCase):
                     "platform": "windows",
                     "run_id": "run-1",
                     "status": "PASS",
+                    "source_revision": None,
                     "cases": [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "cwin", "destination": "cwin"}],
                 },
             )
@@ -318,7 +358,7 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_artifact_segment_rejects_path_traversal(self):
         with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_SMOKE_RUN_ID"):
-            RUNNER.artifact_segment("../other-run", "ATM_SMOKE_RUN_ID")
+            PATHS.artifact_segment("../other-run", "ATM_SMOKE_RUN_ID")
 
     def test_ack_reply_contract_requires_a_sent_reply_ulid(self):
         self.assertEqual(
@@ -494,6 +534,7 @@ class FeatureSmokeTests(unittest.TestCase):
             "m5.example",
             "192.0.2.20",
             lambda _hostname: ["2001:db8::20"],
+            RUNNER.add_case,
         )
         self.assertEqual(cases[0]["status"], "FAIL")
         self.assertIn("missing advertised IP 192.0.2.20", cases[0]["detail"])
@@ -504,7 +545,7 @@ class FeatureSmokeTests(unittest.TestCase):
             os.environ,
             {"ATM_SMOKE_REMOTE_IDENTITY": "cm5:smoke", "ATM_SMOKE_REMOTE_TEAM": "atm-m5"},
             clear=False,
-        ), mock.patch.object(RUNNER, "command", return_value=result) as command:
+        ), mock.patch.object(NETWORK_SUPPORT, "command", return_value=result) as command:
             self.assertEqual(RUNNER.remote_command("m5", "/opt/homebrew/bin/atm", ["doctor", "--json"]), result)
         self.assertEqual(
             command.call_args.args[0],
@@ -559,6 +600,10 @@ class FeatureSmokeTests(unittest.TestCase):
             "remote_shell",
             side_effect=lambda _peer, script, timeout=20.0: remote_command_result(script, timeout),
         ) as remote_shell, mock.patch.object(
+            NETWORK_SUPPORT,
+            "remote_shell",
+            side_effect=lambda _peer, script, timeout=20.0: remote_command_result(script, timeout),
+        ) as network_remote_shell, mock.patch.object(
             RUNNER, "command", side_effect=local_command
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
@@ -587,7 +632,7 @@ class FeatureSmokeTests(unittest.TestCase):
         local_ca_path = curl_calls[0][curl_calls[0].index("--cacert") + 1]
         self.assertEqual(Path(local_ca_path).name, "remote-public.pem")
         self.assertTrue(any("unauthenticated mTLS" in case["name"] for case in cases))
-        cleanup_script = remote_shell.call_args_list[-1].args[1]
+        cleanup_script = network_remote_shell.call_args_list[-1].args[1]
         self.assertIn("rm -f", cleanup_script)
         self.assertIn("local-public.pem", cleanup_script)
         self.assertIn("peer-public.pem", cleanup_script)

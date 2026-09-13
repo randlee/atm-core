@@ -3,8 +3,8 @@ use crate::shared_db::SharedDb;
 use atm_storage::error::AtmError;
 use atm_storage::types::{IsoTimestamp, TeamName};
 use atm_storage::{
-    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow,
+    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, StaleNudgeTemplateOverrideKind,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
 };
 use rusqlite::{OptionalExtension, params};
 use std::sync::Arc;
@@ -18,6 +18,49 @@ impl SqliteNudgeTemplateOverrideStore {
 impl atm_storage::contract::sealed::Sealed for SqliteNudgeTemplateOverrideStore {}
 
 impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
+    fn list_stale_template_override_kinds(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<StaleNudgeTemplateOverrideKind>, AtmError> {
+        let db = Arc::clone(&self.db);
+        let team_key = team.clone();
+        self.db.read(move |connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT template_kind, updated_at
+                     FROM team_nudge_template_overrides
+                     WHERE team_name = ?1
+                     ORDER BY template_kind;",
+                )
+                .map_err(|error| {
+                    db.error(
+                        "failed to prepare stale nudge template override query",
+                        error,
+                    )
+                })?;
+            let rows = statement
+                .query_map(params![team_key.as_str()], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(|error| {
+                    db.error("failed to list stale nudge template override rows", error)
+                })?;
+            let mut stale = Vec::new();
+            for row in rows {
+                let (kind, updated_at) = row.map_err(|error| {
+                    db.error("failed to read stale nudge template override row", error)
+                })?;
+                if kind.parse::<BuiltInNudgeTemplateKind>().is_err() {
+                    stale.push(StaleNudgeTemplateOverrideKind {
+                        kind,
+                        updated_at: parse_updated_at(updated_at)?,
+                    });
+                }
+            }
+            Ok(stale)
+        })
+    }
+
     fn load_template_override(
         &self,
         team: &TeamName,
@@ -54,6 +97,49 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
                     })
                 })
                 .transpose()
+        })
+    }
+
+    fn list_template_overrides(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<TeamNudgeTemplateOverrideRow>, AtmError> {
+        let db = Arc::clone(&self.db);
+        let team_key = team.clone();
+        self.db.read(move |connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT template_kind, mode, template_body, updated_at
+                     FROM team_nudge_template_overrides
+                     WHERE team_name = ?1
+                     ORDER BY template_kind;",
+                )
+                .map_err(|error| db.error("failed to prepare template override query", error))?;
+            let rows = statement
+                .query_map(params![team_key.as_str()], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })
+                .map_err(|error| db.error("failed to list template override rows", error))?;
+            let mut overrides = Vec::new();
+            for row in rows {
+                let (kind, mode, template_body, updated_at) =
+                    row.map_err(|error| db.error("failed to read template override row", error))?;
+                let Ok(kind) = kind.parse::<BuiltInNudgeTemplateKind>() else {
+                    continue;
+                };
+                overrides.push(TeamNudgeTemplateOverrideRow {
+                    team_name: team_key.clone(),
+                    kind,
+                    mode: normalize_loaded_override_mode(mode, template_body)?,
+                    updated_at: parse_updated_at(updated_at)?,
+                });
+            }
+            Ok(overrides)
         })
     }
 
@@ -127,17 +213,13 @@ impl NudgeTemplateOverrideStore for SqliteNudgeTemplateOverrideStore {
         })
     }
 
-    fn clear_template_override(
-        &self,
-        team: &TeamName,
-        kind: BuiltInNudgeTemplateKind,
-    ) -> Result<bool, AtmError> {
+    fn clear_template_override(&self, team: &TeamName, kind: &str) -> Result<bool, AtmError> {
         self.db.with_connection(|connection| {
             connection
                 .execute(
                     "DELETE FROM team_nudge_template_overrides
                      WHERE team_name = ?1 AND template_kind = ?2;",
-                    params![team.as_str(), kind.as_str()],
+                    params![team.as_str(), kind],
                 )
                 .map(|count| count > 0)
                 .map_err(|error| {
@@ -216,7 +298,7 @@ mod tests {
         for (kind, body) in [
             (BuiltInNudgeTemplateKind::Queue, "<queue/>"),
             (BuiltInNudgeTemplateKind::QueueAck, "<queue-ack/>"),
-            (BuiltInNudgeTemplateKind::Task, "<task/>"),
+            (BuiltInNudgeTemplateKind::TaskReady, "<task/>"),
         ] {
             backend
                 .nudge_template_override_store()
@@ -278,10 +360,56 @@ mod tests {
             .nudge_template_override_store()
             .load_template_override(
                 &"test-team".parse().expect("team"),
-                BuiltInNudgeTemplateKind::Task,
+                BuiltInNudgeTemplateKind::TaskReady,
             )
             .expect("lookup");
         assert!(row.is_none());
+    }
+
+    #[test]
+    fn override_row_with_retired_kind_is_listed_stale_and_never_loaded() {
+        let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let db = backend.shared_db_for_test();
+        db.with_connection(|connection| {
+            connection
+                .execute(
+                    "INSERT INTO team_nudge_template_overrides
+                         (team_name, template_kind, mode, template_body, updated_at)
+                     VALUES ('test-team', 'task', 'override', '<retired/>', '2026-09-12T00:00:00Z');",
+                    [],
+                )
+                .map_err(|error| db.error("failed to seed stale override row", error))?;
+            Ok(())
+        })
+        .expect("seed stale row");
+
+        let team = "test-team".parse().expect("team");
+        let stale = backend
+            .nudge_template_override_store()
+            .list_stale_template_override_kinds(&team)
+            .expect("list stale rows");
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale[0].kind, "task");
+        assert!(
+            backend
+                .nudge_template_override_store()
+                .load_template_override(&team, BuiltInNudgeTemplateKind::TaskReady)
+                .expect("load replacement kind")
+                .is_none()
+        );
+        assert!(
+            backend
+                .nudge_template_override_store()
+                .clear_template_override(&team, "task")
+                .expect("clear stale row")
+        );
+        assert!(
+            backend
+                .nudge_template_override_store()
+                .list_stale_template_override_kinds(&team)
+                .expect("list after clear")
+                .is_empty()
+        );
     }
 
     #[test]
@@ -366,7 +494,7 @@ mod tests {
 
         let cleared = backend
             .nudge_template_override_store()
-            .clear_template_override(&team, BuiltInNudgeTemplateKind::DeliveryAck)
+            .clear_template_override(&team, BuiltInNudgeTemplateKind::DeliveryAck.as_str())
             .expect("clear");
         assert!(cleared);
         let missing = backend
