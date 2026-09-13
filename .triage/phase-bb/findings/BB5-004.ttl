@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: run the seven named colima integration scenarios against the colima hermes testbed and commit runner-written evidence under site/reports/, per the BB4-001 precedent ruling (three colima smoke scenarios, CLI-driven, evidence committed), or obtain an explicit lead ruling narrowing this requirement. Routed to cipher on fix/bb5-colima-r1 (BB5-COLIMA-R1-1789258000, queued behind cipher's BB.3 round)." ;
+  triage:deferredNote "Fix: run the seven named colima integration scenarios against the colima hermes testbed and commit runner-written evidence under site/reports/, per the BB4-001 precedent ruling (three colima smoke scenarios, CLI-driven, evidence committed), or obtain an explicit lead ruling narrowing this requirement. Routed to cipher on fix/bb5-colima-r1 (BB5-COLIMA-R1-1789258000, queued behind cipher's BB.3 round). Cipher's BB5-COLIMA-R1-1789258000 closed 2026-09-13T01:27:00Z: fixed at fix/bb5-colima-r1 @ 0cbc4adc6 (scripts/smoke/run_bb5_assignment.py + tests + runner evidence site/reports/bb5-assignment/20260912T234940144098Z -- verified present on the pushed branch, all seven scenarios PASS, source_revision f94125cf5). Gates quoted: just lint 36/36, just test exit 0, pytests 1165 OK. QA dispatched: BB5-QA-COLIMA-1789266000 on PR #1460 @ 0cbc4adc6. Fixed-pending-QA." ;
   triage:foundIn triage:BB5 ;
   triage:foundAt "2026-09-12T22:27:39Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-004/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB5-004/1>
   a triage:Occurrence ;
@@ -32,13 +32,13 @@
   triage:snippet "no colima-testbed evidence artifact exists for any of the seven named BB.5 integration scenarios; site/reports/ contains only unrelated bb4-task-start evidence" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:branch "fix/bb5-colima-r1" ;
+  triage:headSha "0cbc4adc6" ;
   triage:occursIn <urn:atm:triage:worktree/BB5-004/1> .
 
 <urn:atm:triage:worktree/BB5-004/1>
   a triage:WorktreeSnapshot ;
-  triage:path "PR #1452, feature/bb-collapsed" ;
-  triage:branch "feature/bb-collapsed" ;
-  triage:headSha "b74f0d6ef" ;
+  triage:path "PR #1460, fix/bb5-colima-r1" ;
+  triage:branch "fix/bb5-colima-r1" ;
+  triage:headSha "0cbc4adc6" ;
   triage:orderIndex 1 .
