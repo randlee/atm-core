@@ -19,11 +19,11 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T04:33:21Z"^^xsd:dateTime ;
-  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, not blocking -- Phase BB stack is already fully landed (all 19 PRs merged into integrate/phase-bb); this is a smoke-script test-hardening gap, not a production defect or an observed flake. Does not block the integrate/phase-bb -> develop merge. Filed as fast-follow: replace the fixed sleep with a bounded poll mirroring the wait_for_pane/deadline pattern already used at line 117 -- any reminder=\"...\" block appearing for the task is an immediate hard failure; deadline elapsing (derived from TASK_REMINDER_INTERVAL_MS + an explicit multiplier, not a bare literal) is the pass condition." ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, not blocking -- Phase BB stack is already fully landed (all 19 PRs merged into integrate/phase-bb); this is a smoke-script test-hardening gap, not a production defect or an observed flake. Does not block the integrate/phase-bb -> develop merge. Filed as fast-follow: replace the fixed sleep with a bounded poll mirroring the wait_for_pane/deadline pattern already used at line 117 -- any reminder=\"...\" block appearing for the task is an immediate hard failure; deadline elapsing (derived from TASK_REMINDER_INTERVAL_MS + an explicit multiplier, not a bare literal) is the pass condition. Land in the same fast-follow branch as BB6-028 (prompt_handoff_record.rs log_failure() missing outcome= field) -- same colima/prompt-handoff observability surface." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T04:33:21Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-026/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-026/1>
   a triage:Occurrence ;
