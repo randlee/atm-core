@@ -5,7 +5,9 @@ use std::collections::HashMap;
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
 #[cfg(any(test, feature = "test-utils"))]
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+#[cfg(any(test, feature = "test-utils"))]
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -215,6 +217,8 @@ pub struct DummyTaskStore {
     prompt_handoffs: Mutex<Vec<PromptHandoff>>,
     escalation_recipients: Mutex<HashMap<String, Vec<AgentAddress>>>,
     fail_reminders: bool,
+    fail_prompt_handoffs: AtomicBool,
+    prompt_handoff_delay_millis: AtomicU64,
     fail_escalation_recipient_reads: AtomicBool,
 }
 
@@ -231,8 +235,21 @@ impl DummyTaskStore {
             prompt_handoffs: Mutex::new(Vec::new()),
             escalation_recipients: Mutex::new(HashMap::new()),
             fail_reminders,
+            fail_prompt_handoffs: AtomicBool::new(false),
+            prompt_handoff_delay_millis: AtomicU64::new(0),
             fail_escalation_recipient_reads: AtomicBool::new(false),
         }
+    }
+
+    pub fn set_fail_prompt_handoffs(&self, fail: bool) {
+        self.fail_prompt_handoffs.store(fail, Ordering::SeqCst);
+    }
+
+    pub fn set_prompt_handoff_delay(&self, delay: Duration) {
+        self.prompt_handoff_delay_millis.store(
+            u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
+            Ordering::SeqCst,
+        );
     }
 
     pub fn set_fail_escalation_recipient_reads(&self, fail: bool) {
@@ -402,6 +419,15 @@ impl TaskStore for DummyTaskStore {
     }
 
     fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<(), AtmError> {
+        if self.fail_prompt_handoffs.load(Ordering::SeqCst) {
+            return Err(AtmError::mailbox_write(
+                "injected prompt-handoff bookkeeping failure",
+            ));
+        }
+        let delay_millis = self.prompt_handoff_delay_millis.load(Ordering::SeqCst);
+        if delay_millis != 0 {
+            std::thread::sleep(Duration::from_millis(delay_millis));
+        }
         let mut rows = self
             .prompt_handoffs
             .lock()

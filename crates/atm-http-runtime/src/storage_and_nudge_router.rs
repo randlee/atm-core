@@ -4216,9 +4216,9 @@ pub(crate) mod tests {
             NonZeroUsize::new(1).expect("bridge capacity"),
             RuntimeHealth::default(),
         );
-        let store: Arc<dyn TaskStore + Send + Sync> =
-            Arc::new(atm_storage::DummyTaskStore::default());
-        let dispatch = task_handoff_dispatch(None);
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        store.set_fail_prompt_handoffs(true);
+        let dispatch = task_handoff_dispatch(Some("BB6-STORAGE-FAILURE"));
         let layer = PromptHandoffErrorLayer::default();
         let _subscriber =
             tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
@@ -4327,29 +4327,23 @@ pub(crate) mod tests {
             NonZeroUsize::new(1).expect("bridge capacity"),
             RuntimeHealth::default(),
         );
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        store.set_prompt_handoff_delay(Duration::from_millis(100));
         let timer_fired = Arc::new(AtomicBool::new(false));
         let timer_observed = Arc::clone(&timer_fired);
         let timer = tokio::spawn(async move {
             tokio::task::yield_now().await;
             timer_observed.store(true, Ordering::Release);
         });
-        let error = bridge
-            .run(RequestDeadline::after(Duration::from_millis(20)), || {
-                let started = std::time::Instant::now();
-                while started.elapsed() < Duration::from_millis(100) {
-                    std::thread::yield_now();
-                }
-                Ok(())
-            })
-            .await
-            .expect_err("blocking record exceeds its deadline");
-        assert!(error.message().contains("timed out"));
-        crate::prompt_handoff_record::log_failure(
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_millis(20)),
+            store,
             &dispatch,
-            atm_storage::BuiltInNudgeTemplateKind::TaskReady,
             PromptTrigger::Steer,
-            "timeout",
-        );
+            IsoTimestamp::now(),
+        )
+        .await;
         timer.await.expect("independent timer joins");
 
         assert!(
