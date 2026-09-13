@@ -197,7 +197,7 @@ pub struct ListOutcome {
     pub task_rows: Vec<TaskRow>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub task_event_rows: Vec<TaskEventRow>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub handoffs: Vec<PromptHandoff>,
 }
 

@@ -283,13 +283,24 @@ fn task_events_outcome(handoffs: Vec<PromptHandoff>) -> ListOutcome {
 
 #[test]
 fn task_events_decodes_response_without_handoffs_field() {
-    let mut value = serde_json::to_value(task_events_outcome(Vec::new())).unwrap();
-    value.as_object_mut().unwrap().remove("handoffs");
+    let mut value = serde_json::to_value(task_events_outcome(vec![handoff_at(
+        "2026-09-12T15:27:34Z",
+        "01M2HANDOFF00000000000000",
+    )]))
+    .unwrap();
+    assert!(value.as_object_mut().unwrap().remove("handoffs").is_some());
 
     let decoded: ListOutcome = serde_json::from_value(value).unwrap();
 
     assert!(decoded.handoffs.is_empty());
     assert_eq!(decoded.task_event_rows.len(), 1);
+}
+
+#[test]
+fn task_events_omits_empty_handoffs_from_json() {
+    let value = serde_json::to_value(task_events_outcome(Vec::new())).unwrap();
+
+    assert!(value.get("handoffs").is_none());
 }
 
 #[derive(Deserialize)]
