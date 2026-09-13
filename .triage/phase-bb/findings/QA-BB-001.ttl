@@ -16,22 +16,26 @@
   triage:source "rust-qa-agent, verified by quality-mgr, BB-GATE-RERUN-1789285688 phase-ending gate re-run" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/storage_and_nudge_router.rs:1183-1224 (PromptHandoffErrorFields/PromptHandoffErrorEvent), ~2138-2151 (assert_prompt_handoff_error)" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
-  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, not a reopening of the closed BB6-028 (the code fix itself remains correct and verified) -- a new, narrower regression-coverage gap in the same fix. Filed as its own record so the two stay individually accountable, same pattern used for BB6-028 vs BB6-026." ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, not a reopening of the closed BB6-028 (the code fix itself remains correct and verified) -- a new, narrower regression-coverage gap in the same fix. Filed as its own record so the two stay individually accountable, same pattern used for BB6-028 vs BB6-026. CLOSED (2026-09-13T08:47:00Z): quality-mgr BB-GATE2-QA1-1789288411 (PR #1485, report 01M2CZ2MNJ14WHNB6FW75G1CS4) confirms fixed at fix/bb-gate2-findings @ 39850f06c -- outcome field + assertion added, 71/71 storage_and_nudge_router tests pass; quality-mgr personally ran a live mutation experiment removing the outcome field and confirmed all 5 assertion sites fail as expected, then reverted cleanly, proving the guard is genuine not vacuous." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-BB-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-BB-001/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/QA-BB-001/1> ;
+  triage:closedAt "2026-09-13T08:47:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/QA-BB-001/1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 1183 ;
   triage:snippet "PromptHandoffErrorFields/PromptHandoffErrorEvent's 8 captured fields (subsystem/action/reason/message_id/kind/trigger/error_code/error) omit outcome; assert_prompt_handoff_error() (:2138-2150) does not assert it either" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-bb" ;
   triage:headSha "4cb8be1ce" ;
   triage:occursIn <urn:atm:triage:worktree/QA-BB-001/1> .
@@ -42,3 +46,30 @@
   triage:branch "integrate/phase-bb" ;
   triage:headSha "4cb8be1ce" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/QA-BB-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1183 ;
+  triage:snippet "fix verified by quality-mgr BB-GATE2-QA1-1789288411: outcome field + assertion added (1183-1256, :2151), 71/71 tests pass, mutation experiment confirms all 5 assertion sites fail when outcome is removed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb-gate2-findings" ;
+  triage:headSha "39850f06c" ;
+  triage:occursIn <urn:atm:triage:worktree/QA-BB-001/2> .
+
+<urn:atm:triage:worktree/QA-BB-001/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1485, fix/bb-gate2-findings" ;
+  triage:branch "fix/bb-gate2-findings" ;
+  triage:headSha "39850f06c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/QA-BB-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T08:47:00Z"^^xsd:dateTime ;
+  triage:fixCommit "39850f06c" ;
+  triage:fixBranch "fix/bb-gate2-findings" ;
+  triage:verifiedInRound "BB-GATE2-QA1-1789288411" ;
+  triage:resolutionNote "quality-mgr BB-GATE2-QA1-1789288411 (PR #1485, report 01M2CZ2MNJ14WHNB6FW75G1CS4): outcome field + assertion added, 71/71 storage_and_nudge_router tests pass. quality-mgr personally ran a live mutation experiment removing the outcome field and confirmed all 5 assertion sites fail as expected, then reverted cleanly, proving the guard is genuine not vacuous. req-qa + arch-qa both PASS, PR #1485 CI green." .
