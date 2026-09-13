@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-024>
+  a triage:Finding ;
+  triage:findingId "BB6-024" ;
+  triage:title "atm-storage-rusqlite reader_pool test flakes under full-suite load: interrupted worker not reclaimed within its wait-queue deadline" ;
+  triage:description "fenix (2026-09-13T01:37:27Z), observed during solar's full `just test` on fix/bb6-docs-qa1 (205 passed, 1 failed; isolated rerun passed). atm-storage-rusqlite::reader_pool::tests::active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed panicked at crates/atm-storage-rusqlite/src/reader_pool.rs:1621 with 'interrupted worker remains reusable: DeadlineExpired { stage: \"waiting in queue\" }'. Pre-existing at the frozen heads (not introduced by this phase's changes), surfaced incidentally by full-suite timing/load during BB6 docs QA layer work. Per no-flaky-test-tolerance convention: root-caused and fixed, not rerun-to-green. Solar producing --test-threads=1 and under-load reproduction data." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "reliability" ;
+  triage:severity "blocking" ;
+  triage:source "fenix, observed during solar's full `just test` on fix/bb6-docs-qa1" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/reader_pool.rs:1621 (active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed)" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-13T01:37:27Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: root-cause why an interrupted reader-pool worker isn't reclaimed within its wait-queue deadline under full-suite timing/load, and fix the underlying race -- no rerun-to-green. Solar is producing --test-threads=1 and under-load reproduction data; root-cause fix will be routed to a new top layer once repro data is in hand." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T01:37:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-024/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-024/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1621 ;
+  triage:snippet "active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed panicked: interrupted worker remains reusable: DeadlineExpired { stage: \"waiting in queue\" } (full-suite run, 205 passed 1 failed; isolated rerun passed)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0efb1a582" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-024/1> .
+
+<urn:atm:triage:worktree/BB6-024/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1470, fix/bb6-docs-qa1" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0efb1a582" ;
+  triage:orderIndex 1 .
