@@ -148,5 +148,23 @@ class ClosedFindingTests(unittest.TestCase):
         self.assertFalse(qof.is_closed_finding(graph, finding))
 
 
+class OccurrenceFilesTests(unittest.TestCase):
+    def test_occurrence_files_are_collected_sorted_and_deduped(self) -> None:
+        graph = Graph()
+        graph.parse(
+            data=(
+                "@prefix triage: <urn:atm:triage:> .\n"
+                "<urn:atm:triage:finding/X> a triage:Finding ; triage:hasOccurrence <urn:o/1>, <urn:o/2> .\n"
+                '<urn:o/1> triage:file "crates/atm/src/b.rs" .\n'
+                '<urn:o/2> triage:file "crates/atm/src/a.rs" ; triage:file "crates/atm/src/b.rs" .\n'
+            ),
+            format="turtle",
+        )
+        self.assertEqual(
+            qof.occurrence_files(graph, URIRef("urn:atm:triage:finding/X")),
+            ["crates/atm/src/a.rs", "crates/atm/src/b.rs"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

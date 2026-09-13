@@ -41,7 +41,9 @@ Those branches are never declared, so pass ``--sprint <sprint local name>``
 (the ``triage:<ID>`` the findings' ``triage:foundIn`` points at, e.g.
 ``BB6``) to select the sprint directly; ``--branch`` then only labels the
 output. ``--phase`` also picks the matching ``integrate/phase-<phase>``
-worktree when several integration worktrees exist.
+worktree when several integration worktrees exist. Each result lists the
+files its occurrences were observed in; that is where the defect was seen,
+not necessarily where the fix lands, so it is never used as a filter.
 """
 
 from __future__ import annotations
@@ -301,6 +303,17 @@ def _graph_runner(script_dir: Path):
     return module
 
 
+def occurrence_files(graph: "Graph", finding: "URIRef") -> list[str]:
+    """Repository-relative files of every occurrence recorded for the finding."""
+    files: list[str] = []
+    for occurrence in graph.objects(finding, TRIAGE.hasOccurrence):
+        for value in graph.objects(occurrence, TRIAGE.file):
+            text = str(value).strip()
+            if text and text not in files:
+                files.append(text)
+    return sorted(files)
+
+
 def query_open_findings(
     root: Path,
     branch: str,
@@ -350,6 +363,7 @@ def query_open_findings(
         findings.append(
             {
                 "finding": str(finding_uri),
+                "files": occurrence_files(graph, finding_uri),
                 "finding_id": str(finding_id) if finding_id is not None else str(finding_uri).rsplit(":", 1)[-1],
                 "severity": str(severity),
                 "raw_severity": str(raw_severity),
@@ -371,6 +385,8 @@ def _print_table(branch: str, findings: list[dict[str, Any]]) -> None:
         status = item["status"] or "open"
         print(f"- [{item['severity'].upper()}] {item['finding_id']} (status: {status})")
         print(f"    found_at: {item['found_at']}")
+        if item["files"]:
+            print(f"    files: {', '.join(item['files'])}")
         description = item["description"]
         if len(description) > 200:
             description = description[:197] + "..."
