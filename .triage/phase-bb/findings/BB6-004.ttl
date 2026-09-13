@@ -16,29 +16,36 @@
   triage:source "team-lead CI investigation, PR #1459 run 34726244032" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage/Cargo.toml;crates/atm-storage/src/testing.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T23:56:00Z"^^xsd:dateTime ;
-  triage:deferredNote "Per design-ruling-before-capability-adding-fix: do not allowlist tokio for atm-storage (a policy relaxation on a deliberately sync/runtime-free crate) without a ruling. Team-lead's recommended hand-rolled poll-to-completion helper was NOT the ruling issued. Fenix's ruling (issued to solar at 2026-09-12T23:50:00Z, ahead of team-lead's report, as a same-task follow-up on BB6-FIX-STORAGE-QA1-1789265000, no new dispatch): no tokio and no hand-rolled poll helper either (test-only machinery would violate no-unused-code). Instead the seeded-double test moves out of crates/atm-storage/src/testing.rs into crates/atm-storage-rusqlite/tests/prompt_handoffs.rs -- inside solar's existing fence, already depends on tokio, and reaches atm_storage::testing the same way sibling double methods are exercised only from consumer crates. InMemoryTaskLedgerReader keeps its real backing state (the prompt_handoffs field and replace/with_prompt_handoffs methods) in testing.rs; only the #[tokio::test] itself relocates. Fixed-pending-QA: closes on solar's follow-up commit landing on fix/bb6-storage-qa1 with just lint 36/36." ;
+  triage:deferredNote "Per design-ruling-before-capability-adding-fix: do not allowlist tokio for atm-storage (a policy relaxation on a deliberately sync/runtime-free crate) without a ruling. Team-lead's recommended hand-rolled poll-to-completion helper was NOT the ruling issued. Fenix's ruling (issued to solar at 2026-09-12T23:50:00Z, ahead of team-lead's report, as a same-task follow-up on BB6-FIX-STORAGE-QA1-1789265000, no new dispatch): no tokio and no hand-rolled poll helper either (test-only machinery would violate no-unused-code). Instead the seeded-double test moves out of crates/atm-storage/src/testing.rs into crates/atm-storage-rusqlite/tests/prompt_handoffs.rs -- inside solar's existing fence, already depends on tokio, and reaches atm_storage::testing the same way sibling double methods are exercised only from consumer crates. InMemoryTaskLedgerReader keeps its real backing state (the prompt_handoffs field and replace/with_prompt_handoffs methods) in testing.rs; only the #[tokio::test] itself relocates. Fenix's stated closure bar was met verbatim: solar's follow-up landed on fix/bb6-storage-qa1 @ 35b733c09, 2026-09-12T23:58:56Z, self-reporting lint 36/36 and just test exit 0. Closed per that bar, same evidentiary standard as BB5-005 (dev's quoted gate lines accepted without a separate QA rerun when the lead has pre-declared the closing criterion)." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-12T23:51:08Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-004/1> ;
-  triage:triageRecordVersion "2" .
+  triage:hasResolution <urn:atm:triage:resolution/BB6-004/1> ;
+  triage:closedAt "2026-09-12T23:59:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:resolution/BB6-004/1>
+  a triage:Resolution ;
+  triage:resolutionNote "Fenix pre-declared the closure bar when issuing the ruling: 'closes when solar's follow-up commit lands with just lint 36/36.' Solar's push report (message 01M2C0YN5QCR5Q2HKVKJK1E378, 2026-09-12T23:58:56Z) reports exactly that: fix/bb6-storage-qa1 @ 35b733c09, lint 36/36, just test exit 0. Head verified via gh pr view 1459 (headRefOid 35b733c09f1479b3d7936ba6b59280203f7f816a)." .
 
 <urn:atm:triage:occurrence/BB6-004/1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/Cargo.toml" ;
   triage:line 29 ;
   triage:snippet "[dev-dependencies]\ntokio.workspace = true  -- not allowlisted for crates/atm-storage/Cargo.toml in .just/lint-config.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-storage-qa1" ;
-  triage:headSha "0c09c62b0" ;
+  triage:headSha "35b733c09" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-004/1> .
 
 <urn:atm:triage:worktree/BB6-004/1>
   a triage:WorktreeSnapshot ;
   triage:path "PR #1459, fix/bb6-storage-qa1" ;
   triage:branch "fix/bb6-storage-qa1" ;
-  triage:headSha "0c09c62b0" ;
+  triage:headSha "35b733c09" ;
   triage:orderIndex 1 .
