@@ -59,6 +59,23 @@ mod tests {
     }
 
     #[test]
+    fn blocking_bridge_deadline_codes_keep_distinct_stable_wire_spellings() {
+        for (code, wire) in [
+            (
+                AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
+                "ATM_BLOCKING_BRIDGE_DEADLINE_BEFORE_START",
+            ),
+            (
+                AtmErrorCode::BlockingBridgeDeadlineAfterStart,
+                "ATM_BLOCKING_BRIDGE_DEADLINE_AFTER_START",
+            ),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
     fn error_codes_round_trip_through_json() {
         let code = AtmErrorCode::MessageValidationFailed;
         let encoded = serde_json::to_string(&code).expect("serialize error code");

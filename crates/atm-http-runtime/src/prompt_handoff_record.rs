@@ -46,14 +46,16 @@ pub(crate) async fn record_prompt_handoff(
         .run(deadline, move || store.record_prompt_handoff(&handoff))
         .await
     {
-        let reason = if error.message().contains("did not start") {
-            "saturated"
-        } else if error.message().contains("timed out") {
-            "timeout"
-        } else {
-            "storage"
-        };
+        let reason = failure_reason(&error);
         log_failure(dispatch, kind, trigger, reason);
+    }
+}
+
+pub(crate) fn failure_reason(error: &atm_core::error::AtmError) -> &'static str {
+    match error.code() {
+        atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart => "saturated",
+        atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart => "timeout",
+        _ => "storage",
     }
 }
 

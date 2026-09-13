@@ -201,11 +201,11 @@ impl BoundedBlockingBridge {
 fn blocking_bridge_error(error: BlockingBridgeError) -> AtmError {
     match error {
         BlockingBridgeError::DeadlineBeforeStart => AtmError::new(
-            atm_core::error::AtmErrorCode::InternalError,
+            atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
             "blocking work did not start before its request deadline",
         ),
         BlockingBridgeError::DeadlineAfterStart => AtmError::new(
-            atm_core::error::AtmErrorCode::InternalError,
+            atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart,
             "blocking work timed out before its request deadline",
         ),
         BlockingBridgeError::Closed => {

@@ -4353,6 +4353,26 @@ pub(crate) mod tests {
         assert_prompt_handoff_error(&layer, &dispatch, "timeout");
     }
 
+    #[test]
+    fn prompt_handoff_failure_classification_uses_codes_not_wording() {
+        for (code, expected) in [
+            (
+                atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
+                "saturated",
+            ),
+            (
+                atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart,
+                "timeout",
+            ),
+        ] {
+            let error = AtmError::new(code, "deliberately unrelated wording");
+            assert_eq!(
+                crate::prompt_handoff_record::failure_reason(&error),
+                expected
+            );
+        }
+    }
+
     #[tokio::test]
     async fn deferred_write_through_async_router_marks_once_without_tokio_sqlite_access() {
         let fixture = fixture(true, None, None);
