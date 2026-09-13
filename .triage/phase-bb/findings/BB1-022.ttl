@@ -16,7 +16,7 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/boundary/mod.rs:150-173 and its callers" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
   triage:deferredNote "Recommend returning BuiltInNudgeTemplateKind directly (or Result<_, Infallible>) so the signature honestly reflects the guarantee. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates." ;

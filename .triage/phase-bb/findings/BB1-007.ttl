@@ -16,7 +16,7 @@
   triage:source "fenix critical review" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/writer/task_ops.rs; crates/atm-core/src/writer/ops.rs; crates/atm-core/src/task_sql.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
   triage:deferredNote "Lead ruling (fenix): split writer/task_ops.rs by operation (e.g. task_start.rs/task_close.rs under writer/); return TaskMessageResult to task_ops.rs; drop the load_task_row relocation. BB.4 needs headroom in this file. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;

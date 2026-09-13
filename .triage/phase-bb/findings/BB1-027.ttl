@@ -16,7 +16,7 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage/src/contract.rs:1253 and its call sites" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
   triage:deferredNote "Recommend a named struct (e.g. StaleTemplateOverrideKind { kind, updated_at }) so the fields are self-describing and can't be silently transposed. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates." ;
