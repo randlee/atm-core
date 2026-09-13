@@ -17,13 +17,13 @@
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/reader_pool.rs:1621 (active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed)" ;
   triage:status "open" ;
-  triage:dispatchReady false ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T01:37:27Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: root-cause why an interrupted reader-pool worker isn't reclaimed within its wait-queue deadline under full-suite timing/load, and fix the underlying race -- no rerun-to-green. Solar is producing --test-threads=1 and under-load reproduction data; root-cause fix will be routed to a new top layer once repro data is in hand." ;
+  triage:deferredNote "Fix: root-cause why an interrupted reader-pool worker isn't reclaimed within its wait-queue deadline under full-suite timing/load, and fix the underlying race -- no rerun-to-green. Dispatched to arch-ctm as BB-FLAKY-READER-POOL-1789284000, branch fix/bb-flaky-reader-pool cut from f0758be06, to be linked between fix/bb6-cli-qa2 and fix/bb6-docs-qa1 on its first push. Fenix's ruling: reproduce the full-suite run in a loop (solar's data: fails only inside the crate suite, passes isolated and under external load), classify harness wall-clock bound vs a genuine reclaim defect, fix on the observable, 200/200 proof." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T01:37:27Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-024/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-024/1>
   a triage:Occurrence ;
