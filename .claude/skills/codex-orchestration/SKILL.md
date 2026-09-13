@@ -95,7 +95,8 @@ Before starting a sprint:
 5. the lead assigns QA to `quality-mgr` using `qa-template.xml.j2`.
    Every QA assignment must include `sprint_doc`, and `quality-mgr` must treat
    that sprint document as the authoritative QA scope source.
-6. `quality-mgr` launches the reviewer set:
+6. `quality-mgr` launches the full reviewer set on QA-1 (the sprint's first
+   QA pass):
    - `req-qa`
    - `arch-qa`
    - `ruthless-boundary-qa`
@@ -103,16 +104,25 @@ Before starting a sprint:
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
    - `flaky-test-qa` when test instability risk is present
-   - for the near term, `ruthless-boundary-qa` stays enabled on every sprint
-     QA round, plus docs-only plan review and phase-ending review
-7. QA-2 and later rounds must omit `rust-best-practices-agent` and
-   `rust-service-hardening-agent`. All
-   first-pass findings from those reviewers must be fixed before merge —
-   merge gate is 0B+0I+0m with no exceptions and no backlog deferral. QA-1
-   findings route back to `arch-ctm` via `fix-assignment.xml.j2` before
-   QA-2, following the standard triage-and-fix path.
-   `ruthless-boundary-qa` remains part of that loop unless the lead
-   explicitly narrows the reviewer set for a specific task.
+7. QA-2 and later (fix-verification) rounds on the same sprint branch omit
+   `ruthless-boundary-qa`, `rust-best-practices-agent`, and
+   `rust-service-hardening-agent` unconditionally — they reliably surface
+   findings on any diff regardless of size, which turns a small fix-round
+   into unbounded review churn. QA-2+ rounds launch `req-qa` + `arch-qa`
+   (scoped to the dispatched finding ids) plus `rust-qa-agent` (its
+   objective execution-fact gates — fmt, clippy, tests, lint, RULE-003,
+   pytests — are not a subjective findings pass and stay in every round).
+   The verdict is each dispatched finding's fixed/regressed/open status
+   plus `rust-qa-agent`'s gate results, nothing else. Anything req-qa or
+   arch-qa notices outside the dispatched findings goes in a debt-notes
+   section of the report and does not affect the verdict. All QA-1
+   first-pass findings from every reviewer must still be fixed before
+   merge — merge gate is 0B+0I+0m with no exceptions and no backlog
+   deferral. QA-1 findings route back to `arch-ctm` via
+   `fix-assignment.xml.j2` before QA-2, following the standard
+   triage-and-fix path. `ruthless-boundary-qa`, `rust-best-practices-agent`,
+   and `rust-service-hardening-agent` remain part of docs-only plan review
+   and phase-ending review regardless of sprint round.
 8. If QA passes and CI is green, merge may proceed.
 9. After every QA round that reports any finding, at any severity, the lead
    runs `/triaging-findings` the same way: every finding is recorded, correlated

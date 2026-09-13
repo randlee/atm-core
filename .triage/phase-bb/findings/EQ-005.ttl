@@ -16,28 +16,29 @@
   triage:source "Rand, direct review of prerelease 1.5.17 smoke evidence, 2026-09-13" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/smoke/run_feature_smoke.py:672-753 (write_report); scripts/smoke/colima_skill_report.py:90-122; scripts/report_runtime.py (shared resolve_procedure_page/procedure-href plumbing); any other report producer rendering a Procedure link from the same helper" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-13T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EQ-005/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/EQ-005/1>
   a triage:Occurrence ;
   triage:file "site/reports/smoke/macos/rand-m5.local/20260913T075849269287Z-pid38592-thorough/thorough.html" ;
   triage:line 1 ;
   triage:snippet "Procedure: <a href=\"../../../../procedures/smoke-thorough/7475fed9.html\">smoke-thorough @ 7475fed9</a> -- target exists on disk but the link does not work when opened in a real browser per Rand's direct confirmation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "develop" ;
-  triage:headSha "db6250b23" ;
-  triage:occursIn <urn:atm:triage:worktree/EQ-005/1> .
+  triage:headSha "1fce13a99c5a2836d33d5a70d572c05be0025746" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-005/1> ;
+  triage:fixNote "fenix's sprint (arch-ctm/cipher/solar): report producers now copy the procedure page into each report's own output directory as procedure.html and link same-directory only (scripts/report_runtime.py), never climbing above a report's directory. A new stdlib site-link verifier (check_site_links.py) runs in just lint as a permanent CI merge gate. Landed via stack develop <- #1492 (dede62141) <- #1493 (5f62525c8) <- #1495 (f66566c15) <- #1496 (1ddbc20c4), merged to develop at 1fce13a99." .
 
 <urn:atm:triage:worktree/EQ-005/1>
   a triage:WorktreeSnapshot ;
   triage:path "develop" ;
   triage:branch "develop" ;
-  triage:headSha "db6250b23" ;
+  triage:headSha "1fce13a99c5a2836d33d5a70d572c05be0025746" ;
   triage:orderIndex 1 .

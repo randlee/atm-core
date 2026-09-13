@@ -85,6 +85,22 @@ class FuzzReportTests(unittest.TestCase):
             sidecar = evidence_dir / "v2-contract-report.json"
             self.assertIn('"schema_version": "adversarial-fuzzing/v2"', sidecar.read_text(encoding="utf-8"))
 
+    def test_rendered_campaign_copies_procedure_to_its_sidecar(self) -> None:
+        payload = self.v2_report()
+        payload["campaign"]["source_revision"] = "daae4065642f3602d16687ce8b50908db3ca0781"
+        with tempfile.TemporaryDirectory() as tempdir:
+            report_root = Path(tempdir)
+            stem = "v2-procedure-link"
+            report = render_campaign(payload, stem, report_root, invoke_index=False)
+            href = report["procedure_href"]
+            self.assertEqual(href, f"{stem}/procedure.html")
+            self.assertNotIn("..", Path(href).parts)
+            copied = report_root / href
+            source = ROOT / "site/reports/procedures/fuzz-full/daae4065.html"
+            self.assertTrue(copied.is_file())
+            self.assertEqual(copied.read_bytes(), source.read_bytes())
+            self.assertFalse((report_root / "procedure.html").exists())
+
     def test_reports_index_is_invoked_after_v2_artifacts_are_written(self) -> None:
         real_run = subprocess.run
 
