@@ -19,11 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add a distinct AtmErrorCode for DeadlineBeforeStart vs DeadlineAfterStart (additive, per fenix's design ruling) and have prompt_handoff_record.rs:49-55 classify on the error code instead of substring-matching the rendered message. Routed to arch-ctm on BB6-FIX-RUNTIME-QA1-1789271000, branch fix/bb6-runtime-qa1 cut from 4b0f6661c. PR #1461, base feature/bb6-runtime-prompt-handoffs." ;
+  triage:deferredNote "Fix: add a distinct AtmErrorCode for DeadlineBeforeStart vs DeadlineAfterStart (additive, per fenix's design ruling) and have prompt_handoff_record.rs:49-55 classify on the error code instead of substring-matching the rendered message. Routed to arch-ctm on BB6-FIX-RUNTIME-QA1-1789271000, branch fix/bb6-runtime-qa1 cut from 4b0f6661c. PR #1461, base feature/bb6-runtime-prompt-handoffs. BB6-FIX-RUNTIME-QA1-1789271000 complete and self-validated by arch-ctm (2026-09-13T01:29:03Z); implementation commit 7a60092f0. Final layer FROZEN at fix/bb6-runtime-qa1 @ b3e01cd7d (merge of adda7e3f9 via 1862712dc + fixed-sleep fix). QA dispatched BB6-QA-RUNTIME-FIX-1789283000 on PR #1466 (diff vs adda7e3f9). Fixed-pending-QA at b3e01cd7d." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-012/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-012/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-012/1>
   a triage:Occurrence ;
@@ -42,3 +43,21 @@
   triage:branch "feature/bb6-runtime-prompt-handoffs" ;
   triage:headSha "0d2cc1142" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-012/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/router_support.rs" ;
+  triage:line 201 ;
+  triage:snippet "BB6-FIX-RUNTIME-QA1 complete and self-validated; FROZEN final head fix/bb6-runtime-qa1 @ b3e01cd7d" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "b3e01cd7d" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-012/2> .
+
+<urn:atm:triage:worktree/BB6-012/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1466, fix/bb6-runtime-qa1" ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "b3e01cd7d" ;
+  triage:orderIndex 2 .

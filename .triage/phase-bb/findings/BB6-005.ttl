@@ -19,13 +19,14 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: replace the anyhow string errors at task.rs:289-301 and :404-410 with structured AtmErrorCode::TaskNotFound, matching the crate's existing error convention. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. Fixed by solar's second commit (catalog-backed TaskNotFound/TaskNotCounterparty + per-command JSON code tests), pushed to fix/bb6-cli-qa1 @ 8086e5362 (2026-09-13T00:45:06Z, per fenix). Fixed-pending-QA. BB6-FIX-CLI-QA1-1789270000 complete and self-validated by solar (2026-09-13T01:10:38Z) at fix/bb6-cli-qa1 final head adda7e3f9, parent 3aa1954e8 (BB6 L4 final); closing-triage tasklist confirms implementation commit 8086e536. Fixed-pending-QA at adda7e3f9." ;
+  triage:deferredNote "Fix: replace the anyhow string errors at task.rs:289-301 and :404-410 with structured AtmErrorCode::TaskNotFound, matching the crate's existing error convention. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. Fixed by solar's second commit (catalog-backed TaskNotFound/TaskNotCounterparty + per-command JSON code tests), pushed to fix/bb6-cli-qa1 @ 8086e5362 (2026-09-13T00:45:06Z, per fenix). Fixed-pending-QA. BB6-FIX-CLI-QA1-1789270000 complete and self-validated by solar (2026-09-13T01:10:38Z) at fix/bb6-cli-qa1 final head adda7e3f9, parent 3aa1954e8 (BB6 L4 final); closing-triage tasklist confirms implementation commit 8086e536. Fixed-pending-QA at adda7e3f9. quality-mgr BB6-QA-CLI-FIX round 2 (PR #1465 comment, 2026-09-13T01:28:29Z): HALF fixed. Task start's TaskStart path correctly covers both AtmErrorCode paths, and task close's TaskNotFound path is fixed -- but task close's TaskNotCounterparty path (2 tests) still only asserts error-string substrings, not the typed code; the underlying code itself is already correct end-to-end, only the test coverage is missing. Residual filed separately as BB6-023 per fenix's instruction (correlated via relatedFinding), rather than reopening this record at full severity; this finding stays fixed-pending-QA reflecting the now-correct TaskStart + TaskClose/TaskNotFound code paths. Residual + new ARCH-RULE-010 both routed to arch-ctm as BB6-FIX-CLI-QA2-1789281000 on fix/bb6-cli-qa2, cut from his final runtime head, queued behind his runtime close." ;
+  triage:relatedFinding "BB6-023" ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/3> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/BB6-005/1>
   a triage:Occurrence ;

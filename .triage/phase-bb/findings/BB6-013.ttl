@@ -19,12 +19,13 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: remove the call-site-owned failure-classification branch at storage_and_nudge_router.rs:493-519 and route the Steer path through record_prompt_handoff itself, preserving the real task_store() AtmError instead of discarding it. Routed to arch-ctm on BB6-FIX-RUNTIME-QA1-1789271000, branch fix/bb6-runtime-qa1 cut from 4b0f6661c. PR #1461, base feature/bb6-runtime-prompt-handoffs." ;
+  triage:deferredNote "Fix: remove the call-site-owned failure-classification branch at storage_and_nudge_router.rs:493-519 and route the Steer path through record_prompt_handoff itself, preserving the real task_store() AtmError instead of discarding it. Routed to arch-ctm on BB6-FIX-RUNTIME-QA1-1789271000, branch fix/bb6-runtime-qa1 cut from 4b0f6661c. PR #1461, base feature/bb6-runtime-prompt-handoffs. BB6-FIX-RUNTIME-QA1-1789271000 complete and self-validated by arch-ctm (2026-09-13T01:29:03Z); implementation commit 6f7579d32. Final layer FROZEN at fix/bb6-runtime-qa1 @ b3e01cd7d (merge of adda7e3f9 via 1862712dc + fixed-sleep fix). QA dispatched BB6-QA-RUNTIME-FIX-1789283000 on PR #1466 (diff vs adda7e3f9). Fixed-pending-QA at b3e01cd7d." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-013/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-013/2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-013/3> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB6-013/1>
   a triage:Occurrence ;
@@ -61,3 +62,21 @@
   triage:branch "fix/bb6-runtime-qa1" ;
   triage:headSha "6f7579d32" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB6-013/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/storage_and_nudge_router.rs" ;
+  triage:line 493 ;
+  triage:snippet "BB6-FIX-RUNTIME-QA1 complete and self-validated; FROZEN final head fix/bb6-runtime-qa1 @ b3e01cd7d" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "b3e01cd7d" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-013/3> .
+
+<urn:atm:triage:worktree/BB6-013/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1466, fix/bb6-runtime-qa1" ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "b3e01cd7d" ;
+  triage:orderIndex 3 .

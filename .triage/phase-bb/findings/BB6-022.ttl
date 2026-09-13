@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-022>
+  a triage:Finding ;
+  triage:findingId "BB6-022" ;
+  triage:title "task_close.rs/task_start.rs/task_list_events.rs use raw test-lead literals instead of the TEST_LEAD/TEST_LEAD_ADDRESS constants" ;
+  triage:description "quality-mgr BB6-QA-CLI-FIX round 2 (PR #1465 comment, 2026-09-13T01:28:29Z, ARCH-RULE-010, independently confirmed), verdict FAIL, blocking. 3 test files (task_close.rs, task_start.rs, task_list_events.rs) use raw \"test-lead\"/\"test-lead@test-team\" string literals instead of the pre-existing TEST_LEAD/TEST_LEAD_ADDRESS constants in atm_core::test_support. task_assign.rs's pre-existing instance of the same pattern folded into this finding by fenix's ruling rather than filed separately. Ruled genuine by fenix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "maintainability" ;
+  triage:severity "blocking" ;
+  triage:source "quality-mgr BB6-QA-CLI-FIX round 2 (ARCH-RULE-010), ruled genuine by fenix" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm/src/commands/task_close.rs; crates/atm/src/commands/task_start.rs; crates/atm/src/commands/task_list_events.rs; crates/atm/src/commands/task_assign.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T01:28:29Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: replace the raw \"test-lead\"/\"test-lead@test-team\" literals in task_close.rs, task_start.rs, task_list_events.rs, and the pre-existing instance in task_assign.rs with atm_core::test_support::TEST_LEAD/TEST_LEAD_ADDRESS. Dispatched to arch-ctm as BB6-FIX-CLI-QA2-1789281000, branch fix/bb6-cli-qa2 cut from his final runtime head (fix/bb6-runtime-qa1 @ b3e01cd7d), queued behind his runtime close (test-only, CLI crate)." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T01:28:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-022/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-022/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task_close.rs" ;
+  triage:line 1 ;
+  triage:snippet "raw \"test-lead\"/\"test-lead@test-team\" literals instead of TEST_LEAD/TEST_LEAD_ADDRESS from atm_core::test_support; same pattern in task_start.rs, task_list_events.rs, and pre-existing in task_assign.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "adda7e3f9" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-022/1> .
+
+<urn:atm:triage:worktree/BB6-022/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1465, fix/bb6-cli-qa1" ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "adda7e3f9" ;
+  triage:orderIndex 1 .

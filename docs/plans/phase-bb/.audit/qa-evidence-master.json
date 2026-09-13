@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-12T19:00:24Z",
-    "end": "2026-09-13T02:00:00Z"
+    "end": "2026-09-13T01:29:50Z"
   },
   "scope": "BB.1 (PR #1438, feature/bb1-transition-templates) and BB.2 (PR #1439, feature/bb2-orchestration-templates-1516) each have one QA-1 round in flight (assigned, no result yet -- verdict/pass/result_* fields are null/empty until quality-mgr reports). BB.3 (PR #1436, feature/bb3-test-procedure-pages) has one QA-1 FAIL round closed and a QA-2 round in flight on the fix-round push (BB3-FIX-R1, cipher, head 8a8b29640). fenix's parallel critical reviews (on BB.1 and BB.3 so far) are not dispatched quality-mgr QA runs; their findings are recorded separately under .triage/phase-bb/findings/ (BB1-001..021, BB3-001..012), correlated with QA findings on the same commit rather than duplicated. Phase BB is orchestrated with plain atm send (codex-orchestration), not graph-orchestration Assignment/Completion events, but .sprints/BB/events.ttl records dev Assignment/Completion events anyway per fenix's ruling so /triage-report's DEV column works.",
   "count_basis": "headline/reviewer",
@@ -533,6 +533,56 @@
       "minor": 3,
       "count_basis": "headline/reviewer",
       "evidence": "Deliverables 17/19 (89%) (PR #1464 comment, 2026-09-13T02:00:00Z). Blocking: ARCH-001/RBQA-F003 (project-plan.md BB.6=complete edit leaves must_follow dependency BB.5's row at planned despite BB.5's own sprint-doc frontmatter saying complete, filed BB6-016); ATM-QA-BB6-001 (two sprint-doc-named colima integration tests plus their evidence artifact do not exist anywhere, same class as BB4-001/ATM-QA-002, filed BB6-017). Important: ARCH-002 (new ADR-061 D6 entry omits approving party/channel, filed BB6-018); RBQA-F001 (substring-matched AtmError classification, already fixed via BB6-013/014 on fix/bb6-runtime-qa1, this L4 pin predates that merge, no new dispatch). Minor: ATM-QA-BB6-003 (task-store-sqlite.toml manifest omits record_prompt_handoff/list_prompt_handoffs contrary to sprint-doc claim, filed BB6-019); ATM-QA-BB6-004 (D3 narrative undocuments task_transition Some/task_id None defensive branch, no named test, filed BB6-020); RBQA-F002 (no lint guard against reintroducing RBQA-F001's substring-classification pattern, BB.7 debt noted on BB6-014, not dispatched this phase). Resolved by this round: ATM-QA-BB6-002 (missing schema-reviewer sign-off, satisfied by this round's own schema-reviewer PASS on D5/D6, filed already-closed as BB6-021). All five open items -> solar BB6-FIX-DOCS-QA1-1789280000 on fix/bb6-docs-qa1, cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468). PR #1464 mergeable, CI green, stack #1457 re-registered via gh stack checkout."
+    },
+    {
+      "run_id": "BB6-QA-CLI-FIX-R2",
+      "aich_sprint": "BB6",
+      "phase_sprint": "BB.6",
+      "pass": false,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-13T01:14:40Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2C54SGV8WJPJYGCDSHKWP7G",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB6-QA-CLI-FIX-1789279000 (round 2) dispatched by fenix to quality-mgr for PR #1465 (fix/bb6-cli-qa1), pinned head adda7e3f9 (FROZEN, merge of BB6 L4 3aa1954e8). Verifies solar's closing-triage tasklist for BB6-005/006/007/009/010.",
+      "result_time_utc": "2026-09-13T01:28:29Z",
+      "result_time_pst": null,
+      "result_message_id": "01M2C62KX0APYQNVK528YTMR1G",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 1,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "PR #1465 comment, 2026-09-13T01:28:29Z. 4/5 carried findings (BB6-006, BB6-007, BB6-009, BB6-010) fully fixed, closed at adda7e3f9. BB6-005 half-fixed: task start covers both AtmErrorCode paths correctly; task close's TaskNotFound path fixed but its TaskNotCounterparty path (2 tests) still only asserts error-string substrings, not the typed code -- code itself already correct end to end, test coverage residual filed as BB6-023 (correlated to BB6-005). New Blocking finding, independently confirmed: RULE-010 violation (filed BB6-022) -- 3 test files (task_close.rs, task_start.rs, task_list_events.rs) use raw test-lead/test-lead@test-team literals instead of TEST_LEAD/TEST_LEAD_ADDRESS constants in atm_core::test_support; task_assign.rs's pre-existing same pattern folded in by fenix's ruling. All dev gates (just lint 36/36, fmt/clippy/test clean, openapi_surface 4/4) independently re-executed by rust-qa-agent and match solar's claims exactly. PR mergeable, CI green except one in-progress Windows job, stack #1457 re-registered. Both open items -> arch-ctm BB6-FIX-CLI-QA2-1789281000 on fix/bb6-cli-qa2, cut from his final runtime head, queued behind his runtime close (test-only, CLI crate)."
+    },
+    {
+      "run_id": "BB6-QA-RUNTIME-FIX",
+      "aich_sprint": "BB6",
+      "phase_sprint": "BB.6",
+      "pass": null,
+      "run_type": "qa",
+      "assignment_time_utc": "2026-09-13T01:29:50Z",
+      "assignment_time_pst": null,
+      "assignment_message_id": "01M2C653AMZTGV7QNB3DV4EAYV",
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB6-QA-RUNTIME-FIX-1789283000 dispatched by fenix to quality-mgr for PR #1466 (fix/bb6-runtime-qa1), diff vs adda7e3f9, pinned FROZEN head b3e01cd7d (merge of adda7e3f9 via 1862712dc + fixed-sleep fix). Verifies arch-ctm's closing-triage tasklist for BB6-011/012/013/014.",
+      "result_time_utc": null,
+      "result_time_pst": null,
+      "result_message_id": null,
+      "result_from": null,
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PENDING",
+      "blockers": null,
+      "important": null,
+      "minor": null,
+      "count_basis": "headline/reviewer",
+      "evidence": "Dispatch in flight, result not yet reported. MERGE-BB7-RUNTIME-1789282000 at the head of cipher's queue (merge b3e01cd7d into BB7, final push, close)."
     }
   ]
 }

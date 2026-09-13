@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-023>
+  a triage:Finding ;
+  triage:findingId "BB6-023" ;
+  triage:title "BB6-005 residual: task close's TaskNotCounterparty tests assert only the error-string substring, not the typed AtmErrorCode" ;
+  triage:description "quality-mgr BB6-QA-CLI-FIX round 2 (PR #1465 comment, 2026-09-13T01:28:29Z, BB6-QA2-001, independently confirmed), verdict FAIL. BB6-005 asked for TaskStart/TaskClose to raise structured AtmErrorCode::TaskNotFound instead of anyhow string errors. Task start now correctly covers both AtmErrorCode paths, and task close's TaskNotFound path is fixed -- but task close's TaskNotCounterparty path (2 tests) still only asserts the error-string substring, not the typed code. The underlying code itself is already correct end-to-end; only the test coverage is missing. Filed as its own canonical id per fenix's instruction, correlated to BB6-005 rather than folded into it." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "quality-mgr BB6-QA-CLI-FIX round 2 (BB6-QA2-001), ruled genuine by fenix" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/src/commands/task_close.rs (TaskNotCounterparty tests)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T01:28:29Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: update task close's 2 TaskNotCounterparty tests to assert the typed AtmErrorCode rather than only the rendered error-string substring, matching the pattern already used for TaskNotFound. Dispatched to arch-ctm as BB6-FIX-CLI-QA2-1789281000, branch fix/bb6-cli-qa2 cut from his final runtime head (fix/bb6-runtime-qa1 @ b3e01cd7d), queued behind his runtime close (test-only, CLI crate)." ;
+  triage:relatedFinding "BB6-005" ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T01:28:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-023/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-023/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task_close.rs" ;
+  triage:line 1 ;
+  triage:snippet "task close's 2 TaskNotCounterparty tests assert only the error-string substring, not the typed AtmErrorCode; the code itself is already correct" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "adda7e3f9" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-023/1> .
+
+<urn:atm:triage:worktree/BB6-023/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1465, fix/bb6-cli-qa1" ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "adda7e3f9" ;
+  triage:orderIndex 1 .

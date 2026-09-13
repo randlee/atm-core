@@ -24,7 +24,11 @@
   triage:foundAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-007/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-007/2> ;
-  triage:triageRecordVersion "2" .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-09-13T01:28:29Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB6-007/1>
   a triage:Occurrence ;

@@ -19,12 +19,13 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add a failure-injection knob to DummyTaskStore::record_prompt_handoff and rewrite the storage-failure test to exercise it; rewrite the timeout test to go through record_prompt_handoff itself instead of hand-calling log_failure. Routed to arch-ctm on BB6-FIX-RUNTIME-QA1-1789271000, branch fix/bb6-runtime-qa1 cut from 4b0f6661c. PR #1461, base feature/bb6-runtime-prompt-handoffs. Fixed by arch-ctm's first push to fix/bb6-runtime-qa1 @ 08584a4aa (2026-09-13T00:52:35Z, self-reported focused tests + just test/fmt/clippy green). Fixed-pending-QA." ;
+  triage:deferredNote "Fix: add a failure-injection knob to DummyTaskStore::record_prompt_handoff and rewrite the storage-failure test to exercise it; rewrite the timeout test to go through record_prompt_handoff itself instead of hand-calling log_failure. Routed to arch-ctm on BB6-FIX-RUNTIME-QA1-1789271000, branch fix/bb6-runtime-qa1 cut from 4b0f6661c. PR #1461, base feature/bb6-runtime-prompt-handoffs. Fixed by arch-ctm's first push to fix/bb6-runtime-qa1 @ 08584a4aa (2026-09-13T00:52:35Z, self-reported focused tests + just test/fmt/clippy green). Fixed-pending-QA. BB6-FIX-RUNTIME-QA1-1789271000 complete and self-validated by arch-ctm (2026-09-13T01:29:03Z); implementation commits 08584a4aa+b3e01cd7d (followup). Final layer FROZEN at fix/bb6-runtime-qa1 @ b3e01cd7d (merge of adda7e3f9 via 1862712dc + fixed-sleep fix). QA dispatched BB6-QA-RUNTIME-FIX-1789283000 on PR #1466 (diff vs adda7e3f9). Fixed-pending-QA at b3e01cd7d." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-011/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-011/2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-011/3> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB6-011/1>
   a triage:Occurrence ;
@@ -59,3 +60,20 @@
   triage:branch "fix/bb6-runtime-qa1" ;
   triage:headSha "08584a4aa" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB6-011/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:snippet "BB6-FIX-RUNTIME-QA1 complete and self-validated; FROZEN final head fix/bb6-runtime-qa1 @ b3e01cd7d" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "b3e01cd7d" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-011/3> .
+
+<urn:atm:triage:worktree/BB6-011/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1466, fix/bb6-runtime-qa1" ;
+  triage:branch "fix/bb6-runtime-qa1" ;
+  triage:headSha "b3e01cd7d" ;
+  triage:orderIndex 3 .
