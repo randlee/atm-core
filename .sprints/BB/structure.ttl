@@ -16,4 +16,9 @@ triage:BB3 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 3 ; tr
 triage:BB4 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 4 ; triage:branch "feature/bb-collapsed" ; triage:criteria "docs/plans/phase-bb/sprint-BB.4-task-start.md" .
 triage:BB5 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 5 ; triage:branch "feature/bb-collapsed" ; triage:criteria "docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md" .
 triage:BB6 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 6 ; triage:branch "fix/bb6-docs-qa1" ; triage:criteria "docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md" .
-triage:BB7 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 7 ; triage:branch "fix/bb7-openapi-message-bodies" ; triage:criteria "docs/plans/phase-bb/sprint-BB.7-docs.md" .
+triage:BB7 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 7 ; triage:branch "feature/bb7-docs" ; triage:criteria "docs/plans/phase-bb/sprint-BB.7-docs.md" .
+# NOTE (2026-09-13, team-lead): re-pointed from fix/bb7-openapi-message-bodies
+# (BB7-DOCS-NONDELIVERY-001) -- that branch/PR #1467 is an unrelated OpenAPI
+# doc fix (finding BB7-OPENAPI-001) mis-tagged into the BB7 slot; it never
+# delivered sprint-BB.7-docs.md's D1-D6. feature/bb7-docs is the sprint's
+# actual planned branch, now dispatched to cipher.

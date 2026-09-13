@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB7-TEMPLATE-CONTRADICTION-001>
+  a triage:Finding ;
+  triage:findingId "BB7-TEMPLATE-CONTRADICTION-001" ;
+  triage:title "Live dispatch templates and team-protocol.md still tell every assignee to atm ack and never atm task start, contradicting BB.4/BB.5's shipped behavior" ;
+  triage:description "req-qa (NEW-BB-QA-002), independently confirmed by quality-mgr (2026-09-13T04:35:38Z), during BB-POST-MORTEM-1789304000 phase-ending gate against integrate/phase-bb @ 4b1bf0e63. Direct consequence of BB7-DOCS-NONDELIVERY-001 (BB.7 D1/D4 never landed). The six live orchestration dispatch templates (.claude/skills/graph-orchestration/{dev-task,dev-fix}.xml.j2; .claude/skills/codex-orchestration/{dev-template,fix-assignment,review-template,qa-template}.xml.j2) still instruct every assignee to `atm ack` the assignment first and never `atm task start`. docs/team-protocol.md:61-66 still classes 'task assignment' under requires_ack. But BB.4 already shipped `atm task start` as the only assigned->active transition (the daemon no longer starts tasks), and BB.5 already shipped requires_ack = false for assignments. Once this phase merges to develop, the templates this team actually uses to dispatch all dev/QA work will tell every assignee to do the wrong thing (ack, no longer required) and never do the now-required thing (atm task start) -- defeating the phase's own stated goal ('task transitions you can see') and failing phase acceptance criterion Sec9 item 8 verbatim." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "req-qa, verified by quality-mgr, BB-POST-MORTEM-1789304000 phase-ending gate" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/team-protocol.md:54-80; .claude/skills/graph-orchestration/{dev-task,dev-fix}.xml.j2; .claude/skills/codex-orchestration/{dev-template,fix-assignment,review-template,qa-template}.xml.j2; both SKILL.md dispatch sections; ~/.atm/templates/codex-orchestration/ host-only variants (reported with diff, not edited, per BB.2 D4 rule)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T04:35:38Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, confirmed -- do not merge to develop with the live dispatch templates telling every assignee the wrong protocol. Resolved by BB.7 D1/D3/D4 exactly as scoped in sprint-BB.7-docs.md (team-protocol.md rewrite, agent-conventions.md task-lines section, ack step deleted from all six templates + replaced with `atm task start {{ task_id }} \"...\"` as step one). Dispatched to cipher together with BB7-DOCS-NONDELIVERY-001 as one BB.7 fix layer, not a separate branch -- they are the same sprint's deliverables." ;
+  triage:foundIn triage:BB7 ;
+  triage:foundAt "2026-09-13T04:35:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/1>
+  a triage:Occurrence ;
+  triage:file "docs/team-protocol.md" ;
+  triage:line 61 ;
+  triage:snippet "team-protocol.md:61-66 still classes 'task assignment' under requires_ack; all six live dispatch templates still emit atm ack and never atm task start, contradicting BB.4/BB.5's shipped behavior" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4b1bf0e63" ;
+  triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/1> .
+
+<urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4b1bf0e63" ;
+  triage:orderIndex 1 .
