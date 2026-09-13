@@ -164,7 +164,7 @@ below as `qa_process_improvement` (tooling gap, not phase-blocking).
 | `AXPE-RSH-002` — `last_tick_at` surfaced but no staleness check flags a stalled pump | important | `test_hardening` | Herdr doctor/readiness check |
 | `AXPE-RBP-001` — escalation recipient addresses cross the TaskStore trait boundary as raw strings; ADR-062 says validated, enforced one layer up only | important | `architecture_update` | `docs/adr/ADR-062-task-state-machine.md` amendment or a validated newtype at the trait boundary |
 | `AXPE-RBP-002` — duplicate `state_name`/`event_name`/`outcome_name` string mappings instead of calling the canonical `.as_str()` | minor | `no_systemic_followup` (mechanical cleanup) | `atm-storage-rusqlite/task_store.rs`, `writer/task_ops.rs` |
-| `AXPE-QA-115` — local bootstrap lacked pinned cargo-binstall and fell back to compiling cargo-shear 1.13.3 with Rust 1.94.1 | important | `planning_process_improvement` (tooling debt, tracked separately per `project_bootstrap_toolchain_version_debt.md`) | `tools/bootstrap.toml`, `tools/bootstrap.py` |
+| `AXPE-QA-115` — `tools/bootstrap.toml` pins rust 1.94.1 vs. cargo-shear 1.13.3 needing >=1.95, blocking local `just validate`/`bootstrap` | important | `planning_process_improvement` (tooling debt, tracked separately per `project_bootstrap_toolchain_version_debt.md`) | `tools/bootstrap.toml` |
 | `AXPE-QA-116` — commit message overstates a byte-for-byte evidence restore as a "fix" | minor | `no_systemic_followup` | none (cosmetic; not amended to avoid invalidating a QA-passed head) |
 
 All eight are tracked in GitHub issue #1243 and remain open there as
