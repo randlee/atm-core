@@ -41,6 +41,8 @@ pub enum AtmErrorCode {
     DaemonStaleOwnerRecoveryFailed,
     DaemonAutoStartFailed,
     DaemonConnectionSaturated,
+    BlockingBridgeDeadlineBeforeStart,
+    BlockingBridgeDeadlineAfterStart,
     RemoteDeliveryUnconfirmed,
     /// The daemon launch argument did not name a supported peer-wire mode.
     PeerWireModeInvalid,
@@ -218,6 +220,8 @@ impl AtmErrorCode {
             Self::DaemonStaleOwnerRecoveryFailed => "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED",
             Self::DaemonAutoStartFailed => "ATM_DAEMON_AUTO_START_FAILED",
             Self::DaemonConnectionSaturated => "ATM_DAEMON_CONNECTION_SATURATED",
+            Self::BlockingBridgeDeadlineBeforeStart => "ATM_BLOCKING_BRIDGE_DEADLINE_BEFORE_START",
+            Self::BlockingBridgeDeadlineAfterStart => "ATM_BLOCKING_BRIDGE_DEADLINE_AFTER_START",
             Self::RemoteDeliveryUnconfirmed => "REMOTE_DELIVERY_UNCONFIRMED",
             Self::PeerWireModeInvalid => "ATM_PEER_WIRE_MODE_INVALID",
             Self::PeerWireModeSourceForbidden => "ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN",
@@ -405,6 +409,12 @@ fn parse_daemon_or_address_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED" => AtmErrorCode::DaemonStaleOwnerRecoveryFailed,
         "ATM_DAEMON_AUTO_START_FAILED" => AtmErrorCode::DaemonAutoStartFailed,
         "ATM_DAEMON_CONNECTION_SATURATED" => AtmErrorCode::DaemonConnectionSaturated,
+        "ATM_BLOCKING_BRIDGE_DEADLINE_BEFORE_START" => {
+            AtmErrorCode::BlockingBridgeDeadlineBeforeStart
+        }
+        "ATM_BLOCKING_BRIDGE_DEADLINE_AFTER_START" => {
+            AtmErrorCode::BlockingBridgeDeadlineAfterStart
+        }
         "REMOTE_DELIVERY_UNCONFIRMED" => AtmErrorCode::RemoteDeliveryUnconfirmed,
         "ATM_PEER_WIRE_MODE_INVALID" => AtmErrorCode::PeerWireModeInvalid,
         "ATM_PEER_WIRE_MODE_SOURCE_FORBIDDEN" => AtmErrorCode::PeerWireModeSourceForbidden,

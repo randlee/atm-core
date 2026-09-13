@@ -490,33 +490,17 @@ impl StorageAndNudgeRouter {
             )
             .await
             {
-                Ok(Ok(_)) => match self.service_runtime.task_store() {
-                    Ok(store) => {
-                        crate::prompt_handoff_record::record_prompt_handoff(
-                            self.control_path_sync_bridge.blocking_bridge(),
-                            deadline,
-                            store,
-                            &dispatch,
-                            atm_core::boundary::PromptTrigger::Steer,
-                            dispatch.event.message_id.timestamp(),
-                        )
-                        .await;
-                    }
-                    Err(_) if dispatch.event.task_transition.is_some() => {
-                        let kind =
-                            atm_core::boundary::built_in_nudge_template_kind_from_post_send_event(
-                                &dispatch.event,
-                                dispatch.kind,
-                            );
-                        crate::prompt_handoff_record::log_failure(
-                            &dispatch,
-                            kind,
-                            atm_core::boundary::PromptTrigger::Steer,
-                            "storage",
-                        );
-                    }
-                    Err(_) => {}
-                },
+                Ok(Ok(_)) => {
+                    crate::prompt_handoff_record::record_prompt_handoff(
+                        self.control_path_sync_bridge.blocking_bridge(),
+                        deadline,
+                        self.service_runtime.task_store(),
+                        &dispatch,
+                        atm_core::boundary::PromptTrigger::Steer,
+                        dispatch.event.message_id.timestamp(),
+                    )
+                    .await;
+                }
                 Ok(Err(error)) => warnings.push(hook_warning(error)),
                 Err(_) => warnings.push(hook_warning(AtmError::daemon_unavailable(
                     "received-message hook timed out after durable message persistence",
@@ -1203,6 +1187,8 @@ pub(crate) mod tests {
         message_id: String,
         kind: String,
         trigger: String,
+        error_code: String,
+        error: String,
     }
 
     #[derive(Default)]
@@ -1213,6 +1199,8 @@ pub(crate) mod tests {
         message_id: String,
         kind: String,
         trigger: String,
+        error_code: String,
+        error: String,
     }
 
     impl tracing::field::Visit for PromptHandoffErrorFields {
@@ -1224,6 +1212,8 @@ pub(crate) mod tests {
                 "message_id" => self.message_id = value.to_owned(),
                 "kind" => self.kind = value.to_owned(),
                 "trigger" => self.trigger = value.to_owned(),
+                "error_code" => self.error_code = value.to_owned(),
+                "error" => self.error = value.to_owned(),
                 _ => {}
             }
         }
@@ -1257,6 +1247,8 @@ pub(crate) mod tests {
                     message_id: fields.message_id,
                     kind: fields.kind,
                     trigger: fields.trigger,
+                    error_code: fields.error_code,
+                    error: fields.error,
                 });
         }
     }
@@ -2146,16 +2138,53 @@ pub(crate) mod tests {
     fn assert_prompt_handoff_error(
         layer: &PromptHandoffErrorLayer,
         dispatch: &BuiltInPostSendDispatch,
-        reason: &str,
+        reason: crate::router_support::PromptHandoffFailureReason,
     ) {
         let events = layer.events.lock().expect("handoff error events");
         assert_eq!(events.len(), 1, "one structured handoff error is logged");
         assert_eq!(events[0].subsystem, "prompt_handoff");
         assert_eq!(events[0].action, "prompt_handoff_record_failed");
-        assert_eq!(events[0].reason, reason);
+        assert_eq!(events[0].reason, reason.as_str());
         assert_eq!(events[0].message_id, dispatch.event.message_id.to_string());
         assert_eq!(events[0].kind, "task_ready");
         assert_eq!(events[0].trigger, "steer");
+    }
+
+    #[tokio::test]
+    async fn task_store_acquisition_failure_logs_the_real_error() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let dispatch = task_handoff_dispatch(Some("BB6-STORE-ACQUIRE"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_secs(1)),
+            Err(AtmError::daemon_unavailable(
+                "injected task-store acquisition failure",
+            )),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Storage,
+        );
+        let events = layer.events.lock().expect("handoff error events");
+        assert_eq!(events[0].error_code, "ATM_DAEMON_UNAVAILABLE");
+        assert!(
+            events[0]
+                .error
+                .contains("injected task-store acquisition failure")
+        );
     }
 
     #[test]
@@ -4216,9 +4245,9 @@ pub(crate) mod tests {
             NonZeroUsize::new(1).expect("bridge capacity"),
             RuntimeHealth::default(),
         );
-        let store: Arc<dyn TaskStore + Send + Sync> =
-            Arc::new(atm_storage::DummyTaskStore::default());
-        let dispatch = task_handoff_dispatch(None);
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        store.set_fail_prompt_handoffs(true);
+        let dispatch = task_handoff_dispatch(Some("BB6-STORAGE-FAILURE"));
         let layer = PromptHandoffErrorLayer::default();
         let _subscriber =
             tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
@@ -4227,7 +4256,7 @@ pub(crate) mod tests {
         crate::prompt_handoff_record::record_prompt_handoff(
             &bridge,
             RequestDeadline::after(Duration::from_secs(1)),
-            store,
+            Ok(store),
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
@@ -4235,7 +4264,11 @@ pub(crate) mod tests {
         .await;
 
         assert_eq!(sink_result, PostSendEmissionPath::GraftPort);
-        assert_prompt_handoff_error(&layer, &dispatch, "storage");
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Storage,
+        );
     }
 
     #[tokio::test]
@@ -4253,14 +4286,18 @@ pub(crate) mod tests {
         crate::prompt_handoff_record::record_prompt_handoff(
             &bridge,
             RequestDeadline::after(Duration::ZERO),
-            store.clone(),
+            Ok(store.clone()),
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
         )
         .await;
 
-        assert_prompt_handoff_error(&layer, &dispatch, "timeout");
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Timeout,
+        );
         let rows = AsyncTaskLedgerReader::list_prompt_handoffs(
             store.as_ref(),
             "test-team".parse().expect("team"),
@@ -4302,7 +4339,7 @@ pub(crate) mod tests {
         crate::prompt_handoff_record::record_prompt_handoff(
             &bridge,
             RequestDeadline::after(Duration::from_millis(20)),
-            Arc::new(atm_storage::DummyTaskStore::default()),
+            Ok(Arc::new(atm_storage::DummyTaskStore::default())),
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
@@ -4314,7 +4351,11 @@ pub(crate) mod tests {
             .expect("occupying task joins")
             .expect("job exits");
 
-        assert_prompt_handoff_error(&layer, &dispatch, "saturated");
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Saturated,
+        );
     }
 
     #[tokio::test]
@@ -4327,36 +4368,54 @@ pub(crate) mod tests {
             NonZeroUsize::new(1).expect("bridge capacity"),
             RuntimeHealth::default(),
         );
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        store.set_prompt_handoff_delay(Duration::from_millis(100));
         let timer_fired = Arc::new(AtomicBool::new(false));
         let timer_observed = Arc::clone(&timer_fired);
         let timer = tokio::spawn(async move {
             tokio::task::yield_now().await;
             timer_observed.store(true, Ordering::Release);
         });
-        let error = bridge
-            .run(RequestDeadline::after(Duration::from_millis(20)), || {
-                let started = std::time::Instant::now();
-                while started.elapsed() < Duration::from_millis(100) {
-                    std::thread::yield_now();
-                }
-                Ok(())
-            })
-            .await
-            .expect_err("blocking record exceeds its deadline");
-        assert!(error.message().contains("timed out"));
-        crate::prompt_handoff_record::log_failure(
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_millis(20)),
+            Ok(store),
             &dispatch,
-            atm_storage::BuiltInNudgeTemplateKind::TaskReady,
             PromptTrigger::Steer,
-            "timeout",
-        );
+            IsoTimestamp::now(),
+        )
+        .await;
         timer.await.expect("independent timer joins");
 
         assert!(
             timer_fired.load(Ordering::Acquire),
             "Tokio worker remains live"
         );
-        assert_prompt_handoff_error(&layer, &dispatch, "timeout");
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Timeout,
+        );
+    }
+
+    #[test]
+    fn prompt_handoff_failure_classification_uses_codes_not_wording() {
+        for (code, expected) in [
+            (
+                atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
+                crate::router_support::PromptHandoffFailureReason::Saturated,
+            ),
+            (
+                atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart,
+                crate::router_support::PromptHandoffFailureReason::Timeout,
+            ),
+        ] {
+            let error = AtmError::new(code, "deliberately unrelated wording");
+            assert_eq!(
+                crate::prompt_handoff_record::failure_reason(&error),
+                expected
+            );
+        }
     }
 
     #[tokio::test]

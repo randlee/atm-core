@@ -90,7 +90,7 @@ async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
         .expect_err("blocking work must time out");
     release.store(true, Ordering::Release);
 
-    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert_eq!(error.code(), AtmErrorCode::BlockingBridgeDeadlineAfterStart);
     assert!(error.detail().contains("timed out"));
 }
 

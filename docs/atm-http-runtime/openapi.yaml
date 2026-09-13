@@ -27,7 +27,7 @@ paths:
         - $ref: '#/components/parameters/Agent'
         - $ref: '#/components/parameters/ChatId'
       responses:
-        '200': { description: List outcome, content: { application/json: { schema: { $ref: '#/components/schemas/ListOutcome' } } } }
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/ListOutcome' } } } }
         default: { $ref: '#/components/responses/AtmError' }
     post:
       operationId: writeMessage
@@ -51,14 +51,14 @@ paths:
       operationId: inspectMessages
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PeekQuery' } } } }
       responses:
-        '200': { description: Read outcome, content: { application/json: { schema: { $ref: '#/components/schemas/ReadOutcome' } } } }
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/ReadOutcome' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /messages/read:
     post:
       operationId: readMessages
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReadQuery' } } } }
       responses:
-        '200': { description: Read outcome, content: { application/json: { schema: { $ref: '#/components/schemas/ReadOutcome' } } } }
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/ReadOutcome' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /doctor:
     get:
@@ -445,7 +445,8 @@ components:
         acknowledges_message_id: { type: string }
     ListOutcome:
       type: object
-      required: [action, team, agent, selection_mode, history_collapsed, count, rows, bucket_counts, handoffs]
+      description: Body of the `List` response-envelope variant; path references are corrected under the BB.7 envelope item.
+      required: [action, team, agent, selection_mode, history_collapsed, count, rows, bucket_counts]
       properties:
         action: { type: string }
         team: { type: string }
@@ -457,7 +458,7 @@ components:
         bucket_counts: { $ref: '#/components/schemas/BucketCounts' }
         task_rows: { type: array, items: { $ref: '#/components/schemas/TaskRow' }, default: [] }
         task_event_rows: { type: array, items: { $ref: '#/components/schemas/TaskEventRow' }, default: [] }
-        handoffs: { type: array, items: { $ref: '#/components/schemas/PromptHandoff' } }
+        handoffs: { type: array, items: { $ref: '#/components/schemas/PromptHandoff' }, default: [] }
     ListRow:
       type: object
       required: [message_id, summary, from, timestamp, read, pending_ack, task_id]
