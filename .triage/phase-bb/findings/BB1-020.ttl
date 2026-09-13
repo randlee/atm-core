@@ -16,7 +16,7 @@
   triage:source "fenix critical review" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/doctor/mod.rs:404-437" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
   triage:deferredNote "Suggestion only; not required for this round. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;

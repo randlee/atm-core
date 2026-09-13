@@ -16,7 +16,7 @@
   triage:source "ATM-QA-002 via BB6-QA-L2-1789268000, ruled genuine by fenix" ;
   triage:repeatable false ;
   triage:sweepScope "sprint-bb.6 doc (queue_claim_records_handoff_with_trigger_queue_claim test name reference)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: correct the stale sprint-doc test-name reference so it no longer implies a nonexistent PromptTrigger::QueueClaim variant. Correction from fenix (2026-09-13T00:43:17Z): already fixed at feature/bb6-docs-prompt-handoffs @ 4b0f6661c -- sprint-BB.6-prompt-handoffs.md:174 names queue_claim_records_no_handoff, the stale name is absent, verified via git show. Fixed-pending-QA at 4b0f6661c on L4; not a pending fix." ;
@@ -24,13 +24,16 @@
   triage:foundAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-015/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-015/2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasResolution <urn:atm:triage:resolution/BB6-015/1> ;
+  triage:closedAt "2026-09-13T03:09:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB6-015/1>
   a triage:Occurrence ;
   triage:snippet "sprint-doc test name queue_claim_records_handoff_with_trigger_queue_claim implies a nonexistent PromptTrigger::QueueClaim variant" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-runtime-prompt-handoffs" ;
   triage:headSha "0d2cc1142" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-015/1> .
@@ -47,8 +50,8 @@
   triage:file "docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md" ;
   triage:line 174 ;
   triage:snippet "sprint-doc now names queue_claim_records_no_handoff; stale queue_claim_records_handoff_with_trigger_queue_claim name absent; fixed-pending-QA" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-docs-prompt-handoffs" ;
   triage:headSha "4b0f6661c" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-015/2> .
@@ -59,3 +62,30 @@
   triage:branch "feature/bb6-docs-prompt-handoffs" ;
   triage:headSha "4b0f6661c" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB6-015/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md" ;
+  triage:line 174 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 3/3 (2026-09-13T03:09:11Z), verified at 7bb8f4a49. docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md:174 names queue_claim_records_no_handoff; stale name absent." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-cli-qa2" ;
+  triage:headSha "7bb8f4a49" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-015/3> .
+
+<urn:atm:triage:worktree/BB6-015/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1469, fix/bb6-cli-qa2" ;
+  triage:branch "fix/bb6-cli-qa2" ;
+  triage:headSha "7bb8f4a49" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/BB6-015/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:09:11Z"^^xsd:dateTime ;
+  triage:fixCommit "7bb8f4a49" ;
+  triage:fixBranch "fix/bb6-cli-qa2" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch3" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 3/3 (2026-09-13T03:09:11Z), verified at 7bb8f4a49. docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md:174 names queue_claim_records_no_handoff; stale name absent." .

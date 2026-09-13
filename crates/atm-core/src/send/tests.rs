@@ -643,6 +643,7 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         requires_ack: false,
         is_ack: false,
         task_id: None,
+        task_transition: None,
         recipient_pane_id: Some(PaneId::from_cli("%1").expect("pane")),
     };
     let mut tmux_snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
@@ -714,6 +715,7 @@ fn post_send_herdr_skips_a_nonconforming_canonical_recipient_without_panicking()
         requires_ack: false,
         is_ack: false,
         task_id: None,
+        task_transition: None,
         recipient_pane_id: None,
     };
     let mut snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
@@ -1320,7 +1322,7 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
 
 #[test]
 #[serial_test::serial(env)]
-fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
+fn plain_file_task_envelope_does_not_infer_requires_ack() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
@@ -1341,7 +1343,7 @@ fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
     let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect("plain file task envelope send succeeds");
 
-    assert!(outcome.requires_ack);
+    assert!(!outcome.requires_ack);
     assert!(outcome.task_id.is_none());
     let records = runtime
         .persisted_records
@@ -1350,8 +1352,8 @@ fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
         .clone();
     assert_eq!(records.len(), 1);
     let record = &records[0];
-    assert!(record.envelope.requires_ack);
-    assert!(record.envelope.pending_ack_at.is_some());
+    assert!(!record.envelope.requires_ack);
+    assert!(record.envelope.pending_ack_at.is_none());
     assert!(record.envelope.task_id.is_none());
 }
 

@@ -40,8 +40,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
   triage:line 1299 ;
   triage:snippet "comments at :1299 and :1729 name the deleted record_queue_prompt_reminders symbol verbatim, tripping AC1's literal grep despite the deletion itself being complete" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb5-contract-tests" ;
   triage:headSha "d1969185f" ;
   triage:occursIn <urn:atm:triage:worktree/BB5-007/1> .
@@ -58,8 +58,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
   triage:line 1300 ;
   triage:snippet "comments at :1300 and :1730 (shifted from :1299/:1729 by intervening edits) still name the deleted record_queue_prompt_reminders symbol verbatim; recurred as BB5-QA-R1-002" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb5-closure-r1" ;
   triage:headSha "1c7e76da5" ;
   triage:occursIn <urn:atm:triage:worktree/BB5-007/2> .

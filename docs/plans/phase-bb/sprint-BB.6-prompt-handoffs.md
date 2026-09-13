@@ -1,7 +1,7 @@
 ---
-status: planned
-branch: feature/bb6-prompt-handoffs
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb6-prompt-handoffs
+status: complete
+branch: feature/bb6-docs-prompt-handoffs
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb6-docs-prompt-handoffs
 ---
 
 # BB.6 — `prompt_handoffs`
@@ -11,7 +11,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb6-prompt-
 | Design | [`design.md`](../nudge-transition-templates/design.md) §4.6 (SMK-005); plan P2 |
 | Recommended | arch-ctm / deep-reasoning |
 | Depends on | `must_follow` BB.5 (dev push) — the `task_pass` trigger is written from the task pass BB.5 rewrites; stacks on `feature/bb5-assignment-write-task-pass` |
-| Worktree | `feature/bb6-prompt-handoffs` |
+| Worktree | `feature/bb6-docs-prompt-handoffs` (top of the four crate-boundary layers) |
 | Governed interfaces | SQLite MINOR (additive table); HTTP/peer API MINOR: optional `handoffs` on the task-events list response, `HTTP_API_VERSION` 1.8.0 → 1.9.0; schema-reviewer sign-off |
 | Requirements / ADRs edited | ADR-062 new subsection; ADR-061 D5 (1.9.0) and D6 (additive table entry) |
 
@@ -25,7 +25,7 @@ record failures, which is what the colima acceptance asserts. With it the
 
 ## Deliverables
 
-- [ ] D1 — DDL appended to `TASK_TABLES_DDL`
+- [x] D1 — DDL appended to `TASK_TABLES_DDL`
   (`crates/atm-storage-rusqlite/src/task_store.rs:17-52`), exactly:
 
 ```sql
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS prompt_handoffs (
     attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
     trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'task_pass')),
     at TEXT NOT NULL,
-    UNIQUE (team, agent, message_key, attempt)
+    UNIQUE (team, agent, message_key, kind, attempt)
 );
 CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id, at);
 ```
@@ -46,16 +46,18 @@ CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id
   `message_key` is TEXT because `MessageKey` is a `String` newtype
   (`crates/atm-storage/src/contract.rs:29`) and `mail_messages.message_key`
   is `TEXT NOT NULL` (`mail_messages_schema.rs:33`). The identity of a
-  handoff is `(team, agent, message_key, attempt)`: repeated reminders share
-  one message key and differ by attempt; every non-reminder prompt is
-  attempt 0. The insert is `INSERT OR IGNORE`, so a repeated record of the
-  same prompt is a no-op (idempotent; plan P11). No foreign key — no task
-  table has one today, and the row must survive a later task-row rewrite.
-  `CREATE TABLE IF NOT EXISTS` is how every task table is created today; a
-  pre-BB binary ignores the table (MINOR). No `STORAGE_SCHEMA_VERSION`
-  exists yet (ADR-061 D1); the D6 entry records the addition.
+  handoff is `(team, agent, message_key, kind, attempt)`: repeated reminders
+  share one message key and differ by attempt, while distinct prompt kinds at
+  attempt 0 remain distinct. The insert is `INSERT OR IGNORE`, so a repeated
+  record of the same prompt is a no-op (idempotent; plan P11). No foreign key
+  — no task table has one today, and the row must survive a later task-row
+  rewrite. `CREATE TABLE IF NOT EXISTS` is how every task table is created
+  today; open drops and recreates the never-released legacy shape whose
+  uniqueness omitted `kind`. A pre-BB binary ignores the table (MINOR). No
+  `STORAGE_SCHEMA_VERSION` exists yet (ADR-061 D1); the D6 entry records the
+  addition.
 
-- [ ] D2 — `crates/atm-storage/src/task_state.rs`:
+- [x] D2 — `crates/atm-storage/src/task_state.rs`:
 
 ```rust
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -84,11 +86,13 @@ pub struct PromptHandoff {
   (ADR-054 capability count unchanged; stated in the PR body);
   `AsyncTaskLedgerReader` gains
   `async fn list_prompt_handoffs(&self, team: TeamName, task_id: TaskId, deadline: ReadDeadline) -> Result<Vec<PromptHandoff>, ReadLaneError>`
-  (ordered by `at`, then rowid). Boundary manifests
-  `boundaries/atm-storage/task-store.toml` and
-  `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` list both.
+  (ordered by `at`, then rowid). The
+  `boundaries/atm-storage/task-store.toml` manifest explicitly lists
+  `record_prompt_handoff` and `list_prompt_handoffs`.
+  `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` records the SQLite
+  `TaskStore` implementation boundary without naming individual methods.
 
-- [ ] D3 — one helper in `crates/atm-http-runtime/src/prompt_handoff_record.rs`
+- [x] D3 — one helper in `crates/atm-http-runtime/src/prompt_handoff_record.rs`
   (new, ≤ 80 lines), `pub(crate)`: both emit paths that can carry a task
   link live in this crate (plan P13):
 
@@ -96,7 +100,7 @@ pub struct PromptHandoff {
 pub(crate) async fn record_prompt_handoff(
     bridge: &BoundedBlockingBridge,          // router_support.rs:81
     deadline: RequestDeadline,
-    store: Arc<dyn TaskStore + Send + Sync>,
+    store: Result<Arc<dyn TaskStore + Send + Sync>, AtmError>,
     dispatch: &BuiltInPostSendDispatch,
     trigger: PromptTrigger,
     at: IsoTimestamp,
@@ -104,10 +108,15 @@ pub(crate) async fn record_prompt_handoff(
 ```
 
   It returns without writing when `dispatch.event.task_transition` is
-  `None` (not task-linked; plan P10). Otherwise it builds the row (`kind`
-  via the BB.1 decision, `task_id`, `attempt` from `Reminder { attempt }`
-  else `0`) and runs the synchronous store call through the caller's
-  bridge exactly as `record_task_reminder` does
+  `None` (not task-linked; plan P10). It owns task-store acquisition failure
+  handling so both callers use the same structured failure path. A persisted
+  message can defensively reach this helper with `task_transition: Some(_)`
+  and `task_id: None` because the message table has no constraint tying those
+  columns together; that data-integrity guard logs one storage failure and
+  records no row. Otherwise it builds the row (`kind` via the BB.1 decision,
+  `task_id`, `attempt` from `Reminder { attempt }` else `0`) and runs the
+  synchronous store call through the caller's bridge exactly as
+  `record_task_reminder` does
   (`task_pass.rs:552-580`: `bridge.run(deadline, move || store.record_prompt_handoff(&row)).await`).
   Any `Err` — storage, bridge timeout, bridge saturation — emits one
   `tracing::error!(subsystem, action = "prompt_handoff_record_failed", reason, message_id, kind, trigger)`
@@ -126,7 +135,7 @@ pub(crate) async fn record_prompt_handoff(
   `request.nudge_mode` for every task request). A failed sink writes no
   row. Exact lines pinned in the PR body.
 
-- [ ] D4 — `atm task events <id>` (`crates/atm/src/commands/task.rs:437+`,
+- [x] D4 — `atm task events <id>` (`crates/atm/src/commands/task.rs:437+`,
   `render_task_events`): the response (`TaskLedgerQuery` list outcome) gains
   `#[serde(default)] handoffs: Vec<PromptHandoff>`; the renderer
   interleaves handoffs with events ordered by `(at, source, rowid)` where
@@ -138,7 +147,7 @@ pub(crate) async fn record_prompt_handoff(
   `openapi.yaml` and surface baseline updated; a 1.8.0 client omits the
   field and still decodes.
 
-- [ ] D5 — ADR-062 new subsection "Prompt handoffs (Phase BB)": the table,
+- [x] D5 — ADR-062 new subsection "Prompt handoffs (Phase BB)": the table,
   the two triggers and why only two (P13), task-linked only (P10),
   best-effort after sink success with the logged failure line (P11), and
   "`task_events.reminded` remains the task-side counter; `prompt_handoffs`
@@ -152,25 +161,31 @@ pub(crate) async fn record_prompt_handoff(
 Storage — `crates/atm-storage-rusqlite/tests/`:
 
 - `record_prompt_handoff_round_trips_every_trigger` — both.
-- `record_prompt_handoff_ignores_duplicate_identity` — same `(team, agent, message_key, attempt)` twice: one row, `Ok(())`.
+- `record_prompt_handoff_ignores_duplicate_identity` — same `(team, agent, message_key, kind, attempt)` twice: one row, `Ok(())`.
+- `record_prompt_handoff_keeps_kinds_distinct` — one key and attempt, `task_queued` then `task_ready`: two rows.
 - `record_prompt_handoff_keeps_reminder_attempts_distinct` — one key, attempts 1 and 2: two rows.
 - `list_prompt_handoffs_orders_by_time_then_rowid`.
 - `prompt_handoff_row_with_unknown_trigger_fails_decode` — malformed-row coverage.
 - `pre_bb_fixture_opens_and_gains_prompt_handoffs_table` — the BA fixture database opens, the table is created, existing rows untouched.
+- `legacy_prompt_handoff_shape_is_recreated_with_kind_identity` — open replaces the never-released legacy unique constraint and then retains both task prompt kinds.
 - `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created` — the ADR-061 D3 direction: a frozen copy of the BA `TASK_TABLES_DDL` + mail DDL (string fixture under `tests/fixtures/`) is applied to a database that already has `prompt_handoffs`, then assigns, starts and closes a task and reads it back through the frozen statements.
 
 Runtime — `crates/atm-http-runtime/`:
 
 - `task_pass_records_handoff_with_kind_and_attempt`.
+- `task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing`.
 - `steer_emit_records_handoff_with_trigger_steer`.
-- `queue_claim_records_handoff_with_trigger_queue_claim`.
 - `steer_of_non_task_message_records_no_handoff` (P10).
-- `failed_sink_records_no_handoff` — one per path (steer, queue claim, task pass).
+  — a stored task transition with a null task id reaches the defensive
+  data-integrity guard, logs one storage failure, and writes no row.
+- `failed_steer_sink_records_no_handoff`.
+- `failed_task_pass_sink_records_no_handoff`.
 - `record_failure_logs_prompt_handoff_record_failed_and_emission_succeeds` — a failing `TaskStore` stub; the sink result is unchanged and the log line carries `reason = storage`, message id, kind, trigger.
 - `record_bridge_timeout_logs_and_emission_succeeds` — a store stub that sleeps past the deadline: `reason = timeout`, sink result unchanged, the Tokio worker is not blocked (the test's own timer keeps firing).
 - `record_bridge_saturated_logs_and_emission_succeeds` — bridge permits exhausted: `reason = saturated`, sink result unchanged.
 - `steer_with_exhausted_deadline_skips_record_with_failure_log`.
 - `deferred_task_linked_message_is_impossible_after_bb5` — every task request goes through `send_mode_for_task_request` as `Immediate`; the claim path is asserted never to see `task_transition.is_some()`.
+- `queue_claim_records_no_handoff` — the claim path never receives a task link.
 
 CLI:
 

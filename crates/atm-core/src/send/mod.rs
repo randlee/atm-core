@@ -47,7 +47,7 @@ pub(crate) use delivery_persistence::{
 #[doc(hidden)]
 pub use nudge_template::{
     default_template, qualified_sender_identity as qualified_nudge_sender_identity,
-    render_resolved_built_in_nudge, render_task_started_template,
+    render_resolved_built_in_nudge,
 };
 pub use outcome::{SendCommandOutcome, SendOutcome, WarningEntry};
 pub(crate) use peer_routing::direct_peer_destination;
@@ -345,13 +345,8 @@ pub(crate) enum DeliveryExecutionMode {
     Deferred,
 }
 
-pub(crate) fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskId>) -> bool {
+pub(crate) fn request_requires_ack(request: &SendRequest, _task_id: &Option<TaskId>) -> bool {
     request.requires_ack
-        || (task_id.is_some() && request.task_op.is_none())
-        || matches!(
-            &request.message_source,
-            SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
-        )
 }
 
 pub fn validate_task_request(request: &mut SendRequest) -> Result<(), AtmError> {
@@ -382,8 +377,8 @@ pub(crate) fn send_mode_for_task_request(
     request: &SendRequest,
     task_id: &Option<TaskId>,
 ) -> NudgeMode {
-    if task_id.is_some() && request.task_op.is_none() {
-        NudgeMode::Deferred
+    if task_id.is_some() {
+        NudgeMode::Immediate
     } else {
         request.nudge_mode
     }
@@ -786,7 +781,7 @@ mod path_body_tests {
     }
 
     #[test]
-    fn task_request_forces_deferred_mode_while_ordinary_request_is_unchanged() {
+    fn task_request_forces_immediate_mode_without_implying_ack() {
         let home_dir = tempfile::tempdir().expect("temporary home");
         let team: TeamName = "test-team".parse().expect("team");
         let task_request = WriteRequest::new(
@@ -806,9 +801,9 @@ mod path_body_tests {
         let task_id = task_request.task_id.clone();
         assert_eq!(
             send_mode_for_task_request(&task_request, &task_id),
-            NudgeMode::Deferred
+            NudgeMode::Immediate
         );
-        assert!(request_requires_ack(&task_request, &task_id));
+        assert!(!request_requires_ack(&task_request, &task_id));
 
         let mut task_operation = task_request.clone();
         task_operation.task_op = Some(TaskOp::Start);

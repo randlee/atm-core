@@ -1,6 +1,9 @@
 #![cfg(test)]
 
-use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
+use atm_core::test_support::{
+    TEST_LEAD, TEST_LEAD_ADDRESS, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS,
+    TEST_TEAM,
+};
 use atm_storage::{MemberKey, ReminderOutcome, TaskEventKind, TaskOp, TaskState};
 use serial_test::serial;
 
@@ -68,8 +71,8 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
     let mut start_active = atm_core::send::SendRequest::new(
         fixture.home_dir.clone(),
         fixture.current_dir.clone(),
-        "atm-daemon".parse().unwrap(),
-        TEST_RECIPIENT_ADDRESS,
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
         team.clone(),
         atm_core::send::SendMessageSource::Inline("start ACTIVE".into()),
         None,
@@ -133,8 +136,8 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
     let mut start = atm_core::send::SendRequest::new(
         fixture.home_dir.clone(),
         fixture.current_dir.clone(),
-        "atm-daemon".parse().unwrap(),
-        TEST_RECIPIENT_ADDRESS,
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
         team.clone(),
         atm_core::send::SendMessageSource::Inline("start".into()),
         None,
@@ -163,12 +166,12 @@ async fn assign_to_active_member_persists_with_zero_prompts_until_idle() {
 async fn assign_existing_open_id_to_other_agent_reassigns_in_place() {
     let fixture = LoopbackFixture::new("recipient");
     execute_assign(&fixture, assign("T1", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
-    execute_assign(&fixture, assign("T1", "test-lead@test-team", TEST_SENDER)).await;
+    execute_assign(&fixture, assign("T1", TEST_LEAD_ADDRESS, TEST_SENDER)).await;
     let store = fixture.task_store();
     let team = TEST_TEAM.parse().expect("team");
     let task = "T1".parse().expect("task");
     let row = store.load_task(&team, &task).unwrap().unwrap();
-    assert_eq!(row.assignee.as_str(), "test-lead");
+    assert_eq!(row.assignee.as_str(), TEST_LEAD);
     assert_eq!(
         store
             .list_task_events(&team, &task, None)
@@ -209,7 +212,7 @@ async fn assign_closed_id_reopens_same_row() {
     )
     .await
     .expect("close");
-    execute_assign(&fixture, assign("T1", "test-lead@test-team", TEST_SENDER)).await;
+    execute_assign(&fixture, assign("T1", TEST_LEAD_ADDRESS, TEST_SENDER)).await;
     let store = fixture.task_store();
     let team = TEST_TEAM.parse().unwrap();
     let task = "T1".parse().unwrap();

@@ -258,10 +258,10 @@ async fn admit_verified_template(
         }
         return Ok(DeliveryPersistenceResult::already_persisted(envelope));
     }
-    Ok(
-        DeliveryPersistenceResult::persisted(envelope)
-            .with_task_rejection(admission.task_rejection),
-    )
+    Ok(DeliveryPersistenceResult::persisted(envelope)
+        .with_task_assignee(admission.task_assignee)
+        .with_task_rejection(admission.task_rejection)
+        .with_assignment_metadata(admission.queued_position, admission.reassign_notice))
 }
 
 fn build_template_admission(

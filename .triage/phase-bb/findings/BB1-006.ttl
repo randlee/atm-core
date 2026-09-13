@@ -16,7 +16,7 @@
   triage:source "fenix critical review" ;
   triage:repeatable false ;
   triage:sweepScope "docs/atm-daemon/http-api.md:12,16,160,164" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: add the 1.8.0 row (PostSendHookEvent.task_transition, optional, default None) and move the baseline line to 1.8.0. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;

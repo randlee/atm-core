@@ -16,7 +16,7 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/template_override_migration.rs:4" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
   triage:deferredNote "Recommend a named struct instead of the positional tuple. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates." ;

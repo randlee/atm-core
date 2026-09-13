@@ -16,7 +16,7 @@
   triage:source "qa" ;
   triage:repeatable false ;
   triage:sweepScope "docs/plans/phase-bb/sprint-BB.1-transition-templates.md (Tests section, ~line 281)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
   triage:deferredNote "Recommend correcting the cited path to crates/atm-graft-python/src/lib.rs. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates." ;

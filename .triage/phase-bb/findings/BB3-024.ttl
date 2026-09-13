@@ -16,23 +16,27 @@
   triage:source "quality-mgr BB3-QA-R5-1789273000 (ARCH-001), ruled genuine by fenix" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/smoke/admission_capacity_transport.py:60-65" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: import ROOT, DAEMON_SWITCH, MANAGED_DAEMON_TIMEOUT_SECONDS, DIAGNOSTIC_SAMPLE_COUNT, DIAGNOSTIC_DURATION_SECONDS, TARGET_PROFILE_DURATION_SECONDS from admission_capacity_support.py instead of re-declaring them. Dispatched to cipher as BB3-FIX-R6-1789277000, branch fix/bb3-qa5-r6 cut from cipher's BB7 head 35e135673 (stack layer 15 above PR #1467)." ;
+  triage:deferredNote "Fix: import ROOT, DAEMON_SWITCH, MANAGED_DAEMON_TIMEOUT_SECONDS, DIAGNOSTIC_SAMPLE_COUNT, DIAGNOSTIC_DURATION_SECONDS, TARGET_PROFILE_DURATION_SECONDS from admission_capacity_support.py instead of re-declaring them. Dispatched to cipher as BB3-FIX-R6-1789277000, branch fix/bb3-qa5-r6 cut from cipher's BB7 head 35e135673 (stack layer 15 above PR #1467). R6 complete and self-validated by cipher (2026-09-13T02:12:58Z) at final merge head f23d87928 (BB7 b56b35ba7 an ancestor); smoke fast 8/8, evidence archived outside the tree. Fixed-pending-QA at f23d87928." ;
   triage:relatedFinding "BB3-022" ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-024/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-024/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB3-024/1> ;
+  triage:closedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB3-024/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/admission_capacity_transport.py" ;
   triage:line 60 ;
   triage:snippet "re-declares ROOT, DAEMON_SWITCH, MANAGED_DAEMON_TIMEOUT_SECONDS, DIAGNOSTIC_SAMPLE_COUNT, DIAGNOSTIC_DURATION_SECONDS, TARGET_PROFILE_DURATION_SECONDS with identical literal values already owned by admission_capacity_support.py" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "5da523f81" ;
   triage:occursIn <urn:atm:triage:worktree/BB3-024/1> .
@@ -43,3 +47,48 @@
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "5da523f81" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB3-024/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/admission_capacity_transport.py" ;
+  triage:line 60 ;
+  triage:snippet "BB3-FIX-R6 complete and self-validated by cipher; fixed-pending-QA at final merge head f23d87928" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-024/2> .
+
+<urn:atm:triage:worktree/BB3-024/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa5-r6" ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB3-024/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/admission_capacity_transport.py" ;
+  triage:line 60 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. scripts/smoke/admission_capacity_transport.py:28-43 constants now imported from admission_capacity_support; grep confirms zero re-declarations remain." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-024/3> .
+
+<urn:atm:triage:worktree/BB3-024/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1470, fix/bb6-docs-qa1" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/BB3-024/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:fixCommit "0b9b3e4f3" ;
+  triage:fixBranch "fix/bb6-docs-qa1" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch1" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. scripts/smoke/admission_capacity_transport.py:28-43 constants now imported from admission_capacity_support; grep confirms zero re-declarations remain." .

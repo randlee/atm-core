@@ -16,7 +16,7 @@
   triage:source "fenix critical review" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-core/src/nudge_dispatch.rs:219-226" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: call build_task_reminder_dispatch with rows at reminder_count 0 and 3 and assert the resolved template kind. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;

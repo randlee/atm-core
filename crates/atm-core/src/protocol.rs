@@ -100,7 +100,7 @@ pub enum ResponseEnvelope {
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.7.0";
+pub const HTTP_API_VERSION: &str = "1.9.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskMoveRequest {

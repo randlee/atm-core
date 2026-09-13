@@ -140,7 +140,7 @@ BB.6 and BB.2 have merged.
 | sprint | interface | change | class |
 | --- | --- | --- | --- |
 | BB.1 | HTTP/peer API (graft loopback `GraftPostSendRequest`, `ATM_INTERNAL_NUDGE` envelope) | `PostSendHookEvent.task_transition: Option<TaskTransition>`, `#[serde(default, skip_serializing_if = "Option::is_none")]`; `atm-graft` and `atm-graft-python` decode with default and ignore it; `HTTP_API_VERSION` 1.7.0 → 1.8.0 | MINOR |
-| BB.1 | SQLite | none — override rows keep `kind TEXT`; stale `task` rows are reported, not migrated | none |
+| BB.1 | SQLite | `team_nudge_template_overrides` is rebuilt at open without a `template_kind` `CHECK` (validation remains in Rust); no global storage version exists yet (ADR-061 D6) — lead ruling: fenix, 2026-09-12 | MINOR (additive accepted kind spellings; existing rows preserved) |
 | BB.4 | HTTP/peer API | route/envelope: none — `TaskOp::Start` already exists on `WriteRequest` (P1). Error contract: new stable code `ATM_TASK_ALREADY_ACTIVE` (`AtmErrorCode::TaskAlreadyActive`), additive; recorded under the 1.8.0 D5 entry BB.1 opens (BB.4 stacks on BB.1) with the OpenAPI / surface fixtures updated | MINOR (additive error code) |
 | BB.4 | SQLite | none | none |
 | BB.5 | SQLite | one-time open-time normalization of pre-BB assignment ack/nudge markers (state columns only; no DDL change; envelopes untouched) | none (data normalization, recorded in ADR-061 D6 as a note) |
@@ -188,7 +188,7 @@ Nothing outside this list is added; deletions are listed per sprint.
 
 | sprint | addition |
 | --- | --- |
-| BB.1 | `TaskTransition` enum; `PostSendHookEvent.task_transition`; six `BuiltInNudgeTemplateKind` variants; six default bodies; render values `position`, `attempt`, `assignee`, `outcome`, `by`; `TaskClosedOutcome { Cancelled, Reassigned }`; doctor findings `stale_nudge_template_override` and `disabled_task_nudge_template`; `NudgeTemplateOverrideStore::list_stale_template_override_kinds`; `clear_template_override(team, kind: &str)` (parameter type change, sealed trait, both boundary manifests updated — BB.1 D6); `HTTP_API_VERSION` 1.8.0 |
+| BB.1 | `TaskTransition` enum; `PostSendHookEvent.task_transition`; `MessageAdmissionOutcome.task_assignee: Option<AgentName>` (internal assignee snapshot; lead ruling: fenix, 2026-09-12); six `BuiltInNudgeTemplateKind` variants; six default bodies; render values `position`, `attempt`, `assignee`, `outcome`, `by`; `TaskClosedOutcome { Cancelled, Reassigned }`; doctor findings `stale_nudge_template_override` and `disabled_task_nudge_template`; `NudgeTemplateOverrideStore::list_stale_template_override_kinds`; `clear_template_override(team, kind: &str)` (parameter type change, sealed trait, both boundary manifests updated — BB.1 D6); `HTTP_API_VERSION` 1.8.0 |
 | BB.2 | nothing in `crates/`; template steps only |
 | BB.3 | `scripts/procedures/render_procedure_pages.py`; `templates/procedure-report/procedure.html.j2`; `docs/procedures/*.md`; `site/reports/procedures/**`; `source_revision` on two evidence writers; `procedure`/`source_revision` optional envelope fields |
 | BB.4 | clap `TaskSubcommand::Start(TaskStartCommand)`; `SendCommand::build_task_start_request`; writer `admit` arm for `Started` (actor = assignee); `AtmErrorCode::TaskAlreadyActive` / `ATM_TASK_ALREADY_ACTIVE` in `atm-error` + `task_rejection.rs::task_already_active` + the `is_task_rejection` arm |

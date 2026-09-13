@@ -1090,6 +1090,13 @@ mod adapter_tests {
         }
         assert_eq!(
             exit_code_for_atm_error(&AtmError::new(
+                AtmErrorCode::TaskAlreadyActive,
+                "already active"
+            )),
+            1
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::new(
                 AtmErrorCode::TemplateLoadFailed,
                 "template unavailable"
             )),

@@ -16,7 +16,7 @@
   triage:source "rust-best-practices-agent via BB6-QA-L3-1789269000, ruled genuine by fenix" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm/src/commands/task.rs:289-301,404-410" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: replace the anyhow string errors at task.rs:289-301 and :404-410 with structured AtmErrorCode::TaskNotFound, matching the crate's existing error convention. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. Fixed by solar's second commit (catalog-backed TaskNotFound/TaskNotCounterparty + per-command JSON code tests), pushed to fix/bb6-cli-qa1 @ 8086e5362 (2026-09-13T00:45:06Z, per fenix). Fixed-pending-QA. BB6-FIX-CLI-QA1-1789270000 complete and self-validated by solar (2026-09-13T01:10:38Z) at fix/bb6-cli-qa1 final head adda7e3f9, parent 3aa1954e8 (BB6 L4 final); closing-triage tasklist confirms implementation commit 8086e536. Fixed-pending-QA at adda7e3f9. quality-mgr BB6-QA-CLI-FIX round 2 (PR #1465 comment, 2026-09-13T01:28:29Z): HALF fixed. Task start's TaskStart path correctly covers both AtmErrorCode paths, and task close's TaskNotFound path is fixed -- but task close's TaskNotCounterparty path (2 tests) still only asserts error-string substrings, not the typed code; the underlying code itself is already correct end-to-end, only the test coverage is missing. Residual filed separately as BB6-023 per fenix's instruction (correlated via relatedFinding), rather than reopening this record at full severity; this finding stays fixed-pending-QA reflecting the now-correct TaskStart + TaskClose/TaskNotFound code paths. Residual + new ARCH-RULE-010 both routed to arch-ctm as BB6-FIX-CLI-QA2-1789281000 on fix/bb6-cli-qa2, cut from his final runtime head, queued behind his runtime close." ;
@@ -26,15 +26,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/3> ;
-  triage:triageRecordVersion "4" .
+  triage:hasResolution <urn:atm:triage:resolution/BB6-005/1> ;
+  triage:closedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "5" .
 
 <urn:atm:triage:occurrence/BB6-005/1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 289 ;
   triage:snippet "TaskStart/TaskClose raise anyhow 'task not found'/'not assigned' instead of AtmErrorCode::TaskNotFound" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-cli-prompt-handoffs" ;
   triage:headSha "40ccd403e" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-005/1> .
@@ -51,8 +54,8 @@
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 289 ;
   triage:snippet "catalog-backed TaskNotFound/TaskNotCounterparty with per-command JSON code tests replaces the anyhow string errors; fixed-pending-QA" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "8086e5362" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-005/2> .
@@ -69,8 +72,8 @@
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 289 ;
   triage:snippet "BB6-FIX-CLI-QA1 complete and self-validated; fixed-pending-QA at fix/bb6-cli-qa1 final head adda7e3f9" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "adda7e3f9" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-005/3> .
@@ -81,3 +84,30 @@
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "adda7e3f9" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/BB6-005/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task.rs" ;
+  triage:line 289 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at 7bb8f4a49. crates/atm/src/commands/task.rs:289-307,404-411 typed AtmErrorCode::TaskNotFound/TaskNotCounterparty, no anyhow strings." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-cli-qa2" ;
+  triage:headSha "7bb8f4a49" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-005/4> .
+
+<urn:atm:triage:worktree/BB6-005/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1469, fix/bb6-cli-qa2" ;
+  triage:branch "fix/bb6-cli-qa2" ;
+  triage:headSha "7bb8f4a49" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:resolution/BB6-005/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:fixCommit "7bb8f4a49" ;
+  triage:fixBranch "fix/bb6-cli-qa2" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch2" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at 7bb8f4a49. crates/atm/src/commands/task.rs:289-307,404-411 typed AtmErrorCode::TaskNotFound/TaskNotCounterparty, no anyhow strings." .

@@ -18,8 +18,8 @@ use atm_core::task_query::{
 };
 use atm_core::types::{AgentName, TaskId, TeamName};
 use atm_storage::{
-    DAEMON_ACTOR_NAME, MoveTarget, RuntimeMemberState, TaskActor, TaskCloseOutcome, TaskEventRow,
-    TaskRow,
+    DAEMON_ACTOR_NAME, MoveTarget, PromptHandoff, RuntimeMemberState, TaskActor, TaskCloseOutcome,
+    TaskEventRow, TaskRow,
 };
 use chrono::SecondsFormat;
 use clap::{ArgGroup, Args, Subcommand, ValueEnum};
@@ -47,10 +47,25 @@ enum TaskSubcommand {
     Events(TaskEventsCommand),
     /// Assign a task with deferred notification.
     Assign(TaskAssignCommand),
+    /// Start an assigned task: moves it to active and tells the assigner.
+    Start(TaskStartCommand),
     /// Deliver a report and close a task with a typed outcome.
     Close(TaskCloseCommand),
     /// Reorder one member's queue.
     Move(TaskMoveCommand),
+}
+
+/// Start an assigned task: moves it to active and tells the assigner.
+#[derive(Debug, Args)]
+struct TaskStartCommand {
+    task_id: TaskId,
+    /// Optional note to the assigner (what you will do first). Also accepts --stdin/--file/--template.
+    #[command(flatten)]
+    report: MessageSourceArgs,
+    #[arg(long)]
+    json: bool,
+    #[command(flatten)]
+    caller: CallerArgs,
 }
 
 #[derive(Debug, Args)]
@@ -229,8 +244,87 @@ impl TaskCommand {
             TaskSubcommand::List(command) => command.run(observability).await,
             TaskSubcommand::Events(command) => command.run(observability).await,
             TaskSubcommand::Assign(command) => command.run(observability).await,
+            TaskSubcommand::Start(command) => command.run(observability).await,
             TaskSubcommand::Close(command) => command.run(observability).await,
             TaskSubcommand::Move(command) => command.run(observability).await,
+        }
+    }
+}
+
+impl TaskStartCommand {
+    async fn run(self, observability: &CliObservability) -> Result<()> {
+        let (home_dir, current_dir) = resolve_command_runtime_context("task start")?;
+        let caller = resolve_context(&self.caller)?;
+        let composition = composition("task start", observability, &home_dir, &current_dir)?;
+        print!(
+            "{}",
+            self.execute(&composition, caller, home_dir, current_dir)
+                .await?
+        );
+        Ok(())
+    }
+
+    async fn execute(
+        self,
+        composition: &CliComposition<'_>,
+        caller: atm_core::caller_context::CallerContext,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+    ) -> Result<String> {
+        preflight_daemon_api(composition, HttpApiVersion::parse("1.8.0")?, "task start").await?;
+        let query = task_list_request(
+            home_dir.clone(),
+            current_dir.clone(),
+            caller.caller_identity.clone(),
+            caller.caller_team.clone(),
+            None,
+            Some(&self.task_id),
+        )?;
+        let row = composition
+            .list(query)
+            .await?
+            .task_rows
+            .into_iter()
+            .find(|row| row.task_id == self.task_id)
+            .ok_or_else(|| {
+                atm_core::error::AtmError::new(
+                    atm_core::error::AtmErrorCode::TaskNotFound,
+                    format!(
+                        "task {} does not exist on team {}",
+                        self.task_id, caller.caller_team
+                    ),
+                )
+            })?;
+        if row.assignee != caller.caller_identity {
+            return Err(atm_core::error::AtmError::new(
+                atm_core::error::AtmErrorCode::TaskNotCounterparty,
+                format!(
+                    "task {} is not assigned to {}",
+                    self.task_id, caller.caller_identity
+                ),
+            )
+            .into());
+        }
+        let mut report = self.report;
+        if !report.is_present() {
+            report.text = Some(format!("started {}", self.task_id));
+        }
+        let mut request = SendCommand::for_task(report.into_send_options(
+            row.assigner.to_string(),
+            self.caller,
+            None,
+            self.json,
+        ))
+        .build_task_start_request(home_dir, current_dir, self.task_id.clone())?;
+        atm_core::send::validate_task_request(&mut request)?;
+        let result = composition
+            .send(request)
+            .await
+            .map_err(anyhow::Error::from)?;
+        if self.json {
+            Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
+        } else {
+            Ok(format!("started {}\n", self.task_id))
         }
     }
 }
@@ -313,11 +407,14 @@ impl TaskCloseCommand {
         let row = match preflight_close(rows, &self.task_id) {
             ClosePreflight::Proceed { row } => row,
             ClosePreflight::Unknown => {
-                return Err(anyhow::anyhow!(
-                    "task {} does not exist on team {}",
-                    self.task_id,
-                    caller.caller_team
-                ));
+                return Err(atm_core::error::AtmError::new(
+                    atm_core::error::AtmErrorCode::TaskNotFound,
+                    format!(
+                        "task {} does not exist on team {}",
+                        self.task_id, caller.caller_team
+                    ),
+                )
+                .into());
             }
         };
         let recipient = report_recipient(&row, &caller.caller_identity);
@@ -491,7 +588,7 @@ impl TaskEventsCommand {
         .with_task_ledger(ledger.clone());
         let outcome = composition.list(query).await?;
         let selected = select_task_events(outcome.task_event_rows, &contract);
-        let output = render_task_events(&selected.rows, self.json)?;
+        let output = render_task_events(&selected.rows, &outcome.handoffs, self.json)?;
         print_omitted_rows(selected.omitted);
         Ok(output)
     }
@@ -694,39 +791,93 @@ fn member_state_header(member: &AgentName, state: &str) -> String {
     format!("{member} (state: {state})")
 }
 
-fn render_task_events(rows: &[TaskEventRow], json: bool) -> Result<String> {
+fn render_task_events(
+    rows: &[TaskEventRow],
+    handoffs: &[PromptHandoff],
+    json: bool,
+) -> Result<String> {
     if json {
-        return Ok(format!("{}\n", serde_json::to_string_pretty(rows)?));
+        return Ok(format!(
+            "{}\n",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "events": rows,
+                "handoffs": handoffs,
+            }))?
+        ));
     }
     let mut output = String::from("seq at event from→to actor detail\n");
-    for row in rows {
-        let actor = match &row.actor {
-            TaskActor::Member(member) => member.as_str(),
-            TaskActor::Daemon => DAEMON_ACTOR_NAME,
-        };
-        let from = row.from_state.map_or("-", |state| state.as_str());
-        let to = row.to_state.map_or("-", |state| state.as_str());
-        let detail = row
-            .detail
-            .as_deref()
-            .or_else(|| row.marker.map(|marker| marker.as_str()))
-            .or_else(|| row.outcome.map(|outcome| outcome.as_str()))
-            .unwrap_or("-");
-        writeln!(
-            output,
-            "{} {} {} {}→{} {} {}",
-            row.seq,
-            row.at
-                .into_inner()
-                .to_rfc3339_opts(SecondsFormat::Secs, true),
-            row.event.as_str(),
-            from,
-            to,
-            actor,
-            detail,
-        )?;
+    let mut entries = rows
+        .iter()
+        .enumerate()
+        .map(|(rowid, row)| (row.at, 0_u8, rowid, TaskEventDisplay::Event(row)))
+        .chain(
+            handoffs
+                .iter()
+                .enumerate()
+                .map(|(rowid, row)| (row.at, 1_u8, rowid, TaskEventDisplay::Prompt(row))),
+        )
+        .collect::<Vec<_>>();
+    entries.sort_by_key(|(at, source, rowid, _)| (*at, *source, *rowid));
+    for (_, _, _, entry) in entries {
+        match entry {
+            TaskEventDisplay::Event(row) => render_task_event_line(&mut output, row),
+            TaskEventDisplay::Prompt(row) => render_prompt_handoff_line(&mut output, row),
+        }
     }
     Ok(output)
+}
+
+enum TaskEventDisplay<'a> {
+    Event(&'a TaskEventRow),
+    Prompt(&'a PromptHandoff),
+}
+
+fn render_task_event_line(output: &mut String, row: &TaskEventRow) {
+    let actor = match &row.actor {
+        TaskActor::Member(member) => member.as_str(),
+        TaskActor::Daemon => DAEMON_ACTOR_NAME,
+    };
+    let from = row.from_state.map_or("-", |state| state.as_str());
+    let to = row.to_state.map_or("-", |state| state.as_str());
+    let detail = row
+        .detail
+        .as_deref()
+        .or_else(|| row.marker.map(|marker| marker.as_str()))
+        .or_else(|| row.outcome.map(|outcome| outcome.as_str()))
+        .unwrap_or("-");
+    writeln!(
+        output,
+        "{} {} {} {}→{} {} {}",
+        row.seq,
+        row.at
+            .into_inner()
+            .to_rfc3339_opts(SecondsFormat::Secs, true),
+        row.event.as_str(),
+        from,
+        to,
+        actor,
+        detail,
+    )
+    .expect("writing to String cannot fail");
+}
+
+fn render_prompt_handoff_line(output: &mut String, row: &PromptHandoff) {
+    let message_id = row
+        .message_key
+        .as_atm_message_id()
+        .map_or_else(|_| row.message_key.as_str().to_owned(), |id| id.to_string());
+    writeln!(
+        output,
+        "{}  prompt  {}  attempt={}  trigger={}  msg={}",
+        row.at
+            .into_inner()
+            .to_rfc3339_opts(SecondsFormat::Secs, true),
+        row.kind,
+        row.attempt,
+        row.trigger.as_str(),
+        message_id,
+    )
+    .expect("writing to String cannot fail");
 }
 
 #[cfg(test)]

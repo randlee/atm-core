@@ -16,7 +16,7 @@
   triage:source "fenix critical review" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-storage-rusqlite/src/template_override_migration.rs (migrate_template_override_kinds_to_seven, load_template_override_rows, create_seven_kind_override_table, copy_seven_kind_override_rows)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
   triage:deferredNote "Lead ruling (fenix): delete the seven-kind path as the finding says; remove_template_override_kind_check is the only rebuild. Dropped delivery_task/delivery_task_ack rows surface as stale via D6, never silently. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;

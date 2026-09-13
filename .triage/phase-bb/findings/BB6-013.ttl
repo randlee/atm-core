@@ -16,7 +16,7 @@
   triage:source "rust-best-practices-agent + ruthless-boundary-qa via BB6-QA-L2-1789268000, ruled genuine by fenix" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake/storage_and_nudge_router.rs:493-519" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: remove the call-site-owned failure-classification branch at storage_and_nudge_router.rs:493-519 and route the Steer path through record_prompt_handoff itself, preserving the real task_store() AtmError instead of discarding it. Routed to arch-ctm on BB6-FIX-RUNTIME-QA1-1789271000, branch fix/bb6-runtime-qa1 cut from 4b0f6661c. PR #1461, base feature/bb6-runtime-prompt-handoffs. BB6-FIX-RUNTIME-QA1-1789271000 complete and self-validated by arch-ctm (2026-09-13T01:29:03Z); implementation commit 6f7579d32. Final layer FROZEN at fix/bb6-runtime-qa1 @ b3e01cd7d (merge of adda7e3f9 via 1862712dc + fixed-sleep fix). QA dispatched BB6-QA-RUNTIME-FIX-1789283000 on PR #1466 (diff vs adda7e3f9). Fixed-pending-QA at b3e01cd7d." ;
@@ -25,15 +25,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-013/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-013/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-013/3> ;
-  triage:triageRecordVersion "3" .
+  triage:hasResolution <urn:atm:triage:resolution/BB6-013/1> ;
+  triage:closedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/BB6-013/1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake/storage_and_nudge_router.rs" ;
   triage:line 493 ;
   triage:snippet "Steer path's call-site-owned failure-classification branch discards the real task_store() error and duplicates record_prompt_handoff's own logic" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-runtime-prompt-handoffs" ;
   triage:headSha "0d2cc1142" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-013/1> .
@@ -50,8 +53,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake/storage_and_nudge_router.rs" ;
   triage:line 493 ;
   triage:snippet "arch-ctm's fix push for BB6-FIX-RUNTIME-QA1-1789271000; fixed-pending-QA at fix/bb6-runtime-qa1 @ 6f7579d32 (PR #1466, stack layer 13)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-runtime-qa1" ;
   triage:headSha "6f7579d32" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-013/2> .
@@ -68,8 +71,8 @@
   triage:file "crates/atm-http-runtime/src/herdr_queue_wake/storage_and_nudge_router.rs" ;
   triage:line 493 ;
   triage:snippet "BB6-FIX-RUNTIME-QA1 complete and self-validated; FROZEN final head fix/bb6-runtime-qa1 @ b3e01cd7d" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-runtime-qa1" ;
   triage:headSha "b3e01cd7d" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-013/3> .
@@ -80,3 +83,30 @@
   triage:branch "fix/bb6-runtime-qa1" ;
   triage:headSha "b3e01cd7d" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/BB6-013/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/storage_and_nudge_router.rs" ;
+  triage:line 493 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at 7bb8f4a49. storage_and_nudge_router.rs:494 Steer path calls prompt_handoff_record::record_prompt_handoff directly, no duplicate classification branch." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-cli-qa2" ;
+  triage:headSha "7bb8f4a49" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-013/4> .
+
+<urn:atm:triage:worktree/BB6-013/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1469, fix/bb6-cli-qa2" ;
+  triage:branch "fix/bb6-cli-qa2" ;
+  triage:headSha "7bb8f4a49" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:resolution/BB6-013/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:fixCommit "7bb8f4a49" ;
+  triage:fixBranch "fix/bb6-cli-qa2" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch2" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at 7bb8f4a49. storage_and_nudge_router.rs:494 Steer path calls prompt_handoff_record::record_prompt_handoff directly, no duplicate classification branch." .

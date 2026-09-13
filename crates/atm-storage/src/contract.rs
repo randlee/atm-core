@@ -123,16 +123,20 @@ impl FromStr for AckTransition {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum BuiltInNudgeTemplateKind {
     Delivery,
     DeliveryAck,
     Queue,
     QueueAck,
-    Task,
     Acknowledge,
-    AcknowledgeTask,
+    TaskQueued,
+    TaskReady,
+    TaskReminder,
+    TaskStarted,
+    TaskComplete,
+    TaskClosed,
 }
 
 impl BuiltInNudgeTemplateKind {
@@ -142,9 +146,13 @@ impl BuiltInNudgeTemplateKind {
             Self::DeliveryAck => "delivery_ack",
             Self::Queue => "queue",
             Self::QueueAck => "queue_ack",
-            Self::Task => "task",
             Self::Acknowledge => "acknowledge",
-            Self::AcknowledgeTask => "acknowledge_task",
+            Self::TaskQueued => "task_queued",
+            Self::TaskReady => "task_ready",
+            Self::TaskReminder => "task_reminder",
+            Self::TaskStarted => "task_started",
+            Self::TaskComplete => "task_complete",
+            Self::TaskClosed => "task_closed",
         }
     }
 }
@@ -159,21 +167,7 @@ impl FromStr for BuiltInNudgeTemplateKind {
     type Err = AtmError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "delivery" => Ok(Self::Delivery),
-            "delivery_ack" => Ok(Self::DeliveryAck),
-            "queue" => Ok(Self::Queue),
-            "queue_ack" => Ok(Self::QueueAck),
-            "task" => Ok(Self::Task),
-            "acknowledge" => Ok(Self::Acknowledge),
-            "acknowledge_task" => Ok(Self::AcknowledgeTask),
-            "delivery_task" | "delivery_task_ack" => Err(AtmError::validation(format!(
-                "template kind `{value}` was retired; use \"task\""
-            ))),
-            other => Err(AtmError::validation(format!(
-                "unsupported built-in nudge template kind `{other}`"
-            ))),
-        }
+        crate::validation::parse_built_in_template_kind(value)
     }
 }
 
@@ -189,6 +183,12 @@ pub struct TeamNudgeTemplateOverrideRow {
     pub team_name: TeamName,
     pub kind: BuiltInNudgeTemplateKind,
     pub mode: TeamNudgeTemplateOverrideMode,
+    pub updated_at: IsoTimestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StaleNudgeTemplateOverrideKind {
+    pub kind: String,
     pub updated_at: IsoTimestamp,
 }
 
@@ -233,10 +233,16 @@ pub struct Message {
 
 /// Result of admitting one immutable message and applying any governed task
 /// operation carried by that newly inserted local message.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct MessageAdmissionOutcome {
     pub existing: Option<Message>,
     pub already_closed: Option<TaskCloseOutcome>,
+    /// Assignee snapshot for an applied start or close operation.
+    pub task_assignee: Option<AgentName>,
+    /// Landed queue position for an assignment admitted by this write.
+    pub queued_position: Option<u32>,
+    /// Canonical reassignment notice inserted atomically for the old assignee.
+    pub reassign_notice: Option<Message>,
     /// A governed task operation rejected after its report was retained as
     /// ordinary mail. Callers must complete ordinary post-write handling
     /// before surfacing this error to the sender.
@@ -248,8 +254,7 @@ impl MessageAdmissionOutcome {
     pub fn passive(existing: Option<Message>) -> Self {
         Self {
             existing,
-            already_closed: None,
-            task_rejection: None,
+            ..Self::default()
         }
     }
 }
@@ -916,66 +921,19 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Option<Message>, ReadLaneError>;
 
-    /// Bounded roster projection used only to validate an explicitly
-    /// addressed mailbox. It remains on the read-only lane.
+    /// Bounded read-only roster projection for validating an addressed mailbox.
     async fn mailbox_member_exists(
         &self,
         scope: MailboxScope,
         deadline: ReadDeadline,
     ) -> Result<bool, ReadLaneError>;
 
-    /// Bounded durable seen-state projection. The daemon never reads a
-    /// caller-owned seen-state file while servicing an HTTP mailbox request.
+    /// Bounded durable seen state; never reads a caller-owned watermark file.
     async fn load_seen_watermark(
         &self,
         scope: MailboxScope,
         deadline: ReadDeadline,
     ) -> Result<Option<IsoTimestamp>, ReadLaneError>;
-}
-
-/// Tokio-safe, read-only task-ledger capability.
-///
-/// Task rows and their append-only audit events are a separate durable
-/// projection from mailbox messages. Implementations must use a bounded
-/// storage-owned reader lane and must not enter the ordered writer lane.
-#[async_trait::async_trait]
-pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
-    async fn load_task(
-        &self,
-        team: TeamName,
-        task_id: TaskId,
-        deadline: ReadDeadline,
-    ) -> Result<Option<TaskRow>, ReadLaneError>;
-
-    /// Every open task on the team, ordered by assignee and queue position.
-    async fn open_tasks_for_team(
-        &self,
-        team: TeamName,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskRow>, ReadLaneError>;
-
-    /// Trailing consecutive-refusal run for one assignee.
-    async fn refusal_run(
-        &self,
-        team: TeamName,
-        assignee: AgentName,
-        deadline: ReadDeadline,
-    ) -> Result<crate::RefusalRun, ReadLaneError>;
-
-    async fn list_tasks(
-        &self,
-        team: TeamName,
-        member: Option<AgentName>,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskRow>, ReadLaneError>;
-
-    async fn list_task_events(
-        &self,
-        team: TeamName,
-        task_id: TaskId,
-        member: Option<AgentName>,
-        deadline: ReadDeadline,
-    ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {
@@ -1253,6 +1211,16 @@ pub trait StorageNotifier: sealed::Sealed + Send + Sync {
 }
 
 pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
+    fn list_stale_template_override_kinds(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<StaleNudgeTemplateOverrideKind>, AtmError>;
+
+    fn list_template_overrides(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<TeamNudgeTemplateOverrideRow>, AtmError>;
+
     fn load_template_override(
         &self,
         team: &TeamName,
@@ -1272,11 +1240,7 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
         kind: BuiltInNudgeTemplateKind,
     ) -> Result<TeamNudgeTemplateOverrideRow, AtmError>;
 
-    fn clear_template_override(
-        &self,
-        team: &TeamName,
-        kind: BuiltInNudgeTemplateKind,
-    ) -> Result<bool, AtmError>;
+    fn clear_template_override(&self, team: &TeamName, kind: &str) -> Result<bool, AtmError>;
 }
 
 /// Maximum automatic delivery attempts for one deferred (queue-kind) nudge.
@@ -1425,9 +1389,9 @@ mod tests {
         GraftReceiverEndpointStore, GraftReceiverRegistration, Message, MessageKey, MessageQuery,
         MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
         PendingNudgeStore, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
-        RosterMemberKind, RosterSnapshot, RosterStore, RosterUniqueName, StorageNotifier,
-        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, derive_ack_requirement,
-        roster_write_delta, sealed,
+        RosterMemberKind, RosterSnapshot, RosterStore, RosterUniqueName,
+        StaleNudgeTemplateOverrideKind, StorageNotifier, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow, derive_ack_requirement, roster_write_delta, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -1531,6 +1495,20 @@ mod tests {
     impl sealed::Sealed for DummyNudgeTemplateOverrideStore {}
 
     impl NudgeTemplateOverrideStore for DummyNudgeTemplateOverrideStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<StaleNudgeTemplateOverrideKind>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn list_template_overrides(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(Vec::new())
+        }
+
         fn load_template_override(
             &self,
             _team: &TeamName,
@@ -1568,11 +1546,7 @@ mod tests {
             })
         }
 
-        fn clear_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: BuiltInNudgeTemplateKind,
-        ) -> Result<bool, AtmError> {
+        fn clear_template_override(&self, _team: &TeamName, _kind: &str) -> Result<bool, AtmError> {
             Ok(true)
         }
     }
@@ -1758,15 +1732,19 @@ mod tests {
     }
 
     #[test]
-    fn built_in_nudge_template_kind_round_trips_seven_kinds() {
+    fn eleven_kinds_round_trip_as_str_from_str() {
         let kinds = [
             BuiltInNudgeTemplateKind::Delivery,
             BuiltInNudgeTemplateKind::DeliveryAck,
             BuiltInNudgeTemplateKind::Queue,
             BuiltInNudgeTemplateKind::QueueAck,
-            BuiltInNudgeTemplateKind::Task,
             BuiltInNudgeTemplateKind::Acknowledge,
-            BuiltInNudgeTemplateKind::AcknowledgeTask,
+            BuiltInNudgeTemplateKind::TaskQueued,
+            BuiltInNudgeTemplateKind::TaskReady,
+            BuiltInNudgeTemplateKind::TaskReminder,
+            BuiltInNudgeTemplateKind::TaskStarted,
+            BuiltInNudgeTemplateKind::TaskComplete,
+            BuiltInNudgeTemplateKind::TaskClosed,
         ];
         for kind in kinds {
             assert_eq!(kind.as_str().parse::<BuiltInNudgeTemplateKind>(), Ok(kind));
@@ -1774,13 +1752,39 @@ mod tests {
     }
 
     #[test]
-    fn built_in_nudge_template_kind_rejects_retired_task_kinds() {
-        for retired in ["delivery_task", "delivery_task_ack"] {
+    fn retired_kinds_parse_to_hint_naming_the_six() {
+        for retired in [
+            "task",
+            "acknowledge_task",
+            "delivery_task",
+            "delivery_task_ack",
+        ] {
             let error = retired
                 .parse::<BuiltInNudgeTemplateKind>()
                 .expect_err("retired kind");
-            assert!(error.message().contains("was retired; use \"task\""));
+            for replacement in [
+                "task_queued",
+                "task_ready",
+                "task_reminder",
+                "task_started",
+                "task_complete",
+                "task_closed",
+            ] {
+                assert!(error.message().contains(replacement));
+            }
         }
+    }
+
+    #[test]
+    fn unknown_template_kind_is_rejected_by_rust_validation() {
+        let error = "future_unregistered_kind"
+            .parse::<BuiltInNudgeTemplateKind>()
+            .expect_err("unknown kind");
+        assert!(
+            error
+                .message()
+                .contains("unsupported built-in nudge template kind")
+        );
     }
 
     #[test]

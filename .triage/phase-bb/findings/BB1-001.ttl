@@ -16,7 +16,7 @@
   triage:source "fenix critical review" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-core/src/doctor/mod.rs:361,421-422; crates/atm-core/src/team_admin.rs:20; crates/atm/src/commands/teams.rs:897,922" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
   triage:deferredNote "Lead ruling (fenix): option (a). The two D6 finding codes (stale_nudge_template_override, disabled_task_nudge_template_override) are added to the ADR-054 frozen inventory under the Phase-BB amendment BB.1 already writes; acceptance criterion 1's expected hit list is amended to include the D6 deletion path and its test. The concat! splits are removed. Acceptance 2 is reworded to \"passes with the Phase-BB amendment recorded\". Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;

@@ -78,7 +78,7 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 
 **Primary references — read as needed:**
 
-- [`docs/team-protocol.md`](./docs/team-protocol.md) - **MUST READ** ATM dogfooding messaging protocol (ack -> work -> completion -> acknowledgement)
+- [`docs/team-protocol.md`](./docs/team-protocol.md) - **MUST READ** ATM dogfooding messaging protocol (ack -> work -> task close; the close is terminal)
 - [`docs/requirements.md`](./docs/requirements.md) - System requirements, architecture, plugin design
 - [`docs/project-plan.md`](./docs/project-plan.md) - Phased sprint plan with dependency graphs
 - [`docs/agent-team-api.md`](./docs/agent-team-api.md) - Claude agent team API reference (schema baseline: Claude Code 2.1.39)
@@ -107,7 +107,7 @@ Every sprint follows this pattern:
 1. **Create worktree** using `sc-git-worktree` skill
 2. **Dev work** by assigned dev agent(s)
 3. **QA validation** by assigned QA agent(s)
-4. **Retry loop** if QA fails (max attempts configurable)
+4. **Fix round** for each QA verdict with findings, on a new layer cut from the top of the phase stack; the reviewed layer stays frozen (`docs/development/gh-stack-guidelines.md` §0)
 5. **Commit/Push/PR** to phase integration branch
 6. **Agent-teams review** documenting what worked/didn't
 
@@ -133,9 +133,8 @@ main
 
 **Rules:**
 - Always merge PRs with a merge commit (`gh pr merge --merge`); never squash
-- Sprint PRs target `integrate/phase-N` (not `develop` directly)
-- After each sprint merges to the integration branch, subsequent sprints merge latest `integrate/phase-N` into their feature branch before creating their PR
-- When all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
+- The phase's sprint and fix PRs form one append-only `gh stack` above `integrate/phase-N`: every unit of work is a new worktree cut from the current top of the stack, its PR opens on the first push with base = the layer below, nothing below the top is ever edited again, and nobody waits for a lower layer's QA or CI. The single definition is [`docs/development/gh-stack-guidelines.md`](./docs/development/gh-stack-guidelines.md) §0.
+- The stack lands into `integrate/phase-N` once, from the top; when all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
 - Phase integration branch is then cleaned up
 
 ### Worktree Cleanup Policy

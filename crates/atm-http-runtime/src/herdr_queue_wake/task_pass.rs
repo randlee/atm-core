@@ -72,7 +72,6 @@ impl HerdrQueueWakePump {
         let (reader, task_store) = self.task_capabilities(stats)?;
         self.note_task_step_availability(true, None);
         let heads = self.open_task_heads(reader.as_ref(), candidates).await;
-        self.start_owed_tasks(&heads).await;
         Some(PreparedTaskPass {
             reader,
             task_store,
@@ -100,72 +99,6 @@ impl HerdrQueueWakePump {
             )
             .await;
         }
-    }
-
-    pub(super) async fn record_queue_prompt_reminders(
-        &self,
-        prepared: &PreparedTaskPass,
-        prompted: &HashMap<MemberKey, atm_core::schema::AtmMessageId>,
-        stats: &mut HerdrQueueWakeStats,
-    ) {
-        let now = (self.clock)();
-        for (member, message_id) in prompted {
-            let Some(row) = prepared.queue_reminder_head(member) else {
-                continue;
-            };
-            let context = crate::herdr_queue_wake_escalation::TaskReminderContext {
-                task_store: &prepared.task_store,
-                member,
-            };
-            let recorded_row = if self
-                .queue_prompt_is_head_assignment(member, *message_id, row)
-                .await
-            {
-                crate::herdr_task_start::complete_task_handoff(
-                    self,
-                    context.task_store,
-                    &self.daemon_home,
-                    context.member,
-                    row,
-                    now,
-                )
-                .await
-            } else {
-                self.record_task_reminder(
-                    context.task_store,
-                    context.member,
-                    row,
-                    now,
-                    ReminderOutcome::Emitted,
-                )
-                .await
-            };
-            stats.task_reminders += 1;
-            self.warn_failed_reminder_record(&context, row, recorded_row);
-        }
-    }
-
-    async fn queue_prompt_is_head_assignment(
-        &self,
-        member: &MemberKey,
-        message_id: atm_core::schema::AtmMessageId,
-        row: &TaskRow,
-    ) -> bool {
-        if row.state != atm_core::boundary::TaskState::Assigned
-            || row.position.is_none_or(|position| position.get() != 1)
-        {
-            return false;
-        }
-        let runtime = self.service_runtime.clone();
-        let member = member.clone();
-        matches!(
-            self.blocking_bridge
-                .run(super::herdr_request_deadline(), move || {
-                    super::load_received_hook_dispatch_message(&runtime, &member, message_id)
-                })
-                .await,
-            Ok(Some(message)) if message.envelope.task_id.as_ref() == Some(&row.task_id)
-        )
     }
 
     pub(super) fn collect_idle_members(
@@ -242,26 +175,6 @@ impl HerdrQueueWakePump {
             }
         };
         Some((reader, task_store))
-    }
-
-    async fn start_owed_tasks(&self, heads: &HashMap<MemberKey, TaskRow>) {
-        for head in heads.values().filter(|head| {
-            head.state == atm_core::boundary::TaskState::Assigned && head.last_reminded_at.is_some()
-        }) {
-            if let Err(error) =
-                crate::herdr_task_start::start_assigned_task(self, &self.daemon_home, head).await
-            {
-                tracing::warn!(
-                    subsystem = "herdr_queue_wake",
-                    action = "task_start_owed",
-                    outcome = "failed",
-                    member = %head.assignee,
-                    task_id = %head.task_id,
-                    error = %error,
-                    "Owed task start could not be completed"
-                );
-            }
-        }
     }
 
     #[expect(
@@ -480,12 +393,21 @@ impl HerdrQueueWakePump {
             return;
         };
         match emitter
-            .emit_received_message(dispatch, herdr_request_deadline())
+            .emit_received_message(dispatch.clone(), herdr_request_deadline())
             .await
         {
             Ok(_) => {
                 self.record_task_outcome(&context, &row, now, ReminderOutcome::Emitted, stats)
-                    .await
+                    .await;
+                crate::prompt_handoff_record::record_prompt_handoff(
+                    &self.blocking_bridge,
+                    herdr_request_deadline(),
+                    Ok(Arc::clone(task_store)),
+                    &dispatch,
+                    atm_core::boundary::PromptTrigger::TaskPass,
+                    now,
+                )
+                .await;
             }
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {
@@ -503,20 +425,9 @@ impl HerdrQueueWakePump {
         outcome: ReminderOutcome,
         stats: &mut HerdrQueueWakeStats,
     ) {
-        let recorded_row = if outcome == ReminderOutcome::Emitted {
-            crate::herdr_task_start::complete_task_handoff(
-                self,
-                context.task_store,
-                &self.daemon_home,
-                context.member,
-                row,
-                now,
-            )
-            .await
-        } else {
-            self.record_task_reminder(context.task_store, context.member, row, now, outcome)
-                .await
-        };
+        let recorded_row = self
+            .record_task_reminder(context.task_store, context.member, row, now, outcome)
+            .await;
         match outcome {
             ReminderOutcome::Emitted => {
                 stats.prompted += 1;
@@ -610,13 +521,6 @@ impl PreparedTaskPass {
         self.heads.get(member).is_none_or(|head| {
             head.lead_notified_count > 0
                 || head.reminder_count < atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD
-        })
-    }
-
-    fn queue_reminder_head(&self, member: &MemberKey) -> Option<&TaskRow> {
-        self.heads.get(member).filter(|head| {
-            head.lead_notified_count == 0
-                && head.reminder_count < atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD
         })
     }
 }

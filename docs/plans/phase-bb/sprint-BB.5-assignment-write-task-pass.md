@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 branch: feature/bb5-assignment-write-task-pass
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb5-assignment-write-task-pass
 ---
@@ -31,7 +31,7 @@ task pass is the only source of `task_ready`/`task_reminder`, and every
 
 ## Deliverables
 
-- [ ] D1 — `crates/atm/src/commands/send.rs:367`
+- [x] D1 — `crates/atm/src/commands/send.rs:367`
   `self.requires_ack || assigning_task` → `self.requires_ack`; delete
   `assigning_task` (`:358`) if nothing else reads it. The `--requires-ack`
   arg gains `conflicts_with = "task_id"` (clap error: `the argument
@@ -42,7 +42,7 @@ task pass is the only source of `task_ready`/`task_reminder`, and every
   `SendCommand::for_task` (`task.rs:259-268`) is shared by both spellings,
   so both get it.
 
-- [ ] D2 — `crates/atm-core/src/send/mod.rs:381` `send_mode_for_task_request`
+- [x] D2 — `crates/atm-core/src/send/mod.rs:381` `send_mode_for_task_request`
   returns `NudgeMode::Immediate` for an assignment (`task_op = None`), as it
   already does for closes. No pending-nudge marker is written (the marker is
   written only for `Deferred`, `pending_nudge_store.rs`). The writer's
@@ -54,7 +54,7 @@ task pass is the only source of `task_ready`/`task_reminder`, and every
   including 1 (plan P9: one line per assignment, always; `task_ready`
   follows from the task pass).
 
-- [ ] D3 — `crates/atm-http-runtime/src/herdr_queue_wake/task_pass.rs`:
+- [x] D3 — `crates/atm-http-runtime/src/herdr_queue_wake/task_pass.rs`:
   delete `record_queue_prompt_reminders` (`:105-146`) and
   `queue_prompt_is_head_assignment` (`:148-169`) and their call sites in
   `herdr_queue_wake.rs`; delete `herdr_task_start.rs` entirely (BB.4 left
@@ -65,7 +65,7 @@ task pass is the only source of `task_ready`/`task_reminder`, and every
   for **that** row. `build_task_reminder_dispatch` (`nudge_dispatch.rs:182`)
   sets `requires_ack: false`.
 
-- [ ] D4 — `crates/atm-storage-rusqlite/src/writer/task_ops.rs::apply_task_assignment`
+- [x] D4 — `crates/atm-storage-rusqlite/src/writer/task_ops.rs::apply_task_assignment`
   (`:151+`), reassign branch (existing open row, different assignee): inside
   the same transaction, after the `reassigned` event, insert one message to
   the old assignee through a writer-internal primitive
@@ -87,7 +87,7 @@ task pass is the only source of `task_ready`/`task_reminder`, and every
   is the same call with the notice message and that transition). Nothing
   crosses the wire: `SendOutcome` is unchanged.
 
-- [ ] D6 — pre-BB durable assignments (plan P14). New
+- [x] D6 — pre-BB durable assignments (plan P14). New
   `crates/atm-storage-rusqlite/src/task_assignment_migration.rs::normalize_legacy_assignment_markers(connection: &Connection, target: &SharedDbTarget) -> Result<u64, AtmError>`
   called from `ensure_schema` beside
   `migrate_template_override_kinds_to_seven` (`shared_db.rs:756-770`), one
@@ -113,7 +113,7 @@ UPDATE mail_message_states
   nothing. Logged once per open with the affected-row count when non-zero.
   ADR-061 D6 gets a note row (no DDL change).
 
-- [ ] D5 — `docs/requirements.md:1585` delete "require acknowledgement for
+- [x] D5 — `docs/requirements.md:1585` delete "require acknowledgement for
   any task-linked message"; `:1591` delete "imply `--requires-ack`", add
   "`--requires-ack` conflicts with `--task-id`"; `:2975` → "a task-linked
   message never requires acknowledgement; readiness is signalled by the

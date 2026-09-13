@@ -50,10 +50,10 @@ pub use contract::{
     RosterMemberKind, RosterRuntimeIdentity, RosterRuntimeMirror, RosterRuntimeMutationOutcome,
     RosterRuntimeObservation, RosterRuntimeObservationUpdate, RosterSnapshot, RosterStateRevision,
     RosterStore, RosterUniqueName, RuntimeMemberState, RuntimeObservationAvailability,
-    RuntimeObservationSource, StorageNotifier, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow, TrustedPeer, derive_ack_requirement,
-    roster_unique_name_collision_error, roster_unique_name_collisions, roster_write_delta,
-    team_scoped_roster_unique_name_collisions,
+    RuntimeObservationSource, StaleNudgeTemplateOverrideKind, StorageNotifier,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+    derive_ack_requirement, roster_unique_name_collision_error, roster_unique_name_collisions,
+    roster_write_delta, team_scoped_roster_unique_name_collisions,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
@@ -78,9 +78,9 @@ pub use search::{
 };
 pub use task_op::{MoveTarget, TaskOp};
 pub use task_state::{
-    DAEMON_ACTOR_NAME, QueuePosition, RefusalRun, TaskActor, TaskCloseOutcome, TaskEvent,
-    TaskEventKind, TaskEventMarker, TaskEventRow, TaskRejected, TaskRow, TaskState, TaskStateTag,
-    Transition, admit, transition,
+    DAEMON_ACTOR_NAME, PromptHandoff, PromptTrigger, QueuePosition, RefusalRun, TaskActor,
+    TaskCloseOutcome, TaskClosedOutcome, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
+    TaskRejected, TaskRow, TaskState, TaskStateTag, TaskTransition, Transition, admit, transition,
 };
 #[cfg(any(test, feature = "test-utils"))]
 pub use task_store::DummyTaskStore;
@@ -110,4 +110,5 @@ pub use types::{
     LocalCapability, MemberKey, ModelName, OwnerGeneration, PaneId, TaskId, TeamName,
     TemplateFrontmatter, TemplateSha,
 };
+pub use validation::RETIRED_TEMPLATE_KINDS;
 pub use validation::{validate_agent_at_team, validate_path_segment};

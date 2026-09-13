@@ -16,7 +16,6 @@
   triage:source "rust-best-practices-agent via BB6-QA-L3-1789269000, ruled genuine by fenix" ;
   triage:repeatable true ;
   triage:sweepScope "openapi.yaml:446-452 (both copies)" ;
-  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: move the handoffs field documentation to the correct task-events response schema in both openapi.yaml copies at lines 446-452. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. Solar's ruling on this fix (fenix, 2026-09-13T00:52:35Z): GET /messages ref unchanged; ListOutcome schema added additively; handoffs removed from MessageList and from the never-shipped L3 baseline entry. BB.7 debt surfaced by this fix, initially mischaracterized as an externally-tagged ResponseEnvelope; CORRECTED by fenix (2026-09-13T01:00:25Z): decode_http_response actually reads bare ListOutcome (GET /messages) and bare ReadOutcome (POST /messages/inspect, /messages/read) -- MessageList {messages, cursor} models none of the three. Pulled forward by Rand as a new stack layer rather than deferred; filed separately as BB7-OPENAPI-001, dispatched to cipher on fix/bb7-openapi-message-bodies. BB6-FIX-CLI-QA1-1789270000 complete and self-validated by solar (2026-09-13T01:10:38Z); implementation commit 35c759ef4. Final layer head fix/bb6-cli-qa1 @ adda7e3f9, parent 3aa1954e8 (BB6 L4 final). Fixed-pending-QA at adda7e3f9." ;
@@ -35,8 +34,8 @@
   triage:file "openapi.yaml" ;
   triage:line 446 ;
   triage:snippet "handoffs field documented on MessageList schema instead of the real task-events response type" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-cli-prompt-handoffs" ;
   triage:headSha "40ccd403e" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-006/1> .
@@ -53,8 +52,8 @@
   triage:file "openapi.yaml" ;
   triage:line 446 ;
   triage:snippet "BB6-FIX-CLI-QA1 complete and self-validated (implementation commit 35c759ef4); fixed-pending-QA at fix/bb6-cli-qa1 final head adda7e3f9" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "adda7e3f9" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-006/2> .

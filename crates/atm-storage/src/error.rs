@@ -96,6 +96,7 @@ impl AtmError {
             self.code,
             AtmErrorCode::MessageValidationFailed
                 | AtmErrorCode::TaskNotFound
+                | AtmErrorCode::TaskAlreadyActive
                 | AtmErrorCode::TaskAlreadyClosed
                 | AtmErrorCode::TaskNotCounterparty
                 | AtmErrorCode::TaskStaleCounterparty

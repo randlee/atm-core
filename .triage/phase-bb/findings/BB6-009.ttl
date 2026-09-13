@@ -16,7 +16,6 @@
   triage:source "rust-best-practices-agent via BB6-QA-L3-1789269000, ruled genuine by fenix" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm/src/commands/task.rs:827,856" ;
-  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
   triage:deferredNote "Fix: change render_task_event_line and render_prompt_handoff_line (task.rs:827, 856) to plain infallible signatures, dropping the fake Result<()>/? wrapping. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. Fixed by solar, pushed to fix/bb6-cli-qa1 @ 8fc3b9ef2 (2026-09-13T00:41:48Z, self-reported); solar's remaining four assigned findings (BB6-005, BB6-006, BB6-007, BB6-010) are still in progress on the same branch. Fixed-pending-QA. BB6-FIX-CLI-QA1-1789270000 complete and self-validated by solar (2026-09-13T01:10:38Z) at fix/bb6-cli-qa1 final head adda7e3f9, parent 3aa1954e8 (BB6 L4 final); closing-triage tasklist confirms implementation commit 8fc3b9ef2. Fixed-pending-QA at adda7e3f9." ;
@@ -36,8 +35,8 @@
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 827 ;
   triage:snippet "render_task_event_line/render_prompt_handoff_line wrap infallible String writes in Result<()>/? instead of a plain signature" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb6-cli-prompt-handoffs" ;
   triage:headSha "40ccd403e" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-009/1> .
@@ -54,8 +53,8 @@
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 827 ;
   triage:snippet "render_task_event_line/render_prompt_handoff_line changed to plain infallible signatures, dropping the Result<()>/? wrapping; fixed-pending-QA" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "8fc3b9ef2" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-009/2> .
@@ -72,8 +71,8 @@
   triage:file "crates/atm/src/commands/task.rs" ;
   triage:line 827 ;
   triage:snippet "BB6-FIX-CLI-QA1 complete and self-validated; fixed-pending-QA at fix/bb6-cli-qa1 final head adda7e3f9" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-cli-qa1" ;
   triage:headSha "adda7e3f9" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-009/3> .
