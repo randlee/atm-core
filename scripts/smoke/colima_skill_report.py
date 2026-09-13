@@ -16,7 +16,6 @@ import argparse
 from datetime import datetime, timezone
 from html import escape
 import json
-import os
 from pathlib import Path
 import re
 import shutil
@@ -29,6 +28,7 @@ from feature_smoke_report import render_feature_pane  # noqa: E402
 from run_feature_smoke import update_master_report_index  # noqa: E402
 from run_inbound_peer_smoke import PANE_TEMPLATE, REPO_ROOT  # noqa: E402
 from scripts.report_runtime import (  # noqa: E402
+    copy_procedure_page,
     compose as _compose,
     resolve_procedure_page as _resolve_procedure_page,
     source_revision as _git_source_revision,
@@ -94,15 +94,7 @@ def render(run_dir: Path, out_dir: Path) -> Path:
     report = out_dir / f"{FEATURE}.json"
     source_revision = _source_revision()
     procedure_page = _resolve_procedure_page(FEATURE, source_revision, root=REPO_ROOT, error_type=SmokeError)
-    procedure_target = (
-        REPO_ROOT / "site/reports" / procedure_page.html
-        if procedure_page is not None
-        else REPO_ROOT / "site/reports/procedures" / FEATURE / "index.html"
-    )
-    procedure_href = os.path.relpath(
-        procedure_target,
-        out_dir,
-    )
+    procedure_href = copy_procedure_page(procedure_page, linking_page=report, copy_dir=out_dir, root=REPO_ROOT) or ""
     procedure_revision = procedure_page.revision if procedure_page is not None else None
     payload = {"feature": FEATURE, "host": HOST, "platform": PLATFORM, "run_id": run_id, "status": status, "source_revision": source_revision, "cases": cases}
     report.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

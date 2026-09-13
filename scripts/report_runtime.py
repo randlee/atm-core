@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 import subprocess
+import shutil
 import tempfile
 from typing import Any, TypeVar
 
@@ -30,6 +31,22 @@ class ProcedurePage:
 
     revision: str
     html: str
+
+
+def copy_procedure_page(page: ProcedurePage | None, *, linking_page: Path, copy_dir: Path, root: Path | None = None, error_type: type[E] = ReportRuntimeError) -> str | None:
+    """Copy the resolved procedure into a report directory and return a local href."""
+    if page is None:
+        return None
+    checkout = root or Path(__file__).resolve().parents[1]
+    source = checkout / "site/reports" / page.html
+    try:
+        relative = copy_dir.relative_to(linking_page.parent)
+    except ValueError as error:
+        raise error_type("procedure copy directory must be the linking page directory or a descendant") from error
+    destination = copy_dir / "procedure.html"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, destination)
+    return Path(relative, "procedure.html").as_posix()
 
 
 def source_revision(root: Path | None = None) -> str | None:

@@ -39,6 +39,7 @@ from feature_smoke_report import (
     render_host_header,
     summarize_cases,
 )
+from scripts.report_runtime import copy_procedure_page
 try:
     from scripts.smoke.feature_smoke_paths import artifact_segment, smoke_report_directory
 except ModuleNotFoundError:
@@ -678,15 +679,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     revision = source_revision()
     procedure = "graft-hermes" if feature == "graft-hermes" else f"smoke-{feature}"
     procedure_page = _resolve_procedure_page(procedure, revision, root=ROOT, error_type=SmokeError)
-    procedure_target = (
-        ROOT / "site/reports" / procedure_page.html
-        if procedure_page is not None
-        else ROOT / "site/reports/procedures" / procedure / "index.html"
-    )
-    procedure_href = os.path.relpath(
-        procedure_target,
-        directory,
-    )
+    procedure_href = copy_procedure_page(procedure_page, linking_page=report, copy_dir=directory, root=ROOT) or ""
     procedure_revision = procedure_page.revision if procedure_page is not None else None
     report.write_text(
         json.dumps(
