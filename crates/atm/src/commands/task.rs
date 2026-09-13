@@ -287,18 +287,23 @@ impl TaskStartCommand {
             .into_iter()
             .find(|row| row.task_id == self.task_id)
             .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "task {} does not exist on team {}",
-                    self.task_id,
-                    caller.caller_team
+                atm_core::error::AtmError::new(
+                    atm_core::error::AtmErrorCode::TaskNotFound,
+                    format!(
+                        "task {} does not exist on team {}",
+                        self.task_id, caller.caller_team
+                    ),
                 )
             })?;
         if row.assignee != caller.caller_identity {
-            return Err(anyhow::anyhow!(
-                "task {} is not assigned to {}",
-                self.task_id,
-                caller.caller_identity
-            ));
+            return Err(atm_core::error::AtmError::new(
+                atm_core::error::AtmErrorCode::TaskNotCounterparty,
+                format!(
+                    "task {} is not assigned to {}",
+                    self.task_id, caller.caller_identity
+                ),
+            )
+            .into());
         }
         let mut report = self.report;
         if !report.is_present() {
@@ -402,11 +407,14 @@ impl TaskCloseCommand {
         let row = match preflight_close(rows, &self.task_id) {
             ClosePreflight::Proceed { row } => row,
             ClosePreflight::Unknown => {
-                return Err(anyhow::anyhow!(
-                    "task {} does not exist on team {}",
-                    self.task_id,
-                    caller.caller_team
-                ));
+                return Err(atm_core::error::AtmError::new(
+                    atm_core::error::AtmErrorCode::TaskNotFound,
+                    format!(
+                        "task {} does not exist on team {}",
+                        self.task_id, caller.caller_team
+                    ),
+                )
+                .into());
             }
         };
         let recipient = report_recipient(&row, &caller.caller_identity);
