@@ -9,6 +9,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::IsoTimestamp;
 
 use crate::BoundedBlockingBridge;
+use crate::router_support::PromptHandoffFailureReason as FailureReason;
 
 pub(crate) async fn record_prompt_handoff(
     bridge: &BoundedBlockingBridge,
@@ -25,13 +26,13 @@ pub(crate) async fn record_prompt_handoff(
     let store = match store {
         Ok(store) => store,
         Err(error) => {
-            log_failure(dispatch, kind, trigger, "storage", &error);
+            log_failure(dispatch, kind, trigger, FailureReason::Storage, &error);
             return;
         }
     };
     let Some(task_id) = dispatch.event.task_id.clone() else {
         let error = AtmError::mailbox_write("task-linked prompt has no task id");
-        log_failure(dispatch, kind, trigger, "storage", &error);
+        log_failure(dispatch, kind, trigger, FailureReason::Storage, &error);
         return;
     };
     if deadline.expired() {
@@ -39,7 +40,7 @@ pub(crate) async fn record_prompt_handoff(
             AtmErrorCode::InternalError,
             "prompt-handoff recording deadline expired before bridge admission",
         );
-        log_failure(dispatch, kind, trigger, "timeout", &error);
+        log_failure(dispatch, kind, trigger, FailureReason::Timeout, &error);
         return;
     }
     let handoff = PromptHandoff {
@@ -64,11 +65,13 @@ pub(crate) async fn record_prompt_handoff(
     }
 }
 
-pub(crate) fn failure_reason(error: &atm_core::error::AtmError) -> &'static str {
+pub(crate) fn failure_reason(error: &atm_core::error::AtmError) -> FailureReason {
     match error.code() {
-        atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart => "saturated",
-        atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart => "timeout",
-        _ => "storage",
+        atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart => {
+            FailureReason::Saturated
+        }
+        atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart => FailureReason::Timeout,
+        _ => FailureReason::Storage,
     }
 }
 
@@ -76,13 +79,13 @@ pub(crate) fn log_failure(
     dispatch: &BuiltInPostSendDispatch,
     kind: atm_core::boundary::BuiltInNudgeTemplateKind,
     trigger: PromptTrigger,
-    reason: &'static str,
+    reason: FailureReason,
     error: &AtmError,
 ) {
     tracing::error!(
         subsystem = "prompt_handoff",
         action = "prompt_handoff_record_failed",
-        reason,
+        reason = reason.as_str(),
         message_id = %dispatch.event.message_id,
         kind = %kind,
         trigger = trigger.as_str(),

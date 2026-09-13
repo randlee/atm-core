@@ -2138,13 +2138,13 @@ pub(crate) mod tests {
     fn assert_prompt_handoff_error(
         layer: &PromptHandoffErrorLayer,
         dispatch: &BuiltInPostSendDispatch,
-        reason: &str,
+        reason: crate::router_support::PromptHandoffFailureReason,
     ) {
         let events = layer.events.lock().expect("handoff error events");
         assert_eq!(events.len(), 1, "one structured handoff error is logged");
         assert_eq!(events[0].subsystem, "prompt_handoff");
         assert_eq!(events[0].action, "prompt_handoff_record_failed");
-        assert_eq!(events[0].reason, reason);
+        assert_eq!(events[0].reason, reason.as_str());
         assert_eq!(events[0].message_id, dispatch.event.message_id.to_string());
         assert_eq!(events[0].kind, "task_ready");
         assert_eq!(events[0].trigger, "steer");
@@ -2173,7 +2173,11 @@ pub(crate) mod tests {
         )
         .await;
 
-        assert_prompt_handoff_error(&layer, &dispatch, "storage");
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Storage,
+        );
         let events = layer.events.lock().expect("handoff error events");
         assert_eq!(events[0].error_code, "ATM_DAEMON_UNAVAILABLE");
         assert!(
@@ -4260,7 +4264,11 @@ pub(crate) mod tests {
         .await;
 
         assert_eq!(sink_result, PostSendEmissionPath::GraftPort);
-        assert_prompt_handoff_error(&layer, &dispatch, "storage");
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Storage,
+        );
     }
 
     #[tokio::test]
@@ -4285,7 +4293,11 @@ pub(crate) mod tests {
         )
         .await;
 
-        assert_prompt_handoff_error(&layer, &dispatch, "timeout");
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Timeout,
+        );
         let rows = AsyncTaskLedgerReader::list_prompt_handoffs(
             store.as_ref(),
             "test-team".parse().expect("team"),
@@ -4339,7 +4351,11 @@ pub(crate) mod tests {
             .expect("occupying task joins")
             .expect("job exits");
 
-        assert_prompt_handoff_error(&layer, &dispatch, "saturated");
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Saturated,
+        );
     }
 
     #[tokio::test]
@@ -4375,7 +4391,11 @@ pub(crate) mod tests {
             timer_fired.load(Ordering::Acquire),
             "Tokio worker remains live"
         );
-        assert_prompt_handoff_error(&layer, &dispatch, "timeout");
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Timeout,
+        );
     }
 
     #[test]
@@ -4383,11 +4403,11 @@ pub(crate) mod tests {
         for (code, expected) in [
             (
                 atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
-                "saturated",
+                crate::router_support::PromptHandoffFailureReason::Saturated,
             ),
             (
                 atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart,
-                "timeout",
+                crate::router_support::PromptHandoffFailureReason::Timeout,
             ),
         ] {
             let error = AtmError::new(code, "deliberately unrelated wording");
