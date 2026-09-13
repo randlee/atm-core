@@ -19,12 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: document the task_transition: Some + task_id: None defensive branch in D3's narrative and add a named test exercising it. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468). arch-ctm's fix/bb6-handoff-identity first push (2026-09-13T02:14:48Z, @ 113d9021b, layer below fix/bb6-docs-qa1) also reports fixing this finding while implementing BB6-025's handoff-identity change. Overlap flagged to fenix for a ruling on which layer's fix is authoritative / whether solar's assignment is superseded; not closed pending that ruling." ;
+  triage:deferredNote "Fix: document the task_transition: Some + task_id: None defensive branch in D3's narrative and add a named test exercising it. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468). arch-ctm's fix/bb6-handoff-identity first push (2026-09-13T02:14:48Z, @ 113d9021b) also touches this finding. Fenix's ruling (2026-09-13T02:16:38Z): deliberate split, not duplication -- the runtime test task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing lives on arch-ctm's code layer (113d9021b); the D3 narrative citing it lives on solar's docs layer (0d249fa5a). Different files, no rebase collision, nobody re-touches the other's file. Keep both occurrences; close when landing-head QA verifies the test exists and the narrative names it." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-020/2> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB6-020/1>
   a triage:Occurrence ;
@@ -48,7 +48,7 @@
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
   triage:line 1 ;
-  triage:snippet "arch-ctm's fix/bb6-handoff-identity first push also reports fixing this finding as an incidental effect of the handoff-identity change; overlap with solar's fix/bb6-docs-qa1 assignment flagged to fenix, not yet ruled" ;
+  triage:snippet "task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing (the code-side test for this branch) added on arch-ctm's layer; deliberate split from solar's docs-layer narrative fix per fenix's ruling, not duplication" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "fix/bb6-handoff-identity" ;
