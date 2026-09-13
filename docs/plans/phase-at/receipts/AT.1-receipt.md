@@ -53,8 +53,8 @@ from the declared consumer surface was found.
 | `python3 .just/tests/test_release_preflight.py` | 0 | 3 passed: manifest/order, channel result, and candidate-provenance contract checks. |
 | `python3 .just/tests/test_release_homebrew_workflow.py` | 0 | 3 passed: manifest config, declared formulas, credential/published-renderer contract checks. |
 | `.venv-sc-publish/bin/python -m pytest -p no:cacheprovider "$SP/plugins/sc-publish/.github/scripts/tests/" -q` | 0 | `79 passed, 10 skipped, 3 subtests passed`; the scratch package checkout remained clean. |
-| `just bootstrap` | 1 | Environment finding: the checked-in bootstrap contract selects Rust 1.94.1 and now pins cargo-shear 1.13.2, which is compatible with that toolchain. |
-| `PATH="$PWD/.bootstrap-venv/bin:/tmp/at1-cargo-tools-20260827/bin:$PATH" just lint` | 0 | All recorded lint lanes exited 0 with the pinned cargo-shear 1.13.2 executable. |
+| `just bootstrap` | 1 | Environment finding: cargo-shear 1.13.3 could not compile with Rust 1.94.1 because cargo-binstall was absent; the corrected bootstrap installs pinned cargo-binstall and forbids a source-build fallback. |
+| `PATH="$PWD/.bootstrap-venv/bin:/tmp/at1-cargo-tools-20260827/bin:$PATH" just lint` | 0 | All recorded lint lanes exited 0 with a temporary cargo-shear 1.13.3 executable. |
 | `PATH="$PWD/.bootstrap-venv/bin:/tmp/at1-cargo-tools-20260827/bin:$PATH" just test` | 0 | 714 tests passed, 9 skipped. |
 
 The package test dependency (`pytest==9.1.1`) was added only to the disposable
