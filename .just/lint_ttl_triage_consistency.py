@@ -19,7 +19,8 @@ STATE_RE = re.compile(
     r"triage:(?P<field>status|findingAggregate|branchStatus|branchR[A-Za-z0-9_.-]+Status)\s+"
     r"(?:\"(?P<quoted>[^\"]+)\"|triage:(?P<qualified>[A-Za-z0-9_.-]+))"
 )
-CLOSURE_RE = re.compile(r"\btriage:(?:hasResolution|closedAt|closedBy)\b")
+CLOSURE_RE = re.compile(r"^\s*triage:(?:hasResolution|closedAt|closedBy)\b")
+QUOTED_RE = re.compile(r"\"[^\"]*\"")
 SPRINT_FIELD_RE = re.compile(
     r"^\s*(?P<predicate>triage:(?:foundIn|aich_sprint|aichSprint|sprint_id|sprint))\s+"
     r"(?:triage:)?(?:\"(?P<quoted>[^\"]+)\"|(?P<bare>[A-Za-z0-9_.-]+))"
@@ -75,6 +76,23 @@ def is_allowlisted_legacy(allowlist: list[tuple[str, str]], path: str, raw_value
         for allowed_path, allowed_value in allowlist
     )
 
+
+
+def is_managed_phase(repo_root: Path, rel_path: str) -> bool:
+    """A phase is managed when `.sprints/<PHASE>` exists (case-insensitive).
+
+    This is the same rule the pre-push hook applies before it accepts a
+    `.triage/phase-*` change, so a legacy phase that the hook freezes is not
+    held to closure contracts that postdate it.
+    """
+    parts = rel_path.split("/")
+    if len(parts) < 2 or not parts[1].startswith("phase-"):
+        return False
+    phase_short = parts[1][len("phase-"):].upper()
+    sprints_dir = repo_root / ".sprints"
+    if not sprints_dir.is_dir():
+        return False
+    return any(child.is_dir() and child.name.upper() == phase_short for child in sprints_dir.iterdir())
 
 def extract_finding_block(text: str) -> tuple[list[str], int] | None:
     # This validator intentionally assumes one `triage:Finding` block per TTL
@@ -180,18 +198,24 @@ def collect_ttl_triage_violations(repo_root: Path) -> list[TriageConsistencyViol
                     )
                 )
 
+        # `triage:status` inside a `[ ... ]` blank node (a per-branch status
+        # block) belongs to that branch, not to the Finding.
+        depth = 0
         for offset, line in enumerate(lines, start=start_line):
             for match in STATE_RE.finditer(line):
                 state = normalize_state(match)
                 field = match.group("field")
-                if field == "status":
+                if field == "status" and depth == 0:
                     top_statuses.append((state, offset))
                 elif field == "findingAggregate":
                     aggregate_statuses.append((state, offset))
                 else:
                     branch_statuses.append((state, offset))
+            unquoted = QUOTED_RE.sub("", line)
+            depth = max(0, depth + unquoted.count("[") - unquoted.count("]"))
 
-        if len(top_statuses) > 1:
+        managed = is_managed_phase(repo_root, rel_path)
+        if managed and len(top_statuses) > 1:
             _, duplicate_line = top_statuses[1]
             violations.append(
                 TriageConsistencyViolation(
@@ -208,7 +232,7 @@ def collect_ttl_triage_violations(repo_root: Path) -> list[TriageConsistencyViol
             for offset, line in enumerate(lines, start=start_line)
             if CLOSURE_RE.search(line)
         ]
-        if closure_lines and top_statuses and top_statuses[0][0] == "open":
+        if managed and closure_lines and top_statuses and top_statuses[0][0] == "open":
             violations.append(
                 TriageConsistencyViolation(
                     path=rel_path,
