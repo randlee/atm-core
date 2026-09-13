@@ -19,14 +19,15 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: resolve procedure_href via the same exact-then-ancestor rule (or a shared helper) in both write_report and colima_skill_report.render, with a regression test asserting the linked file exists on disk. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) reported this not-reproducible at the current, already-satisfied path on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA (verify-not-reproducible); QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1) to confirm against the record. STILL OPEN (BB3-QA4-1789262000, PR #1455 comment, 2026-09-12T23:24:52Z, blocking): the specific reported 404 is gone, but the fix wired both call sites to a NEW third implementation (scripts/report_runtime.py::resolve_procedure_page) that itself diverges from .just/generate_report_index.py's own resolver -- report_runtime.py takes the first ancestor match in manifest order and raises on any non-0/1 git exit code, while generate_report_index.py detects git-unavailability and falls back to the newest entry dated <= generated_at, otherwise picks the max-by-date ancestor. Two implementations of 'the same rule' still exist and can select different pages for the same envelope under the exact failure modes that produced the original 404. Next: cut a new layer above fix/bb3-qa3-r4 (top of stack #1457) making resolve_procedure_page share the exact same ancestor-resolution implementation as generate_report_index.py (one calls the other, or extract one shared function both call), including the missing git-unavailable dated-fallback branch. Corrected routing (fenix, 2026-09-12T23:32:13Z): the fix layer is fix/bb3-qa4-r5, cut from a7d4664d1 (feature/bb6-storage-prompt-handoffs, top of stack #1457) -- not directly above fix/bb3-qa3-r4. In the BB3-FIX-R5-1789264000 fence, closes on cipher's fix." ;
+  triage:deferredNote "Fix: resolve procedure_href via the same exact-then-ancestor rule (or a shared helper) in both write_report and colima_skill_report.render, with a regression test asserting the linked file exists on disk. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) reported this not-reproducible at the current, already-satisfied path on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA (verify-not-reproducible); QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1) to confirm against the record. STILL OPEN (BB3-QA4-1789262000, PR #1455 comment, 2026-09-12T23:24:52Z, blocking): the specific reported 404 is gone, but the fix wired both call sites to a NEW third implementation (scripts/report_runtime.py::resolve_procedure_page) that itself diverges from .just/generate_report_index.py's own resolver -- report_runtime.py takes the first ancestor match in manifest order and raises on any non-0/1 git exit code, while generate_report_index.py detects git-unavailability and falls back to the newest entry dated <= generated_at, otherwise picks the max-by-date ancestor. Two implementations of 'the same rule' still exist and can select different pages for the same envelope under the exact failure modes that produced the original 404. Next: cut a new layer above fix/bb3-qa3-r4 (top of stack #1457) making resolve_procedure_page share the exact same ancestor-resolution implementation as generate_report_index.py (one calls the other, or extract one shared function both call), including the missing git-unavailable dated-fallback branch. Corrected routing (fenix, 2026-09-12T23:32:13Z): the fix layer is fix/bb3-qa4-r5, cut from a7d4664d1 (feature/bb6-storage-prompt-handoffs, top of stack #1457) -- not directly above fix/bb3-qa3-r4. In the BB3-FIX-R5-1789264000 fence, closes on cipher's fix. cipher's BB3 R5 final push landed at fix/bb3-qa4-r5 @ 5da523f81 (parent merge-forward 16f2ab124), 2026-09-13T00:45:41Z, self-reported fresh just smoke fast 8/8, evidence archived outside tree, reports index unchanged. Fixed-pending-QA." ;
   triage:relatedFinding "BB3-003" ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/3> ;
-  triage:triageRecordVersion "4" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/4> ;
+  triage:triageRecordVersion "5" .
 
 <urn:atm:triage:occurrence/BB3-013/1>
   a triage:Occurrence ;
@@ -81,3 +82,21 @@
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "a7d4664d1" ;
   triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/BB3-013/4>
+  a triage:Occurrence ;
+  triage:file "scripts/report_runtime.py" ;
+  triage:line 65 ;
+  triage:snippet "cipher's BB3 R5 final push; fixed-pending-QA at fix/bb3-qa4-r5 @ 5da523f81" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-013/4> .
+
+<urn:atm:triage:worktree/BB3-013/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:orderIndex 4 .

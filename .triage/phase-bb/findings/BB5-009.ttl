@@ -19,11 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:20:14Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add negative/failure-path unit tests for json_value, task_rows, agent_pane, wait_for_pane, cleanup_tasks, inspect_container, render_html, and the scenario_* functions, matching test_run_inbound_peer_smoke.py's coverage pattern. Routed to cipher as item (5) of BB3-FIX-R5-1789264000 on fix/bb3-qa4-r5 (same Python fence, tests only)." ;
+  triage:deferredNote "Fix: add negative/failure-path unit tests for json_value, task_rows, agent_pane, wait_for_pane, cleanup_tasks, inspect_container, render_html, and the scenario_* functions, matching test_run_inbound_peer_smoke.py's coverage pattern. Routed to cipher as item (5) of BB3-FIX-R5-1789264000 on fix/bb3-qa4-r5 (same Python fence, tests only). cipher's BB3 R5 final push landed at fix/bb3-qa4-r5 @ 5da523f81 (parent merge-forward 16f2ab124), 2026-09-13T00:45:41Z, self-reported fresh just smoke fast 8/8, evidence archived outside tree, reports index unchanged. Fixed-pending-QA." ;
   triage:foundIn triage:BB5 ;
   triage:foundAt "2026-09-13T00:19:54Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-009/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-009/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB5-009/1>
   a triage:Occurrence ;
@@ -42,3 +43,21 @@
   triage:branch "fix/bb5-colima-r1" ;
   triage:headSha "0cbc4adc6" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB5-009/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_bb5_assignment.py" ;
+  triage:line 1 ;
+  triage:snippet "cipher's BB3 R5 final push; fixed-pending-QA at fix/bb3-qa4-r5 @ 5da523f81" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-009/2> .
+
+<urn:atm:triage:worktree/BB5-009/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:orderIndex 2 .
