@@ -9,7 +9,8 @@ on:
 
 # One live run per ref: a new push to a PR branch cancels the queued/running
 # run for the superseded commit instead of stacking a full matrix behind it.
-# Pushes to develop/main are never cancelled (every landed commit gets a run).
+# Pushes to develop/main are never cancelled (every landed commit gets a run,
+# classified by its own change set like a PR).
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -28,17 +29,25 @@ jobs:
       - id: scope
         shell: bash
         run: |
-          # Pushes always exercise the runtime.  A pull request containing only
-          # documentation, site content, report templates, release manifests,
-          # triage/sprint records, or agent configuration
-          # (.claude/, .codex/, .agents/, .cursor/) does not change executable code, so
-          # it does not run the long-lived daemon smoke matrix.
-          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+          # A change set containing only documentation, site content, report
+          # templates, release manifests, triage/sprint records, or agent
+          # configuration (.claude/, .codex/, .agents/, .cursor/) does not change
+          # executable code, so it does not run the long-lived daemon smoke
+          # matrix.  Pull requests and pushes use the same criteria: a PR is
+          # classified against its base, a push against the previous head of
+          # the branch.  Anything else (workflow_call, a branch creation with
+          # no previous head) exercises the runtime.
+          case "${{ github.event_name }}" in
+            pull_request) range_start="${{ github.event.pull_request.base.sha }}" ;;
+            push)         range_start="${{ github.event.before }}" ;;
+            *)            range_start="" ;;
+          esac
+          if [[ -z "$range_start" || "$range_start" =~ ^0+$ ]] || ! git cat-file -e "$range_start^{commit}" 2>/dev/null; then
             echo "runtime=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          changed_files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA")"
+          changed_files="$(git diff --name-only "$range_start" "$GITHUB_SHA")"
           if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|templates/|release/|\.triage/|\.sprints/|\.claude/|\.codex/|\.agents/|\.cursor/|.*\.md$)' <<< "$changed_files"; then
             echo "runtime=true" >> "$GITHUB_OUTPUT"
           else
