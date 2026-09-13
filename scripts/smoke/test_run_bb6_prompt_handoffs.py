@@ -55,9 +55,9 @@ class Bb6PromptHandoffRunnerTests(unittest.TestCase):
     def test_pane_terminal_lines_classifies_each_prompt(self) -> None:
         task = "BB6-one"
         text = (
-            f'<atm task="{task}" queued="1" />\n'
-            f'<atm task="{task}" ready></atm>\n'
-            f'<atm task="{task}" reminder="2"></atm>\n'
+            f'<atm task="{task}" queued="1" message="01QUEUED" />\n'
+            f'<atm task="{task}" ready message="01READY"></atm>\n'
+            f'<atm task="{task}" reminder="2" message="01REMINDER"></atm>\n'
         )
         lines = RUNNER.pane_terminal_lines(text, [task])
         self.assertEqual(
@@ -70,6 +70,7 @@ class Bb6PromptHandoffRunnerTests(unittest.TestCase):
             {
                 "agent": "tester",
                 "task_id": "BB6-one",
+                "message_key": "atm:01TEST",
                 "kind": "task_ready",
                 "attempt": 0,
             }
@@ -83,7 +84,11 @@ class Bb6PromptHandoffRunnerTests(unittest.TestCase):
         messages = [
             {
                 "count": 1,
-                "message": {"taskId": "BB6-one", "taskOp": {"op": "start"}},
+                "message": {
+                    "message_id": "01START",
+                    "taskId": "BB6-one",
+                    "taskOp": {"op": "start"},
+                },
             },
             {"count": 0},
         ]

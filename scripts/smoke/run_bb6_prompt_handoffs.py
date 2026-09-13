@@ -195,6 +195,9 @@ def pane_terminal_lines(text: str, tasks: list[str]) -> list[dict[str, Any]]:
     lines = []
     for task in tasks:
         for block in blocks_for(text, task):
+            message = re.search(r'\bmessage="([^"]+)"', block)
+            if message is None:
+                raise RuntimeError(f"task terminal has no message id: {task}")
             if match := re.search(r'\breminder="(\d+)"', block):
                 kind, attempt = "task_reminder", int(match.group(1))
             elif re.search(r"\bready(?:\s|>)", block):
@@ -208,6 +211,7 @@ def pane_terminal_lines(text: str, tasks: list[str]) -> list[dict[str, Any]]:
                     "surface": "herdr_pane",
                     "agent": ASSIGNEE,
                     "task_id": task,
+                    "message_key": f"atm:{message.group(1)}",
                     "kind": kind,
                     "attempt": attempt,
                     "terminal": block,
@@ -246,6 +250,7 @@ def mailbox_terminal_lines(
                 "surface": "atm_mailbox",
                 "agent": ASSIGNER,
                 "task_id": task,
+                "message_key": f"atm:{message['message_id']}",
                 "kind": kind,
                 "attempt": 0,
                 "terminal": message,
@@ -254,15 +259,23 @@ def mailbox_terminal_lines(
     return lines, commands
 
 
-def handoff_identities(rows: list[list[Any]]) -> Counter[tuple[str, str, str, int]]:
-    return Counter((row[0], row[2], row[1], row[3]) for row in rows)
+def handoff_identities(
+    rows: list[list[Any]],
+) -> Counter[tuple[str, str, str, str, int]]:
+    return Counter((row[0], row[2], row[4], row[1], row[3]) for row in rows)
 
 
 def terminal_identities(
     lines: list[dict[str, Any]],
-) -> Counter[tuple[str, str, str, int]]:
+) -> Counter[tuple[str, str, str, str, int]]:
     return Counter(
-        (line["agent"], line["task_id"], line["kind"], line["attempt"])
+        (
+            line["agent"],
+            line["task_id"],
+            line["message_key"],
+            line["kind"],
+            line["attempt"],
+        )
         for line in lines
     )
 
@@ -485,7 +498,13 @@ def run(container: str, out_dir: Path) -> int:
             "prompt_handoff_record_failed_count": failure_count,
             "terminal_lines": terminal_lines,
             "stored_handoff_rows": rows,
-            "identity_fields": ["agent", "task_id", "kind", "attempt"],
+            "identity_fields": [
+                "agent",
+                "task_id",
+                "message_key",
+                "kind",
+                "attempt",
+            ],
             "identities_match": stored_identities == observed_identities,
             "count_command": count_result,
             "rows_command": rows_result,
