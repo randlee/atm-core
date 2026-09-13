@@ -154,7 +154,9 @@ migration functions directly.
 
 - **2026-09-12 — Phase BB.6 (approved):** `prompt_handoffs` and its task
   lookup index are additive SQLite MINOR schema objects. The table is created
-  idempotently, has no foreign key, and a pre-BB binary ignores it.
+  idempotently, has no foreign key, and a pre-BB binary ignores it. Uniqueness
+  includes `kind`; the legacy-shape table (never released) is dropped and
+  recreated at open.
   `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created` is the D3
   previous-consumer proof: frozen pre-BB DDL and task statements continue to
   read and write after the new table exists.
