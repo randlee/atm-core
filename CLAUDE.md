@@ -99,13 +99,26 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 
 ## Workflow
 
+### Small fixes: one PR, no stack, no QA task
+
+A change with one owner and a bounded scope (a bug fix, a test repair, a docs
+edit, a lint gate — anything well under a few hundred lines) is **one PR off
+`develop` with the fix and its tests together**: the dev runs `just lint` and
+`just test`, the lead performs the one acceptance check the fix exists for
+(a browser click, a CLI run), CI goes green, merge. No gh stack, no
+`quality-mgr` dispatch, no triage records. *Why (Rand, 2026-09-13):* the EQ-005
+procedure-link fix was thirty lines and took an hour to land, then an afternoon
+of stacked layers, two QA rounds, and a bottom-alone merge that turned `develop`
+red; a second QA pass on a small stack only doubles the qualitative
+best-practices findings.
+
 ### Sprint Execution Pattern (Dev-QA Loop)
 
-Every sprint follows this pattern:
+Every phase sprint follows this pattern:
 
 1. **Create worktree** using `sc-git-worktree` skill
 2. **Dev work** by assigned dev agent(s)
-3. **QA validation** by assigned QA agent(s)
+3. **QA validation** by assigned QA agent(s) — dispatched once, on the **top of the stack**, never per layer (a QA already running on a mid layer of a large phase stack may finish; nothing new is dispatched below the top)
 4. **Fix round** for each QA verdict with findings, on a new layer cut from the top of the phase stack; the reviewed layer stays frozen (`docs/development/gh-stack-guidelines.md` §0)
 5. **Commit/Push/PR** to phase integration branch
 6. **Agent-teams review** documenting what worked/didn't
@@ -133,7 +146,8 @@ main
 **Rules:**
 - Always merge PRs with a merge commit (`gh pr merge --merge`); never squash
 - The phase's sprint and fix PRs form one append-only `gh stack` above `integrate/phase-N`: every unit of work is a new worktree cut from the current top of the stack, its PR opens on the first push with base = the layer below, nothing below the top is ever edited again, and nobody waits for a lower layer's QA or CI. The single definition is [`docs/development/gh-stack-guidelines.md`](./docs/development/gh-stack-guidelines.md) §0.
-- The stack lands into `integrate/phase-N` once, from the top; when all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
+- The stack exists so CI runs once and the merge happens once: **QA and CI gate only the top layer.** The stack lands into `integrate/phase-N` once, from the top, after the top's CI is green; when all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
+- A lower layer may be collapsed into the trunk early only when its own CI is green by itself; a layer whose red is fixed on the layer above merges together with that layer, never alone (merging #1492 without #1493 put a known-red test on `develop`, 2026-09-13)
 - Phase integration branch is then cleaned up
 
 ### Worktree Cleanup Policy

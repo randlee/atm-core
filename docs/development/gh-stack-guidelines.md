@@ -13,6 +13,19 @@ functionality is complete and which nobody touches again.
 
 ## 0. The stack is append-only
 
+**Scope first.** A stack is for phase work: several sprints or fix rounds from
+several devs that must land as one unit. It exists so CI completes once, on the
+landing head, and the merge happens once. A small fix with one owner (well under
+a few hundred lines, fix and tests together) is a single PR off `develop` with no
+stack, no `quality-mgr` task, and no triage record: dev runs `just lint` and
+`just test`, the lead does the one acceptance check, CI green, merge.
+**QA runs once, on the top of the stack**; a QA already in flight on a mid
+layer of a large phase stack may finish and its verdict carries forward, but no
+new QA is dispatched below the top. *Why (Rand, 2026-09-13):* the thirty-line
+EQ-005 fix became two layers, two QA rounds (the second produced only a
+pre-existing "best-practices" finding), and a bottom-alone merge that turned
+`develop` red.
+
 Every unit of work — sprint, fix round, cleanup, docs — is a **new worktree
 cut from the current top of the stack**. Its PR opens on the first push with
 base = the layer below and is linked into the stack at once. **Nothing below
