@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-12T11:04:27.879175Z",
-  "branch": "integrate/phase-ba-landing",
-  "version": "1.5.16",
+  "generatedAt": "2026-09-13T07:58:36.787501Z",
+  "branch": "integrate/phase-bb",
+  "version": "1.5.17",
   "status": "pass",
   "findings": []
 }
