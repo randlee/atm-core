@@ -737,9 +737,22 @@ pub(crate) fn concurrent_starts_admit_exactly_one_started_event() {
         })
         .collect();
     barrier.wait();
-    let results: Vec<_> = handles
-        .into_iter()
-        .map(|handle| handle.join().expect("writer thread"))
+    let writer_count = handles.len();
+    let (joined_tx, joined_rx) = std::sync::mpsc::channel();
+    for handle in handles {
+        let joined_tx = joined_tx.clone();
+        std::thread::spawn(move || {
+            let result = handle.join().expect("writer thread");
+            joined_tx.send(result).expect("join result receiver");
+        });
+    }
+    drop(joined_tx);
+    let results: Vec<_> = (0..writer_count)
+        .map(|_| {
+            joined_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .expect("writer thread join timed out")
+        })
         .collect();
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     assert_eq!(

@@ -15,9 +15,8 @@ The messaging protocol in that document is mandatory for all ATM communications.
 
 ## Quick Rule
 
-The sequence for every ATM task assignment is defined once in
-`docs/team-protocol.md` (Required Flow): ack, work, task close. A task close
-is terminal; the receiver never acknowledges it. No silent processing.
+Follow the Required Flow in `docs/team-protocol.md`: acknowledge messages that require it; start assigned work at its `task_ready` line with `atm task start`; do the work; close with `atm task close`.
+A task close is terminal and is never acknowledged; no silent processing.
 
 ## Rust Guidance
 
