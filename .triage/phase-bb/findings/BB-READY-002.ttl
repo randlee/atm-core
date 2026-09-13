@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB-READY-002>
+  a triage:Finding ;
+  triage:findingId "BB-READY-002" ;
+  triage:title "Design-authority docs still publish the obsolete prompt_handoffs uniqueness identity, missing the kind column" ;
+  triage:description "solar production-readiness review, report 01M2CQBTXJXD07KW4YHWDT8104 (verbatim on PR #1477, comment 2026-09-13T06:30:20Z), reviewed head 48b18d48c; still present at fenix-verified current heads. docs/plans/nudge-transition-templates/design.md:289 and docs/plans/phase-bb/phase-bb-plan.md:95 (P11) and :147 all publish 'UNIQUE (team, agent, message_key, attempt)', but the shipped DDL (crates/atm-storage-rusqlite/src/task_store.rs:55-65) and sprint-BB.6-prompt-handoffs.md:32-49 correctly use (team, agent, message_key, kind, attempt) -- the design authority is out of sync with what actually shipped." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "solar, production-readiness review, report 01M2CQBTXJXD07KW4YHWDT8104" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/plans/nudge-transition-templates/design.md:289; docs/plans/phase-bb/phase-bb-plan.md:95,147" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T06:37:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, not blocking merge but must land before the design docs are treated as authoritative again. Fix dispatched by fenix: cipher, BB-READY-DOCS-FIX-1789281196, branch fix/bb-readiness-docs (same branch as BB-READY-001)." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T06:37:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB-READY-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB-READY-002/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB-READY-002/3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB-READY-002/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/nudge-transition-templates/design.md" ;
+  triage:line 289 ;
+  triage:snippet "'UNIQUE (team, agent, message_key, attempt)' -- missing kind column present in the shipped DDL" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "48b18d48c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB-READY-002/1> .
+
+<urn:atm:triage:worktree/BB-READY-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "48b18d48c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB-READY-002/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/phase-bb-plan.md" ;
+  triage:line 95 ;
+  triage:snippet "P11: same obsolete tuple 'UNIQUE (team, agent, message_key, attempt)'" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "48b18d48c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB-READY-002/2> .
+
+<urn:atm:triage:worktree/BB-READY-002/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "48b18d48c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB-READY-002/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/phase-bb-plan.md" ;
+  triage:line 147 ;
+  triage:snippet "same obsolete tuple repeated a second time in the same plan doc" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "48b18d48c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB-READY-002/3> .
+
+<urn:atm:triage:worktree/BB-READY-002/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "48b18d48c" ;
+  triage:orderIndex 3 .
