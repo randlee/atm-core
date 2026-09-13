@@ -235,7 +235,39 @@ for index, run in enumerate(runs):
             echo "$result" >&2
             echo "pre-push: REFUSED. validate-findings.py failed for phase $real_phase_name at pushed commit $local_sha; repair per docs/triage/ttl-repair.md." >&2
             ttl_fail=1
+            continue
         fi
+
+        # The status surface itself must render from the pushed tree.
+        # /triage-report is what the phase owner reads; a triage push that
+        # leaves it unable to produce the per-sprint findings table (exit 2
+        # or 3: structural error or data gap) is refused here, not
+        # discovered by the reader. GitHub state is deliberately absent in
+        # the extracted tree (no .git, no network in a hook), so this gates
+        # the TTL-derived table only: structure, events, findings, QA master
+        # and the per-sprint live counts.
+        report_rel=".claude/skills/triage-report/scripts"
+        graph_rel=".claude/skills/graph-orchestration/scripts"
+        if ! git archive "$local_sha" -- "$report_rel" "$graph_rel" "$qa_master_rel" 2>/dev/null | tar -x -C "$ref_root" 2>/dev/null; then
+            echo "pre-push: REFUSED. Could not extract $report_rel, $graph_rel or $qa_master_rel from pushed commit $local_sha; /triage-report cannot be generated for phase $phase_short." >&2
+            ttl_fail=1
+            continue
+        fi
+        if ! python3 -c 'import rdflib' 2>/dev/null; then
+            echo "pre-push: REFUSED. python3 lacks rdflib, so /triage-report --phase $phase_short cannot be generated for the pushed triage records. Install it (pip install rdflib) and push again." >&2
+            ttl_fail=1
+            continue
+        fi
+        echo "pre-push: generating /triage-report --phase $phase_short from pushed commit $local_sha" >&2
+        report_output=$(python3 "$ref_root/$report_rel/triage_report.py" --phase "$phase_short" --integration-root "$ref_root" --ttl-only --format table 2>&1)
+        report_status=$?
+        if [ "$report_status" -ne 0 ]; then
+            echo "$report_output" >&2
+            echo "pre-push: REFUSED. /triage-report --phase $phase_short exits $report_status at pushed commit $local_sha (the per-sprint findings table cannot be generated); repair per docs/triage/ttl-repair.md and push again." >&2
+            ttl_fail=1
+            continue
+        fi
+        echo "$report_output" >&2
     done
 
     # Same-content, second lint: lint_ttl_triage_consistency.py is the exact
