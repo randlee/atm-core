@@ -19,14 +19,14 @@
   triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
-  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, closed-on-write per fenix -- fenix corrected PR #1483's body from 33/33 to 32/32 immediately, independently confirmed via gh pr view 1483 --json body. No fix branch/dev dispatch needed." ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, closed-on-write per fenix -- fenix corrected PR #1483's body from 33/33 to 32/32 immediately, independently confirmed via gh pr view 1483 --json body. No fix branch/dev dispatch needed. RE-VERIFIED (2026-09-13T08:56:12Z): quality-mgr BB-EVIDENCE-QA2-1789290100 (PR #1483 @ 4c57a786d, report 01M2CZKQ79599VG80XP44J0TD5) confirms the corrected 32/32 count byte-for-byte accurate; req-qa independently re-counted." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T08:35:46Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EQ-002/1> ;
   triage:hasResolution <urn:atm:triage:resolution/EQ-002/1> ;
   triage:closedAt "2026-09-13T08:37:04Z"^^xsd:dateTime ;
   triage:closedBy "fenix" ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/EQ-002/1>
   a triage:Occurrence ;
