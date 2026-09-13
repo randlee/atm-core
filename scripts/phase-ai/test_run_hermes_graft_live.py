@@ -29,7 +29,7 @@ class HermesGraftLiveSmokeTests(unittest.TestCase):
 
     def test_graft_report_and_envelope_carry_source_revision_and_procedure(self) -> None:
         # BB.3: a resolved source revision must select a procedure page from
-        # the manifest (scripts/smoke/report_runtime.py resolve_procedure_page),
+        # the manifest (scripts/report_runtime.py resolve_procedure_page),
         # so the fixture supplies the selected page instead of an empty root.
         feature_smoke = self.module.feature_smoke
         with tempfile.TemporaryDirectory() as tempdir:

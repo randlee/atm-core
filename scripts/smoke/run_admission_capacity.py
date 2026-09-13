@@ -9,29 +9,18 @@ isolate a developer's real mail database.
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import closing
-from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
 import platform
-import plistlib
-from queue import Empty, Queue
 import re
-import shutil
-import socket
-import sqlite3
-import ssl
 import subprocess
 import sys
 import tempfile
-from threading import Lock, Thread
 import time
-from typing import Any, Callable
-import uuid
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EVIDENCE_DIR = ROOT / "site" / "reports" / "send-message-benchmark"
@@ -74,14 +63,6 @@ from scripts.smoke.benchmark_snapshot import (
     verify_active_snapshot,
 )
 
-if os.name != "nt":
-    import pwd
-
-try:
-    import resource
-except ImportError:  # Windows has no POSIX rlimit API.
-    resource = None
-
 from scripts.smoke.daemon_lifecycle import (
     assert_no_process_leak,
     count_atm_daemon_processes,
@@ -89,56 +70,88 @@ from scripts.smoke.daemon_lifecycle import (
     terminate_process,
 )
 from scripts.smoke.smoke_common import SmokeError, command_result
-INTERVALS = 10
-ADMISSIONS_PER_INTERVAL = 1_000
-TARGET_PROFILE_DURATION_SECONDS = 20.0
-# An f8 sample issues ceil(1_000 / 8) = 125 independent connections.  The
-# ordinary benchmark needs enough client workers to occupy all of them; 64
-# underdrives every lane and makes the result incomparable with the reviewed
-# f8/512 physical baselines.
 DEFAULT_WORKERS = 512
-# Keep the benchmark's HTTP/1.1 pipeline below the local socket's bidirectional
-# buffer capacity. The sender writes one bounded batch, then the reader drains
-# every matching response before the next batch.
-MAX_IN_FLIGHT_REQUESTS = 8
-READY_TIMEOUT_SECONDS = 30.0
-CAPACITY_ROOT_PREFIX = "atm-capacity-"
-SPARSE_FRAMES_PER_CONNECTION = (1, 2, 4, 8, 16, 64)
-SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
-DAEMON_OUTPUT_TAIL_LINES = 200
-PEER_WIRE_SECURITY_MODES = ("mutual-tls", "plaintext-test")
-DIRECT_PEER_TCP_PORT = 43_101
-CAPACITY_DIRECT_PEER_PORT_ENV = "ATM_CAPACITY_DIRECT_PEER_PORT"
-CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-BENCHMARK_TARGETS = {
-    # SQLite is a direct-storage target, so it does not select a peer-wire
-    # mode. The daemon itself still starts in its normal secure default.
-    "sqlite": ("sqlite", None),
-    "uds": ("uds", "mutual-tls"),
-    "tcp": ("tcp", "plaintext-test"),
-    "tcp-tls": ("tcp", "mutual-tls"),
-}
-BASELINES_PATH = DEFAULT_EVIDENCE_DIR / "baselines.json"
-DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
-# The daemon-switch control plane can legitimately wait through its documented
-# launchctl unload/owner-repair windows (up to 20s + two 20x2s polls).  Its
-# outer timeout must cover that bounded recovery path; otherwise the runner
-# reports a false benchmark failure while the switch is still repairing the
-# selected singleton.
-MANAGED_DAEMON_TIMEOUT_SECONDS = 120.0
-DIAGNOSTIC_SAMPLE_COUNT = 3
-DIAGNOSTIC_DURATION_SECONDS = 3.0
-# A connection worker owns one client socket while its corresponding daemon
-# child owns the peer socket. Leave enough descriptors for the Python runner,
-# subprocess pipes, and the bounded daemon control plane instead of scheduling
-# more simultaneous connections than the OS account can open.
-DESCRIPTOR_RESERVE = 64
 
-
-from scripts.smoke import admission_capacity_support as _admission_support
-
-globals().update({name: getattr(_admission_support, name) for name in _admission_support.__all__})
-_admission_support._PUBLIC_NAMESPACE = globals()
+from scripts.smoke.admission_capacity_support import (
+    ADMISSIONS_PER_INTERVAL,
+    BASELINES_PATH,
+    BENCHMARK_TARGETS,
+    CAPACITY_DIRECT_PEER_PORT_ENV,
+    CAPACITY_ROOT_PREFIX,
+    CROCKFORD_BASE32,
+    DAEMON_OUTPUT_TAIL_LINES,
+    DAEMON_SWITCH,
+    DESCRIPTOR_RESERVE,
+    DIAGNOSTIC_DURATION_SECONDS,
+    DIAGNOSTIC_SAMPLE_COUNT,
+    DIRECT_PEER_TCP_PORT,
+    INTERVALS,
+    MANAGED_DAEMON_TIMEOUT_SECONDS,
+    MAX_IN_FLIGHT_REQUESTS,
+    PEER_WIRE_SECURITY_MODES,
+    READY_TIMEOUT_SECONDS,
+    SPARSE_FRAMES_PER_CONNECTION,
+    SUSTAINED_MESSAGE_COUNTS,
+    AdmissionResult,
+    CapacityRoster,
+    CapacityRunResult,
+    DEFAULT_CAPACITY_ROSTER,
+    DisposableMtlsIdentity,
+    HostStateBackup,
+    HttpRequest,
+    LocalEndpoint,
+    ManagedDaemonLifecycle,
+    ManagedDaemonOptions,
+    V4EmissionContext,
+    allocate_direct_peer_port,
+    atomic_json,
+    benchmark_os,
+    benchmark_runtime_client_environment,
+    binary_hashes,
+    daemon_switch_result,
+    is_ancestor_revision,
+    os_account_home,
+    release_binary,
+    release_version,
+    reap_owned_daemon,
+    require_capacity_benchmark_account,
+    require_managed_peer_wire_security,
+    require_ready_managed_doctor,
+    resolved_managed_selector_links,
+    runtime_environment,
+    snapshot_evidence,
+    source_revision,
+    sqlite_writer_probe,
+    validate_capacity_home,
+    verify_durability_after_restart,
+    write_v4_evidence,
+    v4_result_from_evidence,
+    run_lifecycle_phase,
+    LaunchAgentPeerWireOverride,
+    DaemonOutputCapture,
+)
+from scripts.smoke.admission_capacity_transport import (
+    admission_connection_worker_limit,
+    await_daemon_ready,
+    benchmark_doctor_payload,
+    benchmark_origin_metadata,
+    cached_roster_heartbeat_body,
+    direct_peer_endpoint,
+    disposable_peer_host,
+    http_request_body,
+    local_endpoint,
+    prepare_capacity_roster,
+    provision_disposable_mtls_identity,
+    read_http_response,
+    resolve_benchmark_target,
+    run_interval,
+    start_capacity_daemon,
+    submit_connection,
+    TARGET_PROFILE_DURATION_SECONDS,
+    tls_client_context,
+    validate_peer_wire_security,
+    validate_transport,
+)
 def run_profile(
     endpoint: LocalEndpoint,
     home: Path,
