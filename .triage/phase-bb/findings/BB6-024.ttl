@@ -19,11 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T01:37:27Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: root-cause why an interrupted reader-pool worker isn't reclaimed within its wait-queue deadline under full-suite timing/load, and fix the underlying race -- no rerun-to-green. Dispatched to arch-ctm as BB-FLAKY-READER-POOL-1789284000, branch fix/bb-flaky-reader-pool cut from f0758be06, to be linked between fix/bb6-cli-qa2 and fix/bb6-docs-qa1 on its first push. Fenix's ruling: reproduce the full-suite run in a loop (solar's data: fails only inside the crate suite, passes isolated and under external load), classify harness wall-clock bound vs a genuine reclaim defect, fix on the observable, 200/200 proof." ;
+  triage:deferredNote "Fix: root-cause why an interrupted reader-pool worker isn't reclaimed within its wait-queue deadline under full-suite timing/load, and fix the underlying race -- no rerun-to-green. Dispatched (reassigned to cipher) as BB-FLAKY-READER-POOL-1789288000, branch fix/bb-flaky-reader-pool cut from f0758be06, linked between fix/bb6-cli-qa2 and fix/bb6-docs-qa1 (PR #1474). Cipher's completion (2026-09-13T02:38:13Z) at @ 637c12263: root cause classified as harness wall-clock timing after interrupt, not a reclaim defect; test now waits for explicit reclamation metrics before reuse with a 5s bound, sibling reclaim bounds swept. Base exact test 50/50, pre-fix package under-load 50/50 locally, corrected test 200/200 under parallel workspace load. just lint 36/36, just test exit 0, parent f23d87928 an ancestor, worktree clean. Fixed-pending-QA at 637c12263." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T01:37:27Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-024/1> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-024/2> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/BB6-024/1>
   a triage:Occurrence ;
@@ -42,3 +43,21 @@
   triage:branch "fix/bb6-docs-qa1" ;
   triage:headSha "0efb1a582" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-024/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 1621 ;
+  triage:snippet "BB-FLAKY-READER-POOL complete: root cause was harness wall-clock timing after interrupt (not a reclaim defect); test waits for explicit reclamation metrics with a 5s bound, corrected test 200/200 under parallel workspace load; fixed-pending-QA at fix/bb-flaky-reader-pool @ 637c12263" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb-flaky-reader-pool" ;
+  triage:headSha "637c12263" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-024/2> .
+
+<urn:atm:triage:worktree/BB6-024/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1474, fix/bb-flaky-reader-pool" ;
+  triage:branch "fix/bb-flaky-reader-pool" ;
+  triage:headSha "637c12263" ;
+  triage:orderIndex 2 .
