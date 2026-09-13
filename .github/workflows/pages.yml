@@ -30,6 +30,9 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Verify generated procedure pages
+        run: python3 scripts/procedures/render_procedure_pages.py --check
+
       - name: Verify generated report index
         run: python3 .just/generate_report_index.py --check
 
