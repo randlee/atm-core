@@ -19,6 +19,7 @@ STATE_RE = re.compile(
     r"triage:(?P<field>status|findingAggregate|branchStatus|branchR[A-Za-z0-9_.-]+Status)\s+"
     r"(?:\"(?P<quoted>[^\"]+)\"|triage:(?P<qualified>[A-Za-z0-9_.-]+))"
 )
+CLOSURE_RE = re.compile(r"\btriage:(?:hasResolution|closedAt|closedBy)\b")
 SPRINT_FIELD_RE = re.compile(
     r"^\s*(?P<predicate>triage:(?:foundIn|aich_sprint|aichSprint|sprint_id|sprint))\s+"
     r"(?:triage:)?(?:\"(?P<quoted>[^\"]+)\"|(?P<bare>[A-Za-z0-9_.-]+))"
@@ -189,6 +190,36 @@ def collect_ttl_triage_violations(repo_root: Path) -> list[TriageConsistencyViol
                     aggregate_statuses.append((state, offset))
                 else:
                     branch_statuses.append((state, offset))
+
+        if len(top_statuses) > 1:
+            _, duplicate_line = top_statuses[1]
+            violations.append(
+                TriageConsistencyViolation(
+                    path=rel_path,
+                    line_number=duplicate_line,
+                    message=(
+                        "duplicate triage:status on the Finding: closure must replace the "
+                        "status line in place, never append a second one"
+                    ),
+                )
+            )
+        closure_lines = [
+            offset
+            for offset, line in enumerate(lines, start=start_line)
+            if CLOSURE_RE.search(line)
+        ]
+        if closure_lines and top_statuses and top_statuses[0][0] == "open":
+            violations.append(
+                TriageConsistencyViolation(
+                    path=rel_path,
+                    line_number=top_statuses[0][1],
+                    message=(
+                        "closed finding still reads open: the Finding carries a closure "
+                        f"(line {closure_lines[0]}) but triage:status is \"open\"; "
+                        "replace the status line with the closure state"
+                    ),
+                )
+            )
 
         if top_statuses and aggregate_statuses:
             top_state, top_line = top_statuses[0]
