@@ -449,7 +449,76 @@ components:
       properties:
         messages: { type: array, items: { $ref: '#/components/schemas/Message' } }
         cursor: { type: string }
+    ListOutcome:
+      type: object
+      description: Body of the `List` response-envelope variant; path references are corrected under the BB.7 envelope item.
+      required: [action, team, agent, selection_mode, history_collapsed, count, rows, bucket_counts]
+      properties:
+        action: { type: string }
+        team: { type: string }
+        agent: { type: string }
+        selection_mode: { type: string }
+        history_collapsed: { type: boolean }
+        count: { type: integer }
+        rows: { type: array, items: { $ref: '#/components/schemas/ListRow' } }
+        bucket_counts: { $ref: '#/components/schemas/BucketCounts' }
+        task_rows: { type: array, items: { $ref: '#/components/schemas/TaskRow' }, default: [] }
+        task_event_rows: { type: array, items: { $ref: '#/components/schemas/TaskEventRow' }, default: [] }
         handoffs: { type: array, items: { $ref: '#/components/schemas/PromptHandoff' }, default: [] }
+    ListRow:
+      type: object
+      required: [message_id, summary, from, timestamp, read, pending_ack, task_id]
+      properties:
+        message_id: { type: string, nullable: true }
+        summary: { type: string }
+        from: { type: string }
+        timestamp: { type: string, format: date-time }
+        read: { type: boolean }
+        pending_ack: { type: boolean }
+        task_id: { type: string, nullable: true }
+    BucketCounts:
+      type: object
+      required: [unread, pending_ack, history]
+      properties:
+        unread: { type: integer }
+        pending_ack: { type: integer }
+        history: { type: integer }
+    TaskRow:
+      type: object
+      required: [team, task_id, assignee, assigner, state, assignment_message_id, description, assigned_at, updated_at, reminder_count, lead_notified_count]
+      properties:
+        team: { type: string }
+        task_id: { type: string }
+        assignee: { type: string }
+        assigner: { type: string }
+        state: { type: string, enum: [assigned, active, complete] }
+        close_outcome: { type: string, nullable: true }
+        position: { type: integer, nullable: true }
+        assignment_message_id: { type: string }
+        description: { type: string }
+        assigned_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_reminded_at: { type: string, format: date-time, nullable: true }
+        reminder_count: { type: integer, format: uint32 }
+        lead_notified_count: { type: integer, format: uint32 }
+    TaskEventRow:
+      type: object
+      required: [team, task_id, assignee, seq, at, event, actor]
+      properties:
+        team: { type: string }
+        task_id: { type: string }
+        assignee: { type: string }
+        seq: { type: integer, format: uint64 }
+        at: { type: string, format: date-time }
+        event: { type: string }
+        from_state: { type: string, nullable: true }
+        to_state: { type: string, nullable: true }
+        close_outcome: { type: string, nullable: true }
+        actor: { type: object }
+        message_id: { type: string, nullable: true }
+        outcome: { type: string, nullable: true }
+        marker: { type: string, nullable: true }
+        detail: { type: string, nullable: true }
     PromptHandoff:
       type: object
       required: [team, agent, message_key, kind, task_id, attempt, trigger, at]
