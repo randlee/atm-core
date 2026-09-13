@@ -314,48 +314,8 @@ pub fn complete_async_list(
     }
 }
 
-/// Reads one task-ledger view through the runtime-selected storage capability.
-///
-/// This is intentionally separate from the mailbox reader lane: task rows are
-/// a durable state projection, not mailbox metadata.
-pub fn list_task_ledger_with_runtime(
-    query: ListQuery,
-    runtime: &LocalServiceRuntime,
-) -> Result<ListOutcome, AtmError> {
-    let task_ledger = query
-        .task_ledger
-        .clone()
-        .ok_or_else(|| AtmError::validation("task ledger list requires a task-ledger selection"))?;
-    let store = runtime.task_store()?;
-    let (task_rows, task_event_rows, handoffs) = match (task_ledger, query.task_filter.as_ref()) {
-        (TaskLedgerQuery::Tasks { member }, Some(task_id)) => {
-            let row = store
-                .load_task(&query.caller_team, task_id)?
-                .filter(|row| member.as_ref().is_none_or(|agent| &row.assignee == agent));
-            (row.into_iter().collect(), Vec::new(), Vec::new())
-        }
-        (TaskLedgerQuery::Tasks { member }, None) => (
-            store.list_tasks(&query.caller_team, member.as_ref())?,
-            Vec::new(),
-            Vec::new(),
-        ),
-        (TaskLedgerQuery::Events { task_id, member }, _) => (
-            Vec::new(),
-            store.list_task_events(&query.caller_team, &task_id, member.as_ref())?,
-            Vec::new(),
-        ),
-    };
-    Ok(build_task_ledger_outcome(
-        query,
-        task_rows,
-        task_event_rows,
-        handoffs,
-    ))
-}
-
 /// Reads one task-ledger view through the bounded storage-owned async reader
-/// lane. This is the daemon/HTTP path; the synchronous sibling remains for
-/// the bare CLI runtime.
+/// lane used by the daemon/HTTP runtime.
 pub async fn list_task_ledger_with_runtime_async(
     query: ListQuery,
     runtime: &LocalServiceRuntime,
