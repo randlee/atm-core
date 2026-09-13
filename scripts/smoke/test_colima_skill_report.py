@@ -78,7 +78,7 @@ class RenderTests(unittest.TestCase):
             procedure = Path(tmp) / "site/reports/procedures/colima-hermes-skills/selected.html"
             procedure.parent.mkdir(parents=True)
             procedure.write_text("<html>procedure</html>\n", encoding="utf-8")
-            with mock.patch.object(MODULE, "_source_revision", return_value="b" * 40), mock.patch.object(MODULE, "compose"), \
+            with mock.patch.object(MODULE, "_source_revision", return_value="b" * 40), mock.patch.object(MODULE, "compose") as compose, \
                     mock.patch.object(MODULE, "_resolve_procedure_page", return_value=SimpleNamespace(
                         revision="a" * 40, html="procedures/colima-hermes-skills/selected.html"
                     )), mock.patch.object(MODULE, "update_master_report_index"), \
@@ -89,6 +89,14 @@ class RenderTests(unittest.TestCase):
             self.assertEqual(payload["source_revision"], "b" * 40)
             self.assertEqual(envelope["source_revision"], "b" * 40)
             self.assertIn("testbed ref", [item["name"] for item in payload["cases"]])
+            copied = out_dir / "procedure.html"
+            self.assertTrue(copied.is_file())
+            self.assertEqual(copied.read_bytes(), procedure.read_bytes())
+            for call in compose.call_args_list:
+                variables = call.args[1]
+                if "procedure_href" in variables:
+                    self.assertEqual(variables["procedure_href"], "procedure.html")
+                    self.assertNotIn("..", Path(variables["procedure_href"]).parts)
 
     def test_render_writes_the_smoke_evidence_set(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -98,10 +106,10 @@ class RenderTests(unittest.TestCase):
             (run_dir / "report-1.txt").write_text(REPORT, encoding="utf-8")
             (run_dir / "herdr-doctor.json").write_text("{}", encoding="utf-8")
             out_dir = Path(tmp) / "site" / "reports" / "smoke" / "linux" / MODULE.HOST / f"{run_dir.name}-{MODULE.FEATURE}"
-            composed: list[tuple[str, Path]] = []
+            composed: list[tuple[str, dict, Path]] = []
 
             def fake_compose(template, variables, output):
-                composed.append((template.name, output))
+                composed.append((template.name, variables, output))
                 output.write_text(variables.get("body_html", variables.get("pane_src", variables.get("pane_html", ""))), encoding="utf-8")
 
             with mock.patch.object(MODULE, "compose", side_effect=fake_compose), \
@@ -113,13 +121,17 @@ class RenderTests(unittest.TestCase):
             self.assertEqual((payload["feature"], payload["host"], payload["platform"], payload["run_id"], payload["status"]),
                              (MODULE.FEATURE, MODULE.HOST, "linux", "20260908T162312Z", "PASS"))
             self.assertEqual(len(payload["cases"]), 7)
-            self.assertEqual([name for name, _ in composed],
+            self.assertEqual([name for name, _, _ in composed],
                              ["inbound-peer-pane.xhtml.j2", "inbound-peer-frame.html.j2", "inbound-peer-review.html.j2"])
-            self.assertEqual({p.name for _, p in composed},
+            self.assertEqual({p.name for _, _, p in composed},
                              {f"{MODULE.HOST}-{MODULE.FEATURE}.xhtml", f"{MODULE.FEATURE}.html", "index.html"})
             envelope = json.loads((out_dir / "smoke.envelope.json").read_text(encoding="utf-8"))
             self.assertEqual(envelope["report_html"], f"smoke/linux/{MODULE.HOST}/{out_dir.name}/index.html")
             self.assertEqual(envelope["status"], "PASS")
+            self.assertFalse((out_dir / "procedure.html").exists())
+            for name, variables, _output in composed:
+                if name in {"inbound-peer-frame.html.j2", "inbound-peer-review.html.j2"}:
+                    self.assertEqual(variables["procedure_href"], "")
             for name in ("result.txt", "report-1.txt", "herdr-doctor.json"):
                 self.assertEqual((out_dir / name).read_bytes(), (run_dir / name).read_bytes())
             index.assert_called_once()
