@@ -100,6 +100,12 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-13 — BB.7 documentation correction (BB7-OPENAPI-001):** The
+  OpenAPI documentation now describes the bare `ListOutcome` body returned by
+  `GET /messages` and the bare `ReadOutcome` body returned by
+  `POST /messages/inspect` and `POST /messages/read`. The HTTP API version is
+  unchanged because wire bytes and `HTTP_API_VERSION` are unchanged; this is
+  a patch-level documentation correction. PR: BB7-FIX-OPENAPI-1789276000.
 - **2026-09-12 — Phase BB.6:** `HTTP_API_VERSION` moves from `1.8.0` to
   `1.9.0`. The task-events list response gains the additive `handoffs`
   collection; it defaults to empty when omitted, and older consumers ignore

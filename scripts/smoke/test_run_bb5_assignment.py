@@ -92,3 +92,85 @@ class Bb5AssignmentRunnerTests(unittest.TestCase):
         ), mock.patch.object(RUNNER, "cleanup_tasks"):
             result = RUNNER.scenario_pending_ack("fixture", "20260913T000000Z")
         self.assertEqual(result["status"], "FAIL")
+
+    def test_scenario_three_assignments_reports_failure_on_bad_pane_state(self) -> None:
+        success = {"exit_code": 0, "stdout": "", "stderr": ""}
+        pane = {"exit_code": 0, "stdout": (
+            '<atm task="one" queued="1" message="queued" />\n'
+            '<atm task="two" queued="2" message="queued" />\n'
+            '<atm task="three" queued="3" message="queued" />\n'
+        ), "stderr": ""}
+        with mock.patch.object(RUNNER, "task_id", side_effect=lambda _run, suffix, _group: suffix), mock.patch.object(
+            RUNNER, "assign", return_value=success
+        ), mock.patch.object(RUNNER, "wait_for_pane", return_value=pane), mock.patch.object(RUNNER, "cleanup_tasks"):
+            result = RUNNER.scenario_three_assignments("fixture", "run")
+        self.assertEqual(result["status"], "FAIL")
+
+    def test_scenario_close_ready_reports_failure_on_missing_ready_line(self) -> None:
+        success = {"exit_code": 0, "stdout": "", "stderr": ""}
+        panes = [
+            {"exit_code": 0, "stdout": '<atm task="one" ready message="ready" />', "stderr": ""},
+            {"exit_code": 0, "stdout": '<atm task="two" message="queued" />', "stderr": ""},
+        ]
+        with mock.patch.object(RUNNER, "task_id", side_effect=lambda _run, suffix, _group: suffix), mock.patch.object(
+            RUNNER, "assign", return_value=success
+        ), mock.patch.object(RUNNER, "run_cli", return_value=success), mock.patch.object(
+            RUNNER, "wait_for_pane", side_effect=panes
+        ), mock.patch.object(RUNNER, "cleanup_tasks"), mock.patch.object(RUNNER, "drain_mailbox"):
+            result = RUNNER.scenario_close_ready("fixture", "run")
+        self.assertEqual(result["status"], "FAIL")
+
+    def test_scenario_reassign_reports_failure_on_bad_ledger_owner(self) -> None:
+        success = {"exit_code": 0, "stdout": "", "stderr": ""}
+        pane = {"exit_code": 0, "stdout": '<atm task="reassign" outcome="reassigned" />', "stderr": ""}
+        listing = {"exit_code": 0, "stdout": '{"rows":[{"task_id":"reassign","assignee":"tester","position":2}]}', "stderr": ""}
+        with mock.patch.object(RUNNER, "task_id", side_effect=lambda _run, suffix, _group: suffix), mock.patch.object(
+            RUNNER, "assign", return_value=success
+        ), mock.patch.object(RUNNER, "run_cli", side_effect=[success, listing]), mock.patch.object(
+            RUNNER, "wait_for_pane", side_effect=[pane, pane]
+        ), mock.patch.object(RUNNER, "cleanup_tasks"):
+            result = RUNNER.scenario_reassign("fixture", "run")
+        self.assertEqual(result["status"], "FAIL")
+
+    def test_scenario_move_head_reports_failure_on_bad_transition_line(self) -> None:
+        success = {"exit_code": 0, "stdout": "", "stderr": ""}
+        queue = {"exit_code": 0, "stdout": (
+            '<atm task="one" queued="1" />\n<atm task="two" queued="2" />\n<atm task="three" queued="3" />'
+        ), "stderr": ""}
+        bad_ready = {"exit_code": 0, "stdout": '<atm task="three" ready outcome="reassigned" />', "stderr": ""}
+        with mock.patch.object(RUNNER, "task_id", side_effect=lambda _run, suffix, _group: suffix), mock.patch.object(
+            RUNNER, "assign", return_value=success
+        ), mock.patch.object(RUNNER, "run_cli", return_value=success), mock.patch.object(
+            RUNNER, "wait_for_pane", side_effect=[queue, bad_ready]
+        ), mock.patch.object(RUNNER, "cleanup_tasks"):
+            result = RUNNER.scenario_move_head("fixture", "run")
+        self.assertEqual(result["status"], "FAIL")
+
+    def test_scenario_cancel_reports_failure_on_wrong_terminal_outcome(self) -> None:
+        success = {"exit_code": 0, "stdout": "", "stderr": ""}
+        bad_terminal = {"exit_code": 0, "stdout": '<atm task="cancel" outcome="completed" />', "stderr": ""}
+        with mock.patch.object(RUNNER, "task_id", side_effect=lambda _run, suffix, _group: suffix), mock.patch.object(
+            RUNNER, "assign", return_value=success
+        ), mock.patch.object(RUNNER, "close", return_value=success), mock.patch.object(
+            RUNNER, "wait_for_pane", return_value=bad_terminal
+        ), mock.patch.object(RUNNER, "drain_mailbox"):
+            result = RUNNER.scenario_cancel("fixture", "run")
+        self.assertEqual(result["status"], "FAIL")
+
+    def test_scenario_busy_assigner_reports_failure_on_missing_complete_notice(self) -> None:
+        success = {"exit_code": 0, "stdout": "", "stderr": ""}
+        mailbox = {"exit_code": 0, "stdout": '{"rows":[{"task_id":"busy","message_id":"msg-1"}]}', "stderr": ""}
+        notice = {"exit_code": 0, "stdout": '{"message":{"taskOp":{"op":"start"}}}', "stderr": ""}
+
+        def cli(_container: str, _identity: str, args: list[str]) -> dict[str, object]:
+            if args[:2] == ["list", "--json"]:
+                return mailbox
+            if args[:2] == ["read", "--message-id"]:
+                return notice
+            return success
+
+        with mock.patch.object(RUNNER, "task_id", side_effect=lambda _run, suffix, _group: suffix), mock.patch.object(
+            RUNNER, "run_cli", side_effect=cli
+        ), mock.patch.object(RUNNER, "cleanup_tasks"), mock.patch.object(RUNNER, "drain_mailbox"):
+            result = RUNNER.scenario_busy_assigner("fixture", "run")
+        self.assertEqual(result["status"], "FAIL")

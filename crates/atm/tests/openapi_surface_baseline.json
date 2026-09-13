@@ -133,7 +133,7 @@
         "responses": {
           "200": {
             "error": false,
-            "schema": "#/components/schemas/MessageList"
+            "schema": "#/components/schemas/ListOutcome"
           },
           "default": {
             "error": true,
@@ -163,7 +163,7 @@
         "responses": {
           "200": {
             "error": false,
-            "schema": "#/components/schemas/MessageList"
+            "schema": "#/components/schemas/ReadOutcome"
           },
           "default": {
             "error": true,
@@ -179,7 +179,7 @@
         "responses": {
           "200": {
             "error": false,
-            "schema": "#/components/schemas/MessageList"
+            "schema": "#/components/schemas/ReadOutcome"
           },
           "default": {
             "error": true,
@@ -286,6 +286,41 @@
         "history",
         "pending_ack",
         "unread"
+      ]
+    },
+    "ClassifiedMessage": {
+      "properties": [
+        "acknowledgedAt",
+        "acknowledgesMessageId",
+        "bucket",
+        "class",
+        "destinationChatId",
+        "expiresAt",
+        "from",
+        "message_id",
+        "parentMessageId",
+        "pendingAckAt",
+        "placement",
+        "read",
+        "requires_ack",
+        "sourceChatId",
+        "source_team",
+        "summary",
+        "taskComplete",
+        "taskId",
+        "taskOp",
+        "text",
+        "threadMode",
+        "timestamp"
+      ],
+      "required": [
+        "bucket",
+        "class",
+        "from",
+        "read",
+        "requires_ack",
+        "text",
+        "timestamp"
       ]
     },
     "ClearQuery": {
@@ -492,15 +527,6 @@
         "to"
       ]
     },
-    "MessageList": {
-      "properties": [
-        "cursor",
-        "messages"
-      ],
-      "required": [
-        "messages"
-      ]
-    },
     "PeekQuery": {
       "properties": [],
       "required": []
@@ -555,6 +581,32 @@
         "body",
         "kind",
         "msg_id"
+      ]
+    },
+    "ReadOutcome": {
+      "properties": [
+        "action",
+        "additional_match_count",
+        "agent",
+        "bucket_counts",
+        "count",
+        "match_count",
+        "message",
+        "mutation_applied",
+        "selected_message_id",
+        "selection_mode",
+        "team"
+      ],
+      "required": [
+        "action",
+        "additional_match_count",
+        "agent",
+        "bucket_counts",
+        "count",
+        "match_count",
+        "mutation_applied",
+        "selection_mode",
+        "team"
       ]
     },
     "ReadQuery": {
