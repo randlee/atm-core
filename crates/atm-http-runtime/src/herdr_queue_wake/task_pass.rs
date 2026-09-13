@@ -393,12 +393,21 @@ impl HerdrQueueWakePump {
             return;
         };
         match emitter
-            .emit_received_message(dispatch, herdr_request_deadline())
+            .emit_received_message(dispatch.clone(), herdr_request_deadline())
             .await
         {
             Ok(_) => {
                 self.record_task_outcome(&context, &row, now, ReminderOutcome::Emitted, stats)
-                    .await
+                    .await;
+                crate::prompt_handoff_record::record_prompt_handoff(
+                    &self.blocking_bridge,
+                    herdr_request_deadline(),
+                    Arc::clone(task_store),
+                    &dispatch,
+                    atm_core::boundary::PromptTrigger::TaskPass,
+                    now,
+                )
+                .await;
             }
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {

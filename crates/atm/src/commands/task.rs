@@ -18,8 +18,8 @@ use atm_core::task_query::{
 };
 use atm_core::types::{AgentName, TaskId, TeamName};
 use atm_storage::{
-    DAEMON_ACTOR_NAME, MoveTarget, RuntimeMemberState, TaskActor, TaskCloseOutcome, TaskEventRow,
-    TaskRow,
+    DAEMON_ACTOR_NAME, MoveTarget, PromptHandoff, RuntimeMemberState, TaskActor, TaskCloseOutcome,
+    TaskEventRow, TaskRow,
 };
 use chrono::SecondsFormat;
 use clap::{ArgGroup, Args, Subcommand, ValueEnum};
@@ -580,7 +580,7 @@ impl TaskEventsCommand {
         .with_task_ledger(ledger.clone());
         let outcome = composition.list(query).await?;
         let selected = select_task_events(outcome.task_event_rows, &contract);
-        let output = render_task_events(&selected.rows, self.json)?;
+        let output = render_task_events(&selected.rows, &outcome.handoffs, self.json)?;
         print_omitted_rows(selected.omitted);
         Ok(output)
     }
@@ -783,39 +783,93 @@ fn member_state_header(member: &AgentName, state: &str) -> String {
     format!("{member} (state: {state})")
 }
 
-fn render_task_events(rows: &[TaskEventRow], json: bool) -> Result<String> {
+fn render_task_events(
+    rows: &[TaskEventRow],
+    handoffs: &[PromptHandoff],
+    json: bool,
+) -> Result<String> {
     if json {
-        return Ok(format!("{}\n", serde_json::to_string_pretty(rows)?));
+        return Ok(format!(
+            "{}\n",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "events": rows,
+                "handoffs": handoffs,
+            }))?
+        ));
     }
     let mut output = String::from("seq at event from→to actor detail\n");
-    for row in rows {
-        let actor = match &row.actor {
-            TaskActor::Member(member) => member.as_str(),
-            TaskActor::Daemon => DAEMON_ACTOR_NAME,
-        };
-        let from = row.from_state.map_or("-", |state| state.as_str());
-        let to = row.to_state.map_or("-", |state| state.as_str());
-        let detail = row
-            .detail
-            .as_deref()
-            .or_else(|| row.marker.map(|marker| marker.as_str()))
-            .or_else(|| row.outcome.map(|outcome| outcome.as_str()))
-            .unwrap_or("-");
-        writeln!(
-            output,
-            "{} {} {} {}→{} {} {}",
-            row.seq,
-            row.at
-                .into_inner()
-                .to_rfc3339_opts(SecondsFormat::Secs, true),
-            row.event.as_str(),
-            from,
-            to,
-            actor,
-            detail,
-        )?;
+    let mut entries = rows
+        .iter()
+        .enumerate()
+        .map(|(rowid, row)| (row.at, 0_u8, rowid, TaskEventDisplay::Event(row)))
+        .chain(
+            handoffs
+                .iter()
+                .enumerate()
+                .map(|(rowid, row)| (row.at, 1_u8, rowid, TaskEventDisplay::Prompt(row))),
+        )
+        .collect::<Vec<_>>();
+    entries.sort_by_key(|(at, source, rowid, _)| (*at, *source, *rowid));
+    for (_, _, _, entry) in entries {
+        match entry {
+            TaskEventDisplay::Event(row) => render_task_event_line(&mut output, row)?,
+            TaskEventDisplay::Prompt(row) => render_prompt_handoff_line(&mut output, row)?,
+        }
     }
     Ok(output)
+}
+
+enum TaskEventDisplay<'a> {
+    Event(&'a TaskEventRow),
+    Prompt(&'a PromptHandoff),
+}
+
+fn render_task_event_line(output: &mut String, row: &TaskEventRow) -> Result<()> {
+    let actor = match &row.actor {
+        TaskActor::Member(member) => member.as_str(),
+        TaskActor::Daemon => DAEMON_ACTOR_NAME,
+    };
+    let from = row.from_state.map_or("-", |state| state.as_str());
+    let to = row.to_state.map_or("-", |state| state.as_str());
+    let detail = row
+        .detail
+        .as_deref()
+        .or_else(|| row.marker.map(|marker| marker.as_str()))
+        .or_else(|| row.outcome.map(|outcome| outcome.as_str()))
+        .unwrap_or("-");
+    writeln!(
+        output,
+        "{} {} {} {}→{} {} {}",
+        row.seq,
+        row.at
+            .into_inner()
+            .to_rfc3339_opts(SecondsFormat::Secs, true),
+        row.event.as_str(),
+        from,
+        to,
+        actor,
+        detail,
+    )?;
+    Ok(())
+}
+
+fn render_prompt_handoff_line(output: &mut String, row: &PromptHandoff) -> Result<()> {
+    let message_id = row
+        .message_key
+        .as_atm_message_id()
+        .map_or_else(|_| row.message_key.as_str().to_owned(), |id| id.to_string());
+    writeln!(
+        output,
+        "{}  prompt  {}  attempt={}  trigger={}  msg={}",
+        row.at
+            .into_inner()
+            .to_rfc3339_opts(SecondsFormat::Secs, true),
+        row.kind,
+        row.attempt,
+        row.trigger.as_str(),
+        message_id,
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]

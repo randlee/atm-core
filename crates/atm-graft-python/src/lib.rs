@@ -1005,6 +1005,7 @@ mod tests {
             rows: Vec::new(),
             task_rows: Vec::new(),
             task_event_rows: Vec::new(),
+            handoffs: Vec::new(),
             bucket_counts: BucketCounts {
                 unread: 2,
                 pending_ack: 3,

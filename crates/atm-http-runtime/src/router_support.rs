@@ -313,6 +313,10 @@ impl ControlPathSyncBridge {
         }
     }
 
+    pub(crate) fn blocking_bridge(&self) -> &BoundedBlockingBridge {
+        &self.bridge
+    }
+
     pub(crate) async fn run<T, F>(&self, deadline: RequestDeadline, job: F) -> Result<T, AtmError>
     where
         T: Send + 'static,

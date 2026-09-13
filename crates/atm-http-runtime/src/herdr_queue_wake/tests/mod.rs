@@ -16,7 +16,8 @@ use atm_core::ack::{AckRequest, ack_mail_with_runtime};
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
     AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-    PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
+    PostSendEmissionPath, PromptTrigger, ReadDeadline, RosterEntry, RosterHarness,
+    RosterMemberKind,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::NullObservability;
@@ -1297,8 +1298,8 @@ async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
         "only the fresh queue nudge is emitted"
     );
     // BB.5: the drain prompt still takes the member's prompt for this tick,
-    // but it no longer counts as a task reminder — `record_queue_prompt_reminders`
-    // is gone and the pass holds while mail is pending
+    // but it no longer counts as a task reminder; the retired queue-wide
+    // reminder recorder is gone and the pass holds while mail is pending
     // (herdr_task_disposition.rs:69).
     assert_eq!(pump.stats().task_reminders, 0);
 
@@ -1372,6 +1373,39 @@ async fn ax5_05_emitted_prompts_consume_budget_when_audit_writes_fail() {
 }
 
 #[tokio::test]
+async fn task_pass_records_handoff_with_kind_and_attempt() {
+    let (_root, _runtime, fake, pump, store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+
+    pump.tick_once().await;
+    *now.lock().expect("test clock lock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+
+    let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
+    let handoffs = atm_core::boundary::AsyncTaskLedgerReader::list_prompt_handoffs(
+        store.as_ref(),
+        keys[0].team().clone(),
+        task_id,
+        ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
+    )
+    .await
+    .expect("list task-pass handoffs");
+    assert_eq!(
+        handoffs.len(),
+        2,
+        "each successful prompt writes one handoff"
+    );
+    assert_eq!(handoffs[0].kind.as_str(), "task_ready");
+    assert_eq!(handoffs[0].attempt, 0);
+    assert_eq!(handoffs[0].trigger, PromptTrigger::TaskPass);
+    assert_eq!(handoffs[1].kind.as_str(), "task_reminder");
+    assert_eq!(handoffs[1].attempt, 1);
+    assert_eq!(handoffs[1].trigger, PromptTrigger::TaskPass);
+}
+
+#[tokio::test]
 async fn ax5_09_generic_emit_failure_counts_and_respects_cooldown() {
     let (_root, _runtime, fake, pump, store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
@@ -1413,6 +1447,25 @@ async fn ax5_09_generic_emit_failure_counts_and_respects_cooldown() {
     queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
     pump.tick_once().await;
     assert_eq!(prompt_texts(&fake).len(), 3, "durable reminder rate-limits");
+}
+
+#[tokio::test]
+async fn failed_task_pass_sink_records_no_handoff() {
+    let (_root, _runtime, fake, pump, store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    fake.queue_prompt_result(Err(atm_herdr::HerdrError::AgentPromptStalled));
+
+    pump.tick_once().await;
+
+    let handoffs = atm_core::boundary::AsyncTaskLedgerReader::list_prompt_handoffs(
+        store.as_ref(),
+        keys[0].team().clone(),
+        "AX5-TASK-00".parse().expect("task id"),
+        ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
+    )
+    .await
+    .expect("list failed task-pass handoffs");
+    assert!(handoffs.is_empty(), "a failed task-pass sink writes no row");
 }
 
 #[tokio::test]
@@ -1726,8 +1779,8 @@ async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
     // item is open, so the tick emits exactly one prompt.
     pump.tick_once().await;
     assert_eq!(pump.stats().prompted, 1);
-    // BB.5: a drained queue prompt never records a reminder against the task
-    // (`record_queue_prompt_reminders` was deleted from task_pass.rs).
+    // BB.5: a drained queue prompt never records a reminder against the task;
+    // the retired queue-wide recorder was deleted from task_pass.rs.
     assert_eq!(pump.stats().task_reminders, 0, "drain counts no reminder");
     close_message(root.path(), &runtime, &key, queue_message_id);
 
