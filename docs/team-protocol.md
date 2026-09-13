@@ -124,7 +124,7 @@ not a sender-local path.
 
 ## Notes
 
-- If blocked, send an immediate ack plus blocker status.
+- If blocked, start the task anyway with the blocker in the start line (`atm task start <task-id> "blocked: <why>"`), or close it `refused` with the reason; never leave a task-linked message unanswered.
 - If work will take time, send periodic progress updates.
 - Prefer concise, explicit messages with branch/commit/test context when relevant.
 - For daemon smoke or recovery, use
