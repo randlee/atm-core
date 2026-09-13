@@ -19,12 +19,13 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: add the same is_file() existence check used by report_runtime.py::resolve_procedure_page() to generate_report_index.py::resolve_procedures() (lines 224-239), plus a unit test for a manifest entry pointing at a missing HTML file. Dispatched to cipher as BB3-FIX-R6-1789277000, branch fix/bb3-qa5-r6 cut from cipher's BB7 head 35e135673 (stack layer 15 above PR #1467)." ;
+  triage:deferredNote "Fix: add the same is_file() existence check used by report_runtime.py::resolve_procedure_page() to generate_report_index.py::resolve_procedures() (lines 224-239), plus a unit test for a manifest entry pointing at a missing HTML file. Dispatched to cipher as BB3-FIX-R6-1789277000, branch fix/bb3-qa5-r6 cut from cipher's BB7 head 35e135673 (stack layer 15 above PR #1467). R6 complete and self-validated by cipher (2026-09-13T02:12:58Z) at final merge head f23d87928 (BB7 b56b35ba7 an ancestor); smoke fast 8/8, evidence archived outside the tree. Fixed-pending-QA at f23d87928." ;
   triage:relatedFinding "BB3-013" ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB3-027/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-027/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB3-027/1>
   a triage:Occurrence ;
@@ -43,3 +44,21 @@
   triage:branch "fix/bb3-qa4-r5" ;
   triage:headSha "5da523f81" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB3-027/2>
+  a triage:Occurrence ;
+  triage:file ".just/generate_report_index.py" ;
+  triage:line 224 ;
+  triage:snippet "BB3-FIX-R6 complete and self-validated by cipher; fixed-pending-QA at final merge head f23d87928" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-027/2> .
+
+<urn:atm:triage:worktree/BB3-027/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa5-r6" ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:orderIndex 2 .
