@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 branch: feature/bb1-transition-templates
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb1-transition-templates
 ---

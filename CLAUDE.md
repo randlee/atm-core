@@ -236,6 +236,7 @@ atm inbox
 | List teams | `atm teams` |
 | Team members | `atm members` |
 | Assign or reassign a task | `atm task assign <agent> [message source] [--task-id <id>] [--before <other-id> \| --head]` |
+| Start a task | `atm task start <task-id> [message]` |
 | Close a task | `atm task close <task-id> <completed\|refused\|cancelled> [reason or report source]` |
 | Reorder a queued task | `atm task move <task-id> --before <other-id> \| --head \| --end` |
 | List open tasks | `atm task list [--all]` |

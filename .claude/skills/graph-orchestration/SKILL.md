@@ -554,7 +554,7 @@ QA assignment uses the existing `quality-mgr` prompt directly — no new templat
 
 ## Required Message Sequence
 
-The sequence for every ATM task assignment — ack, work, task close; the
+The sequence for every ATM task assignment — start, work, task close; the
 receiver never acks a close — is defined once in
 [`docs/team-protocol.md`](../../../docs/team-protocol.md) (Required Flow).
 This skill adds nothing to it and restates none of it.

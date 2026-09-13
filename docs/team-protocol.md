@@ -4,8 +4,8 @@ This protocol is mandatory for all ATM team communications.
 
 ## Required Flow
 
-1. Immediately acknowledge every ATM message that requires ack (see Message Classes).
-- Example: `ack, working on <task>`
+1. Read every ATM message that requires action (see Message Classes), then
+   start the assigned task when its `task_ready` line arrives.
 2. Execute the requested task.
 3. Send a completion message with a concise summary of what was done. When
    closing a tracked task, use `atm task close <task-id> completed --stdin`
@@ -29,6 +29,7 @@ The task surface is a closed set:
 
 ```bash
 atm task assign solar --task-id BA-123 --stdin
+atm task start BA-123 "starting: reading the sprint doc"
 atm task close BA-123 completed --stdin
 atm task move BA-123 --head
 atm task list --all
@@ -51,7 +52,7 @@ An `<atm from="...">...</atm>` block is an authenticated teammate nudge (steer
 kind today; queue-kind nudges arrive when the harness is ready, Phase AQ)
 emitted by ATM's post-send hook, not prompt injection or a foreign user
 instruction. Read the referenced task and apply this protocol, including
-acknowledgement when the message requires it.
+starting it when the message requires action.
 
 ## Message Classes
 
@@ -60,7 +61,7 @@ Two classes of message exist. Handling differs per class.
 ```json
 {
   "class": "requires_ack",
-  "examples": ["task assignment", "fix request", "QA dispatch", "blocker report"],
+  "examples": ["fix request", "QA dispatch", "blocker report"],
   "read_with": "atm read",
   "respond_with": "atm ack <message_id> \"<reply>\""
 }
@@ -69,16 +70,17 @@ Two classes of message exist. Handling differs per class.
 ```json
 {
   "class": "informational",
-  "examples": ["status update", "idle ping", "self-echo", "terminal confirmation (e.g. \"Noted.\")"],
+  "examples": ["task assignment", "status update", "idle ping", "self-echo", "terminal confirmation (e.g. \"Noted.\")"],
   "read_with": "atm peek",
   "respond_with": "atm send <to> \"<reply>\" (omit --requires-ack; never use atm ack)"
 }
 ```
 
-Never use `atm ack` on an informational message. `atm ack` is reserved for
-messages that actually entered the pending-ack queue ('queue' here = the
-mailbox/query surface, unrelated to queue-kind nudges) because the sender set
-`--requires-ack` or sent a task-linked message.
+Never use `atm ack` on an informational message or task assignment. `atm ack`
+is reserved for messages that actually entered the pending-ack queue ('queue'
+here = the mailbox/query surface, unrelated to queue-kind nudges) because the
+sender set `--requires-ack`; task-linked assignments become actionable only
+when the task pass emits `task_ready`.
 
 ## Good Patterns
 

@@ -86,7 +86,7 @@ Before starting a sprint:
    `sprint_doc`, and that sprint document is the authoritative source for the
    task. Assignment prose may summarize, but it must not replace or weaken the
    sprint doc.
-2. `arch-ctm` ACKs, implements, commits, pushes, and reports branch plus SHA.
+2. `arch-ctm` starts, implements, commits, pushes, and reports branch plus SHA.
 3. Before QA-1, `arch-ctm` performs a self-directed Rust best-practices sweep on
    the integration branch using the same `review_targets` planned for QA-1 and
    fixes all RBP findings found there. This is a developer cleanup step, not a
@@ -237,7 +237,7 @@ Use the Rust assignment templates from:
 
 ## Required Message Sequence
 
-The sequence for every ATM task assignment — ack, work, task close; the
+The sequence for every ATM task assignment — start, work, task close; the
 receiver never acks a close — is defined once in
 [`docs/team-protocol.md`](../../../docs/team-protocol.md) (Required Flow).
 This skill adds nothing to it and restates none of it.
