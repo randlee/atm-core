@@ -8,9 +8,6 @@ from urllib.parse import unquote, urlsplit
 import argparse
 import sys
 
-from lint_common import discover_repo_root
-
-
 LINK_ATTRIBUTES = {
     "a": "href",
     "iframe": "src",
@@ -126,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    repo_root = discover_repo_root(args.root)
+    repo_root = Path(args.root).resolve() if args.root else Path(__file__).resolve().parents[1]
     site_root = Path(args.site_root)
     if not site_root.is_absolute():
         site_root = repo_root / site_root
