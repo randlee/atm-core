@@ -1183,6 +1183,7 @@ pub(crate) mod tests {
     struct PromptHandoffErrorEvent {
         subsystem: String,
         action: String,
+        outcome: String,
         reason: String,
         message_id: String,
         kind: String,
@@ -1195,6 +1196,7 @@ pub(crate) mod tests {
     struct PromptHandoffErrorFields {
         subsystem: String,
         action: String,
+        outcome: String,
         reason: String,
         message_id: String,
         kind: String,
@@ -1208,6 +1210,7 @@ pub(crate) mod tests {
             match field.name() {
                 "subsystem" => self.subsystem = value.to_owned(),
                 "action" => self.action = value.to_owned(),
+                "outcome" => self.outcome = value.to_owned(),
                 "reason" => self.reason = value.to_owned(),
                 "message_id" => self.message_id = value.to_owned(),
                 "kind" => self.kind = value.to_owned(),
@@ -1243,6 +1246,7 @@ pub(crate) mod tests {
                 .push(PromptHandoffErrorEvent {
                     subsystem: fields.subsystem,
                     action: fields.action,
+                    outcome: fields.outcome,
                     reason: fields.reason,
                     message_id: fields.message_id,
                     kind: fields.kind,
@@ -2144,6 +2148,7 @@ pub(crate) mod tests {
         assert_eq!(events.len(), 1, "one structured handoff error is logged");
         assert_eq!(events[0].subsystem, "prompt_handoff");
         assert_eq!(events[0].action, "prompt_handoff_record_failed");
+        assert_eq!(events[0].outcome, "failed");
         assert_eq!(events[0].reason, reason.as_str());
         assert_eq!(events[0].message_id, dispatch.event.message_id.to_string());
         assert_eq!(events[0].kind, "task_ready");
