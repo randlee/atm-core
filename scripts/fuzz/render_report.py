@@ -247,7 +247,7 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
         root=ROOT,
         error_type=FuzzReportError,
     )
-    procedure_href = copy_procedure_page(procedure_page, report_dir, root=ROOT) or f"procedures/{procedure}/index.html"
+    procedure_href = copy_procedure_page(procedure_page, linking_page=report_html, copy_dir=report_dir, root=ROOT) or ""
     procedure_revision = procedure_page.revision if procedure_page is not None else None
     report_data: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,

@@ -16,7 +16,6 @@ import argparse
 from datetime import datetime, timezone
 from html import escape
 import json
-import os
 from pathlib import Path
 import re
 import shutil
@@ -95,7 +94,7 @@ def render(run_dir: Path, out_dir: Path) -> Path:
     report = out_dir / f"{FEATURE}.json"
     source_revision = _source_revision()
     procedure_page = _resolve_procedure_page(FEATURE, source_revision, root=REPO_ROOT, error_type=SmokeError)
-    procedure_href = copy_procedure_page(procedure_page, out_dir, root=REPO_ROOT) or f"procedures/{FEATURE}/index.html"
+    procedure_href = copy_procedure_page(procedure_page, linking_page=report, copy_dir=out_dir, root=REPO_ROOT) or ""
     procedure_revision = procedure_page.revision if procedure_page is not None else None
     payload = {"feature": FEATURE, "host": HOST, "platform": PLATFORM, "run_id": run_id, "status": status, "source_revision": source_revision, "cases": cases}
     report.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
