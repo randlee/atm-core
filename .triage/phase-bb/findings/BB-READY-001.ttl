@@ -16,23 +16,26 @@
   triage:source "solar, production-readiness review, report 01M2CQBTXJXD07KW4YHWDT8104" ;
   triage:repeatable false ;
   triage:sweepScope "CLAUDE.md (ATM CLI Quick Reference table); docs/project-plan.md (Sec 60 heading and BB.1/BB.2/BB.7 rows)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T06:37:00Z"^^xsd:dateTime ;
-  triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, filed as a new record (not an occurrence on the closed BB7-DOCS-NONDELIVERY-001) so the live table reflects the residual gap; correlated with that closed finding by reference only, same defect class. Fix dispatched by fenix: cipher, BB-READY-DOCS-FIX-1789281196, branch fix/bb-readiness-docs." ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, filed as a new record (not an occurrence on the closed BB7-DOCS-NONDELIVERY-001) so the live table reflects the residual gap; correlated with that closed finding by reference only, same defect class. Fix dispatched by fenix: cipher, BB-READY-DOCS-FIX-1789281196, branch fix/bb-readiness-docs. UPDATE (2026-09-13T06:49:41Z): quality-mgr BB-READY-DOCS-QA1-1789281981 (report 01M2CRE3BF102MXEE1P393H4YB, PR #1481) confirms FIXED at fix/bb-readiness-docs @ 774f55594 -- CLAUDE.md:238 task start row, :244-245 sole transition statement, :73 status; project-plan.md:1815 Sec 60 heading, :1834/:1835/:1840 rows merged with PR numbers. Independently confirmed by req-qa, arch-qa, and quality-mgr's own read in a fresh detached worktree. CLOSED." ;
   triage:foundIn triage:BB7 ;
   triage:foundAt "2026-09-13T06:37:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB-READY-001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB-READY-001/2> ;
-  triage:triageRecordVersion "1" .
+  triage:hasResolution <urn:atm:triage:resolution/BB-READY-001/1> ;
+  triage:closedAt "2026-09-13T06:49:41Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB-READY-001/1>
   a triage:Occurrence ;
   triage:file "CLAUDE.md" ;
   triage:line 229 ;
   triage:snippet "solar F1 residual: ATM CLI Quick Reference table (~:229-247) has no 'atm task start' row" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "c6a10a09f" ;
   triage:occursIn <urn:atm:triage:worktree/BB-READY-001/1> .
@@ -49,8 +52,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1815 ;
   triage:snippet "solar F1 residual: Sec 60 heading (~:1815) still '[PLANNED - plan PR #1432, plan QA round 2 pending]'; BB.1/BB.2/BB.7 rows (~:1827-1833) still show 'planned'" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "c6a10a09f" ;
   triage:occursIn <urn:atm:triage:worktree/BB-READY-001/2> .
@@ -61,3 +64,48 @@
   triage:branch "feature/bb7-docs" ;
   triage:headSha "c6a10a09f" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB-READY-001/3>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 238 ;
+  triage:snippet "quality-mgr BB-READY-DOCS-QA1-1789281981 (report 01M2CRE3BF102MXEE1P393H4YB, PR #1481): task start row added at :238, sole transition statement at :244-245, status at :73; verified by req-qa and arch-qa" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb-readiness-docs" ;
+  triage:headSha "774f55594" ;
+  triage:occursIn <urn:atm:triage:worktree/BB-READY-001/3> .
+
+<urn:atm:triage:worktree/BB-READY-001/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1481, fix/bb-readiness-docs" ;
+  triage:branch "fix/bb-readiness-docs" ;
+  triage:headSha "774f55594" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/BB-READY-001/4>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1815 ;
+  triage:snippet "quality-mgr BB-READY-DOCS-QA1-1789281981 (report 01M2CRE3BF102MXEE1P393H4YB, PR #1481): Sec 60 heading fixed at :1815; BB.1/BB.2/BB.7 rows :1834/:1835/:1840 merged with PR numbers" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb-readiness-docs" ;
+  triage:headSha "774f55594" ;
+  triage:occursIn <urn:atm:triage:worktree/BB-READY-001/4> .
+
+<urn:atm:triage:worktree/BB-READY-001/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1481, fix/bb-readiness-docs" ;
+  triage:branch "fix/bb-readiness-docs" ;
+  triage:headSha "774f55594" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:resolution/BB-READY-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T06:49:41Z"^^xsd:dateTime ;
+  triage:fixCommit "774f55594" ;
+  triage:fixBranch "fix/bb-readiness-docs" ;
+  triage:verifiedInRound "BB-READY-DOCS-QA1-1789281981" ;
+  triage:resolutionNote "quality-mgr BB-READY-DOCS-QA1-1789281981 Final Quality Report (report 01M2CRE3BF102MXEE1P393H4YB, PR #1481). CLAUDE.md:238 task start row, :244-245 sole transition statement, :73 status; project-plan.md:1815 Sec 60 heading, :1834/:1835/:1840 rows merged with PR numbers. Independently confirmed by req-qa, arch-qa, and quality-mgr's own read in a fresh detached worktree stacked on the already-QA4-PASS feature/bb7-docs head." .
