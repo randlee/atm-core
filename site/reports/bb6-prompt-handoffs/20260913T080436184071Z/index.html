@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>BB.6 prompt-handoff colima evidence</title>
+<style>body{font:16px system-ui,sans-serif;max-width:80rem;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:.5rem;text-align:left}.pass{color:#176b2c}.fail{color:#a00}pre{white-space:pre-wrap;max-height:30rem;overflow:auto;background:#f5f5f5;padding:1rem}</style></head>
+<body><h1>BB.6 prompt-handoff colima evidence</h1>
+<p>Status: <strong>PASS</strong>; source revision: <code>5f2b1bb3d0820dce5aaedf02a5d047379186740e</code></p>
+<p>Container: <code>hermes-testbed-bb-1517-bb6</code>; image: <code>sha256:a5bf8c79a74f8cedb32d646a86b22ced5e8cb766ecbe60bff5d294b0239f93b5</code></p>
+<p>Acceptance count: handoffs=11, task-linked terminal lines=11, record failures=0.</p>
+<table><thead><tr><th>Status</th><th>Scenario</th><th>Expectation</th></tr></thead><tbody><tr class="pass"><td>PASS</td><td>task_events_shows_ready_reminders_and_started_for_prompted_task_only</td><td>task one alone has ready, reminder, and started evidence</td></tr><tr class="pass"><td>PASS</td><td>disabled_task_reminder_override_yields_no_handoff_and_doctor_finding</td><td>disabled task_reminder emits no reminder handoff and doctor reports the override</td></tr></tbody></table>
+<h2>Machine-readable transcript</h2><pre>{
+  &quot;feature&quot;: &quot;bb6-prompt-handoffs&quot;,
+  &quot;generated_at&quot;: &quot;2026-09-13T08:04:36.184252Z&quot;,
+  &quot;source_revision&quot;: &quot;5f2b1bb3d0820dce5aaedf02a5d047379186740e&quot;,
+  &quot;container&quot;: &quot;hermes-testbed-bb-1517-bb6&quot;,
+  &quot;image&quot;: {
+    &quot;container&quot;: &quot;hermes-testbed-bb-1517-bb6&quot;,
+    &quot;image_id&quot;: &quot;sha256:a5bf8c79a74f8cedb32d646a86b22ced5e8cb766ecbe60bff5d294b0239f93b5&quot;,
+    &quot;image_sha256&quot;: &quot;sha256:a5bf8c79a74f8cedb32d646a86b22ced5e8cb766ecbe60bff5d294b0239f93b5&quot;,
+    &quot;image_architecture&quot;: &quot;arm64&quot;,
+    &quot;image_repo_tags&quot;: [
+      &quot;loki/hermes-testbed:bb-1517-5f2b1bb3d&quot;,
+      &quot;loki/hermes-testbed:testbed&quot;
+    ]
+  },
+  &quot;cases&quot;: [
+    {
+      &quot;name&quot;: &quot;task_events_shows_ready_reminders_and_started_for_prompted_task_only&quot;,
+      &quot;status&quot;: &quot;PASS&quot;,
+      &quot;detail&quot;: &quot;task one alone has ready, reminder, and started evidence&quot;,
+      &quot;task_ids&quot;: [
+        &quot;BB6-T080436184252Z-events-one&quot;,
+        &quot;BB6-T080436184252Z-events-two&quot;,
+        &quot;BB6-T080436184252Z-events-three&quot;
+      ],
+      &quot;commands&quot;: [
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task assign tester --task-id BB6-T080436184252Z-events-one --team testbed BB6 prompt handoff 1&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;assigned BB6-T080436184252Z-events-one to tester\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task assign tester --task-id BB6-T080436184252Z-events-two --team testbed BB6 prompt handoff 2&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;assigned BB6-T080436184252Z-events-two to tester\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task assign tester --task-id BB6-T080436184252Z-events-three --team testbed BB6 prompt handoff 3&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;assigned BB6-T080436184252Z-events-three to tester\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task start BB6-T080436184252Z-events-one --team testbed BB6 prompted task started&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;started BB6-T080436184252Z-events-one\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task events BB6-T080436184252Z-events-one --team testbed --json&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;{\n  \&quot;events\&quot;: [\n    {\n      \&quot;actor\&quot;: {\n        \&quot;member\&quot;: \&quot;stub-alpha\&quot;\n      },\n      \&quot;assignee\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:04:36.275715714Z\&quot;,\n      \&quot;event\&quot;: \&quot;assigned\&quot;,\n      \&quot;message_id\&quot;: \&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;,\n      \&quot;seq\&quot;: 1,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;to_state\&quot;: \&quot;assigned\&quot;\n    },\n    {\n      \&quot;actor\&quot;: \&quot;daemon\&quot;,\n      \&quot;assignee\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:04:37.085368515Z\&quot;,\n      \&quot;event\&quot;: \&quot;reminded\&quot;,\n      \&quot;from_state\&quot;: \&quot;assigned\&quot;,\n      \&quot;outcome\&quot;: \&quot;emitted\&quot;,\n      \&quot;seq\&quot;: 2,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;to_state\&quot;: \&quot;assigned\&quot;\n    },\n    {\n      \&quot;actor\&quot;: \&quot;daemon\&quot;,\n      \&quot;assignee\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:05:37.086911513Z\&quot;,\n      \&quot;event\&quot;: \&quot;reminded\&quot;,\n      \&quot;from_state\&quot;: \&quot;assigned\&quot;,\n      \&quot;outcome\&quot;: \&quot;emitted\&quot;,\n      \&quot;seq\&quot;: 3,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;to_state\&quot;: \&quot;assigned\&quot;\n    },\n    {\n      \&quot;actor\&quot;: {\n        \&quot;member\&quot;: \&quot;tester\&quot;\n      },\n      \&quot;assignee\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:05:37.468109799Z\&quot;,\n      \&quot;event\&quot;: \&quot;started\&quot;,\n      \&quot;from_state\&quot;: \&quot;assigned\&quot;,\n      \&quot;message_id\&quot;: \&quot;01M2CWSSHWENZPEB3YGK1BFNP5\&quot;,\n      \&quot;seq\&quot;: 4,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;to_state\&quot;: \&quot;active\&quot;\n    }\n  ],\n  \&quot;handoffs\&quot;: [\n    {\n      \&quot;agent\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:04:36.275Z\&quot;,\n      \&quot;attempt\&quot;: 0,\n      \&quot;kind\&quot;: \&quot;task_queued\&quot;,\n      \&quot;message_key\&quot;: \&quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;trigger\&quot;: \&quot;steer\&quot;\n    },\n    {\n      \&quot;agent\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:04:37.085368515Z\&quot;,\n      \&quot;attempt\&quot;: 0,\n      \&quot;kind\&quot;: \&quot;task_ready\&quot;,\n      \&quot;message_key\&quot;: \&quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;trigger\&quot;: \&quot;task_pass\&quot;\n    },\n    {\n      \&quot;agent\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:05:37.086911513Z\&quot;,\n      \&quot;attempt\&quot;: 1,\n      \&quot;kind\&quot;: \&quot;task_reminder\&quot;,\n      \&quot;message_key\&quot;: \&quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;trigger\&quot;: \&quot;task_pass\&quot;\n    },\n    {\n      \&quot;agent\&quot;: \&quot;stub-alpha\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:05:37.468Z\&quot;,\n      \&quot;attempt\&quot;: 0,\n      \&quot;kind\&quot;: \&quot;task_started\&quot;,\n      \&quot;message_key\&quot;: \&quot;atm:01M2CWSSHWENZPEB3YGK1BFNP5\&quot;,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;trigger\&quot;: \&quot;steer\&quot;\n    }\n  ]\n}\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task events BB6-T080436184252Z-events-two --team testbed --json&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;{\n  \&quot;events\&quot;: [\n    {\n      \&quot;actor\&quot;: {\n        \&quot;member\&quot;: \&quot;stub-alpha\&quot;\n      },\n      \&quot;assignee\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:04:36.310875834Z\&quot;,\n      \&quot;event\&quot;: \&quot;assigned\&quot;,\n      \&quot;message_id\&quot;: \&quot;01M2CWQXTPC4NPJ2SN3WDA3J9K\&quot;,\n      \&quot;seq\&quot;: 1,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-two\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;to_state\&quot;: \&quot;assigned\&quot;\n    }\n  ],\n  \&quot;handoffs\&quot;: [\n    {\n      \&quot;agent\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:04:36.310Z\&quot;,\n      \&quot;attempt\&quot;: 0,\n      \&quot;kind\&quot;: \&quot;task_queued\&quot;,\n      \&quot;message_key\&quot;: \&quot;atm:01M2CWQXTPC4NPJ2SN3WDA3J9K\&quot;,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-two\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;trigger\&quot;: \&quot;steer\&quot;\n    }\n  ]\n}\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task events BB6-T080436184252Z-events-three --team testbed --json&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;{\n  \&quot;events\&quot;: [\n    {\n      \&quot;actor\&quot;: {\n        \&quot;member\&quot;: \&quot;stub-alpha\&quot;\n      },\n      \&quot;assignee\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:04:36.343772740Z\&quot;,\n      \&quot;event\&quot;: \&quot;assigned\&quot;,\n      \&quot;message_id\&quot;: \&quot;01M2CWQXVQP0XJWC9AM4D3RJX8\&quot;,\n      \&quot;seq\&quot;: 1,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-three\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;to_state\&quot;: \&quot;assigned\&quot;\n    }\n  ],\n  \&quot;handoffs\&quot;: [\n    {\n      \&quot;agent\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:04:36.343Z\&quot;,\n      \&quot;attempt\&quot;: 0,\n      \&quot;kind\&quot;: \&quot;task_queued\&quot;,\n      \&quot;message_key\&quot;: \&quot;atm:01M2CWQXVQP0XJWC9AM4D3RJX8\&quot;,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-events-three\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;trigger\&quot;: \&quot;steer\&quot;\n    }\n  ]\n}\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        }
+      ],
+      &quot;observed&quot;: {
+        &quot;handoff_kinds_by_task&quot;: {
+          &quot;BB6-T080436184252Z-events-one&quot;: [
+            &quot;task_queued&quot;,
+            &quot;task_ready&quot;,
+            &quot;task_reminder&quot;,
+            &quot;task_started&quot;
+          ],
+          &quot;BB6-T080436184252Z-events-two&quot;: [
+            &quot;task_queued&quot;
+          ],
+          &quot;BB6-T080436184252Z-events-three&quot;: [
+            &quot;task_queued&quot;
+          ]
+        },
+        &quot;event_names_by_task&quot;: {
+          &quot;BB6-T080436184252Z-events-one&quot;: [
+            &quot;assigned&quot;,
+            &quot;reminded&quot;,
+            &quot;reminded&quot;,
+            &quot;started&quot;
+          ],
+          &quot;BB6-T080436184252Z-events-two&quot;: [
+            &quot;assigned&quot;
+          ],
+          &quot;BB6-T080436184252Z-events-three&quot;: [
+            &quot;assigned&quot;
+          ]
+        },
+        &quot;task_blocks&quot;: {
+          &quot;BB6-T080436184252Z-events-one&quot;: [
+            &quot;&lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;,
+            &quot;&lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  ready message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWQXSK7G1ZBX1W65EJFKD8&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB6-T080436184252Z-events-one&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;&quot;,
+            &quot;&lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  reminder=\&quot;1\&quot;\n  message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWQXSK7G1ZBX1W65EJFKD8&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB6-T080436184252Z-events-one&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;&quot;
+          ],
+          &quot;BB6-T080436184252Z-events-two&quot;: [
+            &quot;&lt;atm\n  task=\&quot;BB6-T080436184252Z-events-two\&quot;\n  queued=\&quot;2\&quot;\n  message=\&quot;01M2CWQXTPC4NPJ2SN3WDA3J9K\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;
+          ],
+          &quot;BB6-T080436184252Z-events-three&quot;: [
+            &quot;&lt;atm\n  task=\&quot;BB6-T080436184252Z-events-three\&quot;\n  queued=\&quot;3\&quot;\n  message=\&quot;01M2CWQXVQP0XJWC9AM4D3RJX8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;
+          ]
+        },
+        &quot;observed_interval&quot;: 59.615639709008974,
+        &quot;task_event_payloads&quot;: {
+          &quot;BB6-T080436184252Z-events-one&quot;: {
+            &quot;events&quot;: [
+              {
+                &quot;actor&quot;: {
+                  &quot;member&quot;: &quot;stub-alpha&quot;
+                },
+                &quot;assignee&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:04:36.275715714Z&quot;,
+                &quot;event&quot;: &quot;assigned&quot;,
+                &quot;message_id&quot;: &quot;01M2CWQXSK7G1ZBX1W65EJFKD8&quot;,
+                &quot;seq&quot;: 1,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;to_state&quot;: &quot;assigned&quot;
+              },
+              {
+                &quot;actor&quot;: &quot;daemon&quot;,
+                &quot;assignee&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:04:37.085368515Z&quot;,
+                &quot;event&quot;: &quot;reminded&quot;,
+                &quot;from_state&quot;: &quot;assigned&quot;,
+                &quot;outcome&quot;: &quot;emitted&quot;,
+                &quot;seq&quot;: 2,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;to_state&quot;: &quot;assigned&quot;
+              },
+              {
+                &quot;actor&quot;: &quot;daemon&quot;,
+                &quot;assignee&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:05:37.086911513Z&quot;,
+                &quot;event&quot;: &quot;reminded&quot;,
+                &quot;from_state&quot;: &quot;assigned&quot;,
+                &quot;outcome&quot;: &quot;emitted&quot;,
+                &quot;seq&quot;: 3,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;to_state&quot;: &quot;assigned&quot;
+              },
+              {
+                &quot;actor&quot;: {
+                  &quot;member&quot;: &quot;tester&quot;
+                },
+                &quot;assignee&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:05:37.468109799Z&quot;,
+                &quot;event&quot;: &quot;started&quot;,
+                &quot;from_state&quot;: &quot;assigned&quot;,
+                &quot;message_id&quot;: &quot;01M2CWSSHWENZPEB3YGK1BFNP5&quot;,
+                &quot;seq&quot;: 4,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;to_state&quot;: &quot;active&quot;
+              }
+            ],
+            &quot;handoffs&quot;: [
+              {
+                &quot;agent&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:04:36.275Z&quot;,
+                &quot;attempt&quot;: 0,
+                &quot;kind&quot;: &quot;task_queued&quot;,
+                &quot;message_key&quot;: &quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8&quot;,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;trigger&quot;: &quot;steer&quot;
+              },
+              {
+                &quot;agent&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:04:37.085368515Z&quot;,
+                &quot;attempt&quot;: 0,
+                &quot;kind&quot;: &quot;task_ready&quot;,
+                &quot;message_key&quot;: &quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8&quot;,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;trigger&quot;: &quot;task_pass&quot;
+              },
+              {
+                &quot;agent&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:05:37.086911513Z&quot;,
+                &quot;attempt&quot;: 1,
+                &quot;kind&quot;: &quot;task_reminder&quot;,
+                &quot;message_key&quot;: &quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8&quot;,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;trigger&quot;: &quot;task_pass&quot;
+              },
+              {
+                &quot;agent&quot;: &quot;stub-alpha&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:05:37.468Z&quot;,
+                &quot;attempt&quot;: 0,
+                &quot;kind&quot;: &quot;task_started&quot;,
+                &quot;message_key&quot;: &quot;atm:01M2CWSSHWENZPEB3YGK1BFNP5&quot;,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;trigger&quot;: &quot;steer&quot;
+              }
+            ]
+          },
+          &quot;BB6-T080436184252Z-events-two&quot;: {
+            &quot;events&quot;: [
+              {
+                &quot;actor&quot;: {
+                  &quot;member&quot;: &quot;stub-alpha&quot;
+                },
+                &quot;assignee&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:04:36.310875834Z&quot;,
+                &quot;event&quot;: &quot;assigned&quot;,
+                &quot;message_id&quot;: &quot;01M2CWQXTPC4NPJ2SN3WDA3J9K&quot;,
+                &quot;seq&quot;: 1,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-two&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;to_state&quot;: &quot;assigned&quot;
+              }
+            ],
+            &quot;handoffs&quot;: [
+              {
+                &quot;agent&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:04:36.310Z&quot;,
+                &quot;attempt&quot;: 0,
+                &quot;kind&quot;: &quot;task_queued&quot;,
+                &quot;message_key&quot;: &quot;atm:01M2CWQXTPC4NPJ2SN3WDA3J9K&quot;,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-two&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;trigger&quot;: &quot;steer&quot;
+              }
+            ]
+          },
+          &quot;BB6-T080436184252Z-events-three&quot;: {
+            &quot;events&quot;: [
+              {
+                &quot;actor&quot;: {
+                  &quot;member&quot;: &quot;stub-alpha&quot;
+                },
+                &quot;assignee&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:04:36.343772740Z&quot;,
+                &quot;event&quot;: &quot;assigned&quot;,
+                &quot;message_id&quot;: &quot;01M2CWQXVQP0XJWC9AM4D3RJX8&quot;,
+                &quot;seq&quot;: 1,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-three&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;to_state&quot;: &quot;assigned&quot;
+              }
+            ],
+            &quot;handoffs&quot;: [
+              {
+                &quot;agent&quot;: &quot;tester&quot;,
+                &quot;at&quot;: &quot;2026-09-13T08:04:36.343Z&quot;,
+                &quot;attempt&quot;: 0,
+                &quot;kind&quot;: &quot;task_queued&quot;,
+                &quot;message_key&quot;: &quot;atm:01M2CWQXVQP0XJWC9AM4D3RJX8&quot;,
+                &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-three&quot;,
+                &quot;team&quot;: &quot;testbed&quot;,
+                &quot;trigger&quot;: &quot;steer&quot;
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      &quot;name&quot;: &quot;disabled_task_reminder_override_yields_no_handoff_and_doctor_finding&quot;,
+      &quot;status&quot;: &quot;PASS&quot;,
+      &quot;detail&quot;: &quot;disabled task_reminder emits no reminder handoff and doctor reports the override&quot;,
+      &quot;task_ids&quot;: [
+        &quot;BB6-T080436184252Z-disabled-reminder&quot;
+      ],
+      &quot;commands&quot;: [
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm teams disable-nudge-template --team testbed --kind task_reminder --json&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;{\n  \&quot;action\&quot;: \&quot;disable-nudge-template\&quot;,\n  \&quot;team\&quot;: \&quot;testbed\&quot;,\n  \&quot;kind\&quot;: \&quot;task_reminder\&quot;,\n  \&quot;updated_at\&quot;: \&quot;2026-09-13T08:05:37.688195815Z\&quot;\n}\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task assign tester --task-id BB6-T080436184252Z-disabled-reminder --team testbed BB6 disabled reminder&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;assigned BB6-T080436184252Z-disabled-reminder to tester\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec hermes-testbed-bb-1517-bb6 herdr pane read w1:p3 --source recent-unwrapped --lines 800&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;# cd /opt/testbed; export ATM_IDENTITY=tester; export ATM_TEAM=testbed; /opt/testbed/harness/run-tester.sh\n \u2590\u259b\u2588\u2588\u2588\u259b\u2588   Claude Code v2.1.270\n\u259d\u259c\u2588\u2588\u2588\u2588\u2588\u2588\u2580  Haiku 4.5 \u00b7 API Usage Billing\n  \u259d\u259d \u259d\u259d    /opt/testbed\n\n\n\u276f &lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&lt;atm\n  task=\&quot;BB6-T080436184252Z-events-two\&quot;\n  queued=\&quot;2\&quot;\n  message=\&quot;01M2CWQXTPC4NPJ2SN3WDA3J9K\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&lt;atm\n  task=\&quot;BB6-T080436184252Z-events-three\&quot;\n  queued=\&quot;3\&quot;\n  message=\&quot;01M2CWQXVQP0XJWC9AM4D3RJX8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Saut\u00e9ed for 0s \u00b7 done 8:04 AM\n\n\u276f &lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  ready message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWQXSK7G1ZBX1W65EJFKD8&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB6-T080436184252Z-events-one&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;\n  &lt;/atm&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Crunched for 0s \u00b7 done 8:04 AM\n\n\u276f &lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  reminder=\&quot;1\&quot;\n  message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWQXSK7G1ZBX1W65EJFKD8&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB6-T080436184252Z-events-one&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;\n  &lt;/atm&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Worked for 0s \u00b7 done 8:05 AM\n\n\u276f &lt;atm\n  task=\&quot;BB6-T080436184252Z-disabled-reminder\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Cooked for 0s \u00b7 done 8:05 AM\n\n\u276f &lt;atm\n  task=\&quot;BB6-T080436184252Z-disabled-reminder\&quot;\n  ready message=\&quot;01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWSSSQAM9RPJZNY1GDVTBP&lt;/action&gt;\n    &lt;action&gt;atm task start BB6-T080436184252Z-\n  disabled-reminder&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;\n  &lt;/atm&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Cooked for 0s \u00b7 done 8:05 AM\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\u276f\u00a0\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  paste again to expand\n                   Not logged in \u00b7 Run /login&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec hermes-testbed-bb-1517-bb6 herdr pane read w1:p3 --source recent-unwrapped --lines 800&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;# cd /opt/testbed; export ATM_IDENTITY=tester; export ATM_TEAM=testbed; /opt/testbed/harness/run-tester.sh\n \u2590\u259b\u2588\u2588\u2588\u259b\u2588   Claude Code v2.1.270\n\u259d\u259c\u2588\u2588\u2588\u2588\u2588\u2588\u2580  Haiku 4.5 \u00b7 API Usage Billing\n  \u259d\u259d \u259d\u259d    /opt/testbed\n\n\n\u276f &lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&lt;atm\n  task=\&quot;BB6-T080436184252Z-events-two\&quot;\n  queued=\&quot;2\&quot;\n  message=\&quot;01M2CWQXTPC4NPJ2SN3WDA3J9K\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&lt;atm\n  task=\&quot;BB6-T080436184252Z-events-three\&quot;\n  queued=\&quot;3\&quot;\n  message=\&quot;01M2CWQXVQP0XJWC9AM4D3RJX8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Saut\u00e9ed for 0s \u00b7 done 8:04 AM\n\n\u276f &lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  ready message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWQXSK7G1ZBX1W65EJFKD8&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB6-T080436184252Z-events-one&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;\n  &lt;/atm&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Crunched for 0s \u00b7 done 8:04 AM\n\n\u276f &lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  reminder=\&quot;1\&quot;\n  message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWQXSK7G1ZBX1W65EJFKD8&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB6-T080436184252Z-events-one&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;\n  &lt;/atm&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Worked for 0s \u00b7 done 8:05 AM\n\n\u276f &lt;atm\n  task=\&quot;BB6-T080436184252Z-disabled-reminder\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Cooked for 0s \u00b7 done 8:05 AM\n\n\u276f &lt;atm\n  task=\&quot;BB6-T080436184252Z-disabled-reminder\&quot;\n  ready message=\&quot;01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWSSSQAM9RPJZNY1GDVTBP&lt;/action&gt;\n    &lt;action&gt;atm task start BB6-T080436184252Z-\n  disabled-reminder&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;\n  &lt;/atm&gt;\n  \u23bf \u00a0Not logged in \u00b7 Please run /login\n\n\u273b Cooked for 0s \u00b7 done 8:05 AM\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\u276f\u00a0\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  \u23f5\u23f5 bypass permissions on (shift+tab to  \u00b7 \u2026\n                   Not logged in \u00b7 Run /login&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task events BB6-T080436184252Z-disabled-reminder --team testbed --json&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;{\n  \&quot;events\&quot;: [\n    {\n      \&quot;actor\&quot;: {\n        \&quot;member\&quot;: \&quot;stub-alpha\&quot;\n      },\n      \&quot;assignee\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:05:37.719046399Z\&quot;,\n      \&quot;event\&quot;: \&quot;assigned\&quot;,\n      \&quot;message_id\&quot;: \&quot;01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;,\n      \&quot;seq\&quot;: 1,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-disabled-reminder\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;to_state\&quot;: \&quot;assigned\&quot;\n    },\n    {\n      \&quot;actor\&quot;: \&quot;daemon\&quot;,\n      \&quot;assignee\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:05:42.088066777Z\&quot;,\n      \&quot;event\&quot;: \&quot;reminded\&quot;,\n      \&quot;from_state\&quot;: \&quot;assigned\&quot;,\n      \&quot;outcome\&quot;: \&quot;emitted\&quot;,\n      \&quot;seq\&quot;: 2,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-disabled-reminder\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;to_state\&quot;: \&quot;assigned\&quot;\n    }\n  ],\n  \&quot;handoffs\&quot;: [\n    {\n      \&quot;agent\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:05:37.719Z\&quot;,\n      \&quot;attempt\&quot;: 0,\n      \&quot;kind\&quot;: \&quot;task_queued\&quot;,\n      \&quot;message_key\&quot;: \&quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-disabled-reminder\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;trigger\&quot;: \&quot;steer\&quot;\n    },\n    {\n      \&quot;agent\&quot;: \&quot;tester\&quot;,\n      \&quot;at\&quot;: \&quot;2026-09-13T08:05:42.088066777Z\&quot;,\n      \&quot;attempt\&quot;: 0,\n      \&quot;kind\&quot;: \&quot;task_ready\&quot;,\n      \&quot;message_key\&quot;: \&quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;,\n      \&quot;task_id\&quot;: \&quot;BB6-T080436184252Z-disabled-reminder\&quot;,\n      \&quot;team\&quot;: \&quot;testbed\&quot;,\n      \&quot;trigger\&quot;: \&quot;task_pass\&quot;\n    }\n  ]\n}\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        },
+        {
+          &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm doctor --json --team testbed&quot;,
+          &quot;exit_code&quot;: 0,
+          &quot;stdout&quot;: &quot;{\n  \&quot;summary\&quot;: {\n    \&quot;status\&quot;: \&quot;warning\&quot;,\n    \&quot;message\&quot;: \&quot;ATM doctor completed with warnings\&quot;,\n    \&quot;info_count\&quot;: 2,\n    \&quot;warning_count\&quot;: 1,\n    \&quot;error_count\&quot;: 0\n  },\n  \&quot;findings\&quot;: [\n    {\n      \&quot;severity\&quot;: \&quot;warning\&quot;,\n      \&quot;code\&quot;: \&quot;ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED\&quot;,\n      \&quot;message\&quot;: \&quot;disabled_task_nudge_template_override: team testbed has disabled `task_reminder`\&quot;,\n      \&quot;remediation\&quot;: \&quot;atm teams clear-nudge-template --team testbed --kind task_reminder\&quot;\n    },\n    {\n      \&quot;severity\&quot;: \&quot;info\&quot;,\n      \&quot;code\&quot;: \&quot;ATM_OBSERVABILITY_HEALTH_OK\&quot;,\n      \&quot;message\&quot;: \&quot;team testbed: task counts: hermes={assigned:0, active:0}, oversight={assigned:0, active:0}, stub-alpha={assigned:0, active:0}, stub-beta={assigned:0, active:0}, tester={assigned:1, active:0}\&quot;,\n      \&quot;remediation\&quot;: null\n    },\n    {\n      \&quot;severity\&quot;: \&quot;info\&quot;,\n      \&quot;code\&quot;: \&quot;ATM_OBSERVABILITY_HEALTH_OK\&quot;,\n      \&quot;message\&quot;: \&quot;shared observability active at /root/.atm/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=6 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=2026-09-13 8:07:22.079748562 +00:00:00\&quot;,\n      \&quot;remediation\&quot;: null\n    },\n    {\n      \&quot;severity\&quot;: \&quot;info\&quot;,\n      \&quot;code\&quot;: \&quot;ATM_RETAINED_DIAGNOSTICS_HEALTH_OK\&quot;,\n      \&quot;message\&quot;: \&quot;retained diagnostics: jsonl forwarded=16 queue_full_dropped=0 reentrant_dropped=0; timeline written=15 queue_full_dropped=0 persist_error_dropped=0\&quot;,\n      \&quot;remediation\&quot;: null\n    }\n  ],\n  \&quot;recommendations\&quot;: [\n    \&quot;atm teams clear-nudge-template --team testbed --kind task_reminder\&quot;\n  ],\n  \&quot;environment\&quot;: {\n    \&quot;atm_home\&quot;: \&quot;/root\&quot;,\n    \&quot;atm_team\&quot;: \&quot;testbed\&quot;,\n    \&quot;atm_identity\&quot;: \&quot;stub-alpha\&quot;,\n    \&quot;team_override\&quot;: \&quot;testbed\&quot;\n  },\n  \&quot;client_context\&quot;: {\n    \&quot;team\&quot;: \&quot;testbed\&quot;,\n    \&quot;identity\&quot;: \&quot;stub-alpha\&quot;,\n    \&quot;version\&quot;: \&quot;1.5.17\&quot;,\n    \&quot;cli_schema_version\&quot;: 1,\n    \&quot;http_api_version\&quot;: \&quot;1.9.0\&quot;\n  },\n  \&quot;daemon_context\&quot;: {\n    \&quot;team\&quot;: \&quot;testbed\&quot;,\n    \&quot;identity\&quot;: \&quot;stub-alpha\&quot;,\n    \&quot;version\&quot;: \&quot;1.5.17\&quot;,\n    \&quot;cli_schema_version\&quot;: 1,\n    \&quot;http_api_version\&quot;: \&quot;1.9.0\&quot;,\n    \&quot;peer_wire_security\&quot;: \&quot;mutual-tls\&quot;\n  },\n  \&quot;reader_lanes\&quot;: {\n    \&quot;pool_size\&quot;: 8,\n    \&quot;queue_depth\&quot;: 32,\n    \&quot;tool_class_max_in_flight\&quot;: 6,\n    \&quot;metrics\&quot;: {\n      \&quot;queue_depth\&quot;: 0,\n      \&quot;saturated\&quot;: 0,\n      \&quot;in_flight\&quot;: 0,\n      \&quot;wait_nanos\&quot;: 0,\n      \&quot;execution_nanos\&quot;: 0,\n      \&quot;expired_in_queue\&quot;: 0,\n      \&quot;interrupted_while_active\&quot;: 0,\n      \&quot;quarantined\&quot;: 0,\n      \&quot;current_quarantined_workers\&quot;: 0,\n      \&quot;retired_replaced_workers\&quot;: 0,\n      \&quot;quarantine_exhausted_rejections\&quot;: 0,\n      \&quot;pool_size\&quot;: 8\n    }\n  },\n  \&quot;team_scope\&quot;: \&quot;single\&quot;,\n  \&quot;member_roster\&quot;: {\n    \&quot;team\&quot;: \&quot;testbed\&quot;,\n    \&quot;members\&quot;: [\n      {\n        \&quot;name\&quot;: \&quot;hermes\&quot;,\n        \&quot;agent_id\&quot;: \&quot;hermes@testbed\&quot;,\n        \&quot;agent_type\&quot;: \&quot;hermes\&quot;,\n        \&quot;harness\&quot;: \&quot;claude-code\&quot;,\n        \&quot;model\&quot;: \&quot;unknown\&quot;,\n        \&quot;joined_at\&quot;: 1789286664106,\n        \&quot;tmux_pane_id\&quot;: null,\n        \&quot;home_dir\&quot;: \&quot;/opt/data\&quot;,\n        \&quot;extra\&quot;: {}\n      },\n      {\n        \&quot;name\&quot;: \&quot;oversight\&quot;,\n        \&quot;agent_id\&quot;: \&quot;oversight@testbed\&quot;,\n        \&quot;agent_type\&quot;: \&quot;stub\&quot;,\n        \&quot;harness\&quot;: \&quot;claude-code\&quot;,\n        \&quot;model\&quot;: \&quot;unknown\&quot;,\n        \&quot;joined_at\&quot;: 1789286664110,\n        \&quot;tmux_pane_id\&quot;: null,\n        \&quot;home_dir\&quot;: \&quot;/opt/testbed\&quot;,\n        \&quot;extra\&quot;: {}\n      },\n      {\n        \&quot;name\&quot;: \&quot;stub-alpha\&quot;,\n        \&quot;agent_id\&quot;: \&quot;stub-alpha@testbed\&quot;,\n        \&quot;agent_type\&quot;: \&quot;lead\&quot;,\n        \&quot;harness\&quot;: \&quot;claude-code\&quot;,\n        \&quot;model\&quot;: \&quot;unknown\&quot;,\n        \&quot;joined_at\&quot;: 1789286664093,\n        \&quot;tmux_pane_id\&quot;: null,\n        \&quot;home_dir\&quot;: \&quot;/opt/testbed\&quot;,\n        \&quot;live_cwd\&quot;: \&quot;/root\&quot;,\n        \&quot;extra\&quot;: {}\n      },\n      {\n        \&quot;name\&quot;: \&quot;stub-beta\&quot;,\n        \&quot;agent_id\&quot;: \&quot;stub-beta@testbed\&quot;,\n        \&quot;agent_type\&quot;: \&quot;stub\&quot;,\n        \&quot;harness\&quot;: \&quot;claude-code\&quot;,\n        \&quot;model\&quot;: \&quot;unknown\&quot;,\n        \&quot;joined_at\&quot;: 1789286664097,\n        \&quot;tmux_pane_id\&quot;: null,\n        \&quot;home_dir\&quot;: \&quot;/opt/testbed\&quot;,\n        \&quot;extra\&quot;: {}\n      },\n      {\n        \&quot;name\&quot;: \&quot;tester\&quot;,\n        \&quot;agent_id\&quot;: \&quot;tester@testbed\&quot;,\n        \&quot;agent_type\&quot;: \&quot;claude\&quot;,\n        \&quot;harness\&quot;: \&quot;claude-code\&quot;,\n        \&quot;model\&quot;: \&quot;unknown\&quot;,\n        \&quot;joined_at\&quot;: 1789286664102,\n        \&quot;tmux_pane_id\&quot;: null,\n        \&quot;backend\&quot;: \&quot;herdr\&quot;,\n        \&quot;herdrSession\&quot;: \&quot;default\&quot;,\n        \&quot;home_dir\&quot;: \&quot;/opt/testbed\&quot;,\n        \&quot;extra\&quot;: {\n          \&quot;backendType\&quot;: \&quot;herdr\&quot;,\n          \&quot;herdrSession\&quot;: \&quot;default\&quot;\n        }\n      }\n    ]\n  },\n  \&quot;graft_receivers\&quot;: {\n    \&quot;receivers\&quot;: [\n      {\n        \&quot;team\&quot;: \&quot;testbed\&quot;,\n        \&quot;agent\&quot;: \&quot;hermes\&quot;,\n        \&quot;endpoint\&quot;: \&quot;127.0.0.1:41595\&quot;,\n        \&quot;registered_at\&quot;: \&quot;2026-09-13T08:04:29.716350072Z\&quot;,\n        \&quot;last_seen_at\&quot;: \&quot;2026-09-13T08:07:43.275054869Z\&quot;,\n        \&quot;last_seen_age_seconds\&quot;: 0,\n        \&quot;reachable_at_last_use\&quot;: true\n      }\n    ]\n  },\n  \&quot;observability\&quot;: {\n    \&quot;active_log_path\&quot;: \&quot;/root/.atm/logs/atm.log.jsonl\&quot;,\n    \&quot;logging_state\&quot;: \&quot;healthy\&quot;,\n    \&quot;query_state\&quot;: null,\n    \&quot;maintenance\&quot;: {\n      \&quot;state\&quot;: \&quot;running\&quot;,\n      \&quot;rotated_files_total\&quot;: 0,\n      \&quot;pruned_files_total\&quot;: 0,\n      \&quot;last_pass_at\&quot;: \&quot;2026-09-13T08:07:22.079748562Z\&quot;\n    },\n    \&quot;diagnostic\&quot;: null,\n    \&quot;jsonl\&quot;: {\n      \&quot;forwarded_total\&quot;: 16,\n      \&quot;dropped_queue_full_total\&quot;: 0,\n      \&quot;dropped_reentrant_total\&quot;: 0\n    },\n    \&quot;timeline\&quot;: {\n      \&quot;written_total\&quot;: 15,\n      \&quot;dropped_queue_full_total\&quot;: 0,\n      \&quot;dropped_persist_error_total\&quot;: 0\n    },\n    \&quot;degraded\&quot;: [],\n    \&quot;detail\&quot;: \&quot;writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=6 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=2026-09-13 8:07:22.079748562 +00:00:00\&quot;\n  },\n  \&quot;herdr_breaker\&quot;: {\n    \&quot;state\&quot;: \&quot;closed\&quot;\n  },\n  \&quot;herdr_queue_pump\&quot;: {\n    \&quot;last_tick_at\&quot;: \&quot;2026-09-13T08:07:42.084185702Z\&quot;,\n    \&quot;breaker\&quot;: {\n      \&quot;state\&quot;: \&quot;closed\&quot;\n    }\n  },\n  \&quot;herdr\&quot;: {\n    \&quot;configured\&quot;: true,\n    \&quot;endpoints\&quot;: [\n      {\n        \&quot;session\&quot;: \&quot;default\&quot;,\n        \&quot;provenance\&quot;: \&quot;herdr_default\&quot;,\n        \&quot;transport\&quot;: \&quot;socket\&quot;,\n        \&quot;endpoint\&quot;: \&quot;$HOME/.config/herdr/herdr.sock\&quot;,\n        \&quot;binary\&quot;: null,\n        \&quot;state\&quot;: {\n          \&quot;kind\&quot;: \&quot;ok\&quot;,\n          \&quot;version\&quot;: \&quot;0.8.2\&quot;,\n          \&quot;protocol\&quot;: 20\n        },\n        \&quot;remedy\&quot;: \&quot;none\&quot;,\n        \&quot;capabilities\&quot;: {\n          \&quot;live_handoff\&quot;: true\n        },\n        \&quot;members\&quot;: [\n          {\n            \&quot;name\&quot;: \&quot;tester\&quot;,\n            \&quot;herdr_agent\&quot;: \&quot;tester\&quot;,\n            \&quot;outcome\&quot;: {\n              \&quot;kind\&quot;: \&quot;visible\&quot;\n            }\n          }\n        ]\n      }\n    ],\n    \&quot;breaker\&quot;: {\n      \&quot;state\&quot;: \&quot;closed\&quot;\n    }\n  },\n  \&quot;post_send\&quot;: {\n    \&quot;config_root\&quot;: \&quot;\&quot;,\n    \&quot;external_rules\&quot;: [],\n    \&quot;recipient_paths\&quot;: []\n  },\n  \&quot;escalation_recipients\&quot;: {\n    \&quot;daemon\&quot;: [],\n    \&quot;teams\&quot;: [\n      {\n        \&quot;team\&quot;: \&quot;testbed\&quot;,\n        \&quot;recipients\&quot;: [],\n        \&quot;source\&quot;: \&quot;daemon_default\&quot;\n      }\n    ]\n  },\n  \&quot;config\&quot;: {\n    \&quot;findings\&quot;: []\n  },\n  \&quot;mail_store\&quot;: {\n    \&quot;findings\&quot;: []\n  },\n  \&quot;roster_store\&quot;: {\n    \&quot;findings\&quot;: []\n  },\n  \&quot;drift_findings\&quot;: [],\n  \&quot;runtime_status\&quot;: {\n    \&quot;liveness\&quot;: \&quot;running\&quot;,\n    \&quot;readiness\&quot;: \&quot;ready\&quot;,\n    \&quot;singleton_owner_pid\&quot;: 359,\n    \&quot;degraded_ingest\&quot;: false,\n    \&quot;member_counts\&quot;: {\n      \&quot;active_members\&quot;: 0,\n      \&quot;idle_members\&quot;: 1,\n      \&quot;offline_members\&quot;: 0,\n      \&quot;unknown_members\&quot;: 4\n    },\n    \&quot;members\&quot;: [\n      {\n        \&quot;team\&quot;: \&quot;testbed\&quot;,\n        \&quot;member\&quot;: \&quot;hermes\&quot;,\n        \&quot;state\&quot;: \&quot;unknown\&quot;,\n        \&quot;revision\&quot;: 0,\n        \&quot;availability\&quot;: \&quot;unobserved\&quot;\n      },\n      {\n        \&quot;team\&quot;: \&quot;testbed\&quot;,\n        \&quot;member\&quot;: \&quot;oversight\&quot;,\n        \&quot;state\&quot;: \&quot;unknown\&quot;,\n        \&quot;revision\&quot;: 0,\n        \&quot;availability\&quot;: \&quot;unobserved\&quot;\n      },\n      {\n        \&quot;team\&quot;: \&quot;testbed\&quot;,\n        \&quot;member\&quot;: \&quot;stub-alpha\&quot;,\n        \&quot;state\&quot;: \&quot;unknown\&quot;,\n        \&quot;revision\&quot;: 0,\n        \&quot;availability\&quot;: \&quot;unobserved\&quot;\n      },\n      {\n        \&quot;team\&quot;: \&quot;testbed\&quot;,\n        \&quot;member\&quot;: \&quot;stub-beta\&quot;,\n        \&quot;state\&quot;: \&quot;unknown\&quot;,\n        \&quot;revision\&quot;: 0,\n        \&quot;availability\&quot;: \&quot;unobserved\&quot;\n      },\n      {\n        \&quot;team\&quot;: \&quot;testbed\&quot;,\n        \&quot;member\&quot;: \&quot;tester\&quot;,\n        \&quot;state\&quot;: \&quot;idle\&quot;,\n        \&quot;revision\&quot;: 25,\n        \&quot;availability\&quot;: \&quot;fresh\&quot;,\n        \&quot;last_observation_attempt_by\&quot;: \&quot;herdr_poll\&quot;,\n        \&quot;last_observation_attempt_at\&quot;: \&quot;2026-09-13T08:07:42.084709412Z\&quot;,\n        \&quot;last_observed_by\&quot;: \&quot;herdr_poll\&quot;,\n        \&quot;last_observed_at\&quot;: \&quot;2026-09-13T08:07:42.084709412Z\&quot;,\n        \&quot;state_changed_by\&quot;: \&quot;herdr_poll\&quot;,\n        \&quot;state_changed_at\&quot;: \&quot;2026-09-13T08:05:42.087397858Z\&quot;\n      }\n    ],\n    \&quot;herdr_queue_last_tick_at\&quot;: \&quot;2026-09-13T08:07:42.084185702Z\&quot;\n  }\n}\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;
+        }
+      ],
+      &quot;observed&quot;: {
+        &quot;handoff_kinds&quot;: [
+          &quot;task_queued&quot;,
+          &quot;task_ready&quot;
+        ],
+        &quot;task_blocks&quot;: [
+          &quot;&lt;atm\n  task=\&quot;BB6-T080436184252Z-disabled-reminder\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;,
+          &quot;&lt;atm\n  task=\&quot;BB6-T080436184252Z-disabled-reminder\&quot;\n  ready message=\&quot;01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWSSSQAM9RPJZNY1GDVTBP&lt;/action&gt;\n    &lt;action&gt;atm task start BB6-T080436184252Z-\n  disabled-reminder&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;&quot;
+        ],
+        &quot;doctor_findings&quot;: [
+          {
+            &quot;severity&quot;: &quot;warning&quot;,
+            &quot;code&quot;: &quot;ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED&quot;,
+            &quot;message&quot;: &quot;disabled_task_nudge_template_override: team testbed has disabled `task_reminder`&quot;,
+            &quot;remediation&quot;: &quot;atm teams clear-nudge-template --team testbed --kind task_reminder&quot;
+          },
+          {
+            &quot;severity&quot;: &quot;info&quot;,
+            &quot;code&quot;: &quot;ATM_OBSERVABILITY_HEALTH_OK&quot;,
+            &quot;message&quot;: &quot;team testbed: task counts: hermes={assigned:0, active:0}, oversight={assigned:0, active:0}, stub-alpha={assigned:0, active:0}, stub-beta={assigned:0, active:0}, tester={assigned:1, active:0}&quot;,
+            &quot;remediation&quot;: null
+          },
+          {
+            &quot;severity&quot;: &quot;info&quot;,
+            &quot;code&quot;: &quot;ATM_OBSERVABILITY_HEALTH_OK&quot;,
+            &quot;message&quot;: &quot;shared observability active at /root/.atm/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=6 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=2026-09-13 8:07:22.079748562 +00:00:00&quot;,
+            &quot;remediation&quot;: null
+          },
+          {
+            &quot;severity&quot;: &quot;info&quot;,
+            &quot;code&quot;: &quot;ATM_RETAINED_DIAGNOSTICS_HEALTH_OK&quot;,
+            &quot;message&quot;: &quot;retained diagnostics: jsonl forwarded=16 queue_full_dropped=0 reentrant_dropped=0; timeline written=15 queue_full_dropped=0 persist_error_dropped=0&quot;,
+            &quot;remediation&quot;: null
+          }
+        ],
+        &quot;observed_interval&quot;: 59.615639709008974,
+        &quot;wait_seconds&quot;: 120.0,
+        &quot;task_event_payload&quot;: {
+          &quot;events&quot;: [
+            {
+              &quot;actor&quot;: {
+                &quot;member&quot;: &quot;stub-alpha&quot;
+              },
+              &quot;assignee&quot;: &quot;tester&quot;,
+              &quot;at&quot;: &quot;2026-09-13T08:05:37.719046399Z&quot;,
+              &quot;event&quot;: &quot;assigned&quot;,
+              &quot;message_id&quot;: &quot;01M2CWSSSQAM9RPJZNY1GDVTBP&quot;,
+              &quot;seq&quot;: 1,
+              &quot;task_id&quot;: &quot;BB6-T080436184252Z-disabled-reminder&quot;,
+              &quot;team&quot;: &quot;testbed&quot;,
+              &quot;to_state&quot;: &quot;assigned&quot;
+            },
+            {
+              &quot;actor&quot;: &quot;daemon&quot;,
+              &quot;assignee&quot;: &quot;tester&quot;,
+              &quot;at&quot;: &quot;2026-09-13T08:05:42.088066777Z&quot;,
+              &quot;event&quot;: &quot;reminded&quot;,
+              &quot;from_state&quot;: &quot;assigned&quot;,
+              &quot;outcome&quot;: &quot;emitted&quot;,
+              &quot;seq&quot;: 2,
+              &quot;task_id&quot;: &quot;BB6-T080436184252Z-disabled-reminder&quot;,
+              &quot;team&quot;: &quot;testbed&quot;,
+              &quot;to_state&quot;: &quot;assigned&quot;
+            }
+          ],
+          &quot;handoffs&quot;: [
+            {
+              &quot;agent&quot;: &quot;tester&quot;,
+              &quot;at&quot;: &quot;2026-09-13T08:05:37.719Z&quot;,
+              &quot;attempt&quot;: 0,
+              &quot;kind&quot;: &quot;task_queued&quot;,
+              &quot;message_key&quot;: &quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP&quot;,
+              &quot;task_id&quot;: &quot;BB6-T080436184252Z-disabled-reminder&quot;,
+              &quot;team&quot;: &quot;testbed&quot;,
+              &quot;trigger&quot;: &quot;steer&quot;
+            },
+            {
+              &quot;agent&quot;: &quot;tester&quot;,
+              &quot;at&quot;: &quot;2026-09-13T08:05:42.088066777Z&quot;,
+              &quot;attempt&quot;: 0,
+              &quot;kind&quot;: &quot;task_ready&quot;,
+              &quot;message_key&quot;: &quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP&quot;,
+              &quot;task_id&quot;: &quot;BB6-T080436184252Z-disabled-reminder&quot;,
+              &quot;team&quot;: &quot;testbed&quot;,
+              &quot;trigger&quot;: &quot;task_pass&quot;
+            }
+          ]
+        }
+      }
+    }
+  ],
+  &quot;setup&quot;: {
+    &quot;baseline_prompt_handoffs&quot;: {
+      &quot;command&quot;: &quot;docker exec hermes-testbed-bb-1517-bb6 python3 -c import sqlite3; db=sqlite3.connect(&#x27;/root/.atm/db/mail.db&#x27;); print(db.execute(&#x27;SELECT COUNT(*) FROM prompt_handoffs&#x27;).fetchone()[0])&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;0\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    }
+  },
+  &quot;cleanup_between_scenarios&quot;: [
+    {
+      &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task close BB6-T080436184252Z-events-two refused --team testbed BB6 runner release&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;closed BB6-T080436184252Z-events-two (refused)\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    },
+    {
+      &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task close BB6-T080436184252Z-events-three refused --team testbed BB6 runner release&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;closed BB6-T080436184252Z-events-three (refused)\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    },
+    {
+      &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm task close BB6-T080436184252Z-events-one completed --team testbed BB6 runner release&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;closed BB6-T080436184252Z-events-one (completed)\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    }
+  ],
+  &quot;assigner_mailbox_commands&quot;: [
+    {
+      &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm read --unread --json --no-since-last-seen&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;{\n  \&quot;action\&quot;: \&quot;read\&quot;,\n  \&quot;team\&quot;: \&quot;testbed\&quot;,\n  \&quot;agent\&quot;: \&quot;stub-alpha\&quot;,\n  \&quot;selection_mode\&quot;: \&quot;unread\&quot;,\n  \&quot;mutation_applied\&quot;: true,\n  \&quot;count\&quot;: 1,\n  \&quot;message\&quot;: {\n    \&quot;bucket\&quot;: \&quot;unread\&quot;,\n    \&quot;class\&quot;: \&quot;unread\&quot;,\n    \&quot;from\&quot;: \&quot;tester\&quot;,\n    \&quot;text\&quot;: \&quot;BB6 runner release\&quot;,\n    \&quot;timestamp\&quot;: \&quot;2026-09-13T08:05:37.655934019Z\&quot;,\n    \&quot;read\&quot;: false,\n    \&quot;source_team\&quot;: \&quot;testbed\&quot;,\n    \&quot;summary\&quot;: \&quot;BB6 runner release\&quot;,\n    \&quot;message_id\&quot;: \&quot;01M2CWSSQQP3VGB3129CRXAQK9\&quot;,\n    \&quot;requires_ack\&quot;: false,\n    \&quot;taskId\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n    \&quot;taskOp\&quot;: {\n      \&quot;op\&quot;: \&quot;close\&quot;,\n      \&quot;outcome\&quot;: \&quot;completed\&quot;,\n      \&quot;reason\&quot;: \&quot;BB6 runner release\&quot;\n    }\n  },\n  \&quot;selected_message_id\&quot;: \&quot;01M2CWSSQQP3VGB3129CRXAQK9\&quot;,\n  \&quot;match_count\&quot;: 4,\n  \&quot;additional_match_count\&quot;: 3,\n  \&quot;bucket_counts\&quot;: {\n    \&quot;unread\&quot;: 4,\n    \&quot;pending_ack\&quot;: 0,\n    \&quot;history\&quot;: 0\n  }\n}\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    },
+    {
+      &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm read --unread --json --no-since-last-seen&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;{\n  \&quot;action\&quot;: \&quot;read\&quot;,\n  \&quot;team\&quot;: \&quot;testbed\&quot;,\n  \&quot;agent\&quot;: \&quot;stub-alpha\&quot;,\n  \&quot;selection_mode\&quot;: \&quot;unread\&quot;,\n  \&quot;mutation_applied\&quot;: true,\n  \&quot;count\&quot;: 1,\n  \&quot;message\&quot;: {\n    \&quot;bucket\&quot;: \&quot;unread\&quot;,\n    \&quot;class\&quot;: \&quot;unread\&quot;,\n    \&quot;from\&quot;: \&quot;tester\&quot;,\n    \&quot;text\&quot;: \&quot;BB6 runner release\&quot;,\n    \&quot;timestamp\&quot;: \&quot;2026-09-13T08:05:37.620273088Z\&quot;,\n    \&quot;read\&quot;: false,\n    \&quot;source_team\&quot;: \&quot;testbed\&quot;,\n    \&quot;summary\&quot;: \&quot;BB6 runner release\&quot;,\n    \&quot;message_id\&quot;: \&quot;01M2CWSSPMCADEDEGNPJCWCQ29\&quot;,\n    \&quot;requires_ack\&quot;: false,\n    \&quot;taskId\&quot;: \&quot;BB6-T080436184252Z-events-three\&quot;,\n    \&quot;taskOp\&quot;: {\n      \&quot;op\&quot;: \&quot;close\&quot;,\n      \&quot;outcome\&quot;: \&quot;refused\&quot;,\n      \&quot;reason\&quot;: \&quot;BB6 runner release\&quot;\n    }\n  },\n  \&quot;selected_message_id\&quot;: \&quot;01M2CWSSPMCADEDEGNPJCWCQ29\&quot;,\n  \&quot;match_count\&quot;: 3,\n  \&quot;additional_match_count\&quot;: 2,\n  \&quot;bucket_counts\&quot;: {\n    \&quot;unread\&quot;: 3,\n    \&quot;pending_ack\&quot;: 0,\n    \&quot;history\&quot;: 1\n  }\n}\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    },
+    {
+      &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm read --unread --json --no-since-last-seen&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;{\n  \&quot;action\&quot;: \&quot;read\&quot;,\n  \&quot;team\&quot;: \&quot;testbed\&quot;,\n  \&quot;agent\&quot;: \&quot;stub-alpha\&quot;,\n  \&quot;selection_mode\&quot;: \&quot;unread\&quot;,\n  \&quot;mutation_applied\&quot;: true,\n  \&quot;count\&quot;: 1,\n  \&quot;message\&quot;: {\n    \&quot;bucket\&quot;: \&quot;unread\&quot;,\n    \&quot;class\&quot;: \&quot;unread\&quot;,\n    \&quot;from\&quot;: \&quot;tester\&quot;,\n    \&quot;text\&quot;: \&quot;BB6 runner release\&quot;,\n    \&quot;timestamp\&quot;: \&quot;2026-09-13T08:05:37.583756281Z\&quot;,\n    \&quot;read\&quot;: false,\n    \&quot;source_team\&quot;: \&quot;testbed\&quot;,\n    \&quot;summary\&quot;: \&quot;BB6 runner release\&quot;,\n    \&quot;message_id\&quot;: \&quot;01M2CWSSNFFG5GYZSR3YCR0SCV\&quot;,\n    \&quot;requires_ack\&quot;: false,\n    \&quot;taskId\&quot;: \&quot;BB6-T080436184252Z-events-two\&quot;,\n    \&quot;taskOp\&quot;: {\n      \&quot;op\&quot;: \&quot;close\&quot;,\n      \&quot;outcome\&quot;: \&quot;refused\&quot;,\n      \&quot;reason\&quot;: \&quot;BB6 runner release\&quot;\n    }\n  },\n  \&quot;selected_message_id\&quot;: \&quot;01M2CWSSNFFG5GYZSR3YCR0SCV\&quot;,\n  \&quot;match_count\&quot;: 2,\n  \&quot;additional_match_count\&quot;: 1,\n  \&quot;bucket_counts\&quot;: {\n    \&quot;unread\&quot;: 2,\n    \&quot;pending_ack\&quot;: 0,\n    \&quot;history\&quot;: 2\n  }\n}\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    },
+    {
+      &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm read --unread --json --no-since-last-seen&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;{\n  \&quot;action\&quot;: \&quot;read\&quot;,\n  \&quot;team\&quot;: \&quot;testbed\&quot;,\n  \&quot;agent\&quot;: \&quot;stub-alpha\&quot;,\n  \&quot;selection_mode\&quot;: \&quot;unread\&quot;,\n  \&quot;mutation_applied\&quot;: true,\n  \&quot;count\&quot;: 1,\n  \&quot;message\&quot;: {\n    \&quot;bucket\&quot;: \&quot;unread\&quot;,\n    \&quot;class\&quot;: \&quot;unread\&quot;,\n    \&quot;from\&quot;: \&quot;tester\&quot;,\n    \&quot;text\&quot;: \&quot;BB6 prompted task started\&quot;,\n    \&quot;timestamp\&quot;: \&quot;2026-09-13T08:05:37.468109799Z\&quot;,\n    \&quot;read\&quot;: false,\n    \&quot;source_team\&quot;: \&quot;testbed\&quot;,\n    \&quot;summary\&quot;: \&quot;BB6 prompted task started\&quot;,\n    \&quot;message_id\&quot;: \&quot;01M2CWSSHWENZPEB3YGK1BFNP5\&quot;,\n    \&quot;requires_ack\&quot;: false,\n    \&quot;taskId\&quot;: \&quot;BB6-T080436184252Z-events-one\&quot;,\n    \&quot;taskOp\&quot;: {\n      \&quot;op\&quot;: \&quot;start\&quot;\n    }\n  },\n  \&quot;selected_message_id\&quot;: \&quot;01M2CWSSHWENZPEB3YGK1BFNP5\&quot;,\n  \&quot;match_count\&quot;: 1,\n  \&quot;additional_match_count\&quot;: 0,\n  \&quot;bucket_counts\&quot;: {\n    \&quot;unread\&quot;: 1,\n    \&quot;pending_ack\&quot;: 0,\n    \&quot;history\&quot;: 3\n  }\n}\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    },
+    {
+      &quot;command&quot;: &quot;docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed-bb-1517-bb6 atm read --unread --json --no-since-last-seen&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;{\n  \&quot;action\&quot;: \&quot;read\&quot;,\n  \&quot;team\&quot;: \&quot;testbed\&quot;,\n  \&quot;agent\&quot;: \&quot;stub-alpha\&quot;,\n  \&quot;selection_mode\&quot;: \&quot;unread\&quot;,\n  \&quot;mutation_applied\&quot;: false,\n  \&quot;count\&quot;: 0,\n  \&quot;match_count\&quot;: 0,\n  \&quot;additional_match_count\&quot;: 0,\n  \&quot;bucket_counts\&quot;: {\n    \&quot;unread\&quot;: 0,\n    \&quot;pending_ack\&quot;: 0,\n    \&quot;history\&quot;: 4\n  }\n}\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    }
+  ],
+  &quot;acceptance&quot;: {
+    &quot;status&quot;: &quot;PASS&quot;,
+    &quot;query&quot;: &quot;SELECT COUNT(*) FROM prompt_handoffs&quot;,
+    &quot;prompt_handoffs_count&quot;: 11,
+    &quot;task_linked_terminal_line_count&quot;: 11,
+    &quot;prompt_handoff_record_failed_count&quot;: 0,
+    &quot;terminal_lines&quot;: [
+      {
+        &quot;surface&quot;: &quot;herdr_pane&quot;,
+        &quot;agent&quot;: &quot;tester&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8&quot;,
+        &quot;kind&quot;: &quot;task_queued&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: &quot;&lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;
+      },
+      {
+        &quot;surface&quot;: &quot;herdr_pane&quot;,
+        &quot;agent&quot;: &quot;tester&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8&quot;,
+        &quot;kind&quot;: &quot;task_ready&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: &quot;&lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  ready message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWQXSK7G1ZBX1W65EJFKD8&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB6-T080436184252Z-events-one&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;&quot;
+      },
+      {
+        &quot;surface&quot;: &quot;herdr_pane&quot;,
+        &quot;agent&quot;: &quot;tester&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8&quot;,
+        &quot;kind&quot;: &quot;task_reminder&quot;,
+        &quot;attempt&quot;: 1,
+        &quot;terminal&quot;: &quot;&lt;atm task=\&quot;BB6-T080436184252Z-events-one\&quot;\n  reminder=\&quot;1\&quot;\n  message=\&quot;01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWQXSK7G1ZBX1W65EJFKD8&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB6-T080436184252Z-events-one&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;&quot;
+      },
+      {
+        &quot;surface&quot;: &quot;herdr_pane&quot;,
+        &quot;agent&quot;: &quot;tester&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-two&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWQXTPC4NPJ2SN3WDA3J9K&quot;,
+        &quot;kind&quot;: &quot;task_queued&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: &quot;&lt;atm\n  task=\&quot;BB6-T080436184252Z-events-two\&quot;\n  queued=\&quot;2\&quot;\n  message=\&quot;01M2CWQXTPC4NPJ2SN3WDA3J9K\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;
+      },
+      {
+        &quot;surface&quot;: &quot;herdr_pane&quot;,
+        &quot;agent&quot;: &quot;tester&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-three&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWQXVQP0XJWC9AM4D3RJX8&quot;,
+        &quot;kind&quot;: &quot;task_queued&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: &quot;&lt;atm\n  task=\&quot;BB6-T080436184252Z-events-three\&quot;\n  queued=\&quot;3\&quot;\n  message=\&quot;01M2CWQXVQP0XJWC9AM4D3RJX8\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;
+      },
+      {
+        &quot;surface&quot;: &quot;herdr_pane&quot;,
+        &quot;agent&quot;: &quot;tester&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-disabled-reminder&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP&quot;,
+        &quot;kind&quot;: &quot;task_queued&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: &quot;&lt;atm\n  task=\&quot;BB6-T080436184252Z-disabled-reminder\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;
+      },
+      {
+        &quot;surface&quot;: &quot;herdr_pane&quot;,
+        &quot;agent&quot;: &quot;tester&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-disabled-reminder&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP&quot;,
+        &quot;kind&quot;: &quot;task_ready&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: &quot;&lt;atm\n  task=\&quot;BB6-T080436184252Z-disabled-reminder\&quot;\n  ready message=\&quot;01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2CWSSSQAM9RPJZNY1GDVTBP&lt;/action&gt;\n    &lt;action&gt;atm task start BB6-T080436184252Z-\n  disabled-reminder&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;&quot;
+      },
+      {
+        &quot;surface&quot;: &quot;atm_mailbox&quot;,
+        &quot;agent&quot;: &quot;stub-alpha&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWSSQQP3VGB3129CRXAQK9&quot;,
+        &quot;kind&quot;: &quot;task_complete&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: {
+          &quot;bucket&quot;: &quot;unread&quot;,
+          &quot;class&quot;: &quot;unread&quot;,
+          &quot;from&quot;: &quot;tester&quot;,
+          &quot;text&quot;: &quot;BB6 runner release&quot;,
+          &quot;timestamp&quot;: &quot;2026-09-13T08:05:37.655934019Z&quot;,
+          &quot;read&quot;: false,
+          &quot;source_team&quot;: &quot;testbed&quot;,
+          &quot;summary&quot;: &quot;BB6 runner release&quot;,
+          &quot;message_id&quot;: &quot;01M2CWSSQQP3VGB3129CRXAQK9&quot;,
+          &quot;requires_ack&quot;: false,
+          &quot;taskId&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+          &quot;taskOp&quot;: {
+            &quot;op&quot;: &quot;close&quot;,
+            &quot;outcome&quot;: &quot;completed&quot;,
+            &quot;reason&quot;: &quot;BB6 runner release&quot;
+          }
+        }
+      },
+      {
+        &quot;surface&quot;: &quot;atm_mailbox&quot;,
+        &quot;agent&quot;: &quot;stub-alpha&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-three&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWSSPMCADEDEGNPJCWCQ29&quot;,
+        &quot;kind&quot;: &quot;task_complete&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: {
+          &quot;bucket&quot;: &quot;unread&quot;,
+          &quot;class&quot;: &quot;unread&quot;,
+          &quot;from&quot;: &quot;tester&quot;,
+          &quot;text&quot;: &quot;BB6 runner release&quot;,
+          &quot;timestamp&quot;: &quot;2026-09-13T08:05:37.620273088Z&quot;,
+          &quot;read&quot;: false,
+          &quot;source_team&quot;: &quot;testbed&quot;,
+          &quot;summary&quot;: &quot;BB6 runner release&quot;,
+          &quot;message_id&quot;: &quot;01M2CWSSPMCADEDEGNPJCWCQ29&quot;,
+          &quot;requires_ack&quot;: false,
+          &quot;taskId&quot;: &quot;BB6-T080436184252Z-events-three&quot;,
+          &quot;taskOp&quot;: {
+            &quot;op&quot;: &quot;close&quot;,
+            &quot;outcome&quot;: &quot;refused&quot;,
+            &quot;reason&quot;: &quot;BB6 runner release&quot;
+          }
+        }
+      },
+      {
+        &quot;surface&quot;: &quot;atm_mailbox&quot;,
+        &quot;agent&quot;: &quot;stub-alpha&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-two&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWSSNFFG5GYZSR3YCR0SCV&quot;,
+        &quot;kind&quot;: &quot;task_complete&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: {
+          &quot;bucket&quot;: &quot;unread&quot;,
+          &quot;class&quot;: &quot;unread&quot;,
+          &quot;from&quot;: &quot;tester&quot;,
+          &quot;text&quot;: &quot;BB6 runner release&quot;,
+          &quot;timestamp&quot;: &quot;2026-09-13T08:05:37.583756281Z&quot;,
+          &quot;read&quot;: false,
+          &quot;source_team&quot;: &quot;testbed&quot;,
+          &quot;summary&quot;: &quot;BB6 runner release&quot;,
+          &quot;message_id&quot;: &quot;01M2CWSSNFFG5GYZSR3YCR0SCV&quot;,
+          &quot;requires_ack&quot;: false,
+          &quot;taskId&quot;: &quot;BB6-T080436184252Z-events-two&quot;,
+          &quot;taskOp&quot;: {
+            &quot;op&quot;: &quot;close&quot;,
+            &quot;outcome&quot;: &quot;refused&quot;,
+            &quot;reason&quot;: &quot;BB6 runner release&quot;
+          }
+        }
+      },
+      {
+        &quot;surface&quot;: &quot;atm_mailbox&quot;,
+        &quot;agent&quot;: &quot;stub-alpha&quot;,
+        &quot;task_id&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+        &quot;message_key&quot;: &quot;atm:01M2CWSSHWENZPEB3YGK1BFNP5&quot;,
+        &quot;kind&quot;: &quot;task_started&quot;,
+        &quot;attempt&quot;: 0,
+        &quot;terminal&quot;: {
+          &quot;bucket&quot;: &quot;unread&quot;,
+          &quot;class&quot;: &quot;unread&quot;,
+          &quot;from&quot;: &quot;tester&quot;,
+          &quot;text&quot;: &quot;BB6 prompted task started&quot;,
+          &quot;timestamp&quot;: &quot;2026-09-13T08:05:37.468109799Z&quot;,
+          &quot;read&quot;: false,
+          &quot;source_team&quot;: &quot;testbed&quot;,
+          &quot;summary&quot;: &quot;BB6 prompted task started&quot;,
+          &quot;message_id&quot;: &quot;01M2CWSSHWENZPEB3YGK1BFNP5&quot;,
+          &quot;requires_ack&quot;: false,
+          &quot;taskId&quot;: &quot;BB6-T080436184252Z-events-one&quot;,
+          &quot;taskOp&quot;: {
+            &quot;op&quot;: &quot;start&quot;
+          }
+        }
+      }
+    ],
+    &quot;stored_handoff_rows&quot;: [
+      [
+        &quot;tester&quot;,
+        &quot;task_queued&quot;,
+        &quot;BB6-T080436184252Z-events-one&quot;,
+        0,
+        &quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8&quot;
+      ],
+      [
+        &quot;tester&quot;,
+        &quot;task_queued&quot;,
+        &quot;BB6-T080436184252Z-events-two&quot;,
+        0,
+        &quot;atm:01M2CWQXTPC4NPJ2SN3WDA3J9K&quot;
+      ],
+      [
+        &quot;tester&quot;,
+        &quot;task_queued&quot;,
+        &quot;BB6-T080436184252Z-events-three&quot;,
+        0,
+        &quot;atm:01M2CWQXVQP0XJWC9AM4D3RJX8&quot;
+      ],
+      [
+        &quot;tester&quot;,
+        &quot;task_ready&quot;,
+        &quot;BB6-T080436184252Z-events-one&quot;,
+        0,
+        &quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8&quot;
+      ],
+      [
+        &quot;tester&quot;,
+        &quot;task_reminder&quot;,
+        &quot;BB6-T080436184252Z-events-one&quot;,
+        1,
+        &quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8&quot;
+      ],
+      [
+        &quot;stub-alpha&quot;,
+        &quot;task_started&quot;,
+        &quot;BB6-T080436184252Z-events-one&quot;,
+        0,
+        &quot;atm:01M2CWSSHWENZPEB3YGK1BFNP5&quot;
+      ],
+      [
+        &quot;stub-alpha&quot;,
+        &quot;task_complete&quot;,
+        &quot;BB6-T080436184252Z-events-two&quot;,
+        0,
+        &quot;atm:01M2CWSSNFFG5GYZSR3YCR0SCV&quot;
+      ],
+      [
+        &quot;stub-alpha&quot;,
+        &quot;task_complete&quot;,
+        &quot;BB6-T080436184252Z-events-three&quot;,
+        0,
+        &quot;atm:01M2CWSSPMCADEDEGNPJCWCQ29&quot;
+      ],
+      [
+        &quot;stub-alpha&quot;,
+        &quot;task_complete&quot;,
+        &quot;BB6-T080436184252Z-events-one&quot;,
+        0,
+        &quot;atm:01M2CWSSQQP3VGB3129CRXAQK9&quot;
+      ],
+      [
+        &quot;tester&quot;,
+        &quot;task_queued&quot;,
+        &quot;BB6-T080436184252Z-disabled-reminder&quot;,
+        0,
+        &quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP&quot;
+      ],
+      [
+        &quot;tester&quot;,
+        &quot;task_ready&quot;,
+        &quot;BB6-T080436184252Z-disabled-reminder&quot;,
+        0,
+        &quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP&quot;
+      ]
+    ],
+    &quot;identity_fields&quot;: [
+      &quot;agent&quot;,
+      &quot;task_id&quot;,
+      &quot;message_key&quot;,
+      &quot;kind&quot;,
+      &quot;attempt&quot;
+    ],
+    &quot;identities_match&quot;: true,
+    &quot;count_command&quot;: {
+      &quot;command&quot;: &quot;docker exec hermes-testbed-bb-1517-bb6 python3 -c import sqlite3; db=sqlite3.connect(&#x27;/root/.atm/db/mail.db&#x27;); print(db.execute(&#x27;SELECT COUNT(*) FROM prompt_handoffs&#x27;).fetchone()[0])&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;11\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    },
+    &quot;rows_command&quot;: {
+      &quot;command&quot;: &quot;docker exec hermes-testbed-bb-1517-bb6 python3 -c import json,sqlite3; db=sqlite3.connect(&#x27;/root/.atm/db/mail.db&#x27;); rows=db.execute(&#x27;SELECT agent,kind,task_id,attempt,message_key FROM prompt_handoffs ORDER BY rowid&#x27;).fetchall(); print(json.dumps(rows))&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;[[\&quot;tester\&quot;, \&quot;task_queued\&quot;, \&quot;BB6-T080436184252Z-events-one\&quot;, 0, \&quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;], [\&quot;tester\&quot;, \&quot;task_queued\&quot;, \&quot;BB6-T080436184252Z-events-two\&quot;, 0, \&quot;atm:01M2CWQXTPC4NPJ2SN3WDA3J9K\&quot;], [\&quot;tester\&quot;, \&quot;task_queued\&quot;, \&quot;BB6-T080436184252Z-events-three\&quot;, 0, \&quot;atm:01M2CWQXVQP0XJWC9AM4D3RJX8\&quot;], [\&quot;tester\&quot;, \&quot;task_ready\&quot;, \&quot;BB6-T080436184252Z-events-one\&quot;, 0, \&quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;], [\&quot;tester\&quot;, \&quot;task_reminder\&quot;, \&quot;BB6-T080436184252Z-events-one\&quot;, 1, \&quot;atm:01M2CWQXSK7G1ZBX1W65EJFKD8\&quot;], [\&quot;stub-alpha\&quot;, \&quot;task_started\&quot;, \&quot;BB6-T080436184252Z-events-one\&quot;, 0, \&quot;atm:01M2CWSSHWENZPEB3YGK1BFNP5\&quot;], [\&quot;stub-alpha\&quot;, \&quot;task_complete\&quot;, \&quot;BB6-T080436184252Z-events-two\&quot;, 0, \&quot;atm:01M2CWSSNFFG5GYZSR3YCR0SCV\&quot;], [\&quot;stub-alpha\&quot;, \&quot;task_complete\&quot;, \&quot;BB6-T080436184252Z-events-three\&quot;, 0, \&quot;atm:01M2CWSSPMCADEDEGNPJCWCQ29\&quot;], [\&quot;stub-alpha\&quot;, \&quot;task_complete\&quot;, \&quot;BB6-T080436184252Z-events-one\&quot;, 0, \&quot;atm:01M2CWSSQQP3VGB3129CRXAQK9\&quot;], [\&quot;tester\&quot;, \&quot;task_queued\&quot;, \&quot;BB6-T080436184252Z-disabled-reminder\&quot;, 0, \&quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;], [\&quot;tester\&quot;, \&quot;task_ready\&quot;, \&quot;BB6-T080436184252Z-disabled-reminder\&quot;, 0, \&quot;atm:01M2CWSSSQAM9RPJZNY1GDVTBP\&quot;]]\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    },
+    &quot;log_command&quot;: {
+      &quot;command&quot;: &quot;docker exec hermes-testbed-bb-1517-bb6 python3 -c from pathlib import Path; p=Path(&#x27;/root/.atm/logs/atm.log.jsonl&#x27;); print(sum(&#x27;prompt_handoff_record_failed&#x27; in line for line in p.open()))&quot;,
+      &quot;exit_code&quot;: 0,
+      &quot;stdout&quot;: &quot;0\n&quot;,
+      &quot;stderr&quot;: &quot;&quot;
+    }
+  },
+  &quot;status&quot;: &quot;PASS&quot;
+}</pre></body></html>
