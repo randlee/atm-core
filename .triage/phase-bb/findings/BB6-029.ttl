@@ -16,22 +16,26 @@
   triage:source "quality-mgr, BB6-GATE-FIX-QA-1789320000 fix-verification, PR #1477" ;
   triage:repeatable false ;
   triage:sweepScope "scripts/smoke/test_run_bb6_prompt_handoffs.py (test_missing_observed_interval_is_rejected, lines 139-142; must invoke RUNNER.run() rather than re-implementing the guard inline)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T05:06:06Z"^^xsd:dateTime ;
   triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, confirmed. Dispatched by fenix to arch-ctm together with BB6-026 (BB-GATE-FIX-R3-1789327000, fix/bb6-taskstart-counterparty-authz) -- BB6-026 and BB6-029 close together after re-verification, since both are the same fail-path test." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T05:06:06Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-029/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-029/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-029/1> ;
+  triage:closedAt "2026-09-13T05:24:15Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-029/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/test_run_bb6_prompt_handoffs.py" ;
   triage:line 139 ;
   triage:snippet "test_missing_observed_interval_is_rejected re-implements the rejection guard inline instead of invoking RUNNER.run(); zero regression protection" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb6-taskstart-counterparty-authz" ;
   triage:headSha "1d86bd608" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-029/1> .
@@ -42,3 +46,30 @@
   triage:branch "fix/bb6-taskstart-counterparty-authz" ;
   triage:headSha "1d86bd608" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-029/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_bb6_prompt_handoffs.py" ;
+  triage:line 42 ;
+  triage:snippet "quality-mgr BB6-GATE-FIX-QA2-1789328500 (report 01M2CKJDZCEWVM3J8A37ZPY0HA, PR #1477), verified at fix/bb6-taskstart-counterparty-authz @ a2491a6c6. require_observed_interval extracted at lines 42-45, called by run() at line 485; test_missing_observed_interval_is_rejected (test_run_bb6_prompt_handoffs.py:139-141) now calls the helper directly instead of re-implementing the guard inline. Confirmed independently by req-qa and arch-qa." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:headSha "a2491a6c6" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-029/2> .
+
+<urn:atm:triage:worktree/BB6-029/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1477, fix/bb6-taskstart-counterparty-authz" ;
+  triage:branch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:headSha "a2491a6c6" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB6-029/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T05:24:15Z"^^xsd:dateTime ;
+  triage:fixCommit "a2491a6c6" ;
+  triage:fixBranch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:verifiedInRound "BB6-GATE-FIX-QA2-1789328500" ;
+  triage:resolutionNote "quality-mgr BB6-GATE-FIX-QA2-1789328500 Final Quality Report (PR #1477, report 01M2CKJDZCEWVM3J8A37ZPY0HA). require_observed_interval helper extracted at scripts/smoke/run_bb6_prompt_handoffs.py:42-45, called on the real run() production path at line 485; test_missing_observed_interval_is_rejected now calls the helper directly. Condition exists in exactly one place. Confirmed independently by req-qa and arch-qa at a2491a6c6." .
