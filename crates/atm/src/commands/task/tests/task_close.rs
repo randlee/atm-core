@@ -229,6 +229,10 @@ async fn stale_counterparty_rejection_exits_three_without_retry() {
         .await
         .unwrap_err();
     assert_eq!(crate::exit_code_for_error(&error), 3);
+    let typed = error
+        .downcast_ref::<atm_core::error::AtmError>()
+        .expect("task close rejection remains typed");
+    assert_eq!(typed.code(), AtmErrorCode::TaskNotCounterparty);
     let store = f.task_store();
     let team = TEST_TEAM.parse().unwrap();
     let task = "T1".parse().unwrap();
@@ -265,6 +269,10 @@ async fn close_by_third_party_delivers_plain_report_and_exits_three() {
         .await
         .unwrap_err();
     assert_eq!(crate::exit_code_for_error(&error), 3);
+    let typed = error
+        .downcast_ref::<atm_core::error::AtmError>()
+        .expect("task close rejection remains typed");
+    assert_eq!(typed.code(), AtmErrorCode::TaskNotCounterparty);
     assert!(error.to_string().contains("not assigned to or by"));
     assert!(error.to_string().contains("report delivered"));
     assert_eq!(f.inbox_contents(TEST_SENDER).len(), sender_before);
