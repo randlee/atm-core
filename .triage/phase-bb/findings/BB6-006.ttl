@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-006>
+  a triage:Finding ;
+  triage:findingId "BB6-006" ;
+  triage:title "OpenAPI doc-drift: handoffs field documented against MessageList, which does not model the task-events response" ;
+  triage:description "rust-best-practices-agent via BB6-QA-L3-1789269000 (PR #1462, feature/bb6-cli-prompt-handoffs @ 40ccd403e), verdict PASS 0/4/2, 2026-09-13T00:38:04Z. openapi.yaml (lines 446-452, both copies) documents the new `handoffs` field on the MessageList schema, but MessageList does not model the task-events response that actually carries handoffs. Ruled genuine by fenix (PR #1462 comment, 2026-09-13T00:38:04Z)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "rust-best-practices-agent via BB6-QA-L3-1789269000, ruled genuine by fenix" ;
+  triage:repeatable true ;
+  triage:sweepScope "openapi.yaml:446-452 (both copies)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: move the handoffs field documentation to the correct task-events response schema in both openapi.yaml copies at lines 446-452. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-006/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-006/1>
+  a triage:Occurrence ;
+  triage:file "openapi.yaml" ;
+  triage:line 446 ;
+  triage:snippet "handoffs field documented on MessageList schema instead of the real task-events response type" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-cli-prompt-handoffs" ;
+  triage:headSha "40ccd403e" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-006/1> .
+
+<urn:atm:triage:worktree/BB6-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1462, feature/bb6-cli-prompt-handoffs" ;
+  triage:branch "feature/bb6-cli-prompt-handoffs" ;
+  triage:headSha "40ccd403e" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-010>
+  a triage:Finding ;
+  triage:findingId "BB6-010" ;
+  triage:title "handoffs field lacks skip_serializing_if = Vec::is_empty unlike its siblings" ;
+  triage:description "rust-best-practices-agent via BB6-QA-L3-1789269000 (PR #1462, feature/bb6-cli-prompt-handoffs @ 40ccd403e), verdict PASS 0/4/2, 2026-09-13T00:38:04Z. list.rs's new `handoffs` field (lines 196-201) lacks #[serde(skip_serializing_if = \"Vec::is_empty\")], unlike its sibling collection fields, so empty handoffs are always serialized. Ruled genuine by fenix (PR #1462 comment, 2026-09-13T00:38:04Z)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:source "rust-best-practices-agent via BB6-QA-L3-1789269000, ruled genuine by fenix" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm/src/commands/list.rs:196-201" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: add #[serde(skip_serializing_if = \"Vec::is_empty\")] to the handoffs field at list.rs:196-201, matching its sibling collection fields. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-010/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-010/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/list.rs" ;
+  triage:line 196 ;
+  triage:snippet "handoffs field lacks skip_serializing_if = Vec::is_empty unlike its sibling collection fields" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-cli-prompt-handoffs" ;
+  triage:headSha "40ccd403e" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-010/1> .
+
+<urn:atm:triage:worktree/BB6-010/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1462, feature/bb6-cli-prompt-handoffs" ;
+  triage:branch "feature/bb6-cli-prompt-handoffs" ;
+  triage:headSha "40ccd403e" ;
+  triage:orderIndex 1 .

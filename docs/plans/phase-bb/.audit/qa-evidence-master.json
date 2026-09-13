@@ -3,7 +3,7 @@
   "timezone": "UTC (result_time_pst/assignment_time_pst omitted; source ATM messages carry UTC timestamps only)",
   "audit_window": {
     "start": "2026-09-12T19:00:24Z",
-    "end": "2026-09-13T00:26:25Z"
+    "end": "2026-09-13T00:38:04Z"
   },
   "scope": "BB.1 (PR #1438, feature/bb1-transition-templates) and BB.2 (PR #1439, feature/bb2-orchestration-templates-1516) each have one QA-1 round in flight (assigned, no result yet -- verdict/pass/result_* fields are null/empty until quality-mgr reports). BB.3 (PR #1436, feature/bb3-test-procedure-pages) has one QA-1 FAIL round closed and a QA-2 round in flight on the fix-round push (BB3-FIX-R1, cipher, head 8a8b29640). fenix's parallel critical reviews (on BB.1 and BB.3 so far) are not dispatched quality-mgr QA runs; their findings are recorded separately under .triage/phase-bb/findings/ (BB1-001..021, BB3-001..012), correlated with QA findings on the same commit rather than duplicated. Phase BB is orchestrated with plain atm send (codex-orchestration), not graph-orchestration Assignment/Completion events, but .sprints/BB/events.ttl records dev Assignment/Completion events anyway per fenix's ruling so /triage-report's DEV column works.",
   "count_basis": "headline/reviewer",
@@ -408,6 +408,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "PASS (PR #1459 comment, 2026-09-13T00:26:25Z): BB6-001/002/003/004 all confirmed fixed, 5/5 reviewers agree; quality-mgr independently re-verified each directly against the pinned diff (35b733c09 vs a7d4664d1) -- single column-list owner + self-test (BB6-001), real filtering in InMemoryTaskLedgerReader (BB6-002), read_lane_storage_error used everywhere with the old local helper deleted (BB6-003), only Cargo.toml delta is a dev-only atm-storage test-utils feature with no tokio/new dependency (BB6-004). All four closed. Two informational notes (format!-built SQL vs a precompiled helper; no explicit allowed_dev_dependencies entry for the rusqlite->atm-storage test-utils dev-dep) ruled not findings by fenix -- no defect, no gate tripped; carried in the phase ledger as BB.7 debt, no triage record."
+    },
+    {
+      "run_id": "BB6-QA-L3",
+      "aich_sprint": "BB6",
+      "phase_sprint": "BB.6",
+      "pass": true,
+      "run_type": "qa",
+      "assignment_time_utc": null,
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": "fenix",
+      "assignment_shared_path": null,
+      "assignment_summary": "BB6-QA-L3-1789269000 dispatched by fenix to quality-mgr for PR #1462, pinned head 40ccd403e (feature/bb6-cli-prompt-handoffs, BB.6 L3 CLI layer). Review scope: D4 CLI deliverables (task start/close, list handoffs surface, OpenAPI, ADR-061 ledger).",
+      "result_time_utc": "2026-09-13T00:36:48Z",
+      "result_time_pst": null,
+      "result_message_id": "01M2C33ZXGDYN59FH3GM6859V8",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 4,
+      "minor": 2,
+      "count_basis": "headline/reviewer",
+      "evidence": "PASS 0/4/2 (PR #1462 comment, 2026-09-13T00:38:04Z), 9/9 D4 deliverables, 0 blocking across 6 reviewers. Important: (a) TaskStart/TaskClose raise anyhow errors instead of AtmErrorCode::TaskNotFound (task.rs 289-301, 404-410) -- filed BB6-005; (b) OpenAPI handoffs field documented on MessageList instead of the real task-events response (openapi.yaml 446-452) -- filed BB6-006; (c) dead sync list_task_ledger_with_runtime (list.rs:321, only caller a test, cross-ref AX4-QA-001) extended with handoffs plumbing instead of deleted -- filed BB6-007; (d) ADR-061 lacks the 1.9.0 D5/D6 ledger entry -- filed BB6-008, resolved by construction on L4 (feature/bb6-docs-prompt-handoffs @ 4b0f6661c, pin verified via git show by fenix), fixed-pending-QA, no separate fix task. Minor: (e) render_task_event_line/render_prompt_handoff_line wrap infallible writes in Result/? (task.rs 827, 856) -- filed BB6-009; (f) handoffs field lacks skip_serializing_if = Vec::is_empty (list.rs 196-201) -- filed BB6-010. (a)(b)(c)(e)(f) ruled genuine by fenix and dispatched to solar as BB6-FIX-CLI-QA1-1789270000 on fix/bb6-cli-qa1 cut from 4b0f6661c."
     }
   ]
 }

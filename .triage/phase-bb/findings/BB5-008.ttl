@@ -19,11 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-12T23:25:29Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: rewrite ADR-062:134-137 to match the BB.4 contract (assignee-only public `atm task start`, daemon rejects non-counterparty callers as TaskNotCounterparty). File fence is that ADR-062 subsection only. Routed to arch-ctm on the BB.6 docs layer feature/bb6-docs-prompt-handoffs (which edits ADR-062 anyway for D5)." ;
+  triage:deferredNote "Fix: rewrite ADR-062:134-137 to match the BB.4 contract (assignee-only public `atm task start`, daemon rejects non-counterparty callers as TaskNotCounterparty). File fence is that ADR-062 subsection only. Routed to arch-ctm on the BB.6 docs layer feature/bb6-docs-prompt-handoffs (which edits ADR-062 anyway for D5). Fixed by arch-ctm as part of BB.6 L4 D5 docs, first pushed to feature/bb6-docs-prompt-handoffs @ 4b0f6661c (PR #1464, 2026-09-13T00:36:35Z), self-reported lint 36/36, pytests 1165 OK. Fixed-pending-QA; L4 QA verifies." ;
   triage:foundIn triage:BB5 ;
   triage:foundAt "2026-09-12T23:24:35Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB5-008/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-008/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB5-008/1>
   a triage:Occurrence ;
@@ -42,3 +43,21 @@
   triage:branch "fix/bb5-closure-r1" ;
   triage:headSha "1c7e76da5" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB5-008/2>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-062-task-state-machine.md" ;
+  triage:line 134 ;
+  triage:snippet "rewritten by arch-ctm's BB.6 L4 D5 docs to match the BB.4 atm task start contract (assignee-only, TaskNotCounterparty rejection); fixed-pending-QA" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "4b0f6661c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-008/2> .
+
+<urn:atm:triage:worktree/BB5-008/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "4b0f6661c" ;
+  triage:orderIndex 2 .
