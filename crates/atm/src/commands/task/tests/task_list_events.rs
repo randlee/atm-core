@@ -2,7 +2,10 @@
 
 use atm_core::list::ListOutcome;
 use atm_core::read::BucketCounts;
-use atm_core::test_support::{TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
+use atm_core::test_support::{
+    TEST_LEAD, TEST_LEAD_ADDRESS, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS,
+    TEST_TEAM,
+};
 use atm_core::types::{CommandAction, ReadSelection};
 use atm_storage::{
     BuiltInNudgeTemplateKind, MessageKey, MoveTarget, PromptHandoff, PromptTrigger, QueuePosition,
@@ -74,7 +77,7 @@ async fn list(f: &LoopbackFixture, all: bool, actor: &str) -> String {
 async fn list_default_is_callers_own_queue() {
     let f = LoopbackFixture::new("recipient");
     run_assign(&f, assign("MINE", TEST_RECIPIENT_ADDRESS, None)).await;
-    run_assign(&f, assign("OTHER", "test-lead@test-team", None)).await;
+    run_assign(&f, assign("OTHER", TEST_LEAD_ADDRESS, None)).await;
     let rows: Vec<atm_storage::TaskRow> =
         serde_json::from_str(&list(&f, false, "recipient").await).unwrap();
     assert_eq!(
@@ -90,7 +93,7 @@ async fn list_default_is_callers_own_queue() {
 async fn list_all_shows_every_member_grouped_with_state_header() {
     let f = LoopbackFixture::new("recipient");
     run_assign(&f, assign("A", TEST_RECIPIENT_ADDRESS, None)).await;
-    run_assign(&f, assign("B", "test-lead@test-team", None)).await;
+    run_assign(&f, assign("B", TEST_LEAD_ADDRESS, None)).await;
     let command = TaskListCommand {
         all: true,
         limit: None,
@@ -110,7 +113,7 @@ async fn list_all_shows_every_member_grouped_with_state_header() {
         .await
         .unwrap();
     assert!(output.contains("recipient (state:"));
-    assert!(output.contains("test-lead (state:"));
+    assert!(output.contains(&format!("{TEST_LEAD} (state:")));
 }
 
 #[tokio::test]

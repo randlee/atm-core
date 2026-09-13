@@ -2,7 +2,7 @@
 
 use atm_core::error::AtmErrorCode;
 use atm_core::schema::AtmMessageId;
-use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+use atm_core::test_support::{TEST_LEAD, TEST_LEAD_ADDRESS, TEST_SENDER, TEST_TEAM};
 use atm_storage::{
     Message, MessageEnvelope, MessageKey, QueuePosition, TaskActor, TaskCloseOutcome, TaskState,
 };
@@ -209,7 +209,7 @@ async fn stale_counterparty_rejection_exits_three_without_retry() {
         f.home_dir.clone(),
         f.current_dir.clone(),
         TEST_SENDER.parse().unwrap(),
-        "test-lead@test-team",
+        TEST_LEAD_ADDRESS,
         TEST_TEAM.parse().unwrap(),
         atm_core::send::SendMessageSource::Inline(
             "reassigned while recipient held stale preflight".into(),
@@ -224,17 +224,21 @@ async fn stale_counterparty_rejection_exits_three_without_retry() {
     let obs = CliObservability::fallback();
     f.composition(&obs).send(reassign).await.unwrap();
     let sender_before = f.inbox_contents(TEST_SENDER).len();
-    let lead_before = f.inbox_contents("test-lead").len();
+    let lead_before = f.inbox_contents(TEST_LEAD).len();
     let error = run_close(&f, close("T1", "recipient", OutcomeArg::Completed))
         .await
         .unwrap_err();
     assert_eq!(crate::exit_code_for_error(&error), 3);
+    let typed = error
+        .downcast_ref::<atm_core::error::AtmError>()
+        .expect("task close rejection remains typed");
+    assert_eq!(typed.code(), AtmErrorCode::TaskNotCounterparty);
     let store = f.task_store();
     let team = TEST_TEAM.parse().unwrap();
     let task = "T1".parse().unwrap();
     let row = store.load_task(&team, &task).unwrap().unwrap();
     assert_eq!(row.state, TaskState::Assigned);
-    assert_eq!(row.assignee.as_str(), "test-lead");
+    assert_eq!(row.assignee.as_str(), TEST_LEAD);
     let events = store.list_task_events(&team, &task, None).unwrap();
     assert_eq!(events.last().unwrap().event.as_str(), "rejected");
     assert_eq!(
@@ -246,13 +250,13 @@ async fn stale_counterparty_rejection_exits_three_without_retry() {
     );
     assert!(error.to_string().contains("report delivered"));
     assert_eq!(f.inbox_contents(TEST_SENDER).len(), sender_before);
-    assert_eq!(f.inbox_contents("test-lead").len(), lead_before + 1);
+    assert_eq!(f.inbox_contents(TEST_LEAD).len(), lead_before + 1);
 }
 
 #[tokio::test]
 #[serial(env)]
 async fn close_by_third_party_delivers_plain_report_and_exits_three() {
-    let f = LoopbackFixture::new_with_identity("recipient", "test-lead");
+    let f = LoopbackFixture::new_with_identity("recipient", TEST_LEAD);
     seed_assignment(&f, "T1", "recipient", TEST_SENDER);
     let sender_before = f.inbox_contents(TEST_SENDER).len();
     let recipient_before = f.inbox_contents("recipient").len();
@@ -261,10 +265,14 @@ async fn close_by_third_party_delivers_plain_report_and_exits_three() {
     let task: TaskId = "T1".parse().unwrap();
     let rows_before = store.list_tasks(&team, None).unwrap().len();
     let events_before = store.list_task_events(&team, &task, None).unwrap().len();
-    let error = run_close(&f, close("T1", "test-lead", OutcomeArg::Completed))
+    let error = run_close(&f, close("T1", TEST_LEAD, OutcomeArg::Completed))
         .await
         .unwrap_err();
     assert_eq!(crate::exit_code_for_error(&error), 3);
+    let typed = error
+        .downcast_ref::<atm_core::error::AtmError>()
+        .expect("task close rejection remains typed");
+    assert_eq!(typed.code(), AtmErrorCode::TaskNotCounterparty);
     assert!(error.to_string().contains("not assigned to or by"));
     assert!(error.to_string().contains("report delivered"));
     assert_eq!(f.inbox_contents(TEST_SENDER).len(), sender_before);
@@ -283,7 +291,7 @@ async fn close_by_third_party_delivers_plain_report_and_exits_three() {
     assert_eq!(rejected.event.as_str(), "rejected");
     assert_eq!(
         rejected.actor,
-        TaskActor::Member("test-lead".parse().unwrap())
+        TaskActor::Member(TEST_LEAD.parse().unwrap())
     );
 }
 
