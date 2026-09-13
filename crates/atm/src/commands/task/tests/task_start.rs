@@ -117,13 +117,13 @@ async fn task_start_defaults_message_when_omitted() {
 
 #[tokio::test]
 #[serial(env)]
-async fn task_start_by_non_assignee_fails_before_sending() {
+async fn task_start_by_non_assignee_is_rejected_by_writer_and_audited() {
     let fixture = LoopbackFixture::new_with_identity("recipient", TEST_LEAD);
     seed_assignment(&fixture, "T1", "recipient");
     let before = fixture.inbox_contents(TEST_SENDER).len();
     let error = run_start(&fixture, start("T1", TEST_LEAD, None))
         .await
-        .expect_err("preflight rejection");
+        .expect_err("writer rejection");
     assert!(
         error
             .to_string()
@@ -136,6 +136,18 @@ async fn task_start_by_non_assignee_fails_before_sending() {
     let json = serde_json::to_value(typed).expect("serialize --json task start error");
     assert_eq!(json["code"], "ATM_TASK_NOT_COUNTERPARTY");
     assert_eq!(fixture.inbox_contents(TEST_SENDER).len(), before);
+    let events = fixture
+        .task_store()
+        .list_task_events(&TEST_TEAM.parse().unwrap(), &"T1".parse().unwrap(), None)
+        .unwrap();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event.event.as_str() == "rejected")
+            .count(),
+        1,
+        "writer rejection must append exactly one rejected audit row"
+    );
 }
 
 #[tokio::test]
