@@ -22,11 +22,8 @@ import tempfile
 import time
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_EVIDENCE_DIR = ROOT / "site" / "reports" / "send-message-benchmark"
-DEFAULT_RAW_EVIDENCE_DIR = ROOT / "artifacts" / "benchmark" / "send-message-benchmark"
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+if str(Path(__file__).resolve().parents[2]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.smoke.benchmark_schema import (
     BaselineEntry,
@@ -70,7 +67,6 @@ from scripts.smoke.daemon_lifecycle import (
     terminate_process,
 )
 from scripts.smoke.smoke_common import SmokeError, command_result
-DEFAULT_WORKERS = 512
 
 from scripts.smoke.admission_capacity_support import (
     ADMISSIONS_PER_INTERVAL,
@@ -90,12 +86,16 @@ from scripts.smoke.admission_capacity_support import (
     MAX_IN_FLIGHT_REQUESTS,
     PEER_WIRE_SECURITY_MODES,
     READY_TIMEOUT_SECONDS,
+    ROOT,
     SPARSE_FRAMES_PER_CONNECTION,
     SUSTAINED_MESSAGE_COUNTS,
     AdmissionResult,
     CapacityRoster,
     CapacityRunResult,
     DEFAULT_CAPACITY_ROSTER,
+    DEFAULT_EVIDENCE_DIR,
+    DEFAULT_RAW_EVIDENCE_DIR,
+    DEFAULT_WORKERS,
     DisposableMtlsIdentity,
     HostStateBackup,
     HttpRequest,
