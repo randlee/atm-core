@@ -16,6 +16,7 @@ if str(JUST_DIR) not in sys.path:
 from generate_report_index import ReportIndexError
 from generate_report_index import build_index as _build_index
 from generate_report_index import write_or_check
+from scripts import report_runtime
 
 
 def build_index(reports: Path) -> str:
@@ -77,6 +78,42 @@ def write_smoke_envelope(root: Path, platform: str, host: str, run: str) -> str:
 
 
 class GenerateReportIndexTests(unittest.TestCase):
+    def test_index_and_runtime_share_git_unavailable_revision_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            reports = root / "site/reports"
+            write_envelope(root, "agreement", "benchmark", "2026-08-08T04:00:00Z", "host")
+            payload_path = reports / "agreement.json"
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            payload.update({"procedure": "benchmark", "source_revision": "a" * 40})
+            payload_path.write_text(json.dumps(payload), encoding="utf-8")
+            revisions = [
+                {"rev": "1" * 40, "date": "2026-08-01", "html": "procedures/benchmark/11111111.html"},
+                {"rev": "2" * 40, "date": "2026-08-05", "html": "procedures/benchmark/22222222.html"},
+            ]
+            for revision in revisions:
+                page = root / "site/reports" / revision["html"]
+                page.parent.mkdir(parents=True, exist_ok=True)
+                page.write_text("<html>procedure</html>\n", encoding="utf-8")
+            (reports / "procedures/manifest.json").write_text(
+                json.dumps({"schema_version": 1, "procedures": [{"procedure": "benchmark", "revisions": revisions}]}),
+                encoding="utf-8",
+            )
+            with mock.patch.object(
+                report_runtime.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess([], 1, "", "git unavailable"),
+            ):
+                runtime_page = report_runtime.resolve_procedure_page(
+                    "benchmark", "a" * 40, root=root, generated_at="2026-08-08T04:00:00Z"
+                )
+                index = _build_index(reports)
+            self.assertIsNotNone(runtime_page)
+            assert runtime_page is not None
+            self.assertEqual(runtime_page.html, "procedures/benchmark/22222222.html")
+            self.assertIn('href="procedures/benchmark/22222222.html"', index)
+            self.assertNotIn("inferred from run date", index)
+
     def test_source_revision_resolves_to_newest_ancestor_without_inference(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)

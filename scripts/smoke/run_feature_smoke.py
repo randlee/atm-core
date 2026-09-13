@@ -91,6 +91,16 @@ def require_environment() -> tuple[str, str, str]:
     return os.environ.get("ATM_SMOKE_ATM", "atm"), identity, team
 
 
+def resolve_dns_addresses(host: str) -> list[str]:
+    """Resolve a peer using the smoke runner's configured direct-peer port."""
+    return _resolve_dns_addresses(host, direct_peer_port())
+
+
+def remote_resolve_dns_addresses(peer: str, host: str) -> list[str]:
+    """Resolve a remote peer using the smoke runner's configured port."""
+    return _remote_resolve_dns_addresses(peer, host, direct_peer_port())
+
+
 def parse_json(result: dict[str, Any], label: str) -> Any:
     if result["exit_code"] != 0:
         raise SmokeError(f"{label} failed: {result['stderr'].strip() or result['stdout'].strip()}")
@@ -223,10 +233,19 @@ def doctor_ready(report: Any, expected_version: str) -> bool:
 
 
 
-from scripts.smoke import feature_smoke_network_support as _network_support
-
-globals().update({name: getattr(_network_support, name) for name in _network_support.__all__})
-_network_support._PUBLIC_NAMESPACE = globals()
+from scripts.smoke.feature_smoke_network_support import (
+    add_dns_case,
+    add_mtls_rejection_case,
+    certificate_authority,
+    certificate_bundle,
+    remote_certificate_workspace,
+    remote_command,
+    remote_context,
+    remote_resolve_dns_addresses as _remote_resolve_dns_addresses,
+    remote_shell,
+    resolve_dns_addresses as _resolve_dns_addresses,
+    mtls_rejected_before_http,
+)
 def curl_doctor(
     cases: list[dict[str, Any]], peer: str, atm: str, remote_atm: str, remote_host: str, expected_version: str,
     *, plaintext: bool,
@@ -305,6 +324,7 @@ def curl_doctor(
                         remote_negative_result,
                         peer,
                         platform.node(),
+                        add_case,
                     )
                     local_negative = [
                         "curl", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "5",
@@ -318,6 +338,7 @@ def curl_doctor(
                         local_negative_result,
                         platform.node(),
                         peer,
+                        add_case,
                     )
             # These checks use each host's ordinary DNS resolver. The mTLS
             # request below intentionally omits --resolve, proving that the
@@ -330,6 +351,7 @@ def curl_doctor(
                 remote_authority,
                 remote_host,
                 resolve_dns_addresses,
+                add_case,
             )
             local_hostname = platform.node()
             local_advertised_ip = advertised_host(atm)
@@ -341,6 +363,7 @@ def curl_doctor(
                 local_hostname,
                 local_advertised_ip,
                 lambda hostname: remote_resolve_dns_addresses(peer, hostname),
+                add_case,
             )
             dns_curl = [
                 "curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET",
