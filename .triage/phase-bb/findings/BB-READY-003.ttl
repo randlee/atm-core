@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB-READY-003>
+  a triage:Finding ;
+  triage:findingId "BB-READY-003" ;
+  triage:title "tools/bootstrap.py's cargo-shear cargo-install fallback pulls a version that cannot build on the pinned rustc" ;
+  triage:description "solar production-readiness review, report 01M2CQBTXJXD07KW4YHWDT8104 (verbatim on PR #1477, comment 2026-09-13T06:30:20Z), reviewed head 48b18d48c; still present at fenix-verified current heads. Refined by arch-ctm (01M2CQK41HFXFJCGQW7Q7C9B4K): cargo-shear 1.13.2's locked ra_ap_* 0.0.340 dependencies require rustc 1.95, but tools/bootstrap.toml:4 pins Rust 1.94.1. CI itself is green because ci.yml:108 installs cargo-binstall 1.22.0 and tools/bootstrap.py:685 binstalls the upstream prebuilt cargo-shear 1.13.3 (a prebuilt binary, not compiled locally). The defect is tools/bootstrap.py:699, the `cargo install --locked` source-build fallback taken whenever cargo-binstall is absent -- that fallback compiles cargo-shear from source against the pinned 1.94.1 rustc and fails (clean 'just bootstrap' without a pre-installed cargo-binstall exits 101)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "important" ;
+  triage:source "solar, production-readiness review, report 01M2CQBTXJXD07KW4YHWDT8104; refined by arch-ctm, 01M2CQK41HFXFJCGQW7Q7C9B4K" ;
+  triage:repeatable false ;
+  triage:sweepScope "tools/bootstrap.py:685-699 (cargo-shear install path); tools/bootstrap.toml:4,14,23" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T06:37:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): important, phase-level tooling debt (matches the known bootstrap toolchain-version debt), not tied to any single BB.N sprint's deliverables. Attributed foundIn to BB3 as its declared branch (fix/bb3-qa5-r6, PR #1468) is already merged and BB3's findings are all closed, freeing its structure.ttl branch slot for this record's fix branch without disturbing any live tracking -- a bookkeeping choice, not a claim that this defect originated in BB.3's work; flagged to fenix as such. Fenix's ruling (2026-09-13): keep cargo-shear pinned at 1.13.3; have bootstrap install the pinned cargo-binstall itself (checksummed, like the sc-compose/wyvern pattern) so the prebuilt path is always taken, and delete the unreachable source-build fallback. Fix re-dispatched by fenix: arch-ctm, BB-READY-BOOTSTRAP-FIX-R2 (branch fix/bb-bootstrap-shear-pin, PR just opened)." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-13T06:37:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB-READY-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB-READY-003/1>
+  a triage:Occurrence ;
+  triage:file "tools/bootstrap.py" ;
+  triage:line 699 ;
+  triage:snippet "cargo install --locked fallback (taken when cargo-binstall is absent) compiles cargo-shear from source against the pinned rustc 1.94.1, which cargo-shear's locked ra_ap_* 0.0.340 deps cannot build on (need rustc 1.95); clean 'just bootstrap' exits 101" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "48b18d48c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB-READY-003/1> .
+
+<urn:atm:triage:worktree/BB-READY-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "48b18d48c" ;
+  triage:orderIndex 1 .
