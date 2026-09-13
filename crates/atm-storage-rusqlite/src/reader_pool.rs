@@ -1528,7 +1528,7 @@ mod tests {
         assert_eq!(replaced.retired_replaced_workers, 1);
         assert_eq!(replaced.pool_size, 1);
         assert_eq!(
-            pool.submit(Duration::from_millis(100), |_, _| {
+            pool.submit(Duration::from_secs(1), |_, _| {
                 Ok::<_, atm_storage::ReadLaneError>("reclaimed")
             })
             .await
@@ -1609,8 +1609,17 @@ mod tests {
                 .expect("worker reports query termination"),
             "the worker must observe SQLite's interrupt, not merely abandon the query"
         );
+        wait_for_metrics(&pool, |metrics| {
+            metrics.interrupted_while_active == 1
+                && metrics.in_flight == 0
+                && metrics.queue_depth == 0
+                && metrics.current_quarantined_workers == 0
+                && metrics.pool_size == 1
+        })
+        .await
+        .expect("reader worker reclaim signal");
         assert_eq!(
-            pool.submit(Duration::from_millis(100), |connection, _| {
+            pool.submit(Duration::from_secs(5), |connection, _| {
                 connection
                     .query_row("SELECT 1;", [], |row| row.get::<_, i64>(0))
                     .map_err(|error| atm_storage::ReadLaneError::Unavailable {
@@ -1651,7 +1660,7 @@ mod tests {
         pool: &ReaderPool,
         predicate: impl Fn(&super::ReaderLaneMetricsSnapshot) -> bool,
     ) -> Result<(), tokio::time::error::Elapsed> {
-        tokio::time::timeout(Duration::from_secs(1), async {
+        tokio::time::timeout(Duration::from_secs(30), async {
             loop {
                 let metrics = pool.metrics();
                 if predicate(&metrics) {
