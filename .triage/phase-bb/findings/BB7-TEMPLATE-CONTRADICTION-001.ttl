@@ -16,10 +16,10 @@
   triage:source "req-qa, verified by quality-mgr, BB-POST-MORTEM-1789304000 phase-ending gate" ;
   triage:repeatable true ;
   triage:sweepScope "docs/team-protocol.md:54-80; .claude/skills/graph-orchestration/{dev-task,dev-fix}.xml.j2; .claude/skills/codex-orchestration/{dev-template,fix-assignment,review-template,qa-template}.xml.j2; both SKILL.md dispatch sections; ~/.atm/templates/codex-orchestration/ host-only variants (reported with diff, not edited, per BB.2 D4 rule)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T04:35:38Z"^^xsd:dateTime ;
-  triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, confirmed -- do not merge to develop with the live dispatch templates telling every assignee the wrong protocol. Resolved by BB.7 D1/D3/D4 exactly as scoped in sprint-BB.7-docs.md (team-protocol.md rewrite, agent-conventions.md task-lines section, ack step deleted from all six templates + replaced with `atm task start {{ task_id }} \"...\"` as step one). Dispatched to cipher together with BB7-DOCS-NONDELIVERY-001 as one BB.7 fix layer, not a separate branch -- they are the same sprint's deliverables. UPDATE (2026-09-13T05:19:57Z): quality-mgr BB7-DOCS-QA1-1789320500 (report 01M2CKA77FGJHZ9E1M0QY55MYV, PR #1478) confirms D1/D4's core edits landed but 3 occurrences of the same defect class were missed by the sprint's file scope -- correlated below as occurrences 2-4 rather than filed as new records. STAYS OPEN. Fix round BB7-DOCS-FIX-R1-1789329000 dispatched to cipher on the same branch (feature/bb7-docs); re-verification follows on his final SHA. ATM-QA-BB7-004 (minor, host-only ~/.atm/templates/codex-orchestration/dev-template-cipher/solar.xml.j2 still ack-first) is fenix's own post-merge host-sync item, not tracked as a separate triage record. UPDATE (2026-09-13T05:43:56Z): quality-mgr BB7-DOCS-QA2-1789332000 (PR #1478, round 2) confirms occurrences 1-4 genuinely fixed by cipher's BB7-DOCS-FIX-R1-1789329000 push (feature/bb7-docs @ 9167bd479, compose_passthrough re-verified 3/3) -- closed below. But req-qa's mandated sweep found 2 NEW live occurrences of the same task-linked-ack defect class (ATM-QA-BB7-101/102), personally verified by quality-mgr via git show at 84ea982ee -- correlated below as occurrences 5-6 rather than filed as new records. STAYS OPEN pending next fix layer. UPDATE (2026-09-13T05:46:26Z): fenix's own broad sweep at the same head (84ea982ee) found 7 more live instances of the same defect class -- correlated below as occurrences 7-15 rather than filed as new records: .claude/agents/quality-mgr.md:145,272,308; .claude/skills/publishing/SKILL.md:54; .claude/skills/publishing/preflight.xml.j2:41; .claude/skills/publishing/publish.xml.j2:39; CLAUDE.md:81 ('ack -> work -> task close'); .claude/skills/quality-management-gh/SKILL.md:164; .claude/skills/triaging-findings/SKILL.md:379 ('ack, work, task close'). Fix round BB7-DOCS-FIX-R2-1789333000 dispatched to cipher on the same branch (closed hit list). STAYS OPEN pending re-verification. UPDATE (2026-09-13T05:57:17Z): fenix found one more live instance at feature/bb7-docs @ 37d06b1ec after cipher's R2 push -- docs/team-protocol.md:127 ('If blocked, send an immediate ack plus blocker status') -- correlated below as occurrence 16, addendum sent to cipher on the same branch. Occurrences 5-15 reported fixed by cipher at 37d06b1ec; awaiting the round-3 QA verdict before closing anything. STAYS OPEN. UPDATE (2026-09-13T06:10:25Z): quality-mgr BB7-DOCS-QA3 (PR #1478, round 3) confirms occurrences 5-16 genuinely fixed at feature/bb7-docs @ caf73bc34 (compose_passthrough 3/3, doc lint gate green, confirmed independently by req-qa and arch-qa) -- closed below. But the mandated ack/acknowledg sweep found 8 more live instances of the same defect class (7 in Mandatory Baseline Sources docs + 1 live skill nudge payload), personally verified by quality-mgr via git show at caf73bc34 -- correlated below as occurrences 17-24 rather than filed as new records. quality-mgr recommends one full-corpus grep for this pattern before round 4, since it has resurfaced across 3 rounds. UPDATE (2026-09-13T06:12:50Z): fenix's authoritative task (BB-CLOSE-BB2-003-OCC17-29-1789336100, quality-mgr BB7-DOCS-QA3-1789334500 full report) supersedes the prior 17-24 file/line mapping -- corrected below (project-plan.md:570,579 and tasks.md:9-12,78 each collapsed to one occurrence per fenix's grouping; read-behavior.md's 4 locations split into 4 separate occurrences 19-22). fenix's own extended sweep adds occurrences 25-29: docs/atm/commands/send.md:26; docs/project-plan.md:608; .claude/skills/restore-team-communications/SKILL.md:76 (task nudge sample); docs/user-documents/examples/nudge-templates/task.xml + the retired task-kind sample in nudge-templates.md; docs/requirements.md Sec 6.5 (conditional, cipher to audit). Fix round BB7-DOCS-FIX-R3-1789336000 dispatched to cipher with the closed list. STAYS OPEN pending round 4." ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, confirmed -- do not merge to develop with the live dispatch templates telling every assignee the wrong protocol. Resolved by BB.7 D1/D3/D4 exactly as scoped in sprint-BB.7-docs.md (team-protocol.md rewrite, agent-conventions.md task-lines section, ack step deleted from all six templates + replaced with `atm task start {{ task_id }} \"...\"` as step one). Dispatched to cipher together with BB7-DOCS-NONDELIVERY-001 as one BB.7 fix layer, not a separate branch -- they are the same sprint's deliverables. UPDATE (2026-09-13T05:19:57Z): quality-mgr BB7-DOCS-QA1-1789320500 (report 01M2CKA77FGJHZ9E1M0QY55MYV, PR #1478) confirms D1/D4's core edits landed but 3 occurrences of the same defect class were missed by the sprint's file scope -- correlated below as occurrences 2-4 rather than filed as new records. STAYS OPEN. Fix round BB7-DOCS-FIX-R1-1789329000 dispatched to cipher on the same branch (feature/bb7-docs); re-verification follows on his final SHA. ATM-QA-BB7-004 (minor, host-only ~/.atm/templates/codex-orchestration/dev-template-cipher/solar.xml.j2 still ack-first) is fenix's own post-merge host-sync item, not tracked as a separate triage record. UPDATE (2026-09-13T05:43:56Z): quality-mgr BB7-DOCS-QA2-1789332000 (PR #1478, round 2) confirms occurrences 1-4 genuinely fixed by cipher's BB7-DOCS-FIX-R1-1789329000 push (feature/bb7-docs @ 9167bd479, compose_passthrough re-verified 3/3) -- closed below. But req-qa's mandated sweep found 2 NEW live occurrences of the same task-linked-ack defect class (ATM-QA-BB7-101/102), personally verified by quality-mgr via git show at 84ea982ee -- correlated below as occurrences 5-6 rather than filed as new records. STAYS OPEN pending next fix layer. UPDATE (2026-09-13T05:46:26Z): fenix's own broad sweep at the same head (84ea982ee) found 7 more live instances of the same defect class -- correlated below as occurrences 7-15 rather than filed as new records: .claude/agents/quality-mgr.md:145,272,308; .claude/skills/publishing/SKILL.md:54; .claude/skills/publishing/preflight.xml.j2:41; .claude/skills/publishing/publish.xml.j2:39; CLAUDE.md:81 ('ack -> work -> task close'); .claude/skills/quality-management-gh/SKILL.md:164; .claude/skills/triaging-findings/SKILL.md:379 ('ack, work, task close'). Fix round BB7-DOCS-FIX-R2-1789333000 dispatched to cipher on the same branch (closed hit list). STAYS OPEN pending re-verification. UPDATE (2026-09-13T05:57:17Z): fenix found one more live instance at feature/bb7-docs @ 37d06b1ec after cipher's R2 push -- docs/team-protocol.md:127 ('If blocked, send an immediate ack plus blocker status') -- correlated below as occurrence 16, addendum sent to cipher on the same branch. Occurrences 5-15 reported fixed by cipher at 37d06b1ec; awaiting the round-3 QA verdict before closing anything. STAYS OPEN. UPDATE (2026-09-13T06:10:25Z): quality-mgr BB7-DOCS-QA3 (PR #1478, round 3) confirms occurrences 5-16 genuinely fixed at feature/bb7-docs @ caf73bc34 (compose_passthrough 3/3, doc lint gate green, confirmed independently by req-qa and arch-qa) -- closed below. But the mandated ack/acknowledg sweep found 8 more live instances of the same defect class (7 in Mandatory Baseline Sources docs + 1 live skill nudge payload), personally verified by quality-mgr via git show at caf73bc34 -- correlated below as occurrences 17-24 rather than filed as new records. quality-mgr recommends one full-corpus grep for this pattern before round 4, since it has resurfaced across 3 rounds. UPDATE (2026-09-13T06:12:50Z): fenix's authoritative task (BB-CLOSE-BB2-003-OCC17-29-1789336100, quality-mgr BB7-DOCS-QA3-1789334500 full report) supersedes the prior 17-24 file/line mapping -- corrected below (project-plan.md:570,579 and tasks.md:9-12,78 each collapsed to one occurrence per fenix's grouping; read-behavior.md's 4 locations split into 4 separate occurrences 19-22). fenix's own extended sweep adds occurrences 25-29: docs/atm/commands/send.md:26; docs/project-plan.md:608; .claude/skills/restore-team-communications/SKILL.md:76 (task nudge sample); docs/user-documents/examples/nudge-templates/task.xml + the retired task-kind sample in nudge-templates.md; docs/requirements.md Sec 6.5 (conditional, cipher to audit). Fix round BB7-DOCS-FIX-R3-1789336000 dispatched to cipher with the closed list. STAYS OPEN pending round 4. UPDATE (2026-09-13T06:29:35Z): quality-mgr BB7-DOCS-QA4-1789280579 (PR #1478, round 4) confirms all 13 occurrences 17-29 FIXED at feature/bb7-docs @ c6a10a09f, confirmed by req-qa, arch-qa, and quality-mgr's own independent git-show reads in a fresh detached worktree; full 23-hit sweep clean (13 corrected wording + 10 ruled LEAVE); cargo test -p agent-team-mail-core --test task_state 6/6. CLOSED -- last open occurrence range on the last open Phase BB triage record." ;
   triage:foundIn triage:BB7 ;
   triage:foundAt "2026-09-13T04:35:38Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/1> ;
@@ -51,7 +51,10 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/27> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/28> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/29> ;
-  triage:triageRecordVersion "7" .
+  triage:hasResolution <urn:atm:triage:resolution/BB7-TEMPLATE-CONTRADICTION-001/1> ;
+  triage:closedAt "2026-09-13T06:29:35Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "8" .
 
 <urn:atm:triage:occurrence/BB7-TEMPLATE-CONTRADICTION-001/1>
   a triage:Occurrence ;
@@ -346,8 +349,8 @@
   triage:file "docs/requirements.md" ;
   triage:line 3482 ;
   triage:snippet "fenix's authoritative mapping of quality-mgr BB7-DOCS-QA3-1789334500: requirements.md:3482, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/17> .
@@ -364,8 +367,8 @@
   triage:file "docs/user-documents/tasks.md" ;
   triage:line 9 ;
   triage:snippet "fenix's authoritative mapping of quality-mgr BB7-DOCS-QA3-1789334500: tasks.md:9-12,78, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/18> .
@@ -382,8 +385,8 @@
   triage:file "docs/read-behavior.md" ;
   triage:line 38 ;
   triage:snippet "fenix's authoritative mapping of quality-mgr BB7-DOCS-QA3-1789334500: read-behavior.md:38, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/19> .
@@ -400,8 +403,8 @@
   triage:file "docs/read-behavior.md" ;
   triage:line 250 ;
   triage:snippet "fenix's authoritative mapping of quality-mgr BB7-DOCS-QA3-1789334500: read-behavior.md:250, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/20> .
@@ -418,8 +421,8 @@
   triage:file "docs/read-behavior.md" ;
   triage:line 457 ;
   triage:snippet "fenix's authoritative mapping of quality-mgr BB7-DOCS-QA3-1789334500: read-behavior.md:457-460, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/21> .
@@ -436,8 +439,8 @@
   triage:file "docs/read-behavior.md" ;
   triage:line 494 ;
   triage:snippet "fenix's authoritative mapping of quality-mgr BB7-DOCS-QA3-1789334500: read-behavior.md:494-495, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/22> .
@@ -454,8 +457,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 570 ;
   triage:snippet "fenix's authoritative mapping of quality-mgr BB7-DOCS-QA3-1789334500: project-plan.md:570,579, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/23> .
@@ -472,8 +475,8 @@
   triage:file "docs/architecture.md" ;
   triage:line 1939 ;
   triage:snippet "fenix's authoritative mapping of quality-mgr BB7-DOCS-QA3-1789334500: architecture.md:1939, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/24> .
@@ -490,8 +493,8 @@
   triage:file "docs/atm/commands/send.md" ;
   triage:line 26 ;
   triage:snippet "fenix's own sweep extras (BB7-DOCS-QA3-1789334500): send.md:26, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/25> .
@@ -508,8 +511,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 608 ;
   triage:snippet "fenix's own sweep extras (BB7-DOCS-QA3-1789334500): project-plan.md:608, same ack/task-start defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/26> .
@@ -526,8 +529,8 @@
   triage:file ".claude/skills/restore-team-communications/SKILL.md" ;
   triage:line 76 ;
   triage:snippet "fenix's own sweep extras (BB7-DOCS-QA3-1789334500): restore-team-communications/SKILL.md:76 task nudge sample says ack, same defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/27> .
@@ -544,8 +547,8 @@
   triage:file "docs/user-documents/examples/nudge-templates/task.xml" ;
   triage:line 1 ;
   triage:snippet "fenix's own sweep extras (BB7-DOCS-QA3-1789334500): task.xml plus the task-kind sample in nudge-templates.md (retired kind) says 'ack the message', same defect class, verified via git show at caf73bc34" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/28> .
@@ -562,8 +565,8 @@
   triage:file "docs/requirements.md" ;
   triage:line 1 ;
   triage:snippet "fenix's own sweep extras (BB7-DOCS-QA3-1789334500): requirements.md Sec 6.5, conditional -- cipher to audit whether this location is actually the same defect class before fixing" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:occursIn <urn:atm:triage:worktree/BB7-TEMPLATE-CONTRADICTION-001/29> .
@@ -574,3 +577,12 @@
   triage:branch "feature/bb7-docs" ;
   triage:headSha "caf73bc34" ;
   triage:orderIndex 29 .
+
+<urn:atm:triage:resolution/BB7-TEMPLATE-CONTRADICTION-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T06:29:35Z"^^xsd:dateTime ;
+  triage:fixCommit "c6a10a09f" ;
+  triage:fixBranch "feature/bb7-docs" ;
+  triage:verifiedInRound "BB7-DOCS-QA4-1789280579" ;
+  triage:resolutionNote "quality-mgr BB7-DOCS-QA4-1789280579 Final Quality Report (PR #1478, round 4, report 01M2CQ9JVXNY849QZ1X49F0JHQ). All 29 occurrences across four fix rounds (R1 9167bd479, R2 37d06b1ec, R3 c6a10a09f) confirmed fixed; final round's full 23-hit corpus-grep sweep clean (13 corrected wording + 10 ruled LEAVE); cargo test -p agent-team-mail-core --test task_state 6/6. Confirmed independently by req-qa, arch-qa, and quality-mgr's own git-show reads in a fresh detached worktree at c6a10a09f. Last open occurrence range on the last open Phase BB triage record." .
