@@ -16,22 +16,26 @@
   triage:source "quality-mgr, BB-READY-004-QA1-1789287640, verdict FAIL" ;
   triage:repeatable false ;
   triage:sweepScope ".claude/skills/prerelease/scripts/prerelease.py::wait_for_archive (clamp branch test)" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-13T08:43:30Z"^^xsd:dateTime ;
-  triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, not blocking on its own -- folded into the same upstream sc-publish PR as ATM-QA-BB004-2 per fenix ('same change + kit tests covering the clamp branch'). Will close alongside ATM-QA-BB004-2/BB-READY-004 once the pin-advance layer passes fix-round QA. foundIn BB3 as bookkeeping reuse, consistent with ATM-QA-BB004-2." ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, not blocking on its own -- folded into the same upstream sc-publish PR as ATM-QA-BB004-2 per fenix ('same change + kit tests covering the clamp branch'). Will close alongside ATM-QA-BB004-2/BB-READY-004 once the pin-advance layer passes fix-round QA. foundIn BB3 as bookkeeping reuse, consistent with ATM-QA-BB004-2. CLOSED (2026-09-13T09:13:00Z): quality-mgr BB-READY-004-QA2-1789291300 (PR #1487 @ 7c0711379, report 01M2D0MMCYNP5DS7MF9AYMSFE8) confirms fixed -- clamp branch test present in the adopted sc-publish 390cc9ff1 kit tests." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-13T08:43:30Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-BB004-1/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-BB004-1/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/ATM-QA-BB004-1/1> ;
+  triage:closedAt "2026-09-13T09:13:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-BB004-1/1>
   a triage:Occurrence ;
   triage:file ".claude/skills/prerelease/scripts/prerelease.py" ;
   triage:line 330 ;
   triage:snippet "clamp branch min(ARCHIVE_POLL_SECONDS, remaining) is untested" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb-prerelease-archive-wait" ;
   triage:headSha "052773738" ;
   triage:occursIn <urn:atm:triage:worktree/ATM-QA-BB004-1/1> .
@@ -42,3 +46,30 @@
   triage:branch "fix/bb-prerelease-archive-wait" ;
   triage:headSha "052773738" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-BB004-1/2>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/prerelease/scripts/prerelease.py" ;
+  triage:line 330 ;
+  triage:snippet "fix verified by quality-mgr BB-READY-004-QA2-1789291300: clamp branch test present in the adopted sc-publish 390cc9ff1 kit tests" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb-ready-004-adopt" ;
+  triage:headSha "7c0711379" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-BB004-1/2> .
+
+<urn:atm:triage:worktree/ATM-QA-BB004-1/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1487, fix/bb-ready-004-adopt" ;
+  triage:branch "fix/bb-ready-004-adopt" ;
+  triage:headSha "7c0711379" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/ATM-QA-BB004-1/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T09:13:00Z"^^xsd:dateTime ;
+  triage:fixCommit "7c0711379" ;
+  triage:fixBranch "fix/bb-ready-004-adopt" ;
+  triage:verifiedInRound "BB-READY-004-QA2-1789291300" ;
+  triage:resolutionNote "quality-mgr BB-READY-004-QA2-1789291300 (PR #1487, report 01M2D0MMCYNP5DS7MF9AYMSFE8): clamp branch test present, adopted from sc-publish PR #93's merge commit 390cc9ff1." .

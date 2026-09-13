@@ -16,22 +16,26 @@
   triage:source "quality-mgr, BB-READY-004-QA1-1789287640, verdict FAIL" ;
   triage:repeatable false ;
   triage:sweepScope ".claude/skills/prerelease/scripts/prerelease.py (ADR-050 shared-kit ownership)" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-09-13T08:43:30Z"^^xsd:dateTime ;
-  triage:deferredNote "Lead ruling (2026-09-13, team-lead/fenix, ADR-050 -- no exception): upstream first, per ADR-050's explicit text. fenix is opening the wait_for_archive fix (plus kit tests covering the ATM-QA-BB004-1 clamp branch) as a sc-publish PR directly; once its CI is green and it merges, a new atm-core layer advances release/sc-publish-pin.toml to that merge commit and re-syncs the kit through an unchanged installer run, which also retires the stale 'vendored from unmerged #90' note (#90 itself merged 2026-09-09). PR #1484 is closed as superseded, not merged. BB-READY-004 stays open until the pin-advance layer passes fix-round QA; cipher's ATM-owned .just test additions from PR #1484 carry over into that layer. foundIn attributed to BB3 as bookkeeping reuse of a fully-closed sprint's branch slot (same convention as BB-READY-003/BB-READY-004), not a claim of origin -- no live atm-core fix branch exists yet pending the upstream merge." ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead/fenix, ADR-050 -- no exception): upstream first, per ADR-050's explicit text. fenix is opening the wait_for_archive fix (plus kit tests covering the ATM-QA-BB004-1 clamp branch) as a sc-publish PR directly; once its CI is green and it merges, a new atm-core layer advances release/sc-publish-pin.toml to that merge commit and re-syncs the kit through an unchanged installer run, which also retires the stale 'vendored from unmerged #90' note (#90 itself merged 2026-09-09). PR #1484 is closed as superseded, not merged. BB-READY-004 stays open until the pin-advance layer passes fix-round QA; cipher's ATM-owned .just test additions from PR #1484 carry over into that layer. foundIn attributed to BB3 as bookkeeping reuse of a fully-closed sprint's branch slot (same convention as BB-READY-003/BB-READY-004), not a claim of origin -- no live atm-core fix branch exists yet pending the upstream merge. CLOSED (2026-09-13T09:13:00Z): quality-mgr BB-READY-004-QA2-1789291300 (PR #1487 @ 7c0711379, report 01M2D0MMCYNP5DS7MF9AYMSFE8) confirms fixed -- kit blobs byte-identical to sc-publish 390cc9ff1 via GitHub Contents API, pin note accurate (revision unchanged from the merge commit). No local hotfix; adopted through the unchanged installer run per ADR-050." ;
   triage:foundIn triage:BB3 ;
   triage:foundAt "2026-09-13T08:43:30Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-BB004-2/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-BB004-2/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/ATM-QA-BB004-2/1> ;
+  triage:closedAt "2026-09-13T09:13:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-BB004-2/1>
   a triage:Occurrence ;
   triage:file ".claude/skills/prerelease/scripts/prerelease.py" ;
   triage:line 330 ;
   triage:snippet "local edit to a synced sc-publish kit file (vendored from unmerged sc-publish PR #90); ADR-050 requires an upstream fix first" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/bb-prerelease-archive-wait" ;
   triage:headSha "052773738" ;
   triage:occursIn <urn:atm:triage:worktree/ATM-QA-BB004-2/1> .
@@ -42,3 +46,30 @@
   triage:branch "fix/bb-prerelease-archive-wait" ;
   triage:headSha "052773738" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/ATM-QA-BB004-2/2>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/prerelease/scripts/prerelease.py" ;
+  triage:line 330 ;
+  triage:snippet "fix verified by quality-mgr BB-READY-004-QA2-1789291300: kit blobs byte-identical to sc-publish 390cc9ff1 via GitHub Contents API, pin note accurate -- adopted through an unchanged installer run, no local edit" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb-ready-004-adopt" ;
+  triage:headSha "7c0711379" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-BB004-2/2> .
+
+<urn:atm:triage:worktree/ATM-QA-BB004-2/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1487, fix/bb-ready-004-adopt" ;
+  triage:branch "fix/bb-ready-004-adopt" ;
+  triage:headSha "7c0711379" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/ATM-QA-BB004-2/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T09:13:00Z"^^xsd:dateTime ;
+  triage:fixCommit "7c0711379" ;
+  triage:fixBranch "fix/bb-ready-004-adopt" ;
+  triage:verifiedInRound "BB-READY-004-QA2-1789291300" ;
+  triage:resolutionNote "quality-mgr BB-READY-004-QA2-1789291300 (PR #1487, report 01M2D0MMCYNP5DS7MF9AYMSFE8): kit blobs confirmed byte-identical to sc-publish PR #93's merge commit 390cc9ff1 via the GitHub Contents API; pin note rewritten to the true synced revision. Adopted through an unchanged installer run per ADR-050, no local edit." .
