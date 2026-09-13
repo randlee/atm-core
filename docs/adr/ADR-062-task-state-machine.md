@@ -131,14 +131,32 @@ further reminders) and appends one timestamped event carrying the outcome;
 these are two facts recorded together. A close that fails never discards the
 carried message.
 
-**Phase BB amendment (2026-09-xx).** BA R1 is superseded. `Started` is applied
+**Phase BB amendment (2026-09-12).** BA R1 is superseded. `Started` is applied
 only by the assignee through `atm task start <id> [message]`
-(`WriteRequest.task_op = Start`, actor = assignee). Any `assigned` position may
-be started; the task moves to the head. A prompt (`task_ready`,
+(`WriteRequest.task_op = Start`). Its event actor is always the assignee
+(`TaskActor::Member`), never the daemon. Any `assigned` position may be
+started; the task moves to the head. A prompt (`task_ready`,
 `task_reminder`) never transitions a task; a task that is prompted and never
 started stays `assigned` and keeps its reminder count. The daemon writes no
 `task_started` receipt; the assigner sees the assignee's start message rendered
 as `task_started`.
+
+### Prompt handoffs (Phase BB)
+
+`prompt_handoffs` is a task-ledger audit table for successfully emitted,
+task-linked prompts. Each row retains the team, recipient, message key,
+template kind, task id, attempt, trigger, and emission timestamp. It has two
+triggers: `steer` for an immediate send's receiver prompt and `task_pass` for
+the reminder pump. Those are the only two task-linked prompt emitters; queue
+claim and queue drain cannot receive a task link after BB.5 (plan P13).
+
+The emitter writes the handoff after the sink reports success. Recording is
+best effort: a storage, timeout, or saturation failure logs one structured
+`prompt_handoff_record_failed` error and neither fails nor retries the already
+successful emission (plan P11). Non-task messages write no handoff (plan P10),
+so this extends the existing task-ledger capability rather than adding a new
+ADR-054 capability. `task_events.reminded` remains the task-side counter;
+`prompt_handoffs` is the emission record.
 
 ### Reminder and escalation
 

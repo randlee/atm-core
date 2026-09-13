@@ -100,6 +100,14 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-12 — Phase BB.6:** `HTTP_API_VERSION` moves from `1.8.0` to
+  `1.9.0`. The task-events list response gains the additive `handoffs`
+  collection; it defaults to empty when omitted, and older consumers ignore
+  it. `task_events_decodes_response_without_handoffs_field` proves the new
+  consumer reads the previous response, while
+  `frozen_1_8_task_events_response_decodes_1_9_payload_with_handoffs` is the
+  D3 previous-consumer proof that a frozen 1.8 response projection reads the
+  1.9 payload. This is a minor, backward-compatible bump.
 - **2026-09-12 — Phase BB.1:** `HTTP_API_VERSION` moves from `1.7.0` to
   `1.8.0`. `PostSendHookEvent` gains additive optional `task_transition`
   metadata; omitted values default to `None`, older consumers ignore the
@@ -144,6 +152,12 @@ migration functions directly.
 
 ### D6. Storage-schema approval record
 
+- **2026-09-12 — Phase BB.6 (approved):** `prompt_handoffs` and its task
+  lookup index are additive SQLite MINOR schema objects. The table is created
+  idempotently, has no foreign key, and a pre-BB binary ignores it.
+  `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created` is the D3
+  previous-consumer proof: frozen pre-BB DDL and task statements continue to
+  read and write after the new table exists.
 - **2026-09-12 — Phase BB.5 (note):** storage open idempotently clears the
   acknowledgement and pending-nudge state columns on pre-BB open assignment
   messages. This is data normalization only; it adds no DDL or schema version.
@@ -187,7 +201,9 @@ migration functions directly.
   #1378 moves it to `1.4.0` for canonical runtime-state revision and freshness
   fields, Phase BA.2 moves it to `1.5.0` for additive task write/projection
   fields, and Phase BA.4 moves it to `1.6.0` for task move; it is bumped on
-  every later governed-interface change.
+  every later governed-interface change. Phase BB.1 moves it to `1.8.0` for
+  task-transition metadata, and Phase BB.6 moves it to `1.9.0` for prompt
+  handoffs in task-event responses.
 - Herdr support becomes a matrix, not a single version; per-release
   conformance fixtures are required.
 - SQLite migrations gain a declared version and an explicit rollback test
