@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-028>
+  a triage:Finding ;
+  triage:findingId "BB6-028" ;
+  triage:title "prompt_handoff_record.rs log_failure() omits the outcome= field that every other herdr_queue_wake/escalation log call sets" ;
+  triage:description "rust-service-hardening-agent, verified by quality-mgr (2026-09-13T04:41:10Z), during BB-POST-MORTEM-1789304000 phase-ending gate against integrate/phase-bb. crates/atm-http-runtime/src/prompt_handoff_record.rs:78-95 log_failure()'s tracing::error! omits the `outcome=` field that every other herdr_queue_wake/escalation log call sets (the subsystem/action/outcome convention), breaking retained-log/doctor filtering consistency for this one new call site." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "observability" ;
+  triage:severity "minor" ;
+  triage:source "rust-service-hardening-agent, verified by quality-mgr, BB-POST-MORTEM-1789304000 phase-ending gate" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/prompt_handoff_record.rs (log_failure, lines 78-95)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T04:41:10Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, not blocking. Filed as its own finding (not folded into BB6-026's record) so the two distinct root causes stay individually accountable, but scoped to land in the SAME fast-follow branch as BB6-026 -- both are in the same colima/prompt-handoff observability surface (prompt_handoff_record.rs and the BB6.7 smoke script that exercises it). Add `outcome=\"...\"` to the log_failure() tracing::error! call matching the subsystem/action/outcome convention used elsewhere in herdr_queue_wake/escalation logging." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T04:41:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-028/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-028/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
+  triage:line 78 ;
+  triage:snippet "log_failure()'s tracing::error! omits outcome= field present on every other herdr_queue_wake/escalation log call" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "52ed82037" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-028/1> .
+
+<urn:atm:triage:worktree/BB6-028/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "52ed82037" ;
+  triage:orderIndex 1 .
