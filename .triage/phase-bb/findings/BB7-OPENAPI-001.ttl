@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB7-OPENAPI-001>
+  a triage:Finding ;
+  triage:findingId "BB7-OPENAPI-001" ;
+  triage:title "OpenAPI MessageList response schema corresponds to no actual Rust wire type on the message-read endpoints" ;
+  triage:description "fenix, correcting an earlier characterization from BB6-QA-L2 (this record supersedes the 'externally-tagged ResponseEnvelope' description noted as BB.7 debt on BB6-006), 2026-09-13T01:00:25Z. crates/atm-core/src/api.rs's decode_http_response reads bare ListOutcome for GET /messages and bare ReadOutcome for POST /messages/inspect and /messages/read -- there is no externally-tagged envelope. OpenAPI's MessageList {messages, cursor} schema, documented against all three endpoints, models none of ListOutcome, ReadOutcome, or any other real Rust wire type. Rand asked to pull this BB.7 item forward as a new top layer of the phase-bb stack rather than deferring it past phase close." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "fenix (correction of BB6-QA-L2 characterization), pulled forward by Rand" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm/openapi.yaml (and docs copy); crates/atm/tests/openapi_surface.rs; crates/atm-core/src/api.rs (decode_http_response, ListOutcome, ReadOutcome)" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T01:00:25Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: correct openapi.yaml (both copies) so GET /messages documents the real ListOutcome shape and POST /messages/inspect and /messages/read document the real ReadOutcome shape, instead of the nonexistent MessageList {messages, cursor} schema. Update crates/atm/tests/openapi_surface.rs's reviewed-file `changes` list and re-bless the baseline. Add one additive ADR-061 ledger row. Ruling (fenix): documentation correction, version unchanged, not an ADR-061 break; schema-reviewer confirms at QA. Dispatched to cipher (idle) as BB7-FIX-OPENAPI-1789276000, branch fix/bb7-openapi-message-bodies cut from BB6 L4 final 3aa1954e8. Opens as stack layer 14, PR on first push, above PR #1466." ;
+  triage:foundIn triage:BB7 ;
+  triage:foundAt "2026-09-13T01:00:25Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB7-OPENAPI-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB7-OPENAPI-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/openapi.yaml" ;
+  triage:snippet "MessageList {messages, cursor} documented on GET /messages, POST /messages/inspect, POST /messages/read, but decode_http_response reads bare ListOutcome / ReadOutcome for those endpoints -- MessageList corresponds to no real Rust wire type" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb7-openapi-message-bodies" ;
+  triage:headSha "3aa1954e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB7-OPENAPI-001/1> .
+
+<urn:atm:triage:worktree/BB7-OPENAPI-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb7-openapi-message-bodies (cut from 3aa1954e8, BB6 L4 final, stack layer 14 above PR #1466)" ;
+  triage:branch "fix/bb7-openapi-message-bodies" ;
+  triage:headSha "3aa1954e8" ;
+  triage:orderIndex 1 .
