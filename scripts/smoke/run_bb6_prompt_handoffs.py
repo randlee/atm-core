@@ -23,7 +23,6 @@ ASSIGNER = "stub-alpha"
 ASSIGNEE = "tester"
 POLL_SECONDS = 0.5
 WAIT_SECONDS = 90.0
-REMINDER_WAIT_SECONDS = 65.0
 SCENARIO_NAMES = (
     "task_events_shows_ready_reminders_and_started_for_prompted_task_only",
     "disabled_task_reminder_override_yields_no_handoff_and_doctor_finding",
@@ -307,11 +306,13 @@ def scenario_task_events(container: str, run_id: str) -> dict[str, Any]:
         and any(" ready" in block for block in blocks_for(text, tasks[0])),
         "three queued prompts and task one ready",
     )
+    ready_at = time.monotonic()
     pane = wait_for_pane(
         container,
         lambda text: any('reminder="1"' in block for block in blocks_for(text, tasks[0])),
         "task one reminder attempt one",
     )
+    observed_interval = time.monotonic() - ready_at
     start = run_cli(
         container,
         ASSIGNEE,
@@ -340,6 +341,7 @@ def scenario_task_events(container: str, run_id: str) -> dict[str, Any]:
             "handoff_kinds_by_task": dict(zip(tasks, kinds)),
             "event_names_by_task": dict(zip(tasks, events)),
             "task_blocks": {task: blocks_for(pane["stdout"], task) for task in tasks},
+            "observed_interval": observed_interval,
             "task_event_payloads": dict(zip(tasks, payloads)),
         },
         tasks,
@@ -368,7 +370,7 @@ def release_first_scenario(container: str, tasks: list[str]) -> list[dict[str, A
     return outcomes
 
 
-def scenario_disabled_reminder(container: str, run_id: str) -> dict[str, Any]:
+def scenario_disabled_reminder(container: str, run_id: str, observed_interval: float) -> dict[str, Any]:
     task = task_id(run_id, "disabled-reminder")
     disable = run_cli(
         container,
@@ -381,8 +383,15 @@ def scenario_disabled_reminder(container: str, run_id: str) -> dict[str, Any]:
         lambda text: any(" ready" in block for block in blocks_for(text, task)),
         "disabled-reminder task ready",
     )
-    time.sleep(REMINDER_WAIT_SECONDS)
+    wait_seconds = max(2 * observed_interval, 2 * 60.0)
+    deadline = time.monotonic() + wait_seconds
     after = pane_text(container)
+    while time.monotonic() < deadline:
+        blocks = blocks_for(after["stdout"], task) if after["exit_code"] == 0 else []
+        if any("reminder=" in block for block in blocks):
+            break
+        time.sleep(POLL_SECONDS)
+        after = pane_text(container)
     event_result, payload = task_events(container, task)
     doctor = run_cli(container, ASSIGNER, ["doctor", "--json", "--team", TEAM])
     doctor_payload = json_value(doctor, "doctor")
@@ -405,7 +414,8 @@ def scenario_disabled_reminder(container: str, run_id: str) -> dict[str, Any]:
             "handoff_kinds": kinds,
             "task_blocks": blocks,
             "doctor_findings": findings,
-            "wait_seconds": REMINDER_WAIT_SECONDS,
+            "observed_interval": observed_interval,
+            "wait_seconds": wait_seconds,
             "task_event_payload": payload,
         },
         [task],
@@ -456,7 +466,10 @@ def run(container: str, out_dir: Path) -> int:
         raise RuntimeError(f"fresh fixture required; prompt_handoffs starts at {baseline_count}")
     first = scenario_task_events(container, run_id)
     cleanup = release_first_scenario(container, first["task_ids"])
-    second = scenario_disabled_reminder(container, run_id)
+    observed_interval = first["observed"].get("observed_interval", 0.0)
+    if observed_interval <= 0:
+        raise RuntimeError("task event scenario did not observe a reminder interval")
+    second = scenario_disabled_reminder(container, run_id, observed_interval)
     final_pane = pane_text(container)
     if final_pane["exit_code"] != 0:
         raise RuntimeError("failed to read final tester pane")
