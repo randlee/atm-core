@@ -29,7 +29,7 @@ if str(JUST_ROOT) not in sys.path:
 from scripts.public_redaction import public_value
 from run_fuzz import FuzzInputError as V2FuzzInputError
 from run_fuzz import validate_report
-from scripts.report_runtime import compose as _compose, resolve_procedure_page
+from scripts.report_runtime import compose as _compose, copy_procedure_page, resolve_procedure_page
 
 
 REPORTS_ROOT = ROOT / "site" / "reports"
@@ -247,7 +247,7 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
         root=ROOT,
         error_type=FuzzReportError,
     )
-    procedure_href = procedure_page.html if procedure_page is not None else f"procedures/{procedure}/index.html"
+    procedure_href = copy_procedure_page(procedure_page, report_dir, root=ROOT) or f"procedures/{procedure}/index.html"
     procedure_revision = procedure_page.revision if procedure_page is not None else None
     report_data: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,

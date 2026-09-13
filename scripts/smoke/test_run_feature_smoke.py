@@ -54,7 +54,8 @@ class FeatureSmokeTests(unittest.TestCase):
             self.assertEqual(json.loads((report.parent / "smoke.envelope.json").read_text())["source_revision"], "a" * 40)
             self.assertEqual(json.loads(report.read_text())["procedure"], "graft-hermes")
             procedure_href = compose.call_args_list[1].args[1]["procedure_href"]
-            self.assertEqual((report.parent / procedure_href).resolve(), procedure.resolve())
+            self.assertEqual(procedure_href, "procedure.html")
+            self.assertEqual((report.parent / procedure_href).read_text(), procedure.read_text())
             self.assertTrue((report.parent / procedure_href).is_file())
             self.assertEqual(compose.call_args_list[1].args[1]["procedure_label"], "graft-hermes @ bbbbbbbb")
 
