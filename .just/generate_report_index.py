@@ -17,8 +17,13 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import sys
-import subprocess
 from typing import Any, Iterable
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from scripts.report_runtime import ReportRuntimeError, resolve_procedure_revision
 
 
 SCHEMA_VERSION = 1
@@ -201,26 +206,6 @@ def _procedure_for(envelope: Envelope) -> str:
     return "fuzz-" + (target or "unknown")
 
 
-def _revision_is_ancestor(revision: str, source_revision: str, reports_root: Path) -> bool | None:
-    repository = subprocess.run(
-        ["git", "rev-parse", "--git-dir"],
-        cwd=reports_root.parent.parent,
-        capture_output=True,
-        check=False,
-    )
-    if repository.returncode != 0:
-        return None
-    result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", revision, source_revision],
-        cwd=reports_root.parent.parent,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode == 0:
-        return True
-    return False if result.returncode == 1 else None
-
-
 def resolve_procedures(envelopes: list[Envelope], reports_root: Path) -> list[Envelope]:
     if not envelopes:
         return []
@@ -232,25 +217,18 @@ def resolve_procedures(envelopes: list[Envelope], reports_root: Path) -> list[En
         if revisions is None:
             raise ReportIndexError(f"{envelope.source}: procedure {procedure} has no page")
         source_revision = envelope.source_revision
-        selected = next((item for item in revisions if source_revision and item.get("rev") == source_revision), None)
         inferred = source_revision is None
-        if selected is None and source_revision:
-            ancestry = [
-                (_revision_is_ancestor(item["rev"], source_revision, reports_root), item)
-                for item in revisions
-                if isinstance(item.get("rev"), str)
-            ]
-            ancestors = [item for is_ancestor, item in ancestry if is_ancestor]
-            git_unavailable = any(is_ancestor is None for is_ancestor, _item in ancestry)
-            if git_unavailable:
-                dated = [
-                    item for item in revisions
-                    if isinstance(item.get("date"), str)
-                    and item["date"] <= envelope.generated_at_text[:10]
-                ]
-                selected = max(dated, key=lambda item: item["date"], default=None)
-            else:
-                selected = max(ancestors, key=lambda item: item.get("date", ""), default=None)
+        selected = None
+        if source_revision:
+            try:
+                selected = resolve_procedure_revision(
+                    revisions,
+                    source_revision,
+                    root=reports_root.parent.parent,
+                    generated_at=envelope.generated_at_text,
+                )
+            except ReportRuntimeError as error:
+                raise ReportIndexError(f"{envelope.source}: {error}") from error
         if selected is None and inferred:
             dated = [item for item in revisions if isinstance(item.get("date"), str) and item["date"] <= envelope.generated_at_text[:10]]
             selected = max(dated, key=lambda item: item["date"], default=None)

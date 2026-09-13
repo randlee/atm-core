@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import subprocess
@@ -42,10 +43,61 @@ def source_revision(root: Path | None = None) -> str | None:
     return revision if result.returncode == 0 and GIT_REVISION.fullmatch(revision) else None
 
 
+def resolve_procedure_revision(
+    revisions: list[dict[str, Any]],
+    revision: str,
+    *,
+    root: Path,
+    generated_at: str | None = None,
+) -> dict[str, Any] | None:
+    """Select the exact page, newest ancestor, or dated fallback entry.
+
+    Report indexes and live report writers must agree on this decision.  Git
+    ancestry is authoritative when available; a missing Git checkout is an
+    expected condition for archived/publication-only consumers and therefore
+    falls back to the newest entry already in effect at the report timestamp.
+    """
+    if not GIT_REVISION.fullmatch(revision):
+        raise ReportRuntimeError(f"invalid source revision: {revision!r}")
+    selected = next((item for item in revisions if item.get("rev") == revision), None)
+    if selected is not None:
+        return selected
+    repository = subprocess.run(
+        ["git", "rev-parse", "--git-dir"], cwd=root, capture_output=True, check=False
+    )
+    git_unavailable = repository.returncode != 0
+    ancestors: list[dict[str, Any]] = []
+    if not git_unavailable:
+        for item in revisions:
+            candidate = item.get("rev")
+            if not isinstance(candidate, str) or not GIT_REVISION.fullmatch(candidate):
+                continue
+            result = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", candidate, revision],
+                cwd=root,
+                capture_output=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                ancestors.append(item)
+            elif result.returncode != 1:
+                git_unavailable = True
+                break
+    if not git_unavailable:
+        return max(ancestors, key=lambda item: item.get("date", ""), default=None)
+    cutoff = (generated_at or datetime.now(timezone.utc).date().isoformat())[:10]
+    dated = [
+        item for item in revisions
+        if isinstance(item.get("date"), str) and item["date"] <= cutoff
+    ]
+    return max(dated, key=lambda item: item["date"], default=None)
+
+
 def resolve_procedure_page(
     procedure: str,
     revision: str | None,
     root: Path | None = None,
+    generated_at: str | None = None,
     error_type: type[E] = ReportRuntimeError,  # type: ignore[assignment]
 ) -> ProcedurePage | None:
     """Select the exact page or newest manifest ancestor for ``revision``."""
@@ -62,25 +114,12 @@ def resolve_procedure_page(
         revisions = entry["revisions"]
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, StopIteration, TypeError) as error:
         raise error_type(f"unable to resolve procedure {procedure} from {manifest_path}: {error}") from error
-    selected = next((item for item in revisions if item.get("rev") == revision), None)
-    if selected is None:
-        for item in revisions:
-            candidate = item.get("rev")
-            if not isinstance(candidate, str) or not GIT_REVISION.fullmatch(candidate):
-                continue
-            result = subprocess.run(
-                ["git", "merge-base", "--is-ancestor", candidate, revision],
-                cwd=checkout,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if result.returncode == 0:
-                selected = item
-                break
-            if result.returncode != 1:
-                detail = result.stderr.strip() or result.stdout.strip() or "git ancestry check failed"
-                raise error_type(f"unable to resolve procedure {procedure}: {detail}")
+    try:
+        selected = resolve_procedure_revision(
+            revisions, revision, root=checkout, generated_at=generated_at,
+        )
+    except ReportRuntimeError as error:
+        raise error_type(str(error)) from error
     if selected is None:
         raise error_type(f"procedure {procedure} has no page for revision {revision}")
     selected_revision = selected.get("rev")

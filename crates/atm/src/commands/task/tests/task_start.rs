@@ -129,7 +129,31 @@ async fn task_start_by_non_assignee_fails_before_sending() {
             .to_string()
             .contains("task T1 is not assigned to test-lead")
     );
+    let typed = error
+        .downcast_ref::<atm_core::error::AtmError>()
+        .expect("task preflight error remains typed");
+    assert_eq!(typed.code(), AtmErrorCode::TaskNotCounterparty);
+    let json = serde_json::to_value(typed).expect("serialize --json task start error");
+    assert_eq!(json["code"], "ATM_TASK_NOT_COUNTERPARTY");
     assert_eq!(fixture.inbox_contents(TEST_SENDER).len(), before);
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn task_start_unknown_task_reports_structured_code_in_json() {
+    let fixture = LoopbackFixture::new_with_identity("recipient", "recipient");
+    let mut command = start("UNKNOWN", "recipient", None);
+    command.json = true;
+    let error = run_start(&fixture, command)
+        .await
+        .expect_err("unknown task must fail");
+    let typed = error
+        .downcast_ref::<atm_core::error::AtmError>()
+        .expect("task lookup error remains typed");
+    assert_eq!(typed.code(), AtmErrorCode::TaskNotFound);
+    let json = serde_json::to_value(typed).expect("serialize --json task start error");
+    assert_eq!(json["code"], "ATM_TASK_NOT_FOUND");
+    assert!(typed.message().contains("Recovery:"));
 }
 
 #[tokio::test]

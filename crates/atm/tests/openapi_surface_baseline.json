@@ -276,6 +276,18 @@
         "message"
       ]
     },
+    "BucketCounts": {
+      "properties": [
+        "history",
+        "pending_ack",
+        "unread"
+      ],
+      "required": [
+        "history",
+        "pending_ack",
+        "unread"
+      ]
+    },
     "ClearQuery": {
       "properties": [],
       "required": []
@@ -415,9 +427,54 @@
         "outcome"
       ]
     },
+    "ListOutcome": {
+      "properties": [
+        "action",
+        "agent",
+        "bucket_counts",
+        "count",
+        "handoffs",
+        "history_collapsed",
+        "rows",
+        "selection_mode",
+        "task_event_rows",
+        "task_rows",
+        "team"
+      ],
+      "required": [
+        "action",
+        "agent",
+        "bucket_counts",
+        "count",
+        "history_collapsed",
+        "rows",
+        "selection_mode",
+        "team"
+      ]
+    },
     "ListQuery": {
       "properties": [],
       "required": []
+    },
+    "ListRow": {
+      "properties": [
+        "from",
+        "message_id",
+        "pending_ack",
+        "read",
+        "summary",
+        "task_id",
+        "timestamp"
+      ],
+      "required": [
+        "from",
+        "message_id",
+        "pending_ack",
+        "read",
+        "summary",
+        "task_id",
+        "timestamp"
+      ]
     },
     "Message": {
       "properties": [
@@ -438,7 +495,6 @@
     "MessageList": {
       "properties": [
         "cursor",
-        "handoffs",
         "messages"
       ],
       "required": [
@@ -614,6 +670,33 @@
         "hits"
       ]
     },
+    "TaskEventRow": {
+      "properties": [
+        "actor",
+        "assignee",
+        "at",
+        "close_outcome",
+        "detail",
+        "event",
+        "from_state",
+        "marker",
+        "message_id",
+        "outcome",
+        "seq",
+        "task_id",
+        "team",
+        "to_state"
+      ],
+      "required": [
+        "actor",
+        "assignee",
+        "at",
+        "event",
+        "seq",
+        "task_id",
+        "team"
+      ]
+    },
     "TaskMoveOutcome": {
       "properties": [
         "assignee",
@@ -640,6 +723,37 @@
         "caller_team",
         "target",
         "task_id"
+      ]
+    },
+    "TaskRow": {
+      "properties": [
+        "assigned_at",
+        "assignee",
+        "assigner",
+        "assignment_message_id",
+        "close_outcome",
+        "description",
+        "last_reminded_at",
+        "lead_notified_count",
+        "position",
+        "reminder_count",
+        "state",
+        "task_id",
+        "team",
+        "updated_at"
+      ],
+      "required": [
+        "assigned_at",
+        "assignee",
+        "assigner",
+        "assignment_message_id",
+        "description",
+        "lead_notified_count",
+        "reminder_count",
+        "state",
+        "task_id",
+        "team",
+        "updated_at"
       ]
     },
     "WorkflowProjectionRequest": {

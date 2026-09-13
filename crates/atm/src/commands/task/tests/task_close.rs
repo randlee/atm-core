@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use atm_core::error::AtmErrorCode;
 use atm_core::schema::AtmMessageId;
 use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 use atm_storage::{
@@ -155,7 +156,14 @@ async fn close_unknown_task_sends_nothing_and_exits_one() {
     let error = run_close(&f, close("UNKNOWN", "recipient", OutcomeArg::Completed))
         .await
         .unwrap_err();
-    assert_eq!(crate::exit_code_for_error(&error), 1);
+    let typed = error
+        .downcast_ref::<atm_core::error::AtmError>()
+        .expect("task lookup error remains typed");
+    assert_eq!(typed.code(), AtmErrorCode::TaskNotFound);
+    let json = serde_json::to_value(typed).expect("serialize --json task close error");
+    assert_eq!(json["code"], "ATM_TASK_NOT_FOUND");
+    assert!(typed.message().contains("Recovery:"));
+    assert_eq!(crate::exit_code_for_error(&error), 3);
     assert_eq!(f.inbox_contents(TEST_SENDER).len(), before);
 }
 
