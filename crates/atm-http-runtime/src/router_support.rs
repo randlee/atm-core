@@ -83,6 +83,23 @@ pub struct BoundedBlockingBridge {
     runtime_health: RuntimeHealth,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PromptHandoffFailureReason {
+    Storage,
+    Timeout,
+    Saturated,
+}
+
+impl PromptHandoffFailureReason {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Storage => "storage",
+            Self::Timeout => "timeout",
+            Self::Saturated => "saturated",
+        }
+    }
+}
+
 enum BlockingBridgeError {
     DeadlineBeforeStart,
     DeadlineAfterStart,
@@ -201,11 +218,11 @@ impl BoundedBlockingBridge {
 fn blocking_bridge_error(error: BlockingBridgeError) -> AtmError {
     match error {
         BlockingBridgeError::DeadlineBeforeStart => AtmError::new(
-            atm_core::error::AtmErrorCode::InternalError,
+            atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
             "blocking work did not start before its request deadline",
         ),
         BlockingBridgeError::DeadlineAfterStart => AtmError::new(
-            atm_core::error::AtmErrorCode::InternalError,
+            atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart,
             "blocking work timed out before its request deadline",
         ),
         BlockingBridgeError::Closed => {

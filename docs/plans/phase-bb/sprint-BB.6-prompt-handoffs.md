@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS prompt_handoffs (
     attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
     trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'task_pass')),
     at TEXT NOT NULL,
-    UNIQUE (team, agent, message_key, attempt)
+    UNIQUE (team, agent, message_key, kind, attempt)
 );
 CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id, at);
 ```
@@ -46,14 +46,16 @@ CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id
   `message_key` is TEXT because `MessageKey` is a `String` newtype
   (`crates/atm-storage/src/contract.rs:29`) and `mail_messages.message_key`
   is `TEXT NOT NULL` (`mail_messages_schema.rs:33`). The identity of a
-  handoff is `(team, agent, message_key, attempt)`: repeated reminders share
-  one message key and differ by attempt; every non-reminder prompt is
-  attempt 0. The insert is `INSERT OR IGNORE`, so a repeated record of the
-  same prompt is a no-op (idempotent; plan P11). No foreign key — no task
-  table has one today, and the row must survive a later task-row rewrite.
-  `CREATE TABLE IF NOT EXISTS` is how every task table is created today; a
-  pre-BB binary ignores the table (MINOR). No `STORAGE_SCHEMA_VERSION`
-  exists yet (ADR-061 D1); the D6 entry records the addition.
+  handoff is `(team, agent, message_key, kind, attempt)`: repeated reminders
+  share one message key and differ by attempt, while distinct prompt kinds at
+  attempt 0 remain distinct. The insert is `INSERT OR IGNORE`, so a repeated
+  record of the same prompt is a no-op (idempotent; plan P11). No foreign key
+  — no task table has one today, and the row must survive a later task-row
+  rewrite. `CREATE TABLE IF NOT EXISTS` is how every task table is created
+  today; open drops and recreates the never-released legacy shape whose
+  uniqueness omitted `kind`. A pre-BB binary ignores the table (MINOR). No
+  `STORAGE_SCHEMA_VERSION` exists yet (ADR-061 D1); the D6 entry records the
+  addition.
 
 - [x] D2 — `crates/atm-storage/src/task_state.rs`:
 
@@ -159,19 +161,21 @@ pub(crate) async fn record_prompt_handoff(
 Storage — `crates/atm-storage-rusqlite/tests/`:
 
 - `record_prompt_handoff_round_trips_every_trigger` — both.
-- `record_prompt_handoff_ignores_duplicate_identity` — same `(team, agent, message_key, attempt)` twice: one row, `Ok(())`.
+- `record_prompt_handoff_ignores_duplicate_identity` — same `(team, agent, message_key, kind, attempt)` twice: one row, `Ok(())`.
+- `record_prompt_handoff_keeps_kinds_distinct` — one key and attempt, `task_queued` then `task_ready`: two rows.
 - `record_prompt_handoff_keeps_reminder_attempts_distinct` — one key, attempts 1 and 2: two rows.
 - `list_prompt_handoffs_orders_by_time_then_rowid`.
 - `prompt_handoff_row_with_unknown_trigger_fails_decode` — malformed-row coverage.
 - `pre_bb_fixture_opens_and_gains_prompt_handoffs_table` — the BA fixture database opens, the table is created, existing rows untouched.
+- `legacy_prompt_handoff_shape_is_recreated_with_kind_identity` — open replaces the never-released legacy unique constraint and then retains both task prompt kinds.
 - `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created` — the ADR-061 D3 direction: a frozen copy of the BA `TASK_TABLES_DDL` + mail DDL (string fixture under `tests/fixtures/`) is applied to a database that already has `prompt_handoffs`, then assigns, starts and closes a task and reads it back through the frozen statements.
 
 Runtime — `crates/atm-http-runtime/`:
 
 - `task_pass_records_handoff_with_kind_and_attempt`.
+- `task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing`.
 - `steer_emit_records_handoff_with_trigger_steer`.
 - `steer_of_non_task_message_records_no_handoff` (P10).
-- `task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing`
   — a stored task transition with a null task id reaches the defensive
   data-integrity guard, logs one storage failure, and writes no row.
 - `failed_steer_sink_records_no_handoff`.

@@ -23,7 +23,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from scripts.report_runtime import ReportRuntimeError, resolve_procedure_revision
+from scripts.report_runtime import ReportRuntimeError, resolve_procedure_page, resolve_procedure_revision
 
 
 SCHEMA_VERSION = 1
@@ -235,7 +235,21 @@ def resolve_procedures(envelopes: list[Envelope], reports_root: Path) -> list[En
         if selected is None:
             revision = source_revision or "none"
             raise ReportIndexError(f"{envelope.source}: procedure {procedure} has no page for revision {revision} (run date {envelope.generated_at_text})")
-        resolved.append(Envelope(**{**envelope.__dict__, "procedure": procedure, "procedure_html": selected["html"], "procedure_inferred": inferred}))
+        try:
+            page = resolve_procedure_page(
+                procedure,
+                selected.get("rev"),
+                root=reports_root.parent.parent,
+                generated_at=envelope.generated_at_text,
+                error_type=ReportIndexError,
+            )
+        except ReportIndexError as error:
+            raise ReportIndexError(f"{envelope.source}: {error}") from error
+        if page is None:
+            raise ReportIndexError(
+                f"{envelope.source}: procedure {procedure} has no page for revision {selected.get('rev', 'none')}"
+            )
+        resolved.append(Envelope(**{**envelope.__dict__, "procedure": procedure, "procedure_html": page.html, "procedure_inferred": inferred}))
     return resolved
 
 

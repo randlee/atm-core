@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS prompt_handoffs (
     attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
     trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'task_pass')),
     at TEXT NOT NULL,
-    UNIQUE (team, agent, message_key, attempt)
+    UNIQUE (team, agent, message_key, kind, attempt)
 );
 CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id, at);
 "#;
@@ -187,6 +187,93 @@ async fn record_prompt_handoff_keeps_reminder_attempts_distinct() {
         .record_prompt_handoff(&second)
         .expect("second attempt");
     assert_eq!(harness.list().await, vec![first, second]);
+}
+
+#[tokio::test]
+async fn record_prompt_handoff_keeps_kinds_distinct() {
+    let harness = Harness::new();
+    let queued = harness.handoff(
+        "atm:01M2BB60000000000000000010",
+        0,
+        PromptTrigger::Steer,
+        "2026-09-12T15:27:34Z",
+    );
+    let mut ready = queued.clone();
+    ready.kind = BuiltInNudgeTemplateKind::TaskReady;
+    let mut queued = queued;
+    queued.kind = BuiltInNudgeTemplateKind::TaskQueued;
+    ready.at = "2026-09-12T15:28:34Z".parse().expect("ready at");
+
+    harness
+        .backend
+        .task_store()
+        .record_prompt_handoff(&queued)
+        .expect("task queued");
+    harness
+        .backend
+        .task_store()
+        .record_prompt_handoff(&ready)
+        .expect("task ready");
+
+    assert_eq!(harness.list().await, vec![queued, ready]);
+}
+
+#[tokio::test]
+async fn legacy_prompt_handoff_shape_is_recreated_with_kind_identity() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let path = root.path().join("mail.db");
+    Connection::open(&path)
+        .expect("connection")
+        .execute_batch(
+            "CREATE TABLE prompt_handoffs (
+                team TEXT NOT NULL, agent TEXT NOT NULL, message_key TEXT NOT NULL,
+                kind TEXT NOT NULL, task_id TEXT NOT NULL,
+                attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
+                trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'task_pass')),
+                at TEXT NOT NULL, UNIQUE (team, agent, message_key, attempt)
+            );",
+        )
+        .expect("legacy prompt handoff schema");
+    let backend = SqliteStorageBackend::new(&path).expect("reshape legacy schema");
+    let harness = Harness {
+        _root: root,
+        path,
+        backend,
+        team: "bb6-team".parse().expect("team"),
+        task_id: "BB6-LEGACY".parse().expect("task id"),
+    };
+    let mut queued = harness.handoff(
+        "atm:01M2BB60000000000000000011",
+        0,
+        PromptTrigger::Steer,
+        "2026-09-12T15:27:34Z",
+    );
+    queued.kind = BuiltInNudgeTemplateKind::TaskQueued;
+    let mut ready = queued.clone();
+    ready.kind = BuiltInNudgeTemplateKind::TaskReady;
+    ready.at = "2026-09-12T15:28:34Z".parse().expect("ready at");
+
+    harness
+        .backend
+        .task_store()
+        .record_prompt_handoff(&queued)
+        .expect("queued");
+    harness
+        .backend
+        .task_store()
+        .record_prompt_handoff(&ready)
+        .expect("ready");
+
+    let sql: String = Connection::open(&harness.path)
+        .expect("reopen")
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'prompt_handoffs'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("new table sql");
+    assert!(sql.contains("UNIQUE (team, agent, message_key, kind, attempt)"));
+    assert_eq!(harness.list().await, vec![queued, ready]);
 }
 
 #[tokio::test]

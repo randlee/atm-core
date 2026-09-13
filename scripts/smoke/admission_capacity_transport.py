@@ -29,12 +29,18 @@ from scripts.smoke.admission_capacity_support import (
     ADMISSIONS_PER_INTERVAL,
     CAPACITY_DIRECT_PEER_PORT_ENV,
     CROCKFORD_BASE32,
+    DAEMON_SWITCH,
     DAEMON_OUTPUT_TAIL_LINES,
     DEFAULT_CAPACITY_ROSTER,
     DESCRIPTOR_RESERVE,
+    DIAGNOSTIC_DURATION_SECONDS,
+    DIAGNOSTIC_SAMPLE_COUNT,
     MAX_IN_FLIGHT_REQUESTS,
+    MANAGED_DAEMON_TIMEOUT_SECONDS,
     PEER_WIRE_SECURITY_MODES,
     READY_TIMEOUT_SECONDS,
+    ROOT,
+    TARGET_PROFILE_DURATION_SECONDS,
     AdmissionResult,
     CapacityRoster,
     DaemonOutputCapture,
@@ -56,14 +62,6 @@ try:
     import resource
 except ImportError:  # Windows has no POSIX rlimit API.
     resource = None
-
-ROOT = Path(__file__).resolve().parents[2]
-DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
-MANAGED_DAEMON_TIMEOUT_SECONDS = 120.0
-DIAGNOSTIC_SAMPLE_COUNT = 3
-DIAGNOSTIC_DURATION_SECONDS = 3.0
-TARGET_PROFILE_DURATION_SECONDS = 20.0
-
 
 def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
     """Validate the benchmark daemon's ready state from its public doctor response."""

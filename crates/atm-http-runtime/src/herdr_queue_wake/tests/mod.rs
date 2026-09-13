@@ -15,9 +15,10 @@ use atm_core::LocalServiceRuntime;
 use atm_core::ack::{AckRequest, ack_mail_with_runtime};
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-    PostSendEmissionPath, PromptTrigger, ReadDeadline, RosterEntry, RosterHarness,
-    RosterMemberKind,
+    AsyncMessageReceivedHookEmitter, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch,
+    GraftNudgeTarget, MessageReceivedHookSelector, NudgeKind, PostSendBuiltInTarget,
+    PostSendEmissionPath, PostSendHookEvent, PromptHandoff, PromptTrigger, ReadDeadline,
+    RosterEntry, RosterHarness, RosterMemberKind, TaskTransition,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::NullObservability;
@@ -50,6 +51,51 @@ use tracing_subscriber::prelude::*;
 #[derive(Default)]
 struct RecordingDiagnosticSink {
     codes: Mutex<Vec<String>>,
+}
+
+#[derive(Clone, Default)]
+struct PromptHandoffLogLayer {
+    failures: Arc<Mutex<Vec<(String, String)>>>,
+}
+
+#[derive(Default)]
+struct PromptHandoffLogFields {
+    action: String,
+    reason: String,
+}
+
+impl tracing::field::Visit for PromptHandoffLogFields {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        match field.name() {
+            "action" => self.action = value.to_owned(),
+            "reason" => self.reason = value.to_owned(),
+            _ => {}
+        }
+    }
+
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.record_str(field, format!("{value:?}").trim_matches('"'));
+    }
+}
+
+impl<S> tracing_subscriber::Layer<S> for PromptHandoffLogLayer
+where
+    S: tracing::Subscriber,
+{
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _context: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut fields = PromptHandoffLogFields::default();
+        event.record(&mut fields);
+        if fields.action == "prompt_handoff_record_failed" {
+            self.failures
+                .lock()
+                .expect("prompt handoff failures")
+                .push((fields.action, fields.reason));
+        }
+    }
 }
 
 impl DiagnosticSink for RecordingDiagnosticSink {
@@ -90,7 +136,7 @@ async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
         .expect_err("blocking work must time out");
     release.store(true, Ordering::Release);
 
-    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert_eq!(error.code(), AtmErrorCode::BlockingBridgeDeadlineAfterStart);
     assert!(error.detail().contains("timed out"));
 }
 
@@ -1374,19 +1420,32 @@ async fn ax5_05_emitted_prompts_consume_budget_when_audit_writes_fail() {
 
 #[tokio::test]
 async fn task_pass_records_handoff_with_kind_and_attempt() {
-    let (_root, _runtime, fake, pump, store, keys, now) =
-        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
-
+    let (_root, runtime, _fake, pump, key, task_id, now) = build_task_handoff_pump();
+    let task_store = runtime.task_store().expect("task store");
+    let task = task_store
+        .load_task(key.team(), &task_id)
+        .expect("load task")
+        .expect("task row");
+    task_store
+        .record_prompt_handoff(&PromptHandoff {
+            team: key.team().clone(),
+            agent: key.agent().clone(),
+            message_key: task.assignment_message_id.into(),
+            kind: BuiltInNudgeTemplateKind::TaskQueued,
+            task_id: task_id.clone(),
+            attempt: 0,
+            trigger: PromptTrigger::Steer,
+            at: *now.lock().expect("test clock lock"),
+        })
+        .expect("preceding task-queued handoff");
     pump.tick_once().await;
-    *now.lock().expect("test clock lock") =
-        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("test timestamp");
-    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
-    pump.tick_once().await;
 
-    let task_id: TaskId = "AX5-TASK-00".parse().expect("task id");
     let handoffs = atm_core::boundary::AsyncTaskLedgerReader::list_prompt_handoffs(
-        store.as_ref(),
-        keys[0].team().clone(),
+        runtime
+            .async_task_ledger_reader()
+            .expect("task ledger reader")
+            .as_ref(),
+        key.team().clone(),
         task_id,
         ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
     )
@@ -1397,12 +1456,79 @@ async fn task_pass_records_handoff_with_kind_and_attempt() {
         2,
         "each successful prompt writes one handoff"
     );
-    assert_eq!(handoffs[0].kind.as_str(), "task_ready");
+    assert_eq!(handoffs[0].kind.as_str(), "task_queued");
     assert_eq!(handoffs[0].attempt, 0);
-    assert_eq!(handoffs[0].trigger, PromptTrigger::TaskPass);
-    assert_eq!(handoffs[1].kind.as_str(), "task_reminder");
-    assert_eq!(handoffs[1].attempt, 1);
+    assert_eq!(handoffs[0].trigger, PromptTrigger::Steer);
+    assert_eq!(handoffs[1].kind.as_str(), "task_ready");
+    assert_eq!(handoffs[1].attempt, 0);
     assert_eq!(handoffs[1].trigger, PromptTrigger::TaskPass);
+}
+
+#[tokio::test]
+async fn task_linked_prompt_without_task_id_logs_storage_failure_and_records_nothing() {
+    let store = Arc::new(atm_storage::DummyTaskStore::default());
+    let event = PostSendHookEvent {
+        sender: "sender".parse().expect("sender"),
+        sender_chat_id: None,
+        sender_team: "bb6-team".parse().expect("sender team"),
+        sender_host: None,
+        recipient: "worker".parse().expect("recipient"),
+        recipient_team: "bb6-team".parse().expect("recipient team"),
+        message_id: AtmMessageId::new(),
+        description: "started task".to_owned(),
+        requires_ack: false,
+        is_ack: false,
+        task_id: None,
+        task_transition: Some(TaskTransition::Started),
+        recipient_pane_id: None,
+    };
+    let dispatch = BuiltInPostSendDispatch {
+        event,
+        target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+            recipient: "worker".parse().expect("recipient"),
+            recipient_team: "bb6-team".parse().expect("team"),
+            rendered_nudge: "task prompt".to_owned(),
+        }),
+        kind: NudgeKind::Steer,
+    };
+    let layer = PromptHandoffLogLayer::default();
+    let _subscriber =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+    let bridge = BoundedBlockingBridge::new(
+        std::num::NonZeroUsize::new(1).expect("bridge capacity"),
+        RuntimeHealth::default(),
+    );
+
+    crate::prompt_handoff_record::record_prompt_handoff(
+        &bridge,
+        RequestDeadline::after(Duration::from_secs(1)),
+        Ok(store.clone()),
+        &dispatch,
+        PromptTrigger::Steer,
+        IsoTimestamp::now(),
+    )
+    .await;
+
+    assert_eq!(
+        layer
+            .failures
+            .lock()
+            .expect("prompt handoff failures")
+            .as_slice(),
+        &[(
+            "prompt_handoff_record_failed".to_owned(),
+            "storage".to_owned()
+        )]
+    );
+    let rows = atm_core::boundary::AsyncTaskLedgerReader::list_prompt_handoffs(
+        store.as_ref(),
+        "bb6-team".parse().expect("team"),
+        "BB6-NO-TASK-ID".parse().expect("task id"),
+        ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
+    )
+    .await
+    .expect("list prompt handoffs");
+    assert!(rows.is_empty());
 }
 
 #[tokio::test]

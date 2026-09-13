@@ -6,7 +6,7 @@ use atm_storage::{
     PromptHandoff, PromptTrigger, QueuePosition, ReminderOutcome, TaskActor, TaskCloseOutcome,
     TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStateTag, TaskStore,
 };
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use super::SqliteTaskStore;
 use crate::shared_db::SharedDb;
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS prompt_handoffs (
     attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
     trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'task_pass')),
     at TEXT NOT NULL,
-    UNIQUE (team, agent, message_key, attempt)
+    UNIQUE (team, agent, message_key, kind, attempt)
 );
 CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id, at);
 "#;
@@ -92,11 +92,37 @@ pub(crate) fn ensure_schema(
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     crate::task_migration::migrate_task_identity(connection, target)?;
+    drop_legacy_prompt_handoffs(connection, target)?;
     connection
         .execute_batch(&format!(
             "{TASK_TABLES_DDL}{TASK_INDEX_DDL}{ESCALATION_RECIPIENTS_DDL}"
         ))
         .map_err(|error| sqlite_error(target, "failed to initialize task ledger schema", error))
+}
+
+fn drop_legacy_prompt_handoffs(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let sql: Option<String> = connection
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'prompt_handoffs'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to inspect prompt handoff schema", error))?;
+    if sql.is_some_and(|sql| {
+        sql.contains("UNIQUE (team, agent, message_key, attempt)")
+            && !sql.contains("UNIQUE (team, agent, message_key, kind, attempt)")
+    }) {
+        connection
+            .execute_batch("DROP TABLE prompt_handoffs;")
+            .map_err(|error| {
+                sqlite_error(target, "failed to reshape prompt handoff schema", error)
+            })?;
+    }
+    Ok(())
 }
 
 impl SqliteTaskStore {

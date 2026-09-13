@@ -2,7 +2,7 @@
 
 use atm_core::error::AtmErrorCode;
 use atm_core::schema::AtmMessageId;
-use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+use atm_core::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
 use atm_storage::{MemberKey, Message, MessageEnvelope, MessageKey, TaskOp, TaskState};
 use serial_test::serial;
 
@@ -118,16 +118,16 @@ async fn task_start_defaults_message_when_omitted() {
 #[tokio::test]
 #[serial(env)]
 async fn task_start_by_non_assignee_fails_before_sending() {
-    let fixture = LoopbackFixture::new_with_identity("recipient", "test-lead");
+    let fixture = LoopbackFixture::new_with_identity("recipient", TEST_LEAD);
     seed_assignment(&fixture, "T1", "recipient");
     let before = fixture.inbox_contents(TEST_SENDER).len();
-    let error = run_start(&fixture, start("T1", "test-lead", None))
+    let error = run_start(&fixture, start("T1", TEST_LEAD, None))
         .await
         .expect_err("preflight rejection");
     assert!(
         error
             .to_string()
-            .contains("task T1 is not assigned to test-lead")
+            .contains(&format!("task T1 is not assigned to {TEST_LEAD}"))
     );
     let typed = error
         .downcast_ref::<atm_core::error::AtmError>()
