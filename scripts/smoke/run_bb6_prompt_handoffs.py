@@ -228,6 +228,8 @@ def mailbox_terminal_lines(
             ["read", "--unread", "--json", "--no-since-last-seen"],
         )
         commands.append(result)
+        if len(commands) > 32:
+            raise RuntimeError("assigner mailbox did not drain within 32 reads")
         payload = json_value(result, "assigner mailbox read")
         if payload.get("count") == 0:
             break
@@ -249,8 +251,6 @@ def mailbox_terminal_lines(
                 "terminal": message,
             }
         )
-        if len(commands) > 32:
-            raise RuntimeError("assigner mailbox did not drain within 32 reads")
     return lines, commands
 
 
