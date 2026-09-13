@@ -376,6 +376,6 @@ Do not send:
 ## ATM Message Contract
 
 Every handoff follows the Required Flow in
-[`docs/team-protocol.md`](../../../docs/team-protocol.md): ack, work, task
-close. A task close is terminal; the receiver does not acknowledge it. No
+[`docs/team-protocol.md`](../../../docs/team-protocol.md): task start, work,
+task close. A task close is terminal; the receiver does not acknowledge it. No
 silent processing.

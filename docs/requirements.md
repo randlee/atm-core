@@ -3281,7 +3281,6 @@ Because `sc-observability` is newly introduced into ATM, the rewrite must add ex
 - best-effort emission failure behavior
 - two-axis state classification
 - two-axis state transition enforcement
-- task-linked ack-required transition behavior
 - log query by severity
 - log query by structured field match
 - log follow/tail behavior
@@ -3468,8 +3467,8 @@ The rewrite is ready when:
 - workflow-axis classification is correct
 - workflow-axis transitions are encoded in implementation structure
 - display buckets are derived consistently from the two-axis model
-- task-linked messages remain pending until acknowledged unless the operator
-  explicitly acknowledges them through `atm ack`
+- task-linked messages never require acknowledgement; readiness is signalled by
+  `task_ready`, and the assignee starts the task with `atm task start`
 - observability integration is exercised by automated tests
 - the file-by-file migration plan is complete enough to implement directly
 - daemon singleton is enforced as requirement `#1` with the documented

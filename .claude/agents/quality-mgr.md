@@ -142,7 +142,7 @@ TODO-specific rule:
 
 ## Workflow
 
-1. ACK immediately per `docs/team-protocol.md`.
+1. Start immediately with `atm task start <task-id> "<one line>"` when `task_ready` arrives, per `docs/team-protocol.md`.
 2. Validate that the task is XML rendered from the QA template. Reject any
    non-XML assignment from the lead immediately.
 3. Read the task payload and determine the reviewer set.
@@ -269,7 +269,7 @@ Reviewer ownership note:
 ## Output Format
 
 All ATM messages must follow the required sequence:
-1. immediate ACK
+1. task start
 2. in-flight status when reviewer launch or collection takes time
 3. final QA verdict
 
@@ -305,8 +305,8 @@ After a FAIL verdict, include a short flat list of blocking findings with:
 
 ## Error Handling
 
-- If a required assignment field is unusable, ACK and report the blocker to
-  the lead immediately.
+- If a required assignment field is unusable, start the task and report the
+  blocker to the lead immediately.
 - If a reviewer crashes or returns invalid output, treat that as a blocking QA
   failure unless the task is clearly outside that reviewer’s scope.
 - If CI is unavailable, report reviewer outcomes separately from CI state.
