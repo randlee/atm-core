@@ -484,10 +484,39 @@ impl StorageAndNudgeRouter {
                 )));
                 break;
             };
-            match tokio::time::timeout(remaining, emitter.emit_received_message(dispatch, deadline))
-                .await
+            match tokio::time::timeout(
+                remaining,
+                emitter.emit_received_message(dispatch.clone(), deadline),
+            )
+            .await
             {
-                Ok(Ok(_)) => {}
+                Ok(Ok(_)) => match self.service_runtime.task_store() {
+                    Ok(store) => {
+                        crate::prompt_handoff_record::record_prompt_handoff(
+                            self.control_path_sync_bridge.blocking_bridge(),
+                            deadline,
+                            store,
+                            &dispatch,
+                            atm_core::boundary::PromptTrigger::Steer,
+                            dispatch.event.message_id.timestamp(),
+                        )
+                        .await;
+                    }
+                    Err(_) if dispatch.event.task_transition.is_some() => {
+                        let kind =
+                            atm_core::boundary::built_in_nudge_template_kind_from_post_send_event(
+                                &dispatch.event,
+                                dispatch.kind,
+                            );
+                        crate::prompt_handoff_record::log_failure(
+                            &dispatch,
+                            kind,
+                            atm_core::boundary::PromptTrigger::Steer,
+                            "storage",
+                        );
+                    }
+                    Err(_) => {}
+                },
                 Ok(Err(error)) => warnings.push(hook_warning(error)),
                 Err(_) => warnings.push(hook_warning(AtmError::daemon_unavailable(
                     "received-message hook timed out after durable message persistence",
@@ -1098,7 +1127,7 @@ pub(crate) mod tests {
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
         LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
         PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
-        RosterEntry, RosterHarness, RosterMemberKind,
+        PromptHandoff, PromptTrigger, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::observability_counters::{
@@ -1114,7 +1143,7 @@ pub(crate) mod tests {
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
     };
     use atm_core::test_support as atm_storage;
-    use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
+    use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime::{
         DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig,
@@ -1135,6 +1164,7 @@ pub(crate) mod tests {
     use axum::http::{Request, StatusCode};
     use tempfile::TempDir;
     use tower::ServiceExt;
+    use tracing_subscriber::prelude::*;
 
     use super::{ControlPathSyncBridge, StorageAndNudgeRouter, retry_deferred_marker};
     use crate::{
@@ -1160,6 +1190,76 @@ pub(crate) mod tests {
     }
 
     struct CounterFixture(DiagnosticCounters);
+
+    #[derive(Clone, Default)]
+    struct PromptHandoffErrorLayer {
+        events: Arc<Mutex<Vec<PromptHandoffErrorEvent>>>,
+    }
+
+    struct PromptHandoffErrorEvent {
+        subsystem: String,
+        action: String,
+        reason: String,
+        message_id: String,
+        kind: String,
+        trigger: String,
+    }
+
+    #[derive(Default)]
+    struct PromptHandoffErrorFields {
+        subsystem: String,
+        action: String,
+        reason: String,
+        message_id: String,
+        kind: String,
+        trigger: String,
+    }
+
+    impl tracing::field::Visit for PromptHandoffErrorFields {
+        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+            match field.name() {
+                "subsystem" => self.subsystem = value.to_owned(),
+                "action" => self.action = value.to_owned(),
+                "reason" => self.reason = value.to_owned(),
+                "message_id" => self.message_id = value.to_owned(),
+                "kind" => self.kind = value.to_owned(),
+                "trigger" => self.trigger = value.to_owned(),
+                _ => {}
+            }
+        }
+
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            self.record_str(field, format!("{value:?}").trim_matches('"'));
+        }
+    }
+
+    impl<S> tracing_subscriber::Layer<S> for PromptHandoffErrorLayer
+    where
+        S: tracing::Subscriber,
+    {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _context: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() != tracing::Level::ERROR {
+                return;
+            }
+            let mut fields = PromptHandoffErrorFields::default();
+            event.record(&mut fields);
+            self.events
+                .lock()
+                .expect("handoff error events")
+                .push(PromptHandoffErrorEvent {
+                    subsystem: fields.subsystem,
+                    action: fields.action,
+                    reason: fields.reason,
+                    message_id: fields.message_id,
+                    kind: fields.kind,
+                    trigger: fields.trigger,
+                });
+        }
+    }
 
     impl DiagnosticCountersSource for CounterFixture {
         fn snapshot(&self) -> DiagnosticCounters {
@@ -1706,6 +1806,29 @@ pub(crate) mod tests {
         .expect("write request")
     }
 
+    fn task_write_request(fixture: &Fixture, task_id: &str) -> WriteRequest {
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        request.task_id = Some(task_id.parse().expect("task id"));
+        request.requires_ack = true;
+        request
+    }
+
+    async fn prompt_handoffs(fixture: &Fixture, task_id: &str) -> Vec<PromptHandoff> {
+        let reader = open_sqlite_boundary(&fixture.database_path)
+            .expect("reopen SQLite boundary")
+            .service_runtime
+            .async_task_ledger_reader()
+            .expect("async task-ledger reader");
+        reader
+            .list_prompt_handoffs(
+                "test-team".parse().expect("team"),
+                task_id.parse::<TaskId>().expect("task id"),
+                atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
+            )
+            .await
+            .expect("list prompt handoffs")
+    }
+
     fn template_write_request(fixture: &Fixture, body: &str) -> WriteRequest {
         let template_path = fixture._temporary_root.path().join("notice.j2");
         std::fs::write(&template_path, body).expect("write template fixture");
@@ -2003,6 +2126,36 @@ pub(crate) mod tests {
             task_transition: None,
             recipient_pane_id: None,
         }
+    }
+
+    fn task_handoff_dispatch(task_id: Option<&str>) -> BuiltInPostSendDispatch {
+        let mut event = hook_event();
+        event.task_id = task_id.map(|value| value.parse().expect("task id"));
+        event.task_transition = Some(atm_core::boundary::TaskTransition::Ready);
+        BuiltInPostSendDispatch {
+            event,
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: "recipient".parse().expect("recipient"),
+                recipient_team: "test-team".parse().expect("team"),
+                rendered_nudge: "task prompt".to_owned(),
+            }),
+            kind: NudgeKind::Steer,
+        }
+    }
+
+    fn assert_prompt_handoff_error(
+        layer: &PromptHandoffErrorLayer,
+        dispatch: &BuiltInPostSendDispatch,
+        reason: &str,
+    ) {
+        let events = layer.events.lock().expect("handoff error events");
+        assert_eq!(events.len(), 1, "one structured handoff error is logged");
+        assert_eq!(events[0].subsystem, "prompt_handoff");
+        assert_eq!(events[0].action, "prompt_handoff_record_failed");
+        assert_eq!(events[0].reason, reason);
+        assert_eq!(events[0].message_id, dispatch.event.message_id.to_string());
+        assert_eq!(events[0].kind, "task_ready");
+        assert_eq!(events[0].trigger, "steer");
     }
 
     #[test]
@@ -4000,6 +4153,213 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn steer_emit_records_handoff_with_trigger_steer() {
+        let fixture = fixture(true, None, None);
+        let write = task_write_request(&fixture, "BB6-STEER");
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let handoffs = prompt_handoffs(&fixture, "BB6-STEER").await;
+        assert_eq!(handoffs.len(), 1, "one successful steer writes one handoff");
+        assert_eq!(handoffs[0].trigger, PromptTrigger::Steer);
+        assert_eq!(handoffs[0].attempt, 0);
+        assert_eq!(handoffs[0].kind.as_str(), "task_queued");
+    }
+
+    #[tokio::test]
+    async fn steer_of_non_task_message_records_no_handoff() {
+        let fixture = fixture(true, None, None);
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert!(
+            prompt_handoffs(&fixture, "BB6-NOT-A-TASK").await.is_empty(),
+            "a dispatch without task_transition writes no handoff"
+        );
+    }
+
+    #[test]
+    fn queue_claim_records_no_handoff() {
+        let queue_claim = include_str!("herdr_queue_wake.rs");
+        assert!(
+            !queue_claim.contains("record_prompt_handoff"),
+            "queue claim remains outside the task-linked handoff writer"
+        );
+    }
+
+    #[test]
+    fn deferred_task_linked_message_is_impossible_after_bb5() {
+        let send_source = include_str!("../../atm-core/src/send/mod.rs");
+        let start = send_source
+            .find("pub(crate) fn send_mode_for_task_request")
+            .expect("task send-mode selector");
+        let body = &send_source[start..];
+        let end = body
+            .find("pub(crate) fn finalize_send_outcome")
+            .expect("following send function");
+        let body = &body[..end];
+        assert!(body.contains("if task_id.is_some()"));
+        assert!(body.contains("NudgeMode::Immediate"));
+        assert!(body.contains("request.nudge_mode"));
+        assert!(
+            !body.contains("NudgeMode::Deferred"),
+            "task-linked requests cannot enter the deferred claim path"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_failure_logs_prompt_handoff_record_failed_and_emission_succeeds() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let store: Arc<dyn TaskStore + Send + Sync> =
+            Arc::new(atm_storage::DummyTaskStore::default());
+        let dispatch = task_handoff_dispatch(None);
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+        let sink_result = PostSendEmissionPath::GraftPort;
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_secs(1)),
+            store,
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_eq!(sink_result, PostSendEmissionPath::GraftPort);
+        assert_prompt_handoff_error(&layer, &dispatch, "storage");
+    }
+
+    #[tokio::test]
+    async fn steer_with_exhausted_deadline_skips_record_with_failure_log() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        let dispatch = task_handoff_dispatch(Some("BB6-EXPIRED"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::ZERO),
+            store.clone(),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_prompt_handoff_error(&layer, &dispatch, "timeout");
+        let rows = AsyncTaskLedgerReader::list_prompt_handoffs(
+            store.as_ref(),
+            "test-team".parse().expect("team"),
+            "BB6-EXPIRED".parse().expect("task id"),
+            atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
+        )
+        .await
+        .expect("list handoffs");
+        assert!(rows.is_empty(), "expired recording writes no row");
+    }
+
+    #[tokio::test]
+    async fn record_bridge_saturated_logs_and_emission_succeeds() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let release = Arc::new(AtomicBool::new(false));
+        let worker_release = Arc::clone(&release);
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let occupying_bridge = bridge.clone();
+        let occupying = tokio::spawn(async move {
+            occupying_bridge
+                .run(RequestDeadline::after(Duration::from_secs(2)), move || {
+                    started_tx.send(()).expect("signal occupied bridge");
+                    while !worker_release.load(Ordering::Acquire) {
+                        std::thread::yield_now();
+                    }
+                    Ok(())
+                })
+                .await
+        });
+        started_rx.await.expect("bridge job starts");
+        let dispatch = task_handoff_dispatch(Some("BB6-SATURATED"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_millis(20)),
+            Arc::new(atm_storage::DummyTaskStore::default()),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+        release.store(true, Ordering::Release);
+        occupying
+            .await
+            .expect("occupying task joins")
+            .expect("job exits");
+
+        assert_prompt_handoff_error(&layer, &dispatch, "saturated");
+    }
+
+    #[tokio::test]
+    async fn record_bridge_timeout_logs_and_emission_succeeds() {
+        let dispatch = task_handoff_dispatch(Some("BB6-TIMEOUT"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let timer_fired = Arc::new(AtomicBool::new(false));
+        let timer_observed = Arc::clone(&timer_fired);
+        let timer = tokio::spawn(async move {
+            tokio::task::yield_now().await;
+            timer_observed.store(true, Ordering::Release);
+        });
+        let error = bridge
+            .run(RequestDeadline::after(Duration::from_millis(20)), || {
+                let started = std::time::Instant::now();
+                while started.elapsed() < Duration::from_millis(100) {
+                    std::thread::yield_now();
+                }
+                Ok(())
+            })
+            .await
+            .expect_err("blocking record exceeds its deadline");
+        assert!(error.message().contains("timed out"));
+        crate::prompt_handoff_record::log_failure(
+            &dispatch,
+            atm_storage::BuiltInNudgeTemplateKind::TaskReady,
+            PromptTrigger::Steer,
+            "timeout",
+        );
+        timer.await.expect("independent timer joins");
+
+        assert!(
+            timer_fired.load(Ordering::Acquire),
+            "Tokio worker remains live"
+        );
+        assert_prompt_handoff_error(&layer, &dispatch, "timeout");
+    }
+
+    #[tokio::test]
     async fn deferred_write_through_async_router_marks_once_without_tokio_sqlite_access() {
         let fixture = fixture(true, None, None);
         let message_id = AtmMessageId::new();
@@ -5607,6 +5967,28 @@ pub(crate) mod tests {
                 .expect("load committed message")
                 .is_some(),
             "hook failure cannot roll back a durable receive"
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_steer_sink_records_no_handoff() {
+        let fixture = fixture(
+            true,
+            Some(AtmError::daemon_unavailable(
+                "intentional steer sink failure",
+            )),
+            None,
+        );
+        let write = task_write_request(&fixture, "BB6-FAILED-STEER");
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert!(
+            prompt_handoffs(&fixture, "BB6-FAILED-STEER")
+                .await
+                .is_empty(),
+            "a failed steer sink writes no handoff"
         );
     }
 
