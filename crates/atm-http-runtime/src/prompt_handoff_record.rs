@@ -5,6 +5,7 @@ use atm_core::boundary::{
     BuiltInPostSendDispatch, PromptHandoff, PromptTrigger, TaskStore,
     built_in_nudge_template_kind_from_post_send_event,
 };
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::types::IsoTimestamp;
 
 use crate::BoundedBlockingBridge;
@@ -12,7 +13,7 @@ use crate::BoundedBlockingBridge;
 pub(crate) async fn record_prompt_handoff(
     bridge: &BoundedBlockingBridge,
     deadline: RequestDeadline,
-    store: Arc<dyn TaskStore + Send + Sync>,
+    store: Result<Arc<dyn TaskStore + Send + Sync>, AtmError>,
     dispatch: &BuiltInPostSendDispatch,
     trigger: PromptTrigger,
     at: IsoTimestamp,
@@ -21,12 +22,24 @@ pub(crate) async fn record_prompt_handoff(
         return;
     };
     let kind = built_in_nudge_template_kind_from_post_send_event(&dispatch.event, dispatch.kind);
+    let store = match store {
+        Ok(store) => store,
+        Err(error) => {
+            log_failure(dispatch, kind, trigger, "storage", &error);
+            return;
+        }
+    };
     let Some(task_id) = dispatch.event.task_id.clone() else {
-        log_failure(dispatch, kind, trigger, "storage");
+        let error = AtmError::mailbox_write("task-linked prompt has no task id");
+        log_failure(dispatch, kind, trigger, "storage", &error);
         return;
     };
     if deadline.expired() {
-        log_failure(dispatch, kind, trigger, "timeout");
+        let error = AtmError::new(
+            AtmErrorCode::InternalError,
+            "prompt-handoff recording deadline expired before bridge admission",
+        );
+        log_failure(dispatch, kind, trigger, "timeout", &error);
         return;
     }
     let handoff = PromptHandoff {
@@ -47,7 +60,7 @@ pub(crate) async fn record_prompt_handoff(
         .await
     {
         let reason = failure_reason(&error);
-        log_failure(dispatch, kind, trigger, reason);
+        log_failure(dispatch, kind, trigger, reason, &error);
     }
 }
 
@@ -64,6 +77,7 @@ pub(crate) fn log_failure(
     kind: atm_core::boundary::BuiltInNudgeTemplateKind,
     trigger: PromptTrigger,
     reason: &'static str,
+    error: &AtmError,
 ) {
     tracing::error!(
         subsystem = "prompt_handoff",
@@ -72,6 +86,8 @@ pub(crate) fn log_failure(
         message_id = %dispatch.event.message_id,
         kind = %kind,
         trigger = trigger.as_str(),
+        error_code = error.code().as_str(),
+        error = %error,
         "Task-linked prompt was emitted but its audit record failed"
     );
 }

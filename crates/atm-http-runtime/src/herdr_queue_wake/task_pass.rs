@@ -402,7 +402,7 @@ impl HerdrQueueWakePump {
                 crate::prompt_handoff_record::record_prompt_handoff(
                     &self.blocking_bridge,
                     herdr_request_deadline(),
-                    Arc::clone(task_store),
+                    Ok(Arc::clone(task_store)),
                     &dispatch,
                     atm_core::boundary::PromptTrigger::TaskPass,
                     now,

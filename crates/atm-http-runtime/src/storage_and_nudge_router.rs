@@ -490,33 +490,17 @@ impl StorageAndNudgeRouter {
             )
             .await
             {
-                Ok(Ok(_)) => match self.service_runtime.task_store() {
-                    Ok(store) => {
-                        crate::prompt_handoff_record::record_prompt_handoff(
-                            self.control_path_sync_bridge.blocking_bridge(),
-                            deadline,
-                            store,
-                            &dispatch,
-                            atm_core::boundary::PromptTrigger::Steer,
-                            dispatch.event.message_id.timestamp(),
-                        )
-                        .await;
-                    }
-                    Err(_) if dispatch.event.task_transition.is_some() => {
-                        let kind =
-                            atm_core::boundary::built_in_nudge_template_kind_from_post_send_event(
-                                &dispatch.event,
-                                dispatch.kind,
-                            );
-                        crate::prompt_handoff_record::log_failure(
-                            &dispatch,
-                            kind,
-                            atm_core::boundary::PromptTrigger::Steer,
-                            "storage",
-                        );
-                    }
-                    Err(_) => {}
-                },
+                Ok(Ok(_)) => {
+                    crate::prompt_handoff_record::record_prompt_handoff(
+                        self.control_path_sync_bridge.blocking_bridge(),
+                        deadline,
+                        self.service_runtime.task_store(),
+                        &dispatch,
+                        atm_core::boundary::PromptTrigger::Steer,
+                        dispatch.event.message_id.timestamp(),
+                    )
+                    .await;
+                }
                 Ok(Err(error)) => warnings.push(hook_warning(error)),
                 Err(_) => warnings.push(hook_warning(AtmError::daemon_unavailable(
                     "received-message hook timed out after durable message persistence",
@@ -1203,6 +1187,8 @@ pub(crate) mod tests {
         message_id: String,
         kind: String,
         trigger: String,
+        error_code: String,
+        error: String,
     }
 
     #[derive(Default)]
@@ -1213,6 +1199,8 @@ pub(crate) mod tests {
         message_id: String,
         kind: String,
         trigger: String,
+        error_code: String,
+        error: String,
     }
 
     impl tracing::field::Visit for PromptHandoffErrorFields {
@@ -1224,6 +1212,8 @@ pub(crate) mod tests {
                 "message_id" => self.message_id = value.to_owned(),
                 "kind" => self.kind = value.to_owned(),
                 "trigger" => self.trigger = value.to_owned(),
+                "error_code" => self.error_code = value.to_owned(),
+                "error" => self.error = value.to_owned(),
                 _ => {}
             }
         }
@@ -1257,6 +1247,8 @@ pub(crate) mod tests {
                     message_id: fields.message_id,
                     kind: fields.kind,
                     trigger: fields.trigger,
+                    error_code: fields.error_code,
+                    error: fields.error,
                 });
         }
     }
@@ -2156,6 +2148,39 @@ pub(crate) mod tests {
         assert_eq!(events[0].message_id, dispatch.event.message_id.to_string());
         assert_eq!(events[0].kind, "task_ready");
         assert_eq!(events[0].trigger, "steer");
+    }
+
+    #[tokio::test]
+    async fn task_store_acquisition_failure_logs_the_real_error() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let dispatch = task_handoff_dispatch(Some("BB6-STORE-ACQUIRE"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_secs(1)),
+            Err(AtmError::daemon_unavailable(
+                "injected task-store acquisition failure",
+            )),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_prompt_handoff_error(&layer, &dispatch, "storage");
+        let events = layer.events.lock().expect("handoff error events");
+        assert_eq!(events[0].error_code, "ATM_DAEMON_UNAVAILABLE");
+        assert!(
+            events[0]
+                .error
+                .contains("injected task-store acquisition failure")
+        );
     }
 
     #[test]
@@ -4227,7 +4252,7 @@ pub(crate) mod tests {
         crate::prompt_handoff_record::record_prompt_handoff(
             &bridge,
             RequestDeadline::after(Duration::from_secs(1)),
-            store,
+            Ok(store),
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
@@ -4253,7 +4278,7 @@ pub(crate) mod tests {
         crate::prompt_handoff_record::record_prompt_handoff(
             &bridge,
             RequestDeadline::after(Duration::ZERO),
-            store.clone(),
+            Ok(store.clone()),
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
@@ -4302,7 +4327,7 @@ pub(crate) mod tests {
         crate::prompt_handoff_record::record_prompt_handoff(
             &bridge,
             RequestDeadline::after(Duration::from_millis(20)),
-            Arc::new(atm_storage::DummyTaskStore::default()),
+            Ok(Arc::new(atm_storage::DummyTaskStore::default())),
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
@@ -4338,7 +4363,7 @@ pub(crate) mod tests {
         crate::prompt_handoff_record::record_prompt_handoff(
             &bridge,
             RequestDeadline::after(Duration::from_millis(20)),
-            store,
+            Ok(store),
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
