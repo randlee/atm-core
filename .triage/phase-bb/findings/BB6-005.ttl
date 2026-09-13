@@ -19,11 +19,12 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
-  triage:deferredNote "Fix: replace the anyhow string errors at task.rs:289-301 and :404-410 with structured AtmErrorCode::TaskNotFound, matching the crate's existing error convention. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c." ;
+  triage:deferredNote "Fix: replace the anyhow string errors at task.rs:289-301 and :404-410 with structured AtmErrorCode::TaskNotFound, matching the crate's existing error convention. Routed to solar on BB6-FIX-CLI-QA1-1789270000, branch fix/bb6-cli-qa1 cut from 4b0f6661c. Fixed by solar's second commit (catalog-backed TaskNotFound/TaskNotCounterparty + per-command JSON code tests), pushed to fix/bb6-cli-qa1 @ 8086e5362 (2026-09-13T00:45:06Z, per fenix). Fixed-pending-QA." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T00:38:04Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-005/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-005/1>
   a triage:Occurrence ;
@@ -42,3 +43,21 @@
   triage:branch "feature/bb6-cli-prompt-handoffs" ;
   triage:headSha "40ccd403e" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-005/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task.rs" ;
+  triage:line 289 ;
+  triage:snippet "catalog-backed TaskNotFound/TaskNotCounterparty with per-command JSON code tests replaces the anyhow string errors; fixed-pending-QA" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "8086e5362" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-005/2> .
+
+<urn:atm:triage:worktree/BB6-005/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1465, fix/bb6-cli-qa1" ;
+  triage:branch "fix/bb6-cli-qa1" ;
+  triage:headSha "8086e5362" ;
+  triage:orderIndex 2 .
