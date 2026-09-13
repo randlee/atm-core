@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-025>
+  a triage:Finding ;
+  triage:findingId "BB6-025" ;
+  triage:title "prompt_handoffs UNIQUE(team,agent,message_key,attempt) collides task_queued and task_ready for one assignment, silently dropping task_ready" ;
+  triage:description "fenix (2026-09-13T02:02:27Z), observed by solar at fix/bb6-docs-qa1 @ 9429a9971 in a fresh arm64 colima image (sha256:f9a96560...). The prompt_handoffs UNIQUE (team, agent, message_key, attempt) constraint collides task_queued and task_ready for one assignment (same message_key, both attempt 0), so record_prompt_handoff's INSERT OR IGNORE silently drops the task_ready row. `atm task events` shows handoffs [task_queued, task_reminder, task_started] with task_ready absent, while the pane shows all three blocks; violates sprint-BB.6 lines 184/189. Contributing: unit test task_pass_records_handoff_with_kind_and_attempt never seeds the preceding task_queued row, so the collision is untested." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "fenix, observed by solar at fix/bb6-docs-qa1 in a fresh arm64 colima image" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/task_sql.rs (DDL); crates/atm-http-runtime/src/prompt_handoff_record.rs (record_prompt_handoff, test task_pass_records_handoff_with_kind_and_attempt)" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-13T02:02:27Z"^^xsd:dateTime ;
+  triage:deferredNote "Root cause: prompt_handoffs UNIQUE (team, agent, message_key, attempt) does not distinguish handoff kind, so task_queued and task_ready for the same assignment (same message_key, attempt 0) collide and record_prompt_handoff's INSERT OR IGNORE silently drops the second (task_ready) row. Fix must include the kind in the uniqueness scope (or otherwise disambiguate), and the unit test task_pass_records_handoff_with_kind_and_attempt must seed the preceding task_queued row so this collision is covered. Evidence: site/reports/bb6-prompt-handoffs/20260913T015759104883Z (uncommitted, on solar's host). fenix's ruling and dispatch to arch-ctm on a new layer to follow once this finding id is sent back to fenix; dispatchReady left false pending that ruling/branch assignment." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T02:02:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-025/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-025/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_sql.rs" ;
+  triage:line 0 ;
+  triage:snippet "prompt_handoffs UNIQUE (team, agent, message_key, attempt) collides task_queued/task_ready for one assignment; record_prompt_handoff's INSERT OR IGNORE silently drops task_ready" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "9429a9971" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-025/1> .
+
+<urn:atm:triage:worktree/BB6-025/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1470, fix/bb6-docs-qa1" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "9429a9971" ;
+  triage:orderIndex 1 .
