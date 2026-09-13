@@ -70,7 +70,7 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 - Agent team execution: Scrum Master → Dev(s) + QA(s), Opus Architect on escalation
 - All work on dedicated worktrees via `sc-git-worktree`
 
-**Current Status**: Phase AX merged to develop (PR #1253, 98661ea18, 2026-09-06 — 7 sprints incl. task-state tracking and every-backend nudge templates; AX.7 live-evidence sprint superseded 2026-09-05, moved to release readiness). Phase AY (native-IPC transport cutover for Herdr) has all sprints merged into `integrate/phase-ay`; its phase-ending gate is in progress and the merge to `develop` is pending Rand approval.
+**Current Status**: Phase AX merged to develop (PR #1253, 98661ea18, 2026-09-06 — 7 sprints incl. task-state tracking and every-backend nudge templates; AX.7 live-evidence sprint superseded 2026-09-05, moved to release readiness). Phase AY (native-IPC transport cutover for Herdr) has all sprints merged into `integrate/phase-ay`; its phase-ending gate is in progress and the merge to `develop` is pending Rand approval. Phase BB has all seven sprints merged into `integrate/phase-bb`; its phase-ending gate and readiness review are in progress, with the merge to `develop` pending.
 
 ---
 
@@ -235,11 +235,14 @@ atm inbox
 | List teams | `atm teams` |
 | Team members | `atm members` |
 | Assign or reassign a task | `atm task assign <agent> [message source] [--task-id <id>] [--before <other-id> \| --head]` |
-| Start a task | `atm task start <task-id> [message]` |
+| Start an assigned task | `atm task start <task-id> "<one-line plan>"` |
 | Close a task | `atm task close <task-id> <completed\|refused\|cancelled> [reason or report source]` |
 | Reorder a queued task | `atm task move <task-id> --before <other-id> \| --head \| --end` |
 | List open tasks | `atm task list [--all]` |
 | Show task history | `atm task events <task-id>` |
+
+`atm task start` is the only assigned-to-active task transition; `atm ack`
+never changes task state.
 
 `atm send <agent> --task-id <id> ...` is an alias for `atm task assign`.
 `atm send <assigner> --task-id <id> --task-complete ...` is an alias for
