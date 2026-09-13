@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 branch: feature/bb2-orchestration-templates-1516
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb2-orchestration-templates-1516
 ---

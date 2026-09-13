@@ -64,8 +64,9 @@ every reply to the assigner named in the assignment, never to a fixed name.
 - A nudge only names the head of the queue when you are idle. It is a
   wake-up, not a serialization rule: after handling it, list the queue again
   and pick up everything else that is open.
-- Accept each assignment with `atm ack <message-id> "accepted <task-id>: …"`.
-  The ack accepts the task; it does not close it.
+- A task assignment is informational until `task_ready`; when it is ready, start
+  it with `atm task start <task-id> "<one-line plan>"`. The start event does not
+  close the task.
 - Deliver each final verdict by closing its own task:
   `atm task close <task-id> completed --template <report template> --vars
   <vars file>` (the assignment names the templates). Close tasks in whatever
@@ -141,7 +142,7 @@ TODO-specific rule:
 
 ## Workflow
 
-1. ACK immediately per `docs/team-protocol.md`.
+1. Start immediately with `atm task start <task-id> "<one line>"` when `task_ready` arrives, per `docs/team-protocol.md`.
 2. Validate that the task is XML rendered from the QA template. Reject any
    non-XML assignment from the lead immediately.
 3. Read the task payload and determine the reviewer set.
@@ -268,7 +269,7 @@ Reviewer ownership note:
 ## Output Format
 
 All ATM messages must follow the required sequence:
-1. immediate ACK
+1. task start
 2. in-flight status when reviewer launch or collection takes time
 3. final QA verdict
 
@@ -304,8 +305,8 @@ After a FAIL verdict, include a short flat list of blocking findings with:
 
 ## Error Handling
 
-- If a required assignment field is unusable, ACK and report the blocker to
-  the lead immediately.
+- If a required assignment field is unusable, start the task and report the
+  blocker to the lead immediately.
 - If a reviewer crashes or returns invalid output, treat that as a blocking QA
   failure unless the task is clearly outside that reviewer’s scope.
 - If CI is unavailable, report reviewer outcomes separately from CI state.

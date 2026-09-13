@@ -103,13 +103,13 @@ When assigning work to a teammate:
 1. create or update the task list entry first
 2. include task scope, worktree, relevant docs, and acceptance criteria
 3. require:
-   - immediate ACK
+   - `atm task start <task-id> "<one line>"` when `task_ready` arrives
    - intermediate status at meaningful milestones
    - completion notification with commit or PR reference
 
 ### Communication Rules
 
-- No ACK means the work is not being done.
+- No task start row means the work is not being done.
 - Codex agents such as `arch-ctm` only see new ATM messages when they check
   mail after their current task completes.
 - On atm 1.5.16, the assignee's `atm task close <task-id> completed` report

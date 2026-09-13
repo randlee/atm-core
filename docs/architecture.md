@@ -1936,7 +1936,7 @@ Current runtime boundary rule:
 - read-time duplicate collapse by `message_id`
 - workflow axis classification
 - workflow axis transitions
-- task-linked ack-required classification
+- task-linked classification (never ack-required, ADR-062)
 - seen-state behavior
 - timeout behavior
 - ack transition behavior

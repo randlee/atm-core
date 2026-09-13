@@ -29,7 +29,7 @@
 When receiving a message `<atm from="omega-prime...` containing an
 orchestration alert or sprint-plan violation or merge-conflict notice:
 
-1. Acknowledge immediately (ATM ack protocol)
+1. For an alert explicitly marked `--requires-ack`, acknowledge immediately through the ATM ack protocol
 2. Verify compliance with the sprint plan's dependency rules
    (`must_follow`, `parallel_safe`)
 3. If a pipeline sequencing violation is confirmed, correct the assignment order before proceeding
@@ -78,10 +78,9 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 
 **Primary references — read as needed:**
 
-- [`docs/team-protocol.md`](./docs/team-protocol.md) - **MUST READ** ATM dogfooding messaging protocol (ack -> work -> task close; the close is terminal)
+- [`docs/team-protocol.md`](./docs/team-protocol.md) - **MUST READ** ATM dogfooding messaging protocol (task start -> work -> task close; the close is terminal)
 - [`docs/requirements.md`](./docs/requirements.md) - System requirements, architecture, plugin design
 - [`docs/project-plan.md`](./docs/project-plan.md) - Phased sprint plan with dependency graphs
-- [`docs/agent-team-api.md`](./docs/agent-team-api.md) - Claude agent team API reference (schema baseline: Claude Code 2.1.39)
 - [`docs/cross-platform-guidelines.md`](./docs/cross-platform-guidelines.md) - Mandatory Windows CI compliance patterns
 
 **Rust development reference — read only when implementation decisions are needed:**
@@ -236,6 +235,7 @@ atm inbox
 | List teams | `atm teams` |
 | Team members | `atm members` |
 | Assign or reassign a task | `atm task assign <agent> [message source] [--task-id <id>] [--before <other-id> \| --head]` |
+| Start a task | `atm task start <task-id> [message]` |
 | Close a task | `atm task close <task-id> <completed\|refused\|cancelled> [reason or report source]` |
 | Reorder a queued task | `atm task move <task-id> --before <other-id> \| --head \| --end` |
 | List open tasks | `atm task list [--all]` |

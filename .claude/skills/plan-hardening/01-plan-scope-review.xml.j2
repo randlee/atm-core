@@ -115,8 +115,8 @@ metadata:
   </plan-hardening>
 
   <workflow>
-    <step id="a">ACK this message immediately with `atm ack &lt;message-id&gt; "accepted {{ task_id }}: &lt;one line on what you do first&gt;"`; the ack accepts the task and does not close it. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
-    <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line on what you will do first&gt;"`. If the task includes questions or concerns, report them to the lead before proceeding; if it materially changes the discussed scope, state that hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="b">Immediately after task start, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
     <step id="d">As soon as the guidelines pass is complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send {{ lead }} --stdin` so scope review can begin in parallel; never close the task on a push. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="e">After the push report, run the required validation.</step>

@@ -567,7 +567,8 @@ Acceptance:
 - Every reviewed non-retained file must also appear there with a `do not copy` decision.
 - Workflow-axis transitions must be enforced by code structure, not only by tests.
 - Display bucket behavior must remain separate from the canonical two-axis workflow model.
-- Task-linked mail must be ack-required from creation time.
+- Task-linked mail is never ack-required; readiness is signalled by the task pass
+  and the assignee starts it with `atm task start`.
 - Generic logging query/follow/filter behavior should live in `sc-observability` where possible, not in ATM-specific code.
 - Persisted config/schema compatibility issues must recover at the narrowest
   safe scope, and identity/routing fields must never be guessed.
@@ -576,7 +577,8 @@ Acceptance:
   must be deduplicated by unresolved condition.
 
 Cross-document invariants that must stay locked during implementation:
-- `taskId` implies ack-required send behavior
+- `taskId` implies task-linked mail that never requires acknowledgement;
+  readiness is signalled by `task_ready`, and start by `atm task start`
 - `mutation_applied = true` means a displayed message's legal read/seen
   transition was accepted into the supervised non-blocking handoff; durable
   `read = true` visibility may follow later
@@ -605,7 +607,8 @@ The rewrite is ready when:
   defaults or committed `tmux_pane_id` routing truth
 - retained command behavior is preserved, and any current-runtime shape changes
   are intentionally documented
-- task-linked mail remains pending until acknowledged
+- task-linked mail is actionable on `task_ready` and never waits for an
+  acknowledgement
 - the file-by-file migration plan is complete enough to implement directly
 - the retained command tests pass against the new crate layout
 
@@ -1824,12 +1827,12 @@ team-lead lands the final status when the phase PR merges.
 
 | Sprint | Status | Branch | Authoritative sprint doc |
 | --- | --- | --- | --- |
-| `BB.1` | `planned` | `feature/bb1-transition-templates` | `docs/plans/phase-bb/sprint-BB.1-transition-templates.md` |
-| `BB.2` | `planned` | `feature/bb2-orchestration-templates-1516` | `docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md` |
-| `BB.3` | `complete` | `feature/bb3-test-procedure-pages` | `docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md` |
-| `BB.4` | `complete` | `feature/bb4-task-start` | `docs/plans/phase-bb/sprint-BB.4-task-start.md` |
-| `BB.5` | `complete` | `feature/bb5-assignment-write-task-pass` | `docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md` |
-| `BB.6` | `complete` | `feature/bb6-docs-prompt-handoffs` | `docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md` |
+| `BB.1` | `merged (#1452)` | `feature/bb1-transition-templates` | `docs/plans/phase-bb/sprint-BB.1-transition-templates.md` |
+| `BB.2` | `merged (#1452)` | `feature/bb2-orchestration-templates-1516` | `docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md` |
+| `BB.3` | `merged (#1468)` | `feature/bb3-test-procedure-pages` | `docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md` |
+| `BB.4` | `merged (#1452)` | `feature/bb4-task-start` | `docs/plans/phase-bb/sprint-BB.4-task-start.md` |
+| `BB.5` | `merged (#1452)` | `feature/bb5-assignment-write-task-pass` | `docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md` |
+| `BB.6` | `merged (#1470)` | `feature/bb6-docs-prompt-handoffs` | `docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md` |
 | `BB.7` | `planned` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
 
 ## Daemon-Switch Scope Reduction

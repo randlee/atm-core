@@ -161,6 +161,6 @@ Use the final template only for `PASS` closeout.
 
 The sequence for every QA task assignment is defined once in
 [`docs/team-protocol.md`](../../../docs/team-protocol.md) (Required Flow):
-ack, work, task close. The verdict travels in the `atm task close` report
+task start, work, task close. The verdict travels in the `atm task close` report
 above; the close is terminal and the lead never acknowledges it. No silent
 processing.
