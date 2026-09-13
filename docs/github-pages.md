@@ -31,3 +31,6 @@ Run `just lint site-links` to check every local link and asset reference in
 the generated `site/` tree. The check rejects missing targets, links that
 escape the site tree, root-absolute paths, and directory links without an
 `index.html`.
+
+Rendered pages under `site/reports/` may be edited only to repair links;
+runner-written JSON and envelope artifacts are never edited.
