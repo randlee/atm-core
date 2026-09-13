@@ -52,6 +52,51 @@ class Bb6PromptHandoffRunnerTests(unittest.TestCase):
                 {"exit_code": 0, "stdout": "many", "stderr": ""}, "count"
             )
 
+    def test_pane_terminal_lines_classifies_each_prompt(self) -> None:
+        task = "BB6-one"
+        text = (
+            f'<atm task="{task}" queued="1" />\n'
+            f'<atm task="{task}" ready></atm>\n'
+            f'<atm task="{task}" reminder="2"></atm>\n'
+        )
+        lines = RUNNER.pane_terminal_lines(text, [task])
+        self.assertEqual(
+            [(line["kind"], line["attempt"]) for line in lines],
+            [("task_queued", 0), ("task_ready", 0), ("task_reminder", 2)],
+        )
+
+    def test_terminal_and_stored_identities_compare_exactly(self) -> None:
+        terminal = [
+            {
+                "agent": "tester",
+                "task_id": "BB6-one",
+                "kind": "task_ready",
+                "attempt": 0,
+            }
+        ]
+        stored = [["tester", "task_ready", "BB6-one", 0, "atm:01TEST"]]
+        self.assertEqual(
+            RUNNER.terminal_identities(terminal), RUNNER.handoff_identities(stored)
+        )
+
+    def test_mailbox_terminal_lines_records_surface_and_kind(self) -> None:
+        messages = [
+            {
+                "count": 1,
+                "message": {"taskId": "BB6-one", "taskOp": {"op": "start"}},
+            },
+            {"count": 0},
+        ]
+        results = [
+            {"exit_code": 0, "stdout": __import__("json").dumps(row), "stderr": ""}
+            for row in messages
+        ]
+        with mock.patch.object(RUNNER, "run_cli", side_effect=results):
+            lines, commands = RUNNER.mailbox_terminal_lines("fixture", ["BB6-one"])
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(lines[0]["surface"], "atm_mailbox")
+        self.assertEqual(lines[0]["kind"], "task_started")
+
     def test_handoff_and_event_extractors_reject_wrong_shapes(self) -> None:
         self.assertEqual(RUNNER.handoff_kinds({"handoffs": "bad"}), [])
         self.assertEqual(RUNNER.event_names({"events": "bad"}), [])

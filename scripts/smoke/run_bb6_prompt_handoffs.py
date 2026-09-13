@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from datetime import datetime, timezone
 from html import escape
 import json
@@ -170,6 +171,17 @@ def prompt_failure_count(container: str) -> dict[str, Any]:
     return run_command(["docker", "exec", container, "python3", "-c", code])
 
 
+def prompt_handoff_rows(container: str) -> dict[str, Any]:
+    code = (
+        "import json,sqlite3; "
+        "db=sqlite3.connect('/root/.atm/db/mail.db'); "
+        "rows=db.execute('SELECT agent,kind,task_id,attempt,message_key "
+        "FROM prompt_handoffs ORDER BY rowid').fetchall(); "
+        "print(json.dumps(rows))"
+    )
+    return run_command(["docker", "exec", container, "python3", "-c", code])
+
+
 def integer_result(result: dict[str, Any], label: str) -> int:
     if result["exit_code"] != 0:
         raise RuntimeError(f"{label} failed: {result['stderr'].strip()}")
@@ -177,6 +189,82 @@ def integer_result(result: dict[str, Any], label: str) -> int:
         return int(result["stdout"].strip())
     except ValueError as error:
         raise RuntimeError(f"{label} returned a non-integer") from error
+
+
+def pane_terminal_lines(text: str, tasks: list[str]) -> list[dict[str, Any]]:
+    lines = []
+    for task in tasks:
+        for block in blocks_for(text, task):
+            if match := re.search(r'\breminder="(\d+)"', block):
+                kind, attempt = "task_reminder", int(match.group(1))
+            elif re.search(r"\bready(?:\s|>)", block):
+                kind, attempt = "task_ready", 0
+            elif re.search(r'\bqueued="\d+"', block):
+                kind, attempt = "task_queued", 0
+            else:
+                continue
+            lines.append(
+                {
+                    "surface": "herdr_pane",
+                    "agent": ASSIGNEE,
+                    "task_id": task,
+                    "kind": kind,
+                    "attempt": attempt,
+                    "terminal": block,
+                }
+            )
+    return lines
+
+
+def mailbox_terminal_lines(
+    container: str, tasks: list[str]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    lines = []
+    commands = []
+    while True:
+        result = run_cli(
+            container,
+            ASSIGNER,
+            ["read", "--unread", "--json", "--no-since-last-seen"],
+        )
+        commands.append(result)
+        payload = json_value(result, "assigner mailbox read")
+        if payload.get("count") == 0:
+            break
+        message = payload.get("message", {})
+        task = message.get("taskId")
+        if task not in tasks:
+            continue
+        operation = message.get("taskOp", {}).get("op")
+        kind = {"start": "task_started", "close": "task_complete"}.get(operation)
+        if kind is None:
+            raise RuntimeError(f"unexpected task mailbox operation: {operation}")
+        lines.append(
+            {
+                "surface": "atm_mailbox",
+                "agent": ASSIGNER,
+                "task_id": task,
+                "kind": kind,
+                "attempt": 0,
+                "terminal": message,
+            }
+        )
+        if len(commands) > 32:
+            raise RuntimeError("assigner mailbox did not drain within 32 reads")
+    return lines, commands
+
+
+def handoff_identities(rows: list[list[Any]]) -> Counter[tuple[str, str, str, int]]:
+    return Counter((row[0], row[2], row[1], row[3]) for row in rows)
+
+
+def terminal_identities(
+    lines: list[dict[str, Any]],
+) -> Counter[tuple[str, str, str, int]]:
+    return Counter(
+        (line["agent"], line["task_id"], line["kind"], line["attempt"])
+        for line in lines
+    )
 
 
 def case_record(
@@ -224,7 +312,8 @@ def scenario_task_events(container: str, run_id: str) -> dict[str, Any]:
     events = [event_names(payload) for payload in payloads]
     passed = (
         all(command["exit_code"] == 0 for command in commands)
-        and kinds[0] == ["task_queued", "task_ready", "task_reminder"]
+        and kinds[0]
+        == ["task_queued", "task_ready", "task_reminder", "task_started"]
         and kinds[1:] == [["task_queued"], ["task_queued"]]
         and "started" in events[0]
         and all("started" not in names for names in events[1:])
@@ -359,12 +448,25 @@ def run(container: str, out_dir: Path) -> int:
     if final_pane["exit_code"] != 0:
         raise RuntimeError("failed to read final tester pane")
     all_tasks = first["task_ids"] + second["task_ids"]
-    terminal_line_count = sum(len(blocks_for(final_pane["stdout"], task)) for task in all_tasks)
+    terminal_lines = pane_terminal_lines(final_pane["stdout"], all_tasks)
+    mailbox_lines, mailbox_commands = mailbox_terminal_lines(container, all_tasks)
+    terminal_lines.extend(mailbox_lines)
+    terminal_line_count = len(terminal_lines)
     count_result = sqlite_count(container)
     handoff_count = integer_result(count_result, "final prompt_handoffs count")
+    rows_result = prompt_handoff_rows(container)
+    rows = json_value(rows_result, "prompt handoff rows")
+    if not isinstance(rows, list):
+        raise RuntimeError("prompt handoff rows returned a non-list payload")
     log_result = prompt_failure_count(container)
     failure_count = integer_result(log_result, "prompt-handoff failure count")
-    acceptance_passed = handoff_count == terminal_line_count and failure_count == 0
+    stored_identities = handoff_identities(rows)
+    observed_identities = terminal_identities(terminal_lines)
+    acceptance_passed = (
+        handoff_count == terminal_line_count
+        and stored_identities == observed_identities
+        and failure_count == 0
+    )
     report = {
         "feature": "bb6-prompt-handoffs",
         "generated_at": generated_at.isoformat().replace("+00:00", "Z"),
@@ -374,13 +476,19 @@ def run(container: str, out_dir: Path) -> int:
         "cases": [first, second],
         "setup": {"baseline_prompt_handoffs": baseline_result},
         "cleanup_between_scenarios": cleanup,
+        "assigner_mailbox_commands": mailbox_commands,
         "acceptance": {
             "status": "PASS" if acceptance_passed else "FAIL",
             "query": "SELECT COUNT(*) FROM prompt_handoffs",
             "prompt_handoffs_count": handoff_count,
             "task_linked_terminal_line_count": terminal_line_count,
             "prompt_handoff_record_failed_count": failure_count,
+            "terminal_lines": terminal_lines,
+            "stored_handoff_rows": rows,
+            "identity_fields": ["agent", "task_id", "kind", "attempt"],
+            "identities_match": stored_identities == observed_identities,
             "count_command": count_result,
+            "rows_command": rows_result,
             "log_command": log_result,
         },
     }
