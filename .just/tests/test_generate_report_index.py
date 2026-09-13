@@ -215,6 +215,23 @@ class GenerateReportIndexTests(unittest.TestCase):
             (reports / "procedures/manifest.json").write_text('{"schema_version": 1, "procedures": []}\n')
             with self.assertRaises(ReportIndexError): write_or_check(root, check=False)
 
+    def test_rejects_report_whose_manifest_page_file_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir); reports = root / "site/reports"; reports.mkdir(parents=True)
+            write_envelope(root, "missing-page", "benchmark", "2026-08-01T00:00:00Z", "host")
+            manifest = {
+                "schema_version": 1,
+                "procedures": [{"procedure": "missing-page", "revisions": [{
+                    "rev": "0" * 40,
+                    "date": "2026-01-01",
+                    "html": "procedures/benchmark/missing.html",
+                }]}],
+            }
+            (reports / "procedures").mkdir()
+            (reports / "procedures/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ReportIndexError, "page does not exist"):
+                write_or_check(root, check=False)
+
     def test_rejects_site_without_procedure_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir); write_envelope(root, "bad", "benchmark", "2026-08-01T00:00:00Z", "host")
