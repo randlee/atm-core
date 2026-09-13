@@ -16,22 +16,26 @@
   triage:source "rust-service-hardening-agent, verified by quality-mgr, BB-POST-MORTEM-1789304000 phase-ending gate" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-http-runtime/src/prompt_handoff_record.rs (log_failure, lines 78-95)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-13T04:41:10Z"^^xsd:dateTime ;
   triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, not blocking. Filed as its own finding (not folded into BB6-026's record) so the two distinct root causes stay individually accountable, but scoped to land in the SAME fast-follow branch as BB6-026 -- both are in the same colima/prompt-handoff observability surface (prompt_handoff_record.rs and the BB6.7 smoke script that exercises it). Add `outcome=\"...\"` to the log_failure() tracing::error! call matching the subsystem/action/outcome convention used elsewhere in herdr_queue_wake/escalation logging." ;
   triage:foundIn triage:BB6 ;
   triage:foundAt "2026-09-13T04:41:10Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BB6-028/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-028/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-028/1> ;
+  triage:closedAt "2026-09-13T05:31:59Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/BB6-028/1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
   triage:line 78 ;
   triage:snippet "log_failure()'s tracing::error! omits outcome= field present on every other herdr_queue_wake/escalation log call" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-bb" ;
   triage:headSha "52ed82037" ;
   triage:occursIn <urn:atm:triage:worktree/BB6-028/1> .
@@ -42,3 +46,30 @@
   triage:branch "integrate/phase-bb" ;
   triage:headSha "52ed82037" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-028/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/prompt_handoff_record.rs" ;
+  triage:line 88 ;
+  triage:snippet "quality-mgr BB6-028-QA-1789330500 (report 01M2CM0BBB3VQWMT0S5171Z471, PR #1479), verified at fix/bb6-028-log-outcome @ 6665742cd. log_failure() now carries outcome = \"failed\" matching herdr_queue_wake/release_guard.rs:73 and herdr_escalation.rs:210; one-line diff. Confirmed independently by req-qa and arch-qa." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-028-log-outcome" ;
+  triage:headSha "6665742cd" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-028/2> .
+
+<urn:atm:triage:worktree/BB6-028/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1479, fix/bb6-028-log-outcome" ;
+  triage:branch "fix/bb6-028-log-outcome" ;
+  triage:headSha "6665742cd" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB6-028/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T05:31:59Z"^^xsd:dateTime ;
+  triage:fixCommit "6665742cd" ;
+  triage:fixBranch "fix/bb6-028-log-outcome" ;
+  triage:verifiedInRound "BB6-028-QA-1789330500" ;
+  triage:resolutionNote "quality-mgr BB6-028-QA-1789330500 Final Quality Report (PR #1479, report 01M2CM0BBB3VQWMT0S5171Z471). prompt_handoff_record.rs:88 log_failure() now carries outcome = \"failed\" matching the subsystem/action/outcome convention at release_guard.rs:73 and herdr_escalation.rs:210; one-line diff, nothing else changed. Confirmed independently by req-qa and arch-qa at 6665742cd." .
