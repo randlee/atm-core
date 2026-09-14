@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-13T05:00:15.564847Z",
+  "source_revision": "2cc19c18da82188ce964889a3b4c1ef32c1c9fca",
+  "image": {
+    "tag": "loki/hermes-testbed:bb6-runner-2cc19c18d",
+    "id": "sha256:5148a16444fee96daa92c2f7d27e51986716c4ff0f2211cfce7561c3f16fdc16",
+    "sha256": "sha256:5148a16444fee96daa92c2f7d27e51986716c4ff0f2211cfce7561c3f16fdc16",
+    "architecture": "arm64"
+  },
+  "container": "hermes-testbed-bb6-runner-2cc19c18d",
+  "atm_version": null,
+  "procedure": "colima-prompt-handoffs",
+  "procedure_revision": "2cc19c18da82188ce964889a3b4c1ef32c1c9fca",
+  "procedure_revision_inferred": false,
+  "status": "PASS",
+  "steps": [
+    {
+      "order": 1,
+      "name": "prompt-handoffs",
+      "procedure": "colima-prompt-handoffs",
+      "procedure_revision": "2cc19c18da82188ce964889a3b4c1ef32c1c9fca",
+      "procedure_revision_inferred": false,
+      "status": "PASS",
+      "generated_at": "2026-09-13T05:00:15.564847Z",
+      "container": "hermes-testbed-bb6-runner-2cc19c18d",
+      "payload": "steps/01-prompt-handoffs/step.json",
+      "panel": "steps/01-prompt-handoffs/panel.xhtml"
+    }
+  ]
+}
