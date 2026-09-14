@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-010>
+  a triage:Finding ;
+  triage:findingId "EQ-010" ;
+  triage:title "Concurrent schema-migration race on 'failed to create decomposed_messages view' -- intermittent Windows CI test failure AND a real Linux daemon-startup failure (colima)" ;
+  triage:description "team-lead, 2026-09-14, discovered on PR #1508 (fix/eq-009-managed-service-discovery @ b3738b89f, Test (windows-latest) job, run 34865056313/job 104048518591). crates/atm/tests/peer_cli.rs:138 -- `peer_trust_mutations_succeed_without_daemon_and_persist` panics: 'offline trust add failed: failed to create decomposed_messages view'. Traced to crates/atm-storage-rusqlite/src/template_catalog_schema.rs:30-58,85-86 (DECOMPOSED_MESSAGES_VIEW_V2 = 'DROP VIEW IF EXISTS decomposed_messages; CREATE VIEW decomposed_messages AS ...', executed via execute_batch() inside ensure_schema(), non-atomic drop+create) -- a schema-migration race window if two processes reach ensure_schema() against the same sqlite file concurrently. Confirmed NOT caused by PR #1508's own diff: #1508 touches zero Rust files (Python-only daemon-switch/prerelease tooling, per quality-mgr's independent read). Confirmed this exact test (added in EQ-007's PR #1504) passed on Windows at its own introduction (run 34816393039/job 103888981781, 16m18s) and again at develop tip 617a25f5b post-EQ-007-and-EQ-008-merge (run 34820743283, job conclusion success) -- i.e. it is intermittent, not a deterministic regression tied to any single commit in this session's chain. The test itself sets HOME/ATM_HOME/ATM_CONFIG_HOME/ATM_LOG_DIR/ATM_TEAMS_DIR to fresh per-test tempdirs and guards against an ambient real daemon (`if runtime_scope.socket.exists() { skip }`), but does not appear to guard against cross-test-binary contention if Windows env-var isolation for the spawned `atm` subprocess is incomplete (e.g. a HOME/USERPROFILE fallback outside the tempdir), which would let concurrently-running cargo test binaries race on the same underlying database file's schema catch-up. GENERALIZED (fenix, colima v1.5.18 run 20260914T153243230345Z): this is not just a Windows CI test artifact -- 1 of 2 fresh colima runs hit the identical 'failed to create decomposed_messages view' error during real daemon startup (atm-db-init.sh's `nohup atm-daemon &` followed immediately by `atm doctor --json`), then started cleanly on the next run. fenix traces the general mechanism to writer/mod.rs:70: every process that opens the writer re-runs schema setup outside a transaction, so the daemon and a concurrent CLI command can collide on template_catalog_schema.rs:85-86's non-atomic DROP VIEW/CREATE VIEW regardless of platform or test harness. PR #1509's BEGIN IMMEDIATE fix must be verified against this general writer-open path, not only the peer_cli.rs test that first surfaced it. See occurrence 2." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "team-lead, PR #1508 CI (Windows), 2026-09-14" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/template_catalog_schema.rs:60-87 (ensure_schema/DECOMPOSED_MESSAGES_VIEW_V2 non-atomic drop+create); crates/atm/tests/peer_cli.rs:100-138 (env isolation for the spawned atm subprocess, verify HOME/ATM_HOME/ATM_CONFIG_HOME/ATM_LOG_DIR/ATM_TEAMS_DIR are fully honored on Windows with no fallback to a shared default, and that no other test binary/process can reach the same sqlite file during this test's window). Needs real root-cause (why did it pass at 617a25f5b and PR #1504, then fail here with no Rust diff in between) before any fix -- do not paper over with a blind retry-on-lock or a test rerun. Blocking PR #1508's merge (CI gate); PR #1508's own diff is not implicated." ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-010/1>, <urn:atm:triage:occurrence/EQ-010/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/EQ-010/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
+  triage:line 85 ;
+  triage:snippet "connection.execute_batch(DECOMPOSED_MESSAGES_VIEW_V2).map_err(|error| sqlite_error(target, \"failed to create decomposed_messages view\", error)) -- non-atomic DROP VIEW IF EXISTS + CREATE VIEW, observed failing under crates/atm/tests/peer_cli.rs:138's peer_trust_mutations_succeed_without_daemon_and_persist on Windows CI, PR #1508 run 34865056313" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/eq-009-managed-service-discovery" ;
+  triage:headSha "b3738b89f" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-010/1> .
+
+<urn:atm:triage:occurrence/EQ-010/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/mod.rs" ;
+  triage:line 70 ;
+  triage:snippet "fenix, colima v1.5.18 run 20260914T153243230345Z (site/reports/integration/colima/, evidence PR pending): 1 of 2 fresh colima runs failed real daemon startup, not just a test. testbed atm-db-init.sh runs `nohup atm-daemon &` then `atm doctor --json` immediately; the daemon exited with the same 'failed to create decomposed_messages view / Recovery: Repair mailbox access or wait for the competing operation, then retry.' The same image/script started cleanly on the next run (intermittent, matching the race theory). Suspected cause (fenix, code reading, not independently confirmed): every process that opens the writer re-runs schema setup outside a transaction (writer/mod.rs:70), including template_catalog_schema.rs:86's DROP VIEW IF EXISTS / CREATE VIEW -- the daemon and a concurrent CLI command collide there. This generalizes EQ-010 beyond Windows-CI test flakiness to a real Linux daemon-startup race; confirms PR #1509's fix (BEGIN IMMEDIATE around the same ensure_schema() view swap) needs to be verified against the general writer-open path, not just the one CLI test path. The error drops the underlying SQLite cause -- neither /tmp/atm-daemon.log nor atm.log.jsonl records it, a separate observability gap worth a QA note even after the race itself is fixed." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integration/colima-v1.5.18" ;
+  triage:headSha "unknown-evidence-pr-pending" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-010/1> .
+
+<urn:atm:triage:worktree/EQ-010/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "a0c5262a0" ;
+  triage:orderIndex 1 .
