@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
@@ -23,7 +22,6 @@ from queue import Empty, Queue
 import re
 import shutil
 import socket
-import sqlite3
 import ssl
 import subprocess
 import sys
@@ -65,14 +63,6 @@ from scripts.smoke.benchmark_account import (
 from scripts.smoke.benchmark_baselines import load_baselines
 from scripts.report_runtime import source_revision as _git_source_revision
 from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_identity
-from scripts.smoke.benchmark_snapshot import (
-    BenchmarkSnapshotError,
-    VerifiedSnapshot,
-    checkpoint_closed_database,
-    create_verified_snapshot,
-    restore_verified_snapshot,
-    verify_active_snapshot,
-)
 
 if os.name != "nt":
     import pwd
@@ -730,60 +720,58 @@ def reap_owned_daemon(process: subprocess.Popen[str]) -> None:
 
 LIFECYCLE_RECOVERY = {
     "preflight": "correct the disposable benchmark-account manifest before retrying",
-    "snapshot": "keep the benchmark daemon stopped and inspect retained snapshot staging material",
-    "profile": "the runner will stop its owned daemon and restore the published clean snapshot",
+    "reset": "keep the benchmark daemon stopped and inspect the disposable benchmark state",
+    "setup": "inspect the disposable benchmark setup diagnostics before retrying",
+    "profile": "the runner will stop its owned daemon and inspect its profile diagnostics",
     "restart": "keep the benchmark daemon stopped and inspect its restart diagnostics before retrying",
     "durability": "keep the benchmark daemon stopped and inspect the disposable benchmark store",
-    "stop": "keep the benchmark daemon stopped; do not restore while SQLite sidecars may be active",
-    "restore": "keep the benchmark daemon stopped and inspect retained restore staging material",
-    "post_restore_verify": "keep the benchmark daemon stopped and inspect the restored benchmark account",
+    "stop": "keep the benchmark daemon stopped and inspect its shutdown diagnostics",
     "cleanup": "remove only the per-run temporary ATM_HOME after inspecting the retained evidence",
 }
 
 
 def verify_durability_after_restart(
-    benchmark_account: BenchmarkAccount,
     roster: CapacityRoster,
     expected_accepted_count: int,
+    *,
+    atm: Path,
+    environment: dict[str, str],
 ) -> dict[str, Any]:
-    """Count this run's recipient rows after a fresh daemon has reopened SQLite.
+    """Count this run's recipient mailbox through the public CLI after restart.
 
     The benchmark roster is unique per target, so its recipient mailbox is an
-    exact, isolated measurement: roster setup cannot contribute mail rows and
-    no other target can share its ``(team, agent)`` pair.  The caller starts
-    and doctors a new owned daemon immediately before this read; the query is
-    deliberately read-only and never touches an interactive account.
+    exact, isolated measurement: roster setup cannot contribute message rows
+    and no other target can share its ``(team, agent)`` pair. The caller starts
+    and doctors a new owned daemon immediately before this read.
     """
     if expected_accepted_count < 0:
         raise SmokeError("durability expected accepted count must not be negative")
-    database = benchmark_account.durable_state_root / "mail.db"
+    result = command_result(
+        [
+            str(atm), "list", f"{roster.recipient}@{roster.team}",
+            "--all", "--limit", "1", "--json",
+        ],
+        timeout=15.0,
+        env=benchmark_runtime_client_environment(environment),
+    )
+    if result["exit_code"] != 0:
+        detail = result["stderr"].strip() or result["stdout"].strip() or "no CLI output"
+        raise SmokeError(f"could not count durable benchmark mailbox through atm list: {detail}")
     try:
-        with closing(sqlite3.connect(f"file:{database}?mode=ro", uri=True)) as connection:
-            row = connection.execute(
-                "SELECT COUNT(*) FROM mail_messages WHERE team = ? AND agent = ?",
-                (roster.team, roster.recipient),
-            ).fetchone()
-    except sqlite3.Error as error:
-        raise SmokeError(f"could not count durable benchmark mailbox rows: {error}") from error
-    if row is None or not isinstance(row[0], int):
-        raise SmokeError("durability count query returned no integer mailbox count")
-    observed = row[0]
+        payload = json.loads(result["stdout"])
+    except json.JSONDecodeError as error:
+        raise SmokeError("atm list returned malformed JSON for the durability count") from error
+    bucket_counts = payload.get("bucket_counts") if isinstance(payload, dict) else None
+    if not isinstance(bucket_counts, dict):
+        raise SmokeError("atm list returned no mailbox bucket counts for durability")
+    buckets = tuple(bucket_counts.get(name) for name in ("unread", "pending_ack", "history"))
+    if not all(isinstance(value, int) and value >= 0 for value in buckets):
+        raise SmokeError("atm list returned invalid mailbox bucket counts for durability")
+    observed = sum(buckets)
     return {
         "expected_accepted_count": expected_accepted_count,
         "observed_mailbox_count": observed,
         "passed": observed == expected_accepted_count,
-    }
-
-
-def snapshot_evidence(snapshot: VerifiedSnapshot) -> dict[str, Any]:
-    """Return non-sensitive facts from a verified account-local snapshot."""
-    return {
-        "snapshot_id": snapshot.snapshot_id,
-        "account_identity": f"sha256:{hashlib.sha256(str(snapshot.account_id).encode()).hexdigest()[:16]}",
-        "user_version": snapshot.user_version,
-        "page_count": snapshot.page_count,
-        "byte_count": snapshot.byte_count,
-        "sha256": snapshot.sha256,
     }
 
 
@@ -798,7 +786,7 @@ def run_lifecycle_phase(
     try:
         result = action()
     except (
-        BenchmarkMtlsError, BenchmarkSnapshotError, OSError, RuntimeError, ValueError, SmokeError,
+        BenchmarkMtlsError, OSError, RuntimeError, ValueError, SmokeError,
         subprocess.TimeoutExpired,
     ) as error:
         finished_wall = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
