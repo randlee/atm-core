@@ -3,6 +3,8 @@
 `agent-team-mail` is the retained ATM CLI and daemon-backed runtime for local
 ATM mailbox workflows.
 
+Website: <https://randlee.github.io/atm-core/>
+
 This repository is now the source of truth for publishing:
 - `agent-team-mail`
 - `agent-team-mail-core`
