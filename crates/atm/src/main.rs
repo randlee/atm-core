@@ -68,6 +68,7 @@ pub(crate) enum ConsoleLogRoute {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    restore_default_sigpipe();
     let exit_code = match run().await {
         Ok(()) => 0,
         Err(error) => {
@@ -77,6 +78,20 @@ async fn main() {
     };
     std::process::exit(exit_code);
 }
+
+/// Let Unix deliver a closed-pipe termination instead of allowing Rust's
+/// `print!`/`println!` macros to panic after stdout returns `EPIPE`.
+#[cfg(unix)]
+fn restore_default_sigpipe() {
+    // SAFETY: installing the process's documented default disposition for
+    // SIGPIPE has no borrowed-pointer or lifetime requirements.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn restore_default_sigpipe() {}
 
 #[cfg(test)]
 fn exit_code_for_error(error: &anyhow::Error) -> i32 {
