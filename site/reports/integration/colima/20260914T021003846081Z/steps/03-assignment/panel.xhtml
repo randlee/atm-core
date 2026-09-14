@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>assignment · step 03 · PASS</title>
+<meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+<meta name="integration-step" content="Step 03 · assignment" /><meta name="integration-generated-at" content="2026-09-14T02:20:00.189812Z" />
+<style type="text/css">body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1b1b1b;margin:1.5rem;line-height:1.45}h1{font-size:1.25rem;margin:0 0 .25rem}h2{font-size:1.05rem;margin:1.5rem 0 .5rem;border-bottom:1px solid #d5d9de;padding-bottom:.2rem}h3{font-size:1rem;margin:1.2rem 0 .3rem}h4{font-size:.85rem;margin:.8rem 0 .2rem;color:#555;text-transform:uppercase;letter-spacing:.03em}p.meta{margin:.2rem 0;color:#555}table{border-collapse:collapse;width:100%;margin:.4rem 0}th,td{border:1px solid #d5d9de;padding:.35rem .5rem;text-align:left;vertical-align:top}th{background:#f3f5f7;font-weight:600;color:#555;font-size:.85em}table.facts{width:auto;min-width:24rem}table.facts th{width:11rem;font-weight:600}pre{margin:0;white-space:pre-wrap;word-break:break-word;font-size:.82em;background:#f7f9fa;padding:.4rem .5rem;border:1px solid #e3e3e3;max-height:24rem;overflow:auto}code{white-space:pre-wrap;word-break:break-all}.verdict{font-weight:700;padding:.1rem .5rem;border-radius:.25rem}.pass{background:#e8f5e9;color:#1a7f37}.fail{background:#ffebee;color:#c62828}a{color:#0b57d0}dl{margin:.5rem 0}dt{color:#555;font-size:.85em}dd{margin:0 0 .4rem}</style>
+</head><body>
+<h1>Step 03 · assignment <span class="verdict pass">PASS</span></h1>
+<p class="meta">Test plan: <a href="../../../../../procedures/colima-assignment/5df9c2f0.html">colima-assignment @ 5df9c2f0</a></p>
+<p class="meta">Container: <code>hermes-testbed</code> · Image: <code>sha256:76abb11faacaa82f08fcfab00b7d095071f6ce676327fb12636821e5e129dc96</code> · atm: <code>atm 1.5.17</code> · Recorded: 2026-09-14T02:20:00.189812Z</p>
+<h2>Cases</h2><h3>1. three_assignments_show_queued_1_2_3_then_one_ready <span class="verdict pass">PASS</span></h3><p>three queued positions and exactly one ready prompt for task one</p><table class="facts"><tbody><tr><th>origin</th><td>stub-alpha@testbed</td></tr><tr><th>destination</th><td>tester@testbed</td></tr><tr><th>attempt</th><td>1</td></tr><tr><th>task_ids</th><td>BB5-T022000189812Z-queued-one, BB5-T022000189812Z-queued-two, BB5-T022000189812Z-queued-three</td></tr></tbody></table><h4>commands</h4><table><thead><tr><th>command</th><th>exit</th><th>stdout</th></tr></thead><tbody><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-queued-one --team testbed BB5 queued task 1</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-queued-one to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-queued-two --team testbed BB5 queued task 2</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-queued-two to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-queued-three --team testbed BB5 queued task 3</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-queued-three to tester
+</pre></td></tr></tbody></table><h4>observed</h4><pre>{
+  &quot;blocks&quot;: {
+    &quot;BB5-T022000189812Z-queued-one&quot;: [
+      &quot;&lt;atm task=\&quot;BB5-T022000189812Z-queued-one\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2EVDNGBPQSWKCBK1FD5AVPC\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;,
+      &quot;&lt;atm task=\&quot;BB5-T022000189812Z-queued-one\&quot;\n  ready message=\&quot;01M2EVDNGBPQSWKCBK1FD5AVPC\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2EVDNGBPQSWKCBK1FD5AVPC&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB5-T022000189812Z-queued-one&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;&quot;
+    ],
+    &quot;BB5-T022000189812Z-queued-three&quot;: [
+      &quot;&lt;atm\n  task=\&quot;BB5-T022000189812Z-queued-three\&quot;\n  queued=\&quot;3\&quot;\n  message=\&quot;01M2EVDNJMTA35P81M7XB1DWD9\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;
+    ],
+    &quot;BB5-T022000189812Z-queued-two&quot;: [
+      &quot;&lt;atm\n  task=\&quot;BB5-T022000189812Z-queued-two\&quot;\n  queued=\&quot;2\&quot;\n  message=\&quot;01M2EVDNHFPHJMNFEAN5ZNZDB7\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;
+    ]
+  },
+  &quot;queued_positions&quot;: {
+    &quot;BB5-T022000189812Z-queued-one&quot;: [
+      1
+    ],
+    &quot;BB5-T022000189812Z-queued-three&quot;: [
+      3
+    ],
+    &quot;BB5-T022000189812Z-queued-two&quot;: [
+      2
+    ]
+  },
+  &quot;ready_counts&quot;: {
+    &quot;BB5-T022000189812Z-queued-one&quot;: 1,
+    &quot;BB5-T022000189812Z-queued-three&quot;: 0,
+    &quot;BB5-T022000189812Z-queued-two&quot;: 0
+  }
+}</pre><h3>2. pending_ack_header_stays_zero_across_assignments <span class="verdict pass">PASS</span></h3><p>assignment mailbox header is Unread 3 / Pending-Ack 0</p><table class="facts"><tbody><tr><th>origin</th><td>stub-alpha@testbed</td></tr><tr><th>destination</th><td>tester@testbed</td></tr><tr><th>attempt</th><td>1</td></tr><tr><th>task_ids</th><td>BB5-T022000189812Z-pending-one, BB5-T022000189812Z-pending-two, BB5-T022000189812Z-pending-three</td></tr></tbody></table><h4>commands</h4><table><thead><tr><th>command</th><th>exit</th><th>stdout</th></tr></thead><tbody><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-pending-one --team testbed BB5 pending-ack header</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-pending-one to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-pending-two --team testbed BB5 pending-ack header</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-pending-two to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-pending-three --team testbed BB5 pending-ack header</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-pending-three to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed atm read --team testbed</code></td><td>0</td><td><pre>Queue: tester@testbed
+Unread: 3 | Pending-Ack: 0 | History: 0
+Selected: 01M2EVECYQ3QP9CV1PJGYKAGW9 | Matches: 3 | Additional: 2
+
+From: stub-alpha
+At: 2026-09-14T02:20:24.407468457+00:00
+Task: BB5-T022000189812Z-pending-three
+Summary: BB5 pending-ack header
+Body:
+BB5 pending-ack header
+
+Additional matches remain. Use `atm list` with the same filters to inspect them.
+</pre></td></tr></tbody></table><h4>observed</h4><pre>{
+  &quot;header&quot;: &quot;Queue: tester@testbed\nUnread: 3 | Pending-Ack: 0 | History: 0\nSelected: 01M2EVECYQ3QP9CV1PJGYKAGW9 | Matches: 3 | Additional: 2&quot;
+}</pre><h3>3. close_shows_ready_for_next_task_within_one_pass <span class="verdict pass">PASS</span></h3><p>closing task one yields one ready prompt for task two</p><table class="facts"><tbody><tr><th>origin</th><td>stub-alpha@testbed</td></tr><tr><th>destination</th><td>tester@testbed</td></tr><tr><th>attempt</th><td>1</td></tr><tr><th>task_ids</th><td>BB5-T022000189812Z-close-one, BB5-T022000189812Z-close-two</td></tr></tbody></table><h4>commands</h4><table><thead><tr><th>command</th><th>exit</th><th>stdout</th></tr></thead><tbody><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-close-one --team testbed BB5 close readiness</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-close-one to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-close-two --team testbed BB5 close readiness</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-close-two to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed atm task close BB5-T022000189812Z-close-one completed --team testbed BB5 completed first task</code></td><td>0</td><td><pre>closed BB5-T022000189812Z-close-one (completed)
+</pre></td></tr></tbody></table><h4>observed</h4><pre>{
+  &quot;next_task_block&quot;: &quot;&lt;atm task=\&quot;BB5-T022000189812Z-close-two\&quot;\n  ready message=\&quot;01M2EVEDB2PYSZJW109J7AHXE9\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2EVEDB2PYSZJW109J7AHXE9&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB5-T022000189812Z-close-two&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;&quot;
+}</pre><h3>4. reassign_shows_closed_reassigned_to_old_and_queued_to_new <span class="verdict pass">PASS</span></h3><p>old assignee receives closed=reassigned and new assignee owns queued position one</p><table class="facts"><tbody><tr><th>origin</th><td>stub-alpha@testbed</td></tr><tr><th>destination</th><td>tester@testbed</td></tr><tr><th>attempt</th><td>1</td></tr><tr><th>task_ids</th><td>BB5-T022000189812Z-reassign-reassign</td></tr></tbody></table><h4>commands</h4><table><thead><tr><th>command</th><th>exit</th><th>stdout</th></tr></thead><tbody><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-reassign-reassign --team testbed BB5 reassignment</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-reassign-reassign to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign stub-beta --task-id BB5-T022000189812Z-reassign-reassign --team testbed BB5 moved to stub-beta</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-reassign-reassign to stub-beta
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task list --all --json</code></td><td>0</td><td><pre>[
+  {
+    &quot;team&quot;: &quot;testbed&quot;,
+    &quot;task_id&quot;: &quot;BB5-T022000189812Z-reassign-reassign&quot;,
+    &quot;assignee&quot;: &quot;stub-beta&quot;,
+    &quot;assigner&quot;: &quot;stub-alpha&quot;,
+    &quot;state&quot;: &quot;assigned&quot;,
+    &quot;position&quot;: 1,
+    &quot;assignment_message_id&quot;: &quot;01M2EVFCMQT9WE8HGK9ASB58DJ&quot;,
+    &quot;description&quot;: &quot;BB5 moved to stub-beta&quot;,
+    &quot;assigned_at&quot;: &quot;2026-09-14T02:20:56.855115049Z&quot;,
+    &quot;updated_at&quot;: &quot;2026-09-14T02:20:56.855115049Z&quot;,
+    &quot;reminder_count&quot;: 0,
+    &quot;lead_notified_count&quot;: 0
+  }
+]
+</pre></td></tr></tbody></table><h4>observed</h4><pre>{
+  &quot;new_assignee_row&quot;: {
+    &quot;assigned_at&quot;: &quot;2026-09-14T02:20:56.855115049Z&quot;,
+    &quot;assignee&quot;: &quot;stub-beta&quot;,
+    &quot;assigner&quot;: &quot;stub-alpha&quot;,
+    &quot;assignment_message_id&quot;: &quot;01M2EVFCMQT9WE8HGK9ASB58DJ&quot;,
+    &quot;description&quot;: &quot;BB5 moved to stub-beta&quot;,
+    &quot;lead_notified_count&quot;: 0,
+    &quot;position&quot;: 1,
+    &quot;reminder_count&quot;: 0,
+    &quot;state&quot;: &quot;assigned&quot;,
+    &quot;task_id&quot;: &quot;BB5-T022000189812Z-reassign-reassign&quot;,
+    &quot;team&quot;: &quot;testbed&quot;,
+    &quot;updated_at&quot;: &quot;2026-09-14T02:20:56.855115049Z&quot;
+  },
+  &quot;old_assignee_block&quot;: &quot;&lt;atm\n  task=\&quot;BB5-T022000189812Z-reassign-reassign\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2EVFCCE5FVE6RWAPAGY5YXR\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;\n&lt;atm\n  task=\&quot;BB5-T022000189812Z-reassign-reassign\&quot;\n  closed by=\&quot;stub-alpha@testbed\&quot;\n  outcome=\&quot;reassigned\&quot;\n  message=\&quot;01M2EVFCMRYCRCGWJTHTPM168T\&quot;/&gt;&quot;
+}</pre><h3>5. move_to_head_while_idle_shows_ready_next_pass_and_no_extra_line <span class="verdict pass">PASS</span></h3><p>moving task three to head while busy yields its single ready line on the next idle pass</p><table class="facts"><tbody><tr><th>origin</th><td>stub-alpha@testbed</td></tr><tr><th>destination</th><td>tester@testbed</td></tr><tr><th>attempt</th><td>1</td></tr><tr><th>task_ids</th><td>BB5-T022000189812Z-move-one, BB5-T022000189812Z-move-two, BB5-T022000189812Z-move-three</td></tr></tbody></table><h4>commands</h4><table><thead><tr><th>command</th><th>exit</th><th>stdout</th></tr></thead><tbody><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-move-one --team testbed BB5 move-to-head</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-move-one to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-move-two --team testbed BB5 move-to-head</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-move-two to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-move-three --team testbed BB5 move-to-head</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-move-three to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task move --head --team testbed BB5-T022000189812Z-move-three</code></td><td>0</td><td><pre>moved BB5-T022000189812Z-move-three for tester from 3 to 1
+</pre></td></tr></tbody></table><h4>observed</h4><pre>{
+  &quot;blocks&quot;: {
+    &quot;BB5-T022000189812Z-move-one&quot;: &quot;&lt;atm task=\&quot;BB5-T022000189812Z-move-one\&quot;\n  queued=\&quot;1\&quot;\n  message=\&quot;01M2EVFE99930TETFT59PFCX0F\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;,
+    &quot;BB5-T022000189812Z-move-three&quot;: &quot;&lt;atm\n  task=\&quot;BB5-T022000189812Z-move-three\&quot;\n  queued=\&quot;3\&quot;\n  message=\&quot;01M2EVFEB8BEZ9M53H7JR1J3VD\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;\n&lt;atm task=\&quot;BB5-T022000189812Z-move-three\&quot;\n  ready message=\&quot;01M2EVFEB8BEZ9M53H7JR1J3VD\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;&gt;\n    &lt;action&gt;atm read --message-id\n  01M2EVFEB8BEZ9M53H7JR1J3VD&lt;/action&gt;\n    &lt;action&gt;atm task start\n  BB5-T022000189812Z-move-three&lt;/action&gt;\n    &lt;action&gt;execute the assigned task&lt;/action&gt;\n    &lt;console announce=\&quot;concise\&quot;\n  pause=\&quot;false\&quot;/&gt;&quot;,
+    &quot;BB5-T022000189812Z-move-two&quot;: &quot;&lt;atm\n  task=\&quot;BB5-T022000189812Z-move-two\&quot;\n  queued=\&quot;2\&quot;\n  message=\&quot;01M2EVFEA9BZ72N8EKYDWR4CYT\&quot;\n  from=\&quot;stub-alpha@testbed\&quot;/&gt;&quot;
+  }
+}</pre><h3>6. cancel_shows_closed_cancelled_to_assignee <span class="verdict pass">PASS</span></h3><p>assignee receives the cancelled terminal line</p><table class="facts"><tbody><tr><th>origin</th><td>stub-alpha@testbed</td></tr><tr><th>destination</th><td>tester@testbed</td></tr><tr><th>attempt</th><td>1</td></tr><tr><th>task_ids</th><td>BB5-T022000189812Z-cancel-cancel</td></tr></tbody></table><h4>commands</h4><table><thead><tr><th>command</th><th>exit</th><th>stdout</th></tr></thead><tbody><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-cancel-cancel --team testbed BB5 cancellation</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-cancel-cancel to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task close BB5-T022000189812Z-cancel-cancel cancelled --team testbed BB5 runner cleanup</code></td><td>0</td><td><pre>closed BB5-T022000189812Z-cancel-cancel (cancelled)
+</pre></td></tr></tbody></table><h4>observed</h4><pre>{
+  &quot;block&quot;: &quot;&lt;atm\n    task=\&quot;BB5-T022000189812Z-cancel-cancel\&quot;\n    queued=\&quot;1\&quot;\n    message=\&quot;01M2EVFZQSFR43EQTZDMAGQ6AF\&quot;\n    from=\&quot;stub-alpha@testbed\&quot;/&gt;\n&lt;atm\n    task=\&quot;BB5-T022000189812Z-cancel-cancel\&quot;\n    closed by=\&quot;stub-alpha@testbed\&quot;\n    outcome=\&quot;cancelled\&quot;\n    message=\&quot;01M2EVFZRW8PES4MX4WKRC25MB\&quot;/&gt;&quot;
+}</pre><h3>7. busy_assigner_receives_started_and_complete_at_write_time <span class="verdict pass">PASS</span></h3><p>busy assigner mailbox contains start and complete notices immediately after writes</p><table class="facts"><tbody><tr><th>origin</th><td>stub-alpha@testbed</td></tr><tr><th>destination</th><td>tester@testbed</td></tr><tr><th>attempt</th><td>1</td></tr><tr><th>task_ids</th><td>BB5-T022000189812Z-busy-assigner-active, BB5-T022000189812Z-busy-busy</td></tr></tbody></table><h4>commands</h4><table><thead><tr><th>command</th><th>exit</th><th>stdout</th></tr></thead><tbody><tr><td><code>docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed atm task assign stub-alpha --task-id BB5-T022000189812Z-busy-assigner-active --team testbed BB5 active task keeps assigner busy</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-busy-assigner-active to stub-alpha
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task start BB5-T022000189812Z-busy-assigner-active --team testbed BB5 assigner became busy</code></td><td>0</td><td><pre>started BB5-T022000189812Z-busy-assigner-active
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm task assign tester --task-id BB5-T022000189812Z-busy-busy --team testbed BB5 busy assigner</code></td><td>0</td><td><pre>assigned BB5-T022000189812Z-busy-busy to tester
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed atm task start BB5-T022000189812Z-busy-busy --team testbed BB5 started while assigner is busy</code></td><td>0</td><td><pre>started BB5-T022000189812Z-busy-busy
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=tester -e ATM_TEAM=testbed hermes-testbed atm task close BB5-T022000189812Z-busy-busy completed --team testbed BB5 completed while assigner is busy</code></td><td>0</td><td><pre>closed BB5-T022000189812Z-busy-busy (completed)
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm list --json --team testbed</code></td><td>0</td><td><pre>{
+  &quot;action&quot;: &quot;list&quot;,
+  &quot;team&quot;: &quot;testbed&quot;,
+  &quot;agent&quot;: &quot;stub-alpha&quot;,
+  &quot;selection_mode&quot;: &quot;actionable&quot;,
+  &quot;history_collapsed&quot;: false,
+  &quot;count&quot;: 4,
+  &quot;rows&quot;: [
+    {
+      &quot;message_id&quot;: &quot;01M2EVG02FE57DP2PJPHYMERWC&quot;,
+      &quot;summary&quot;: &quot;BB5 completed while assigner is busy&quot;,
+      &quot;from&quot;: &quot;tester&quot;,
+      &quot;timestamp&quot;: &quot;2026-09-14T02:21:16.751959225Z&quot;,
+      &quot;read&quot;: false,
+      &quot;pending_ack&quot;: false,
+      &quot;task_id&quot;: &quot;BB5-T022000189812Z-busy-busy&quot;
+    },
+    {
+      &quot;message_id&quot;: &quot;01M2EVG01E1ZYZFBQXQNT7S476&quot;,
+      &quot;summary&quot;: &quot;BB5 started while assigner is busy&quot;,
+      &quot;from&quot;: &quot;tester&quot;,
+      &quot;timestamp&quot;: &quot;2026-09-14T02:21:16.718335056Z&quot;,
+      &quot;read&quot;: false,
+      &quot;pending_ack&quot;: false,
+      &quot;task_id&quot;: &quot;BB5-T022000189812Z-busy-busy&quot;
+    },
+    {
+      &quot;message_id&quot;: &quot;01M2EVFZYF0030PBD9051BJNSJ&quot;,
+      &quot;summary&quot;: &quot;BB5 active task keeps assigner busy&quot;,
+      &quot;from&quot;: &quot;tester&quot;,
+      &quot;timestamp&quot;: &quot;2026-09-14T02:21:16.623770756Z&quot;,
+      &quot;read&quot;: false,
+      &quot;pending_ack&quot;: false,
+      &quot;task_id&quot;: &quot;BB5-T022000189812Z-busy-assigner-active&quot;
+    },
+    {
+      &quot;message_id&quot;: &quot;01M2EVFV3S5VQYPBCR6FBK7V97&quot;,
+      &quot;summary&quot;: &quot;started BB5-T022000189812Z-move-three&quot;,
+      &quot;from&quot;: &quot;tester&quot;,
+      &quot;timestamp&quot;: &quot;2026-09-14T02:21:11.673075580Z&quot;,
+      &quot;read&quot;: false,
+      &quot;pending_ack&quot;: false,
+      &quot;task_id&quot;: &quot;BB5-T022000189812Z-move-three&quot;
+    }
+  ],
+  &quot;bucket_counts&quot;: {
+    &quot;unread&quot;: 4,
+    &quot;pending_ack&quot;: 0,
+    &quot;history&quot;: 0
+  }
+}
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm read --message-id 01M2EVG02FE57DP2PJPHYMERWC --team testbed --json</code></td><td>0</td><td><pre>{
+  &quot;action&quot;: &quot;read&quot;,
+  &quot;team&quot;: &quot;testbed&quot;,
+  &quot;agent&quot;: &quot;stub-alpha&quot;,
+  &quot;selection_mode&quot;: &quot;actionable&quot;,
+  &quot;mutation_applied&quot;: true,
+  &quot;count&quot;: 1,
+  &quot;message&quot;: {
+    &quot;bucket&quot;: &quot;unread&quot;,
+    &quot;class&quot;: &quot;unread&quot;,
+    &quot;from&quot;: &quot;tester&quot;,
+    &quot;text&quot;: &quot;BB5 completed while assigner is busy&quot;,
+    &quot;timestamp&quot;: &quot;2026-09-14T02:21:16.751959225Z&quot;,
+    &quot;read&quot;: false,
+    &quot;source_team&quot;: &quot;testbed&quot;,
+    &quot;summary&quot;: &quot;BB5 completed while assigner is busy&quot;,
+    &quot;message_id&quot;: &quot;01M2EVG02FE57DP2PJPHYMERWC&quot;,
+    &quot;requires_ack&quot;: false,
+    &quot;taskId&quot;: &quot;BB5-T022000189812Z-busy-busy&quot;,
+    &quot;taskOp&quot;: {
+      &quot;op&quot;: &quot;close&quot;,
+      &quot;outcome&quot;: &quot;completed&quot;,
+      &quot;reason&quot;: &quot;BB5 completed while assigner is busy&quot;
+    }
+  },
+  &quot;selected_message_id&quot;: &quot;01M2EVG02FE57DP2PJPHYMERWC&quot;,
+  &quot;match_count&quot;: 1,
+  &quot;additional_match_count&quot;: 0,
+  &quot;bucket_counts&quot;: {
+    &quot;unread&quot;: 4,
+    &quot;pending_ack&quot;: 0,
+    &quot;history&quot;: 0
+  }
+}
+</pre></td></tr><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm read --message-id 01M2EVG01E1ZYZFBQXQNT7S476 --team testbed --json</code></td><td>0</td><td><pre>{
+  &quot;action&quot;: &quot;read&quot;,
+  &quot;team&quot;: &quot;testbed&quot;,
+  &quot;agent&quot;: &quot;stub-alpha&quot;,
+  &quot;selection_mode&quot;: &quot;actionable&quot;,
+  &quot;mutation_applied&quot;: true,
+  &quot;count&quot;: 1,
+  &quot;message&quot;: {
+    &quot;bucket&quot;: &quot;unread&quot;,
+    &quot;class&quot;: &quot;unread&quot;,
+    &quot;from&quot;: &quot;tester&quot;,
+    &quot;text&quot;: &quot;BB5 started while assigner is busy&quot;,
+    &quot;timestamp&quot;: &quot;2026-09-14T02:21:16.718335056Z&quot;,
+    &quot;read&quot;: false,
+    &quot;source_team&quot;: &quot;testbed&quot;,
+    &quot;summary&quot;: &quot;BB5 started while assigner is busy&quot;,
+    &quot;message_id&quot;: &quot;01M2EVG01E1ZYZFBQXQNT7S476&quot;,
+    &quot;requires_ack&quot;: false,
+    &quot;taskId&quot;: &quot;BB5-T022000189812Z-busy-busy&quot;,
+    &quot;taskOp&quot;: {
+      &quot;op&quot;: &quot;start&quot;
+    }
+  },
+  &quot;selected_message_id&quot;: &quot;01M2EVG01E1ZYZFBQXQNT7S476&quot;,
+  &quot;match_count&quot;: 1,
+  &quot;additional_match_count&quot;: 0,
+  &quot;bucket_counts&quot;: {
+    &quot;unread&quot;: 3,
+    &quot;pending_ack&quot;: 0,
+    &quot;history&quot;: 1
+  }
+}
+</pre></td></tr></tbody></table><h4>observed</h4><pre>{
+  &quot;messages&quot;: [
+    {
+      &quot;from&quot;: &quot;tester&quot;,
+      &quot;message_id&quot;: &quot;01M2EVG02FE57DP2PJPHYMERWC&quot;,
+      &quot;pending_ack&quot;: false,
+      &quot;read&quot;: false,
+      &quot;summary&quot;: &quot;BB5 completed while assigner is busy&quot;,
+      &quot;task_id&quot;: &quot;BB5-T022000189812Z-busy-busy&quot;,
+      &quot;timestamp&quot;: &quot;2026-09-14T02:21:16.751959225Z&quot;
+    },
+    {
+      &quot;from&quot;: &quot;tester&quot;,
+      &quot;message_id&quot;: &quot;01M2EVG01E1ZYZFBQXQNT7S476&quot;,
+      &quot;pending_ack&quot;: false,
+      &quot;read&quot;: false,
+      &quot;summary&quot;: &quot;BB5 started while assigner is busy&quot;,
+      &quot;task_id&quot;: &quot;BB5-T022000189812Z-busy-busy&quot;,
+      &quot;timestamp&quot;: &quot;2026-09-14T02:21:16.718335056Z&quot;
+    }
+  ],
+  &quot;observed_operations&quot;: [
+    &quot;close&quot;,
+    &quot;start&quot;
+  ]
+}</pre><h2>roster</h2><p>hermes, oversight, stub-alpha, stub-beta, tester</p><h2>setup</h2><h4>members</h4><table><thead><tr><th>command</th><th>exit</th><th>stdout</th></tr></thead><tbody><tr><td><code>docker exec -e ATM_IDENTITY=stub-alpha -e ATM_TEAM=testbed hermes-testbed atm members --json --team testbed</code></td><td>0</td><td><pre>{
+  &quot;members&quot;: [
+    {
+      &quot;agent_id&quot;: &quot;hermes@testbed&quot;,
+      &quot;agent_type&quot;: &quot;hermes&quot;,
+      &quot;availability&quot;: &quot;unobserved&quot;,
+      &quot;extra&quot;: {},
+      &quot;harness&quot;: &quot;claude-code&quot;,
+      &quot;home_dir&quot;: &quot;/opt/data&quot;,
+      &quot;joined_at&quot;: 1789351818872,
+      &quot;model&quot;: &quot;unknown&quot;,
+      &quot;name&quot;: &quot;hermes&quot;,
+      &quot;revision&quot;: 0,
+      &quot;state&quot;: &quot;unknown&quot;,
+      &quot;tmux_pane_id&quot;: null
+    },
+    {
+      &quot;agent_id&quot;: &quot;oversight@testbed&quot;,
+      &quot;agent_type&quot;: &quot;stub&quot;,
+      &quot;availability&quot;: &quot;unobserved&quot;,
+      &quot;extra&quot;: {},
+      &quot;harness&quot;: &quot;claude-code&quot;,
+      &quot;home_dir&quot;: &quot;/opt/testbed&quot;,
+      &quot;joined_at&quot;: 1789351818877,
+      &quot;model&quot;: &quot;unknown&quot;,
+      &quot;name&quot;: &quot;oversight&quot;,
+      &quot;revision&quot;: 0,
+      &quot;state&quot;: &quot;unknown&quot;,
+      &quot;tmux_pane_id&quot;: null
+    },
+    {
+      &quot;agent_id&quot;: &quot;stub-alpha@testbed&quot;,
+      &quot;agent_type&quot;: &quot;lead&quot;,
+      &quot;availability&quot;: &quot;unobserved&quot;,
+      &quot;extra&quot;: {},
+      &quot;harness&quot;: &quot;claude-code&quot;,
+      &quot;home_dir&quot;: &quot;/opt/testbed&quot;,
+      &quot;joined_at&quot;: 1789351818852,
+      &quot;live_cwd&quot;: &quot;/opt/testbed&quot;,
+      &quot;model&quot;: &quot;unknown&quot;,
+      &quot;name&quot;: &quot;stub-alpha&quot;,
+      &quot;revision&quot;: 0,
+      &quot;state&quot;: &quot;unknown&quot;,
+      &quot;tmux_pane_id&quot;: null
+    },
+    {
+      &quot;agent_id&quot;: &quot;stub-beta@testbed&quot;,
+      &quot;agent_type&quot;: &quot;stub&quot;,
+      &quot;availability&quot;: &quot;unobserved&quot;,
+      &quot;extra&quot;: {},
+      &quot;harness&quot;: &quot;claude-code&quot;,
+      &quot;home_dir&quot;: &quot;/opt/testbed&quot;,
+      &quot;joined_at&quot;: 1789351818859,
+      &quot;model&quot;: &quot;unknown&quot;,
+      &quot;name&quot;: &quot;stub-beta&quot;,
+      &quot;revision&quot;: 0,
+      &quot;state&quot;: &quot;unknown&quot;,
+      &quot;tmux_pane_id&quot;: null
+    },
+    {
+      &quot;agent_id&quot;: &quot;tester@testbed&quot;,
+      &quot;agent_type&quot;: &quot;claude&quot;,
+      &quot;availability&quot;: &quot;fresh&quot;,
+      &quot;backend&quot;: &quot;herdr&quot;,
+      &quot;extra&quot;: {
+        &quot;backendType&quot;: &quot;herdr&quot;,
+        &quot;herdrSession&quot;: &quot;default&quot;
+      },
+      &quot;harness&quot;: &quot;claude-code&quot;,
+      &quot;herdrSession&quot;: &quot;default&quot;,
+      &quot;home_dir&quot;: &quot;/opt/testbed&quot;,
+      &quot;joined_at&quot;: 1789351818866,
+      &quot;last_observation_attempt_at&quot;: &quot;2026-09-14T02:19:59.222881263Z&quot;,
+      &quot;last_observation_attempt_by&quot;: &quot;herdr_poll&quot;,
+      &quot;last_observed_at&quot;: &quot;2026-09-14T02:19:59.222881263Z&quot;,
+      &quot;last_observed_by&quot;: &quot;herdr_poll&quot;,
+      &quot;model&quot;: &quot;unknown&quot;,
+      &quot;name&quot;: &quot;tester&quot;,
+      &quot;revision&quot;: 1,
+      &quot;state&quot;: &quot;unknown&quot;,
+      &quot;tmux_pane_id&quot;: null
+    }
+  ],
+  &quot;team&quot;: &quot;testbed&quot;
+}
+</pre></td></tr></tbody></table><h2>fixture_reset</h2><table><thead><tr><th>command</th><th>exit</th><th>stdout</th></tr></thead><tbody><tr><td><code>docker exec hermes-testbed sh -lc set -eu
+herdr pane list 2&gt;/dev/null | python3 -c &#x27;
+import json, subprocess, sys
+for pane in json.load(sys.stdin)[&quot;result&quot;][&quot;panes&quot;]:
+    subprocess.run([&quot;herdr&quot;, &quot;pane&quot;, &quot;close&quot;, pane[&quot;pane_id&quot;]], capture_output=True)
+&#x27; 2&gt;/dev/null || true
+pkill -f &#x27;[h]ermes gateway run&#x27; 2&gt;/dev/null || true
+pkill -f &#x27;[h]erdr server&#x27; 2&gt;/dev/null || true
+pkill -x atm-daemon 2&gt;/dev/null || true
+for unused in $(seq 1 20); do
+  pgrep -x atm-daemon &gt;/dev/null 2&gt;&amp;1 || break
+  sleep 1
+done
+rm -f /root/.atm/daemon/owner.lock /root/.atm/daemon/local-http.json
+mkdir -p /root/.atm/logs
+: &gt; /root/.atm/logs/atm.log.jsonl
+python3 -c &#x27;import json
+import sqlite3
+
+connection = sqlite3.connect(&#x27;&quot;&#x27;&quot;&#x27;/root/.atm/db/mail.db&#x27;&quot;&#x27;&quot;&#x27;)
+tables = (&#x27;&quot;&#x27;&quot;&#x27;peer_local_certificate&#x27;&quot;&#x27;&quot;&#x27;, &#x27;&quot;&#x27;&quot;&#x27;peer_trusted_peers&#x27;&quot;&#x27;&quot;&#x27;, &#x27;&quot;&#x27;&quot;&#x27;peer_https_interfaces&#x27;&quot;&#x27;&quot;&#x27;, &#x27;&quot;&#x27;&quot;&#x27;team_roster&#x27;&quot;&#x27;&quot;&#x27;)
+before = {table: connection.execute(f&#x27;&quot;&#x27;&quot;&#x27;SELECT * FROM {table} ORDER BY 1&#x27;&quot;&#x27;&quot;&#x27;).fetchall() for table in tables}
+connection.executescript(&#x27;&quot;&#x27;&quot;&#x27;PRAGMA foreign_keys = ON;\nBEGIN IMMEDIATE;\nDELETE FROM prompt_handoffs;\nDELETE FROM task_events;\nDELETE FROM tasks;\nDELETE FROM escalation_recipients;\nDELETE FROM mail_message_states;\nDELETE FROM mail_messages;\nDELETE FROM mail_seen_watermarks;\nDELETE FROM mail_message_search_documents;\nDELETE FROM team_nudge_template_overrides;\nDELETE FROM diagnostic_events;\nCOMMIT;\nPRAGMA wal_checkpoint(TRUNCATE);&#x27;&quot;&#x27;&quot;&#x27;)
+after = {table: connection.execute(f&#x27;&quot;&#x27;&quot;&#x27;SELECT * FROM {table} ORDER BY 1&#x27;&quot;&#x27;&quot;&#x27;).fetchall() for table in tables}
+if not before[&#x27;&quot;&#x27;&quot;&#x27;peer_local_certificate&#x27;&quot;&#x27;&quot;&#x27;] or after != before:
+    raise SystemExit(&#x27;&quot;&#x27;&quot;&#x27;reset changed required peer, roster, or interface metadata&#x27;&quot;&#x27;&quot;&#x27;)
+print(&#x27;&quot;&#x27;&quot;&#x27;reset preserved metadata: &#x27;&quot;&#x27;&quot;&#x27; + json.dumps({table: len(rows) for table, rows in after.items()}, sort_keys=True))&#x27;
+/opt/testbed/harness/bringup.sh</code></td><td>0</td><td><pre>reset preserved metadata: {&quot;peer_https_interfaces&quot;: 1, &quot;peer_local_certificate&quot;: 1, &quot;peer_trusted_peers&quot;: 1, &quot;team_roster&quot;: 5}
+bringup: daemon start failed once (  Recovery: Repair mailbox access or wait for the competing operation, then retry.); retrying
+bringup: done
+bringup: gateway up (4 hook load(s) logged)
+bringup: doctor {&quot;status&quot;: &quot;healthy&quot;, &quot;message&quot;: &quot;ATM doctor completed with healthy findings only&quot;, &quot;info_count&quot;: 2, &quot;warning_count&quot;: 0, &quot;error_count&quot;: 0}
+bringup: herdr [(&#x27;tester&#x27;, &#x27;unknown&#x27;)]
+</pre></td></tr></tbody></table></body></html>

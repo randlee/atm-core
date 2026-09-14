@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-14T02:24:23.354097Z",
+  "source_revision": "198509a1a188d35f428da9d93c4ace6e8b46d50f",
+  "image": {
+    "tag": null,
+    "id": null,
+    "sha256": "sha256:76abb11faacaa82f08fcfab00b7d095071f6ce676327fb12636821e5e129dc96",
+    "architecture": null
+  },
+  "container": "hermes-testbed",
+  "atm_version": "atm 1.5.17",
+  "procedure": "colima-integration",
+  "procedure_revision": "1f3334062b30f1b9dc1fd2ca5aa00344dac04551",
+  "procedure_revision_inferred": false,
+  "status": "FAIL",
+  "steps": [
+    {
+      "order": 1,
+      "name": "hermes-skills",
+      "procedure": "colima-hermes-skills",
+      "procedure_revision": "6040ecf36a3ac43d40207869d281114c719533ea",
+      "procedure_revision_inferred": false,
+      "status": "PASS",
+      "generated_at": "2026-09-14T02:10:03Z",
+      "container": "hermes-testbed",
+      "payload": "steps/01-hermes-skills/step.json",
+      "panel": "steps/01-hermes-skills/panel.xhtml"
+    },
+    {
+      "order": 2,
+      "name": "task-start",
+      "procedure": "colima-task-start",
+      "procedure_revision": "8aa00a111db46011e43bfa08ef70643f15e8e5ad",
+      "procedure_revision_inferred": false,
+      "status": "FAIL",
+      "generated_at": "2026-09-14T02:17:31.347715Z",
+      "container": "hermes-testbed",
+      "payload": "steps/02-task-start/step.json",
+      "panel": "steps/02-task-start/panel.xhtml"
+    },
+    {
+      "order": 3,
+      "name": "assignment",
+      "procedure": "colima-assignment",
+      "procedure_revision": "5df9c2f0078f0606940aaf2c2f110e22860da94d",
+      "procedure_revision_inferred": false,
+      "status": "PASS",
+      "generated_at": "2026-09-14T02:20:00.189812Z",
+      "container": "hermes-testbed",
+      "payload": "steps/03-assignment/step.json",
+      "panel": "steps/03-assignment/panel.xhtml"
+    },
+    {
+      "order": 4,
+      "name": "prompt-handoffs",
+      "procedure": "colima-prompt-handoffs",
+      "procedure_revision": "1f3334062b30f1b9dc1fd2ca5aa00344dac04551",
+      "procedure_revision_inferred": false,
+      "status": "FAIL",
+      "generated_at": "2026-09-14T02:24:23.354097Z",
+      "container": "hermes-testbed",
+      "payload": "steps/04-prompt-handoffs/step.json",
+      "panel": "steps/04-prompt-handoffs/panel.xhtml"
+    }
+  ]
+}
