@@ -4,6 +4,9 @@ family: integration
 runner: scripts/smoke/run_bb6_prompt_handoffs.py
 evidence: site/reports/integration/colima/<run>/steps/NN-prompt-handoffs/step.json
 revisions:
+  - rev: 1f3334062b30f1b9dc1fd2ca5aa00344dac04551
+    date: 2026-09-13
+    note: "feat(bb8): run prompt handoff checks in the shared integration fixture"
   - rev: a2491a6c69e99e93bc971be69a51f5c7dd24f96a
     date: 2026-09-12
     note: "test(smoke): exercise observed interval guard"
@@ -28,7 +31,7 @@ revisions:
 ---
 
 ## What this test proves
-Inside the colima testbed, the daemon records one durable prompt-handoff row per terminal line it delivers (queued, ready, reminder, started, complete) and matches them by durable identity; a disabled reminder override yields no handoff and a doctor finding.
+Inside the shared colima testbed, the daemon records one durable prompt-handoff row per task-linked terminal line this step delivers (queued, ready, reminder, started, complete) and matches the rows added after the step baseline by durable identity; a disabled reminder override yields no handoff and a doctor finding.
 
 ## Flow
 ```mermaid
@@ -42,20 +45,43 @@ flowchart LR
   case1 --> case2
   case2 --> verdict
   verdict --> evidence
-  note[runner revision a2491a6c]:::revision
+  note[runner revision 1f333406]:::revision
 ```
 
 ## Steps
 | step | action | observable | evidence |
 | --- | --- | --- | --- |
-| 1 | `task_events_shows_ready_reminders_and_started_for_prompted_task_only`: assign three tasks, wait for reminders, start and close the prompted one | task events and the prompt_handoffs table agree row for row, for the prompted task only; recorded PASS or FAIL at revision `a2491a6c` | `step.json` cases |
-| 2 | `disabled_task_reminder_override_yields_no_handoff_and_doctor_finding`: disable the task reminder and assign | no handoff row is written and `atm doctor` reports the finding; recorded PASS or FAIL at revision `a2491a6c` | `step.json` cases |
+| 1 | `task_events_shows_ready_reminders_and_started_for_prompted_task_only`: record the shared-table baseline, assign three tasks, wait for reminders, start and close the prompted one | task events and prompt-handoff rows added after the baseline agree row for row, for the prompted task only; recorded PASS or FAIL at revision `1f333406` | `step.json` cases |
+| 2 | `disabled_task_reminder_override_yields_no_handoff_and_doctor_finding`: disable the task reminder and assign | no handoff row is added and `atm doctor` reports the finding; recorded PASS or FAIL at revision `1f333406` | `step.json` cases |
 
 ## Evidence layout
 This procedure is one step of a colima integration run. The runner's payload is kept byte-for-byte as `steps/NN-prompt-handoffs/step.json` under `site/reports/integration/colima/<run>/`; the step's `panel.xhtml` and the run's `index.html`, `integration.json` and envelope are rendered from it by `scripts/integration/render_colima.py`. Historical runs made before the integration layout existed were moved into it unchanged and are rendered by the same code.
 
 ## Changes
 The revision sections below list every runner revision that produced committed evidence, newest first. A run whose source revision is not an ancestor of any listed revision links to the revision in effect on its run date and is marked inferred.
+
+## Revision 1f333406 (2026-09-13)
+The shared-fixture revision records the existing `prompt_handoffs` row count before this step, then reconciles only the rows added by the step. This preserves the exact terminal-line identity assertion without requiring a fresh container after earlier integration steps.
+
+```mermaid
+flowchart LR
+  setup[Read shared fixture handoff baseline]
+  case1[1: task_events_shows_ready_reminders_and_st]
+  case2[2: disabled_task_reminder_override_yields_n]
+  verdict[Aggregate PASS/FAIL]
+  evidence[Write step.json]
+  setup --> case1
+  case1 --> case2
+  case2 --> verdict
+  verdict --> evidence
+  note[runner revision 1f333406]:::revision
+```
+
+## Steps
+| step | action | observable | evidence |
+| --- | --- | --- | --- |
+| 1 | `task_events_shows_ready_reminders_and_started_for_prompted_task_only`: record the shared-table baseline, assign three tasks, wait for reminders, start and close the prompted one | task events and prompt-handoff rows added after the baseline agree row for row, for the prompted task only; recorded PASS or FAIL at revision `1f333406` | `step.json` cases |
+| 2 | `disabled_task_reminder_override_yields_no_handoff_and_doctor_finding`: disable the task reminder and assign | no handoff row is added and `atm doctor` reports the finding; recorded PASS or FAIL at revision `1f333406` | `step.json` cases |
 
 ## Revision a2491a6c (2026-09-12)
 The runner change `test(smoke): exercise observed interval guard` is the source for this revision's procedure order.

@@ -34,10 +34,29 @@
       ]
     },
     {
+      "procedure": "colima-integration",
+      "family": "integration",
+      "runner": "scripts/integration/run_colima.py",
+      "revisions": [
+        {
+          "rev": "1f3334062b30f1b9dc1fd2ca5aa00344dac04551",
+          "date": "2026-09-13",
+          "note": "feat(bb8): add unified colima integration driver",
+          "html": "procedures/colima-integration/1f333406.html"
+        }
+      ]
+    },
+    {
       "procedure": "colima-prompt-handoffs",
       "family": "integration",
       "runner": "scripts/smoke/run_bb6_prompt_handoffs.py",
       "revisions": [
+        {
+          "rev": "1f3334062b30f1b9dc1fd2ca5aa00344dac04551",
+          "date": "2026-09-13",
+          "note": "feat(bb8): run prompt handoff checks in the shared integration fixture",
+          "html": "procedures/colima-prompt-handoffs/1f333406.html"
+        },
         {
           "rev": "a2491a6c69e99e93bc971be69a51f5c7dd24f96a",
           "date": "2026-09-12",

@@ -44,6 +44,55 @@ def compose(template: Path, variables: dict[str, Any], output: Path) -> str:
         raise ProcedureRenderError(str(error)) from error
 
 
+INLINE_MARKUP = re.compile(r"\[(`[^`]+`|[^\]]+)\]\(([^)]+)\)|`([^`]+)`")
+LINK_MARKUP = re.compile(r"\[(`[^`]+`|[^\]]+)\]\(([^)]+)\)")
+
+
+def inline_fragment(text: str) -> str:
+    """Render safe code spans and links to sibling procedure sources."""
+    parts: list[str] = []
+    offset = 0
+    for match in INLINE_MARKUP.finditer(text):
+        parts.append(html.escape(text[offset:match.start()]))
+        label, target, code = match.groups()
+        if code is not None:
+            parts.append(f"<code>{html.escape(code)}</code>")
+        else:
+            assert label is not None and target is not None
+            if not re.fullmatch(r"[a-z0-9-]+\.md", target):
+                raise ProcedureRenderError(f"unsupported procedure link target: {target}")
+            href = f"../{target.removesuffix('.md')}/"
+            if label.startswith("`") and label.endswith("`"):
+                rendered_label = f"<code>{html.escape(label[1:-1])}</code>"
+            else:
+                rendered_label = html.escape(label)
+            parts.append(f'<a href="{html.escape(href, quote=True)}">{rendered_label}</a>')
+        offset = match.end()
+    parts.append(html.escape(text[offset:]))
+    return "".join(parts)
+
+
+def table_cell_fragment(text: str) -> str:
+    """Render sibling-procedure links while preserving legacy table text."""
+    parts: list[str] = []
+    offset = 0
+    for match in LINK_MARKUP.finditer(text):
+        parts.append(html.escape(text[offset:match.start()]))
+        label, target = match.groups()
+        if not re.fullmatch(r"[a-z0-9-]+\.md", target):
+            raise ProcedureRenderError(f"unsupported procedure link target: {target}")
+        href = f"../{target.removesuffix('.md')}/"
+        rendered_label = (
+            f"<code>{html.escape(label[1:-1])}</code>"
+            if label.startswith("`") and label.endswith("`")
+            else html.escape(label)
+        )
+        parts.append(f'<a href="{html.escape(href, quote=True)}">{rendered_label}</a>')
+        offset = match.end()
+    parts.append(html.escape(text[offset:]))
+    return "".join(parts)
+
+
 def markdown_fragment(text: str) -> str:
     """Render the deliberately small markdown subset used by procedure docs."""
     lines = text.strip().splitlines()
@@ -70,8 +119,8 @@ def markdown_fragment(text: str) -> str:
                     rows.append(cells)
                 index += 1
             if rows:
-                out.append("<table><thead><tr>" + "".join(f"<th>{html.escape(c)}</th>" for c in rows[0]) + "</tr></thead><tbody>" +
-                           "".join("<tr>" + "".join(f"<td>{html.escape(c)}</td>" for c in row) + "</tr>" for row in rows[1:]) + "</tbody></table>")
+                out.append("<table><thead><tr>" + "".join(f"<th>{table_cell_fragment(c)}</th>" for c in rows[0]) + "</tr></thead><tbody>" +
+                           "".join("<tr>" + "".join(f"<td>{table_cell_fragment(c)}</td>" for c in row) + "</tr>" for row in rows[1:]) + "</tbody></table>")
             continue
         heading = re.match(r"^(#{1,6})\s+(.+)$", line)
         if heading:
@@ -85,8 +134,7 @@ def markdown_fragment(text: str) -> str:
         index += 1
         while index < len(lines) and lines[index].strip() and not lines[index].startswith(("#", "|", "```", "- ")):
             paragraph.append(lines[index]); index += 1
-        value = html.escape(" ".join(paragraph))
-        value = re.sub(r"`([^`]+)`", r"<code>\1</code>", value)
+        value = inline_fragment(" ".join(paragraph))
         out.append(f"<p>{value}</p>")
     return "\n".join(out)
 

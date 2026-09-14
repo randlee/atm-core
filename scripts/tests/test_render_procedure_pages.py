@@ -110,6 +110,18 @@ class ProcedurePageTests(unittest.TestCase):
         page = next((ROOT / "site/reports/procedures").glob("*/????????.html"))
         self.assertNotIn("<script>", page.read_text().lower())
 
+    def test_sibling_procedure_links_render_as_safe_anchors(self):
+        fragment = MODULE.markdown_fragment(
+            "| step | action |\n| --- | --- |\n"
+            "| 1 | Run [`colima-task-start`](colima-task-start.md) |"
+        )
+        self.assertIn(
+            '<a href="../colima-task-start/"><code>colima-task-start</code></a>',
+            fragment,
+        )
+        with self.assertRaisesRegex(MODULE.ProcedureRenderError, "unsupported procedure link"):
+            MODULE.markdown_fragment("[unsafe](https://example.com)")
+
     def test_manifest_lists_every_revision_in_front_matter_order(self):
         for item in self.manifest["procedures"]:
             source = (ROOT / "docs/procedures" / f"{item['procedure']}.md").read_text()

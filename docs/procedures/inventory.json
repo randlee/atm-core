@@ -23,6 +23,14 @@
     },
     {
       "family": "integration",
+      "id": "colima-integration",
+      "runner": "scripts/integration/run_colima.py",
+      "sources": [
+        "runner:sequence:colima"
+      ]
+    },
+    {
+      "family": "integration",
       "id": "colima-prompt-handoffs",
       "runner": "scripts/smoke/run_bb6_prompt_handoffs.py",
       "sources": [

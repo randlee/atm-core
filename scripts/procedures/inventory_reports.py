@@ -25,6 +25,7 @@ RUNNERS = {
 }
 # Colima integration steps: procedure -> the runner that produced the step payload.
 INTEGRATION_RUNNERS = {
+    "colima-integration": "scripts/integration/run_colima.py",
     "colima-hermes-skills": "scripts/smoke/colima_skill_report.py",
     "colima-task-start": "scripts/smoke/run_bb4_task_start.py",
     "colima-assignment": "scripts/smoke/run_bb5_assignment.py",
@@ -61,6 +62,7 @@ def _procedure_for_feature(feature: str) -> str:
 def build_inventory(root: Path = ROOT) -> dict[str, Any]:
     reports = root / "site" / "reports"
     sources: dict[str, set[str]] = defaultdict(set)
+    sources["colima-integration"].add("runner:sequence:colima")
 
     for feature in FEATURES:
         sources[f"smoke-{feature}"].add("runner:feature:" + feature)
