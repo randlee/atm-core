@@ -18,6 +18,7 @@ dependencies = [
  "atm-storage",
  "chrono",
  "clap",
+ "libc",
  "sc-observability",
  "sc-observability-types",
  "serde",
