@@ -113,8 +113,37 @@ pub(crate) fn resolve_command_runtime_context(
 /// If a daemon is already serving, this authenticated reload makes the
 /// mutation visible before the command reports completion.
 pub(crate) async fn reload_running_runtime_view() -> Result<(), AtmError> {
+    reload_running_runtime_view_impl(true).await.map(|_| ())
+}
+
+/// Refresh an already-running daemon and report whether a daemon accepted the
+/// reload. A missing host runtime directory means no daemon has started yet;
+/// other runtime-directory inspection failures remain errors.
+pub(crate) async fn reload_running_runtime_view_outcome() -> Result<bool, AtmError> {
+    reload_running_runtime_view_impl(false).await
+}
+
+async fn reload_running_runtime_view_impl(
+    treat_wait_timeout_as_unavailable: bool,
+) -> Result<bool, AtmError> {
+    let endpoint = resolve_daemon_local_ipc_endpoint()?;
+    let runtime_directory = endpoint.as_ref().parent().ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "local HTTP endpoint record has no runtime directory for reload",
+        )
+    })?;
+    match std::fs::metadata(runtime_directory) {
+        Ok(_) => {}
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(source) => {
+            return Err(
+                AtmError::daemon_unavailable("failed to inspect local runtime directory")
+                    .with_cause(source),
+            );
+        }
+    }
+
     let reload = async {
-        let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let transport = atm_http_runtime::preferred_local_client(
             endpoint.as_ref(),
             SAME_HOST_REQUEST_DEADLINE,
@@ -132,16 +161,15 @@ pub(crate) async fn reload_running_runtime_view() -> Result<(), AtmError> {
     };
 
     match reload.await {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(true),
         Err(error)
-            if matches!(
-                error.code(),
-                AtmErrorCode::DaemonUnavailable | AtmErrorCode::WaitTimeout
-            ) =>
+            if error.code() == AtmErrorCode::DaemonUnavailable
+                || (treat_wait_timeout_as_unavailable
+                    && error.code() == AtmErrorCode::WaitTimeout) =>
         {
             // Administrative mutations persist independently; only refresh an
             // already-running runtime view, never start one just for reload.
-            Ok(())
+            Ok(false)
         }
         Err(error) => Err(error),
     }
@@ -420,16 +448,6 @@ impl<'a> CliComposition<'a> {
                 Ok(*report)
             }
             other => Err(unexpected_response("doctor", other)),
-        }
-    }
-
-    pub(crate) async fn reload_runtime_view(&self) -> Result<(), AtmError> {
-        match self
-            .execute_request(RequestEnvelope::ReloadRuntimeView)
-            .await?
-        {
-            ResponseEnvelope::RuntimeViewReloaded => Ok(()),
-            other => Err(unexpected_response("runtime reload", other)),
         }
     }
 
@@ -1080,9 +1098,9 @@ pub(crate) mod tests {
         let composition = CliComposition::from_fake_transport(transport, &observability);
 
         composition
-            .reload_runtime_view()
+            .execute_request(RequestEnvelope::ReloadRuntimeView)
             .await
-            .expect("CLI runtime reload response");
+            .expect("CLI runtime reload request");
     }
 
     #[tokio::test]
