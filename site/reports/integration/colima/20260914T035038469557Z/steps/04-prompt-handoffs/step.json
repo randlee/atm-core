@@ -1,0 +1,14 @@
+{
+  "feature": "colima-prompt-handoffs",
+  "generated_at": "2026-09-14T04:21:03.792579Z",
+  "source_revision": "9b5c612d1657d399fc9c2a95fb9ee8757e569773",
+  "container": "hermes-testbed",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "prompt execution",
+      "status": "FAIL",
+      "detail": "prompt: /opt/testbed/prompts/atm-team/AT11-prompt-handoffs.md (agent=claude-code model=sonnet timeout=900s)"
+    }
+  ]
+}

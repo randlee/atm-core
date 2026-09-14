@@ -1,0 +1,14 @@
+{
+  "feature": "colima-task-start",
+  "generated_at": "2026-09-14T04:02:53.289798Z",
+  "source_revision": "9b5c612d1657d399fc9c2a95fb9ee8757e569773",
+  "container": "hermes-testbed",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "prompt execution",
+      "status": "FAIL",
+      "detail": "Error response from daemon: Could not find the file /opt/testbed/results/prompt-AT9.json in container hermes-testbed"
+    }
+  ]
+}
