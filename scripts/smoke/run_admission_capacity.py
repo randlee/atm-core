@@ -46,19 +46,12 @@ from scripts.smoke.benchmark_account import (
     BenchmarkAccount,
     BenchmarkAccountError,
     bootstrap_benchmark_account,
+    clear_benchmark_database_state,
     require_benchmark_account,
 )
 from scripts.smoke.benchmark_baselines import load_baselines
 from scripts.report_runtime import source_revision as _git_source_revision
 from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_identity
-from scripts.smoke.benchmark_snapshot import (
-    BenchmarkSnapshotError,
-    VerifiedSnapshot,
-    checkpoint_closed_database,
-    create_verified_snapshot,
-    restore_verified_snapshot,
-    verify_active_snapshot,
-)
 
 from scripts.smoke.daemon_lifecycle import (
     assert_no_process_leak,
@@ -119,7 +112,6 @@ from scripts.smoke.admission_capacity_support import (
     require_ready_managed_doctor,
     resolved_managed_selector_links,
     runtime_environment,
-    snapshot_evidence,
     source_revision,
     sqlite_writer_probe,
     validate_capacity_home,
@@ -439,7 +431,6 @@ def run_capacity(
     process: subprocess.Popen[str] | None = None
     daemon_output: DaemonOutputCapture | None = None
     before: list[int] | None = None
-    snapshot: VerifiedSnapshot | None = None
     mtls_identity: DisposableMtlsIdentity | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
@@ -499,7 +490,6 @@ def run_capacity(
         if process is None:
             return
         reap_owned_daemon(process)
-        checkpoint_closed_database(benchmark_account.durable_state_root / "mail.db")
         if daemon_output is not None:
             daemon_output.join()
             if output_key is not None:
@@ -533,9 +523,10 @@ def run_capacity(
     try:
         run_lifecycle_phase(
             evidence,
-            "snapshot",
+            "setup",
             lambda: require_clean_host_daemon_state(smoke_label="admission-capacity smoke"),
         )
+        run_lifecycle_phase(evidence, "reset", clear_benchmark_database_state)
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
         if launch_peer_wire_security == "mutual-tls":
@@ -543,10 +534,10 @@ def run_capacity(
             # including the secure-default daemon used by the sqlite and UDS
             # targets.  Persist a disposable identity through the ordinary
             # plaintext control plane before any measured mTLS launch.
-            run_lifecycle_phase(evidence, "snapshot", lambda: start_daemon("plaintext-test"))
+            run_lifecycle_phase(evidence, "setup", lambda: start_daemon("plaintext-test"))
             mtls_identity = run_lifecycle_phase(
                 evidence,
-                "snapshot",
+                "setup",
                 lambda: provision_disposable_mtls_identity(
                     atm, env, home, roster, direct_peer_port,
                 ),
@@ -561,18 +552,8 @@ def run_capacity(
                 "stop",
                 lambda: stop_owned_daemon(output_key="mtls_setup_daemon_output"),
             )
-        # The pre-roster daemon is deliberately short-lived: it initializes
-        # the account database, then is quiesced before the public snapshot
-        # owner copies the clean baseline.
-        run_lifecycle_phase(evidence, "snapshot", start_daemon)
-        run_lifecycle_phase(
-            evidence, "stop", lambda: stop_owned_daemon(output_key="pre_snapshot_daemon_output"),
-        )
-        snapshot = run_lifecycle_phase(evidence, "snapshot", create_verified_snapshot)
-        evidence["clean_baseline_snapshot"] = snapshot_evidence(snapshot)
-        evidence["clean_baseline_snapshot"]["sidecars_absent"] = True
-
-        # Roster creation belongs strictly after clean-baseline publication.
+        # The fresh durable store was created by the daemon after the explicit
+        # account-state reset. Roster creation uses only the public CLI.
         run_lifecycle_phase(evidence, "profile", start_daemon)
         run_lifecycle_phase(
             evidence, "profile", lambda: prepare_capacity_roster(atm, env, home, roster),
@@ -637,9 +618,8 @@ def run_capacity(
 
         # A 201/direct-writer success is not enough for a benchmark result:
         # reopen the isolated account store with a fresh shipped daemon, then
-        # count this target's unique recipient mailbox.  This happens before
-        # the clean snapshot is restored and is intentionally outside every
-        # timed interval.
+        # count this target's unique recipient mailbox through the public CLI.
+        # This happens outside every timed interval.
         run_lifecycle_phase(evidence, "stop", stop_owned_daemon)
         run_lifecycle_phase(evidence, "restart", start_and_doctor)
         evidence["doctor_after_restart"] = {"status": evidence["doctor_status"]}
@@ -653,6 +633,8 @@ def run_capacity(
                 benchmark_account,
                 roster,
                 expected_accepted_count,
+                atm=atm,
+                environment=env,
             ),
         )
 
@@ -678,34 +660,6 @@ def run_capacity(
             except SmokeError as error:
                 evidence["passed"] = False
                 evidence["failure"] = str(error)
-        if snapshot is not None and process is None:
-            try:
-                restored = run_lifecycle_phase(
-                    evidence, "restore", lambda: restore_verified_snapshot(snapshot.snapshot_id),
-                )
-                evidence["restored_clean_baseline"] = snapshot_evidence(restored)
-
-                def verify_clean_baseline() -> None:
-                    # Keep the daemon stopped: a post-restore start can recreate
-                    # SQLite sidecars and invalidate the exact clean baseline.
-                    verified = verify_active_snapshot(snapshot.snapshot_id)
-                    evidence["post_restore_snapshot"] = snapshot_evidence(verified)
-                    evidence["restored_live_database"] = {
-                        **snapshot_evidence(verified),
-                        "sidecars_absent": True,
-                    }
-
-                run_lifecycle_phase(evidence, "post_restore_verify", verify_clean_baseline)
-                run_lifecycle_phase(evidence, "cleanup", stop_owned_daemon)
-            except SmokeError as error:
-                evidence["passed"] = False
-                evidence["failure"] = str(error)
-        elif snapshot is not None:
-            evidence["passed"] = False
-            evidence["failure"] = (
-                "benchmark stop phase failed; recovery: keep the benchmark daemon stopped and do not restore "
-                "while SQLite sidecars may be active"
-            )
         if daemon_output is not None:
             daemon_output.join()
             evidence["daemon_output"] = daemon_output.evidence()
