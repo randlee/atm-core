@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-14T18:52:49Z",
+  "source_revision": "481cacf2b9399f98a302ebff99765e84ef30aae0",
+  "image": {
+    "tag": null,
+    "id": null,
+    "sha256": null,
+    "architecture": null
+  },
+  "container": "hermes-testbed",
+  "atm_version": "1.5.19",
+  "procedure": "colima-integration",
+  "procedure_revision": "10f80d6ec985eff0c1594e53c11b056d54cab35a",
+  "procedure_revision_inferred": false,
+  "status": "PASS",
+  "steps": [
+    {
+      "order": 1,
+      "name": "hermes-skills",
+      "procedure": "colima-hermes-skills",
+      "procedure_revision": "6040ecf36a3ac43d40207869d281114c719533ea",
+      "procedure_revision_inferred": false,
+      "status": "PASS",
+      "generated_at": "2026-09-14T18:33:34Z",
+      "container": "hermes-testbed",
+      "payload": "steps/01-hermes-skills/step.json",
+      "panel": "steps/01-hermes-skills/panel.xhtml"
+    },
+    {
+      "order": 2,
+      "name": "task-start",
+      "procedure": "colima-task-start",
+      "procedure_revision": "10f80d6ec985eff0c1594e53c11b056d54cab35a",
+      "procedure_revision_inferred": false,
+      "status": "PASS",
+      "generated_at": "2026-09-14T18:44:12Z",
+      "container": "hermes-testbed",
+      "payload": "steps/02-task-start/step.json",
+      "panel": "steps/02-task-start/panel.xhtml"
+    },
+    {
+      "order": 3,
+      "name": "assignment",
+      "procedure": "colima-assignment",
+      "procedure_revision": "10f80d6ec985eff0c1594e53c11b056d54cab35a",
+      "procedure_revision_inferred": false,
+      "status": "PASS",
+      "generated_at": "2026-09-14T18:47:12Z",
+      "container": "hermes-testbed",
+      "payload": "steps/03-assignment/step.json",
+      "panel": "steps/03-assignment/panel.xhtml"
+    },
+    {
+      "order": 4,
+      "name": "prompt-handoffs",
+      "procedure": "colima-prompt-handoffs",
+      "procedure_revision": "10f80d6ec985eff0c1594e53c11b056d54cab35a",
+      "procedure_revision_inferred": false,
+      "status": "PASS",
+      "generated_at": "2026-09-14T18:52:49Z",
+      "container": "hermes-testbed",
+      "payload": "steps/04-prompt-handoffs/step.json",
+      "panel": "steps/04-prompt-handoffs/panel.xhtml"
+    }
+  ]
+}
