@@ -1,0 +1,9 @@
+prompt: /opt/testbed/prompts/atm-team/AT10-assignment.md (agent=claude-code model=sonnet timeout=900s)
+SMOKE-REPORT-WRITTEN /opt/testbed/results/prompt-AT10.json
+
+**Root cause:** the ATM daemon's HTTP mailbox endpoint is unreachable in this fixture. `atm teams add-member`/`atm members` (roster operations) succeeded, letting me bootstrap team `fx-at10` with alpha/beta/gamma, but every mailbox/task command (`atm doctor --json`, `atm list --json`) returned exit 4 with "HTTP client could not connect to the configured daemon endpoint," confirmed across two identities and over 2 minutes of foreground polling. `atm task assign` therefore could never succeed, so none of the six AT10 cases could run.
+
+**Fix:** none possible from this identity — restarting `atm-daemon` requires root, and `harness/restart-daemon.sh` is explicitly designed to be invoked out-of-band by the outer coordinator via `docker exec`, never by the unprivileged fixture agent (`hermes`, no sudo available here).
+
+All six cases plus cleanup are reported fail/skip with the exact CLI output as evidence in `/opt/testbed/results/prompt-AT10.json`; overall verdict `fail`.
+VERDICT AT10: fail (/opt/testbed/results/prompt-AT10.json)

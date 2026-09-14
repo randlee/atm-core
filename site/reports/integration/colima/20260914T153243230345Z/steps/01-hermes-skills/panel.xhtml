@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>hermes-skills · step 01 · FAIL</title>
+<meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+<meta name="integration-step" content="Step 01 · hermes-skills" /><meta name="integration-generated-at" content="2026-09-14T15:34:23.448736+00:00" />
+<style type="text/css">body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1b1b1b;margin:1.5rem;line-height:1.45}h1{font-size:1.25rem;margin:0 0 .25rem}h2{font-size:1.05rem;margin:1.5rem 0 .5rem;border-bottom:1px solid #d5d9de;padding-bottom:.2rem}h3{font-size:1rem;margin:1.2rem 0 .3rem}h4{font-size:.85rem;margin:.8rem 0 .2rem;color:#555;text-transform:uppercase;letter-spacing:.03em}p.meta{margin:.2rem 0;color:#555}table{border-collapse:collapse;width:100%;margin:.4rem 0}th,td{border:1px solid #d5d9de;padding:.35rem .5rem;text-align:left;vertical-align:top}th{background:#f3f5f7;font-weight:600;color:#555;font-size:.85em}table.facts{width:auto;min-width:24rem}table.facts th{width:11rem;font-weight:600}pre{margin:0;white-space:pre-wrap;word-break:break-word;font-size:.82em;background:#f7f9fa;padding:.4rem .5rem;border:1px solid #e3e3e3;max-height:24rem;overflow:auto}code{white-space:pre-wrap;word-break:break-all}.verdict{font-weight:700;padding:.1rem .5rem;border-radius:.25rem}.pass{background:#e8f5e9;color:#1a7f37}.fail{background:#ffebee;color:#c62828}a{color:#0b57d0}dl{margin:.5rem 0}dt{color:#555;font-size:.85em}dd{margin:0 0 .4rem}</style>
+</head><body>
+<h1>Step 01 · hermes-skills <span class="verdict fail">FAIL</span></h1>
+<p class="meta">Test plan: <a href="../../../../../procedures/colima-hermes-skills/6040ecf3.html">colima-hermes-skills @ 6040ecf3</a></p>
+<p class="meta">Container: <code>hermes-testbed</code> · Image: <code>unknown</code> · atm: <code>unknown</code> · Recorded: 2026-09-14T15:34:23.448736+00:00</p>
+<h2>Cases</h2><h3>1. report <span class="verdict fail">FAIL</span></h3><p>report missing; see run-prompts.log</p><h2>test.sh.log</h2><pre>== 15:32:43Z resolve inputs
+atm 1.5.18 = prerelease/v1.5.18 @ 204f67135; prerelease-archive run 34860896730; ci run 34861923410; arch aarch64
+== 15:32:57Z build (10-20 min the first time, seconds when nothing changed)
+atm tarball override: /Users/randlee/Documents/github/atm-hermes-testbed-worktrees/fix-remove-eq007-workaround/.cache/atm-1.5.18/atm_1.5.18_aarch64-unknown-linux-gnu.tar.gz (sha256 bbb5147904704e64820f58b0ebf109befd83aa76f229ab0832f07dae1a3fc322)
+wheels override: hermes_atm-1.5.18-py3-none-any.whl, atm_graft-1.5.18-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+base context: main = a909c4f5bf Merge pull request #25 from randlee/sync/candidate-20260912-merge
+== 15:34:14Z start the fixture
++ export ATM_IDENTITY=stub-alpha ATM_TEAM=testbed
++ [ -r /opt/testbed/members.txt ]
++ atm peer certificate show --json
++ python3 -c import json,sys; print(json.load(sys.stdin)[&quot;fingerprint&quot;])
++ fingerprint=912E7EAD71BFFCB58221C2777E43887806E5A5665D4C4E05AA54B1EAF074231E
++ trust_row_present
++ atm peer trust list --json
++ python3 -c import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); rows=data if isinstance(data,list) else data.get(&quot;rows&quot;,[]); raise SystemExit(0 if any(row.get(&quot;host&quot;)==&quot;localhost&quot; and row.get(&quot;fingerprint&quot;)==expected and row.get(&quot;https_port&quot;)==43101 for row in rows) else 1) 912E7EAD71BFFCB58221C2777E43887806E5A5665D4C4E05AA54B1EAF074231E
++ atm peer trust add --host localhost --fingerprint 912E7EAD71BFFCB58221C2777E43887806E5A5665D4C4E05AA54B1EAF074231E --https-port 43101 --yes
+added trusted peer localhost
+trusted peer change applies at the next daemon start
++ ready=no
++ seq 1 30
++ atm doctor --json
++ nohup atm-daemon
++ kill -0 371
++ tail -20 /tmp/atm-daemon.log
+failed to create decomposed_messages view
+  Recovery: Repair mailbox access or wait for the competing operation, then retry.
++ exit 1
+CANNOT RUN: run.sh failed (full log: /Users/randlee/Documents/github/atm-hermes-testbed-worktrees/fix-remove-eq007-workaround/.cache/results/20260914T153243Z/run.log)
+</pre></body></html>

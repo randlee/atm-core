@@ -1,0 +1,14 @@
+{
+  "feature": "colima-hermes-skills",
+  "generated_at": "2026-09-14T15:34:23.448736+00:00",
+  "source_revision": "9f2430a00a2013655d84b2ad21b05fd04fa6889a",
+  "container": "hermes-testbed",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "report",
+      "status": "FAIL",
+      "detail": "report missing; see run-prompts.log"
+    }
+  ]
+}

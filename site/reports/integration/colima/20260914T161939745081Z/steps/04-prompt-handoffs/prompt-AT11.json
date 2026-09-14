@@ -1,0 +1,26 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT11-prompt-handoffs",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "prompted-task-events-only",
+      "status": "pass",
+      "detail": "Pre-case: `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"clear-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"cleared\":false}. Assigned three tasks: `atm task assign fx-at11-beta \"AT11 case1 task1\" --task-id at11-1789404006-1 --json` -> {\"task_id\":\"at11-1789404006-1\"}; task2 --task-id at11-1789404006-2 -> {\"task_id\":\"at11-1789404006-2\"}; task3 --task-id at11-1789404006-3 -> {\"task_id\":\"at11-1789404006-3\"}. Polled `atm task events at11-1789404006-1 --json` every 5s (iters 1-14, ~68s): handoffs reached [task_queued@16:40:06.309Z, task_ready@16:40:06.722220870Z, task_reminder@16:41:11.717346860Z] and events list showed assigned(seq1)->reminded(seq2, task_ready)->reminded(seq3, task_reminder). Observed interval = 16:41:11.717346860Z - 16:40:06.722220870Z = 64.995s (~65s, matches documented 60s default + scheduling margin). Started task 1: `atm task start at11-1789404006-1 \"starting task 1\" --json` -> {\"action\":\"send\",...,\"task_id\":\"at11-1789404006-1\",\"summary\":\"starting task 1\"}. Re-ran `atm task events at11-1789404006-1 --json`: events now [assigned(seq1,16:40:06.309Z), reminded/task_ready(seq2,16:40:06.722Z), reminded/task_reminder(seq3,16:41:11.717Z), started(seq4,16:41:23.769569877Z, actor fx-at11-beta, to_state active)]; handoffs show task_queued, task_ready, task_reminder, task_started in that order -> queued, ready, reminder, started confirmed in order. `atm task events at11-1789404006-2 --json` -> events=[assigned only], handoffs=[task_queued only]. `atm task events at11-1789404006-3 --json` -> events=[assigned only], handoffs=[task_queued only]. Tasks 2 and 3 show queued only, as required."
+    },
+    {
+      "name": "disabled-reminder-doctor-finding",
+      "status": "pass",
+      "detail": "`ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams disable-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"disable-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"updated_at\":\"2026-09-14T16:41:35.985673025Z\"}. Assigned new task: `atm task assign fx-at11-beta \"AT11 case2 task4\" --task-id at11-1789404098-4 --json` -> {\"task_id\":\"at11-1789404098-4\"} at 2026-09-14T16:41:38.776572703Z. Polled `atm task events at11-1789404098-4 --json` every 5s for 130s (observed case-1 interval 65s x2, foreground loop, elapsed logged 5s..130s). Final `atm task events at11-1789404098-4 --json` -> events=[assigned(seq1,16:41:38.760796061Z), reminded(seq2,16:41:41.721039970Z,outcome=emitted)]; handoffs=[{\"kind\":\"task_queued\",\"at\":\"2026-09-14T16:41:38.760Z\"},{\"kind\":\"task_ready\",\"at\":\"2026-09-14T16:41:41.721039970Z\"}] -- queued and ready present, no task_reminder handoff and no second reminded event after 130s wait. `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm doctor --json --team fx-at11` findings include {\"severity\":\"warning\",\"code\":\"ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED\",\"message\":\"disabled_task_nudge_template_override: team fx-at11 has disabled `task_reminder`\",\"remediation\":\"atm teams clear-nudge-template --team fx-at11 --kind task_reminder\"}."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "`atm task close at11-1789404006-1 completed \"case1 task1 done\" --json` -> {\"action\":\"send\",...,\"task_id\":\"at11-1789404006-1\"}. `atm task close at11-1789404006-2 cancelled \"case1 cleanup\" --json` -> {\"action\":\"send\",...,\"task_id\":\"at11-1789404006-2\"}. `atm task close at11-1789404006-3 cancelled \"case1 cleanup\" --json` -> {\"action\":\"send\",...,\"task_id\":\"at11-1789404006-3\"}. `ATM_IDENTITY=fx-at11-beta ATM_TEAM=fx-at11 atm task list --json` -> [] (confirmed empty before case 2). `atm task close at11-1789404098-4 cancelled \"case2 cleanup\" --json` -> {\"action\":\"send\",...,\"task_id\":\"at11-1789404098-4\"}. `atm task list --json` -> [] (empty after case 2). `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"clear-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"cleared\":true}."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.5.18", "hermes_atm": "n/a: fx-at11 roster has no hermes agent_type (atm doctor --json --team fx-at11 member_roster shows agent_type=stub/stub)", "atm_graft": "n/a: atm doctor --json --team fx-at11 -> graft_receivers.receivers=[]"},
+  "started_at": "2026-09-14T16:39:48Z",
+  "finished_at": "2026-09-14T16:44:18Z"
+}
