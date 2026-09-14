@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+from contextlib import redirect_stderr
 import subprocess
 import sys
 import tempfile
@@ -148,7 +149,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             (root / "release" / "publish-artifacts.toml").read_text(encoding="utf-8")
         )["prerelease"]
         self.assertEqual(prerelease["binaries"], ["atm", "atm-daemon"])
-        self.assertIn("daemon-switch.py switch --prerelease {version} --yes", prerelease["post_install"])
+        self.assertIn(
+            "daemon-switch.py switch --prerelease {version} --yes --discover-managed-service",
+            prerelease["post_install"],
+        )
         self.assertTrue(prerelease["selector_dir"]["darwin"].startswith(prerelease["install_root"]))
         self.assertTrue(prerelease["selector_dir"]["linux"].startswith(prerelease["install_root"]))
         self.assertNotIn("Programs\\\\ATM", prerelease["selector_dir"]["windows"])
@@ -210,7 +214,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 self.assertEqual(
                     command_text,
                     "python3 .claude/skills/daemon-switch/scripts/daemon-switch.py "
-                    "switch --prerelease 1.5.11 --yes",
+                    "switch --prerelease 1.5.11 --yes --discover-managed-service",
                 )
                 self.assertEqual(active_cli.resolve(), (old_bin / "atm").resolve())
                 self.assertEqual(active_daemon.resolve(), (old_bin / "atm-daemon").resolve())
@@ -228,8 +232,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                         "--prerelease",
                         "1.5.11",
                         "--yes",
-                        "--service",
-                        "fixture",
+                        "--discover-managed-service",
                     ],
                 ):
                     self.assertEqual(daemon_switch.main(), 0)
@@ -247,6 +250,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ) as resolve,
                 mock.patch.object(daemon_switch, "sign_prerelease_pair") as sign,
                 mock.patch.object(daemon_switch, "require_no_active_temporary_launch_session"),
+                mock.patch.object(
+                    daemon_switch._service_control_module,
+                    "_linux_candidates",
+                    return_value=[("fixture", None)],
+                ),
                 mock.patch.object(daemon_switch, "save_default_pair"),
                 mock.patch.object(daemon_switch, "run_service") as service,
                 mock.patch.object(daemon_switch, "require_stopped_daemon") as stopped,
@@ -275,6 +283,82 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(calls, ["atm --version"])
             self.assertNotIn("already selected; service left running", stdout.getvalue())
+
+    @unittest.skipUnless(os.name == "posix", "selector rollback uses POSIX symlinks")
+    def test_zero_candidate_install_restores_selectors_and_leaves_live_pair_unchanged(self) -> None:
+        root = discover_repo_root()
+        prerelease = load_script(
+            "atm_prerelease_zero_candidate",
+            root / ".claude" / "skills" / "prerelease" / "scripts" / "prerelease.py",
+        )
+        daemon_switch = load_script(
+            "atm_daemon_switch_zero_candidate",
+            root / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory)
+            old_bin, candidate_bin = fixture / "old" / "bin", fixture / "builds" / "v1.5.18" / "bin"
+            active_bin, private_bin = fixture / "active", fixture / "private"
+            for folder in (old_bin, candidate_bin, active_bin, private_bin):
+                folder.mkdir(parents=True)
+            for folder in (old_bin, candidate_bin):
+                for name in ("atm", "atm-daemon"):
+                    binary = folder / name
+                    binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                    binary.chmod(0o755)
+            for name in ("atm", "atm-daemon"):
+                (active_bin / name).symlink_to(old_bin / name)
+                (private_bin / name).symlink_to(old_bin / name)
+            config = {
+                "install_root": str(fixture / "builds"),
+                "binaries": ["atm", "atm-daemon"],
+                "selector_dir": {
+                    "darwin": str(private_bin),
+                    "linux": str(private_bin),
+                    "windows": str(private_bin),
+                },
+                "post_install": (
+                    "python3 .claude/skills/daemon-switch/scripts/daemon-switch.py "
+                    "switch --prerelease {version} --yes --discover-managed-service"
+                ),
+                "verify": "atm --version",
+            }
+
+            def refuse_activation(command_text: str, *, capture: bool = False):
+                self.assertFalse(capture)
+                self.assertIn("--discover-managed-service", command_text)
+                argv = [
+                    "daemon-switch.py",
+                    "switch",
+                    "--prerelease",
+                    "1.5.18",
+                    "--yes",
+                    "--discover-managed-service",
+                ]
+                with (
+                    mock.patch.object(daemon_switch.sys, "argv", argv),
+                    mock.patch.object(
+                        daemon_switch._service_control_module,
+                        "_linux_candidates",
+                        return_value=[],
+                    ),
+                    redirect_stderr(io.StringIO()),
+                ):
+                    code = daemon_switch.main()
+                raise subprocess.CalledProcessError(code, command_text)
+
+            with (
+                mock.patch.object(prerelease, "select_release", return_value=("1.5.18", {})),
+                mock.patch.object(prerelease.platform, "system", return_value="Linux"),
+                mock.patch.object(prerelease, "shell", side_effect=refuse_activation),
+                mock.patch.dict(os.environ, {"PATH": f"{active_bin}{os.pathsep}{os.environ['PATH']}"}),
+            ):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    prerelease.install({"prerelease": config}, "1.5.18")
+
+            for name in ("atm", "atm-daemon"):
+                self.assertEqual((private_bin / name).resolve(), (old_bin / name).resolve())
+                self.assertEqual((active_bin / name).resolve(), (old_bin / name).resolve())
 
     def test_generic_workflow_preserves_manifest_build_and_plain_artifact_contracts(self) -> None:
         root = discover_repo_root()

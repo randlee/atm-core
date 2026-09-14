@@ -138,7 +138,7 @@ class WindowsScheduledTaskTests(unittest.TestCase):
             yes=True,
         )
         self.selector = Path(self.args.daemon_link)
-        self.xml = """<?xml version=\"1.0\"?><Task xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Actions><Exec><Command>C:\\atm-active\\atm-daemon.exe</Command></Exec></Actions></Task>"""
+        self.xml = """<?xml version=\"1.0\"?><Task xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Principals><Principal><UserId>DOMAIN\\agent</UserId></Principal></Principals><Actions><Exec><Command>C:\\atm-active\\atm-daemon.exe</Command></Exec></Actions></Task>"""
 
     def test_task_status_reads_one_executable_action_and_running_state(self) -> None:
         with mock.patch.object(
@@ -155,6 +155,7 @@ class WindowsScheduledTaskTests(unittest.TestCase):
                     "registered": True,
                     "state": "running",
                     "command": r"C:\atm-active\atm-daemon.exe",
+                    "user_id": r"DOMAIN\agent",
                 },
             )
 
