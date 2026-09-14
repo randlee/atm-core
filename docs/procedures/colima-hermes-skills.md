@@ -1,8 +1,8 @@
 ---
 procedure: colima-hermes-skills
-family: smoke
+family: integration
 runner: scripts/smoke/colima_skill_report.py
-evidence: site/reports/<run>/colima-hermes-skills.json
+evidence: site/reports/integration/colima/<run>/steps/NN-hermes-skills/step.json
 revisions:
   - rev: 6040ecf36a3ac43d40207869d281114c719533ea
     date: 2026-09-08
@@ -83,7 +83,7 @@ flowchart LR
 | 49 | Execute `atm-smoke / tester: Start line` | The named check reports PASS or FAIL at revision `6040ecf3` | `colima-hermes-skills.json` cases |
 
 ## Evidence layout
-The runner writes immutable evidence for `colima-hermes-skills` beneath `site/reports/`. The JSON payload is the source for case or worker outcomes; the rendered report and envelope provide the public navigation entry.
+This procedure is the `hermes-skills` step of a colima integration run. The runner's payload is kept byte-for-byte as `steps/NN-hermes-skills/step.json` under `site/reports/integration/colima/<run>/` together with the seven skill reports (`report-N.txt`), `result.txt` and `herdr-doctor.json`; the step's `panel.xhtml` and the run's page, aggregate and envelope are rendered from them by `scripts/integration/render_colima.py`.
 
 ## Changes
 The revision sections below are the retained runner-history backfill. Each section records the source revision and its own ordered procedure description.

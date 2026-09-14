@@ -2,8 +2,27 @@
   "schema_version": 1,
   "procedures": [
     {
+      "procedure": "colima-assignment",
+      "family": "integration",
+      "runner": "scripts/smoke/run_bb5_assignment.py",
+      "revisions": [
+        {
+          "rev": "5df9c2f0078f0606940aaf2c2f110e22860da94d",
+          "date": "2026-09-13",
+          "note": "fix(bb): correct evidence provenance and roster scope",
+          "html": "procedures/colima-assignment/5df9c2f0.html"
+        },
+        {
+          "rev": "0cbc4adc679d6eb334fd0233c546421fe098bbff",
+          "date": "2026-09-12",
+          "note": "test: add BB5 colima assignment scenarios",
+          "html": "procedures/colima-assignment/0cbc4adc.html"
+        }
+      ]
+    },
+    {
       "procedure": "colima-hermes-skills",
-      "family": "smoke",
+      "family": "integration",
       "runner": "scripts/smoke/colima_skill_report.py",
       "revisions": [
         {
@@ -11,6 +30,68 @@
           "date": "2026-09-08",
           "note": "render colima run in the smoke-report shape",
           "html": "procedures/colima-hermes-skills/6040ecf3.html"
+        }
+      ]
+    },
+    {
+      "procedure": "colima-prompt-handoffs",
+      "family": "integration",
+      "runner": "scripts/smoke/run_bb6_prompt_handoffs.py",
+      "revisions": [
+        {
+          "rev": "a2491a6c69e99e93bc971be69a51f5c7dd24f96a",
+          "date": "2026-09-12",
+          "note": "test(smoke): exercise observed interval guard",
+          "html": "procedures/colima-prompt-handoffs/a2491a6c.html"
+        },
+        {
+          "rev": "2cc19c18da82188ce964889a3b4c1ef32c1c9fca",
+          "date": "2026-09-12",
+          "note": "test(smoke): cover observed reminder deadline",
+          "html": "procedures/colima-prompt-handoffs/2cc19c18.html"
+        },
+        {
+          "rev": "6d18058c0e21501a6f8329b980a9756b02ea9e11",
+          "date": "2026-09-12",
+          "note": "fix(smoke): bound disabled reminder wait by observed interval (BB6-026)",
+          "html": "procedures/colima-prompt-handoffs/6d18058c.html"
+        },
+        {
+          "rev": "054fd8b268e275498e9a0315eb24c4564a19a4cd",
+          "date": "2026-09-12",
+          "note": "test(bb6): match handoffs by durable identity",
+          "html": "procedures/colima-prompt-handoffs/054fd8b2.html"
+        },
+        {
+          "rev": "98e410369120438bb91089ec14ba38fcbdedf93d",
+          "date": "2026-09-12",
+          "note": "test(bb6): bound bare mailbox evidence reads",
+          "html": "procedures/colima-prompt-handoffs/98e41036.html"
+        },
+        {
+          "rev": "f5cc8d384247bd28577a73e4c002d83442d0d6d2",
+          "date": "2026-09-12",
+          "note": "test(bb6): reconcile all prompt recipient surfaces",
+          "html": "procedures/colima-prompt-handoffs/f5cc8d38.html"
+        },
+        {
+          "rev": "9429a9971243182203b5e6fb050a5c2ca2f6e84b",
+          "date": "2026-09-12",
+          "note": "test(bb6): add prompt handoff colima runner",
+          "html": "procedures/colima-prompt-handoffs/9429a997.html"
+        }
+      ]
+    },
+    {
+      "procedure": "colima-task-start",
+      "family": "integration",
+      "runner": "scripts/smoke/run_bb4_task_start.py",
+      "revisions": [
+        {
+          "rev": "8aa00a111db46011e43bfa08ef70643f15e8e5ad",
+          "date": "2026-09-12",
+          "note": "test(bb4): add task start CLI smoke suite",
+          "html": "procedures/colima-task-start/8aa00a11.html"
         }
       ]
     },
