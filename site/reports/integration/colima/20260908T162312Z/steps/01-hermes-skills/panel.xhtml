@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>hermes-skills · step 01 · PASS</title>
+<meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+<meta name="integration-step" content="Step 01 · hermes-skills" /><meta name="integration-generated-at" content="2026-09-08T16:23:12Z" />
+<style type="text/css">body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1b1b1b;margin:1.5rem;line-height:1.45}h1{font-size:1.25rem;margin:0 0 .25rem}h2{font-size:1.05rem;margin:1.5rem 0 .5rem;border-bottom:1px solid #d5d9de;padding-bottom:.2rem}h3{font-size:1rem;margin:1.2rem 0 .3rem}h4{font-size:.85rem;margin:.8rem 0 .2rem;color:#555;text-transform:uppercase;letter-spacing:.03em}p.meta{margin:.2rem 0;color:#555}table{border-collapse:collapse;width:100%;margin:.4rem 0}th,td{border:1px solid #d5d9de;padding:.35rem .5rem;text-align:left;vertical-align:top}th{background:#f3f5f7;font-weight:600;color:#555;font-size:.85em}table.facts{width:auto;min-width:24rem}table.facts th{width:11rem;font-weight:600}pre{margin:0;white-space:pre-wrap;word-break:break-word;font-size:.82em;background:#f7f9fa;padding:.4rem .5rem;border:1px solid #e3e3e3;max-height:24rem;overflow:auto}code{white-space:pre-wrap;word-break:break-all}.verdict{font-weight:700;padding:.1rem .5rem;border-radius:.25rem}.pass{background:#e8f5e9;color:#1a7f37}.fail{background:#ffebee;color:#c62828}a{color:#0b57d0}dl{margin:.5rem 0}dt{color:#555;font-size:.85em}dd{margin:0 0 .4rem}</style>
+</head><body>
+<h1>Step 01 · hermes-skills <span class="verdict pass">PASS</span></h1>
+<p class="meta">Test plan: <a href="../../../../../procedures/colima-hermes-skills/6040ecf3.html">colima-hermes-skills @ 6040ecf3</a></p>
+<p class="meta">Container: <code>hermes-testbed</code> · Image: <code>unknown</code> · atm: <code>unknown</code> · Recorded: 2026-09-08T16:23:12Z</p>
+<h2>Cases</h2><h3>1. doctor <span class="verdict pass">PASS</span></h3><p>ATM 1.5.9</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>2. advertised host <span class="verdict pass">PASS</span></h3><p>127.0.0.1 (sentences enter by docker exec; --no-peer)</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>3. herdr transport (atm doctor, fixture daemon) <span class="verdict pass">PASS</span></h3><p>socket ({&#x27;kind&#x27;: &#x27;unexpected_response&#x27;, &#x27;code&#x27;: &#x27;internal_failure&#x27;, &#x27;detail&#x27;: &#x27;Herdr status query did not return a supported response&#x27;})</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>4. atm-setup-environment / tester: Start line <span class="verdict pass">PASS</span></h3><p>01M20XB6SYPVP1GVZD63PSTD73</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>5. atm-setup-environment / tester: Daemon answers <span class="verdict pass">PASS</span></h3><p>status: healthy, error_count: 0, versions: 1.5.9</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>6. atm-setup-environment / tester: Roster complete <span class="verdict pass">PASS</span></h3><p>all expected members present (stub-alpha, stub-beta, tester, hermes, oversight)</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>7. atm-setup-environment / tester: Doctor passes <span class="verdict pass">PASS</span></h3><p>error_count: 0, no warnings on expected teams</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>8. atm-setup-environment / tester: Self round trip <span class="verdict pass">PASS</span></h3><p>message_id: 01M20XBGY0JNDH6YGQF8N0MK1K, mutation_applied: true, unread count after read: 0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>9. atm-setup-environment / tester: Cross-host peer <span class="verdict pass">PASS</span></h3><p>localhost peer trust enabled, message_id: 01M20XBWCB8QXN8BPWNPMK86SP</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>10. atm-setup-environment / hermes: Start line <span class="verdict pass">PASS</span></h3><p>01M20XBEM7R1K82CRWNEN5Z865</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>11. atm-setup-environment / hermes: Daemon answers <span class="verdict pass">PASS</span></h3><p>status: healthy, client: 1.5.9, daemon: 1.5.9</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>12. atm-setup-environment / hermes: Roster complete <span class="verdict pass">PASS</span></h3><p>all 5 expected members present, 0 added</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>13. atm-setup-environment / hermes: Doctor passes <span class="verdict pass">PASS</span></h3><p>error_count: 0, warning_count: 0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>14. atm-setup-environment / hermes: Self round trip <span class="verdict pass">PASS</span></h3><p>sent: 01M20XBVPRMQC25E74MSST023M, count: 1, mutation_applied: true, unread after: 0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>15. atm-smoke / hermes: Self round trip <span class="verdict pass">PASS</span></h3><p>sent: 01M20XDFXZ6NWZMKZ8WJZ8C37G, count: 1, mutation_applied: true, unread after: 0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>16. atm-smoke / hermes: Send <span class="verdict pass">PASS</span></h3><p>01M20XDTCWBZZR9E3FBWM6V0SJ</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>17. atm-smoke / hermes: Partner message arrives <span class="verdict pass">PASS</span></h3><p>0s, id: 01M20XDH9JG5CD02K9ATS43VHN, read: false</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>18. atm-smoke / hermes: Peek does not mutate <span class="verdict pass">PASS</span></h3><p>mutation_applied: false, read: false</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>19. atm-smoke / hermes: Read by id <span class="verdict pass">PASS</span></h3><p>count: 1, mutation_applied: true</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>20. atm-smoke / hermes: Read marked it <span class="verdict pass">PASS</span></h3><p>read: true</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>21. atm-smoke / hermes: Stale-connection probe <span class="verdict pass">PASS</span></h3><p>exit: 0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>22. atm-smoke / hermes: Ack <span class="verdict pass">PASS</span></h3><p>exit: 0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>23. atm-smoke / hermes: Your message got acked <span class="verdict pass">PASS</span></h3><p>150s, id: 01M20XJESRAMHB789VP66VHTBN</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>24. atm-smoke / tester: Self round trip <span class="verdict pass">PASS</span></h3><p>message_id: 01M20XD79ER1SV2EBDPVW5NZFZ, count: 1→0, mutation_applied: true</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>25. atm-smoke / tester: Send <span class="verdict pass">PASS</span></h3><p>message_id: 01M20XDH9JG5CD02K9ATS43VHN (ack-required to hermes)</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>26. atm-smoke / tester: Partner&#x27;s message arrives <span class="verdict pass">PASS</span></h3><p>message_id: 01M20XDTCWBZZR9E3FBWM6V0SJ, read: false, seconds: 9</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>27. atm-smoke / tester: Peek does not mutate <span class="verdict pass">PASS</span></h3><p>mutation_applied: false, read: false</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>28. atm-smoke / tester: Read by id <span class="verdict pass">PASS</span></h3><p>count: 1, mutation_applied: true</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>29. atm-smoke / tester: Read marked it <span class="verdict pass">PASS</span></h3><p>read: true</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>30. atm-smoke / tester: Stale-connection probe <span class="verdict pass">PASS</span></h3><p>exit code: 0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>31. atm-smoke / tester: Ack <span class="verdict pass">PASS</span></h3><p>exit code: 0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>32. atm-smoke / tester: Your message got acked <span class="verdict pass">PASS</span></h3><p>ack_reply_id: 01M20XEY2JVSYN4TFHJV683GSX, seconds: 46</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>33. atm-hermes-ready / tester: Start line <span class="verdict pass">PASS</span></h3><p>01M20XQP4PQ7N37KCVGTQK7YF8</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>34. atm-hermes-ready / tester: Roster <span class="verdict pass">PASS</span></h3><p>hermes@testbed found</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>35. atm-hermes-ready / tester: Receivers registered <span class="verdict pass">PASS</span></h3><p>hermes graft receiver active (last_seen_age: 0s)</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>36. atm-hermes-ready / tester: Ping <span class="verdict pass">PASS</span></h3><p>message_id: 01M20XR1N1WQ7K80F72J9B2JHB</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>37. atm-hermes-ready / tester: Pong <span class="verdict pass">PASS</span></h3><p>hermes reply: &quot;ready&quot;, seconds: 22, message_id: 01M20XRPJ31JNSEX0GFSZD5HC0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>38. atm-nudge-roundtrip / hermes: Start line <span class="verdict pass">PASS</span></h3><p>01M20XWYHEC7S4XHQN2W8HQG04</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>39. atm-nudge-roundtrip / hermes: Nudge received <span class="verdict pass">PASS</span></h3><p>id: 01M20XWT8VMDBE7GZ64581VPQX</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>40. atm-nudge-roundtrip / hermes: Read by id <span class="verdict pass">PASS</span></h3><p>count: 1</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>41. atm-nudge-roundtrip / hermes: Ack natively <span class="verdict pass">PASS</span></h3><p>reply sent: 01M20XXCXC7FXXG89RDTRQ4MV7</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>42. atm-nudge-roundtrip / hermes: List after idle <span class="verdict pass">PASS</span></h3><p>exit: 0</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>43. atm-nudge-roundtrip / tester: Start line <span class="verdict pass">PASS</span></h3><p>01M20XWQJPCK4RFC4MSKPBKAJZ</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>44. atm-nudge-roundtrip / tester: Send <span class="verdict pass">PASS</span></h3><p>message_id: 01M20XWT8VMDBE7GZ64581VPQX (ack-required)</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h3>45. atm-nudge-roundtrip / tester: Ack arrives <span class="verdict pass">PASS</span></h3><p>reply message_id: 01M20XXCXC7FXXG89RDTRQ4MV7, summary: &quot;roundtrip 1788885231&quot;, seconds: 33</p><table class="facts"><tbody><tr><th>origin</th><td>hermes-testbed</td></tr><tr><th>destination</th><td>hermes-testbed</td></tr><tr><th>attempt</th><td>1</td></tr></tbody></table><h2>herdr-doctor.json</h2><pre>{
+ &quot;configured&quot;: true,
+ &quot;endpoints&quot;: [
+  {
+   &quot;session&quot;: null,
+   &quot;provenance&quot;: &quot;herdr_default&quot;,
+   &quot;transport&quot;: &quot;socket&quot;,
+   &quot;endpoint&quot;: &quot;$HOME/.config/herdr/herdr.sock&quot;,
+   &quot;binary&quot;: null,
+   &quot;state&quot;: {
+    &quot;kind&quot;: &quot;unexpected_response&quot;,
+    &quot;code&quot;: &quot;internal_failure&quot;,
+    &quot;detail&quot;: &quot;Herdr status query did not return a supported response&quot;
+   },
+   &quot;remedy&quot;: &quot;Verify supported Herdr and capture response&quot;,
+   &quot;capabilities&quot;: {
+    &quot;live_handoff&quot;: null
+   },
+   &quot;members&quot;: []
+  }
+ ],
+ &quot;breaker&quot;: {
+  &quot;state&quot;: &quot;closed&quot;
+ }
+}</pre><h2>report-1.txt</h2><pre>ATM TEST REPORT
+skill: atm-setup-environment
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.9 daemon 1.5.9
+result: PASS   (5/5 steps)
+steps:
+  0 PASS Start line — 01M20XB6SYPVP1GVZD63PSTD73
+  1 PASS Daemon answers — status: healthy, error_count: 0, versions: 1.5.9
+  2 PASS Roster complete — all expected members present (stub-alpha, stub-beta, tester, hermes, oversight)
+  3 PASS Doctor passes — error_count: 0, no warnings on expected teams
+  4 PASS Self round trip — message_id: 01M20XBGY0JNDH6YGQF8N0MK1K, mutation_applied: true, unread count after read: 0
+  5 PASS Cross-host peer — localhost peer trust enabled, message_id: 01M20XBWCB8QXN8BPWNPMK86SP
+elapsed: 35s
+</pre><h2>report-2.txt</h2><pre>ATM TEST REPORT
+skill: atm-setup-environment
+fixture: hermes-testbed
+agent: hermes@testbed  tools: native+cli
+atm: client 1.5.9 daemon 1.5.9
+result: PASS   (6/6 steps)
+steps:
+  0 PASS Start line — 01M20XBEM7R1K82CRWNEN5Z865
+  1 PASS Daemon answers — status: healthy, client: 1.5.9, daemon: 1.5.9
+  2 PASS Roster complete — all 5 expected members present, 0 added
+  3 PASS Doctor passes — error_count: 0, warning_count: 0
+  4 PASS Self round trip — sent: 01M20XBVPRMQC25E74MSST023M, count: 1, mutation_applied: true, unread after: 0
+  5 SKIP Cross-host peer — no peer host named in request
+elapsed: 45s
+</pre><h2>report-3.txt</h2><pre>ATM TEST REPORT
+skill: atm-smoke
+fixture: hermes-testbed
+agent: hermes@testbed  tools: native+cli
+atm: client 1.5.9 daemon 1.5.9
+result: PASS   (10/10 steps)
+steps:
+  S PASS Start line — 01M20XDB9XXGDMD8GZ1G2TMZ00
+  0 PASS Self round trip — sent: 01M20XDFXZ6NWZMKZ8WJZ8C37G, count: 1, mutation_applied: true, unread after: 0
+  1 PASS Send — 01M20XDTCWBZZR9E3FBWM6V0SJ
+  2 PASS Partner message arrives — 0s, id: 01M20XDH9JG5CD02K9ATS43VHN, read: false
+  3 PASS Peek does not mutate — mutation_applied: false, read: false
+  4 PASS Read by id — count: 1, mutation_applied: true
+  5 PASS Read marked it — read: true
+  6 PASS Stale-connection probe — exit: 0
+  7 PASS Ack — exit: 0
+  8 PASS Your message got acked — 150s, id: 01M20XJESRAMHB789VP66VHTBN
+elapsed: 195s
+</pre><h2>report-4.txt</h2><pre>ATM TEST REPORT
+skill: atm-smoke
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.9 daemon 1.5.9
+result: PASS   (8/8 steps)
+steps:
+  0 PASS Self round trip — message_id: 01M20XD79ER1SV2EBDPVW5NZFZ, count: 1→0, mutation_applied: true
+  1 PASS Send — message_id: 01M20XDH9JG5CD02K9ATS43VHN (ack-required to hermes)
+  2 PASS Partner&#x27;s message arrives — message_id: 01M20XDTCWBZZR9E3FBWM6V0SJ, read: false, seconds: 9
+  3 PASS Peek does not mutate — mutation_applied: false, read: false
+  4 PASS Read by id — count: 1, mutation_applied: true
+  5 PASS Read marked it — read: true
+  6 PASS Stale-connection probe — exit code: 0
+  7 PASS Ack — exit code: 0
+  8 PASS Your message got acked — ack_reply_id: 01M20XEY2JVSYN4TFHJV683GSX, seconds: 46
+elapsed: 56s
+</pre><h2>report-5.txt</h2><pre>ATM TEST REPORT
+skill: atm-hermes-ready
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.9 daemon 1.5.9
+result: PASS   (4/4 steps)
+steps:
+  0 PASS Start line — 01M20XQP4PQ7N37KCVGTQK7YF8
+  1 PASS Roster — hermes@testbed found
+  2 PASS Receivers registered — hermes graft receiver active (last_seen_age: 0s)
+  3 PASS Ping — message_id: 01M20XR1N1WQ7K80F72J9B2JHB
+  4 PASS Pong — hermes reply: &quot;ready&quot;, seconds: 22, message_id: 01M20XRPJ31JNSEX0GFSZD5HC0
+elapsed: 52s
+</pre><h2>report-6.txt</h2><pre>ATM TEST REPORT
+skill: atm-nudge-roundtrip
+fixture: hermes-testbed
+agent: hermes@testbed  tools: native
+atm: client 1.5.9 daemon 1.5.9
+result: PASS   (5/5 steps)
+steps:
+  0 PASS Start line — 01M20XWYHEC7S4XHQN2W8HQG04
+  1 PASS Nudge received — id: 01M20XWT8VMDBE7GZ64581VPQX
+  2 PASS Read by id — count: 1
+  3 PASS Ack natively — reply sent: 01M20XXCXC7FXXG89RDTRQ4MV7
+  4 PASS List after idle — exit: 0
+elapsed: 25s
+</pre><h2>report-7.txt</h2><pre>ATM TEST REPORT
+skill: atm-nudge-roundtrip
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.9 daemon 1.5.9
+result: PASS   (2/2 steps)
+steps:
+  0 PASS Start line — 01M20XWQJPCK4RFC4MSKPBKAJZ
+  1 PASS Send — message_id: 01M20XWT8VMDBE7GZ64581VPQX (ack-required)
+  2 PASS Ack arrives — reply message_id: 01M20XXCXC7FXXG89RDTRQ4MV7, summary: &quot;roundtrip 1788885231&quot;, seconds: 33
+elapsed: 39s
+</pre><h2>report.md</h2><pre># Colima integration run 9: atm 1.5.9 (integrate/phase-ay) with Hermes, herdr socket transport
+
+- verdict: **PASS** (7/7 skill reports, every step PASS, no intervention)
+- run: 2026-09-08 16:23:12Z start, 16:36:21Z verdict (13 minutes including the testbed image layer rebuild)
+- command: `./test.sh` in atm-hermes-testbed (branch `feat/atm-test-skills` at 6c81af1), no arguments
+- files beside this report: the run&#x27;s outputs, unedited (`result.txt`, `report-1.txt` … `report-7.txt`, the seven
+  skill reports as received in the fixture&#x27;s oversight inbox, and `herdr-doctor.json`, `atm doctor --json` `.herdr`
+  inside the fixture after bringup), plus the smoke-report set rendered from them by
+  `scripts/smoke/colima_skill_report.py` through the sc-compose smoke templates: `colima-hermes-skills.json` (one case
+  per skill step), `hermes-testbed-colima-hermes-skills.xhtml` (the evidence pane), `colima-hermes-skills.html` and
+  `index.html` (frames), `smoke.envelope.json` (report index)
+
+## Inputs (all from the network, pinned)
+
+| component | source | pin |
+| --- | --- | --- |
+| atm-daemon + atm CLI 1.5.9 | prerelease-archive.yml run 34249771093, artifact `aarch64-unknown-linux-gnu` | tag `prerelease/v1.5.9` = 0c2d38368 on integrate/phase-ay |
+| hermes_atm + atm_graft 1.5.9 wheels | ci.yml run 34249772325 (PR #1308), artifact `hermes-atm-wheels-linux-aarch64` | same commit |
+| herdr | GitHub release `herdrdev/herdr` v0.8.2, sha256-checked | build.sh |
+| Hermes | fork randlee/hermes-agent, `main` = d45230aac (Hermes Agent v0.21.0, 2026.8.31) | build context |
+
+## The seven reports
+
+| # | skill | agent | tools | result |
+| --- | --- | --- | --- | --- |
+| 1 | atm-setup-environment | tester@testbed (Claude Code, herdr backend) | cli | PASS 5/5 |
+| 2 | atm-setup-environment | hermes@testbed (gateway) | native+cli | PASS 6/6 |
+| 3 | atm-smoke | hermes@testbed | native+cli | PASS 10/10 |
+| 4 | atm-smoke | tester@testbed | cli | PASS 8/8 |
+| 5 | atm-hermes-ready | tester@testbed | cli | PASS 4/4 |
+| 6 | atm-nudge-roundtrip | hermes@testbed | native | PASS 5/5 |
+| 7 | atm-nudge-roundtrip | tester@testbed | cli | PASS 2/2 |
+
+Every sentence produced its `ATM TEST START` line within a minute; the one `WAIT` line (tester smoke, step 8) was
+the 60 s tick while the gateway answered.
+
+## herdr transport: socket (native IPC), proven
+
+The fixture daemon&#x27;s home config carries `[herdr] transport = &quot;socket&quot;` (written by bringup.sh before the daemon
+starts; 1.5.9&#x27;s default is also socket). `herdr-doctor.json` shows `transport: socket`, endpoint
+`$HOME/.config/herdr/herdr.sock`, breaker closed. Every nudge to the herdr-backed `tester` delivered over that path
+(reports 1, 4, 5, 7 exist only because the tester was nudged).
+
+Finding, not a run failure: the doctor&#x27;s herdr **status query** over the socket returns
+`unexpected_response / internal_failure: &quot;Herdr status query did not return a supported response&quot;` and lists no
+members, while delivery works. Filed as atm-core #1335 (Phase AY).
+
+## Context
+
+Runs 3–8 (atm 1.5.8, 2026-09-08) hardened the fixture to zero interventions; their FAIL/cause/fix table is in
+`docs/plans/hermes-integration-tests/reports/hermes-skill-tests-1.5.8-hermes-testbed.md` on atm-core branch
+`feat/atm-test-skills`. Run 9 is the first run on integrate/phase-ay and the first over the socket transport.
+Not covered: host→container sends over the peer link (`--no-peer`; blocked by atm-core #1309), Windows and x86_64.
+
+Reproduce: `./test.sh` from a checkout of atm-hermes-testbed with `env/allowlist.env` present; it picks the latest
+`prerelease/vX.Y.Z` tag on its own and writes this bundle under `.cache/results/&lt;UTC&gt;/site/`.
+</pre><h2>result.txt</h2><pre>PASS  skills reported 7/7, PASS 7/7 (7 report messages)
+atm:    1.5.9 (prerelease/v1.5.9 @ 0c2d38368, prerelease-archive run 34249771093, ci run 34249772325)
+hermes: randlee/hermes-agent @ d45230aac
+hermes Hermes Agent v0.21.0 (2026.8.31) · upstream d45230aa | atm-daemon 1.5.9 | herdr 0.8.2
+herdr transport: socket ({&#x27;kind&#x27;: &#x27;unexpected_response&#x27;, &#x27;code&#x27;: &#x27;internal_failure&#x27;, &#x27;detail&#x27;: &#x27;Herdr status query did not return a supported response&#x27;}) (atm doctor --json .herdr.endpoints[].transport; bringup writes [herdr] transport=&quot;socket&quot; to /root/.atm.toml)
+skill: atm-setup-environment agent: tester@testbed  tools: cli result: PASS   (5/5 steps) 
+skill: atm-setup-environment agent: hermes@testbed  tools: native+cli result: PASS   (6/6 steps) 
+skill: atm-smoke agent: hermes@testbed  tools: native+cli result: PASS   (10/10 steps) 
+skill: atm-smoke agent: tester@testbed  tools: cli result: PASS   (8/8 steps) 
+skill: atm-hermes-ready agent: tester@testbed  tools: cli result: PASS   (4/4 steps) 
+skill: atm-nudge-roundtrip agent: hermes@testbed  tools: native result: PASS   (5/5 steps) 
+skill: atm-nudge-roundtrip agent: tester@testbed  tools: cli result: PASS   (2/2 steps) 
+reports and logs: /Users/randlee/Documents/github/atm-hermes-testbed-worktrees/feat/atm-test-skills/.cache/results/20260908T162312Z
+the fixture is still running: docker exec hermes-testbed ... ; ./teardown.sh when done
+</pre></body></html>

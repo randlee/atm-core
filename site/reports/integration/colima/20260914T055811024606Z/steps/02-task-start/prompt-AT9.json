@@ -1,0 +1,31 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT9-task-start",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "started-line-at-write-time",
+      "status": "pass",
+      "detail": "atm task start at9-1789365942-case1 (--as fx-at9-beta) => {\"action\":\"send\",\"team\":\"fx-at9\",\"agent\":\"fx-at9-alpha\",\"sender\":\"fx-at9-beta\",\"outcome\":\"sent\",\"message_id\":\"01M2F8B231AH30YJHNG60KZ9R6\",\"requires_ack\":false,\"task_id\":\"at9-1789365942-case1\",\"summary\":\"starting case1\"} identified task_id at write time, before alpha's read. Then atm list --unread --json (--as fx-at9-alpha) => rows:[{\"message_id\":\"01M2F8B231AH30YJHNG60KZ9R6\",...,\"task_id\":\"at9-1789365942-case1\"}]. atm read --message-id 01M2F8B231AH30YJHNG60KZ9R6 (--as fx-at9-alpha) => {\"taskId\":\"at9-1789365942-case1\",\"taskOp\":{\"op\":\"start\"}}."
+    },
+    {
+      "name": "out-of-order-start-reorders-queue",
+      "status": "pass",
+      "detail": "Assigned at9-1789365942-case2a then at9-1789365942-case2b; started case2b as beta. atm task list --json (--as fx-at9-beta) => [{\"task_id\":\"at9-1789365942-case2b\",\"state\":\"active\",\"position\":1,...},{\"task_id\":\"at9-1789365942-case2a\",\"state\":\"assigned\",\"position\":2,...}] — started task active and ordered ahead of the still-assigned task."
+    },
+    {
+      "name": "unstarted-task-keeps-reminding",
+      "status": "pass",
+      "detail": "Assigned at9-1789365942-case3, never started. Polled atm task events at9-1789365942-case3 --json every 5s; at t=131s from assignment (within the 150s budget) handoffs contained two task_reminder entries: {\"agent\":\"fx-at9-beta\",\"at\":\"2026-09-14T06:07:17.953354045Z\",\"attempt\":1,\"kind\":\"task_reminder\",...} and {\"agent\":\"fx-at9-beta\",\"at\":\"2026-09-14T06:08:22.946619713Z\",\"attempt\":2,\"kind\":\"task_reminder\",...}. atm task list --json (--as fx-at9-beta) confirmed the task remained {\"task_id\":\"at9-1789365942-case3\",\"state\":\"assigned\",\"reminder_count\":3}."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "atm task close at9-1789365942-case1 completed (--as fx-at9-beta) => {\"outcome\":\"sent\",\"task_id\":\"at9-1789365942-case1\"}; atm task close at9-1789365942-case2b completed => {\"outcome\":\"sent\",\"task_id\":\"at9-1789365942-case2b\"}; atm task close at9-1789365942-case2a completed => {\"outcome\":\"sent\",\"task_id\":\"at9-1789365942-case2a\"}; atm task close at9-1789365942-case3 cancelled => {\"outcome\":\"sent\",\"task_id\":\"at9-1789365942-case3\"}. Final atm task list --json (--as fx-at9-beta) => [] after each case."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.5.17", "hermes_atm": "", "atm_graft": ""},
+  "started_at": "2026-09-14T06:05:32Z",
+  "finished_at": "2026-09-14T06:08:33Z"
+}

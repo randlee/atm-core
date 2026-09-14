@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-13T08:02:03.865440Z",
+  "source_revision": "5f2b1bb3d0820dce5aaedf02a5d047379186740e",
+  "image": {
+    "tag": null,
+    "id": null,
+    "sha256": "sha256:a5bf8c79a74f8cedb32d646a86b22ced5e8cb766ecbe60bff5d294b0239f93b5",
+    "architecture": null
+  },
+  "container": "hermes-testbed-bb-1517-bb4",
+  "atm_version": "atm 1.5.17",
+  "procedure": "colima-task-start",
+  "procedure_revision": "8aa00a111db46011e43bfa08ef70643f15e8e5ad",
+  "procedure_revision_inferred": false,
+  "status": "PASS",
+  "steps": [
+    {
+      "order": 1,
+      "name": "task-start",
+      "procedure": "colima-task-start",
+      "procedure_revision": "8aa00a111db46011e43bfa08ef70643f15e8e5ad",
+      "procedure_revision_inferred": false,
+      "status": "PASS",
+      "generated_at": "2026-09-13T08:02:03.865440Z",
+      "container": "hermes-testbed-bb-1517-bb4",
+      "payload": "steps/01-task-start/step.json",
+      "panel": "steps/01-task-start/panel.xhtml"
+    }
+  ]
+}

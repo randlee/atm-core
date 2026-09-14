@@ -110,6 +110,30 @@ def resolve_procedure_revision(
     return max(dated, key=lambda item: item["date"], default=None)
 
 
+def _manifest_revisions(procedure: str, root: Path, error_type: type[E]) -> list[dict[str, Any]]:
+    manifest_path = root / "site/reports/procedures/manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        procedures = manifest["procedures"]
+        entry = next(item for item in procedures if item.get("procedure") == procedure)
+        revisions = entry["revisions"]
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, StopIteration, TypeError) as error:
+        raise error_type(f"unable to resolve procedure {procedure} from {manifest_path}: {error}") from error
+    if not isinstance(revisions, list):
+        raise error_type(f"procedure {procedure} has a malformed revision list")
+    return revisions
+
+
+def _page_for(procedure: str, selected: dict[str, Any], root: Path, error_type: type[E]) -> ProcedurePage:
+    selected_revision = selected.get("rev")
+    selected_html = selected.get("html")
+    if not isinstance(selected_revision, str) or not isinstance(selected_html, str):
+        raise error_type(f"procedure {procedure} has a malformed revision entry")
+    if not (root / "site/reports" / selected_html).is_file():
+        raise error_type(f"procedure {procedure} page does not exist: {selected_html}")
+    return ProcedurePage(revision=selected_revision, html=selected_html)
+
+
 def resolve_procedure_page(
     procedure: str,
     revision: str | None,
@@ -123,14 +147,7 @@ def resolve_procedure_page(
         return None
     if not GIT_REVISION.fullmatch(revision):
         raise error_type(f"invalid source revision for procedure {procedure}: {revision!r}")
-    manifest_path = checkout / "site/reports/procedures/manifest.json"
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        procedures = manifest["procedures"]
-        entry = next(item for item in procedures if item.get("procedure") == procedure)
-        revisions = entry["revisions"]
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, StopIteration, TypeError) as error:
-        raise error_type(f"unable to resolve procedure {procedure} from {manifest_path}: {error}") from error
+    revisions = _manifest_revisions(procedure, checkout, error_type)
     try:
         selected = resolve_procedure_revision(
             revisions, revision, root=checkout, generated_at=generated_at,
@@ -139,13 +156,44 @@ def resolve_procedure_page(
         raise error_type(str(error)) from error
     if selected is None:
         raise error_type(f"procedure {procedure} has no page for revision {revision}")
-    selected_revision = selected.get("rev")
-    selected_html = selected.get("html")
-    if not isinstance(selected_revision, str) or not isinstance(selected_html, str):
-        raise error_type(f"procedure {procedure} has a malformed revision entry")
-    if not (checkout / "site/reports" / selected_html).is_file():
-        raise error_type(f"procedure {procedure} page does not exist: {selected_html}")
-    return ProcedurePage(revision=selected_revision, html=selected_html)
+    return _page_for(procedure, selected, checkout, error_type)
+
+
+def select_procedure_page(
+    procedure: str,
+    revision: str | None,
+    *,
+    root: Path,
+    generated_at: str,
+    error_type: type[E] = ReportRuntimeError,  # type: ignore[assignment]
+) -> tuple[ProcedurePage, bool]:
+    """The procedure page a run at ``revision`` executed, and whether that choice was inferred.
+
+    An exact manifest match or the newest Git ancestor is proven.  Without a
+    source revision, or when no listed revision precedes it, the newest
+    revision already in effect on the run date is selected and reported as
+    inferred.  The report index and every report renderer share this one
+    decision so a page and its index row never disagree.
+    """
+    revisions = _manifest_revisions(procedure, root, error_type)
+    selected = None
+    if revision is not None:
+        if not GIT_REVISION.fullmatch(revision):
+            raise error_type(f"invalid source revision for procedure {procedure}: {revision!r}")
+        try:
+            selected = resolve_procedure_revision(revisions, revision, root=root, generated_at=generated_at)
+        except ReportRuntimeError as error:
+            raise error_type(str(error)) from error
+    inferred = selected is None
+    if inferred:
+        cutoff = generated_at[:10]
+        dated = [item for item in revisions if isinstance(item.get("date"), str) and item["date"] <= cutoff]
+        selected = max(dated, key=lambda item: item["date"], default=None)
+    if selected is None:
+        raise error_type(
+            f"procedure {procedure} has no page for revision {revision or 'none'} (run date {generated_at})"
+        )
+    return _page_for(procedure, selected, root, error_type), inferred
 
 
 def compose(

@@ -1,27 +1,13 @@
-"""Unit tests for the colima skill-run evidence renderer."""
+"""Unit tests for the colima skill integration-step converter."""
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
-import sys
 import tempfile
-from types import SimpleNamespace
 from unittest import mock
 import unittest
 
-
-def load_module():
-    path = Path(__file__).with_name("colima_skill_report.py")
-    sys.path.insert(0, str(path.parent))
-    spec = importlib.util.spec_from_file_location("colima_skill_report", path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-MODULE = load_module()
+from scripts.smoke import colima_skill_report as MODULE
 
 REPORT = """ATM TEST REPORT
 skill: atm-smoke
@@ -42,104 +28,57 @@ herdr transport: socket ({'kind': 'ready'}) (atm doctor --json .herdr.endpoints[
 
 
 class ParseTests(unittest.TestCase):
-    def test_steps_become_cases_named_by_skill_and_agent(self):
+    def test_steps_become_cases_named_by_skill_and_agent(self) -> None:
         cases = MODULE.parse_report(REPORT)
-        self.assertEqual([c["name"] for c in cases], [
-            "atm-smoke / tester: Self round trip", "atm-smoke / tester: Ack", "atm-smoke / tester: Doctor passes",
-        ])
-        self.assertEqual([c["status"] for c in cases], ["PASS", "FAIL", "PASS"])
-        self.assertEqual(cases[0]["detail"], "message_id: X, count: 1→0")
-        self.assertEqual(cases[2]["detail"], "Doctor passes")
-        self.assertTrue(all(c["origin"] == c["destination"] == MODULE.HOST for c in cases))
+        self.assertEqual(
+            [case["name"] for case in cases],
+            [
+                "atm-smoke / tester: Self round trip",
+                "atm-smoke / tester: Ack",
+                "atm-smoke / tester: Doctor passes",
+            ],
+        )
+        self.assertEqual([case["status"] for case in cases], ["PASS", "FAIL", "PASS"])
 
-    def test_header_carries_version_and_transport(self):
+    def test_header_carries_version_and_transport(self) -> None:
         doctor, advertised, transport, testbed = MODULE.header_cases(RESULT, MODULE.parse_report(REPORT))
         self.assertEqual((doctor["status"], doctor["detail"]), ("PASS", "ATM 1.5.9"))
         self.assertEqual(advertised["name"], "advertised host")
         self.assertEqual((transport["status"], transport["detail"]), ("PASS", "socket ({'kind': 'ready'})"))
         self.assertEqual(testbed["name"], "testbed ref")
 
-    def test_header_doctor_fails_without_a_passing_doctor_step(self):
+    def test_header_doctor_fails_without_a_passing_doctor_step(self) -> None:
         doctor, _, transport, _ = MODULE.header_cases(
-            RESULT.replace("socket (", "cli ("), MODULE.parse_report(REPORT.replace("2 PASS Doctor", "2 FAIL Doctor")))
+            RESULT.replace("socket (", "cli ("),
+            MODULE.parse_report(REPORT.replace("2 PASS Doctor", "2 FAIL Doctor")),
+        )
         self.assertEqual(doctor["status"], "FAIL")
         self.assertEqual(transport["status"], "FAIL")
 
 
-class RenderTests(unittest.TestCase):
-    def test_payload_and_envelope_carry_source_revision_and_testbed_ref_case(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            run_dir = Path(tmp) / "run"
+class StepTests(unittest.TestCase):
+    def test_run_step_writes_payload_and_copies_raw_sidecars(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            run_dir = Path(tempdir) / "20260908T162312Z"
             run_dir.mkdir()
             (run_dir / "result.txt").write_text(RESULT, encoding="utf-8")
             (run_dir / "report-1.txt").write_text(REPORT, encoding="utf-8")
             (run_dir / "herdr-doctor.json").write_text("{}", encoding="utf-8")
-            out_dir = Path(tmp) / "site" / "reports" / "smoke" / "linux" / MODULE.HOST / "out"
-            procedure = Path(tmp) / "site/reports/procedures/colima-hermes-skills/selected.html"
-            procedure.parent.mkdir(parents=True)
-            procedure.write_text("<html>procedure</html>\n", encoding="utf-8")
-            with mock.patch.object(MODULE, "_source_revision", return_value="b" * 40), mock.patch.object(MODULE, "compose") as compose, \
-                    mock.patch.object(MODULE, "_resolve_procedure_page", return_value=SimpleNamespace(
-                        revision="a" * 40, html="procedures/colima-hermes-skills/selected.html"
-                    )), mock.patch.object(MODULE, "update_master_report_index"), \
-                    mock.patch.object(MODULE, "REPO_ROOT", Path(tmp)):
-                report = MODULE.render(run_dir, out_dir)
-            payload = json.loads(report.read_text())
-            envelope = json.loads((out_dir / "smoke.envelope.json").read_text())
+            step_dir = Path(tempdir) / "step"
+            with mock.patch.object(MODULE, "_source_revision", return_value="b" * 40):
+                payload = MODULE.run_step(run_dir, step_dir)
+            self.assertEqual(json.loads((step_dir / "step.json").read_text()), payload)
             self.assertEqual(payload["source_revision"], "b" * 40)
-            self.assertEqual(envelope["source_revision"], "b" * 40)
+            self.assertEqual(payload["run_id"], run_dir.name)
             self.assertIn("testbed ref", [item["name"] for item in payload["cases"]])
-            copied = out_dir / "procedure.html"
-            self.assertTrue(copied.is_file())
-            self.assertEqual(copied.read_bytes(), procedure.read_bytes())
-            for call in compose.call_args_list:
-                variables = call.args[1]
-                if "procedure_href" in variables:
-                    self.assertEqual(variables["procedure_href"], "procedure.html")
-                    self.assertNotIn("..", Path(variables["procedure_href"]).parts)
+            self.assertEqual(
+                {path.name for path in step_dir.iterdir()},
+                {"step.json", "result.txt", "report-1.txt", "herdr-doctor.json"},
+            )
 
-    def test_render_writes_the_smoke_evidence_set(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            run_dir = Path(tmp) / "20260908T162312Z"
-            run_dir.mkdir()
-            (run_dir / "result.txt").write_text(RESULT, encoding="utf-8")
-            (run_dir / "report-1.txt").write_text(REPORT, encoding="utf-8")
-            (run_dir / "herdr-doctor.json").write_text("{}", encoding="utf-8")
-            out_dir = Path(tmp) / "site" / "reports" / "smoke" / "linux" / MODULE.HOST / f"{run_dir.name}-{MODULE.FEATURE}"
-            composed: list[tuple[str, dict, Path]] = []
-
-            def fake_compose(template, variables, output):
-                composed.append((template.name, variables, output))
-                output.write_text(variables.get("body_html", variables.get("pane_src", variables.get("pane_html", ""))), encoding="utf-8")
-
-            with mock.patch.object(MODULE, "compose", side_effect=fake_compose), \
-                    mock.patch.object(MODULE, "_resolve_procedure_page", return_value=None), \
-                    mock.patch.object(MODULE, "update_master_report_index") as index, \
-                    mock.patch.object(MODULE, "REPO_ROOT", Path(tmp)):
-                report = MODULE.render(run_dir, out_dir)
-            payload = json.loads(report.read_text(encoding="utf-8"))
-            self.assertEqual((payload["feature"], payload["host"], payload["platform"], payload["run_id"], payload["status"]),
-                             (MODULE.FEATURE, MODULE.HOST, "linux", "20260908T162312Z", "PASS"))
-            self.assertEqual(len(payload["cases"]), 7)
-            self.assertEqual([name for name, _, _ in composed],
-                             ["inbound-peer-pane.xhtml.j2", "inbound-peer-frame.html.j2", "inbound-peer-review.html.j2"])
-            self.assertEqual({p.name for _, _, p in composed},
-                             {f"{MODULE.HOST}-{MODULE.FEATURE}.xhtml", f"{MODULE.FEATURE}.html", "index.html"})
-            envelope = json.loads((out_dir / "smoke.envelope.json").read_text(encoding="utf-8"))
-            self.assertEqual(envelope["report_html"], f"smoke/linux/{MODULE.HOST}/{out_dir.name}/index.html")
-            self.assertEqual(envelope["status"], "PASS")
-            self.assertFalse((out_dir / "procedure.html").exists())
-            for name, variables, _output in composed:
-                if name in {"inbound-peer-frame.html.j2", "inbound-peer-review.html.j2"}:
-                    self.assertEqual(variables["procedure_href"], "")
-            for name in ("result.txt", "report-1.txt", "herdr-doctor.json"):
-                self.assertEqual((out_dir / name).read_bytes(), (run_dir / name).read_bytes())
-            index.assert_called_once()
-
-    def test_documented_steps_match_the_runner_case_order(self):
+    def test_documented_steps_match_the_runner_case_order(self) -> None:
         root = Path(__file__).resolve().parents[2]
         header_names = [item["name"] for item in MODULE.header_cases(RESULT, MODULE.parse_report(REPORT))]
-
         source = (root / "docs/procedures/colima-hermes-skills.md").read_text(encoding="utf-8")
         sections = source.split("## Steps\n")[1:]
         self.assertEqual(len(sections), 2)
