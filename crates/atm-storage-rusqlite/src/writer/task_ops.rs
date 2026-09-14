@@ -7,7 +7,8 @@ use super::ops::{
 use super::stmt_cache::WriterStatementCache;
 use super::task_close::apply_task_close;
 use super::task_rejection::{
-    is_task_rejection, task_already_closed, task_move_invalid, task_not_found,
+    is_task_rejection, task_already_closed, task_move_invalid, task_not_counterparty,
+    task_not_found,
 };
 use super::task_start::apply_task_start;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
@@ -80,6 +81,17 @@ pub(super) fn append_rejected_task_event(
     error: &AtmError,
 ) -> Result<(), AtmError> {
     if !is_task_rejection(error.code()) {
+        return Ok(());
+    }
+    if matches!(
+        op,
+        WriteOp::UpsertMessage { record, provenance }
+            if *provenance == MessageWriteOrigin::Local
+                && record.envelope.task_op.is_none()
+                && error.code() == atm_storage::AtmErrorCode::TaskNotCounterparty
+    ) {
+        // A refused reassignment is an authorization failure before task
+        // admission. Keep the attempted message and task ledger unchanged.
         return Ok(());
     }
     let (team, task_id, requested, actor, message_id) = match op {
@@ -161,7 +173,7 @@ pub(super) fn apply_task_message(
         });
     };
     match record.envelope.task_op.as_ref() {
-        None if is_non_assigner_report(record, task_id, connection, target)? => {
+        None if is_existing_task_report(record, task_id, connection, target)? => {
             Ok(TaskMessageResult::Applied {
                 already_closed: None,
                 task_assignee: None,
@@ -205,14 +217,25 @@ pub(super) fn apply_task_message(
     }
 }
 
-fn is_non_assigner_report(
+fn is_existing_task_report(
     record: &Message,
     task_id: &TaskId,
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<bool, AtmError> {
-    Ok(load_task_row(connection, target, &record.team, task_id)?
-        .is_some_and(|row| record.envelope.from != row.assigner))
+    let Some(row) = load_task_row(connection, target, &record.team, task_id)? else {
+        return Ok(false);
+    };
+    if record.envelope.from == row.assigner {
+        return Ok(false);
+    }
+    if record.agent == row.assigner {
+        return Ok(true);
+    }
+    Err(task_not_counterparty(format!(
+        "task {task_id} was assigned by {}; caller {} cannot reassign it",
+        row.assigner, record.envelope.from
+    )))
 }
 
 struct TaskAssignmentApplied {

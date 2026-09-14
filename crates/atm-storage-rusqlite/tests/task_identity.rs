@@ -251,6 +251,35 @@ pub(crate) fn assignee_task_report_is_plain_message_and_leaves_task_unchanged() 
 }
 
 #[test]
+fn non_assigner_reassignment_is_refused_without_mail_or_task_event_mutation() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let before = h.row("T1");
+    let event_count = h.events("T1").len();
+    let mut attempted = h.message("bob", "alice", "reassign T1");
+    attempted.envelope.task_id = Some("T1".parse().expect("task id"));
+
+    let error = h
+        .save(&attempted)
+        .expect_err("non-assigner cannot reassign");
+
+    assert_eq!(error.code(), AtmErrorCode::TaskNotCounterparty);
+    assert!(error.detail().contains("task T1"));
+    assert!(error.detail().contains("assigned by lead"));
+    assert!(error.detail().contains("caller alice"));
+    assert_eq!(h.row("T1"), before);
+    assert_eq!(h.events("T1").len(), event_count);
+    assert!(
+        h.backend
+            .message_store()
+            .load_message(&attempted.message_key)
+            .expect("load attempted message")
+            .is_none(),
+        "the refused reassignment writes no mail"
+    );
+}
+
+#[test]
 fn reassign_inserts_closed_reassigned_message_to_old_assignee_in_same_transaction() {
     let h = Harness::new();
     let old = h.assign("T1", "alice", "lead", None);

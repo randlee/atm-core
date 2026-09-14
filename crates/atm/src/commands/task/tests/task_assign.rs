@@ -1,10 +1,14 @@
 #![cfg(test)]
 
+use atm_core::schema::AtmMessageId;
 use atm_core::test_support::{
     TEST_LEAD, TEST_LEAD_ADDRESS, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS,
     TEST_TEAM,
 };
-use atm_storage::{MemberKey, ReminderOutcome, TaskEventKind, TaskOp, TaskState};
+use atm_storage::{
+    MemberKey, Message, MessageEnvelope, MessageKey, ReminderOutcome, TaskEventKind, TaskOp,
+    TaskState,
+};
 use serial_test::serial;
 
 use super::*;
@@ -46,6 +50,66 @@ async fn execute_assign(fixture: &LoopbackFixture, command: TaskAssignCommand) -
         )
         .await
         .expect("assignment command")
+}
+
+fn seed_assignment(fixture: &LoopbackFixture, task_id: &str, assignee: &str, assigner: &str) {
+    let message_id = AtmMessageId::new();
+    fixture
+        .message_store()
+        .save_message(&Message {
+            team: TEST_TEAM.parse().expect("team"),
+            agent: assignee.parse().expect("assignee"),
+            message_key: MessageKey::from(message_id),
+            envelope: MessageEnvelope {
+                from: assigner.parse().expect("assigner"),
+                source_chat_id: None,
+                text: format!("assign {task_id}"),
+                timestamp: atm_storage::IsoTimestamp::now(),
+                read: false,
+                source_team: Some(TEST_TEAM.parse().expect("source team")),
+                destination_chat_id: None,
+                summary: None,
+                message_id: Some(message_id),
+                requires_ack: false,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: Some(task_id.parse().expect("task id")),
+                placement: None,
+                task_op: None,
+                task_complete: None,
+                extra: serde_json::Map::new(),
+            },
+        })
+        .expect("seed assignment");
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn non_assigner_reassign_returns_structured_cli_error() {
+    let fixture = LoopbackFixture::new("recipient");
+    seed_assignment(&fixture, "EQ008-CLI", "recipient", TEST_LEAD);
+    let observability = CliObservability::fallback();
+    let composition = fixture.composition(&observability);
+
+    let error = assign("EQ008-CLI", TEST_RECIPIENT_ADDRESS, TEST_SENDER)
+        .execute(
+            &composition,
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+        )
+        .await
+        .expect_err("non-assigner CLI reassignment must fail");
+    let error = error
+        .downcast_ref::<atm_core::error::AtmError>()
+        .expect("typed task refusal");
+    assert_eq!(error.code(), atm_storage::AtmErrorCode::TaskNotCounterparty);
+    assert!(error.detail().contains("task EQ008-CLI"));
+    assert!(error.detail().contains(TEST_LEAD));
+    assert!(error.detail().contains(TEST_SENDER));
 }
 
 #[tokio::test]

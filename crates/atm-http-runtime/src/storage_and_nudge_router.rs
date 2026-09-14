@@ -1742,7 +1742,7 @@ pub(crate) mod tests {
         roster_store
             .save_roster(&RosterSnapshot {
                 team_name: team.clone(),
-                members: ["recipient", "sender"]
+                members: ["recipient", "sender", "third"]
                     .into_iter()
                     .map(|agent_name| RosterEntry {
                         team_name: team.clone(),
@@ -1888,6 +1888,243 @@ pub(crate) mod tests {
                 NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
             ),
         )
+    }
+
+    async fn start_task_lifecycle_daemon(
+        fixture: &Fixture,
+    ) -> (
+        crate::HttpRuntime<crate::Running>,
+        Arc<dyn atm_core::api::DaemonApiClient>,
+    ) {
+        let assembly = open_sqlite_boundary(&fixture.database_path)
+            .expect("reopen durable runtime for daemon lifecycle test");
+        let mailbox_runtime = assembly
+            .async_mailbox_runtime
+            .with_state_handoff(HandoffConfig::default())
+            .expect("configure daemon mailbox runtime");
+        let handler = StorageAndNudgeRouter::new(
+            assembly.service_runtime,
+            Arc::new(NullObservability),
+            Arc::new(FixedReceivedHookSelector {
+                emitter: fixture.received_hook.clone(),
+            }),
+            fixture.home_dir.clone(),
+        )
+        .with_async_mailbox_runtime(Arc::new(mailbox_runtime));
+        let endpoint_record = fixture
+            ._temporary_root
+            .path()
+            .join("task-lifecycle-http.json");
+        let daemon_instance_id = ulid::Ulid::new();
+        std::fs::write(
+            fixture
+                ._temporary_root
+                .path()
+                .join(atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE),
+            format!("1:task-lifecycle-test:{daemon_instance_id}\n"),
+        )
+        .expect("write task lifecycle daemon owner record");
+        let config = HttpRuntimeConfig::new(
+            LoopbackTcpConfig::new(
+                "127.0.0.1:0".parse().expect("ephemeral loopback address"),
+                endpoint_record.clone(),
+                daemon_instance_id,
+            ),
+            None,
+            RuntimeLimits::new(
+                NonZeroUsize::new(4096).expect("body limit"),
+                NonZeroUsize::new(4).expect("connection limit"),
+            ),
+            RuntimeTimeouts::new(
+                NonZeroDuration::new(Duration::from_secs(5)).expect("request timeout"),
+                NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+            ),
+        );
+        let running = HttpRuntimeBuilder::new(config, Arc::new(handler))
+            .build()
+            .expect("configure task lifecycle daemon")
+            .start()
+            .await
+            .expect("start task lifecycle daemon");
+        let client = crate::loopback_tcp_client(endpoint_record, Duration::from_secs(5))
+            .expect("task lifecycle daemon client");
+        (running, client)
+    }
+
+    fn assignment_request(fixture: &Fixture, from: &str, to: &str, task_id: &str) -> WriteRequest {
+        WriteRequest::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            from.parse().expect("assignment caller"),
+            &format!("{to}@test-team"),
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline(format!("assign {task_id}")),
+            None,
+            false,
+            Some(task_id.parse().expect("task id")),
+            false,
+        )
+        .expect("assignment request")
+    }
+
+    fn lifecycle_list_query(
+        fixture: &Fixture,
+        caller: &str,
+        target: Option<&str>,
+    ) -> atm_core::list::ListQuery {
+        atm_core::list::ListQuery::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            caller.parse().expect("list caller"),
+            target,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("lifecycle list query")
+    }
+
+    async fn daemon_request(
+        client: &Arc<dyn atm_core::api::DaemonApiClient>,
+        request: ApiRequest,
+    ) -> ResponseEnvelope {
+        client
+            .execute(request)
+            .await
+            .expect("daemon API exchange")
+            .into_inner()
+    }
+
+    async fn task_events_via_daemon(
+        fixture: &Fixture,
+        client: &Arc<dyn atm_core::api::DaemonApiClient>,
+        task_id: &str,
+    ) -> serde_json::Value {
+        let query = lifecycle_list_query(fixture, "sender", None).with_task_ledger(
+            atm_core::list::TaskLedgerQuery::Events {
+                task_id: task_id.parse().expect("task id"),
+                member: None,
+            },
+        );
+        serde_json::to_value(
+            daemon_request(
+                client,
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    query,
+                ))),
+            )
+            .await,
+        )
+        .expect("serialize task events")
+    }
+
+    async fn mailbox_via_daemon(
+        fixture: &Fixture,
+        client: &Arc<dyn atm_core::api::DaemonApiClient>,
+        member: &str,
+    ) -> serde_json::Value {
+        let query = lifecycle_list_query(fixture, member, Some(member));
+        serde_json::to_value(
+            daemon_request(
+                client,
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    query,
+                ))),
+            )
+            .await,
+        )
+        .expect("serialize mailbox")
+    }
+
+    #[tokio::test]
+    async fn non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon() {
+        let fixture = fixture(true, None, None);
+        let (running, client) = start_task_lifecycle_daemon(&fixture).await;
+        let assigned = daemon_request(
+            &client,
+            ApiRequest::new(RequestEnvelope::Write(Box::new(assignment_request(
+                &fixture,
+                "sender",
+                "recipient",
+                "EQ008-T1",
+            )))),
+        )
+        .await;
+        assert!(matches!(assigned, ResponseEnvelope::Send(_)));
+        let events_before = task_events_via_daemon(&fixture, &client, "EQ008-T1").await;
+        let mail_before = mailbox_via_daemon(&fixture, &client, "third").await;
+
+        let refused = daemon_request(
+            &client,
+            ApiRequest::new(RequestEnvelope::Write(Box::new(assignment_request(
+                &fixture,
+                "recipient",
+                "third",
+                "EQ008-T1",
+            )))),
+        )
+        .await;
+        let ResponseEnvelope::Error(error) = refused else {
+            panic!("non-assigner reassignment must return a structured refusal");
+        };
+        assert_eq!(error.code(), atm_storage::AtmErrorCode::TaskNotCounterparty);
+        assert!(error.detail().contains("task EQ008-T1"));
+        assert!(error.detail().contains("assigned by sender"));
+        assert!(error.detail().contains("caller recipient"));
+        assert_eq!(
+            task_events_via_daemon(&fixture, &client, "EQ008-T1").await,
+            events_before
+        );
+        assert_eq!(
+            mailbox_via_daemon(&fixture, &client, "third").await,
+            mail_before
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("task lifecycle daemon shuts down");
+    }
+
+    #[tokio::test]
+    async fn recorded_assigner_reassign_still_succeeds_through_daemon() {
+        let fixture = fixture(true, None, None);
+        let (running, client) = start_task_lifecycle_daemon(&fixture).await;
+        for recipient in ["recipient", "third"] {
+            let response = daemon_request(
+                &client,
+                ApiRequest::new(RequestEnvelope::Write(Box::new(assignment_request(
+                    &fixture, "sender", recipient, "EQ008-T2",
+                )))),
+            )
+            .await;
+            assert!(matches!(response, ResponseEnvelope::Send(_)));
+        }
+
+        let events = task_events_via_daemon(&fixture, &client, "EQ008-T2").await;
+        let rows = events["List"]["task_event_rows"]
+            .as_array()
+            .unwrap_or_else(|| panic!("task event rows in {events}"));
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["event"], "assigned");
+        assert_eq!(rows[1]["event"], "reassigned");
+        assert_eq!(rows[1]["assignee"], "third");
+        assert_eq!(
+            mailbox_via_daemon(&fixture, &client, "third").await["List"]["count"],
+            1
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("task lifecycle daemon shuts down");
     }
 
     /// Hang detector for two-runtime router tests that dispatch a canonical
