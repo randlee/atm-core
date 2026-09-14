@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-015>
+  a triage:Finding ;
+  triage:findingId "EQ-015" ;
+  triage:title "scripts/integration/run_colima.py runs the AT9/10/11 prompt steps even when step 01 test.sh aborted, producing a false step-level PASS against a stale container" ;
+  triage:description "fenix, 2026-09-14, discovered during the v1.5.19 colima closeout run (first attempt, invalid, not committed: 20260914T181644770090Z). test.sh (step 01) aborted with 'CANNOT RUN: wheels download failed' because it started before CI had uploaded the 1.5.19 linux wheels (tracked separately as randlee/atm-hermes-testbed#13). Despite step 01's abort, the driver (scripts/integration/run_colima.py) proceeded to run the AT9/AT10/AT11 prompt steps anyway, against the stale, already-running 1.5.18 container -- those steps reported PASS (they genuinely exercised something, just the wrong version). The aggregate run verdict was still correctly FAIL (because step 01 failed), so this did not produce a false overall PASS, but the individual AT9/10/11 step-level PASS results are misleading: they read as if 1.5.19 was validated when it was actually 1.5.18. This is a driver defect, not a testbed defect (contrast with #13)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "fenix, v1.5.19 colima closeout run, relayed 2026-09-14 (ATM message 01M2GMT66GT1B17YCRYRVTVFCV)" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/integration/run_colima.py: the step sequencing/orchestration loop that runs AT9/AT10/AT11 (and any other prompt-handoff steps) unconditionally after step 01 (test.sh / fixture install). Fix: gate subsequent steps on step 01's actual success, or explicitly record them as NOT RUN (not silently skipped, not run-and-reported) when the fixture didn't install. fenix: timing is after the v1.5.19 release, per the phase BB scope freeze -- not a release blocker, deferred fast-follow." ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-015/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/EQ-015/1>
+  a triage:Occurrence ;
+  triage:file "scripts/integration/run_colima.py" ;
+  triage:line 1 ;
+  triage:snippet "invalid v1.5.19 closeout attempt 20260914T181644770090Z (not committed): step 01 test.sh.log records 'CANNOT RUN: wheels download failed' (wheels not yet uploaded by CI, see randlee/atm-hermes-testbed#13), but AT9/AT10/AT11 prompt steps ran anyway against the still-running stale 1.5.18 container and reported step-level PASS; prompt reports show atm 1.5.18, not 1.5.19. Aggregate run verdict was still FAIL (correct), only the individual step verdicts are misleading." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-015/1> .
+
+<urn:atm:triage:worktree/EQ-015/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,46 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT10-assignment",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "three-queued-then-one-ready",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at10-alpha ATM_TEAM=fx-at10 atm task assign fx-at10-beta ... --task-id at10-case1{a,b,c}-1789411530 --json -> {\"task_id\":\"at10-case1a-1789411530\"}, {\"task_id\":\"at10-case1b-1789411530\"}, {\"task_id\":\"at10-case1c-1789411530\"}. After each assignment, atm list --pending-ack --json --as fx-at10-beta --team fx-at10 -> {\"selection_mode\":\"pending_ack\",\"count\":0,\"rows\":[],\"bucket_counts\":{\"pending_ack\":0,...}} all three times (unread climbed 1,2,3 while pending_ack stayed 0). atm task list --json (as fx-at10-beta) -> positions 1,2,3 for case1a/b/c respectively, all state \"assigned\". atm task events at10-case1a...--json handoffs contain {\"kind\":\"task_queued\"} then {\"kind\":\"task_ready\",\"trigger\":\"task_pass\"}; atm task events at10-case1b...--json and at10-case1c...--json handoffs contain only {\"kind\":\"task_queued\"} (no task_ready) -- exactly one ready task."
+    },
+    {
+      "name": "close-releases-next",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at10-beta ATM_TEAM=fx-at10 atm task start at10-case1a-1789411530 --json then atm task close at10-case1a-1789411530 completed --json both -> {\"action\":\"send\",\"outcome\":\"sent\",...}. Polled atm task events at10-case1b-1789411530 --json at 1s intervals; ready at poll 2 (2s): handoffs contains {\"agent\":\"fx-at10-beta\",\"kind\":\"task_ready\",\"trigger\":\"task_pass\",\"task_id\":\"at10-case1b-1789411530\"}. atm task list --json (as fx-at10-beta) confirmed case1b now {\"position\":1,\"state\":\"assigned\",\"last_reminded_at\":\"2026-09-14T18:45:40.807094365Z\"}."
+    },
+    {
+      "name": "reassign-notifies-both",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at10-alpha ATM_TEAM=fx-at10 atm task assign fx-at10-beta 'case3 task' --task-id at10-case3-1789411552 --json then, while still queued for beta, atm task assign fx-at10-gamma 'case3 task reassigned' --task-id at10-case3-1789411552 --json (same task-id) -> {\"task_id\":\"at10-case3-1789411552\"}. atm task events at10-case3-1789411552 --json shows seq3 {\"event\":\"reassigned\",\"assignee\":\"fx-at10-gamma\",\"from_state\":\"assigned\",\"to_state\":\"assigned\"} and handoffs {\"agent\":\"fx-at10-beta\",\"kind\":\"task_closed\"} then {\"agent\":\"fx-at10-gamma\",\"kind\":\"task_queued\"} then {\"agent\":\"fx-at10-gamma\",\"kind\":\"task_ready\"}. atm read --message-id 01M2GKTZKMPNNNT7SEGDATXAA2 --json (as fx-at10-beta) -> message.text=\"task at10-case3-1789411552 was reassigned to fx-at10-gamma\", summary=\"task_closed:at10-case3-1789411552\". atm task list --json (as fx-at10-gamma) -> [{\"task_id\":\"at10-case3-1789411552\",\"state\":\"assigned\",\"position\":1}]; atm task list --json (as fx-at10-beta) -> []."
+    },
+    {
+      "name": "move-head-readies-once",
+      "status": "pass",
+      "detail": "Assigned at10-case4a-1789411577 then at10-case4b-1789411577 to idle beta (alpha). Polled atm task events at10-case4a...--json; ready at poll 4 (handoffs has exactly one {\"kind\":\"task_ready\"} for case4a). ATM_IDENTITY=fx-at10-beta atm task move at10-case4b-1789411577 --head --json -> {\"from\":2,\"to\":1}. After 3s, atm task events at10-case4b...--json handoffs shows exactly one {\"kind\":\"task_ready\",\"task_id\":\"at10-case4b-1789411577\"} (events also show a \"moved\" entry \"detail\":\"2\\u21921\"). Re-checked atm task events at10-case4a...--json: handoffs still contains exactly one {\"kind\":\"task_ready\"} entry (same single occurrence as before the move) -- no duplicate on either task. atm task list --json confirmed case4b now position 1, case4a position 2."
+    },
+    {
+      "name": "cancel-notifies-assignee",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at10-alpha ATM_TEAM=fx-at10 atm task assign fx-at10-beta 'case5 task' --task-id at10-case5-1789411601 --json then immediately atm task close at10-case5-1789411601 cancelled 'case5 cancelled before start' --json (still queued, never started) -> {\"outcome\":\"sent\",...}. atm task events at10-case5-1789411601 --json (as fx-at10-beta) seq2 -> {\"event\":\"cancelled\",\"close_outcome\":\"cancelled\",\"from_state\":\"assigned\",\"to_state\":\"complete\",\"detail\":\"case5 cancelled before start\"}, handoffs [...,{\"agent\":\"fx-at10-beta\",\"kind\":\"task_closed\"}]. atm list --all --task at10-case5-1789411601 --json (as fx-at10-beta) rows[0]={\"message_id\":\"01M2GKWAPBSEEB0HDJT8G0S3Y0\",\"summary\":\"case5 cancelled before start\",\"from\":\"fx-at10-alpha\",\"task_id\":\"at10-case5-1789411601\"} -- cancelled terminal outcome delivered to beta."
+    },
+    {
+      "name": "busy-assigner-sees-terminal-lines",
+      "status": "pass",
+      "detail": "ATM_IDENTITY=fx-at10-gamma atm task assign fx-at10-alpha 'keep alpha busy' --task-id at10-case6-busy-1789411614 --json, then ATM_IDENTITY=fx-at10-alpha atm task start at10-case6-busy-1789411614 --json. atm task list --json (as fx-at10-alpha) BEFORE beta's work -> [{\"task_id\":\"at10-case6-busy-1789411614\",\"state\":\"active\",\"assignee\":\"fx-at10-alpha\",\"assigner\":\"fx-at10-gamma\",\"position\":1}]. Then ATM_IDENTITY=fx-at10-alpha atm task assign fx-at10-beta 'case6 work for beta' --task-id at10-case6-work-1789411614 --json; ATM_IDENTITY=fx-at10-beta atm task start ...--json; ATM_IDENTITY=fx-at10-beta atm task close ... completed --json. atm task events at10-case6-work-1789411614 --json (as fx-at10-alpha) events[] in order: seq1 assigned, seq2 {\"event\":\"started\",\"from_state\":\"assigned\",\"to_state\":\"active\",\"at\":\"...18:46:58.998301437Z\"}, seq3 {\"event\":\"completed\",\"close_outcome\":\"completed\",\"from_state\":\"active\",\"to_state\":\"complete\",\"at\":\"...18:46:59.005026051Z\"}; handoffs[] show {\"agent\":\"fx-at10-alpha\",\"kind\":\"task_started\"} then {\"agent\":\"fx-at10-alpha\",\"kind\":\"task_complete\"} -- started before completed, both present in alpha's history while alpha's own task was still active."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "Closed every task created: at10-case1a/b/c-1789411530 (completed x3), at10-case3-1789411552 (completed, on gamma after reassign), at10-case4a/b-1789411577 (completed x2), at10-case5-1789411601 (already terminal via cancel), at10-case6-busy-1789411614 (completed) and at10-case6-work-1789411614 (completed via beta). Final: atm task list --json -> [] for fx-at10-alpha, fx-at10-beta, and fx-at10-gamma."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.5.19", "hermes_atm": "", "atm_graft": ""},
+  "started_at": "2026-09-14T18:44:58Z",
+  "finished_at": "2026-09-14T18:47:12Z"
+}
