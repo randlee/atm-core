@@ -18,7 +18,7 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[2]
 TEAM = "testbed"
 ASSIGNER = "stub-alpha"
-ASSIGNEE = "tester"
+ASSIGNEE = "stub-beta"
 POLL_SECONDS = 0.5
 WAIT_SECONDS = 90.0
 SCENARIO_NAMES = (
@@ -101,11 +101,22 @@ def assign(container: str, task: str, message: str) -> dict[str, Any]:
 
 
 def agent_pane(container: str) -> str:
-    result = run_herdr(container, ["agent", "list"])
-    payload = json_value(result, "herdr agent list")
-    agents = payload.get("result", {}).get("agents", [])
+    agents_result = run_herdr(container, ["agent", "list"])
+    agents_payload = json_value(agents_result, "herdr agent list")
+    agents = agents_payload.get("result", {}).get("agents", [])
+    if any(
+        agent.get("name") == ASSIGNEE for agent in agents if isinstance(agent, dict)
+    ):
+        raise RuntimeError(f"passive assignee {ASSIGNEE} has a live agent pane")
+    result = run_herdr(container, ["pane", "list"])
+    payload = json_value(result, "herdr pane list")
+    panes = payload.get("result", {}).get("panes", [])
     pane = next(
-        (agent.get("pane_id") for agent in agents if agent.get("name") == ASSIGNEE),
+        (
+            candidate.get("pane_id")
+            for candidate in panes
+            if isinstance(candidate, dict) and candidate.get("label") == ASSIGNEE
+        ),
         None,
     )
     if not isinstance(pane, str):
@@ -465,7 +476,7 @@ def run_step(container: str, step_dir: Path) -> dict[str, Any]:
     second = scenario_disabled_reminder(container, run_id, observed_interval)
     final_pane = pane_text(container)
     if final_pane["exit_code"] != 0:
-        raise RuntimeError("failed to read final tester pane")
+        raise RuntimeError(f"failed to read final {ASSIGNEE} pane")
     all_tasks = first["task_ids"] + second["task_ids"]
     terminal_lines = pane_terminal_lines(final_pane["stdout"], all_tasks)
     mailbox_lines, mailbox_commands = mailbox_terminal_lines(container, all_tasks)

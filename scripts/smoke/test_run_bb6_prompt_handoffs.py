@@ -68,14 +68,14 @@ class Bb6PromptHandoffRunnerTests(unittest.TestCase):
     def test_terminal_and_stored_identities_compare_exactly(self) -> None:
         terminal = [
             {
-                "agent": "tester",
+                "agent": RUNNER.ASSIGNEE,
                 "task_id": "BB6-one",
                 "message_key": "atm:01TEST",
                 "kind": "task_ready",
                 "attempt": 0,
             }
         ]
-        stored = [["tester", "task_ready", "BB6-one", 0, "atm:01TEST"]]
+        stored = [[RUNNER.ASSIGNEE, "task_ready", "BB6-one", 0, "atm:01TEST"]]
         self.assertEqual(
             RUNNER.terminal_identities(terminal), RUNNER.handoff_identities(stored)
         )
@@ -111,14 +111,59 @@ class Bb6PromptHandoffRunnerTests(unittest.TestCase):
         )
 
     def test_agent_pane_rejects_missing_assignee(self) -> None:
-        result = {
+        agents = {
             "exit_code": 0,
             "stdout": '{"result":{"agents":[]}}',
             "stderr": "",
         }
-        with mock.patch.object(RUNNER, "run_herdr", return_value=result):
+        panes = {
+            "exit_code": 0,
+            "stdout": '{"result":{"panes":[]}}',
+            "stderr": "",
+        }
+        with mock.patch.object(RUNNER, "run_herdr", side_effect=(agents, panes)):
             with self.assertRaisesRegex(RuntimeError, "no pane"):
                 RUNNER.agent_pane("fixture")
+
+    def test_agent_pane_requires_assignee_without_live_agent(self) -> None:
+        agents = {
+            "exit_code": 0,
+            "stdout": __import__("json").dumps(
+                {
+                    "result": {
+                        "agents": [
+                            {"name": RUNNER.ASSIGNEE, "pane_id": "w1:p2"}
+                        ]
+                    }
+                }
+            ),
+            "stderr": "",
+        }
+        with mock.patch.object(RUNNER, "run_herdr", return_value=agents):
+            with self.assertRaisesRegex(RuntimeError, "has a live agent pane"):
+                RUNNER.agent_pane("fixture")
+
+    def test_agent_pane_finds_passive_labeled_pane(self) -> None:
+        agents = {
+            "exit_code": 0,
+            "stdout": '{"result":{"agents":[{"name":"tester"}]}}',
+            "stderr": "",
+        }
+        panes = {
+            "exit_code": 0,
+            "stdout": __import__("json").dumps(
+                {
+                    "result": {
+                        "panes": [
+                            {"label": RUNNER.ASSIGNEE, "pane_id": "w1:p2"}
+                        ]
+                    }
+                }
+            ),
+            "stderr": "",
+        }
+        with mock.patch.object(RUNNER, "run_herdr", side_effect=(agents, panes)):
+            self.assertEqual(RUNNER.agent_pane("fixture"), "w1:p2")
 
     def test_wait_for_pane_reports_timeout(self) -> None:
         result = {"exit_code": 0, "stdout": "unchanged", "stderr": ""}

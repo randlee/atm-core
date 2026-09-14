@@ -16,7 +16,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 TEAM = "testbed"
 ASSIGNER = "stub-alpha"
-ASSIGNEE = "tester"
+ASSIGNEE = "stub-beta"
 POLL_SECONDS = 5.0
 REMINDER_TIMEOUT_SECONDS = 135.0
 
@@ -59,6 +59,33 @@ def task_rows(value: Any) -> list[dict[str, Any]]:
 def message_rows(value: Any) -> list[dict[str, Any]]:
     rows = value.get("rows") if isinstance(value, dict) else value
     return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def require_passive_assignee(container: str) -> None:
+    """Reject a fixture where the scenario assignee has a live agent process."""
+    result = subprocess.run(
+        ["docker", "exec", container, "herdr", "agent", "list"],
+        capture_output=True,
+        text=True,
+        timeout=30.0,
+        check=False,
+    )
+    payload = json_value(
+        {
+            "exit_code": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        },
+        "herdr agent list",
+    )
+    agents = payload.get("result", {}).get("agents", [])
+    live_names = {
+        agent.get("name")
+        for agent in agents
+        if isinstance(agent, dict) and agent.get("name")
+    }
+    if ASSIGNEE in live_names:
+        raise RuntimeError(f"passive assignee {ASSIGNEE} has a live agent pane")
 
 
 def task_id(prefix: str, run_id: str, suffix: str) -> str:
@@ -209,6 +236,7 @@ def inspect_container(container: str) -> dict[str, Any]:
 
 
 def run_step(container: str, step_dir: Path) -> dict[str, Any]:
+    require_passive_assignee(container)
     generated_at = datetime.now(timezone.utc)
     run_id = generated_at.strftime("%Y%m%dT%H%M%S%fZ")
     source = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False)

@@ -36,27 +36,19 @@ RESULTS_LINE = re.compile(r"^reports and logs:\s+(.+)$", re.MULTILINE)
 StepRunner = Callable[[str, Path], dict[str, Any]]
 FixtureReset = Callable[[str], dict[str, Any]]
 
-RESET_SQL = """
-PRAGMA foreign_keys = ON;
-BEGIN IMMEDIATE;
-DELETE FROM prompt_handoffs;
-DELETE FROM task_events;
-DELETE FROM tasks;
-DELETE FROM escalation_recipients;
-DELETE FROM mail_message_states;
-DELETE FROM mail_messages;
-DELETE FROM mail_seen_watermarks;
-DELETE FROM mail_message_search_documents;
-DELETE FROM team_nudge_template_overrides;
-DELETE FROM diagnostic_events;
-COMMIT;
-PRAGMA wal_checkpoint(TRUNCATE);
-""".strip()
-PRESERVED_TABLES = (
-    "peer_local_certificate",
-    "peer_trusted_peers",
-    "peer_https_interfaces",
-    "team_roster",
+RESET_POLICY_PATH = ROOT / "scripts/integration/colima_reset_tables.json"
+RESET_POLICY = json.loads(RESET_POLICY_PATH.read_text(encoding="utf-8"))
+CLEAR_TABLES = tuple(RESET_POLICY["clear"])
+MANAGED_CLEAR_TABLES = tuple(RESET_POLICY["clear_via_owner"])
+PRESERVED_TABLES = tuple(RESET_POLICY["keep"])
+RESET_SQL = "\n".join(
+    (
+        "PRAGMA foreign_keys = ON;",
+        "BEGIN IMMEDIATE;",
+        *(f"DELETE FROM {table};" for table in CLEAR_TABLES),
+        "COMMIT;",
+        "PRAGMA wal_checkpoint(TRUNCATE);",
+    )
 )
 
 
@@ -66,10 +58,14 @@ import json
 import sqlite3
 
 connection = sqlite3.connect('/root/.atm/db/mail.db')
-tables = {PRESERVED_TABLES!r}
-before = {{table: connection.execute(f'SELECT * FROM {{table}} ORDER BY 1').fetchall() for table in tables}}
+kept = {PRESERVED_TABLES!r}
+classified = set({CLEAR_TABLES!r}) | set({MANAGED_CLEAR_TABLES!r}) | set(kept)
+actual = {{row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")}}
+if actual != classified:
+    raise SystemExit(f'unclassified migrated tables: {{sorted(actual ^ classified)}}')
+before = {{table: connection.execute(f'SELECT * FROM {{table}} ORDER BY 1').fetchall() for table in kept}}
 connection.executescript({RESET_SQL!r})
-after = {{table: connection.execute(f'SELECT * FROM {{table}} ORDER BY 1').fetchall() for table in tables}}
+after = {{table: connection.execute(f'SELECT * FROM {{table}} ORDER BY 1').fetchall() for table in kept}}
 if not before['peer_local_certificate'] or after != before:
     raise SystemExit('reset changed required peer, roster, or interface metadata')
 print('reset preserved metadata: ' + json.dumps({{table: len(rows) for table, rows in after.items()}}, sort_keys=True))
