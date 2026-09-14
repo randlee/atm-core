@@ -1838,6 +1838,7 @@ team-lead lands the final status when the phase PR merges.
 | `BB.5` | `merged (#1452)` | `feature/bb5-assignment-write-task-pass` | `docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md` |
 | `BB.6` | `merged (#1470)` | `feature/bb6-docs-prompt-handoffs` | `docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md` |
 | `BB.7` | `merged (#1470, #1478)` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
+| `BB.8` | `in progress (#1500)` | `feature/bb8-colima-integration` | `docs/plans/phase-bb/sprint-BB.8-colima-integration.md` |
 
 ## Daemon-Switch Scope Reduction
 
