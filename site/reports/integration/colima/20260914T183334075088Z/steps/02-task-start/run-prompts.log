@@ -1,0 +1,5 @@
+prompt: /opt/testbed/prompts/atm-team/AT9-task-start.md (agent=claude-code model=sonnet timeout=600s)
+All four steps passed (verdict: pass). Report written.
+
+SMOKE-REPORT-WRITTEN /opt/testbed/results/prompt-AT9.json
+VERDICT AT9: pass (/opt/testbed/results/prompt-AT9.json)
