@@ -1,0 +1,13 @@
+ATM TEST REPORT
+skill: atm-hermes-ready
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.18 daemon 1.5.18
+result: FAIL   (3/4 steps)
+steps:
+  0 PASS Start line — 01M2GC1MDB0WQ8YEFGW5CBTSA7
+  1 PASS Roster — hermes@testbed found
+  2 FAIL Receivers registered — cause: hermes graft receiver has stale last_seen (never); fix: none possible; retest: depends on gateway recovery
+  3 PASS Ping — message 01M2GC202RKSXQPNNNE94NJXS9 sent to hermes@testbed
+  4 PASS Pong — ack received after 20s
+elapsed: 42s
