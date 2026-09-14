@@ -1,0 +1,14 @@
+ATM TEST REPORT
+skill: atm-setup-environment
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.18 daemon 1.5.18
+result: PASS   (5/5 steps)
+steps:
+  0 PASS Start line — 01M2GBH2HG06747JND9KBFQ54R
+  1 PASS Daemon answers — client 1.5.18 daemon 1.5.18
+  2 PASS Roster complete — stub-alpha, stub-beta, tester, hermes, oversight all present
+  3 PASS Doctor passes — error_count: 0
+  4 PASS Self round trip — message 01M2GBHGKK8QJE1N5WTTVR2D84 sent and read
+  5 SKIP Cross-host peer — no peer hosts configured
+elapsed: 30s

@@ -1,0 +1,60 @@
+== 16:19:40Z resolve inputs
+atm 1.5.18 = prerelease/v1.5.18 @ 204f67135; prerelease-archive run 34860896730; ci run 34861923410; arch aarch64
+== 16:19:42Z build (10-20 min the first time, seconds when nothing changed)
+atm tarball override: /Users/randlee/Documents/github/atm-hermes-testbed-worktrees/fix-remove-eq007-workaround/.cache/atm-1.5.18/atm_1.5.18_aarch64-unknown-linux-gnu.tar.gz (sha256 bbb5147904704e64820f58b0ebf109befd83aa76f229ab0832f07dae1a3fc322)
+wheels override: hermes_atm-1.5.18-py3-none-any.whl, atm_graft-1.5.18-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+base context: main = a909c4f5bf Merge pull request #25 from randlee/sync/candidate-20260912-merge
+== 16:19:52Z start the fixture
+bringup: done
+bringup: gateway up (1 hook load(s) logged)
+bringup: doctor {"status": "healthy", "message": "ATM doctor completed with healthy findings only", "info_count": 2, "warning_count": 0, "error_count": 0}
+bringup: herdr [('tester', 'idle'), ('fx-at7-beta', 'idle'), ('fx-at9-beta', 'idle'), ('fx-at10-beta', 'idle'), ('fx-at10-gamma', 'idle'), ('fx-at11-beta', 'idle')]
+hermes Hermes Agent v0.21.2 (2026.9.11) · upstream a909c4f5 | atm-daemon 1.5.18 | herdr 0.8.2
+herdr transport (fixture daemon, atm doctor): socket ({'kind': 'ok', 'version': '0.8.2', 'protocol': 20})
+herdr doctor state ok on every endpoint: yes
+== 16:20:23Z atm-setup-environment (tester + hermes)
+sent to tester: run the atm-setup-environment skill on fixture hermes-testbed (expected roster: stub-alpha@testbed stub-beta@testbed tester@testbed hermes@testbed oversight@testbed)
+sent to hermes: run the atm-setup-environment skill on fixture hermes-testbed (expected roster: stub-alpha@testbed stub-beta@testbed tester@testbed hermes@testbed oversight@testbed)
+ATM TEST START 2026-09-14T16:20:43Z on fixture hermes-testbed by tester@testbed
+ATM TEST START skill: atm-setup-environment fixture: hermes-testbed agent: hermes@testbed
+REPORT 1: skill: atm-setup-environment agent: tester@testbed  tools: cli result: PASS   (5/5 steps) 
+REPORT 2: skill: atm-setup-environment agent: hermes@testbed  tools: native+cli result: PASS   (5/6 steps) 
+== 16:22:25Z atm-smoke (tester + hermes)
+sent to tester: run the atm-smoke skill against hermes@testbed on fixture hermes-testbed
+sent to hermes: run the atm-smoke skill against tester@testbed on fixture hermes-testbed
+ATM TEST START skill: atm-smoke fixture: hermes-testbed agent: tester@testbed
+ATM TEST START skill: atm-smoke fixture: hermes-testbed agent: hermes@testbed
+REPORT 3: skill: atm-smoke agent: hermes@testbed  tools: native+cli result: PASS   (9/9 steps) 
+REPORT 4: skill: atm-smoke agent: tester@testbed  tools: cli result: FAIL   (7/8 steps) 
+== 16:29:23Z atm-hermes-ready (tester)
+sent to tester: run the atm-hermes-ready skill for hermes@testbed on fixture hermes-testbed
+ATM TEST START skill: atm-hermes-ready fixture: hermes-testbed agent: tester@testbed
+REPORT 5: skill: atm-hermes-ready agent: tester@testbed  tools: cli result: FAIL   (3/4 steps) 
+REPORT 6: skill: atm-hermes-ready agent: tester@testbed  tools: cli result: FAIL   (3/4 steps)  (repeat, not counted)
+== 16:30:35Z atm-nudge-roundtrip (tester + hermes)
+sent to tester: run the atm-nudge-roundtrip skill as tester against hermes@testbed on fixture hermes-testbed
+sent to hermes: run the atm-nudge-roundtrip skill as responder on fixture hermes-testbed
+ATM TEST START skill: atm-nudge-roundtrip fixture: hermes-testbed agent: tester@testbed
+ATM TEST START skill: atm-nudge-roundtrip fixture: hermes-testbed agent: hermes@testbed
+REPORT 7: skill: atm-nudge-roundtrip agent: tester@testbed  tools: cli result: PASS   (3/3 steps) 
+REPORT 8: skill: atm-nudge-roundtrip agent: hermes@testbed  tools: native+cli result: PASS   (5/5 steps) 
+== 16:31:47Z verdict
+FAIL  skills reported 7/7, PASS 5/7 (8 report messages); herdr doctor ok: yes
+atm:    1.5.18 (prerelease/v1.5.18 @ 204f67135, prerelease-archive run 34860896730, ci run 34861923410)
+hermes: randlee/hermes-agent @ a909c4f5b
+hermes Hermes Agent v0.21.2 (2026.9.11) · upstream a909c4f5 | atm-daemon 1.5.18 | herdr 0.8.2
+herdr transport: socket ({'kind': 'ok', 'version': '0.8.2', 'protocol': 20}) (atm doctor --json .herdr.endpoints[].transport; bringup writes [herdr] transport="socket" to /root/.atm.toml)
+skill: atm-setup-environment agent: tester@testbed  tools: cli result: PASS   (5/5 steps) 
+skill: atm-setup-environment agent: hermes@testbed  tools: native+cli result: PASS   (5/6 steps) 
+skill: atm-smoke agent: hermes@testbed  tools: native+cli result: PASS   (9/9 steps) 
+skill: atm-smoke agent: tester@testbed  tools: cli result: FAIL   (7/8 steps) 
+        8 FAIL Your message got acked — cause: timeout; fix: partner's ack reply not received within 300s; retest: FAIL
+skill: atm-hermes-ready agent: tester@testbed  tools: cli result: FAIL   (3/4 steps) 
+        2 FAIL Receivers registered — cause: hermes graft receiver has stale last_seen (never); fix: none possible; retest: depends on gateway recovery
+skill: atm-hermes-ready agent: tester@testbed  tools: cli result: FAIL   (3/4 steps) 
+        2 FAIL Receivers registered — cause: hermes graft receiver has stale last_seen (never); fix: none possible; retest: depends on gateway recovery
+skill: atm-nudge-roundtrip agent: tester@testbed  tools: cli result: PASS   (3/3 steps) 
+skill: atm-nudge-roundtrip agent: hermes@testbed  tools: native+cli result: PASS   (5/5 steps) 
+reports and logs: /Users/randlee/Documents/github/atm-hermes-testbed-worktrees/fix-remove-eq007-workaround/.cache/results/20260914T161939Z
+the fixture is still running: docker exec hermes-testbed ... ; ./teardown.sh when done
+site evidence: /Users/randlee/Documents/github/atm-hermes-testbed-worktrees/fix-remove-eq007-workaround/.cache/results/20260914T161939Z/site (smoke/linux/hermes-testbed/20260914T161939Z-colima-hermes-skills)
