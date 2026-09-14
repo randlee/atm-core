@@ -63,6 +63,27 @@ class ReportRuntimeTests(unittest.TestCase):
             self.assertEqual(selected.revision, procedure_revision)
             self.assertEqual(selected.html, procedure_html)
 
+    def test_procedure_page_refuses_shallow_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            origin = Path(tempdir) / "origin"
+            origin.mkdir()
+            git(origin, "init", "--quiet")
+            git(origin, "config", "user.email", "fixture@example.test")
+            git(origin, "config", "user.name", "Fixture")
+            for text in ("first", "second"):
+                (origin / "runner.py").write_text(f"{text}\n", encoding="utf-8")
+                git(origin, "add", "runner.py")
+                git(origin, "commit", "--quiet", "-m", text)
+            procedure_revision = git(origin, "rev-parse", "HEAD~1")
+            clone = Path(tempdir) / "clone"
+            subprocess.run(
+                ["git", "clone", "--quiet", "--depth", "1", origin.as_uri(), str(clone)],
+                check=True, capture_output=True,
+            )
+            revisions = [{"rev": procedure_revision, "date": "2026-09-12", "html": "p.html"}]
+            with self.assertRaisesRegex(MODULE.ReportRuntimeError, "shallow git checkout"):
+                MODULE.resolve_procedure_revision(revisions, git(clone, "rev-parse", "HEAD"), root=clone)
+
     def test_source_revision_returns_none_when_git_is_unavailable(self) -> None:
         with mock.patch.object(
             MODULE.subprocess,
