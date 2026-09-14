@@ -40,3 +40,9 @@ triage:BB7 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 7 ; tr
 # (BB-READY-DOCS-FIX-1789281196) that serves both BB-READY-002 (foundIn
 # BB.6) and BB-READY-001 (foundIn BB.7); BB6's prior fix/bb6-docs-qa1 and
 # BB7's feature/bb7-docs delivery work are both already merged/closed.
+# NOTE (2026-09-14, team-lead): BB8 opened post-hoc, not in the original
+# phase-bb-plan.md wave/dependency table -- Rand's colima-integration
+# ruling (one sequence, one aggregate verdict, sequential XHTML panels,
+# traceability to test process, historical runs rebuilt). Sprint doc is
+# the first commit on the delivery branch, per fenix.
+triage:BB8 a triage:Sprint ; triage:inPhase triage:PhaseBB ; triage:order 8 ; triage:branch "feature/bb8-colima-integration" ; triage:criteria "docs/plans/phase-bb/sprint-BB.8-colima-integration.md" .
