@@ -292,6 +292,62 @@ def repoint_selector(paths: Sequence[Path], config: dict[str, Any]) -> None:
         target.symlink_to(source)
 
 
+def selector_snapshot(
+    paths: Sequence[Path],
+    config: dict[str, Any],
+    backup_root: Path,
+) -> tuple[Path, bool, list[tuple[Path, str, str | Path | None]]]:
+    selector = selector_directory(config)
+    existed = selector.is_dir()
+    snapshot: list[tuple[Path, str, str | Path | None]] = []
+    for index, source in enumerate(paths):
+        target = selector / source.name
+        if target.is_symlink():
+            snapshot.append((target, "symlink", os.readlink(target)))
+        elif target.is_file():
+            backup = backup_root / str(index)
+            shutil.copy2(target, backup)
+            snapshot.append((target, "file", backup))
+        elif target.exists():
+            raise SystemExit(f"prerelease selector target is not a file: {target}")
+        else:
+            snapshot.append((target, "absent", None))
+    return selector, existed, snapshot
+
+
+def restore_selectors(
+    selector: Path,
+    selector_existed: bool,
+    snapshot: Sequence[tuple[Path, str, str | Path | None]],
+) -> None:
+    for target, kind, value in snapshot:
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        if kind == "symlink":
+            assert isinstance(value, str)
+            target.symlink_to(value)
+        elif kind == "file":
+            assert isinstance(value, Path)
+            shutil.copy2(value, target)
+    if not selector_existed:
+        try:
+            selector.rmdir()
+        except OSError:
+            pass
+
+
+def activate_install(paths: Sequence[Path], config: dict[str, Any], version: str, stage: Path) -> None:
+    """Repoint prerelease selectors transactionally around live activation."""
+    with tempfile.TemporaryDirectory(prefix="prerelease-selector-backup-") as directory:
+        selector, existed, snapshot = selector_snapshot(paths, config, Path(directory))
+        try:
+            repoint_selector(paths, config)
+            verify_install(config, version, stage)
+        except BaseException:
+            restore_selectors(selector, existed, snapshot)
+            raise
+
+
 def replace_command(template: str, version: str, stage: Path) -> str:
     return template.replace("{version}", version).replace("{stage_dir}", str(stage))
 
@@ -316,8 +372,7 @@ def install(manifest: dict[str, Any], requested: str) -> tuple[str, Path]:
         with tempfile.TemporaryDirectory(prefix="prerelease-") as directory:
             archive = download_checked_archive(tag, version, manifest, Path(directory))
             paths = stage_archive(archive, stage, config)
-    repoint_selector(paths, config)
-    verify_install(config, version, stage)
+    activate_install(paths, config, version, stage)
     return version, stage
 
 

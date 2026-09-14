@@ -208,6 +208,13 @@ def require_windows_task_selector(args: argparse.Namespace) -> None:
     _service_control().require_windows_task_selector(args, selected_links)
 def provision_windows_task(args: argparse.Namespace) -> None:
     _service_control().provision_windows_task(args, selected_links)
+def resolve_managed_service(args: argparse.Namespace) -> None:
+    _service_control().resolve_managed_service(
+        args,
+        selected_links,
+        macos_loaded_launch_agent_plist,
+        windows_task_status,
+    )
 def systemd_unit_missing(detail: str) -> bool:
     return _service_control().systemd_unit_missing(detail)
 def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = False) -> None:
@@ -1215,9 +1222,15 @@ def parser() -> argparse.ArgumentParser:
     selectors = argparse.ArgumentParser(add_help=False)
     selectors.add_argument("--cli-link", help="system selector symlink for atm")
     selectors.add_argument("--daemon-link", help="system selector symlink for atm-daemon")
-    selectors.add_argument(
+    service_selector = selectors.add_mutually_exclusive_group()
+    service_selector.add_argument(
         "--service",
         help="LaunchAgent label, systemd unit, or Windows scheduled-task name",
+    )
+    service_selector.add_argument(
+        "--discover-managed-service",
+        action="store_true",
+        help="discover exactly one current-user service that launches the selected daemon link",
     )
     selectors.add_argument("--launch-agent-plist", help="macOS LaunchAgent plist used to restart the singleton")
     selectors.add_argument(
@@ -1283,6 +1296,7 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     try:
+        resolve_managed_service(args)
         if args.command == "status":
             status(args)
         elif args.command == "switch":
