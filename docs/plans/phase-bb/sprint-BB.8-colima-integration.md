@@ -200,7 +200,9 @@ layer that must be visible first.
 
 - `just lint` (includes `site-links`, `procedures --check` via pytests, `reports-index --check`) and `just test` summary lines at the final SHA.
 - `python3 .just/check_site_links.py` pages scanned / 0 broken.
-- `git diff -M100% --name-status $(git merge-base origin/develop HEAD) -- site/reports | grep -c '^R100'` = number of moved evidence files, and `grep -c '^D'` = 0.
+- `git diff -M100% --name-status $(git merge-base origin/develop HEAD) -- site/reports | grep -c '^R100'` = number of moved evidence files,
+  and every `D` line is a superseded rendering (`.html`, `.xhtml`) or a superseded `smoke.envelope.json`; no payload or sidecar is deleted
+  (BB.8.1: 51 `R100`, 24 such `D`). The guard test enforces the same rule.
 - Open `site/reports/index.html`, `site/reports/history/integration.html`, the newest run page and one historical run page from the worktree (`open <file>`), and screenshot each with headless Chrome (`"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --screenshot=<png> file://<path>`); attach the four PNG paths in the push report. Fenix looks at them before the PR is reviewed.
 - The new run's `index.html` shows every panel in order; each panel's `Test plan:` link opens the procedure revision page.
 
