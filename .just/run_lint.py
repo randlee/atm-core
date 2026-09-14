@@ -31,6 +31,7 @@ PYTHON_LINT_ORDER = (
     "boundaries",
     "adr-index",
     "site-links",
+    "site-generated",
     "unix-gating",
     "same-host-portability",
     "runtime-waits",
@@ -138,6 +139,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "adr-index": LintTask("adr-index", [*python_command, str(repo_root / ".just/check_adr_index.py")]),
         "site-links": LintTask(
             "site-links", [*python_command, str(repo_root / ".just/check_site_links.py")]
+        ),
+        "site-generated": LintTask(
+            "site-generated", [*python_command, str(repo_root / ".just/check_site_generated.py")]
         ),
         "unix-gating": LintTask(
             "unix-gating", [*python_command, str(repo_root / ".just/lint_unix_gating.py")]
