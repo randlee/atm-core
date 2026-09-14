@@ -20,9 +20,15 @@ FEATURES = (
 RUNNERS = {
     "smoke": "scripts/smoke/run_feature_smoke.py",
     "graft": "scripts/phase-ai/run_hermes_graft_live.py",
-    "colima": "scripts/smoke/colima_skill_report.py",
     "benchmark": "scripts/smoke/benchmark_report.py",
     "fuzz": ".just/run_fuzz.py",
+}
+# Colima integration steps: procedure -> the runner that produced the step payload.
+INTEGRATION_RUNNERS = {
+    "colima-hermes-skills": "scripts/smoke/colima_skill_report.py",
+    "colima-task-start": "scripts/smoke/run_bb4_task_start.py",
+    "colima-assignment": "scripts/smoke/run_bb5_assignment.py",
+    "colima-prompt-handoffs": "scripts/smoke/run_bb6_prompt_handoffs.py",
 }
 
 
@@ -47,7 +53,7 @@ def _smoke_feature(path: Path, data: dict[str, Any]) -> str | None:
 
 
 def _procedure_for_feature(feature: str) -> str:
-    if feature in {"graft-hermes", "colima-hermes-skills"}:
+    if feature == "graft-hermes":
         return feature
     return "smoke-" + ("local-ip" if feature == "local-up" else feature)
 
@@ -63,12 +69,14 @@ def build_inventory(root: Path = ROOT) -> dict[str, Any]:
         if not data:
             continue
         report_type = data.get("report_type")
-        if report_type == "smoke":
+        if report_type == "integration" and isinstance(data.get("procedure"), str):
+            sources[data["procedure"]].add(path.relative_to(root).as_posix())
+        elif report_type == "smoke":
             feature = _smoke_feature(path, data)
             if feature:
-                sources["graft-hermes" if feature == "graft-hermes" else
-                        "colima-hermes-skills" if feature == "colima-hermes-skills" else
-                        "smoke-" + ("local-ip" if feature == "local-up" else feature)].add(path.relative_to(root).as_posix())
+                sources[_procedure_for_feature(feature)].add(path.relative_to(root).as_posix())
+        elif "integration" in path.parts and isinstance(data.get("cases"), list) and isinstance(data.get("status"), str):
+            continue  # a step payload; its run's envelope names the procedure
         elif (
             isinstance(data.get("feature"), str)
             and isinstance(data.get("cases"), list)
@@ -101,8 +109,8 @@ def build_inventory(root: Path = ROOT) -> dict[str, Any]:
             family, runner = "smoke", RUNNERS["smoke"]
         elif procedure == "graft-hermes":
             family, runner = "smoke", RUNNERS["graft"]
-        elif procedure == "colima-hermes-skills":
-            family, runner = "smoke", RUNNERS["colima"]
+        elif procedure in INTEGRATION_RUNNERS:
+            family, runner = "integration", INTEGRATION_RUNNERS[procedure]
         elif procedure.startswith("fuzz-"):
             family, runner = "fuzz", RUNNERS["fuzz"]
         else:
