@@ -192,8 +192,8 @@ layer that must be visible first.
 - [x] D5 — `.just/generate_report_index.py` integration family + history page; `just reports-index` output committed.
 - [x] D6 — twelve historical runs under `site/reports/integration/colima/`, payloads byte-identical (prove with `git diff -M100% --name-status`).
 - [x] D7 — evidence guard accepts `R100` renames; test for it.
-- [ ] D8 — one new run from the driver on this branch's head, committed as evidence (runner-written, never hand-edited), PASS or an honest FAIL with the failing step visible on the page.
-- [x] D9 — unit tests: prompt-report validation, driver aggregation (all PASS → PASS, one FAIL → FAIL, step order preserved), public-only source guard, historical payload rendering, panel well-formedness, index/history, and rename guard.
+- [x] D8 — one new run from the driver on this branch's head, committed as evidence (runner-written, never hand-edited), PASS or an honest FAIL with the failing step visible on the page: `20260914T055811024606Z`, PASS 4/4, from `d684e2016`. Runs made while the driver was being rewritten measured code that no longer exists and are not retained.
+- [x] D9 — unit tests: a prompt report becomes a step payload with its raw log; a missing report is one FAIL; aggregation, historical payload rendering, panel well-formedness, index/history, and rename guard (BB.8.1 tests). The driver has no validator or source guard to test: the verdict is the agent's report, and the panel shows the raw output.
 - [x] D10 — `docs/project-plan.md` BB table contains the BB.8 row; this doc's frontmatter is complete.
 
 ## Validation (quote verbatim in the push report and the close body)

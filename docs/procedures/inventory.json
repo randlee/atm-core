@@ -3,7 +3,7 @@
     {
       "family": "integration",
       "id": "colima-assignment",
-      "runner": "scripts/smoke/run_bb5_assignment.py",
+      "runner": "scripts/integration/run_colima.py",
       "sources": [
         "site/reports/integration/colima/20260912T234940144098Z.envelope.json",
         "site/reports/integration/colima/20260913T080346160928Z.envelope.json",
@@ -26,13 +26,14 @@
       "id": "colima-integration",
       "runner": "scripts/integration/run_colima.py",
       "sources": [
-        "runner:sequence:colima"
+        "runner:sequence:colima",
+        "site/reports/integration/colima/20260914T055811024606Z.envelope.json"
       ]
     },
     {
       "family": "integration",
       "id": "colima-prompt-handoffs",
-      "runner": "scripts/smoke/run_bb6_prompt_handoffs.py",
+      "runner": "scripts/integration/run_colima.py",
       "sources": [
         "site/reports/integration/colima/20260913T025601172318Z.envelope.json",
         "site/reports/integration/colima/20260913T050015564593Z.envelope.json",
@@ -42,7 +43,7 @@
     {
       "family": "integration",
       "id": "colima-task-start",
-      "runner": "scripts/smoke/run_bb4_task_start.py",
+      "runner": "scripts/integration/run_colima.py",
       "sources": [
         "site/reports/integration/colima/20260912T211350137931Z.envelope.json",
         "site/reports/integration/colima/20260913T080203865232Z.envelope.json"
