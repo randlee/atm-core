@@ -16,28 +16,29 @@
   triage:source "arch-ctm, v1.5.18 native-smoke leg, relayed 2026-09-14 (ATM message 01M2G8EE47V7DXEMDZCBDGJ4AQ)" ;
   triage:repeatable true ;
   triage:sweepScope "release/publish-artifacts.toml post_install line; .claude/skills/daemon-switch/scripts/daemon-switch.py switch dispatch + service_control.py service_commands(); .claude/skills/prerelease/scripts/prerelease.py --install path that invokes post_install. RULED (team-lead, 2026-09-14, accepting solar's architecture recommendation in full): option (c) -- daemon-switch-owned discovery, not a prerelease.py-generic or unmanaged-mode fix. (1) Add an explicit `daemon-switch switch --discover-managed-service` selector mode owned by service_control.py (platform-specific lifecycle authority); identify the service by behaviour/ownership (exactly one current-user managed entry whose executable resolves to the selected atm-daemon selector -- verified plist path on macOS, unit ExecStart/fragment on Linux, scheduled-task action on Windows), zero/multiple candidates fail closed with no selector mutation. (2) release/publish-artifacts.toml post_install changes only to add `--discover-managed-service`, stays host-neutral; explicit --service/--launch-agent-plist remains the operator override, mutually exclusive with discovery. (3) Add the adjacent fix in the same change: prerelease.py currently repoints its selector (lines 319-320) before post_install succeeds -- pre-resolve the managed service before selector mutation, or restore the prior prerelease selectors on post_install failure, so a failed install can't leave a partial state. (4) Unit tests for unique/zero/ambiguous/foreign-fixture candidates on Darwin/Linux/Windows, parser mutual exclusion, an installer contract test proving the manifest invokes explicit discovery, and an integration negative test proving a zero-candidate install leaves selectors/mailbox daemon untouched. Rejected: (a) prerelease.py resolving the label itself -- would duplicate three OS service-manager parsers and daemon-switch's ownership validation outside its authority. (b) an unmanaged/raw-process switch mode -- cannot guarantee stop/start/rollback of exactly one singleton, weakens the deliberate managed-singleton safety boundary. This host (rand-m5.local) has no native managed atm-daemon service registered (only the com.atm.daemon.crosshost-smoke fixture, which discovery must never select) -- on this host, discovery is expected to correctly refuse; unblocking native smoke here requires separately provisioning/registering the native singleton service, not hijacking the fixture or killing/relaunching the raw PID." ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BB8 ;
   triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EQ-009/1> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" ;
+  triage:fixNote "solar implemented the ruled design in full: service_control.py's new resolve_managed_service/_macos_candidates/_linux_candidates/_windows_candidates/_unique_service functions back a new `daemon-switch switch --discover-managed-service` selector mode; release/publish-artifacts.toml's post_install now invokes it (host-neutral, no hardcoded service label); prerelease.py pre-resolves the managed service before selector mutation so a failed install can't leave a partial state. Full QA-1 (quality-mgr + req-qa + arch-qa) independently agreed PASS, 0 findings, all 4 ruling requirements and both rejected-alternative exclusions verified. Landed via b3738b89f75450ea9afe87d87e6216fad8e4cede on PR #1508, merged to develop at a6cb5094f2db34297fa2dfcd62d036132fcb718c. This dev host (rand-m5.local) still has no native managed atm-daemon service registered -- native smoke here requires separately provisioning that service, tracked as a follow-up, not a defect in this fix." .
 
 <urn:atm:triage:occurrence/EQ-009/1>
   a triage:Occurrence ;
   triage:file "release/publish-artifacts.toml" ;
   triage:line 21 ;
   triage:snippet "post_install = \"python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --prerelease {version} --yes\" -- no --service supplied; service_control.py:29-30 unconditionally raises SwitchError('--service is required; never switch an unmanaged daemon') when args.service is unset" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "develop" ;
-  triage:headSha "5e42802e2" ;
+  triage:headSha "a6cb5094f" ;
   triage:occursIn <urn:atm:triage:worktree/EQ-009/1> .
 
 <urn:atm:triage:worktree/EQ-009/1>
   a triage:WorktreeSnapshot ;
   triage:path "develop" ;
   triage:branch "develop" ;
-  triage:headSha "5e42802e2" ;
+  triage:headSha "a6cb5094f" ;
   triage:orderIndex 1 .
