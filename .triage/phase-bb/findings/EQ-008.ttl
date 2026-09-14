@@ -14,30 +14,31 @@
   triage:category "correctness" ;
   triage:severity "important" ;
   triage:source "fenix, relayed from AT10 agent report, colima run 20260914T035038469557Z, 2026-09-14 (ATM message 01M2F2K5JQ2DJTY320BFX9ZVZW) -- not independently reproduced by fenix" ;
-  triage:repeatable false ;
+  triage:repeatable true ;
   triage:sweepScope "atm task assign / atm-daemon task-reassignment authorization path: manual repro first (non-assigner identity calling `atm task assign <other> --task-id <existing>`, diff `atm task events <id> --all --json` before/after); if reproduced, fix to either perform the reassignment when authorized or return a non-zero exit / explicit refusal when the caller is not the current assigner" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BB8 ;
   triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EQ-008/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:fixNote "Manual repro confirmed the defect (a non-assigner's atm task assign returned exit 0 but silently no-op'd, leaving the task's assignee and event log unchanged). Rand's ruling, relayed by fenix: only the recorded assigner may reassign a task; any other caller gets a nonzero exit and no mutation. solar's fix (PR #1505) implements that refusal. Landed via 1cc9f4831 (fix(tasks): refuse non-assigner reassignment) + f149d6986 (refactor(tasks): keep rejection audit bounded), merged to develop at cbec8bb26." .
 
 <urn:atm:triage:occurrence/EQ-008/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src" ;
   triage:line 1 ;
-  triage:snippet "atm task assign <other> --task-id <existing task>, called by fx-at10-beta (not the task's assigner), inside colima run 20260914T035038469557Z (/opt/data/results/prompt-AT10.json): returns {\"task_id\":...} exit 0, but `atm task events <id> --all --json` is byte-identical before/after and the assignee is unchanged -- agent-observed, not yet independently reproduced" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "atm task assign <other> --task-id <existing task>, called by fx-at10-beta (not the task's assigner), inside colima run 20260914T035038469557Z (/opt/data/results/prompt-AT10.json): returns {\"task_id\":...} exit 0, but `atm task events <id> --all --json` is byte-identical before/after and the assignee is unchanged -- agent-observed, independently reproduced by manual repro before the fix" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "develop" ;
-  triage:headSha "e9c395517" ;
+  triage:headSha "cbec8bb26" ;
   triage:occursIn <urn:atm:triage:worktree/EQ-008/1> .
 
 <urn:atm:triage:worktree/EQ-008/1>
   a triage:WorktreeSnapshot ;
   triage:path "develop" ;
   triage:branch "develop" ;
-  triage:headSha "e9c395517" ;
+  triage:headSha "cbec8bb26" ;
   triage:orderIndex 1 .

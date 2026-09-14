@@ -16,23 +16,24 @@
   triage:source "Rand ruling 2026-09-14, relayed by fenix (ATM message 01M2EXF67W0A744S2YDW2NT3ZX)" ;
   triage:repeatable true ;
   triage:sweepScope "scripts/smoke/benchmark_snapshot.py:160,306-307,398,431-432; scripts/smoke/admission_capacity_support.py:26,759-766; scripts/smoke/run_admission_capacity.py:502" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BB8 ;
   triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EQ-006/1>, <urn:atm:triage:occurrence/EQ-006/2>, <urn:atm:triage:occurrence/EQ-006/3> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:fixNote "cipher's fix (PR #1506): scripts/smoke/benchmark_snapshot.py and its test module deleted outright -- no more sqlite snapshot read/copy/write of mail.db. admission_capacity_support.py and run_admission_capacity.py's remaining sqlite reads replaced with a public CLI durability count; an R3 correction fixed an initial undercount (atm list's --limit-capped count) by summing uncapped bucket_counts instead. No direct sqlite3 access remains in any of the three scripts. Landed via 723f5f3d0 (remove benchmark SQLite snapshot access) + fefe2b443 (use uncapped public mailbox durability counts), merged to develop at 617a25f5b." .
 
 <urn:atm:triage:occurrence/EQ-006/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/benchmark_snapshot.py" ;
   triage:line 160 ;
   triage:snippet "sqlite3.connect(...) -- direct sqlite access to read/copy/write mail.db benchmark snapshots (also lines 306-307, 398, 431-432)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "develop" ;
-  triage:headSha "b951ba330" ;
+  triage:headSha "617a25f5b" ;
   triage:occursIn <urn:atm:triage:worktree/EQ-006/1> .
 
 <urn:atm:triage:occurrence/EQ-006/2>
@@ -40,10 +41,10 @@
   triage:file "scripts/smoke/admission_capacity_support.py" ;
   triage:line 26 ;
   triage:snippet "sqlite3 read-only open of the benchmark mail.db (also lines 759-766)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "develop" ;
-  triage:headSha "b951ba330" ;
+  triage:headSha "617a25f5b" ;
   triage:occursIn <urn:atm:triage:worktree/EQ-006/1> .
 
 <urn:atm:triage:occurrence/EQ-006/3>
@@ -51,15 +52,15 @@
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 502 ;
   triage:snippet "checkpoint_closed_database on mail.db -- direct sqlite checkpoint call" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "develop" ;
-  triage:headSha "b951ba330" ;
+  triage:headSha "617a25f5b" ;
   triage:occursIn <urn:atm:triage:worktree/EQ-006/1> .
 
 <urn:atm:triage:worktree/EQ-006/1>
   a triage:WorktreeSnapshot ;
   triage:path "develop" ;
   triage:branch "develop" ;
-  triage:headSha "b951ba330" ;
+  triage:headSha "617a25f5b" ;
   triage:orderIndex 1 .

@@ -16,23 +16,24 @@
   triage:source "fenix, BB.8.2 colima run 20260914T033348165292Z + solar trace run 20260914T034828507479Z, relayed 2026-09-14 (ATM messages 01M2F0524PRJ67KF4WD4AR86BA, 01M2F0HNQK91V6GEKNNR16TKB4)" ;
   triage:repeatable true ;
   triage:sweepScope "atm peer trust replace AND atm peer trust add -- both confirmed with the identical exit-code/stderr defect when the daemon is not running at call time; CLI crate, peer-trust command handler" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BB8 ;
   triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/EQ-007/1>, <urn:atm:triage:occurrence/EQ-007/2> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" ;
+  triage:fixNote "solar's fix (PR #1504): atm peer trust replace/add's reported exit code and stderr now agree with the actual durable outcome when the daemon is offline at call time, for both subcommands -- the offline write remains supported (hermes-testbed's documented pre-daemon-start trust configuration flow), it just no longer contradicts its own result. Landed via b6383c2af (allow peer trust writes while daemon is offline), merged to develop at f7c3f9f1b." .
 
 <urn:atm:triage:occurrence/EQ-007/1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/cli" ;
   triage:line 1 ;
   triage:snippet "atm peer trust replace --host localhost --fingerprint <fp> --https-port 43101 --yes (daemon offline): stdout 'replaced trusted peer localhost', stderr 'failed to inspect local runtime directory ... Recovery: ... restore the single local daemon to a healthy serving state and retry.', exit=4 -- but `atm peer trust list --json` confirms the write persisted" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "develop" ;
-  triage:headSha "6d1264c7f" ;
+  triage:headSha "f7c3f9f1b" ;
   triage:occursIn <urn:atm:triage:worktree/EQ-007/1> .
 
 <urn:atm:triage:occurrence/EQ-007/2>
@@ -40,15 +41,15 @@
   triage:file "crates/atm/src/cli" ;
   triage:line 1 ;
   triage:snippet "atm peer trust add --host localhost --fingerprint <fp> --https-port 43101 --yes (daemon offline, fresh testbed container, solar trace run 20260914T034828507479Z with set -x): 'failed to inspect local runtime directory' -- identical defect to `trust replace`, write still persists" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "develop" ;
-  triage:headSha "6d1264c7f" ;
+  triage:headSha "f7c3f9f1b" ;
   triage:occursIn <urn:atm:triage:worktree/EQ-007/1> .
 
 <urn:atm:triage:worktree/EQ-007/1>
   a triage:WorktreeSnapshot ;
   triage:path "develop" ;
   triage:branch "develop" ;
-  triage:headSha "6d1264c7f" ;
+  triage:headSha "f7c3f9f1b" ;
   triage:orderIndex 1 .
