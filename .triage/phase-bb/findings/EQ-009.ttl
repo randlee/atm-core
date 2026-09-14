@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-009>
+  a triage:Finding ;
+  triage:findingId "EQ-009" ;
+  triage:title "release/publish-artifacts.toml's post_install command can never succeed: daemon-switch.py switch categorically requires --service, the manifest never supplies one" ;
+  triage:description "arch-ctm, 2026-09-14, discovered running the v1.5.18 native-smoke leg of the BB closeout: `python3 .claude/skills/prerelease/scripts/prerelease.py --install 1.5.18` ran its dry-run clean, but the real install failed during post-install verification with 'daemon-switch requires an explicit --service'. Traced to release/publish-artifacts.toml's `post_install = \"python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --prerelease {version} --yes\"` -- no --service is ever passed. `switch --prerelease` always routes through switch_pair() -> run_service() -> service_commands() (service_control.py:29-30), which unconditionally raises 'SwitchError(\"--service is required; never switch an unmanaged daemon\")' when args.service is unset; there is no default. This is confirmed by daemon-switch/SKILL.md itself: 'The script refuses an unpaired or unmanaged switch' and 'Never substitute an invented `com.atm.daemon` label: the current installed release may use a versioned label' -- i.e. the correct --service value is host-specific and must be discovered at run time (`launchctl list | rg 'com\\.atm\\.daemon'` on macOS), which a static manifest string can never express. Confirmed this host (rand-m5.local) has no plain `com.atm.daemon*` LaunchAgent registered at all (only a `com.atm.daemon.crosshost-smoke.plist` fixture and an unrelated atm-monitor plist) -- the primary dev daemon here is not currently service-managed, so even a hardcoded --service value would not fix this host. This blocks /prerelease --install universally, on every host, not just this one -- not a one-off environment problem. Blocks the native-smoke leg of the v1.5.18 BB closeout (/prerelease -> smoke + colima -> dogfood -> release)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:source "arch-ctm, v1.5.18 native-smoke leg, relayed 2026-09-14 (ATM message 01M2G8EE47V7DXEMDZCBDGJ4AQ)" ;
+  triage:repeatable true ;
+  triage:sweepScope "release/publish-artifacts.toml post_install line; .claude/skills/daemon-switch/scripts/daemon-switch.py switch dispatch + service_control.py service_commands(); .claude/skills/prerelease/scripts/prerelease.py --install path that invokes post_install. Needs a design decision, not a guessed patch: either (a) prerelease.py resolves the live --service/--launch-agent-plist per-host before invoking post_install (a capability add to the install path), or (b) daemon-switch.py switch gains an explicit unmanaged/raw-process mode for hosts with no managed service, or (c) the manifest post_install line is replaced with a small discovery wrapper script. Needs a ruling before implementation per the design-ruling-before-capability-adding-fix convention -- this is the second time this exact manifest/switch contract has needed alignment (see 97b0323cd, 'fix(prerelease): align manifest and switch contracts', 2026-09-08, findings ATM-QA-001/PRERELEASE-DUP-1/ATM-QA-003/RBQA-A002), so a narrow patch that doesn't address the host-discovery problem is likely to recur a third time." ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-009/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/EQ-009/1>
+  a triage:Occurrence ;
+  triage:file "release/publish-artifacts.toml" ;
+  triage:line 21 ;
+  triage:snippet "post_install = \"python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --prerelease {version} --yes\" -- no --service supplied; service_control.py:29-30 unconditionally raises SwitchError('--service is required; never switch an unmanaged daemon') when args.service is unset" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "5e42802e2" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-009/1> .
+
+<urn:atm:triage:worktree/EQ-009/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "5e42802e2" ;
+  triage:orderIndex 1 .
