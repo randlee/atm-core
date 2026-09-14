@@ -731,7 +731,6 @@ LIFECYCLE_RECOVERY = {
 
 
 def verify_durability_after_restart(
-    benchmark_account: BenchmarkAccount,
     roster: CapacityRoster,
     expected_accepted_count: int,
     *,
@@ -747,11 +746,10 @@ def verify_durability_after_restart(
     """
     if expected_accepted_count < 0:
         raise SmokeError("durability expected accepted count must not be negative")
-    del benchmark_account
     result = command_result(
         [
             str(atm), "list", f"{roster.recipient}@{roster.team}",
-            "--all", "--limit", "10000", "--json",
+            "--all", "--limit", "1", "--json",
         ],
         timeout=15.0,
         env=benchmark_runtime_client_environment(environment),
@@ -763,9 +761,13 @@ def verify_durability_after_restart(
         payload = json.loads(result["stdout"])
     except json.JSONDecodeError as error:
         raise SmokeError("atm list returned malformed JSON for the durability count") from error
-    if not isinstance(payload, dict) or not isinstance(payload.get("count"), int):
-        raise SmokeError("atm list returned no integer durability count")
-    observed = payload["count"]
+    bucket_counts = payload.get("bucket_counts") if isinstance(payload, dict) else None
+    if not isinstance(bucket_counts, dict):
+        raise SmokeError("atm list returned no mailbox bucket counts for durability")
+    buckets = tuple(bucket_counts.get(name) for name in ("unread", "pending_ack", "history"))
+    if not all(isinstance(value, int) and value >= 0 for value in buckets):
+        raise SmokeError("atm list returned invalid mailbox bucket counts for durability")
+    observed = sum(buckets)
     return {
         "expected_accepted_count": expected_accepted_count,
         "observed_mailbox_count": observed,

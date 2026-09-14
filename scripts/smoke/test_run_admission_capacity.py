@@ -426,14 +426,17 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertIn("durable=95", result.incomplete_reason)
 
     def test_durability_count_after_restart_uses_public_list_json(self):
-        account = mock.Mock()
         roster = RUNNER.CapacityRoster(
             run_id="target", team="target-team", agent="target-agent", recipient="target-recipient",
         )
-        result = {"exit_code": 0, "stdout": json.dumps({"count": 2}), "stderr": ""}
+        result = {
+            "exit_code": 0,
+            "stdout": json.dumps({"bucket_counts": {"unread": 1, "pending_ack": 1, "history": 0}}),
+            "stderr": "",
+        }
         with mock.patch.object(SUPPORT, "command_result", return_value=result) as command:
             observation = RUNNER.verify_durability_after_restart(
-                account, roster, 2, atm=Path("/tmp/atm"), environment={"ATM_HOME": "/tmp/atm"},
+                roster, 2, atm=Path("/tmp/atm"), environment={"ATM_HOME": "/tmp/atm"},
             )
 
         self.assertEqual(observation, {
@@ -442,13 +445,13 @@ class AdmissionCapacityTests(unittest.TestCase):
             "passed": True,
         })
         self.assertEqual(command.call_args.args[0][1:], [
-            "list", "target-recipient@target-team", "--all", "--limit", "10000", "--json",
+            "list", "target-recipient@target-team", "--all", "--limit", "1", "--json",
         ])
 
     def test_durability_count_rejects_invalid_expected_count_before_cli(self):
         with self.assertRaisesRegex(RUNNER.SmokeError, "must not be negative"):
             RUNNER.verify_durability_after_restart(
-                mock.Mock(), mock.Mock(), -1, atm=Path("/tmp/atm"), environment={},
+                mock.Mock(), -1, atm=Path("/tmp/atm"), environment={},
             )
 
     def test_benchmark_doctor_environment_preserves_disposable_atm_home(self):

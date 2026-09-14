@@ -630,7 +630,6 @@ def run_capacity(
             evidence,
             "durability",
             lambda: verify_durability_after_restart(
-                benchmark_account,
                 roster,
                 expected_accepted_count,
                 atm=atm,
