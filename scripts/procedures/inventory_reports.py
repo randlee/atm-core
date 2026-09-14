@@ -27,9 +27,9 @@ RUNNERS = {
 INTEGRATION_RUNNERS = {
     "colima-integration": "scripts/integration/run_colima.py",
     "colima-hermes-skills": "scripts/smoke/colima_skill_report.py",
-    "colima-task-start": "scripts/smoke/run_bb4_task_start.py",
-    "colima-assignment": "scripts/smoke/run_bb5_assignment.py",
-    "colima-prompt-handoffs": "scripts/smoke/run_bb6_prompt_handoffs.py",
+    "colima-task-start": "scripts/integration/run_colima.py",
+    "colima-assignment": "scripts/integration/run_colima.py",
+    "colima-prompt-handoffs": "scripts/integration/run_colima.py",
 }
 
 
