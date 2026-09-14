@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-014>
+  a triage:Finding ;
+  triage:findingId "EQ-014" ;
+  triage:title "EQ-012's libc dependency addition to crates/atm/Cargo.toml was never added to .just/lint-config.toml's manifest-dependency-allowlist -- boundaries lint now fails on develop and every open PR" ;
+  triage:description "team-lead, 2026-09-14, discovered while chasing PR #1511's (colima evidence) lint failure. `just lint`'s boundaries check fails: \"crates/atm/Cargo.toml [manifest-dependency-allowlist]: Cargo dependency 'libc' is not allowlisted\". Root cause: EQ-012's fix (PR #1510, f547bed1016c, merged to develop at ec2b04c0a) added `libc = \"0.2\"` to crates/atm/Cargo.toml (needed for the SIGPIPE-to-SIG_DFL restoration) but did not add 'libc' to that manifest's entry in .just/lint-config.toml's `[[boundaries.manifest_dependency_allowlists]]` (owner_manifest_path = \"crates/atm/Cargo.toml\"). Confirmed via the raw boundaries.log artifact from PR #1511's failing CI run (job 104083556017, run 34876099501) that this is the ONLY boundaries violation -- not a false positive, not the RUSTSEC-2026-0285 advisory (which now passes clean, deny check confirmed passed in the same run). team-lead's own error: merged PR #1510 without checking which specific `just lint` sub-checks were failing beyond the already-known RUSTSEC advisory -- PR #1510's own lint run (job 104067943456) shows BOTH `deny failed` (pre-existing, expected) AND `boundaries failed` (new, not caught) at merge time. This is now blocking develop's own lint and every open/future PR until fixed." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "team-lead, PR #1511 CI investigation, 2026-09-14" ;
+  triage:repeatable true ;
+  triage:sweepScope ".just/lint-config.toml's crates/atm/Cargo.toml manifest_dependency_allowlists entry: add 'libc' to allowed_dependencies. Small bounded one-line fix, one owner -- no triage stack/QA dispatch needed per the small-fix workflow, but the owner must run full `just lint` (not just fmt/clippy/targeted test) before pushing to confirm no other boundaries/allowlist gaps were introduced by the same change." ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-014/1> ;
+  triage:triageRecordVersion "2" ;
+  triage:fixNote "cipher added 'libc' to the allowed_dependencies array for crates/atm/Cargo.toml in .just/lint-config.toml -- the only changed file, exactly one list entry. Validated: full `just lint` passed, 37/37 checks succeeded. Landed via 7283b5ffc on PR #1513, merged to develop at e666022f2db8a0c53ca26b7a488af091dc557f40." .
+
+<urn:atm:triage:occurrence/EQ-014/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 134 ;
+  triage:snippet "[[boundaries.manifest_dependency_allowlists]] owner_manifest_path = \"crates/atm/Cargo.toml\" -- allowed_dependencies list is missing 'libc', added to crates/atm/Cargo.toml by EQ-012's PR #1510 (f547bed1016c) without a matching allowlist update; boundaries lint fails on develop (bcec74fe9) and PR #1511 (job 104083556017)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "develop" ;
+  triage:headSha "e666022f2" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-014/1> .
+
+<urn:atm:triage:worktree/EQ-014/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "e666022f2" ;
+  triage:orderIndex 1 .
