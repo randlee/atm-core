@@ -1,0 +1,14 @@
+{
+  "feature": "bb4-task-start",
+  "generated_at": "2026-09-14T02:07:48.128882Z",
+  "source_revision": "3add6ddf5970e44604e4030d3cdb8948124f801f",
+  "container": "hermes-testbed",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "task-start_step_execution",
+      "status": "FAIL",
+      "detail": "fixture state reset failed: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import json,sys; print(json.load(sys.stdin)[\"fingerprint\"])\n                           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nTypeError: 'NoneType' object is not subscriptable"
+    }
+  ]
+}
