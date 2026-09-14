@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-012>
+  a triage:Finding ;
+  triage:findingId "EQ-012" ;
+  triage:title "atm CLI panics on a broken stdout pipe instead of exiting quietly (SIGPIPE / BrokenPipe on stdout write)" ;
+  triage:description "fenix, 2026-09-14, colima v1.5.18 run 20260914T153243230345Z. `atm doctor --team testbed --json | <reader that closes stdin early>` panics: \"thread 'main' panicked at .../std/std/io/stdio.rs:1165:9: failed printing to stdout: Broken pipe (os error 32)\" instead of exiting quietly. This is Rust's standard default-stdout-panic-on-EPIPE behavior (well-known pattern for CLI tools piped into `head`, a closing reader, etc.) -- the fix is to handle/ignore a BrokenPipe error on stdout writes (or reset SIGPIPE to default disposition) rather than let it unwind as a panic. Repro: pipe `atm doctor --json` (or any atm subcommand producing enough stdout) into a reader that closes early." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:source "fenix, colima v1.5.18 run 20260914T153243230345Z, relayed 2026-09-14 (ATM message 01M2GD639VMFQTZPZ8EGNNR7AN)" ;
+  triage:repeatable true ;
+  triage:sweepScope "atm CLI's stdout-writing entrypoints (doctor --json and any other bulk-output command): confirm the panic source is std's default write_fmt panic-on-error for stdout/print!, fix by installing a BrokenPipe-tolerant writer or handling the error explicitly, or resetting SIGPIPE to SIG_DFL at process start on unix so the OS terminates the process silently instead of the Rust panic unwinding through stdio. Small bounded fix, one owner -- no triage stack/QA dispatch needed per the small-fix workflow." ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-012/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/EQ-012/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src"  ;
+  triage:line 1 ;
+  triage:snippet "atm doctor --team testbed --json piped into a reader that closes stdin early (colima v1.5.18 run 20260914T153243230345Z): thread 'main' panicked at .../std/io/stdio.rs:1165:9: failed printing to stdout: Broken pipe (os error 32) -- default Rust stdout-panic-on-EPIPE behavior, should exit quietly instead" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integration/colima-v1.5.18" ;
+  triage:headSha "unknown-evidence-pr-pending" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-012/1> .
+
+<urn:atm:triage:worktree/EQ-012/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "9d88175cb" ;
+  triage:orderIndex 1 .
