@@ -1,0 +1,13 @@
+ATM TEST REPORT
+skill: atm-hermes-ready
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.17 daemon 1.5.17
+result: FAIL   (2/4 steps)
+steps:
+  0 PASS Start line — 01M2EW3E41SXH4CXSEBEJXHS4K
+  1 PASS Roster — hermes@testbed found
+  2 FAIL Receivers registered — cause: hermes has no receiver entry (last_seen missing); fix: none possible; retest: FAIL
+  3 PASS Ping — message id 01M2EW3V8Q0KF7RYEQB7D7K5DA sent to hermes@testbed
+  4 FAIL Pong — cause: no ack within 120s (reply arrived after deadline); fix: none possible; retest: FAIL
+elapsed: 1789353268s
