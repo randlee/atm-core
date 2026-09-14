@@ -1,0 +1,18 @@
+ATM TEST REPORT
+skill: atm-smoke
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.17 daemon 1.5.17
+result: FAIL   (8/9 steps)
+steps:
+  0 PASS Start line — 01M2ESJSRZ2PST114AAEZ1Z7MH
+  1 FAIL Self round trip — cause: unread count did not decrease; fix: none; retest: FAIL
+  2 PASS Send — message_id: 01M2ESKZFCGK95XV3QA0956Q6Y
+  3 PASS Partner message — seconds: 0, message_id: 01M2ESKPN5ZEKX19X79YNPP9Y0
+  4 PASS Peek does not mutate — mutation_applied: false, read: false
+  5 PASS Read by id — count: 1, mutation_applied: true
+  6 PASS Read marked it — read: true
+  7 PASS Stale connection probe — exit: 0
+  8 PASS Ack — exit: 0
+  9 PASS Partner ack reply — seconds: 60
+elapsed: 67s
