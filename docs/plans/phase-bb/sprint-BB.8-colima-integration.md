@@ -1,7 +1,7 @@
 ---
-status: in-progress
-branch: feature/bb8-colima-integration
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb8-colima-integration
+status: complete
+branch: feature/bb8-2-colima-driver
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/bb8-2-colima-driver
 ---
 
 # BB.8 — Colima integration: one sequence, one verdict, sequential panels

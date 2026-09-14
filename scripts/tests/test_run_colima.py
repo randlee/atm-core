@@ -99,6 +99,7 @@ class DriverTests(unittest.TestCase):
                     testbed=Path(tempdir),
                     container=DRIVER.DEFAULT_CONTAINER,
                     runners=runners,
+                    fixture_reset=lambda _container: {"exit_code": 0},
                 )
             self.assertEqual(calls, list(DRIVER.STEP_ORDER))
             self.assertEqual(summary["status"], "FAIL")
@@ -114,6 +115,7 @@ class DriverTests(unittest.TestCase):
             run_dir = root / "site/reports/integration/colima/20260913T000001Z"
             calls: list[str] = []
             starts: list[str] = []
+            resets: list[str] = []
             selected = DRIVER.parse_steps("prompt-handoffs,task-start")
 
             def start(_testbed: Path, container: str) -> dict[str, str]:
@@ -128,11 +130,49 @@ class DriverTests(unittest.TestCase):
                     container=DRIVER.DEFAULT_CONTAINER,
                     runners={name: runner(name, calls) for name in selected},
                     fixture_start=start,
+                    fixture_reset=lambda container: resets.append(container) or {"exit_code": 0},
                 )
             self.assertEqual(starts, [DRIVER.DEFAULT_CONTAINER])
+            self.assertEqual(resets, [DRIVER.DEFAULT_CONTAINER, DRIVER.DEFAULT_CONTAINER])
             self.assertEqual(calls, ["task-start", "prompt-handoffs"])
             self.assertEqual(summary["status"], "PASS")
             self.assertEqual([step["name"] for step in summary["steps"]], calls)
+
+    def test_each_non_skill_step_observes_clean_fixture_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = make_root(tempdir)
+            run_dir = root / "site/reports/integration/colima/20260913T000002Z"
+            state = ["dirty"]
+            calls: list[str] = []
+
+            def reset(_container: str) -> dict[str, int]:
+                state.clear()
+                return {"exit_code": 0}
+
+            def stateful(name: str):
+                base = runner(name, calls)
+
+                def run(container: str, step_dir: Path) -> dict[str, object]:
+                    self.assertEqual(state, [])
+                    payload = base(container, step_dir)
+                    state.append(name)
+                    return payload
+
+                return run
+
+            selected = ("task-start", "assignment", "prompt-handoffs")
+            with mock.patch.object(DRIVER, "ROOT", root):
+                summary = DRIVER.run_sequence(
+                    run_dir,
+                    selected,
+                    testbed=Path(tempdir),
+                    container=DRIVER.DEFAULT_CONTAINER,
+                    runners={name: stateful(name) for name in selected},
+                    fixture_start=lambda _testbed, _container: {"status": "started"},
+                    fixture_reset=reset,
+                )
+            self.assertEqual(summary["status"], "PASS")
+            self.assertEqual(calls, list(selected))
 
 
 if __name__ == "__main__":

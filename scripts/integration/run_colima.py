@@ -33,6 +33,28 @@ FEATURES = {
 }
 RESULTS_LINE = re.compile(r"^reports and logs:\s+(.+)$", re.MULTILINE)
 StepRunner = Callable[[str, Path], dict[str, Any]]
+FixtureReset = Callable[[str], dict[str, Any]]
+
+RESET_COMMAND = r"""
+set -eu
+herdr pane list 2>/dev/null | python3 -c '
+import json, subprocess, sys
+for pane in json.load(sys.stdin)["result"]["panes"]:
+    subprocess.run(["herdr", "pane", "close", pane["pane_id"]], capture_output=True)
+' 2>/dev/null || true
+pkill -f '[h]ermes gateway run' 2>/dev/null || true
+pkill -f '[h]erdr server' 2>/dev/null || true
+pkill -x atm-daemon 2>/dev/null || true
+for unused in $(seq 1 20); do
+  pgrep -x atm-daemon >/dev/null 2>&1 || break
+  sleep 1
+done
+rm -f /root/.atm/db/mail.db /root/.atm/db/mail.db-shm /root/.atm/db/mail.db-wal
+rm -f /root/.atm/daemon/owner.lock /root/.atm/daemon/local-http.json
+mkdir -p /root/.atm/logs
+: > /root/.atm/logs/atm.log.jsonl
+/opt/testbed/harness/bringup.sh
+""".strip()
 
 
 class DriverError(RuntimeError):
@@ -79,6 +101,15 @@ def start_fixture(testbed: Path, container: str) -> dict[str, Any]:
         detail = result["stderr"].strip() or result["stdout"].strip()
         raise DriverError(f"testbed start failed: {detail}")
     return {"status": "started", "container": container, "command": result}
+
+
+def reset_fixture(container: str) -> dict[str, Any]:
+    """Reset mutable ATM/team state while retaining the one container session."""
+    result = command_record(["docker", "exec", container, "sh", "-lc", RESET_COMMAND])
+    if result["exit_code"] != 0:
+        detail = result["stderr"].strip() or result["stdout"].strip()
+        raise DriverError(f"fixture state reset failed: {detail}")
+    return result
 
 
 def run_skills(testbed: Path, step_dir: Path) -> dict[str, Any]:
@@ -131,11 +162,13 @@ def run_sequence(
     container: str,
     runners: dict[str, StepRunner] | None = None,
     fixture_start: Callable[[Path, str], dict[str, Any]] = start_fixture,
+    fixture_reset: FixtureReset = reset_fixture,
 ) -> dict[str, Any]:
     active_runners = runners or step_runners(testbed)
     fixture_ready = False
     for order, name in enumerate(selected, start=1):
         step_dir = run_dir / "steps" / f"{order:02d}-{name}"
+        reset_record: dict[str, Any] | None = None
         try:
             if name == "hermes-skills":
                 payload = active_runners[name](container, step_dir)
@@ -144,17 +177,21 @@ def run_sequence(
                 if not fixture_ready:
                     fixture_start(testbed, container)
                     fixture_ready = True
+                reset_record = fixture_reset(container)
                 payload = active_runners[name](container, step_dir)
             if payload.get("status") not in render_colima.VERDICTS:
                 raise DriverError(f"{name} returned no PASS/FAIL status")
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as error:
-            write_failure(step_dir, failure_payload(name, container, error))
+            payload = failure_payload(name, container, error)
             if not fixture_ready:
                 try:
                     fixture_start(testbed, container)
                     fixture_ready = True
                 except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
                     pass
+        if reset_record is not None:
+            payload["fixture_reset"] = reset_record
+        write_failure(step_dir, payload)
         render_colima.add_step(run_dir, name, step_dir / "step.json", order)
     return render_colima.render_run(run_dir, root=ROOT)
 
