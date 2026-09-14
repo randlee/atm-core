@@ -74,16 +74,6 @@ class Bb5AssignmentRunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "container missing"):
                 RUNNER.inspect_container("missing")
 
-    def test_render_html_marks_a_failed_case_and_escapes_its_detail(self) -> None:
-        html = RUNNER.render_html({
-            "status": "FAIL", "source_revision": "abc", "container": "fixture",
-            "image": {"image_id": "sha256:test"}, "roster": [],
-            "cases": [{"status": "FAIL", "name": "bad <case>", "detail": "<unsafe>"}],
-        })
-        self.assertIn('class="fail"', html)
-        self.assertIn("✗", html)
-        self.assertIn("&lt;unsafe&gt;", html)
-
     def test_scenario_records_fail_when_an_assignment_command_fails(self) -> None:
         failed = {"exit_code": 1, "stdout": "", "stderr": "assignment rejected"}
         read = {"exit_code": 0, "stdout": '{"bucket_counts":{"unread":0,"pending_ack":0}}', "stderr": ""}

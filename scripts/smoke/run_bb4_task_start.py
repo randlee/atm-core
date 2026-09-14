@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""Run the BB.4 task-start CLI smoke cases against a live testbed container.
-
-The runner talks only to the public ``atm`` CLI inside an already-running
-container.  It writes its complete command transcripts and conclusions under
-``site/reports`` so the evidence cannot be mistaken for a hand-edited report.
-"""
+"""Run the BB.4 task-start step against a live colima integration fixture."""
 
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-from html import escape
 import json
 from pathlib import Path
 import subprocess
@@ -214,26 +208,7 @@ def inspect_container(container: str) -> dict[str, Any]:
     return {"image": image, "version": version, "members": members, "roster": names}
 
 
-def render_html(report: dict[str, Any]) -> str:
-    rows = []
-    for case in report["cases"]:
-        detail = f"task {case.get('task_id', 'multiple')}"
-        rows.append(
-            f"<tr class=\"{escape(case['status'].lower())}\"><td>{'✓' if case['status'] == 'PASS' else '✗'}</td>"
-            f"<td>{escape(case['name'])}</td><td>{escape(detail)}</td><td>{escape(case['status'])}</td></tr>"
-        )
-    return """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>BB.4 task-start CLI smoke</title>
-<style>body{font:16px system-ui,sans-serif;max-width:72rem;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:.5rem;text-align:left}.pass{color:#176b2c}.fail{color:#a00}pre{white-space:pre-wrap;max-height:24rem;overflow:auto;background:#f5f5f5;padding:1rem}</style></head>
-<body><h1>BB.4 task-start CLI smoke</h1>
-<p>Runner-generated evidence. Source revision: <code>""" + escape(report["source_revision"]) + """</code></p>
-<p>Container: <code>""" + escape(report["container"]) + """</code>; roster: <code>""" + escape(", ".join(report["roster"])) + """</code></p>
-<table><thead><tr><th>Status</th><th>Case</th><th>Scope</th><th>Result</th></tr></thead><tbody>""" + "".join(rows) + """</tbody></table>
-<h2>Machine-readable transcript</h2><pre>""" + escape(json.dumps(report, indent=2)) + """</pre></body></html>
-"""
-
-
-def run(container: str, out_dir: Path) -> int:
+def run_step(container: str, step_dir: Path) -> dict[str, Any]:
     generated_at = datetime.now(timezone.utc)
     run_id = generated_at.strftime("%Y%m%dT%H%M%S%fZ")
     source = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False)
@@ -268,25 +243,23 @@ def run(container: str, out_dir: Path) -> int:
     finally:
         report["cleanup"] = cleanup_results
     report["status"] = "PASS" if report["cases"] and all(case["status"] == "PASS" for case in report["cases"]) else "FAIL"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "bb4-task-start.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    (out_dir / "index.html").write_text(render_html(report), encoding="utf-8")
+    step_dir.mkdir(parents=True, exist_ok=True)
+    (step_dir / "step.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"BB4 task-start smoke: {report['status']}")
     for case in report["cases"]:
         print(f"{case['status']} {case['name']}")
-    print(f"evidence: {out_dir}")
-    return 0 if report["status"] == "PASS" else 1
+    print(f"evidence: {step_dir}")
+    return report
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--container", default="hermes-testbed", help="already-running Docker testbed container")
-    parser.add_argument("--out", type=Path, help="evidence directory; defaults under site/reports")
+    parser.add_argument("--container", required=True, help="already-running Docker testbed container")
+    parser.add_argument("--out", type=Path, required=True, help="driver-owned step directory")
     args = parser.parse_args()
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    out_dir = args.out or ROOT / "site/reports" / "bb4-task-start" / run_id
     try:
-        return run(args.container, out_dir.resolve())
+        report = run_step(args.container, args.out.resolve())
+        return 0 if report["status"] == "PASS" else 1
     except (OSError, subprocess.SubprocessError, RuntimeError) as error:
         print(f"BB4 task-start smoke: FAIL: {error}", file=sys.stderr)
         return 1

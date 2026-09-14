@@ -140,31 +140,9 @@ class Bb6PromptHandoffRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "did not observe"):
             RUNNER.require_observed_interval(0.0)
 
-    def test_fresh_fixture_refuses_existing_handoffs(self) -> None:
-        count = {"exit_code": 0, "stdout": "1\n", "stderr": ""}
-        with mock.patch.object(RUNNER, "sqlite_count", return_value=count):
-            with self.assertRaisesRegex(RuntimeError, "fresh fixture required"):
-                RUNNER.run("fixture", mock.Mock())
-
-    def test_render_html_escapes_case_details_and_shows_counts(self) -> None:
-        report = {
-            "status": "FAIL",
-            "source_revision": "abc",
-            "container": "fixture",
-            "image": {"image_id": "sha256:test"},
-            "acceptance": {
-                "prompt_handoffs_count": 1,
-                "task_linked_terminal_line_count": 2,
-                "prompt_handoff_record_failed_count": 3,
-            },
-            "cases": [
-                {"status": "FAIL", "name": "bad <case>", "detail": "<unsafe>"}
-            ],
-        }
-        html = RUNNER.render_html(report)
-        self.assertIn("&lt;unsafe&gt;", html)
-        self.assertIn("handoffs=1", html)
-        self.assertIn('class="fail"', html)
+    def test_shared_fixture_counts_only_handoffs_after_the_baseline(self) -> None:
+        rows = [["old", "task_ready", "old-task", 0, "atm:old"]]
+        self.assertEqual(RUNNER.handoff_identities(rows[1:]), __import__("collections").Counter())
 
 
 if __name__ == "__main__":

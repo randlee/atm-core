@@ -35,7 +35,7 @@ def make_root(tempdir: str) -> Path:
     root = Path(tempdir)
     reports = root / "site/reports"
     procedures = []
-    for procedure in render_colima.STEP_PROCEDURES.values():
+    for procedure in (*render_colima.STEP_PROCEDURES.values(), render_colima.SEQUENCE_PROCEDURE):
         page = reports / "procedures" / procedure / "00000000.html"
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_text(f"<html>{procedure}</html>\n", encoding="utf-8")
@@ -109,7 +109,7 @@ class RenderColimaTests(unittest.TestCase):
             envelope = json.loads((out.parent / "20260913T000000Z.envelope.json").read_text(encoding="utf-8"))
             self.assertEqual(envelope["status"], "FAIL")
 
-    def test_rejects_step_gaps_unknown_steps_and_mixed_procedures_without_a_sequence(self) -> None:
+    def test_rejects_step_gaps_and_unknown_steps_and_selects_sequence_procedure(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = make_root(tempdir)
             out = root / "site/reports/integration/colima/20260913T000000Z"
@@ -121,9 +121,21 @@ class RenderColimaTests(unittest.TestCase):
             with self.assertRaisesRegex(render_colima.RenderError, "without gaps"):
                 render_colima.render_run(out, root=root)
             shutil.rmtree(out / "steps/03-hermes-skills")
-            render_colima.add_step(out, "task-start", committed_step("task-start", SHAPES["task-start"]) / "step.json")
-            with self.assertRaisesRegex(render_colima.RenderError, "sequence procedure"):
-                render_colima.render_run(out, root=root)
+            task_dir = render_colima.add_step(
+                out,
+                "task-start",
+                committed_step("task-start", SHAPES["task-start"]) / "step.json",
+            )
+            task_payload = json.loads((task_dir / "step.json").read_text())
+            first_payload = json.loads((out / "steps/01-hermes-skills/step.json").read_text())
+            task_payload["source_revision"] = first_payload.get("source_revision")
+            task_payload["container"] = first_payload.get("host")
+            task_payload.pop("atm_version", None)
+            (task_dir / "step.json").write_text(json.dumps(task_payload), encoding="utf-8")
+            summary = render_colima.render_run(out, root=root)
+            self.assertEqual(summary["procedure"], render_colima.SEQUENCE_PROCEDURE)
+            envelope = json.loads((out.parent / "20260913T000000Z.envelope.json").read_text())
+            self.assertEqual(envelope["procedure"], render_colima.SEQUENCE_PROCEDURE)
 
     def test_rendered_runs_are_discovered_as_the_integration_family(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""Run the BB.5 assignment/task-pass scenarios against a live colima fixture.
-
-The fixture is driven only through the public ``atm`` CLI and Herdr's pane
-observation API.  The complete command transcript is written as immutable
-runner evidence under ``site/reports/bb5-assignment``.
-"""
+"""Run the BB.5 assignment/task-pass step against a live colima fixture."""
 
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-from html import escape
 import json
 from pathlib import Path
 import re
@@ -22,7 +16,6 @@ from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[2]
 TEAM = "testbed"
-DEFAULT_CONTAINER = "hermes-testbed-bb5"
 ASSIGNER = "stub-alpha"
 ASSIGNEE = "tester"
 POLL_SECONDS = 0.5
@@ -311,23 +304,7 @@ def inspect_container(container: str) -> dict[str, Any]:
     }
 
 
-def render_html(report: dict[str, Any]) -> str:
-    rows = "".join(
-        f"<tr class=\"{case['status'].lower()}\"><td>{'✓' if case['status'] == 'PASS' else '✗'}</td>"
-        f"<td>{escape(case['name'])}</td><td>{escape(case['detail'])}</td><td>{case['status']}</td></tr>"
-        for case in report["cases"]
-    )
-    return f"""<!doctype html>
-<html lang=\"en\"><head><meta charset=\"utf-8\"><title>BB.5 assignment/task-pass colima evidence</title>
-<style>body{{font:16px system-ui,sans-serif;max-width:80rem;margin:2rem auto;padding:0 1rem}}table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #ddd;padding:.5rem;text-align:left}}.pass{{color:#176b2c}}.fail{{color:#a00}}pre{{white-space:pre-wrap;max-height:30rem;overflow:auto;background:#f5f5f5;padding:1rem}}</style></head>
-<body><h1>BB.5 assignment/task-pass colima evidence</h1>
-<p>Status: <strong>{escape(report['status'])}</strong>; source revision: <code>{escape(report['source_revision'])}</code></p>
-<p>Container: <code>{escape(report['container'])}</code>; image: <code>{escape(report['image'].get('image_id', 'unknown'))}</code>; roster: <code>{escape(', '.join(report['roster']))}</code></p>
-<table><thead><tr><th>Status</th><th>Scenario</th><th>Expectation</th><th>Result</th></tr></thead><tbody>{rows}</tbody></table>
-<h2>Machine-readable transcript</h2><pre>{escape(json.dumps(report, indent=2))}</pre></body></html>"""
-
-
-def run(container: str, out_dir: Path) -> int:
+def run_step(container: str, step_dir: Path) -> dict[str, Any]:
     generated_at = datetime.now(timezone.utc)
     run_id = generated_at.strftime("%Y%m%dT%H%M%S%fZ")
     source = run_command(["git", "rev-parse", "HEAD"])
@@ -357,26 +334,25 @@ def run(container: str, out_dir: Path) -> int:
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as error:
             report["cases"].append(case_record(name, "FAIL", str(error), [], {}, []))
     report["status"] = "PASS" if len(report["cases"]) == 7 and all(case["status"] == "PASS" for case in report["cases"]) else "FAIL"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "bb5-assignment.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    (out_dir / "index.html").write_text(render_html(report), encoding="utf-8")
+    step_dir.mkdir(parents=True, exist_ok=True)
+    (step_dir / "step.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"BB5 assignment/task-pass colima: {report['status']}")
     for case in report["cases"]:
         print(f"{case['status']} {case['name']}")
     print(f"source revision: {source_revision}")
     print(f"image: {image.get('image_id', 'unknown')}")
-    print(f"evidence: {out_dir}")
-    return 0 if report["status"] == "PASS" else 1
+    print(f"evidence: {step_dir}")
+    return report
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--container", default=DEFAULT_CONTAINER, help="already-running rebuilt fixture container")
-    parser.add_argument("--out", type=Path, help="evidence directory; defaults under site/reports/bb5-assignment")
+    parser.add_argument("--container", required=True, help="already-running rebuilt fixture container")
+    parser.add_argument("--out", type=Path, required=True, help="driver-owned step directory")
     args = parser.parse_args()
-    out_dir = args.out or ROOT / "site/reports" / "bb5-assignment" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     try:
-        return run(args.container, out_dir.resolve())
+        report = run_step(args.container, args.out.resolve())
+        return 0 if report["status"] == "PASS" else 1
     except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as error:
         print(f"BB5 assignment/task-pass colima: FAIL: {error}", file=sys.stderr)
         return 1

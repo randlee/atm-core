@@ -35,6 +35,7 @@ REPORTS = Path("site/reports")
 TEMPLATES = Path("templates/integration-report")
 # The colima fixture the sequence runs in; the container name inside it is recorded per step.
 HOST_LABEL = "hermes-testbed"
+SEQUENCE_PROCEDURE = "colima-integration"
 STEP_DIR = re.compile(r"^(\d{2})-([a-z][a-z0-9-]*)$")
 # Step name -> the procedure that runs it.  The payload's ``feature`` names the
 # historical runner; the step name is what the run directory shows.
@@ -312,10 +313,14 @@ def _single(values: set[Any], what: str, run_dir: Path) -> Any:
     return next(iter(values), None)
 
 
-def aggregate(steps: list[Step], records: list[dict[str, Any]], run_dir: Path) -> dict[str, Any]:
-    procedures = {record["procedure"] for record in records}
-    if len(procedures) != 1:
-        raise RenderError(f"{run_dir}: a multi-step run needs the sequence procedure (BB.8.2 driver)")
+def aggregate(
+    steps: list[Step],
+    records: list[dict[str, Any]],
+    run_dir: Path,
+    run_procedure: str,
+    run_page: ProcedurePage,
+    run_page_inferred: bool,
+) -> dict[str, Any]:
     image = next((step.image for step in steps if step.image["sha256"]), steps[0].image)
     return {
         "schema_version": 1,
@@ -324,9 +329,9 @@ def aggregate(steps: list[Step], records: list[dict[str, Any]], run_dir: Path) -
         "image": image,
         "container": _single({step.container for step in steps}, "container", run_dir),
         "atm_version": _single({step.atm_version for step in steps if step.atm_version}, "atm_version", run_dir),
-        "procedure": records[0]["procedure"],
-        "procedure_revision": records[0]["procedure_revision"],
-        "procedure_revision_inferred": records[0]["procedure_revision_inferred"],
+        "procedure": run_procedure,
+        "procedure_revision": run_page.revision,
+        "procedure_revision_inferred": run_page_inferred,
         "status": "PASS" if all(step.status == "PASS" for step in steps) else "FAIL",
         "steps": records,
     }
@@ -397,9 +402,24 @@ def render_run(run_dir: Path, *, root: Path = ROOT) -> dict[str, Any]:
         render_panel(step, page, root=root)
         records.append(_step_record(step, page, inferred, run_dir))
         pages.append(page)
-    summary = aggregate(steps, records, run_dir)
+    if len({record["procedure"] for record in records}) == 1:
+        run_procedure = records[0]["procedure"]
+        run_page = pages[0]
+        run_page_inferred = records[0]["procedure_revision_inferred"]
+    else:
+        run_procedure = SEQUENCE_PROCEDURE
+        try:
+            run_page, run_page_inferred = select_procedure_page(
+                SEQUENCE_PROCEDURE,
+                _single({step.source_revision for step in steps}, "source_revision", run_dir),
+                root=root,
+                generated_at=max(step.generated_at for step in steps),
+            )
+        except ReportRuntimeError as error:
+            raise RenderError(f"{run_dir}: {error}") from error
+    summary = aggregate(steps, records, run_dir, run_procedure, run_page, run_page_inferred)
     _write_json(run_dir / "integration.json", summary)
-    render_run_page(summary, run_dir, pages[0], root=root)
+    render_run_page(summary, run_dir, run_page, root=root)
     _write_json(run_dir.parent / f"{run_dir.name}.envelope.json", _envelope(summary, run_dir, reports_root))
     return summary
 
