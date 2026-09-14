@@ -1,9 +1,12 @@
 ---
 procedure: colima-prompt-handoffs
 family: integration
-runner: scripts/smoke/run_bb6_prompt_handoffs.py
+runner: scripts/integration/run_colima.py
 evidence: site/reports/integration/colima/<run>/steps/NN-prompt-handoffs/step.json
 revisions:
+  - rev: 10f80d6ec985eff0c1594e53c11b056d54cab35a
+    date: 2026-09-13
+    note: "refactor(bb8): drive colima checks through fixture prompts"
   - rev: 1f3334062b30f1b9dc1fd2ca5aa00344dac04551
     date: 2026-09-13
     note: "feat(bb8): run prompt handoff checks in the shared integration fixture"
@@ -31,34 +34,61 @@ revisions:
 ---
 
 ## What this test proves
-Inside the shared colima testbed, the daemon records one durable prompt-handoff row per task-linked terminal line this step delivers (queued, ready, reminder, started, complete) and matches the rows added after the step baseline by durable identity; a disabled reminder override yields no handoff and a doctor finding.
+Inside the shared colima testbed, a real agent executes prompt AT11 and observes only public ATM CLI JSON. Task events expose queued, ready, reminder, and started for the prompted task but queued only for later tasks; disabling reminders removes the reminder event and produces the documented doctor finding.
 
 ## Flow
 ```mermaid
 flowchart LR
-  setup[Start testbed container for colima-prompt-handoffs]
-  case1[1: task_events_shows_ready_reminders_and_st]
-  case2[2: disabled_task_reminder_override_yields_n]
+  setup[Reuse the live testbed fixture]
+  prompt[Run AT11 prompt-handoffs agent prompt]
+  case1[1: prompted task events only]
+  case2[2: disabled reminder doctor finding]
   verdict[Aggregate PASS/FAIL]
   evidence[Write step.json]
-  setup --> case1
+  setup --> prompt
+  prompt --> case1
   case1 --> case2
   case2 --> verdict
   verdict --> evidence
-  note[runner revision 1f333406]:::revision
+  note[runner revision 10f80d6e]:::revision
 ```
 
 ## Steps
 | step | action | observable | evidence |
 | --- | --- | --- | --- |
-| 1 | `task_events_shows_ready_reminders_and_started_for_prompted_task_only`: record the shared-table baseline, assign three tasks, wait for reminders, start and close the prompted one | task events and prompt-handoff rows added after the baseline agree row for row, for the prompted task only; recorded PASS or FAIL at revision `1f333406` | `step.json` cases |
-| 2 | `disabled_task_reminder_override_yields_no_handoff_and_doctor_finding`: disable the task reminder and assign | no handoff row is added and `atm doctor` reports the finding; recorded PASS or FAIL at revision `1f333406` | `step.json` cases |
+| 1 | Tell the fixture agent to assign three tasks, wait for a reminder, and start the prompted task | `atm task events --json` shows queued, ready, reminder, started for task 1 and queued only for tasks 2–3 | `prompt-AT11.json` and `step.json` cases |
+| 2 | Tell the agent to disable task reminders and assign another task | task events omit reminder and `atm doctor --json` reports `disabled_task_nudge_template_override` | `prompt-AT11.json` and `step.json` cases |
 
 ## Evidence layout
-This procedure is one step of a colima integration run. The runner's payload is kept byte-for-byte as `steps/NN-prompt-handoffs/step.json` under `site/reports/integration/colima/<run>/`; the step's `panel.xhtml` and the run's `index.html`, `integration.json` and envelope are rendered from it by `scripts/integration/render_colima.py`. Historical runs made before the integration layout existed were moved into it unchanged and are rendered by the same code.
+This procedure is one step of a colima integration run. The agent's unedited `prompt-report-1` JSON is retained beside `step.json`; `scripts/integration/render_colima.py` renders the panel and aggregate. Historical payloads remain byte-identical and render through the same path.
 
 ## Changes
 The revision sections below list every runner revision that produced committed evidence, newest first. A run whose source revision is not an ancestor of any listed revision links to the revision in effect on its run date and is marked inferred.
+
+## Revision 10f80d6e (2026-09-13)
+The host-side handoff simulator and its storage inspection were deleted. A real fixture agent executes AT11 and reports only public `atm task events` and `atm doctor` observations.
+
+```mermaid
+flowchart LR
+  setup[Reuse the live testbed fixture]
+  prompt[Run AT11 prompt-handoffs agent prompt]
+  case1[1: prompted task events only]
+  case2[2: disabled reminder doctor finding]
+  verdict[Aggregate PASS/FAIL]
+  evidence[Write prompt report and step.json]
+  setup --> prompt
+  prompt --> case1
+  case1 --> case2
+  case2 --> verdict
+  verdict --> evidence
+  note[runner revision 10f80d6e]:::revision
+```
+
+## Steps
+| step | action | observable | evidence |
+| --- | --- | --- | --- |
+| 1 | Tell the fixture agent to assign three tasks, wait for a reminder, and start the prompted task | `atm task events --json` shows queued, ready, reminder, started for task 1 and queued only for tasks 2–3 | `prompt-AT11.json` and `step.json` cases |
+| 2 | Tell the agent to disable task reminders and assign another task | task events omit reminder and `atm doctor --json` reports `disabled_task_nudge_template_override` | `prompt-AT11.json` and `step.json` cases |
 
 ## Revision 1f333406 (2026-09-13)
 The shared-fixture revision records the existing `prompt_handoffs` row count before this step, then reconciles only the rows added by the step. This preserves the exact terminal-line identity assertion without requiring a fresh container after earlier integration steps.

@@ -55,12 +55,47 @@ class PromptReportTests(unittest.TestCase):
 
 
 class DriverTests(unittest.TestCase):
-    def test_one_bringup_then_three_prompt_reports_in_order(self) -> None:
+    def test_canonical_testbed_result_is_converted_and_retained(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            testbed = root / "testbed"
+            results = root / "results"
+            step_dir = root / "step"
+            testbed.mkdir()
+            results.mkdir()
+            calls: list[tuple[list[str], Path | None, float]] = []
+
+            def command(argv: list[str], cwd: Path | None, timeout: float) -> dict[str, object]:
+                calls.append((argv, cwd, timeout))
+                return {
+                    "exit_code": 1,
+                    "stdout": f"fixture failed honestly\nreports and logs: {results}\n",
+                    "stderr": "",
+                    "command": "test.sh",
+                }
+
+            converted = {"feature": "colima-hermes-skills", "status": "FAIL", "cases": []}
+            with mock.patch.object(DRIVER.colima_skill_report, "run_step", return_value=converted) as run_step:
+                payload = DRIVER.run_hermes_skills(testbed, step_dir, command)
+
+            self.assertEqual(calls, [([str(testbed / "test.sh")], testbed, 3600.0)])
+            run_step.assert_called_once_with(results, step_dir)
+            self.assertEqual(payload["status"], "FAIL")
+            self.assertEqual(payload["testbed_execution"]["exit_code"], 1)
+
+    def test_canonical_testbed_requires_a_retained_result_directory(self) -> None:
+        def command(_argv: list[str], _cwd: Path | None, _timeout: float) -> dict[str, object]:
+            return {"exit_code": 1, "stdout": "fixture failed", "stderr": "root cause", "command": "test.sh"}
+
+        with self.assertRaisesRegex(DRIVER.DriverError, "root cause"):
+            DRIVER.run_hermes_skills(Path("testbed"), Path("step"), command)
+
+    def test_one_canonical_testbed_run_then_three_prompts_in_order(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
             testbed = root / "testbed"
             testbed.mkdir()
-            (testbed / "run.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+            (testbed / "test.sh").write_text("#!/bin/sh\n", encoding="utf-8")
             run_dir = root / "site/reports/integration/colima/run"
             commands: list[list[str]] = []
 
@@ -78,20 +113,30 @@ class DriverTests(unittest.TestCase):
                 statuses = [json.loads(item.read_text())["status"] for item in sorted(path.glob("steps/*/step.json"))]
                 return {"status": "PASS" if all(item == "PASS" for item in statuses) else "FAIL", "steps": statuses}
 
+            def skills(_testbed: Path, step_dir: Path, _command: DRIVER.Command) -> dict[str, object]:
+                return {
+                    "feature": "colima-hermes-skills",
+                    "generated_at": "2026-09-14T00:00:00Z",
+                    "source_revision": "b" * 40,
+                    "container": "fixture",
+                    "status": "PASS",
+                    "cases": [{"name": "skills", "status": "PASS", "detail": "test.sh"}],
+                }
+
             summary = DRIVER.run_sequence(
                 run_dir,
                 testbed=testbed,
                 root=root,
                 run_command=command,
+                skill_runner=skills,
                 renderer=renderer,
             )
-            self.assertEqual(summary, {"status": "PASS", "steps": ["PASS", "PASS", "PASS"]})
-            self.assertEqual(sum(argv[0].endswith("run.sh") for argv in commands), 1)
+            self.assertEqual(summary, {"status": "PASS", "steps": ["PASS", "PASS", "PASS", "PASS"]})
             prompt_calls = [argv[-1] for argv in commands if argv[:2] == ["docker", "exec"]]
             self.assertEqual(prompt_calls, ["AT9", "AT10", "AT11"])
             self.assertEqual(
                 [path.parent.name for path in sorted(run_dir.glob("steps/*/step.json"))],
-                ["01-task-start", "02-assignment", "03-prompt-handoffs"],
+                ["01-hermes-skills", "02-task-start", "03-assignment", "04-prompt-handoffs"],
             )
 
     def test_failed_prompt_is_recorded_and_later_prompt_runs(self) -> None:
@@ -116,8 +161,25 @@ class DriverTests(unittest.TestCase):
                 statuses = [json.loads(item.read_text())["status"] for item in sorted(path.glob("steps/*/step.json"))]
                 return {"status": "FAIL", "steps": statuses}
 
-            summary = DRIVER.run_sequence(run_dir, testbed=testbed, root=root, run_command=command, renderer=renderer)
-            self.assertEqual(summary["steps"], ["PASS", "FAIL", "PASS"])
+            def skills(_testbed: Path, _step_dir: Path, _command: DRIVER.Command) -> dict[str, object]:
+                return {
+                    "feature": "colima-hermes-skills",
+                    "generated_at": "2026-09-14T00:00:00Z",
+                    "source_revision": "c" * 40,
+                    "container": "fixture",
+                    "status": "PASS",
+                    "cases": [],
+                }
+
+            summary = DRIVER.run_sequence(
+                run_dir,
+                testbed=testbed,
+                root=root,
+                run_command=command,
+                skill_runner=skills,
+                renderer=renderer,
+            )
+            self.assertEqual(summary["steps"], ["PASS", "PASS", "FAIL", "PASS"])
 
     def test_driver_called_sources_use_no_database_or_process_shortcuts(self) -> None:
         source = Path(DRIVER.__file__).read_text(encoding="utf-8").lower()

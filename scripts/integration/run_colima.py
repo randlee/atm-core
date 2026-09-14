@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any, Callable
@@ -16,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.integration import render_colima  # noqa: E402
+from scripts.smoke import colima_skill_report  # noqa: E402
 
 DEFAULT_TESTBED = Path.home() / "Documents/github/atm-hermes-testbed"
 DEFAULT_CONTAINER = "hermes-testbed"
@@ -26,7 +28,9 @@ PROMPTS = (
 )
 PROMPT_SCHEMA = "prompt-report-1"
 VERDICTS = {"pass": "PASS", "fail": "FAIL"}
+RESULTS_LINE = re.compile(r"^reports and logs:\s+(.+)$", re.MULTILINE)
 Command = Callable[[list[str], Path | None, float], dict[str, Any]]
+SkillRunner = Callable[[Path, Path, Command], dict[str, Any]]
 
 
 class DriverError(RuntimeError):
@@ -104,6 +108,17 @@ def failure_payload(step_name: str, revision: str | None, container: str, error:
     }
 
 
+def run_hermes_skills(testbed: Path, step_dir: Path, run_command: Command = command_record) -> dict[str, Any]:
+    """Run the testbed's canonical entry point and convert its retained reports."""
+    execution = run_command([str(testbed / "test.sh")], testbed, 3600.0)
+    match = RESULTS_LINE.search(execution["stdout"])
+    if match is None:
+        raise DriverError(execution["stderr"].strip() or execution["stdout"].strip() or "test.sh reported no result directory")
+    payload = colima_skill_report.run_step(Path(match.group(1).strip()), step_dir)
+    payload["testbed_execution"] = execution
+    return payload
+
+
 def run_prompt(
     prompt_id: str,
     step_name: str,
@@ -138,16 +153,20 @@ def run_sequence(
     container: str = DEFAULT_CONTAINER,
     root: Path = ROOT,
     run_command: Command = command_record,
+    skill_runner: SkillRunner = run_hermes_skills,
     renderer: Callable[..., dict[str, Any]] = render_colima.render_run,
 ) -> dict[str, Any]:
     revision = source_revision(root)
-    start = run_command([str(testbed / "run.sh"), "--gateway", "--no-peer"], testbed, 600.0)
-    start_error = None if start["exit_code"] == 0 else DriverError(start["stderr"].strip() or start["stdout"].strip())
-    for order, (prompt_id, step_name, test_id) in enumerate(PROMPTS, start=1):
+    skills_dir = run_dir / "steps/01-hermes-skills"
+    try:
+        skills_payload = skill_runner(testbed, skills_dir, run_command)
+    except (DriverError, OSError, subprocess.SubprocessError, ValueError) as error:
+        skills_payload = failure_payload("hermes-skills", revision, container, error)
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    (skills_dir / "step.json").write_text(json.dumps(skills_payload, indent=2) + "\n", encoding="utf-8")
+    for order, (prompt_id, step_name, test_id) in enumerate(PROMPTS, start=2):
         step_dir = run_dir / "steps" / f"{order:02d}-{step_name}"
         try:
-            if start_error is not None:
-                raise start_error
             payload = run_prompt(
                 prompt_id,
                 step_name,
@@ -177,7 +196,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--container", default=DEFAULT_CONTAINER)
     args = parser.parse_args(argv[1:])
     testbed = args.testbed.expanduser().resolve()
-    if not (testbed / "run.sh").is_file():
+    if not (testbed / "test.sh").is_file():
         print(f"colima integration: error: not an atm-hermes-testbed checkout: {testbed}", file=sys.stderr)
         return 2
     run_dir = (args.out or default_run_dir()).resolve()
@@ -186,7 +205,7 @@ def main(argv: list[str]) -> int:
     except (DriverError, render_colima.RenderError, OSError) as error:
         print(f"colima integration: error: {error}", file=sys.stderr)
         return 2
-    print(f"colima integration: {summary['status']} ({len(summary['steps'])} prompt(s))")
+    print(f"colima integration: {summary['status']} ({len(summary['steps'])} step(s))")
     print(f"evidence: {run_dir}")
     return 0 if summary["status"] == "PASS" else 1
 

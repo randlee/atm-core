@@ -4,8 +4,14 @@
     {
       "procedure": "colima-assignment",
       "family": "integration",
-      "runner": "scripts/smoke/run_bb5_assignment.py",
+      "runner": "scripts/integration/run_colima.py",
       "revisions": [
+        {
+          "rev": "10f80d6ec985eff0c1594e53c11b056d54cab35a",
+          "date": "2026-09-13",
+          "note": "refactor(bb8): drive colima checks through fixture prompts",
+          "html": "procedures/colima-assignment/10f80d6e.html"
+        },
         {
           "rev": "5df9c2f0078f0606940aaf2c2f110e22860da94d",
           "date": "2026-09-13",
@@ -39,6 +45,12 @@
       "runner": "scripts/integration/run_colima.py",
       "revisions": [
         {
+          "rev": "10f80d6ec985eff0c1594e53c11b056d54cab35a",
+          "date": "2026-09-13",
+          "note": "refactor(bb8): drive colima checks through fixture prompts",
+          "html": "procedures/colima-integration/10f80d6e.html"
+        },
+        {
           "rev": "1f3334062b30f1b9dc1fd2ca5aa00344dac04551",
           "date": "2026-09-13",
           "note": "feat(bb8): add unified colima integration driver",
@@ -49,8 +61,14 @@
     {
       "procedure": "colima-prompt-handoffs",
       "family": "integration",
-      "runner": "scripts/smoke/run_bb6_prompt_handoffs.py",
+      "runner": "scripts/integration/run_colima.py",
       "revisions": [
+        {
+          "rev": "10f80d6ec985eff0c1594e53c11b056d54cab35a",
+          "date": "2026-09-13",
+          "note": "refactor(bb8): drive colima checks through fixture prompts",
+          "html": "procedures/colima-prompt-handoffs/10f80d6e.html"
+        },
         {
           "rev": "1f3334062b30f1b9dc1fd2ca5aa00344dac04551",
           "date": "2026-09-13",
@@ -104,8 +122,14 @@
     {
       "procedure": "colima-task-start",
       "family": "integration",
-      "runner": "scripts/smoke/run_bb4_task_start.py",
+      "runner": "scripts/integration/run_colima.py",
       "revisions": [
+        {
+          "rev": "10f80d6ec985eff0c1594e53c11b056d54cab35a",
+          "date": "2026-09-13",
+          "note": "refactor(bb8): drive colima checks through fixture prompts",
+          "html": "procedures/colima-task-start/10f80d6e.html"
+        },
         {
           "rev": "8aa00a111db46011e43bfa08ef70643f15e8e5ad",
           "date": "2026-09-12",
