@@ -37,6 +37,10 @@ class DriverError(RuntimeError):
     """The fixture could not run or returned an invalid prompt report."""
 
 
+class FixtureBringupError(DriverError):
+    """The canonical testbed entry point could not bring up its fixture."""
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -113,7 +117,10 @@ def run_hermes_skills(testbed: Path, step_dir: Path, run_command: Command = comm
     execution = run_command([str(testbed / "test.sh")], testbed, 3600.0)
     match = RESULTS_LINE.search(execution["stdout"])
     if match is None:
-        raise DriverError(execution["stderr"].strip() or execution["stdout"].strip() or "test.sh reported no result directory")
+        detail = execution["stderr"].strip() or execution["stdout"].strip() or "test.sh reported no result directory"
+        bringup_markers = ("cannot run", "run.sh failed")
+        error_type = FixtureBringupError if any(marker in detail.lower() for marker in bringup_markers) else DriverError
+        raise error_type(detail)
     payload = colima_skill_report.run_step(Path(match.group(1).strip()), step_dir)
     payload["testbed_execution"] = execution
     return payload
@@ -158,8 +165,12 @@ def run_sequence(
 ) -> dict[str, Any]:
     revision = source_revision(root)
     skills_dir = run_dir / "steps/01-hermes-skills"
+    bringup_failed = False
     try:
         skills_payload = skill_runner(testbed, skills_dir, run_command)
+    except FixtureBringupError as error:
+        bringup_failed = True
+        skills_payload = failure_payload("hermes-skills", revision, container, error)
     except (DriverError, OSError, subprocess.SubprocessError, ValueError) as error:
         skills_payload = failure_payload("hermes-skills", revision, container, error)
     skills_dir.mkdir(parents=True, exist_ok=True)
@@ -167,6 +178,8 @@ def run_sequence(
     for order, (prompt_id, step_name, test_id) in enumerate(PROMPTS, start=2):
         step_dir = run_dir / "steps" / f"{order:02d}-{step_name}"
         try:
+            if bringup_failed:
+                raise DriverError("not run: fixture bringup failed (step 1)")
             payload = run_prompt(
                 prompt_id,
                 step_name,

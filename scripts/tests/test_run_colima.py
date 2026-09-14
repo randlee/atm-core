@@ -181,6 +181,37 @@ class DriverTests(unittest.TestCase):
             )
             self.assertEqual(summary["steps"], ["PASS", "PASS", "FAIL", "PASS"])
 
+    def test_fixture_bringup_failure_records_unrun_prompt_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            run_dir = root / "site/reports/integration/colima/run"
+            commands: list[list[str]] = []
+
+            def command(argv: list[str], _cwd: Path | None, _timeout: float) -> dict[str, object]:
+                commands.append(argv)
+                return {"exit_code": 0, "stdout": "d" * 40, "stderr": "", "command": "git"}
+
+            def skills(_testbed: Path, _step_dir: Path, _command: DRIVER.Command) -> dict[str, object]:
+                raise DRIVER.FixtureBringupError("CANNOT RUN: run.sh failed")
+
+            def renderer(path: Path, *, root: Path) -> dict[str, object]:
+                payloads = [json.loads(item.read_text()) for item in sorted(path.glob("steps/*/step.json"))]
+                return {"status": "FAIL", "steps": payloads}
+
+            summary = DRIVER.run_sequence(
+                run_dir,
+                testbed=root / "testbed",
+                root=root,
+                run_command=command,
+                skill_runner=skills,
+                renderer=renderer,
+            )
+
+            self.assertEqual([item["status"] for item in summary["steps"]], ["FAIL"] * 4)
+            for payload in summary["steps"][1:]:
+                self.assertEqual(payload["cases"][0]["detail"], "not run: fixture bringup failed (step 1)")
+            self.assertFalse(any(argv[:2] == ["docker", "exec"] for argv in commands))
+
     def test_driver_called_sources_use_no_database_or_process_shortcuts(self) -> None:
         source = Path(DRIVER.__file__).read_text(encoding="utf-8").lower()
         forbidden = ("sqlite3", "mail.db", "pkill", "herdr pane", "docker exec atm doctor")
