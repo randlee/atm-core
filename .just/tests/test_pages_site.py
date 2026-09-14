@@ -30,8 +30,12 @@ class PagesSiteTests(unittest.TestCase):
 
     def test_pages_workflow_validates_and_uploads_only_site(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("python3 scripts/procedures/render_procedure_pages.py --check", workflow)
-        self.assertIn("python3 .just/generate_report_index.py --check", workflow)
+        self.assertIn("fetch-depth: 0", workflow)
+        self.assertIn("python3 .just/check_site_generated.py", workflow)
+        self.assertIn("python3 .just/check_site_links.py", workflow)
+        gate = (REPO_ROOT / ".just/check_site_generated.py").read_text(encoding="utf-8")
+        self.assertIn('("scripts/procedures/render_procedure_pages.py", "--check")', gate)
+        self.assertIn('(".just/generate_report_index.py", "--check")', gate)
         self.assertIn("actions/upload-pages-artifact@v3", workflow)
         self.assertIn("path: site", workflow)
         self.assertIn("actions/deploy-pages@v4", workflow)

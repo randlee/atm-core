@@ -32,7 +32,7 @@
 set -u
 
 if [ "${ATM_SKIP_PUSH_GATE:-}" = "1" ]; then
-    echo "pre-push: ATM_SKIP_PUSH_GATE=1 set; skipping fmt/clippy/ttl gates" >&2
+    echo "pre-push: ATM_SKIP_PUSH_GATE=1 set; skipping fmt/clippy/ttl/site gates" >&2
     exit 0
 fi
 
@@ -48,6 +48,7 @@ tooling_pattern='(^|/)\.claude/skills/graph-orchestration/scripts/validate-findi
 
 needs_rust_gate=0
 ttl_fail=0
+site_fail=0
 tmp_root=$(mktemp -d)
 cleanup() { rm -rf "$tmp_root"; }
 trap cleanup EXIT
@@ -102,6 +103,25 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
 
     if printf '%s\n' "$changed" | grep -E "$tooling_pattern" >/dev/null 2>&1; then
         echo "pre-push: WARNING: validate-findings.py/.sparql, .graph-orchestration-ignore, or triage-record.ttl.j2 changed in this push. Only phases whose own TTL files are touched are gated below -- a tooling regression affecting other phases will NOT be caught by this hook. Run validate-findings.py manually against every phase before relying on this change." >&2
+    fi
+
+    # Site gate: the same check Pages runs (.just/check_site_generated.py) plus
+    # link verification, against the pushed commit. Generated pages resolve
+    # procedure revisions from git ancestry, so this uses a detached worktree
+    # (full shared history) rather than a git archive extract.
+    if printf '%s\n' "$changed" | grep -E '^(site|docs/procedures|docs/reports|templates|scripts/procedures|scripts/integration)/|^scripts/report_runtime\.py$|^\.just/(generate_report_index|check_site_generated|check_site_links)\.py$' >/dev/null 2>&1; then
+        site_tree="$tmp_root/site.$local_sha"
+        echo "pre-push: running site-generated and site-links against pushed commit $local_sha" >&2
+        if git worktree add --quiet --detach "$site_tree" "$local_sha" >/dev/null 2>&1; then
+            if ! (cd "$site_tree" && python3 .just/check_site_generated.py && python3 .just/check_site_links.py >/dev/null); then
+                echo "pre-push: REFUSED. Generated site pages or links are invalid at pushed commit $local_sha; run 'just reports-index' and 'just lint site-links', then commit." >&2
+                site_fail=1
+            fi
+            git worktree remove --force "$site_tree" >/dev/null 2>&1
+        else
+            echo "pre-push: REFUSED. Could not check out pushed commit $local_sha for the site gate." >&2
+            site_fail=1
+        fi
     fi
 
     # Only validate phases whose own .triage/.sprints files are actually
@@ -313,7 +333,7 @@ if [ "$needs_rust_gate" -eq 1 ]; then
     fi
 fi
 
-if [ "$ttl_fail" -ne 0 ]; then
+if [ "$ttl_fail" -ne 0 ] || [ "$site_fail" -ne 0 ]; then
     exit 1
 fi
 

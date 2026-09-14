@@ -83,6 +83,18 @@ def resolve_procedure_revision(
         ["git", "rev-parse", "--git-dir"], cwd=root, capture_output=True, check=False
     )
     git_unavailable = repository.returncode != 0
+    if not git_unavailable:
+        shallow = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            cwd=root, capture_output=True, text=True, check=False,
+        )
+        if shallow.stdout.strip() == "true":
+            # A shallow clone lacks procedure commits, so ancestry would silently
+            # degrade to the dated fallback and select different pages.
+            raise ReportRuntimeError(
+                f"{root}: shallow git checkout; report generation needs full history "
+                "(actions/checkout fetch-depth: 0, or git fetch --unshallow)"
+            )
     ancestors: list[dict[str, Any]] = []
     if not git_unavailable:
         for item in revisions:
