@@ -13,16 +13,16 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = (
-    ("scripts/procedures/render_procedure_pages.py", "--check"),
-    (".just/generate_report_index.py", "--check"),
+    ("scripts/procedures/render_procedure_pages.py", "--check", "just procedures"),
+    (".just/generate_report_index.py", "--check", "just reports-index"),
 )
 
 
 def main() -> int:
-    for script, flag in CHECKS:
+    for script, flag, regenerate in CHECKS:
         result = subprocess.run([sys.executable, str(ROOT / script), flag], cwd=ROOT, check=False)
         if result.returncode:
-            print(f"site-generated: {script} {flag} failed (run `just reports-index`)", file=sys.stderr)
+            print(f"site-generated: {script} {flag} failed (run `{regenerate}`, then commit)", file=sys.stderr)
             return result.returncode
     return 0
 

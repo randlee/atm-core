@@ -114,7 +114,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         echo "pre-push: running site-generated and site-links against pushed commit $local_sha" >&2
         if git worktree add --quiet --detach "$site_tree" "$local_sha" >/dev/null 2>&1; then
             if ! (cd "$site_tree" && python3 .just/check_site_generated.py && python3 .just/check_site_links.py >/dev/null); then
-                echo "pre-push: REFUSED. Generated site pages or links are invalid at pushed commit $local_sha; run 'just reports-index' and 'just lint site-links', then commit." >&2
+                echo "pre-push: REFUSED. Generated site pages or links are invalid at pushed commit $local_sha; regenerate as printed above and fix links reported by 'just lint site-links', then commit." >&2
                 site_fail=1
             fi
             git worktree remove --force "$site_tree" >/dev/null 2>&1
