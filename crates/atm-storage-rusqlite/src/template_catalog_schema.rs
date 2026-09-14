@@ -9,6 +9,7 @@ use atm_storage::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateRegistration,
     TemplateRegistrationOutcome,
 };
+use rusqlite::{Transaction, TransactionBehavior};
 
 const TEMPLATE_CATALOG_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS message_templates (
@@ -27,8 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_message_templates_type
     ON message_templates(template_type) WHERE template_type IS NOT NULL;
 "#;
 
-const DECOMPOSED_MESSAGES_VIEW_V2: &str = r#"
-DROP VIEW IF EXISTS decomposed_messages;
+const DECOMPOSED_MESSAGES_VIEW_CREATE: &str = r#"
 CREATE VIEW decomposed_messages AS
 SELECT m.team, m.agent, m.from_agent, m.message_at, m.message_id,
        m.template_sha, t.template_type, m.vars_json,
@@ -58,6 +58,47 @@ WHERE m.template_sha IS NOT NULL;
 "#;
 
 pub(crate) fn ensure_schema(
+    connection: &mut SqliteConnection,
+    target: &SharedDbTarget,
+) -> Result<(), atm_storage::AtmError> {
+    ensure_catalog_schema(connection, target)?;
+    // `execute_batch` runs each statement in autocommit mode unless the
+    // caller supplies a transaction. Keeping the drop and create together
+    // prevents another process running startup migration from observing the
+    // view's intentional replacement gap on the host-scoped database.
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to begin decomposed_messages view replacement",
+                error,
+            )
+        })?;
+    transaction
+        .execute_batch("DROP VIEW IF EXISTS decomposed_messages;")
+        .map_err(|error| sqlite_error(target, "failed to drop decomposed_messages view", error))?;
+    create_decomposed_messages_view(&transaction, target)?;
+    transaction.commit().map_err(|error| {
+        sqlite_error(
+            target,
+            "failed to commit decomposed_messages view replacement",
+            error,
+        )
+    })
+}
+
+/// Re-runs the catalog migrations and restores the view inside a caller-owned
+/// transaction, as required by the legacy `mail_messages` table rebuild.
+pub(crate) fn ensure_schema_in_transaction(
+    transaction: &Transaction<'_>,
+    target: &SharedDbTarget,
+) -> Result<(), atm_storage::AtmError> {
+    ensure_catalog_schema(transaction, target)?;
+    create_decomposed_messages_view(transaction, target)
+}
+
+fn ensure_catalog_schema(
     connection: &SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<(), atm_storage::AtmError> {
@@ -81,8 +122,15 @@ pub(crate) fn ensure_schema(
         "output_format",
         "ALTER TABLE message_templates ADD COLUMN output_format TEXT NULL;",
     )?;
+    Ok(())
+}
+
+fn create_decomposed_messages_view(
+    connection: &SqliteConnection,
+    target: &SharedDbTarget,
+) -> Result<(), atm_storage::AtmError> {
     connection
-        .execute_batch(DECOMPOSED_MESSAGES_VIEW_V2)
+        .execute_batch(DECOMPOSED_MESSAGES_VIEW_CREATE)
         .map_err(|error| sqlite_error(target, "failed to create decomposed_messages view", error))
 }
 
