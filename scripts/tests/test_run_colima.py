@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import shutil
+import sqlite3
 import tempfile
 import unittest
 from unittest import mock
@@ -64,6 +65,28 @@ def runner(name: str, calls: list[str], *, fail: bool = False):
 
 
 class DriverTests(unittest.TestCase):
+    def test_reset_sql_clears_step_state_but_preserves_peer_metadata(self) -> None:
+        connection = sqlite3.connect(":memory:")
+        mutable = (
+            "prompt_handoffs",
+            "task_events",
+            "tasks",
+            "escalation_recipients",
+            "mail_message_states",
+            "mail_messages",
+            "mail_seen_watermarks",
+            "mail_message_search_documents",
+            "team_nudge_template_overrides",
+            "diagnostic_events",
+        )
+        preserved = DRIVER.PRESERVED_TABLES
+        for table in (*mutable, *preserved):
+            connection.execute(f"CREATE TABLE {table} (value TEXT)")
+            connection.execute(f"INSERT INTO {table} VALUES ('retained-or-cleared')")
+        connection.executescript(DRIVER.RESET_SQL)
+        self.assertTrue(all(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0 for table in mutable))
+        self.assertTrue(all(connection.execute(f"SELECT value FROM {table}").fetchone()[0] == "retained-or-cleared" for table in preserved))
+
     def test_parse_steps_keeps_declared_order_and_rejects_bad_input(self) -> None:
         self.assertEqual(DRIVER.parse_steps("prompt-handoffs,task-start"), ("task-start", "prompt-handoffs"))
         with self.assertRaisesRegex(DRIVER.DriverError, "unknown step"):

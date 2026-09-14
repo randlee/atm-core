@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 from typing import Any, Callable
@@ -35,7 +36,45 @@ RESULTS_LINE = re.compile(r"^reports and logs:\s+(.+)$", re.MULTILINE)
 StepRunner = Callable[[str, Path], dict[str, Any]]
 FixtureReset = Callable[[str], dict[str, Any]]
 
-RESET_COMMAND = r"""
+RESET_SQL = """
+PRAGMA foreign_keys = ON;
+BEGIN IMMEDIATE;
+DELETE FROM prompt_handoffs;
+DELETE FROM task_events;
+DELETE FROM tasks;
+DELETE FROM escalation_recipients;
+DELETE FROM mail_message_states;
+DELETE FROM mail_messages;
+DELETE FROM mail_seen_watermarks;
+DELETE FROM mail_message_search_documents;
+DELETE FROM team_nudge_template_overrides;
+DELETE FROM diagnostic_events;
+COMMIT;
+PRAGMA wal_checkpoint(TRUNCATE);
+""".strip()
+PRESERVED_TABLES = (
+    "peer_local_certificate",
+    "peer_trusted_peers",
+    "peer_https_interfaces",
+    "team_roster",
+)
+
+
+def reset_command() -> str:
+    database_reset = f"""
+import json
+import sqlite3
+
+connection = sqlite3.connect('/root/.atm/db/mail.db')
+tables = {PRESERVED_TABLES!r}
+before = {{table: connection.execute(f'SELECT * FROM {{table}} ORDER BY 1').fetchall() for table in tables}}
+connection.executescript({RESET_SQL!r})
+after = {{table: connection.execute(f'SELECT * FROM {{table}} ORDER BY 1').fetchall() for table in tables}}
+if not before['peer_local_certificate'] or after != before:
+    raise SystemExit('reset changed required peer, roster, or interface metadata')
+print('reset preserved metadata: ' + json.dumps({{table: len(rows) for table, rows in after.items()}}, sort_keys=True))
+""".strip()
+    return rf"""
 set -eu
 herdr pane list 2>/dev/null | python3 -c '
 import json, subprocess, sys
@@ -49,10 +88,10 @@ for unused in $(seq 1 20); do
   pgrep -x atm-daemon >/dev/null 2>&1 || break
   sleep 1
 done
-rm -f /root/.atm/db/mail.db /root/.atm/db/mail.db-shm /root/.atm/db/mail.db-wal
 rm -f /root/.atm/daemon/owner.lock /root/.atm/daemon/local-http.json
 mkdir -p /root/.atm/logs
 : > /root/.atm/logs/atm.log.jsonl
+python3 -c {shlex.quote(database_reset)}
 /opt/testbed/harness/bringup.sh
 """.strip()
 
@@ -105,7 +144,7 @@ def start_fixture(testbed: Path, container: str) -> dict[str, Any]:
 
 def reset_fixture(container: str) -> dict[str, Any]:
     """Reset mutable ATM/team state while retaining the one container session."""
-    result = command_record(["docker", "exec", container, "sh", "-lc", RESET_COMMAND])
+    result = command_record(["docker", "exec", container, "sh", "-lc", reset_command()])
     if result["exit_code"] != 0:
         detail = result["stderr"].strip() or result["stdout"].strip()
         raise DriverError(f"fixture state reset failed: {detail}")
