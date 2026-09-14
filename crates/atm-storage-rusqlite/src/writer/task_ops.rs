@@ -83,13 +83,7 @@ pub(super) fn append_rejected_task_event(
     if !is_task_rejection(error.code()) {
         return Ok(());
     }
-    if matches!(
-        op,
-        WriteOp::UpsertMessage { record, provenance }
-            if *provenance == MessageWriteOrigin::Local
-                && record.envelope.task_op.is_none()
-                && error.code() == atm_storage::AtmErrorCode::TaskNotCounterparty
-    ) {
+    if is_pre_admission_reassignment_refusal(op, error) {
         // A refused reassignment is an authorization failure before task
         // admission. Keep the attempted message and task ledger unchanged.
         return Ok(());
@@ -155,6 +149,16 @@ pub(super) fn append_rejected_task_event(
         None,
         None,
         Some(error.message()),
+    )
+}
+
+fn is_pre_admission_reassignment_refusal(op: &WriteOp, error: &AtmError) -> bool {
+    matches!(
+        op,
+        WriteOp::UpsertMessage { record, provenance }
+            if *provenance == MessageWriteOrigin::Local
+                && record.envelope.task_op.is_none()
+                && error.code() == atm_storage::AtmErrorCode::TaskNotCounterparty
     )
 }
 
