@@ -23,11 +23,15 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from scripts.report_runtime import ReportRuntimeError, resolve_procedure_page, resolve_procedure_revision
+from scripts.report_runtime import ReportRuntimeError, select_procedure_page
 
 
 SCHEMA_VERSION = 1
-REPORT_TYPES = ("benchmark", "fuzz", "smoke")
+REPORT_TYPES = ("benchmark", "fuzz", "integration", "smoke")
+# Families whose index title is not just the capitalised family name.
+FAMILY_TITLES = {"integration": "Integration (colima)"}
+# Report types whose envelope carries the run verdict.
+VERDICT_REPORT_TYPES = frozenset({"integration", "smoke"})
 REPORTS_RELATIVE = Path("site/reports")
 INDEX_NAME = "index.html"
 HISTORY_DIRECTORY = "history"
@@ -42,7 +46,7 @@ OPTIONAL_FIELDS = frozenset({
     "execution_identity", "measurement_note", "effective_lane_settings", "ratchet",
     "source_revision", "procedure",
 })
-SMOKE_STATUS_VALUES = frozenset({"PASS", "FAIL"})
+RUN_STATUS_VALUES = frozenset({"PASS", "FAIL"})
 FUZZ_STATUS_VALUES = frozenset({"PASS", "FAIL", "ERROR"})
 
 
@@ -112,10 +116,10 @@ def _safe_host_label(value: Any, source: Path) -> str:
     return value
 
 
-def _smoke_status(value: Any, source: Path) -> str:
-    if value not in SMOKE_STATUS_VALUES:
+def _run_status(value: Any, source: Path) -> str:
+    if value not in RUN_STATUS_VALUES:
         raise ReportIndexError(
-            f"{source}: smoke status must be one of {', '.join(sorted(SMOKE_STATUS_VALUES))}"
+            f"{source}: status must be one of {', '.join(sorted(RUN_STATUS_VALUES))}"
         )
     return value
 
@@ -167,7 +171,7 @@ def _sibling_feature(source: Path) -> str | None:
 
 
 def _procedure_for_feature(feature: str) -> str:
-    if feature in {"graft-hermes", "colima-hermes-skills"}:
+    if feature == "graft-hermes":
         return feature
     return "smoke-" + ("local-ip" if feature == "local-up" else feature)
 
@@ -192,8 +196,7 @@ def _procedure_for(envelope: Envelope) -> str:
         return envelope.source.name.removesuffix(".json")
     if envelope.report_type == "smoke":
         feature = _sibling_feature(envelope.source)
-        if feature == "graft-hermes" or feature == "colima-hermes-skills": return feature
-        return "smoke-" + ("local-ip" if feature == "local-up" else feature or "unknown")
+        return _procedure_for_feature(feature or "unknown")
     target = None
     for candidate in sorted(envelope.source.parent.glob("*.json")):
         data = None
@@ -208,46 +211,20 @@ def _procedure_for(envelope: Envelope) -> str:
 def resolve_procedures(envelopes: list[Envelope], reports_root: Path) -> list[Envelope]:
     if not envelopes:
         return []
-    manifest = _manifest(reports_root)
+    _manifest(reports_root)
     resolved: list[Envelope] = []
     for envelope in envelopes:
         procedure = _procedure_for(envelope)
-        revisions = manifest.get(procedure)
-        if revisions is None:
-            raise ReportIndexError(f"{envelope.source}: procedure {procedure} has no page")
-        source_revision = envelope.source_revision
-        inferred = source_revision is None
-        selected = None
-        if source_revision:
-            try:
-                selected = resolve_procedure_revision(
-                    revisions,
-                    source_revision,
-                    root=reports_root.parent.parent,
-                    generated_at=envelope.generated_at_text,
-                )
-            except ReportRuntimeError as error:
-                raise ReportIndexError(f"{envelope.source}: {error}") from error
-        if selected is None and inferred:
-            dated = [item for item in revisions if isinstance(item.get("date"), str) and item["date"] <= envelope.generated_at_text[:10]]
-            selected = max(dated, key=lambda item: item["date"], default=None)
-        if selected is None:
-            revision = source_revision or "none"
-            raise ReportIndexError(f"{envelope.source}: procedure {procedure} has no page for revision {revision} (run date {envelope.generated_at_text})")
         try:
-            page = resolve_procedure_page(
+            page, inferred = select_procedure_page(
                 procedure,
-                selected.get("rev"),
+                envelope.source_revision,
                 root=reports_root.parent.parent,
                 generated_at=envelope.generated_at_text,
                 error_type=ReportIndexError,
             )
         except ReportIndexError as error:
             raise ReportIndexError(f"{envelope.source}: {error}") from error
-        if page is None:
-            raise ReportIndexError(
-                f"{envelope.source}: procedure {procedure} has no page for revision {selected.get('rev', 'none')}"
-            )
         resolved.append(Envelope(**{**envelope.__dict__, "procedure": procedure, "procedure_html": page.html, "procedure_inferred": inferred}))
     return resolved
 
@@ -268,7 +245,7 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
         raise ReportIndexError(
             f"{source}: report_type must be one of {', '.join(REPORT_TYPES)}"
         )
-    allowed_fields = REQUIRED_FIELDS | OPTIONAL_FIELDS | ({"status"} if report_type == "smoke" else set())
+    allowed_fields = REQUIRED_FIELDS | OPTIONAL_FIELDS | ({"status"} if report_type in VERDICT_REPORT_TYPES else set())
     unexpected_fields = set(payload) - allowed_fields
     if unexpected_fields:
         raise ReportIndexError(
@@ -283,6 +260,8 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
     procedure = payload.get("procedure")
     if procedure is not None and (not isinstance(procedure, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", procedure)):
         raise ReportIndexError(f"{source}: procedure must be a safe procedure id")
+    if report_type == "integration" and procedure is None:
+        raise ReportIndexError(f"{source}: an integration envelope must name its procedure")
     host_label = _safe_host_label(payload["host_label"], source)
     report_html = _safe_relative_html(payload["report_html"], source)
     html_path = reports_root / report_html
@@ -316,7 +295,7 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
         report_html=report_html,
         source=source,
         status=(
-            _smoke_status(payload["status"], source) if report_type == "smoke"
+            _run_status(payload.get("status"), source) if report_type in VERDICT_REPORT_TYPES
             else _fuzz_status(html_path) if report_type == "fuzz"
             else None
         ),
@@ -347,7 +326,7 @@ def parse_smoke_result(source: Path, reports_root: Path, payload: dict[str, Any]
         host_label=host_label,
         report_html=html_path.relative_to(reports_root).as_posix(),
         source=source,
-        status=_smoke_status(payload["status"], source),
+        status=_run_status(payload["status"], source),
         source_revision=_source_revision(payload.get("source_revision"), source),
         procedure=_procedure_for_feature(payload["feature"]),
     )
@@ -407,7 +386,7 @@ class Classification:
 
     @property
     def title(self) -> str:
-        return self.family.capitalize()
+        return FAMILY_TITLES.get(self.family, self.family.capitalize())
 
     @property
     def latest(self) -> Envelope:
@@ -647,7 +626,7 @@ def nav_for(page: str, classifications: list[Classification]) -> str:
     by_family = {item.family: item for item in classifications}
     if parts[0] == HISTORY_DIRECTORY and len(parts) == 2:
         family = parts[1].removesuffix(".html")
-        title = by_family[family].title if family in by_family else family.capitalize()
+        title = by_family[family].title if family in by_family else FAMILY_TITLES.get(family, family.capitalize())
         return render_nav(crumbs + [Crumb(f"{title} history")])
     if parts[0] == "procedures" and len(parts) == 3:
         procedure = parts[1]

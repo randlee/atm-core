@@ -389,6 +389,23 @@ class GenerateReportIndexTests(unittest.TestCase):
             with self.assertRaisesRegex(ReportIndexError, "host_label"):
                 build_index(reports)
 
+    def test_integration_envelope_needs_procedure_and_verdict_benchmark_takes_no_status(self) -> None:
+        cases = (
+            ("integration", {"status": "PASS"}, "must name its procedure"),
+            ("integration", {"procedure": "benchmark", "status": "SKIP"}, "status must be one of FAIL, PASS"),
+            ("benchmark", {"status": "PASS"}, "unsupported public fields: status"),
+        )
+        for report_type, extra, message in cases:
+            with self.subTest(report_type=report_type, extra=extra), tempfile.TemporaryDirectory() as tempdir:
+                root = Path(tempdir)
+                write_envelope(root, "run", report_type, "2026-08-08T04:00:00Z", "hermes-testbed")
+                payload_path = root / "site/reports/run.json"
+                payload = json.loads(payload_path.read_text(encoding="utf-8"))
+                payload.update(extra)
+                payload_path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaisesRegex(ReportIndexError, message):
+                    build_index(root / "site/reports")
+
     def test_rejects_missing_html_and_evidence_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
