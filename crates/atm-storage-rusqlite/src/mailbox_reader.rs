@@ -11,8 +11,8 @@ use atm_storage::{
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use crate::reader_pool::ReaderPool;
-use crate::search_store::{SqlFilterAliases, compile_sql_filters_for};
 use crate::shared_db::{SharedDbTarget, deserialize_json, sqlite_error};
+use crate::sql_filters::{SqlFilterAliases, compile_sql_filters_for};
 
 struct MailboxReader {
     pool: ReaderPool,

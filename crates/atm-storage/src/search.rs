@@ -20,6 +20,12 @@ use crate::template_workflow::{
 };
 use crate::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName, TemplateSha};
 
+mod mailbox_filters;
+pub use mailbox_filters::{
+    SearchAckState, SearchCount, SearchCountGroupBy, SearchCountKey, SearchMailboxSelection,
+    SearchReadState,
+};
+
 /// One bounded literal term in a typed search expression.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchAtom {
@@ -337,6 +343,7 @@ impl Default for SearchPageRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[rustfmt::skip]
 pub struct SearchFilters {
     pub team: Option<TeamName>,
     pub agent: Option<AgentName>,
@@ -356,70 +363,8 @@ pub struct SearchFilters {
     pub workflow_transition: Option<WorkflowTransition>,
     pub workflow_iteration: Option<WorkflowIteration>,
     pub time_range: Option<TimeRange>,
-    /// Exact durable protocol message identifier, when the mailbox command
-    /// names a message rather than a display bucket.
-    pub message_id: Option<AtmMessageId>,
-    /// Durable task link from the message envelope.
-    pub task_id: Option<TaskId>,
-    /// Case-insensitive mailbox text/summary match, applied by the reader
-    /// before its page limit so a client never has to materialize a mailbox
-    /// to find a matching message.
-    pub contains: Option<String>,
-    /// Durable mailbox read-state predicate. Visibility remains implicit for
-    /// storage-owned search/count operations.
-    pub read_state: Option<SearchReadState>,
-    /// Durable acknowledgement-state predicate.
-    pub ack_state: Option<SearchAckState>,
-    /// Restricts results to the current terminal message in each successor
-    /// chain, matching mailbox list collapse semantics.
-    pub current_only: bool,
-    /// Mailbox display eligibility. This is typed here rather than redoing
-    /// bucket policy after an unbounded reader query in the runtime.
-    pub mailbox_selection: Option<SearchMailboxSelection>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SearchMailboxSelection {
-    Actionable,
-    Unread,
-    PendingAck,
-    All,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SearchReadState {
-    Unread,
-    Read,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SearchAckState {
-    Pending,
-    Acknowledged,
-    NotRequired,
-}
-
-/// Aggregate grouping supported by the storage-owned message counter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SearchCountGroupBy {
-    Bucket,
-    FromAgent,
-    Tag,
-}
-
-/// One SQL aggregate result.  A bucket is absent for an ungrouped count.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SearchCount {
-    pub key: Option<SearchCountKey>,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SearchCountKey {
-    Bucket(MailboxBucket),
-    FromAgent(AgentName),
-    Tag(String),
-}
+    /// Exact durable protocol identifier named by the mailbox command.
+    pub message_id: Option<AtmMessageId>, pub task_id: Option<TaskId>, pub contains: Option<String>, pub read_state: Option<SearchReadState>, pub ack_state: Option<SearchAckState>, pub current_only: bool, pub mailbox_selection: Option<SearchMailboxSelection>, }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MailboxBucket {

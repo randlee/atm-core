@@ -11,6 +11,7 @@ pub mod error_codes;
 pub mod factory;
 pub mod peer_catalog_audit;
 mod peer_contract;
+mod read_lane_error;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
@@ -46,7 +47,7 @@ pub use contract::{
     MailMessageState, MailboxBucketCounts, MailboxListQuery, MailboxScope, Message,
     MessageAdmissionOutcome, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent,
     MessageStore, NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore,
-    PrivateKeyRef, ReadDeadline, ReadLaneError, RosterChangedEvent, RosterHarness, RosterMember,
+    PrivateKeyRef, ReadDeadline, RosterChangedEvent, RosterHarness, RosterMember,
     RosterMemberEphemeralState, RosterMemberKind, RosterRuntimeIdentity, RosterRuntimeMirror,
     RosterRuntimeMutationOutcome, RosterRuntimeObservation, RosterRuntimeObservationUpdate,
     RosterSnapshot, RosterStateRevision, RosterStore, RosterUniqueName, RuntimeMemberState,
@@ -66,6 +67,7 @@ pub use factory::{
     StorageHandles, WriteThroughRosterStore,
 };
 pub use peer_catalog_audit::TrustedPeerCatalogAudit;
+pub use read_lane_error::ReadLaneError;
 pub use roles::ROLE_WORKER;
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use search::{
