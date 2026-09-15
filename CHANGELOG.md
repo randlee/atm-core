@@ -18,6 +18,13 @@
   per-transition kinds, so every task transition (assigned, started,
   reminded, completed, refused, cancelled) is visible in the recipient's
   prompt line, plus `atm task start` for the assignee (Phase BB, #1482)
+- Herdr roster aliases and unique-name: `atm teams add-member|update-member
+  --alias <name>` / `--clear-alias` give a member a durable alias that Herdr
+  uses as its live-agent target (the canonical name stays the
+  routing/audit identity); `atm send`, `ATM_IDENTITY` and `--as` resolve
+  aliases. unique-name = alias ?? name MUST be unique across the database:
+  roster writes creating a collision are rejected and `atm doctor` reports
+  legacy collisions (Phase AY, #1305, #1310)
 - fix(storage): mailbox selection and counts for `atm list --all --json
   bucket_counts` moved into SQL -- fixes a bounded-reader-lane failure
   counting large sqlite mailboxes (888k+ messages) and, more broadly, `atm
@@ -55,8 +62,10 @@
   through ping (#1353); diagnose unresolvable Herdr nudge targets and carry
   the breaker cause in `atm doctor` (#1363)
 - fix(doctor): preserve escalation recipient addresses (#1358)
-- fix(roster): scope unique-name collision checks to the writing team
-  (#1341); validate only written name deltas (#1359)
+- fix(roster): a roster write is rejected only for a collision it creates
+  or participates in -- a pre-existing collision between two other teams
+  no longer blocks an unrelated write (#1341); validate only written name
+  deltas (#1359)
 - fix(daemon): singleton guards, no test runtime-home override (#1325)
 - fix(hermes-atm): read nudge injection platform from hook config (#1327)
 - fix(graft): nudge carries the rendered template only (#1283); native
