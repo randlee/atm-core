@@ -1,0 +1,14 @@
+ATM TEST REPORT
+skill: atm-setup-environment
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.20 daemon 1.5.20
+result: PASS   (5/5 steps)
+steps:
+  0 PASS Start line — 01M2HMV9KB1ENVZDD785JGZD0R
+  1 PASS Daemon answers — client 1.5.20 daemon 1.5.20
+  2 PASS Roster complete — all members present (stub-alpha, stub-beta, tester, hermes, oversight)
+  3 PASS Doctor passes — error_count 0 warning_count 0
+  4 PASS Self round trip — message 01M2HMVJBXETST87HK9WRD6N44 sent, read, removed from unread
+  5 PASS Cross-host peer — message 01M2HMVZ0QJ3AAAPSHX4VPNSEN sent to oversight@testbed
+elapsed: 30s
