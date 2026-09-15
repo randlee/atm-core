@@ -1,18 +1,19 @@
 ---
 title: Nudge Templates
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Nudge Templates
 
 ATM supports built-in nudge behavior and bounded operator override surfaces.
 
-Repeated open-task reminders also produce daemon escalation notifications.
-At reminders 10, 20, and later multiples of 10, the unique roster lead is
-notified. A blocked member is escalated after 60 seconds and re-notified every
-10 minutes while the blocked episode continues. These daemon messages are
-system-generated and are not controlled by the eleven built-in template kinds.
+Repeated open-task reminders can produce daemon escalation notifications. The
+unique roster lead is notified once when the reminder count reaches 10; later
+reminders do not repeat that escalation. A blocked or offline member is
+escalated once for a new observed episode, then held until a new episode.
+These daemon messages are system-generated and are not controlled by the
+eleven built-in template kinds.
 
 ## Purpose
 
@@ -45,6 +46,11 @@ ATM ships exactly eleven built-in template kinds:
 kinds; their durable state and event audit are defined in ADR-062. The
 `acknowledge` form is an intentionally compact acknowledgement nudge.
 
+`task_queued` is informational. `task_ready` and `task_reminder` tell an
+assignee to read and act on the task; `task_started`, `task_complete`, and
+`task_closed` record the transition for the receiving mailbox. Use [Tasks](./tasks.md)
+for the CLI lifecycle and outcomes.
+
 ## Supported Placeholders
 
 Built-in template rendering supports exactly these placeholders:
@@ -54,9 +60,16 @@ Built-in template rendering supports exactly these placeholders:
 - `{{message_id}}`
 - `{{description}}`
 - `{{task_id}}`
+- `{{position}}`
+- `{{attempt}}`
+- `{{assignee}}`
+- `{{outcome}}`
+- `{{by}}`
 
 There is no Jinja evaluation, no conditionals, and no template-side branching.
-ATM performs direct placeholder substitution only.
+ATM performs direct placeholder substitution only. Task-specific values are
+populated by the corresponding queued, reminder, started, complete, or closed
+transition; a value not applicable to that transition is empty.
 
 ## Precedence
 
@@ -84,7 +97,12 @@ atm teams disable-nudge-template --team atm-dev --kind delivery_ack
 atm teams clear-nudge-template --team atm-dev --kind delivery_ack
 ```
 
-## Default XML Bodies
+## Default ATM Wire Bodies
+
+These `.xml` examples are ATM's XML-shaped nudge wire syntax, not documents
+for a generic XML parser. In particular, task markers such as `ready` are bare
+ATM attributes because that is the exact emitted wire form. Keep template
+bodies in the supported ATM syntax shown here.
 
 Delivery without required acknowledgement:
 

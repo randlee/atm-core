@@ -1,7 +1,7 @@
 ---
 title: Troubleshooting
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Troubleshooting
@@ -119,7 +119,7 @@ Supported recovery:
 For the configuration model, see [Hooks](./hooks.md) and
 [Nudge Templates](./nudge-templates.md).
 
-### Herdr Target Not Found
+### Herdr Agent Not Visible Or Unique-Name Collision
 
 `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` means Herdr has one or more unnamed
 agents: a pane label set with `herdr pane rename` is not an agent name and is
@@ -132,6 +132,24 @@ Herdr agent names are in-memory state: they are lost when the Herdr server
 restarts, so a label-only launcher will cause this warning again until it
 reapplies `herdr agent rename` for each managed pane.
 
+`ATM_HERDR_AGENT_NOT_VISIBLE` means the configured live-agent target is not
+visible on the selected Herdr endpoint. Inspect `atm doctor --json` at
+`herdr.endpoints[]`: correct the endpoint/session, then use `herdr agent
+rename <pane_id> <alias>` or set a matching durable roster alias with `atm
+teams update-member <team> <member> --alias <alias>`.
+
+`roster unique-name collision(s)` means an alias (or a member without an
+alias, its canonical name) duplicates a unique-name elsewhere in the ATM
+database. The error names the conflicting `(team, member)` owners. Choose a
+different `--alias` for one conflicting member with `atm teams update-member
+--alias <unique-herdr-name> <team> <member>`, then make the live Herdr agent
+use that alias. The same conflict appears in doctor as a `WarningRosterDrift`
+warning beginning `effective roster name '<n>' for member '<m>' conflicts with
+member '<x>@<team>'; assign a unique --alias before the next roster write`.
+Herdr agent names are unique per server, so the second colliding agent cannot
+start until the unique-name is repaired. See [Herdr Integration](./herdr.md)
+for the database-wide rule and alias grammar.
+
 Additional runnable examples live in
 [examples/troubleshooting/](./examples/troubleshooting/).
 
@@ -142,5 +160,6 @@ Additional runnable examples live in
 - [Doctor And Log](./doctor-and-log.md)
 - [Hooks](./hooks.md)
 - [Nudge Templates](./nudge-templates.md)
+- [Herdr Integration](./herdr.md)
 
 Return to the [ATM User Guide](./README.md).
