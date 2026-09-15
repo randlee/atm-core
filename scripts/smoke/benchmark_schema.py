@@ -90,7 +90,7 @@ class DurabilityAfterRestart(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    method: str = "isolated_sqlite_exact_count_after_restart"
+    method: str = "public_cli_mailbox_count_after_restart"
     expected_accepted_count: int = Field(ge=0)
     observed_mailbox_count: int = Field(ge=0)
     passed: bool

@@ -18,8 +18,6 @@ LOG_DIR = Path(".just/logs")
 CONFIG_PATH = Path(".just/lint-config.toml")
 TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 LINT_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
-CFG_ATTRIBUTE_RE = re.compile(r"^#(?P<inner>!)?\[cfg\((?P<body>.*)\)\]$")
-TEST_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_])test(?![A-Za-z0-9_])")
 
 
 @dataclass(frozen=True)
@@ -433,10 +431,24 @@ def strip_negated_cfg_segments(body: str) -> str:
 
 
 def is_rust_test_cfg_attribute(line: str) -> bool:
-    match = CFG_ATTRIBUTE_RE.match(line.strip())
-    if match is None:
+    stripped = line.strip()
+    prefix = "#![cfg(" if stripped.startswith("#![cfg(") else "#[cfg("
+    if not stripped.startswith(prefix) or not stripped.endswith(")]"):
         return False
-    return TEST_TOKEN_RE.search(strip_negated_cfg_segments(match.group("body"))) is not None
+    body = strip_negated_cfg_segments(stripped[len(prefix):-2])
+    start = 0
+    while (index := body.find("test", start)) >= 0:
+        before = body[index - 1] if index > 0 else ""
+        after_index = index + len("test")
+        after = body[after_index] if after_index < len(body) else ""
+        if not (_is_rust_identifier_character(before) or _is_rust_identifier_character(after)):
+            return True
+        start = after_index
+    return False
+
+
+def _is_rust_identifier_character(value: str) -> bool:
+    return value == "_" or (value.isascii() and value.isalnum())
 
 
 def classify_rust_test_scope(

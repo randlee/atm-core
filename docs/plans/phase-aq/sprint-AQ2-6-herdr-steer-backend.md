@@ -725,9 +725,9 @@ this doc cites it by decision id (`D1`–`D8`).
     the `herdr_string_containment_gate` source-audit rule,
     `docs/atm-herdr/{requirements.md,architecture.md,boundaries.md}` present
     and current, `cargo test -p atm-architecture`, and `just test` pass on
-    all three lanes. Herdr command fixtures run on macOS/ubuntu; Windows
-    verifies selection and command construction only until a supported
-    Windows Herdr deployment is explicitly added. **(deliverable 5)**
+    all three lanes. Herdr command fixtures run on macOS/ubuntu; the Windows
+    process-correctness and named-pipe work is superseded into Phase AY.7,
+    with live Windows proof retained as release readiness. **(deliverable 5)**
 16. `atm doctor --json` exposes a top-level `herdr_breaker: { state:
     "closed"|"open", retry_after_ms, consecutive_failures }` field sourced
     from `HerdrSpawnBreaker::state()`; a fixture opens the breaker and

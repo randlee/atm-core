@@ -6,6 +6,8 @@
 //! `ack` re-exports the acknowledgement request/outcome types, so external
 //! paths (including serde/persisted shapes) are unchanged.
 
+pub(crate) use pipeline::has_authenticated_peer_provenance;
+
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -53,6 +55,8 @@ pub struct AckRequest {
 impl AckRequest {
     pub fn into_write_request(self) -> SendRequest {
         SendRequest {
+            placement: None,
+            task_op: None,
             home_dir: self.home_dir,
             current_dir: self.current_dir,
             caller_identity: self.caller_identity,
@@ -60,6 +64,7 @@ impl AckRequest {
             caller_team: self.caller_team,
             activity_observation: self.activity_observation,
             authenticated_source_host: None,
+            peer_http_api_version: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: None,
@@ -69,6 +74,7 @@ impl AckRequest {
             summary_override: None,
             requires_ack: false,
             task_id: None,
+            task_complete: None,
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
@@ -185,8 +191,9 @@ mod acknowledgement;
 mod pipeline;
 
 pub use pipeline::{
-    PreparedWrite, WriteOutcome, prepare_write_with_async_runtime, prepare_write_with_runtime,
-    send_mail, send_mail_with_runtime, write_mail, write_mail_with_runtime,
+    PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
+    prepare_write_with_runtime, send_mail, send_mail_with_runtime, write_mail,
+    write_mail_with_runtime,
 };
 
 #[cfg(test)]

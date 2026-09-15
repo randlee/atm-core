@@ -1,0 +1,25 @@
+{
+ "configured": true,
+ "endpoints": [
+  {
+   "session": "default",
+   "provenance": "herdr_default",
+   "transport": "socket",
+   "endpoint": "$HOME/.config/herdr/herdr.sock",
+   "binary": null,
+   "state": {
+    "kind": "unexpected_response",
+    "code": "internal_failure",
+    "detail": "Herdr socket server status must use the ping probe"
+   },
+   "remedy": "Verify supported Herdr and capture response",
+   "capabilities": {
+    "live_handoff": null
+   },
+   "members": []
+  }
+ ],
+ "breaker": {
+  "state": "closed"
+ }
+}

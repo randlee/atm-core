@@ -11,9 +11,9 @@ target: integrate/phase-AD
 
 ## Goal
 
-- make `atm read` report the message it actually mutated and the post-mutation
-  bucket counts it actually produced, instead of mixing pre-mutation ids/counts
-  with post-mutation unread selection
+- make `atm read` report the selected message and reader-lane snapshot it
+  actually observed, instead of mixing the selected id with a later unread
+  payload or claiming durable post-handoff state in the response
 
 ## Hard Dependencies
 
@@ -54,29 +54,31 @@ with these invariants:
 
 - if `mutation_applied == true` and `message.is_some()`, `message` describes
   the same durable message identified by `selected_message_id`
-- `bucket_counts` always describe the post-mutation mailbox state returned by
-  that command execution
-- a read-side mutation may mark a message read and still return that same
-  message in the output payload; the command must not silently swap the payload
-  to the next unread message just because the selection mode was `--unread`
+- `bucket_counts` describe the reader-lane snapshot and MAY predate durable
+  handoff application
+- `mutation_applied == true` means the read/seen transition was accepted into
+  the supervised non-blocking handoff, not that it is already durable
+- a read-side transition may later mark a message read while the response still
+  returns that same selected message; the command must not silently swap the
+  payload to the next unread message just because the selection mode was
+  `--unread`
 
 ## Paths To Delete
 
-- post-mutation reload logic in `crates/atm-core/src/read/mod.rs` that
-  re-runs unread selection and substitutes the next unread message into the
-  response payload after the original message has been marked read
-- returning pre-mutation `selection.bucket_counts` after a successful
-  mutation path
+- logic in `crates/atm-core/src/read/mod.rs` that re-runs unread selection and
+  substitutes the next unread message into the response payload after the
+  original selection
+- any response contract that claims a post-handoff durable bucket snapshot
 - any smoke/test expectation that treats mismatched `selected_message_id` and
   `message.message_id`/payload as acceptable read behavior
 
 ## Deliverables
 
-- `atm read --unread --json` returns a payload consistent with the message it
-  actually marked read
-- `ReadOutcome.selected_message_id` and `ReadOutcome.message` refer to the same
-  durable message after mutation
-- `ReadOutcome.bucket_counts` reflect post-mutation mailbox state
+- `atm read --unread --json` returns a payload consistent with the selected
+  message whose transition it offered to the handoff
+- `ReadOutcome.selected_message_id` and `ReadOutcome.message` refer to the
+  same selected durable message
+- `ReadOutcome.bucket_counts` reflect the reader-lane snapshot
 - regression coverage proves the read-side mutation path and ack-side mutation
   path remain distinct, and that ack already clears `pending_ack_at` /
   populates `acknowledged_at` correctly
@@ -92,20 +94,21 @@ with these invariants:
 ## Acceptance Criteria
 
 - a targeted read-mutation test proves:
-  - first `atm read --unread --json` marks the selected unread message read
-  - returned `selected_message_id` identifies that mutated message
-  - returned `message`, when present, matches that same mutated message rather
-    than a later unread message
-  - returned `bucket_counts.unread` is the post-mutation unread total
-- repeated `atm read --unread --json` calls monotonically reduce unread counts
-  until the unread surface is exhausted, with no off-by-one stale count in the
-  returned payload
+- first `atm read --unread --json` accepts the selected unread message's
+  read/seen transition into the supervised handoff
+- returned `selected_message_id` identifies that selected message
+- returned `message`, when present, matches that same selected message rather
+  than a later unread message
+- returned `bucket_counts` are the reader-lane snapshot and need not show the
+  handoff result; a bounded later `atm list --json` poll observes durability
+- repeated reads do not claim read-your-writes; callers use the bounded list
+  poll when they require durable unread-count changes
 - ack regression coverage proves ack-side state mutation already persists
   `read=true`, clears `pending_ack_at`, and sets `acknowledged_at`
 - `docs/requirements.md`, `docs/architecture.md`,
   `docs/atm-core/requirements.md`, and `docs/atm-core/architecture.md`
-  describe `atm read` as a durable read-state mutation with self-consistent
-  post-mutation output
+  describe `atm read` as accepted non-blocking read-state handoff with a
+  self-consistent reader-lane output snapshot
 
 ## Required Validation
 

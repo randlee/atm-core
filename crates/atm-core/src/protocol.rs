@@ -24,11 +24,16 @@ use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::schema::AtmMessageId;
 use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
+use crate::types::TaskId;
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
 pub use atm_storage::{
     GraftReceiverLease, GraftReceiverRegistration, LocalCapability, OwnerGeneration,
+    RosterRuntimeIdentity, RosterRuntimeMutationOutcome, RosterRuntimeObservation,
+    RosterRuntimeObservationUpdate, RosterStateRevision, RuntimeMemberState,
+    RuntimeObservationAvailability, RuntimeObservationSource,
 };
+use atm_storage::{MoveTarget, QueuePosition};
 
 /// Body representation for the local graft receiver lookup route.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -51,6 +56,7 @@ pub enum SendResponseEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
     Write(Box<WriteRequest>),
+    TaskMove(TaskMoveRequest),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     QueueGetNext(QueueGetNextRequest),
@@ -75,6 +81,7 @@ pub enum RequestEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
+    TaskMove(TaskMoveOutcome),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
     QueueGetNext(QueueGetNextResponse),
@@ -93,7 +100,23 @@ pub enum ResponseEnvelope {
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.0.0";
+pub const HTTP_API_VERSION: &str = "1.9.0";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskMoveRequest {
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
+    pub task_id: TaskId,
+    pub target: MoveTarget,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskMoveOutcome {
+    pub task_id: TaskId,
+    pub assignee: AgentName,
+    pub from: QueuePosition,
+    pub to: QueuePosition,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
@@ -115,7 +138,7 @@ impl fmt::Display for ReleaseVersion {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct HttpApiVersion(Version);
 
@@ -333,22 +356,14 @@ pub struct NotificationEvent {
     pub agent: Option<AgentName>,
 }
 
-/// Runtime heartbeat activity transported into the daemon status cache.
+/// Runtime heartbeat activity transported into the canonical ephemeral
+/// master-roster record.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum HeartbeatActivity {
     ActiveToolUse,
     Idle,
     SessionEnded,
-}
-
-/// Provenance of an observation accepted by the daemon runtime cache.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeObservationSource {
-    Heartbeat,
-    LocalCommand,
-    HerdrPoll,
 }
 
 /// One daemon heartbeat request for one team member identity.
@@ -367,7 +382,7 @@ pub struct TeamMemberHeartbeatRequest {
     pub session_id: Option<SessionId>,
 }
 
-/// One daemon heartbeat response after runtime-state application.
+/// One daemon heartbeat response after canonical roster-state application.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TeamMemberHeartbeatResponse {
     pub team: TeamName,
@@ -427,23 +442,24 @@ pub struct GraftReceiverRefreshRequest {
     pub owner_generation: OwnerGeneration,
 }
 
-/// Runtime-owned live-state projection for one known team member.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeMemberState {
-    Unknown,
-    IdentityConflict,
-    Offline,
-    Idle,
-    Active,
-}
-
-/// Current non-authoritative runtime observation for one roster member.
+/// Wire projection of one member's canonical ephemeral master-roster state.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RuntimeMemberObservation {
     pub team: TeamName,
     pub member: AgentName,
     pub state: RuntimeMemberState,
+    #[serde(default)]
+    pub revision: RosterStateRevision,
+    #[serde(default)]
+    pub availability: RuntimeObservationAvailability,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observation_attempt_by: Option<RuntimeObservationSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observation_attempt_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observed_by: Option<RuntimeObservationSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_observed_at: Option<IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<SessionId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -527,6 +543,10 @@ pub struct RuntimeStatusSnapshot {
     /// request budget they were dispatched with.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub blocking_core_bridge_stalls_total: u64,
+    /// Cumulative caller-owned file/template source preflights that outlived
+    /// their request deadline while retaining bounded blocking capacity.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub write_source_preflight_stalls_total: u64,
 }
 
 fn is_zero_u64(value: &u64) -> bool {
@@ -537,9 +557,10 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
-        RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState, RuntimeReadinessState,
-        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, QueueGetNextRequest, RequestEnvelope,
+        ResponseEnvelope, RosterStateRevision, RuntimeLivenessState, RuntimeMemberObservation,
+        RuntimeMemberState, RuntimeObservationAvailability, RuntimeReadinessState,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TaskMoveRequest, TeamMemberHeartbeatRequest,
         TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
@@ -549,6 +570,7 @@ mod tests {
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, SessionId, TeamName};
+    use atm_storage::MoveTarget;
     use serde::Deserialize;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -678,6 +700,7 @@ mod tests {
             queue_messages_drained_total: 0,
             queue_drain_failures_total: 0,
             blocking_core_bridge_stalls_total: 0,
+            write_source_preflight_stalls_total: 0,
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
@@ -707,6 +730,26 @@ mod tests {
     }
 
     #[test]
+    fn runtime_member_observation_accepts_payload_without_revision_or_availability() {
+        let legacy_payload = serde_json::json!({
+            "team": "test-team",
+            "member": "test-agent",
+            "state": "active"
+        });
+
+        let decoded: RuntimeMemberObservation =
+            serde_json::from_value(legacy_payload).expect("decode legacy member observation");
+        assert_eq!(decoded.state, RuntimeMemberState::Active);
+        assert_eq!(decoded.revision.get(), 0);
+        assert_eq!(
+            decoded.availability,
+            RuntimeObservationAvailability::Unobserved
+        );
+        assert_eq!(decoded.last_observed_by, None);
+        assert_eq!(decoded.last_observation_attempt_at, None);
+    }
+
+    #[test]
     fn older_runtime_snapshot_reader_ignores_additive_members_field() {
         #[derive(Debug, Deserialize, PartialEq, Eq)]
         struct LegacyRuntimeStatusSnapshot {
@@ -729,6 +772,12 @@ mod tests {
                 team: TeamName::from_validated("test-team"),
                 member: AgentName::from_validated("test-agent"),
                 state: RuntimeMemberState::Active,
+                revision: RosterStateRevision::default(),
+                availability: RuntimeObservationAvailability::Fresh,
+                last_observation_attempt_by: None,
+                last_observation_attempt_at: None,
+                last_observed_by: None,
+                last_observed_at: None,
                 session_id: Some(SessionId::new("session-1").expect("session")),
                 pid: Some(42),
                 last_active_at: None,
@@ -745,6 +794,7 @@ mod tests {
             queue_messages_drained_total: 0,
             queue_drain_failures_total: 0,
             blocking_core_bridge_stalls_total: 0,
+            write_source_preflight_stalls_total: 0,
         };
         let decoded: LegacyRuntimeStatusSnapshot =
             serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))
@@ -851,6 +901,44 @@ mod tests {
             }
             other => panic!("expected send request, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn codec_preserves_protocol_1_5_0_fixtures() {
+        #[derive(Debug, Deserialize)]
+        enum RequestEnvelope15 {
+            QueueGetNext(serde_json::Value),
+            ReloadRuntimeView,
+        }
+
+        let fixtures = [
+            serde_json::to_vec(&RequestEnvelope::QueueGetNext(QueueGetNextRequest {
+                team: TeamName::from_validated(TEST_TEAM),
+                member: AgentName::from_validated(TEST_SENDER),
+            }))
+            .expect("queue fixture"),
+            serde_json::to_vec(&RequestEnvelope::ReloadRuntimeView).expect("reload fixture"),
+        ];
+        for fixture in fixtures {
+            serde_json::from_slice::<RequestEnvelope>(&fixture).expect("1.6 decodes 1.5 fixture");
+            match serde_json::from_slice::<RequestEnvelope15>(&fixture)
+                .expect("pinned 1.5 enum decodes fixture")
+            {
+                RequestEnvelope15::QueueGetNext(value) => assert!(value.is_object()),
+                RequestEnvelope15::ReloadRuntimeView => {}
+            }
+        }
+
+        let task_move = serde_json::to_vec(&RequestEnvelope::TaskMove(TaskMoveRequest {
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
+            task_id: "T1".parse().expect("task id"),
+            target: MoveTarget::Head,
+        }))
+        .expect("task move fixture");
+        let error = serde_json::from_slice::<RequestEnvelope15>(&task_move)
+            .expect_err("1.5 enum must reject the 1.6-only variant");
+        assert!(error.to_string().contains("unknown variant `TaskMove`"));
     }
 
     #[test]

@@ -1,0 +1,81 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-READY-P1>
+  a triage:Finding ;
+  triage:findingId "AW-READY-P1" ;
+  triage:title "atm send --file zeroes the source file when the path already lives in the team share dir, while reporting success" ;
+  triage:description "fenix (01M1S7GTFR44DA787SQQ3N2WTW), live production bug on 1.5.1, unrelated to AW.5's actual sprint scope but filed into the phase-aw ledger per fenix's explicit direction so it can ride the same batched fix round. crates/atm-core/src/send/file_policy.rs:101-104 does `share_copy = share_dir.join(file_name); fs::copy(file_path, &share_copy)` with no same-file/same-inode guard: when <path> already lives in the team share dir (~/.config/atm/share/<team>/), fs::copy truncates the source before copying it to itself, and copied_bytes==0 still passes the size check, so `atm send --file <path>` reports \"Sent to ... [message_id: ...]\" success while the source file has been zeroed (reproduced today on 1.5.1: 80 bytes -> 0 bytes). Root cause is unchanged since the original send implementation (28543ad09) -- an external team's \"changed after Sep 4 10:48 on 1.4.13\" observation is an exposure change (cwd/repo-root or binary swap made is_file_in_repo stop short-circuiting), not a code change; note this in the record rather than treating it as a regression introduced by phase-aw. Fix: same-file/same-inode guard before fs::copy; verify copied_bytes == source file len; regression test asserting the source file's content survives a share-dir send unchanged." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "data-loss" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T16:54:42Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW5 ;
+  triage:foundAt "2026-09-05T16:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-READY-P1/AW1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-READY-P1/AW1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/file_policy.rs" ;
+  triage:line 102 ;
+  triage:snippet "let copied_bytes = fs::copy(file_path, &share_copy).map_err(|error| {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW1/7e61ad87e> .
+
+<urn:atm:triage:worktree/AW1/7e61ad87e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AW1" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "7e61ad87e" ;
+  triage:orderIndex 1 .
+
+# Developer follow-up on fix/aw-readiness-easy, PR #1215, 2026-09-05:
+# the same-file guard is exercised with the actual ~/.config/atm/share/<team>
+# fixture and the source bytes are asserted unchanged. Original guard:
+# f2962ecc1; follow-up regression-fixture proof: d9fa67fcc. QA owns closure.
+#
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2: removed the
+# stale duplicate `triage:status "fixed"` triple previously here (same
+# duplicate-predicate defect class already corrected this round for
+# AW-READY-M4/M7 -- it caused the deduplicated current_integration_summary
+# diagnostic, which reads the finding-level status directly rather than
+# through the branch-scoped occurrence gate, to see this record's FIRST
+# (stale "open") status triple and report it as an open blocker even though
+# both linked occurrences were already closed/fixed). Consolidated to a
+# single header assertion above (status "fixed", closedAt/closedBy added).
+
+# quality-mgr, 2026-09-05, qa-pr1215-r2: independently confirmed by req-qa,
+# arch-qa, and ruthless-boundary-qa -- fixture path matches production's
+# home_dir/.config/atm/share/<team> construction exactly, guard branch is
+# genuinely exercised (not bypassed), source bytes assertion present.
+<urn:atm:triage:occurrence/AW-READY-P1/fix-aw-readiness-easy-d9fa67fcc>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/file_policy.rs" ;
+  triage:line 221 ;
+  triage:snippet "let share_dir = home_dir.path().join(\".config\").join(\"atm\").join(\"share\").join(TEST_TEAM);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc> .
+
+<urn:atm:triage:worktree/fix-aw-readiness-easy/d9fa67fcc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "d9fa67fcc" ;
+  triage:orderIndex 2 .

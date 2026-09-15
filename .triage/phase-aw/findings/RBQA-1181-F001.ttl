@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-1181-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-1181-F001" ;
+  triage:title "error_layer documented as an ATM_GRAFT_FALLBACK_WRITE_FAILED field but never emitted" ;
+  triage:description "qa-pr1181-r1 (msg 01M1QS4C69FTKB887D5K0V12Y8) at 9f4d3170e: ruthless-boundary-qa: docs/graft-observability.md and the sprint doc name error_layer as a field of ATM_GRAFT_FALLBACK_WRITE_FAILED; grep across atm-graft-python shows it is never emitted. Doc/impl gap; either emit it or drop it from both docs. CLOSURE (qa-cipher-fix, quality-mgr): 28bc90dfb dropped the ATM_GRAFT_FALLBACK_WRITE_FAILED/error_layer row from both docs/graft-observability.md and the sprint doc. quality-mgr independently grepped crates/atm-graft-python/src/ for error_layer and ATM_GRAFT_FALLBACK_WRITE_FAILED: the only occurrence is the bare status code string in observability.rs:90 (ObservabilityStatus::failed(\"ATM_GRAFT_FALLBACK_WRITE_FAILED\")) -- no error_layer field is constructed anywhere, confirming the doc now matches the implementation. Finding closed." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-impl-gap" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T03:18:47Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW4 ;
+  triage:foundAt "2026-09-05T03:12:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-1181-F001/AW4-1> ;
+  triage:closedAt "2026-09-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBQA-1181-F001/AW4-1>
+  a triage:Occurrence ;
+  triage:file "docs/graft-observability.md" ;
+  triage:line 1 ;
+  triage:snippet "error_layer" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "9f4d3170e" ;
+  triage:occursIn <urn:atm:triage:worktree/AW4/9f4d3170e> .
+
+<urn:atm:triage:worktree/AW4/9f4d3170e>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw4-graft-fallback-observability" ;
+  triage:branch "feature/aw4-graft-fallback-observability" ;
+  triage:headSha "9f4d3170e" ;
+  triage:orderIndex 3 .

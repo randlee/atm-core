@@ -1,0 +1,17 @@
+ATM TEST REPORT
+skill: atm-smoke
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.18 daemon 1.5.18
+result: FAIL   (7/8 steps)
+steps:
+  0 PASS Start line — 01M2GBMQF9FSMZSC860ZJF4B9J
+  1 PASS Send ack-required — message 01M2GBN22Q988Y9WP0FBQFFYN5
+  2 PASS Partner message arrives — 01M2GBNGN3H3Q4D4BW6S53R1R5 in 20s
+  3 PASS Peek does not mutate — mutation_applied: false
+  4 PASS Read by id — count: 1, mutation_applied: true
+  5 PASS Read marked it — read flag: true
+  6 PASS Stale-connection probe — no errors
+  7 PASS Ack — message 01M2GBPNAXFDTW7KCEX3GZ391H sent
+  8 FAIL Your message got acked — cause: timeout; fix: partner's ack reply not received within 300s; retest: FAIL
+elapsed: 350s

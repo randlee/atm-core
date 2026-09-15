@@ -96,6 +96,18 @@ def _required(value: str | None, name: str) -> str:
     return normalized
 
 
+def _platform_name(value: str) -> str:
+    """Validate a public Hermes platform name before writing hook config."""
+
+    name = _required(value, "platform").upper()
+    platform = _require_public_capability(
+        "gateway.config", "Platform", "TELEGRAM", member_must_be_callable=False
+    )
+    if getattr(platform, name, None) is None:
+        raise HermesAtmInstallError(f"unsupported Hermes injection platform {value!r}")
+    return name.lower()
+
+
 def _read_launch_agent_python(path: Path) -> str:
     try:
         with path.open("rb") as source:
@@ -258,11 +270,13 @@ def install_profile(
     chat_id: str,
     atm_home: str,
     workspace_root: str,
+    platform: str = "telegram",
     launch_agent_plist: Path | None = None,
 ) -> Mapping[str, Any]:
     """Validate the host then materialize the standard declarative profile hook."""
 
     profile = _required(profile, "profile")
+    platform = _platform_name(platform)
     config = {
         "schema_version": 1,
         "profile": profile,
@@ -271,6 +285,7 @@ def install_profile(
         "team": _required(team, "ATM_TEAM"),
         "chat_id": _required(chat_id, "ATM_CHAT_ID"),
         "workspace_root": _required(workspace_root, "ATM_WORKSPACE_ROOT"),
+        "platform": platform,
     }
     validate_host_capability(launch_agent_plist=launch_agent_plist)
     hook_dir = profile_home / "hooks" / HOOK_NAME
@@ -330,6 +345,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("ATM_WORKSPACE_ROOT", ""),
         help="canonical graft root; must equal the roster workspace_root",
     )
+    install.add_argument(
+        "--platform",
+        default="telegram",
+        help="Hermes injection platform (for example telegram or api_server)",
+    )
     install.add_argument("--launch-agent-plist", type=Path)
     return parser
 
@@ -345,6 +365,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             chat_id=args.chat_id,
             atm_home=args.atm_home,
             workspace_root=args.workspace_root,
+            platform=args.platform,
             launch_agent_plist=args.launch_agent_plist,
         )
     except HermesAtmInstallError as error:

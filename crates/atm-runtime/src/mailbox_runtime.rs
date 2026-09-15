@@ -16,9 +16,12 @@ use atm_core::read::selection::{
     MailboxSelectionCandidate, MailboxSelectionRequest, MailboxSelectionResult,
     select_mailbox_candidates, sort_and_limit_mailbox_selection,
 };
+#[cfg(test)]
+use atm_storage::MessageQuery;
 use atm_storage::{
-    AsyncMailboxReader, AsyncMessageStore, AtmError, IsoTimestamp, MailboxScope, Message,
-    MessageKey, MessageQuery, ReadDeadline,
+    AsyncMailboxReader, AsyncMessageStore, AtmError, IsoTimestamp, MailboxListQuery, MailboxScope,
+    Message, MessageKey, ReadDeadline, SearchCountGroupBy, SearchFilters, SearchMailboxSelection,
+    TimeRange,
 };
 
 /// Bounded, composition-owned handoff settings for post-read state updates.
@@ -473,9 +476,10 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
     ) -> Result<ListOutcome, AtmError> {
         let command = self.authorize_list(command, deadline).await?;
         let selection = self
-            .select_all(
+            .select_all_for_tool(
                 command.scope().clone(),
                 command.selection().clone(),
+                command.pushdown_limit(),
                 deadline,
             )
             .await?;
@@ -488,7 +492,7 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
         deadline: RequestDeadline,
     ) -> Result<ReadOutcome, AtmError> {
         let command = self.authorize_read(command, deadline).await?;
-        let selection = self
+        let (selection, match_count) = self
             .select_for_read(
                 command.scope().clone(),
                 command.selection().clone(),
@@ -496,7 +500,6 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
                 command.wait_timeout(),
             )
             .await?;
-        let match_count = selection.selected.len();
         let mut selection = selection;
         sort_and_limit_mailbox_selection(&mut selection.selected, Some(1));
         Ok(complete_async_read(&command, selection, match_count, false))
@@ -508,7 +511,7 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
         deadline: RequestDeadline,
     ) -> Result<ReadOutcome, AtmError> {
         let command = self.authorize_read(command, deadline).await?;
-        let selection = self
+        let (selection, match_count) = self
             .select_for_read(
                 command.scope().clone(),
                 command.selection().clone(),
@@ -516,7 +519,6 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
                 command.wait_timeout(),
             )
             .await?;
-        let match_count = selection.selected.len();
         let mut selection = selection;
         sort_and_limit_mailbox_selection(&mut selection.selected, Some(1));
         let accepted = self.try_handoff_selected(
@@ -564,6 +566,55 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
             .await?;
         self.try_handoff_selected(scope, &selection, true)?;
         Ok(selection)
+    }
+}
+
+fn bucket_counts_from_storage(
+    counts: Vec<atm_storage::SearchCount>,
+) -> atm_core::read::BucketCounts {
+    let mut buckets = atm_core::read::BucketCounts {
+        unread: 0,
+        pending_ack: 0,
+        history: 0,
+    };
+    for count in counts {
+        match count.key {
+            Some(atm_storage::SearchCountKey::Bucket(atm_storage::MailboxBucket::Unread)) => {
+                buckets.unread = count.count
+            }
+            Some(atm_storage::SearchCountKey::Bucket(atm_storage::MailboxBucket::PendingAck)) => {
+                buckets.pending_ack = count.count
+            }
+            Some(atm_storage::SearchCountKey::Bucket(atm_storage::MailboxBucket::History)) => {
+                buckets.history = count.count
+            }
+            None => {}
+            _ => {}
+        }
+    }
+    buckets
+}
+
+fn mailbox_filters(scope: &MailboxScope, request: &MailboxSelectionRequest) -> SearchFilters {
+    SearchFilters {
+        team: Some(scope.team.clone()),
+        agent: Some(scope.agent.clone()),
+        from_agent: request.sender_filter.clone(),
+        message_id: request.message_id_filter,
+        task_id: request.task_filter.clone(),
+        contains: request.contains_filter.clone(),
+        time_range: request.timestamp_filter.map(|since| TimeRange {
+            since: Some(since),
+            until: None,
+        }),
+        current_only: true,
+        mailbox_selection: Some(match request.selection_mode {
+            atm_core::types::ReadSelection::Actionable => SearchMailboxSelection::Actionable,
+            atm_core::types::ReadSelection::Unread => SearchMailboxSelection::Unread,
+            atm_core::types::ReadSelection::PendingAck => SearchMailboxSelection::PendingAck,
+            atm_core::types::ReadSelection::All => SearchMailboxSelection::All,
+        }),
+        ..SearchFilters::default()
     }
 }
 
@@ -630,15 +681,20 @@ impl StorageAsyncMailboxRuntime {
         request: MailboxSelectionRequest,
         deadline: RequestDeadline,
     ) -> Result<MailboxSelectionResult, AtmError> {
-        let messages = self
-            .reader
-            .list_messages(scope.clone(), query(&scope), read_deadline(deadline)?)
-            .await
-            .map_err(AtmError::from)?;
-        Ok(select_mailbox_candidates(
-            messages.into_iter().map(selection_candidate).collect(),
-            &request,
-        ))
+        self.select_matching(scope, request, None, deadline).await
+    }
+
+    /// An explicit `atm list` is exploratory/operator traffic. Keep its
+    /// ordinary mailbox policy but reserve the agent-class reader capacity for
+    /// ack/send/read work under saturation.
+    async fn select_all_for_tool(
+        &self,
+        scope: MailboxScope,
+        request: MailboxSelectionRequest,
+        limit: Option<usize>,
+        deadline: RequestDeadline,
+    ) -> Result<MailboxSelectionResult, AtmError> {
+        self.select_matching(scope, request, limit, deadline).await
     }
 
     async fn select_for_read(
@@ -647,17 +703,17 @@ impl StorageAsyncMailboxRuntime {
         request: MailboxSelectionRequest,
         deadline: RequestDeadline,
         wait_timeout: Option<Duration>,
-    ) -> Result<MailboxSelectionResult, AtmError> {
+    ) -> Result<(MailboxSelectionResult, usize), AtmError> {
         let Some(wait_timeout) = wait_timeout else {
-            return self.select_all(scope, request, deadline).await;
+            return self.select_one_for_read(scope, request, deadline).await;
         };
         let wait_deadline = tokio::time::Instant::now() + wait_timeout;
         loop {
-            let selection = self
-                .select_all(scope.clone(), request.clone(), deadline)
+            let (selection, match_count) = self
+                .select_one_for_read(scope.clone(), request.clone(), deadline)
                 .await?;
             if !selection.selected.is_empty() || tokio::time::Instant::now() >= wait_deadline {
-                return Ok(selection);
+                return Ok((selection, match_count));
             }
             let request_remaining = deadline.remaining().ok_or_else(|| {
                 AtmError::daemon_unavailable("mailbox request deadline expired while awaiting mail")
@@ -668,10 +724,69 @@ impl StorageAsyncMailboxRuntime {
                 .min(request_remaining)
                 .min(until_wait_deadline);
             if pause.is_zero() {
-                return Ok(selection);
+                return Ok((selection, match_count));
             }
             tokio::time::sleep(pause).await;
         }
+    }
+
+    async fn select_one_for_read(
+        &self,
+        scope: MailboxScope,
+        request: MailboxSelectionRequest,
+        deadline: RequestDeadline,
+    ) -> Result<(MailboxSelectionResult, usize), AtmError> {
+        let filters = mailbox_filters(&scope, &request);
+        let selection = self
+            .select_matching(scope.clone(), request, Some(1), deadline)
+            .await?;
+        let counts = self
+            .reader
+            .count_messages(scope, filters, None, read_deadline(deadline)?)
+            .await
+            .map_err(AtmError::from)?;
+        let match_count = counts.first().map_or(0, |count| count.count);
+        Ok((selection, match_count))
+    }
+
+    async fn select_matching(
+        &self,
+        scope: MailboxScope,
+        request: MailboxSelectionRequest,
+        limit: Option<usize>,
+        deadline: RequestDeadline,
+    ) -> Result<MailboxSelectionResult, AtmError> {
+        let filters = mailbox_filters(&scope, &request);
+        let bucket_counts = self
+            .reader
+            .count_messages(
+                scope.clone(),
+                SearchFilters {
+                    team: Some(scope.team.clone()),
+                    agent: Some(scope.agent.clone()),
+                    current_only: true,
+                    ..SearchFilters::default()
+                },
+                Some(SearchCountGroupBy::Bucket),
+                read_deadline(deadline)?,
+            )
+            .await
+            .map_err(AtmError::from)?;
+        let messages = self
+            .reader
+            .list_matching_messages(
+                scope,
+                MailboxListQuery { filters, limit },
+                read_deadline(deadline)?,
+            )
+            .await
+            .map_err(AtmError::from)?;
+        let mut selection = select_mailbox_candidates(
+            messages.into_iter().map(selection_candidate).collect(),
+            &request,
+        );
+        selection.bucket_counts = bucket_counts_from_storage(bucket_counts);
+        Ok(selection)
     }
 
     fn try_handoff_selected(
@@ -731,16 +846,6 @@ impl StorageAsyncMailboxRuntime {
     }
 }
 
-fn query(scope: &MailboxScope) -> MessageQuery {
-    MessageQuery {
-        team: scope.team.clone(),
-        agent: scope.agent.clone(),
-        sender: None,
-        task_id: None,
-        limit: None,
-    }
-}
-
 fn selection_candidate(message: Message) -> MailboxSelectionCandidate {
     MailboxSelectionCandidate {
         message_key: message.message_key.to_string(),
@@ -748,7 +853,7 @@ fn selection_candidate(message: Message) -> MailboxSelectionCandidate {
     }
 }
 
-fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
+pub fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
     deadline
         .remaining()
         .ok_or_else(|| AtmError::daemon_unavailable("mailbox request deadline expired"))
@@ -769,8 +874,8 @@ mod tests {
     use atm_core::types::ReadSelection;
     use atm_storage::testing::InMemoryMailboxReader;
     use atm_storage::{
-        AgentName, AtmError, AtmErrorCode, IsoTimestamp, Message, MessageEnvelope, ReadLaneError,
-        TeamName,
+        AgentName, AtmError, AtmErrorCode, AtmMessageId, IsoTimestamp, Message, MessageEnvelope,
+        ReadLaneError, TeamName,
     };
 
     use super::{
@@ -818,6 +923,9 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                placement: None,
+                task_op: None,
+                task_complete: None,
                 extra: serde_json::Map::new(),
             },
         }
@@ -1026,6 +1134,10 @@ mod tests {
             .expect("runtime selects through reader lane");
         assert_eq!(outcome.count, 1);
         assert!(outcome.mutation_applied, "handoff admission is reported");
+        assert!(
+            !outcome.message.expect("selected message").envelope.read,
+            "the response remains the pre-handoff reader snapshot"
+        );
 
         let list = ListQuery::new(
             query_root.clone(),
@@ -1054,6 +1166,54 @@ mod tests {
             writer.applied().len(),
             0,
             "list never uses the writer handoff"
+        );
+    }
+
+    #[tokio::test]
+    async fn exact_message_read_reports_handoff_acceptance_not_durability() {
+        let writer = Arc::new(RecordingWriter::default());
+        let mut selected = message("unread", false);
+        let message_id = AtmMessageId::new();
+        selected.envelope.message_id = Some(message_id);
+        let runtime = StorageAsyncMailboxRuntime::new(
+            Arc::new(InMemoryMailboxReader::with_messages(vec![selected])),
+            writer,
+        )
+        .with_state_handoff(HandoffConfig::default())
+        .expect("runtime handoff starts");
+        let root = PathBuf::from("/daemon-owned");
+        let id = message_id.to_string();
+        let read = ReadQuery::new(
+            root.clone(),
+            root,
+            agent(),
+            None,
+            team(),
+            ReadSelection::Unread,
+            false,
+            true,
+            Some(&id),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("exact read query");
+        let outcome = runtime
+            .read_command(
+                prepare_async_read(&read).expect("core prepares exact policy"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("runtime selects exact message");
+        assert!(
+            outcome.mutation_applied,
+            "acceptance is reported for exact reads"
+        );
+        assert!(
+            !outcome.message.expect("selected message").envelope.read,
+            "exact reads share the pre-handoff snapshot contract"
         );
     }
 
@@ -1277,7 +1437,11 @@ mod tests {
                 AtmErrorCode::DaemonConnectionSaturated,
             ),
             (
-                ReadLaneError::DeadlineExpired { stage: "test" },
+                ReadLaneError::DeadlineExpired {
+                    stage: "test",
+                    budget_ms: 3_000,
+                    elapsed_ms: 3_000,
+                },
                 AtmErrorCode::MailboxLockTimeout,
             ),
             (
@@ -1292,6 +1456,33 @@ mod tests {
             assert_eq!(error.code(), expected_code);
             assert!(error.cause().is_some());
         }
+    }
+
+    #[test]
+    fn reader_deadline_error_exposes_safe_variant_stage_and_budget() {
+        let error = AtmError::from(ReadLaneError::DeadlineExpired {
+            stage: "running sqlite query",
+            budget_ms: 3_000,
+            elapsed_ms: 2_997,
+        });
+
+        assert_eq!(error.code(), AtmErrorCode::MailboxLockTimeout);
+        assert!(error.detail().contains("variant=deadline_expired"));
+        assert!(error.detail().contains("stage=running sqlite query"));
+        assert!(error.detail().contains("budget_ms=3000"));
+        assert!(error.detail().contains("elapsed_ms=2997"));
+    }
+
+    #[test]
+    fn reader_storage_error_keeps_diagnostic_cause_out_of_public_detail() {
+        let error = AtmError::from(ReadLaneError::Storage {
+            code: AtmErrorCode::MailboxReadFailed,
+            message: "sqlite reader failed at /private/atm.db".to_owned(),
+            cause: Some("/private/atm.db".to_owned()),
+        });
+
+        assert!(!error.detail().contains("/private/atm.db"));
+        assert!(error.cause().is_some());
     }
 }
 

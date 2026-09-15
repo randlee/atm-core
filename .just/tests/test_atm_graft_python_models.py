@@ -78,6 +78,7 @@ class AtmGraftPythonModelTests(unittest.TestCase):
                 "contains",
                 "since",
                 "from_agent",
+                "peek",
             },
             models.AtmListRequest: {
                 "selection",

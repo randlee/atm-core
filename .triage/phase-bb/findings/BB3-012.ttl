@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-012>
+  a triage:Finding ;
+  triage:findingId "BB3-012" ;
+  triage:title "Double Flow/Steps rendering, missing --output in compose, sibling-JSON quirk, undeclared note field" ;
+  triage:description "fenix critical review M1/M2/M4/M5, reviewed at 27e21224c. M1: each page renders the body ## Flow/## Steps and then the revision section's SVG and table again (render_procedure_pages.py:173-176, template L17) -- two Flow headings, two identical tables per page. M2: render_procedure_pages.compose (L29-42) omits --output, contrary to D2's 'exactly as render_file does' (escaping is identical; cosmetic). M4: _procedure_for (inventory_reports.py:175-190) ignores an envelope-less result's own feature and reads sibling JSONs instead (_sibling_feature L152-160); no live effect on the committed tree today. M5: procedure.html.j2:17 renders {{ note | e }} with note neither required nor defaulted; surfaces once BB3-004 (missing '---') is fixed." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/procedures/render_procedure_pages.py" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:deferredNote "Low priority cosmetic cleanup bundle for a later pass; not required for BB3-FIX-R1 to land." ;
+  triage:relatedFinding "BB3-004" ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-012/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB3-012/1> ;
+  triage:closedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-012/1>
+  a triage:Occurrence ;
+  triage:file "scripts/procedures/render_procedure_pages.py" ;
+  triage:line 173 ;
+  triage:snippet "page body repeats the Flow/Steps content already shown in the revision section (double render); compose omits --output; _procedure_for reads sibling JSONs instead of the result's own feature; template's note field is undeclared/undefaulted" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-012/1> .
+
+<urn:atm:triage:worktree/BB3-012/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB3-012/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:fixCommit "791680c2ae8155bced4fd5fd2888c5a607228f01" ;
+  triage:fixBranch "feature/bb3-test-procedure-pages" ;
+  triage:verifiedInRound "BB3-FIX-R1" ;
+  triage:resolutionNote "Confirmed fixed (M1/M2/M4/M5 sub-items) in BB3-QA2 -- QA-2's own M2 finding is a distinct, deliberately-left-open remnant of the original M4 sub-item (sibling-JSON read pattern relocated into build_inventory, no live effect per this record's own deferredNote), recorded separately; the other three sub-items (double render, missing --output, undeclared note field) are resolved." .

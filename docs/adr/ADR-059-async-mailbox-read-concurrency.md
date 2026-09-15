@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-059 |
-| Status | Proposed (Phase AV.2) |
+| Status | Accepted |
 | Scope | Mailbox read-family scheduling, SQLite reader-lane ownership, and read-side state handoff |
 | Relates to | ADR-001, ADR-036, phase-av-plan §1.1–§1.2, AV.1a D1/D1a, AV.1b D2, AV.3 D1/D2/D2b/D3/D4, `av-closeout-record.md` |
 
@@ -121,6 +121,14 @@ The chosen bounded handoff exposes overflow, supervisor state, restart count,
 retry-deadline exhaustion, and buffered depth to `atm doctor`. Operators can
 therefore distinguish a safely re-presented message from a runtime that has
 failed closed.
+
+### D6. Read JSON observation contract addendum
+
+`mutation_applied = true` reports acceptance into the state handoff, not
+durable completion. The returned message and bucket counts are the reader-lane
+snapshot and may be pre-handoff. Bare reads and exact-message reads share this
+contract. Consumers that need durable visibility poll `atm list --json` with a
+bounded deadline; they must not demand read-your-writes from a read response.
 
 ## Consequences
 

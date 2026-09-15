@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 from pathlib import Path
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -16,6 +18,19 @@ PICKER = ROOT / "scripts/send-to/picker.py"
 COMMAND_WRAPPER = ROOT / "scripts/send-to/atm-send-to.command"
 NAUTILUS_WRAPPER = ROOT / "scripts/send-to/nautilus-atm-send-to.sh"
 FIXTURES = ROOT / "docs/plans/phase-aq/fixtures"
+VALIDATE_RELEASE = ROOT / "scripts/validate_release.py"
+
+# Test-only seam in atm-send-to.command / nautilus-atm-send-to.sh that
+# replaces the wrapper's desktop notification (`osascript display
+# notification` / `notify-send`) on the failure path. Before this seam
+# existed, every `just test` / `just lint` / `just validate` run popped a
+# real macOS notification from
+# test_command_wrapper_propagates_exit_code_and_forwards_stderr_on_failure.
+NOTIFIER_SEAM = "ATM_SEND_TO_NOTIFIER"
+# The desktop-notification binaries the wrappers reach for by default. Every
+# wrapper run in this suite shadows them on PATH with a stub that records a
+# marker; tearDown asserts the marker was never written.
+DESKTOP_NOTIFIER_BINARIES = ("osascript", "notify-send")
 
 # Load the committed PickerInput/PickerOutput fixtures verbatim (rather than
 # inline-shaped equivalents) so this suite exercises the exact bytes the
@@ -42,6 +57,33 @@ def invoke_script(script: Path, *args: Path) -> list[str]:
 
 
 class SendToSurfaceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Shadow the real desktop-notification binaries for every wrapper
+        # run so a regression in the notifier seam fails this suite loudly
+        # instead of silently popping a notification on the developer's
+        # desktop. The stub only records its argv; it never shows UI.
+        self._ui_stub_dir = tempfile.TemporaryDirectory()
+        self.ui_marker = Path(self._ui_stub_dir.name) / "desktop-notification.marker"
+        if os.name != "nt":
+            for name in DESKTOP_NOTIFIER_BINARIES:
+                stub = Path(self._ui_stub_dir.name) / name
+                stub.write_text(
+                    "#!/bin/sh\n"
+                    f"printf '%s\\n' \"$0\" \"$@\" >> '{self.ui_marker}'\n",
+                    encoding="utf-8",
+                )
+                executable(stub)
+
+    def tearDown(self) -> None:
+        leaked = self.ui_marker.read_text(encoding="utf-8") if self.ui_marker.exists() else ""
+        self._ui_stub_dir.cleanup()
+        self.assertEqual(
+            leaked,
+            "",
+            "a Send-To wrapper reached a real desktop-notification binary; the "
+            f"{NOTIFIER_SEAM} seam must keep every test in this suite UI-free:\n{leaked}",
+        )
+
     def make_atm(self, directory: Path, log: Path) -> Path:
         path = fixture_path(directory, "atm")
         if os.name == "nt":
@@ -103,6 +145,12 @@ class SendToSurfaceTests(unittest.TestCase):
             env["ATM_SEND_TO_PICKER"] = str(picker)
         else:
             env.pop("ATM_SEND_TO_PICKER", None)
+        # No test here may raise a real desktop notification: suppress the
+        # wrappers' failure-path notification by default (a test that wants
+        # to observe it overrides the seam via `extra`), and put the
+        # marker-recording stubs ahead of the real binaries on PATH.
+        env[NOTIFIER_SEAM] = "none"
+        env["PATH"] = self._ui_stub_dir.name + os.pathsep + env.get("PATH", "")
         if extra:
             env.update(extra)
         return subprocess.run(invoke_script(script, *files), cwd=ROOT, env=env, text=True, capture_output=True)
@@ -300,6 +348,48 @@ class SendToSurfaceTests(unittest.TestCase):
             self.assertFalse(log.exists(), result.stderr)
             self.assertIn("send-to picker", result.stderr)
 
+    def make_recording_notifier(self, directory: Path, record: Path) -> Path:
+        """A notifier command that records its argv (one per line) to `record`."""
+        path = fixture_path(directory, "notifier-record")
+        path.write_text(
+            "#!/bin/sh\n"
+            f"printf '%s\\n' \"$@\" > '{record}'\n",
+            encoding="utf-8",
+        )
+        executable(path)
+        return path
+
+    @unittest.skipIf(os.name == "nt", "the notifying wrappers are Unix-only")
+    def test_wrapper_notification_seam_replaces_the_desktop_notification_on_failure(self) -> None:
+        expected_message = "send-to picker: at least one recipient must be selected"
+        for wrapper in (COMMAND_WRAPPER, NAUTILUS_WRAPPER):
+            for mode in ("command", "stderr"):
+                with self.subTest(wrapper=wrapper.name, mode=mode), tempfile.TemporaryDirectory() as raw:
+                    directory = Path(raw)
+                    (directory / "input.json").write_text(json.dumps(PICKER_INPUT))
+                    log = directory / "send.log"
+                    self.make_atm(directory, log)
+                    picker = self.make_noisy_failing_picker(directory, code=7)
+                    record = directory / "notifier.args"
+                    notifier = self.make_recording_notifier(directory, record)
+                    extra = {NOTIFIER_SEAM: str(notifier) if mode == "command" else "stderr"}
+                    result = self.run_surface(picker, [directory / "one.txt"], directory, log, extra, script=wrapper)
+                    # The seam must not change the wrapper's contract: real
+                    # exit code, no send, full stderr detail still forwarded.
+                    self.assertEqual(result.returncode, 7, result.stderr)
+                    self.assertFalse(log.exists(), result.stderr)
+                    self.assertIn(expected_message, result.stderr)
+                    if mode == "command":
+                        # The notification travels through the seam as
+                        # `<command> "ATM Send-To" "<last stderr line>"` ...
+                        self.assertEqual(record.read_text(encoding="utf-8").splitlines(), ["ATM Send-To", expected_message])
+                    else:
+                        self.assertFalse(record.exists())
+                        self.assertIn(f"ATM Send-To: {expected_message}", result.stderr)
+                    # ... and never through osascript / notify-send (the PATH
+                    # stubs installed by setUp would have recorded a marker).
+                    self.assertFalse(self.ui_marker.exists(), "the wrapper reached a real desktop-notification binary")
+
     @unittest.skipIf(os.name == "nt", "the command wrapper is Unix-only")
     def test_command_wrapper_exits_zero_on_success(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -328,31 +418,57 @@ class SendToSurfaceTests(unittest.TestCase):
 
 
 # RBQA-F103: ATM_SEND_TO_PICKER / ATM_SEND_TO_NATIVE_PICKER are test-only
-# override seams shipped inside atm-send-to.sh/.ps1 with no mechanical
-# enforcement that they stay documented as test-only or stay confined to the
-# two scripts (plus their own test coverage). This is that enforcement.
-SEND_TO_TEST_ONLY_ENV_VARS = ("ATM_SEND_TO_PICKER", "ATM_SEND_TO_NATIVE_PICKER")
+# override seams shipped inside atm-send-to.sh/.ps1, and ATM_SEND_TO_NOTIFIER
+# is the test-only notification seam shipped inside atm-send-to.command /
+# nautilus-atm-send-to.sh, with no mechanical enforcement that they stay
+# documented as test-only or stay confined to their host scripts (plus their
+# own test coverage). This is that enforcement.
+SEND_TO_TEST_ONLY_ENV_VARS = ("ATM_SEND_TO_PICKER", "ATM_SEND_TO_NATIVE_PICKER", NOTIFIER_SEAM)
 SEND_TO_SCRIPTS = (
     ROOT / "scripts/send-to/atm-send-to.sh",
     ROOT / "scripts/send-to/atm-send-to.ps1",
 )
-# Files other than the two send-to scripts and `test_*` files that
-# legitimately reference the seam today. Kept as an explicit allowlist
-# (rather than a broader glob) so any new reference is a deliberate,
-# reviewed addition rather than an accidental leak into a shipped path.
+SEND_TO_NOTIFYING_WRAPPERS = (COMMAND_WRAPPER, NAUTILUS_WRAPPER)
+# Which shipped script(s) host each seam: every seam must be read by exactly
+# these files and documented as test-only right where it is read.
+SEND_TO_SEAM_HOSTS = {
+    "ATM_SEND_TO_PICKER": SEND_TO_SCRIPTS,
+    "ATM_SEND_TO_NATIVE_PICKER": SEND_TO_SCRIPTS,
+    NOTIFIER_SEAM: SEND_TO_NOTIFYING_WRAPPERS,
+}
+# Files other than the seam hosts and `test_*` files that legitimately
+# reference a seam today. Kept as an explicit allowlist (rather than a
+# broader glob) so any new reference is a deliberate, reviewed addition
+# rather than an accidental leak into a shipped path.
 SEND_TO_SEAM_REFERENCE_ALLOWLIST = (
     ROOT / "scripts/phase-aq/run_aq5_wyvern_degradation_evidence.py",
     # RBQA-F103's own release-environment guard (see
     # validate_send_to_test_seams in scripts/validate_release.py).
-    ROOT / "scripts/validate_release.py",
+    VALIDATE_RELEASE,
+    # Operator-facing note that the notifier seam is test-only.
+    ROOT / "scripts/send-to/README.md",
 )
 
 
 class SendToTestOnlySeamLintTests(unittest.TestCase):
-    def test_both_scripts_document_the_seam_as_test_only(self) -> None:
-        for script in SEND_TO_SCRIPTS:
-            text = script.read_text(encoding="utf-8")
-            for var in SEND_TO_TEST_ONLY_ENV_VARS:
+    def test_every_seam_has_a_host_script_and_the_release_guard_lists_it(self) -> None:
+        self.assertEqual(set(SEND_TO_SEAM_HOSTS), set(SEND_TO_TEST_ONLY_ENV_VARS))
+        spec = importlib.util.spec_from_file_location("validate_release_for_seam_lint", VALIDATE_RELEASE)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        # dataclasses resolves the defining module through sys.modules at
+        # class-creation time, so the module must be registered before exec.
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        # The release-environment guard must block the exact same set of
+        # seams this lint confines, so a seam can never be added to one list
+        # without the other.
+        self.assertEqual(set(module.SEND_TO_TEST_ONLY_ENV_VARS), set(SEND_TO_TEST_ONLY_ENV_VARS))
+
+    def test_host_scripts_document_the_seam_as_test_only(self) -> None:
+        for var, hosts in SEND_TO_SEAM_HOSTS.items():
+            for script in hosts:
+                text = script.read_text(encoding="utf-8")
                 self.assertIn(var, text, f"{script}: expected a reference to {var}")
                 index = text.index(var)
                 # The documenting comment must sit close to the variable, not
@@ -369,8 +485,11 @@ class SendToTestOnlySeamLintTests(unittest.TestCase):
             ROOT / ".github" / "workflows",
             ROOT / "scripts",
             ROOT / ".just",
+            # The seams live in the shell wrappers only; production Rust must
+            # never read them.
+            ROOT / "crates",
         )
-        allowed = {*SEND_TO_SCRIPTS, *SEND_TO_SEAM_REFERENCE_ALLOWLIST}
+        allowed = {*SEND_TO_SCRIPTS, *SEND_TO_NOTIFYING_WRAPPERS, *SEND_TO_SEAM_REFERENCE_ALLOWLIST}
         stray: list[str] = []
         for root in candidate_roots:
             if not root.exists():
@@ -390,9 +509,9 @@ class SendToTestOnlySeamLintTests(unittest.TestCase):
         self.assertEqual(
             stray,
             [],
-            "the Send-To test-only picker seam must stay confined to "
-            "scripts/send-to/atm-send-to.{sh,ps1}, their tests, and the "
-            "explicit SEND_TO_SEAM_REFERENCE_ALLOWLIST entries:\n" + "\n".join(stray),
+            "the Send-To test-only seams must stay confined to their host "
+            "scripts under scripts/send-to/, their tests, and the explicit "
+            "SEND_TO_SEAM_REFERENCE_ALLOWLIST entries:\n" + "\n".join(stray),
         )
 
 

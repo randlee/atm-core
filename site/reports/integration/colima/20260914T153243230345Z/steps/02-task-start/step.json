@@ -1,0 +1,30 @@
+{
+  "feature": "colima-task-start",
+  "generated_at": "2026-09-14T15:37:11Z",
+  "source_revision": "9f2430a00a2013655d84b2ad21b05fd04fa6889a",
+  "container": "hermes-testbed",
+  "atm_version": "1.5.18",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "started-line-at-write-time",
+      "status": "fail",
+      "detail": "atm doctor --json (as fx-at9-alpha --team fx-at9): 'HTTP client could not connect to the configured daemon endpoint\\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.' No task could be assigned or started because the ATM daemon never became reachable; step could not run."
+    },
+    {
+      "name": "out-of-order-start-reorders-queue",
+      "status": "fail",
+      "detail": "Same daemon-unreachable condition as step 1 (atm doctor --json repeated 6x over 30s, identical error each time: 'HTTP client could not connect to the configured daemon endpoint'). Could not assign two tasks or query atm task list --json."
+    },
+    {
+      "name": "unstarted-task-keeps-reminding",
+      "status": "fail",
+      "detail": "Same daemon-unreachable condition; atm task assign and atm task events --json cannot be exercised without a reachable daemon endpoint."
+    },
+    {
+      "name": "cleanup",
+      "status": "fail",
+      "detail": "No tasks were created in any case (daemon unreachable throughout), so there is nothing to close via atm task close; cleanup cannot be verified as successful."
+    }
+  ]
+}

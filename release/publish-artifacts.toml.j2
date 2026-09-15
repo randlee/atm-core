@@ -14,6 +14,14 @@ required_variables:
   - project.renderer_archive_path
   - project.workspace_toml
   - project.rust_toolchain
+  - prerelease.tag_prefix
+  - prerelease.tag_script
+  - prerelease.install_root
+  - prerelease.binaries
+  - prerelease.protected_branches
+  - prerelease.selector_dir
+  - prerelease.post_install
+  - prerelease.verify
   - release_targets
   - crates
   - release_binaries
@@ -46,6 +54,7 @@ required_variables:
   - has_renderer_archive_path
   - has_workspace_toml
   - has_rust_toolchain
+  - has_prerelease
   - has_channel_pypi
   - has_channel_homebrew
   - has_channel_winget
@@ -70,6 +79,18 @@ workspace_toml = {{ project.workspace_toml }}
 {% endif %}
 {% if has_rust_toolchain %}
 rust_toolchain = {{ project.rust_toolchain }}
+{% endif %}
+
+{% if has_prerelease %}
+[prerelease]
+tag_prefix = {{ prerelease.tag_prefix }}
+tag_script = {{ prerelease.tag_script }}
+install_root = {{ prerelease.install_root }}
+binaries = {{ prerelease.binaries }}
+protected_branches = {{ prerelease.protected_branches }}
+selector_dir = {{ prerelease.selector_dir }}
+post_install = {{ prerelease.post_install }}
+verify = {{ prerelease.verify }}
 {% endif %}
 
 {% for target in release_targets %}

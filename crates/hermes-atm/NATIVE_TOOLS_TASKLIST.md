@@ -1,6 +1,6 @@
 # Hermes ATM Native Tools — Worktree Checklist
 
-Scope: `atm_send`, read-only `atm_read`, and `atm_list` in `hermes-atm`.
+Scope: `atm_send`, mutating `atm_read`, and `atm_list` in `hermes-atm`.
 Execution rule: complete and verify each item before marking it done. Do not
 perform live gateway-profile testing until every offline item and the second-pass review
 are complete.

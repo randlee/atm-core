@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-002>
+  a triage:Finding ;
+  triage:findingId "CPR-002" ;
+  triage:title "SendOutcome.already_closed has no producer; atm task close reports a false success" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. SendOutcome.already_closed has no producer; `atm task close` reports a false success. Doc says: nudge-task-design.md §5.2: already complete -> DELIVER the message, INFORM the caller. sprint-BA.4:213 requires stage 3 to print 'task <id> was already closed (<outcome>); report delivered', exit 0. Code does: apply_task_close correctly returns Ok(Some(already)) at task_ops.rs:532-542, but the dispatcher discards it: `Some(TaskOp::Close { .. }) => apply_task_close(...).map(|_| ())`. Every construction site of SendOutcome hardcodes `already_closed: None` (crates/atm-core/src/send/outcome.rs:29 decl; None at write/pipeline.rs:502, send/write_context.rs:47, atm/src/composition.rs:1115, atm-http-runtime/src/message_handler.rs:1067, client.rs:1179, plus graft sites) and the field is never mutated. The CLI branch at crates/atm/src/commands/task.rs:353 is unreachable. Recommendation: Thread the Option<TaskCloseOutcome> from apply_task_close through apply_task_message and the write pipeline into SendOutcome, or delete the field and the CLI branch. Do not ship a governed (ADR-061) interface field that is structurally always None. fenix's ruling: thread the real TaskCloseOutcome through SendOutcome.already_closed instead of hardcoding None." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A97CP7ZRAC882G0DD78AE5, 2026-09-12T07:45:02Z): fixed at review-2 92995d258 (fix) + 33754d69d (dead-code correction; contract.rs back to 977 prod lines). fenix (ATM 01M2A9ATC16T0YXH1T71T7ZHA8, 2026-09-12T07:46:54Z): gate confirmation -- 33754d69d is gate-green on fenix's host, RULE-003 included. Status fixed at 33754d69d stands, nothing pending." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-002/2> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/CPR-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 129 ;
+  triage:snippet "apply_task_close returns Ok(Some(already)) but the dispatcher discards it (.map(|_| ())); every SendOutcome construction site hardcodes already_closed: None" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:45:02Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-2 @ 33754d69d)." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-002/review2> .
+
+<urn:atm:triage:occurrence/CPR-002/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 129 ;
+  triage:snippet "real TaskCloseOutcome threaded through SendOutcome.already_closed instead of hardcoded None" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:46:54Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm fix/phase-ba-review-2 @ 92995d258 (fix), corrected at 33754d69d (dead-code correction; contract.rs back to 977 prod lines); gate-green on fenix's host, RULE-003 included." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "33754d69d" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-002/2> .
+
+<urn:atm:triage:worktree/CPR-002/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), gate-green" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "33754d69d" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/CPR-002/review2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm, bounded bridge + CPR items 4-14), above fix/phase-ba-review-1" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .

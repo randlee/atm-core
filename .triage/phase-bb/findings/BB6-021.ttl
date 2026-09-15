@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-021>
+  a triage:Finding ;
+  triage:findingId "BB6-021" ;
+  triage:title "D5/D6 governed-interface entries lacked a recorded schema-reviewer sign-off -- resolved by this round's own dispatch" ;
+  triage:description "quality-mgr BB6-QA-L4-1789275000 (ATM-QA-BB6-002, req-qa: missing schema-reviewer sign-off), PR #1464 comment, 2026-09-13T02:00:00Z. Filed and resolved within the same QA round: satisfied by this round's own schema-reviewer dispatch, which returned PASS -- both D5 (HTTP 1.9.0) and D6 (additive prompt_handoffs table) confirmed correctly classified MINOR, both previous-consumer proof tests verified genuine (task_events_decodes_response_without_handoffs_field, frozen_1_8_task_events_response_decodes_1_9_payload_with_handoffs, pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created). Per fenix's explicit instruction, filed already-resolved." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "quality-mgr BB6-QA-L4-1789275000 (ATM-QA-BB6-002)" ;
+  triage:repeatable false ;
+  triage:sweepScope "D5/D6 governed-interface entries (ADR-061)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:deferredNote "No fix dispatch needed. Resolved by this round's own schema-reviewer dispatch returning PASS on both D5 and D6 entries." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-021/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB6-021/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-061.md" ;
+  triage:line 1 ;
+  triage:snippet "D5/D6 governed-interface entries lacked recorded schema-reviewer sign-off; resolved by this round's own schema-reviewer dispatch (PASS)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-021/1> .
+
+<urn:atm:triage:worktree/BB6-021/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB6-021/1>
+  a triage:Resolution ;
+  triage:resolutionNote "Satisfied by this round's own schema-reviewer dispatch, which returned PASS -- both D5 (HTTP 1.9.0) and D6 (additive prompt_handoffs table) confirmed correctly classified MINOR, both previous-consumer proof tests verified genuine." ;
+  triage:resolvedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .

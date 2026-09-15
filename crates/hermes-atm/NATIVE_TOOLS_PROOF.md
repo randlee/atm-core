@@ -14,9 +14,10 @@ terminal output, git history, or proof artifacts.
    `atm_send`, `atm_read`, and `atm_list` from `hermes-atm-native-tools`.
 4. Invoke `atm_send` with a distinct ordinary test body and `requires_ack`
    false. Verify the structured success envelope and ordinary mailbox delivery.
-5. Invoke `atm_list` and `atm_read` with a bounded, read-only selection. Before
-   and after each invocation, compare the selected message's read and pending
-   acknowledgement state; neither may change.
+5. Invoke `atm_list` and `atm_read` with a bounded selection. Verify that
+   `atm_read` changes the selected message from unread to read while leaving
+   pending acknowledgement state unchanged; `atm_list` must not mutate either
+   state.
 6. Invoke each tool once with an invalid/unknown argument. Verify a structured
    `kind=error` envelope with `layer=ingress_validation`, and verify no daemon
    mailbox operation occurred.

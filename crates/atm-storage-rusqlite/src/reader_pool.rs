@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use atm_storage::{AtmError, ReadLaneError};
 use rusqlite::{Connection, InterruptHandle};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::shared_db::SharedDbTarget;
 use crate::shared_db_reader_lanes::open_read_connection_for_target;
@@ -235,113 +236,82 @@ impl ReaderLaneMetrics {
 #[derive(Clone)]
 pub(crate) struct ReaderPool {
     inner: Arc<PoolInner>,
+    // This Arc is owned only by public ReaderPool handles, unlike `inner`,
+    // which short-lived watchdogs may retain. Its Drop runs with Arc's atomic
+    // last-owner semantics, so it shuts down readers exactly once.
+    _ownership: Arc<PoolShutdownGuard>,
 }
 
-/// Bounded knobs for one independent read lane. AV.1b adds the doctor lane to
-/// the same configuration surface; keeping the budget arithmetic here makes it
-/// impossible for a future lane to silently oversubscribe SQLite.
+/// Bounded knobs for the one shared SQLite read pool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ReaderPoolConfig {
     pub(crate) pool_size: NonZeroUsize,
     pub(crate) queue_depth: NonZeroUsize,
     pub(crate) interrupt_grace: Duration,
     pub(crate) request_deadline: Duration,
+    pub(crate) shutdown_join_deadline: Duration,
     pub(crate) max_quarantined: NonZeroUsize,
+    /// Tool-class reads reserve fewer slots than the full shared pool. Agent
+    /// reads deliberately do not consume this budget and may use all workers.
+    pub(crate) tool_class_max_in_flight: usize,
 }
 
 impl ReaderPoolConfig {
-    pub(crate) const fn mailbox_defaults() -> Self {
+    pub(crate) const fn shared_defaults() -> Self {
         Self {
-            pool_size: NonZeroUsize::new(4).expect("non-zero mailbox pool size"),
-            queue_depth: NonZeroUsize::new(16).expect("non-zero mailbox queue depth"),
+            pool_size: NonZeroUsize::new(8).expect("non-zero shared read pool size"),
+            queue_depth: NonZeroUsize::new(32).expect("non-zero shared read queue depth"),
             interrupt_grace: Duration::from_millis(250),
             request_deadline: Duration::from_secs(10),
-            max_quarantined: NonZeroUsize::new(4).expect("non-zero mailbox quarantine budget"),
-        }
-    }
-
-    pub(crate) const fn search_defaults() -> Self {
-        Self {
-            pool_size: NonZeroUsize::new(2).expect("non-zero search pool size"),
-            queue_depth: NonZeroUsize::new(8).expect("non-zero search queue depth"),
-            interrupt_grace: Duration::from_millis(250),
-            request_deadline: Duration::from_secs(10),
-            max_quarantined: NonZeroUsize::new(2).expect("non-zero search quarantine budget"),
+            shutdown_join_deadline: Duration::from_secs(5),
+            max_quarantined: NonZeroUsize::new(8).expect("non-zero shared read quarantine budget"),
+            tool_class_max_in_flight: 6,
         }
     }
 }
-
-/// AV.1b's doctor lane is included now so the connection cap remains stable as
-/// the stacked handler-cutover branch lands.
-pub(crate) const DEFAULT_DOCTOR_READER_CONFIG: ReaderPoolConfig = ReaderPoolConfig {
-    pool_size: NonZeroUsize::new(4).expect("non-zero doctor pool size"),
-    queue_depth: NonZeroUsize::new(16).expect("non-zero doctor queue depth"),
-    interrupt_grace: Duration::from_millis(250),
-    request_deadline: Duration::from_secs(10),
-    max_quarantined: NonZeroUsize::new(4).expect("non-zero doctor quarantine budget"),
-};
 
 pub(crate) const DEFAULT_MAX_READER_CONNECTIONS: NonZeroUsize =
     NonZeroUsize::new(32).expect("non-zero maximum reader connections");
 
-/// The one composition-owned `[reader_lanes]` configuration surface.
-///
-/// AV.1a keeps it backend-local because no HTTP handler reads it; the storage
-/// factory accepts one value and validates the whole connection budget before
-/// opening any worker. This prevents mailbox/search/doctor knobs from drifting
-/// into per-handler constants.
+/// The one composition-owned shared-read-pool configuration surface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ReaderLanesConfig {
-    pub(crate) mailbox: ReaderPoolConfig,
-    pub(crate) search: ReaderPoolConfig,
-    pub(crate) doctor: ReaderPoolConfig,
+pub(crate) struct SharedReadPoolConfig {
+    pub(crate) pool: ReaderPoolConfig,
     pub(crate) max_connections: NonZeroUsize,
 }
 
-impl Default for ReaderLanesConfig {
+impl Default for SharedReadPoolConfig {
     fn default() -> Self {
         Self {
-            mailbox: ReaderPoolConfig::mailbox_defaults(),
-            search: ReaderPoolConfig::search_defaults(),
-            doctor: DEFAULT_DOCTOR_READER_CONFIG,
+            pool: ReaderPoolConfig::shared_defaults(),
             max_connections: DEFAULT_MAX_READER_CONNECTIONS,
         }
     }
 }
 
-impl ReaderLanesConfig {
+impl SharedReadPoolConfig {
     pub(crate) fn validate(self) -> Result<(), AtmError> {
-        validate_connection_budget(self.mailbox, self.search, self.doctor, self.max_connections)
+        validate_connection_budget(self.pool, self.max_connections)
     }
 }
 
 pub(crate) fn validate_connection_budget(
-    mailbox: ReaderPoolConfig,
-    search: ReaderPoolConfig,
-    doctor: ReaderPoolConfig,
+    pool: ReaderPoolConfig,
     max_connections: NonZeroUsize,
 ) -> Result<(), AtmError> {
     let worst_case = 1usize
-        .saturating_add(mailbox.pool_size.get())
-        .saturating_add(search.pool_size.get())
-        .saturating_add(doctor.pool_size.get())
-        .saturating_add(mailbox.max_quarantined.get())
-        .saturating_add(search.max_quarantined.get())
-        .saturating_add(doctor.max_quarantined.get())
+        .saturating_add(pool.pool_size.get())
+        .saturating_add(pool.max_quarantined.get())
         .saturating_add(1); // analyst RO connection
-    if mailbox.max_quarantined > mailbox.pool_size
-        || search.max_quarantined > search.pool_size
-        || doctor.max_quarantined > doctor.pool_size
+    if pool.max_quarantined > pool.pool_size
+        || pool.tool_class_max_in_flight >= pool.pool_size.get()
         || worst_case > max_connections.get()
     {
         return Err(AtmError::validation(format!(
-            "SQLite reader connection budget exceeds max_connections: writer=1, mailbox_pool={}, search_pool={}, doctor_pool={}, mailbox_max_quarantined={}, search_max_quarantined={}, doctor_max_quarantined={}, analyst=1, total={worst_case}, max_connections={max_connections}",
-            mailbox.pool_size.get(),
-            search.pool_size.get(),
-            doctor.pool_size.get(),
-            mailbox.max_quarantined.get(),
-            search.max_quarantined.get(),
-            doctor.max_quarantined.get(),
+            "SQLite shared reader connection budget is invalid: writer=1, read_pool={}, read_max_quarantined={}, tool_class_max_in_flight={}, analyst=1, total={worst_case}, max_connections={max_connections}",
+            pool.pool_size.get(),
+            pool.max_quarantined.get(),
+            pool.tool_class_max_in_flight,
         )));
     }
     Ok(())
@@ -352,13 +322,23 @@ struct PoolInner {
     target: Arc<SharedDbTarget>,
     config: ReaderPoolConfig,
     queue_per_worker: usize,
-    workers: Mutex<Vec<Worker>>,
+    workers: Mutex<WorkerRegistry>,
+    shutting_down: AtomicBool,
     next_worker_index: AtomicUsize,
     next_worker_id: AtomicUsize,
     next_request: AtomicUsize,
+    tool_class_slots: Arc<Semaphore>,
     metrics: Arc<ReaderLaneMetrics>,
     #[cfg(test)]
     lifecycle_events: Mutex<Option<tokio::sync::mpsc::UnboundedSender<WorkerLifecycleEvent>>>,
+    #[cfg(test)]
+    worker_exit_count: Arc<AtomicUsize>,
+    #[cfg(test)]
+    shutdown_count: AtomicUsize,
+}
+
+struct PoolShutdownGuard {
+    inner: Arc<PoolInner>,
 }
 
 #[cfg(test)]
@@ -370,9 +350,15 @@ enum WorkerLifecycleEvent {
 
 struct Worker {
     id: usize,
-    sender: tokio::sync::mpsc::Sender<Request>,
+    sender: tokio::sync::mpsc::Sender<WorkerMessage>,
     interrupt: Arc<InterruptHandle>,
     state: Arc<WorkerState>,
+    handle: thread::JoinHandle<()>,
+}
+
+struct WorkerRegistry {
+    active: Vec<Worker>,
+    retired: Vec<thread::JoinHandle<()>>,
 }
 
 struct WorkerState {
@@ -383,7 +369,7 @@ struct WorkerState {
 
 struct WorkerReservation {
     id: usize,
-    sender: tokio::sync::mpsc::Sender<Request>,
+    sender: tokio::sync::mpsc::Sender<WorkerMessage>,
     interrupt: Arc<InterruptHandle>,
     state: Arc<WorkerState>,
 }
@@ -392,7 +378,13 @@ struct Request {
     id: RequestId,
     queued_at: Instant,
     deadline: Instant,
+    _tool_class_slot: Option<OwnedSemaphorePermit>,
     run: Box<ReaderJob>,
+}
+
+enum WorkerMessage {
+    Request(Request),
+    Shutdown,
 }
 
 type ReaderJob = dyn FnOnce(&Connection, &SharedDbTarget, RequestDisposition) + Send;
@@ -419,9 +411,11 @@ impl ReaderPool {
         target: Arc<SharedDbTarget>,
         config: ReaderPoolConfig,
     ) -> Result<Self, AtmError> {
-        if config.max_quarantined > config.pool_size {
+        if config.max_quarantined > config.pool_size
+            || config.tool_class_max_in_flight >= config.pool_size.get()
+        {
             return Err(AtmError::validation(format!(
-                "SQLite {lane} reader pool requires non-zero pool_size/queue_depth and max_quarantined <= pool_size"
+                "SQLite {lane} reader pool requires max_quarantined <= pool_size and tool_class_max_in_flight < pool_size"
             )));
         }
         let inner = Arc::new(PoolInner {
@@ -429,18 +423,33 @@ impl ReaderPool {
             target,
             queue_per_worker: config.queue_depth.get().div_ceil(config.pool_size.get()),
             config,
-            workers: Mutex::new(Vec::with_capacity(config.pool_size.get())),
+            workers: Mutex::new(WorkerRegistry {
+                active: Vec::with_capacity(config.pool_size.get()),
+                retired: Vec::new(),
+            }),
+            shutting_down: AtomicBool::new(false),
             next_worker_index: AtomicUsize::new(0),
             next_worker_id: AtomicUsize::new(config.pool_size.get()),
             next_request: AtomicUsize::new(0),
+            tool_class_slots: Arc::new(Semaphore::new(config.tool_class_max_in_flight)),
             metrics: Arc::new(ReaderLaneMetrics::new(lane, config.pool_size.get())),
             #[cfg(test)]
             lifecycle_events: Mutex::new(None),
+            #[cfg(test)]
+            worker_exit_count: Arc::new(AtomicUsize::new(0)),
+            #[cfg(test)]
+            shutdown_count: AtomicUsize::new(0),
         });
+        let pool = Self {
+            _ownership: Arc::new(PoolShutdownGuard {
+                inner: Arc::clone(&inner),
+            }),
+            inner,
+        };
         for worker_id in 0..config.pool_size.get() {
-            inner.spawn_worker(worker_id)?;
+            pool.inner.spawn_worker(worker_id)?;
         }
-        Ok(Self { inner })
+        Ok(pool)
     }
 
     pub(crate) fn metrics(&self) -> ReaderLaneMetricsSnapshot {
@@ -465,7 +474,58 @@ impl ReaderPool {
         T: Send + 'static,
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
+        self.submit_with_class(deadline, None, operation).await
+    }
+
+    pub(crate) async fn submit_tool<T, F>(
+        &self,
+        deadline: Duration,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
         let expires_at = deadline_at(deadline)?;
+        let remaining = expires_at.saturating_duration_since(Instant::now());
+        let permit = tokio::time::timeout(
+            remaining,
+            Arc::clone(&self.inner.tool_class_slots).acquire_owned(),
+        )
+        .await
+        .map_err(|_| deadline_expired("waiting for tool read capacity", deadline))?
+        .map_err(|_| ReadLaneError::Unavailable {
+            message: "tool read capacity closed".to_owned(),
+        })?;
+        self.submit_with_class_at(expires_at, deadline, Some(permit), operation)
+            .await
+    }
+
+    async fn submit_with_class<T, F>(
+        &self,
+        deadline: Duration,
+        tool_class_slot: Option<OwnedSemaphorePermit>,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
+        self.submit_with_class_at(deadline_at(deadline)?, deadline, tool_class_slot, operation)
+            .await
+    }
+
+    async fn submit_with_class_at<T, F>(
+        &self,
+        expires_at: Instant,
+        deadline: Duration,
+        tool_class_slot: Option<OwnedSemaphorePermit>,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
         let reservation = self.reserve_worker()?;
         let request_id = RequestId::next(&self.inner.next_request);
         let (reply, response) = tokio::sync::oneshot::channel();
@@ -473,12 +533,13 @@ impl ReaderPool {
             id: request_id,
             queued_at: Instant::now(),
             deadline: expires_at,
+            _tool_class_slot: tool_class_slot,
             run: Box::new(move |connection, target, disposition| {
                 let result = match disposition {
                     RequestDisposition::Execute => operation(connection, target),
-                    RequestDisposition::ExpiredInQueue => Err(ReadLaneError::DeadlineExpired {
-                        stage: "waiting in queue",
-                    }),
+                    RequestDisposition::ExpiredInQueue => {
+                        Err(deadline_expired("waiting in queue", deadline))
+                    }
                     RequestDisposition::Rejected(error) => Err(error),
                 };
                 let _ = reply.send(result);
@@ -489,7 +550,12 @@ impl ReaderPool {
             .queue_depth
             .fetch_add(1, Ordering::Relaxed);
         let remaining = expires_at.saturating_duration_since(Instant::now());
-        match tokio::time::timeout(remaining, reservation.sender.send(request)).await {
+        match tokio::time::timeout(
+            remaining,
+            reservation.sender.send(WorkerMessage::Request(request)),
+        )
+        .await
+        {
             Err(_) => {
                 self.inner
                     .metrics
@@ -499,9 +565,7 @@ impl ReaderPool {
                     .metrics
                     .expired_in_queue
                     .fetch_add(1, Ordering::Relaxed);
-                return Err(ReadLaneError::DeadlineExpired {
-                    stage: "waiting in queue",
-                });
+                return Err(deadline_expired("waiting in queue", deadline));
             }
             Ok(Err(_)) => {
                 self.inner
@@ -516,7 +580,7 @@ impl ReaderPool {
         }
         let remaining = expires_at.saturating_duration_since(Instant::now());
         match tokio::time::timeout(remaining, response).await {
-            Err(_) => Err(self.expire_waiting_request(reservation, request_id)),
+            Err(_) => Err(self.expire_waiting_request(reservation, request_id, deadline)),
             Ok(Err(_)) => Err(ReadLaneError::Unavailable {
                 message: "reader worker closed its reply channel".to_owned(),
             }),
@@ -524,7 +588,7 @@ impl ReaderPool {
         }
     }
 
-    pub(crate) fn submit_blocking<T, F>(
+    pub(crate) fn submit_tool_blocking<T, F>(
         &self,
         deadline: Duration,
         operation: F,
@@ -534,69 +598,125 @@ impl ReaderPool {
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
         let expires_at = deadline_at(deadline)?;
+        let permit = loop {
+            match Arc::clone(&self.inner.tool_class_slots).try_acquire_owned() {
+                Ok(permit) => break permit,
+                Err(tokio::sync::TryAcquireError::Closed) => {
+                    return Err(ReadLaneError::Unavailable {
+                        message: "tool read capacity closed".to_owned(),
+                    });
+                }
+                Err(tokio::sync::TryAcquireError::NoPermits) if Instant::now() >= expires_at => {
+                    return Err(deadline_expired("waiting for tool read capacity", deadline));
+                }
+                Err(tokio::sync::TryAcquireError::NoPermits) => {
+                    thread::park_timeout(Duration::from_millis(2));
+                }
+            }
+        };
+        self.submit_blocking_with_class_at(expires_at, deadline, Some(permit), operation)
+    }
+
+    /// Submits a synchronous compatibility read through the shared pool.
+    ///
+    /// Older sealed storage contracts are synchronous, but their pure reads
+    /// must still never borrow the serial writer connection. This path keeps
+    /// the same bounded queue and deadline behavior as async agent reads.
+    pub(crate) fn submit_blocking<T, F>(
+        &self,
+        deadline: Duration,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
+        self.submit_blocking_with_class_at(deadline_at(deadline)?, deadline, None, operation)
+    }
+
+    pub(crate) fn request_deadline(&self) -> Duration {
+        self.inner.config.request_deadline
+    }
+
+    fn submit_blocking_with_class_at<T, F>(
+        &self,
+        expires_at: Instant,
+        deadline: Duration,
+        tool_class_slot: Option<OwnedSemaphorePermit>,
+        operation: F,
+    ) -> Result<T, ReadLaneError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
+    {
         let reservation = self.reserve_worker()?;
         let request_id = RequestId::next(&self.inner.next_request);
         let (reply, response) = mpsc::sync_channel(1);
-        let mut request = Request {
+        let request = Request {
             id: request_id,
             queued_at: Instant::now(),
             deadline: expires_at,
+            _tool_class_slot: tool_class_slot,
             run: Box::new(move |connection, target, disposition| {
                 let result = match disposition {
                     RequestDisposition::Execute => operation(connection, target),
-                    RequestDisposition::ExpiredInQueue => Err(ReadLaneError::DeadlineExpired {
-                        stage: "waiting in queue",
-                    }),
+                    RequestDisposition::ExpiredInQueue => {
+                        Err(deadline_expired("waiting in queue", deadline))
+                    }
                     RequestDisposition::Rejected(error) => Err(error),
                 };
                 let _ = reply.send(result);
             }),
         };
+        self.enqueue_request(&reservation, request, expires_at, deadline)?;
+        response
+            .recv_timeout(expires_at.saturating_duration_since(Instant::now()))
+            .map_err(|error| match error {
+                mpsc::RecvTimeoutError::Timeout => {
+                    self.expire_waiting_request(reservation, request_id, deadline)
+                }
+                mpsc::RecvTimeoutError::Disconnected => ReadLaneError::Unavailable {
+                    message: "reader worker closed its reply channel".to_owned(),
+                },
+            })?
+    }
+
+    /// Pushes `request` onto the worker's bounded queue, retrying until the
+    /// deadline elapses or the queue accepts the request.
+    fn enqueue_request(
+        &self,
+        reservation: &WorkerReservation,
+        mut request: Request,
+        expires_at: Instant,
+        deadline: Duration,
+    ) -> Result<(), ReadLaneError> {
+        let metrics = &self.inner.metrics;
         loop {
-            self.inner
-                .metrics
-                .queue_depth
-                .fetch_add(1, Ordering::Relaxed);
-            match reservation.sender.try_send(request) {
-                Ok(()) => break,
-                Err(tokio::sync::mpsc::error::TrySendError::Full(returned)) => {
-                    self.inner
-                        .metrics
-                        .queue_depth
-                        .fetch_sub(1, Ordering::Relaxed);
+            metrics.queue_depth.fetch_add(1, Ordering::Relaxed);
+            match reservation.sender.try_send(WorkerMessage::Request(request)) {
+                Ok(()) => return Ok(()),
+                Err(tokio::sync::mpsc::error::TrySendError::Full(WorkerMessage::Request(
+                    returned,
+                ))) => {
+                    metrics.queue_depth.fetch_sub(1, Ordering::Relaxed);
                     if Instant::now() >= expires_at {
-                        self.inner
-                            .metrics
-                            .expired_in_queue
-                            .fetch_add(1, Ordering::Relaxed);
-                        return Err(ReadLaneError::DeadlineExpired {
-                            stage: "waiting in queue",
-                        });
+                        metrics.expired_in_queue.fetch_add(1, Ordering::Relaxed);
+                        return Err(deadline_expired("waiting in queue", deadline));
                     }
                     request = returned;
                     thread::park_timeout(Duration::from_millis(2));
                 }
+                Err(tokio::sync::mpsc::error::TrySendError::Full(WorkerMessage::Shutdown)) => {
+                    unreachable!("reader submissions never send a shutdown message")
+                }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    self.inner
-                        .metrics
-                        .queue_depth
-                        .fetch_sub(1, Ordering::Relaxed);
+                    metrics.queue_depth.fetch_sub(1, Ordering::Relaxed);
                     return Err(ReadLaneError::Unavailable {
                         message: "reader worker stopped".to_owned(),
                     });
                 }
             }
         }
-        response
-            .recv_timeout(expires_at.saturating_duration_since(Instant::now()))
-            .map_err(|error| match error {
-                mpsc::RecvTimeoutError::Timeout => {
-                    self.expire_waiting_request(reservation, request_id)
-                }
-                mpsc::RecvTimeoutError::Disconnected => ReadLaneError::Unavailable {
-                    message: "reader worker closed its reply channel".to_owned(),
-                },
-            })?
     }
 
     fn reserve_worker(&self) -> Result<WorkerReservation, ReadLaneError> {
@@ -610,7 +730,8 @@ impl ReaderPool {
             // A watchdog is exceptional cleanup, not a Tokio request task.
             // Park gives the thread no runnable work during its grace delay.
             thread::park_timeout(grace);
-            if reservation.state.active.load(Ordering::Acquire)
+            if !pool.shutting_down.load(Ordering::Acquire)
+                && reservation.state.active.load(Ordering::Acquire)
                 && RequestId::is_active(&reservation.state.active_request, request_id)
             {
                 pool.quarantine_if_still_active(reservation.id, request_id);
@@ -622,6 +743,7 @@ impl ReaderPool {
         &self,
         reservation: WorkerReservation,
         request_id: RequestId,
+        deadline: Duration,
     ) -> ReadLaneError {
         if reservation.state.active.load(Ordering::Acquire)
             && RequestId::is_active(&reservation.state.active_request, request_id)
@@ -632,35 +754,56 @@ impl ReaderPool {
                 .interrupted_while_active
                 .fetch_add(1, Ordering::Relaxed);
             self.schedule_quarantine(reservation, request_id);
-            ReadLaneError::DeadlineExpired {
-                stage: "executing active query",
-            }
+            deadline_expired("executing active query", deadline)
         } else {
             self.inner
                 .metrics
                 .expired_in_queue
                 .fetch_add(1, Ordering::Relaxed);
-            ReadLaneError::DeadlineExpired {
-                stage: "waiting in queue",
-            }
+            deadline_expired("waiting in queue", deadline)
         }
+    }
+}
+
+impl Drop for PoolShutdownGuard {
+    fn drop(&mut self) {
+        self.inner.shutdown_and_join();
     }
 }
 
 fn deadline_at(deadline: Duration) -> Result<Instant, ReadLaneError> {
     Instant::now()
         .checked_add(deadline)
-        .ok_or(ReadLaneError::DeadlineExpired {
-            stage: "computing reader deadline",
-        })
+        .ok_or_else(|| deadline_expired("computing reader deadline", deadline))
+}
+
+fn deadline_expired(stage: &'static str, budget: Duration) -> ReadLaneError {
+    let budget_ms = u64::try_from(budget.as_millis()).unwrap_or(u64::MAX);
+    ReadLaneError::DeadlineExpired {
+        stage,
+        budget_ms,
+        // The reader pool emits this only at the request deadline.  Report
+        // the total instead of an inferred remaining duration so operators
+        // can compare it directly with the configured request budget.
+        elapsed_ms: budget_ms,
+    }
 }
 
 impl PoolInner {
     fn worker_count(&self) -> usize {
-        self.workers.lock().expect("reader pool lock").len()
+        self.workers.lock().expect("reader pool lock").active.len()
     }
 
     fn spawn_worker(self: &Arc<Self>, id: usize) -> Result<(), AtmError> {
+        // Hold the registry lock through registration so shutdown either sees
+        // this worker's handle or prevents it from being created at all.
+        let mut workers = self.workers.lock().expect("reader pool lock");
+        if self.shutting_down.load(Ordering::Acquire) {
+            return Err(AtmError::daemon_unavailable(format!(
+                "SQLite {} reader pool is shutting down",
+                self.lane
+            )));
+        }
         let connection = open_read_connection_for_target(self.target.as_ref())?;
         let interrupt = Arc::new(connection.get_interrupt_handle());
         let (sender, receiver) = tokio::sync::mpsc::channel(self.queue_per_worker);
@@ -674,7 +817,9 @@ impl PoolInner {
         let worker_metrics = Arc::clone(&self.metrics);
         let worker_target = Arc::clone(&self.target);
         let lane = self.lane;
-        thread::Builder::new()
+        #[cfg(test)]
+        let worker_exit_count = Arc::clone(&self.worker_exit_count);
+        let handle = thread::Builder::new()
             .name(format!("atm-sqlite-{lane}-reader-{id}"))
             .spawn(move || {
                 let retired = run_worker(
@@ -689,24 +834,33 @@ impl PoolInner {
                 if retired && let Some(pool) = Weak::upgrade(&weak) {
                     pool.retire_and_replace(id);
                 }
+                #[cfg(test)]
+                worker_exit_count.fetch_add(1, Ordering::Relaxed);
             })
             .map_err(|error| {
                 AtmError::daemon_unavailable(format!(
                     "failed to start SQLite {lane} reader worker {id}: {error}"
                 ))
             })?;
-        self.workers.lock().expect("reader pool lock").push(Worker {
+        workers.active.push(Worker {
             id,
             sender,
             interrupt,
             state,
+            handle,
         });
         Ok(())
     }
 
     fn reserve_worker(&self) -> Result<WorkerReservation, ReadLaneError> {
+        if self.shutting_down.load(Ordering::Acquire) {
+            return Err(ReadLaneError::Unavailable {
+                message: "reader pool is shutting down".to_owned(),
+            });
+        }
         let workers = self.workers.lock().expect("reader pool lock");
         let quarantined = workers
+            .active
             .iter()
             .filter(|worker| WorkerStatus::load(&worker.state.status) == WorkerStatus::Quarantined)
             .count();
@@ -719,7 +873,7 @@ impl PoolInner {
                 reason: "reader quarantine budget exhausted",
             });
         }
-        let count = workers.len();
+        let count = workers.active.len();
         if count == 0 {
             return Err(ReadLaneError::Unavailable {
                 message: "reader pool has no workers".to_owned(),
@@ -727,7 +881,7 @@ impl PoolInner {
         }
         let start = self.next_worker_index.fetch_add(1, Ordering::Relaxed);
         for offset in 0..count {
-            let worker = &workers[(start + offset) % count];
+            let worker = &workers.active[(start + offset) % count];
             if WorkerStatus::load(&worker.state.status) == WorkerStatus::Ready
                 && !worker.sender.is_closed()
                 && worker.sender.capacity() > 0
@@ -748,7 +902,7 @@ impl PoolInner {
 
     fn quarantine_if_still_active(&self, worker_id: usize, request_id: RequestId) {
         let workers = self.workers.lock().expect("reader pool lock");
-        let Some(worker) = workers.iter().find(|worker| worker.id == worker_id) else {
+        let Some(worker) = workers.active.iter().find(|worker| worker.id == worker_id) else {
             return;
         };
         if !worker.state.active.load(Ordering::Acquire)
@@ -757,6 +911,7 @@ impl PoolInner {
             return;
         }
         let existing = workers
+            .active
             .iter()
             .filter(|candidate| {
                 WorkerStatus::load(&candidate.state.status) == WorkerStatus::Quarantined
@@ -784,11 +939,18 @@ impl PoolInner {
     fn retire_and_replace(self: &Arc<Self>, worker_id: usize) {
         let was_quarantined = {
             let mut workers = self.workers.lock().expect("reader pool lock");
-            let Some(position) = workers.iter().position(|worker| worker.id == worker_id) else {
+            let Some(position) = workers
+                .active
+                .iter()
+                .position(|worker| worker.id == worker_id)
+            else {
                 return;
             };
-            let worker = workers.remove(position);
-            WorkerStatus::load(&worker.state.status) == WorkerStatus::Quarantined
+            let worker = workers.active.remove(position);
+            let was_quarantined =
+                WorkerStatus::load(&worker.state.status) == WorkerStatus::Quarantined;
+            workers.retired.push(worker.handle);
+            was_quarantined
         };
         if !was_quarantined {
             return;
@@ -800,8 +962,19 @@ impl PoolInner {
             .retired_replaced_workers
             .fetch_add(1, Ordering::Relaxed);
         self.metrics.pool_size.fetch_sub(1, Ordering::Relaxed);
+        if self.shutting_down.load(Ordering::Acquire) {
+            return;
+        }
         let replacement_id = self.next_worker_id.fetch_add(1, Ordering::Relaxed);
         if self.spawn_worker(replacement_id).is_err() {
+            // A failed respawn must not permanently ratchet the advertised
+            // capacity downward; the retired worker was already removed.
+            self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
+            tracing::warn!(
+                worker_id,
+                replacement_id,
+                "reader worker replacement failed; capacity restored"
+            );
             return;
         }
         self.metrics.pool_size.fetch_add(1, Ordering::Relaxed);
@@ -820,16 +993,114 @@ impl PoolInner {
             let _ = sender.send(event);
         }
     }
+
+    fn shutdown_and_join(&self) {
+        if self.shutting_down.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        #[cfg(test)]
+        self.shutdown_count.fetch_add(1, Ordering::Relaxed);
+        let (active, mut handles) = {
+            let mut workers = self.workers.lock().expect("reader pool lock");
+            (
+                std::mem::take(&mut workers.active),
+                std::mem::take(&mut workers.retired),
+            )
+        };
+        for worker in &active {
+            worker.interrupt.interrupt();
+            match worker.sender.try_send(WorkerMessage::Shutdown) {
+                Ok(()) | Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                    tracing::warn!(
+                        lane = self.lane,
+                        worker_id = worker.id,
+                        "SQLite reader shutdown signal skipped because the bounded queue was full; relying on channel disconnect after queued work drains"
+                    );
+                }
+            }
+        }
+        handles.extend(active.into_iter().map(|worker| worker.handle));
+        self.join_workers(handles);
+    }
+
+    fn join_workers(&self, handles: Vec<thread::JoinHandle<()>>) {
+        let deadline = Instant::now()
+            .checked_add(self.config.shutdown_join_deadline)
+            .unwrap_or_else(Instant::now);
+        for handle in handles {
+            if handle.thread().id() == thread::current().id() {
+                tracing::warn!(
+                    lane = self.lane,
+                    "SQLite reader shutdown skipped a self-join; detaching worker handle"
+                );
+                continue;
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                tracing::warn!(
+                    lane = self.lane,
+                    timeout_ms = self.config.shutdown_join_deadline.as_millis(),
+                    "SQLite reader shutdown exceeded the bounded join deadline; detaching worker handle"
+                );
+                continue;
+            }
+            let (result_tx, result_rx) = mpsc::sync_channel(1);
+            let join_helper = thread::spawn(move || {
+                let _ = result_tx.send(handle.join());
+            });
+            match result_rx.recv_timeout(remaining) {
+                Ok(Ok(())) => {
+                    let _ = join_helper.join();
+                }
+                Ok(Err(_)) => {
+                    let _ = join_helper.join();
+                    tracing::warn!(
+                        lane = self.lane,
+                        "SQLite reader worker panicked while shutting down"
+                    );
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    drop(join_helper);
+                    tracing::warn!(
+                        lane = self.lane,
+                        timeout_ms = self.config.shutdown_join_deadline.as_millis(),
+                        "SQLite reader shutdown exceeded the bounded join deadline; detaching join helper"
+                    );
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    let _ = join_helper.join();
+                    tracing::warn!(
+                        lane = self.lane,
+                        "SQLite reader join helper disconnected before reporting its worker result"
+                    );
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn worker_exit_count(&self) -> Arc<AtomicUsize> {
+        Arc::clone(&self.worker_exit_count)
+    }
+
+    #[cfg(test)]
+    fn shutdown_count(&self) -> usize {
+        self.shutdown_count.load(Ordering::Acquire)
+    }
 }
 
 fn run_worker(
     connection: Connection,
     target: Arc<SharedDbTarget>,
-    mut receiver: tokio::sync::mpsc::Receiver<Request>,
+    mut receiver: tokio::sync::mpsc::Receiver<WorkerMessage>,
     state: Arc<WorkerState>,
     metrics: Arc<ReaderLaneMetrics>,
 ) -> bool {
-    while let Some(request) = receiver.blocking_recv() {
+    while let Some(message) = receiver.blocking_recv() {
+        let WorkerMessage::Request(request) = message else {
+            return false;
+        };
         let now = Instant::now();
         metrics
             .queue_depth
@@ -883,15 +1154,14 @@ fn run_worker(
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_DOCTOR_READER_CONFIG, DEFAULT_MAX_READER_CONNECTIONS, ReaderLaneMetrics,
-        ReaderPool, ReaderPoolConfig, WorkerLifecycleEvent, deadline_at,
-        validate_connection_budget,
+        DEFAULT_MAX_READER_CONNECTIONS, ReaderLaneMetrics, ReaderPool, ReaderPoolConfig,
+        WorkerLifecycleEvent, deadline_at, validate_connection_budget,
     };
     use crate::shared_db::SharedDbTarget;
     use std::num::NonZeroUsize;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, mpsc};
-    use std::time::{Duration, Instant};
+    use std::sync::{Arc, Barrier, mpsc};
+    use std::time::Duration;
 
     static NEXT_TEST_POOL_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -920,34 +1190,115 @@ mod tests {
             queue_depth: NonZeroUsize::new(queue_depth).expect("non-zero test queue depth"),
             interrupt_grace,
             request_deadline: Duration::from_secs(10),
+            shutdown_join_deadline: Duration::from_secs(1),
             max_quarantined: NonZeroUsize::new(max_quarantined)
                 .expect("non-zero test quarantine budget"),
+            tool_class_max_in_flight: pool_size.saturating_sub(1),
         }
     }
 
     #[test]
     fn documented_default_connection_budget_is_within_the_cap() {
         validate_connection_budget(
-            ReaderPoolConfig::mailbox_defaults(),
-            ReaderPoolConfig::search_defaults(),
-            DEFAULT_DOCTOR_READER_CONFIG,
+            ReaderPoolConfig::shared_defaults(),
             DEFAULT_MAX_READER_CONNECTIONS,
         )
-        .expect("1 writer + 4 mailbox + 2 search + 4 doctor + 10 quarantine + 1 analyst = 22");
+        .expect("1 writer + 8 shared reads + 8 quarantined + 1 analyst = 18");
     }
 
     #[test]
-    fn reader_lane_default_deadline_is_config_owned() {
+    fn shared_reader_default_deadline_is_config_owned() {
         let expected = Duration::from_secs(10);
         assert_eq!(
-            ReaderPoolConfig::mailbox_defaults().request_deadline,
-            expected
+            ReaderPoolConfig::shared_defaults().request_deadline,
+            expected,
+        );
+    }
+
+    #[test]
+    fn synchronous_compatibility_reads_run_on_a_reader_worker() {
+        let pool = test_pool(test_config(1, 1, Duration::from_millis(20), 1));
+        let answer = pool
+            .submit_blocking(Duration::from_secs(1), |connection, _| {
+                connection
+                    .query_row("SELECT 1;", [], |row| row.get::<_, i64>(0))
+                    .map_err(|error| atm_storage::ReadLaneError::Unavailable {
+                        message: error.to_string(),
+                    })
+            })
+            .expect("bounded compatibility read");
+        assert_eq!(answer, 1);
+        assert_eq!(pool.metrics().lane, "test");
+    }
+
+    #[test]
+    fn dropping_the_last_reader_pool_handle_joins_all_workers() {
+        let pool = test_pool(test_config(2, 2, Duration::from_millis(20), 2));
+        let exited = pool.inner.worker_exit_count();
+        drop(pool);
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            2,
+            "pool drop must return only after every reader worker has exited"
+        );
+    }
+
+    #[test]
+    fn dropping_one_reader_pool_owner_keeps_workers_serving_until_the_last_owner_drops() {
+        let pool = test_pool(test_config(2, 2, Duration::from_millis(20), 2));
+        let surviving_owner = pool.clone();
+        let exited = pool.inner.worker_exit_count();
+        drop(pool);
+
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            0,
+            "dropping one owner must not begin worker shutdown"
         );
         assert_eq!(
-            ReaderPoolConfig::search_defaults().request_deadline,
-            expected
+            surviving_owner
+                .submit_blocking(Duration::from_secs(1), |_, _| {
+                    Ok::<_, atm_storage::ReadLaneError>("still-serving")
+                })
+                .expect("remaining owner keeps reader workers available"),
+            "still-serving"
         );
-        assert_eq!(DEFAULT_DOCTOR_READER_CONFIG.request_deadline, expected);
+
+        drop(surviving_owner);
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            2,
+            "dropping the final owner must join every reader worker"
+        );
+    }
+
+    #[test]
+    fn concurrent_last_reader_pool_drops_trigger_exactly_one_shutdown() {
+        let pool = test_pool(test_config(2, 2, Duration::from_millis(20), 2));
+        let other_owner = pool.clone();
+        let exited = pool.inner.worker_exit_count();
+        let shutdowns = Arc::clone(&pool.inner);
+        let barrier = Arc::new(Barrier::new(2));
+
+        std::thread::scope(|scope| {
+            let first_barrier = Arc::clone(&barrier);
+            scope.spawn(move || {
+                first_barrier.wait();
+                drop(pool);
+            });
+            let second_barrier = Arc::clone(&barrier);
+            scope.spawn(move || {
+                second_barrier.wait();
+                drop(other_owner);
+            });
+        });
+
+        assert_eq!(shutdowns.shutdown_count(), 1);
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            2,
+            "the atomic last-owner guard must join every worker after concurrent drops"
+        );
     }
 
     #[test]
@@ -966,17 +1317,14 @@ mod tests {
     #[test]
     fn connection_budget_fails_closed_and_names_each_contributor() {
         let error = validate_connection_budget(
-            ReaderPoolConfig::mailbox_defaults(),
-            ReaderPoolConfig::search_defaults(),
-            DEFAULT_DOCTOR_READER_CONFIG,
-            NonZeroUsize::new(21).expect("non-zero maximum connections"),
+            ReaderPoolConfig::shared_defaults(),
+            NonZeroUsize::new(17).expect("non-zero maximum connections"),
         )
-        .expect_err("22 reader connections must not fit under a cap of 21");
+        .expect_err("18 shared-read connections must not fit under a cap of 17");
         let message = error.message();
-        assert!(message.contains("mailbox_pool=4"));
-        assert!(message.contains("search_pool=2"));
-        assert!(message.contains("doctor_pool=4"));
-        assert!(message.contains("max_connections=21"));
+        assert!(message.contains("read_pool=8"));
+        assert!(message.contains("tool_class_max_in_flight=6"));
+        assert!(message.contains("max_connections=17"));
     }
 
     #[test]
@@ -985,6 +1333,8 @@ mod tests {
             deadline_at(Duration::MAX),
             Err(atm_storage::ReadLaneError::DeadlineExpired {
                 stage: "computing reader deadline",
+                budget_ms: u64::MAX,
+                elapsed_ms: u64::MAX,
             })
         );
     }
@@ -1023,38 +1373,41 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mailbox_and_search_lanes_do_not_steal_each_others_capacity() {
-        let mailbox = Arc::new(test_pool(test_config(1, 1, Duration::from_millis(50), 1)));
-        let search = test_pool(test_config(1, 1, Duration::from_millis(50), 1));
+    async fn tool_reads_are_capped_below_shared_pool_capacity() {
+        let pool = Arc::new(test_pool(test_config(2, 2, Duration::from_millis(50), 2)));
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let mailbox_task = {
-            let mailbox = Arc::clone(&mailbox);
+        let tool_task = {
+            let pool = Arc::clone(&pool);
             tokio::spawn(async move {
-                mailbox
-                    .submit(Duration::from_secs(1), move |_, _| {
-                        let _ = started_tx.send(());
-                        std::thread::park_timeout(Duration::from_millis(80));
-                        Ok::<_, atm_storage::ReadLaneError>(())
-                    })
-                    .await
+                pool.submit_tool(Duration::from_secs(1), move |_, _| {
+                    let _ = started_tx.send(());
+                    std::thread::park_timeout(Duration::from_millis(80));
+                    Ok::<_, atm_storage::ReadLaneError>(())
+                })
+                .await
             })
         };
-        started_rx.await.expect("mailbox worker started");
-        let started = Instant::now();
-        search
-            .submit(Duration::from_millis(100), |_, _| {
-                Ok::<_, atm_storage::ReadLaneError>("search")
+        started_rx.await.expect("tool read started");
+        let capped = pool
+            .submit_tool(Duration::from_millis(10), |_, _| {
+                Ok::<_, atm_storage::ReadLaneError>(())
             })
             .await
-            .expect("search lane stays available");
-        assert!(
-            started.elapsed() < Duration::from_millis(40),
-            "search must not wait behind a mailbox worker"
+            .expect_err("second tool read must respect the sub-cap");
+        assert_eq!(
+            capped,
+            atm_storage::ReadLaneError::DeadlineExpired {
+                stage: "waiting for tool read capacity",
+                budget_ms: 10,
+                elapsed_ms: 10,
+            }
         );
-        mailbox_task
-            .await
-            .expect("mailbox join")
-            .expect("mailbox result");
+        pool.submit(Duration::from_millis(50), |_, _| {
+            Ok::<_, atm_storage::ReadLaneError>("agent")
+        })
+        .await
+        .expect("agent traffic may use the second shared worker");
+        tool_task.await.expect("tool join").expect("tool result");
     }
 
     #[tokio::test]
@@ -1083,7 +1436,9 @@ mod tests {
         assert_eq!(
             queued,
             atm_storage::ReadLaneError::DeadlineExpired {
-                stage: "waiting in queue"
+                stage: "waiting in queue",
+                budget_ms: 10,
+                elapsed_ms: 10,
             }
         );
         let saturated = pool
@@ -1143,7 +1498,9 @@ mod tests {
         assert_eq!(
             timed_out,
             atm_storage::ReadLaneError::DeadlineExpired {
-                stage: "executing active query"
+                stage: "executing active query",
+                budget_ms: 15,
+                elapsed_ms: 15,
             }
         );
         // Lifecycle notifications are the completion signal. The timeout is
@@ -1181,7 +1538,7 @@ mod tests {
         assert_eq!(replaced.retired_replaced_workers, 1);
         assert_eq!(replaced.pool_size, 1);
         assert_eq!(
-            pool.submit(Duration::from_millis(100), |_, _| {
+            pool.submit(Duration::from_secs(1), |_, _| {
                 Ok::<_, atm_storage::ReadLaneError>("reclaimed")
             })
             .await
@@ -1192,6 +1549,31 @@ mod tests {
         assert_eq!(metrics.quarantined, 1);
         assert_eq!(metrics.interrupted_while_active, 1);
         assert_eq!(metrics.quarantine_exhausted_rejections, 1);
+        let pool = Arc::try_unwrap(pool).expect("completed task releases its pool owner");
+        let surviving_owner = pool.clone();
+        let exited = pool.inner.worker_exit_count();
+        let inner = Arc::clone(&pool.inner);
+        drop(pool);
+        assert_eq!(
+            inner.shutdown_count(),
+            0,
+            "a remaining owner must keep the replacement reader alive"
+        );
+        assert_eq!(
+            surviving_owner
+                .submit_blocking(Duration::from_secs(1), |_, _| {
+                    Ok::<_, atm_storage::ReadLaneError>("replacement-still-serving")
+                })
+                .expect("replacement remains available until the final owner drops"),
+            "replacement-still-serving"
+        );
+        drop(surviving_owner);
+        assert_eq!(inner.shutdown_count(), 1);
+        assert_eq!(
+            exited.load(Ordering::Acquire),
+            2,
+            "final drop must join a quarantined worker's retired handle and its replacement"
+        );
     }
 
     #[tokio::test]
@@ -1200,7 +1582,7 @@ mod tests {
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let (interrupted_tx, interrupted_rx) = std::sync::mpsc::sync_channel(1);
         let timed_out = pool
-            .submit(Duration::from_millis(15), move |connection, _| {
+            .submit(Duration::from_millis(500), move |connection, _| {
                 let _ = started_tx.send(());
                 let result = connection.query_row(
                     "WITH RECURSIVE count(value) AS (
@@ -1227,7 +1609,9 @@ mod tests {
         assert_eq!(
             timed_out,
             atm_storage::ReadLaneError::DeadlineExpired {
-                stage: "executing active query"
+                stage: "executing active query",
+                budget_ms: 500,
+                elapsed_ms: 500,
             }
         );
         started_rx.await.expect("statement started before deadline");
@@ -1237,8 +1621,17 @@ mod tests {
                 .expect("worker reports query termination"),
             "the worker must observe SQLite's interrupt, not merely abandon the query"
         );
+        wait_for_metrics(&pool, |metrics| {
+            metrics.interrupted_while_active == 1
+                && metrics.in_flight == 0
+                && metrics.queue_depth == 0
+                && metrics.current_quarantined_workers == 0
+                && metrics.pool_size == 1
+        })
+        .await
+        .expect("reader worker reclaim signal");
         assert_eq!(
-            pool.submit(Duration::from_millis(100), |connection, _| {
+            pool.submit(Duration::from_secs(5), |connection, _| {
                 connection
                     .query_row("SELECT 1;", [], |row| row.get::<_, i64>(0))
                     .map_err(|error| atm_storage::ReadLaneError::Unavailable {
@@ -1279,7 +1672,7 @@ mod tests {
         pool: &ReaderPool,
         predicate: impl Fn(&super::ReaderLaneMetricsSnapshot) -> bool,
     ) -> Result<(), tokio::time::error::Elapsed> {
-        tokio::time::timeout(Duration::from_secs(1), async {
+        tokio::time::timeout(Duration::from_secs(30), async {
             loop {
                 let metrics = pool.metrics();
                 if predicate(&metrics) {

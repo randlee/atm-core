@@ -8,10 +8,26 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed — Phase AI target |
-| HTTP API SemVer | `1.0.0`; major is `/v1/atm` |
+| Status | Current — Phase BA |
+| HTTP API SemVer | `1.8.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
+
+Version 1.8.0 adds the optional `PostSendHookEvent.task_transition` field;
+older payloads default it to absent and older same-major consumers ignore it.
+Version 1.7.0 adds stable task-rejection error codes without changing response
+envelopes or existing detail text. Version 1.6.0 adds the local-only task-move
+request and response. Version 1.5.0
+adds typed task operations and queue placement to writes, plus task close
+outcome and queue position to task projections. Version 1.4.0 added optional
+canonical runtime-member revision, freshness, and observation-provenance
+fields to the doctor runtime-status projection; payloads that omit them remain
+valid. Version 1.3.0 added optional Herdr doctor
+diagnostics. `herdr.breaker` reports
+`last_error_code` and `last_error_detail` when an open breaker retains the
+failure that caused it. Each `herdr.endpoints[]` entry may also contain
+`findings`, the endpoint-wide target-resolution or named-session diagnostics;
+older payloads that omit these fields remain valid.
 
 ## Transport and handler rule
 
@@ -69,6 +85,7 @@ tests.
 | `/v1/atm/messages/inspect` | `POST` | Inspect/query messages without mutation | read/query |
 | `/v1/atm/messages` | `DELETE` | Clear selected messages where authorized | clear |
 | `/v1/atm/messages/read` | `POST` | Owner-only read-state mutation | read mutation |
+| `/v1/atm/tasks/move` | `POST` | Reorder one task in its assignee's queue; authenticated local ingress only | task move |
 | `/v1/atm/doctor` | `GET` | Return safe daemon/transport health | doctor |
 | `/v1/atm/peers/{peer}/sync` | `POST` | Run one explicit bounded reconciliation for a registered peer | peer sync |
 | `/v1/atm/runtime/reload` | `POST` | Reload the authenticated runtime view after local trust/configuration changes | runtime reload |
@@ -97,6 +114,19 @@ handler owns both persistence and acknowledgement mutation. The response's
 `Location` header identifies the created message; `/message/{message-id}` is
 not a separately registered route.
 
+Task-bearing writes use the optional `task_op` (`Start` or typed `Close`) and
+`placement` (`Head`, `End`, or `Before`) fields added in 1.5.0. The legacy
+`task_complete` field remains decode-only for 1.4.0 compatibility. `TaskRow`
+and `TaskEventRow` JSON gained optional `close_outcome`; `TaskRow` also gained
+optional `position`. A 1.5.0 reader defaults an omitted close outcome on a
+complete legacy row to `completed`, and omitted placement means end of queue.
+
+Version 1.6.0 adds `POST /v1/atm/tasks/move`. Its `TaskMoveRequest` carries
+`caller_identity`, `caller_team`, `task_id`, and `target`; its
+`TaskMoveOutcome` returns `task_id`, `assignee`, and the `from` and `to` queue
+positions. Task operations are local-team control operations: peer ingress
+rejects a task-bearing write or `TaskMove` before any task-ledger mutation.
+
 ## Response rules
 
 - JSON is the only application representation in v1.
@@ -115,6 +145,13 @@ not a separately registered route.
 - Mutation preconditions and authorization failures use ordinary HTTP status
   codes but retain the same ATM error code in the body.
 
+The `/v1/atm/doctor` response includes Herdr endpoint presence entries under
+`herdr.endpoints[].members[]`. Each entry exposes the canonical roster
+`name` and the effective `herdr_agent` name. The `herdr_agent` field is
+nullable for backward-compatible v1.1 payloads and was added in HTTP API
+1.2.0. Each endpoint also reports its `transport` as `cli` or `socket`; that
+field was added in HTTP API 1.2.0.
+
 ## Publication and compatibility
 
 `docs/atm-http-runtime/openapi.yaml` is the source artifact. CI validates the
@@ -122,7 +159,23 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. Same-major additive fields, error details,
+The v1 resource paths are durable. The current baseline is `1.8.0`.
+
+| Version | Phase / date | Additive HTTP surface |
+| --- | --- | --- |
+| `1.8.0` | Phase BB.1, 2026-09-12 | Optional `PostSendHookEvent.task_transition`; omitted values default to `None` and same-major consumers tolerate the additive field. |
+| `1.7.0` | Phase BA closure review, 2026-09-12 | Stable task-rejection error codes for not-found, already-closed, third-party, stale-counterparty, and invalid-move families; envelope shapes and detail text are unchanged. |
+| `1.6.0` | Phase BA.4, 2026-09-12 | Local-only `TaskMove` request/response and `/v1/atm/tasks/move` route; peer ingress rejects the operation. |
+| `1.5.0` | Phase BA.2, 2026-09-11 | Optional `WriteRequest.task_op` and `placement`; optional `TaskRow`/`TaskEventRow.close_outcome` and `TaskRow.position`; legacy `task_complete` remains decode-only. |
+| `1.4.0` | Issue #1378, 2026-09-09 | Optional canonical runtime-member revision, freshness, and observation-provenance fields. |
+| `1.3.0` | DOCTOR-HERDR-TARGET-R1, 2026-09-09 | Optional Herdr endpoint `findings`. |
+| `1.2.0` | AY.15, 2026-09-07 | Optional `herdr_agent` and `peer_http_api_version`. |
+
+The `1.3.0` baseline added optional Herdr doctor diagnostics, and the `1.2.0`
+baseline added the optional
+`peer_http_api_version` to cross-host write envelopes; receivers
+reject only a peer major-version mismatch and tolerate minor skew. Same-major
+additive fields, error details,
 and endpoints require a minor version: servers default omitted additive request
 fields and ignore unknown additive fields; clients tolerate additive response
 fields. Patch versions are corrective only. A new operation may require an

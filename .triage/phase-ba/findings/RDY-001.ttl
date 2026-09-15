@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RDY-001>
+  a triage:Finding ;
+  triage:findingId "RDY-001" ;
+  triage:title "prerelease/v1.5.15 already tagged from BA.2 dogfood lineage is not an ancestor of the phase landing head" ;
+  triage:description "solar BA-READINESS Part A (release readiness review) @ 9f5aef2fe; verdict DO NOT SHIP until items 1-4 resolved. Finding: prerelease/v1.5.15 was tagged from the BA.2 dogfood lineage commit 7736ec31, which is NOT an ancestor of the phase landing head 9f5aef2fe -- shipping from that tag would ship pre-Phase-BA code under a Phase-BA version number. fenix's VERSION RULING: explicit patch++ bump to 1.5.16 for the real Phase BA release; also fixed the .just/prerelease_tag.py dry-run collision parity bug (item B2) as part of the same fix." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "release-readiness" ;
+  triage:severity "blocking(release)" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RDY-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RDY-001/1>
+  a triage:Occurrence ;
+  triage:file ".just/prerelease_tag.py" ;
+  triage:line 1 ;
+  triage:snippet "prerelease/v1.5.15 not an ancestor of 9f5aef2fe; version ruling = 1.5.16" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "solar fix/phase-ba-review-3 f40f313aa (item B2, prerelease tagger preflight + dry-run collision parity fix in .just/prerelease_tag.py), ACCEPTED by fenix -- 13 gates green + prerelease workflow unit tests 14/14. Sha remap (fenix ATM 01M2A9NY2AEAKS6EAHY0V4ZDYB, 2026-09-12T07:52:59Z): review-3 rebased onto review-2 33754d69d (force-with-lease); f40f313aa -> a5ff2bc77." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "a5ff2bc77" ;
+  triage:occursIn <urn:atm:triage:worktree/RDY-001/1> .
+
+<urn:atm:triage:worktree/RDY-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar), item B2 fixed, rebased onto review-2 33754d69d" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "a5ff2bc77" ;
+  triage:orderIndex 9 .

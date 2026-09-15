@@ -8,12 +8,15 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 from html import escape
-import json
 from pathlib import Path
 import re
-import subprocess
 import sys
-import tempfile
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.report_runtime import compose as _compose
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -28,15 +31,7 @@ def fail(message: str) -> None:
 
 
 def compose(variables: dict[str, str], output: Path) -> None:
-    with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
-        json.dump(variables, handle)
-        var_file = Path(handle.name)
-    try:
-        completed = subprocess.run(["sc-compose", "render", "--root", str(REPO_ROOT), "--file", str(TEMPLATE), "--var-file", str(var_file), "--output", str(output)], capture_output=True, text=True, check=False)
-        if completed.returncode:
-            fail("sc-compose render failed: " + (completed.stderr.strip() or completed.stdout.strip()))
-    finally:
-        var_file.unlink(missing_ok=True)
+    _compose(TEMPLATE, variables, output, root=REPO_ROOT, error_type=RuntimeError)
 
 
 def load_current_pane(path: Path, expected_host: str, max_age_minutes: float) -> str:

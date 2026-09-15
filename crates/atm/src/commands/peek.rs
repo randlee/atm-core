@@ -130,6 +130,13 @@ impl PeekCommand {
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
             filters,
         )
+        .map(|query| {
+            if self.message_id.is_some() {
+                query.with_caller_chat_id(None)
+            } else {
+                query
+            }
+        })
         .map_err(Into::into)
     }
 
@@ -251,6 +258,27 @@ mod tests {
             query_json["mailbox"]["message_id_filter"],
             json!("01KRFK5QTF2R6NRS3Q0F8Z9K0S")
         );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn exact_message_id_does_not_apply_session_chat_scope() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a")),
+            ("ATM_CHAT_ID", Some("session-a")),
+            ("ATM_TEAM", Some("env-team")),
+        ]);
+        let mut command = base_command();
+        command.message_id = Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S".to_string());
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+        let query_json = serde_json::to_value(&query).expect("serialized query");
+
+        assert_eq!(
+            query_json["mailbox"]["message_id_filter"],
+            json!("01KRFK5QTF2R6NRS3Q0F8Z9K0S")
+        );
+        assert!(query_json["mailbox"]["participant_filter"].is_null());
     }
 
     #[test]

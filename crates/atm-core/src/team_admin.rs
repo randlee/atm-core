@@ -16,6 +16,7 @@ use crate::delivery_channel::LocalMessageReceivedBackend;
 use crate::error::AtmError;
 use crate::schema::HomeDirPath;
 use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
+use atm_storage::RETIRED_TEMPLATE_KINDS;
 
 #[path = "team_admin/filesystem.rs"]
 mod filesystem;
@@ -65,6 +66,8 @@ pub struct MemberSummary {
         skip_serializing_if = "Option::is_none"
     )]
     pub herdr_session: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias: Option<String>,
     /// Canonical typed backend projection used by runtime doctor consumers.
     /// This is an internal transport detail and never changes the JSON shape.
     #[serde(skip)]
@@ -233,15 +236,20 @@ impl DisableNudgeTemplateOverrideRequest {
 pub struct ClearNudgeTemplateOverrideRequest {
     pub caller_team: TeamName,
     pub team: TeamName,
-    pub kind: BuiltInNudgeTemplateKind,
+    pub kind: String,
 }
 
 impl ClearNudgeTemplateOverrideRequest {
     pub fn new(caller_team: TeamName, team: &str, kind: &str) -> Result<Self, AtmError> {
+        match kind.parse::<BuiltInNudgeTemplateKind>() {
+            Ok(_) => {}
+            Err(_) if RETIRED_TEMPLATE_KINDS.contains(&kind) => {}
+            Err(error) => return Err(error),
+        }
         Ok(Self {
             caller_team,
             team: team.parse()?,
-            kind: kind.parse()?,
+            kind: kind.to_owned(),
         })
     }
 }
@@ -270,7 +278,7 @@ pub struct DisableNudgeTemplateOverrideOutcome {
 pub struct ClearNudgeTemplateOverrideOutcome {
     pub action: &'static str,
     pub team: TeamName,
-    pub kind: BuiltInNudgeTemplateKind,
+    pub kind: String,
     pub cleared: bool,
 }
 
@@ -372,6 +380,7 @@ pub fn set_nudge_template_override_with_store(
         "set-nudge-template",
     )?;
     validate_nudge_template_body(&request.template_body)?;
+    crate::send::nudge_template::validate_built_in_nudge_template_body(&request.template_body)?;
 
     let row = override_store.save_template_override(
         &request.team,
@@ -431,7 +440,7 @@ pub fn clear_nudge_template_override_with_store(
         request.team.clone(),
         "clear-nudge-template",
     )?;
-    let cleared = override_store.clear_template_override(&request.team, request.kind)?;
+    let cleared = override_store.clear_template_override(&request.team, &request.kind)?;
     Ok(ClearNudgeTemplateOverrideOutcome {
         action: "clear-nudge-template",
         team: request.team,
@@ -471,7 +480,7 @@ pub(crate) fn ordered_roster_member_summaries(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::path::PathBuf;
     use std::sync::Mutex;
 
@@ -511,7 +520,7 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingNudgeTemplateOverrideStore {
-        rows: Mutex<BTreeMap<(TeamName, BuiltInNudgeTemplateKind), TeamNudgeTemplateOverrideRow>>,
+        rows: Mutex<HashMap<(TeamName, BuiltInNudgeTemplateKind), TeamNudgeTemplateOverrideRow>>,
     }
 
     impl RecordingRosterStore {
@@ -644,6 +653,28 @@ mod tests {
     }
 
     impl NudgeTemplateOverrideStore for RecordingNudgeTemplateOverrideStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::StaleNudgeTemplateOverrideKind>, crate::error::AtmError>
+        {
+            Ok(Vec::new())
+        }
+
+        fn list_template_overrides(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
+        {
+            Ok(self
+                .rows
+                .lock()
+                .expect("override store lock")
+                .values()
+                .cloned()
+                .collect())
+        }
+
         fn load_template_override(
             &self,
             team: &TeamName,
@@ -702,8 +733,11 @@ mod tests {
         fn clear_template_override(
             &self,
             team: &TeamName,
-            kind: BuiltInNudgeTemplateKind,
+            kind: &str,
         ) -> Result<bool, crate::error::AtmError> {
+            let Ok(kind) = kind.parse::<BuiltInNudgeTemplateKind>() else {
+                return Ok(false);
+            };
             Ok(self
                 .rows
                 .lock()
@@ -754,6 +788,94 @@ mod tests {
     }
 
     #[test]
+    fn add_member_rejects_reserved_daemon_name_without_mutation() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_SENDER)]);
+        let before = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("roster");
+
+        let request = AddMemberRequest::new(
+            tempdir.path().to_path_buf(),
+            TEST_TEAM,
+            "atm-daemon",
+            "worker".to_owned(),
+            "gpt-5".to_owned(),
+            tempdir.path().to_path_buf(),
+            None,
+        )
+        .expect("request parses");
+        let error = add_member_with_roster_store(&roster_store, request)
+            .expect_err("reserved sender must be rejected");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(
+            error
+                .message()
+                .contains("atm-daemon is a reserved sender name")
+        );
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("roster"),
+            before
+        );
+    }
+
+    #[test]
+    fn update_member_rejects_reserved_daemon_name_without_mutation() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+                roster_member(TEST_TEAM, "atm-daemon"),
+            ],
+        );
+        let before = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("roster");
+
+        let error = update_member_with_roster_store(
+            &roster_store,
+            UpdateMemberRequest {
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
+                member: MemberName("atm-daemon".parse().expect("member")),
+                home_dir: None,
+                workspace_root: None,
+                harness: None,
+                agent_type: None,
+                model: None,
+                tmux_pane_id: None,
+                local_backend: None,
+                alias: None,
+                backend_warning: None,
+                host: None,
+            },
+        )
+        .expect_err("reserved sender must be rejected");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(
+            error
+                .message()
+                .contains("atm-daemon is a reserved sender name")
+        );
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("roster"),
+            before
+        );
+    }
+
+    #[test]
     fn explicit_herdr_backend_validates_identity_and_session() {
         let tempdir = tempdir().expect("tempdir");
         let request = AddMemberRequest::new_with_backend(
@@ -767,6 +889,8 @@ mod tests {
                 backend: Some("herdr"),
                 target: None,
                 session: Some("team-a"),
+                alias: None,
+                clear_alias: false,
             },
         )
         .expect("Herdr request");
@@ -787,6 +911,8 @@ mod tests {
                 backend: Some("herdr"),
                 target: None,
                 session: None,
+                alias: None,
+                clear_alias: false,
             },
         )
         .expect_err("Herdr grammar must be strict");
@@ -808,6 +934,8 @@ mod tests {
                 backend: Some("herdr"),
                 target: None,
                 session: Some("team-a"),
+                alias: None,
+                clear_alias: false,
             },
         )
         .expect("Herdr request");
@@ -866,6 +994,7 @@ mod tests {
                 member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("7").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -906,6 +1035,7 @@ mod tests {
                 member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("session:1.2").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1034,6 +1164,7 @@ mod tests {
                 member_home_dir: tempdir.path().to_path_buf().into(),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%12").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1233,6 +1364,7 @@ mod tests {
                 model: Some(crate::types::ModelName::new("gpt-5").expect("model")),
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("22").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1296,6 +1428,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%0").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1316,6 +1449,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: Some(crate::types::PaneId::from_cli("%1").expect("pane")),
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1365,6 +1499,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: None,
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1396,6 +1531,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: None,
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1427,6 +1563,7 @@ mod tests {
                 model: None,
                 tmux_pane_id: None,
                 local_backend: None,
+                alias: None,
                 backend_warning: None,
                 host: None,
             },
@@ -1671,6 +1808,38 @@ mod tests {
     }
 
     #[test]
+    fn set_nudge_template_override_rejects_unknown_placeholder_before_write() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        let error = set_nudge_template_override_with_store(
+            &override_store,
+            SetNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+                "<atm>{{unknown}}</atm>".to_string(),
+            )
+            .expect("request"),
+        )
+        .expect_err("unknown placeholder");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(
+            error
+                .message()
+                .contains("unsupported built-in nudge placeholder")
+        );
+        assert!(
+            override_store
+                .load_template_override(
+                    &TEST_TEAM.parse().expect("team"),
+                    BuiltInNudgeTemplateKind::DeliveryAck,
+                )
+                .expect("load")
+                .is_none()
+        );
+    }
+
+    #[test]
     fn set_nudge_template_override_rejects_caller_team_mismatch() {
         let override_store = RecordingNudgeTemplateOverrideStore::default();
         let error = set_nudge_template_override_with_store(
@@ -1718,6 +1887,32 @@ mod tests {
             .expect("saved row");
         assert_eq!(saved.template_body(), Some("<atm/>"));
         assert!(!saved.is_disabled());
+    }
+
+    #[test]
+    fn set_nudge_template_override_round_trips_queue_ack_kind() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        let outcome = set_nudge_template_override_with_store(
+            &override_store,
+            SetNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "queue_ack",
+                "<atm/>".to_string(),
+            )
+            .expect("request"),
+        )
+        .expect("save");
+
+        assert_eq!(outcome.kind, BuiltInNudgeTemplateKind::QueueAck);
+        let saved = override_store
+            .load_template_override(
+                &TEST_TEAM.parse().expect("team"),
+                BuiltInNudgeTemplateKind::QueueAck,
+            )
+            .expect("load")
+            .expect("saved row");
+        assert_eq!(saved.template_body(), Some("<atm/>"));
     }
 
     #[test]

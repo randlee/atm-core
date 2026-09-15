@@ -1,10 +1,10 @@
 # AGENTS Instructions for atm-core
 
-## ⚠️ HARD RULE: No Daemon Remodeling — Tokio/Axum Only
+## ⚠️ HARD RULE: No Legacy Daemon Remodeling — Tokio/Axum Only (migration complete)
 
-The daemon's target architecture is **Tokio + Axum (`atm-http-runtime`)** for ALL of CLI + graft + cross-host transport. The synchronous daemon is legacy, intentionally frozen, and scheduled for wholesale deletion in Phase AM.
+The daemon's only architecture is **Tokio + Axum (`atm-http-runtime`)** for ALL of CLI + graft + cross-host transport. The legacy synchronous daemon was **deleted in Phase AM** (PR #853; see `docs/plans/phase-am/am6-closure-proof.md`) — there is no remaining legacy sync-daemon path.
 
-**Immediately reject any thought, finding, fix, or task that remodels, patches, or hardens the current synchronous daemon.** This includes "improving" its runtime behavior (e.g. private Tokio runtime via `spawn_blocking`) — that is known, deferred technical debt, not a defect. The only correct direction for daemon-side work is finishing the `atm-http-runtime` cutover (AL.5–AL.7 adapter activation). If an assignment appears to require touching legacy daemon runtime/dispatch code, stop and raise it with team-lead instead of implementing — rewriting that code invalidates the Phase AM deletion plan (`docs/plans/phase-am/*.md`).
+**Immediately reject any thought, finding, fix, or task that assumes a synchronous/legacy daemon path still exists to remodel, patch, or harden.** That code is gone; a proposal built on that assumption is factually wrong, not deferred technical debt. If an assignment references "legacy daemon runtime/dispatch code" or an "AL.5–AL.7 cutover" as still-open, stop and raise it with team-lead — it is describing already-completed migration work, and the correct action is to correct the assignment, not implement against removed code.
 
 ## MUST READ
 
@@ -15,13 +15,8 @@ The messaging protocol in that document is mandatory for all ATM communications.
 
 ## Quick Rule
 
-Always follow this sequence for every ATM message:
-1. Immediate acknowledgement
-2. Do the work
-3. Completion summary
-4. Immediate completion acknowledgement by receiver
-
-No silent processing.
+Follow the Required Flow in `docs/team-protocol.md`: acknowledge messages that require it; start assigned work at its `task_ready` line with `atm task start`; do the work; close with `atm task close`.
+A task close is terminal and is never acknowledged; no silent processing.
 
 ## Rust Guidance
 

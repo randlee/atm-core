@@ -187,6 +187,42 @@ account that already owns ATM durable state. `just benchmark` then validates
 that manifest before release-binary lookup, daemon startup, SQLite access, or
 temporary benchmark setup. The interactive account must fail this preflight.
 
+### 4.5.2 Physical benchmark operator route
+
+The provisioned physical benchmark account is currently reached from a
+developer host as `atmbench@rand-m5.local`.  Do not infer the benchmark
+account from the interactive host or try to bootstrap the interactive account:
+the expected interactive-account failure is the safety property above.
+
+Use a clean worktree on the exact candidate revision.  Leave the account's
+primary checkout alone if it has retained report artifacts or other work in
+progress.  The account-local worktree must be clean before measurement.
+
+```bash
+ssh atmbench@rand-m5.local
+cd ~/github/atm-core-worktrees/<candidate-worktree>
+git rev-parse HEAD                 # must equal the candidate revision
+ATM_CAPACITY_HOST_LABEL=m5-atmbench just benchmark
+                                   # complete sqlite, UDS, TCP, and TCP-TLS matrix
+just benchmark-report
+just benchmark-publish             # stages only validated public report artifacts
+```
+
+`just benchmark` is the only release-quality admission benchmark command.  A
+selected `--target` or `--transport` profile is deliberately diagnostic-only:
+the runner requires `--diagnostic-only` for it and that output cannot satisfy
+the complete benchmark gate or establish a release baseline.  Never replace a
+full matrix with separate `just benchmark --transport uds` or `tcp` commands.
+The `m5-atmbench` label is required to select the reviewed same-host floors;
+do not use the implicit `local` label for this physical campaign.
+
+The benchmark runner owns only the validated account's disposable daemon,
+state, snapshot, and cleanup lifecycle.  It must not stop, restart, switch,
+or otherwise alter an ambient dogfood daemon on either the interactive host or
+the benchmark host.  A missing or invalid benchmark-account manifest is an
+exact preflight blocker; report it without attempting an `ATM_HOME` override,
+trust edit, alternate runtime root, or interactive-account bootstrap.
+
 ### 4.6 Coverage Reporting
 
 Coverage reporting is a separate reporting surface.

@@ -567,7 +567,8 @@ Acceptance:
 - Every reviewed non-retained file must also appear there with a `do not copy` decision.
 - Workflow-axis transitions must be enforced by code structure, not only by tests.
 - Display bucket behavior must remain separate from the canonical two-axis workflow model.
-- Task-linked mail must be ack-required from creation time.
+- Task-linked mail is never ack-required; readiness is signalled by the task pass
+  and the assignee starts it with `atm task start`.
 - Generic logging query/follow/filter behavior should live in `sc-observability` where possible, not in ATM-specific code.
 - Persisted config/schema compatibility issues must recover at the narrowest
   safe scope, and identity/routing fields must never be guessed.
@@ -576,8 +577,11 @@ Acceptance:
   must be deduplicated by unresolved condition.
 
 Cross-document invariants that must stay locked during implementation:
-- `taskId` implies ack-required send behavior
-- displayed messages always persist `read = true`
+- `taskId` implies task-linked mail that never requires acknowledgement;
+  readiness is signalled by `task_ready`, and start by `atm task start`
+- `mutation_applied = true` means a displayed message's legal read/seen
+  transition was accepted into the supervised non-blocking handoff; durable
+  `read = true` visibility may follow later
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
 - `atm clear` never removes pending-ack messages
@@ -603,7 +607,8 @@ The rewrite is ready when:
   defaults or committed `tmux_pane_id` routing truth
 - retained command behavior is preserved, and any current-runtime shape changes
   are intentionally documented
-- task-linked mail remains pending until acknowledged
+- task-linked mail is actionable on `task_ready` and never waits for an
+  acknowledgement
 - the file-by-file migration plan is complete enough to implement directly
 - the retained command tests pass against the new crate layout
 
@@ -1098,10 +1103,13 @@ complete. Phase AJ is not closed: a final holistic QA gate finding (a
 transport-trust-boundary gap in heartbeat ingress) must be remediated and
 reverified before its final status changes.
 
-AJ keeps roster runtime observation in daemon memory: successful
-environment-attested CLI/graft activity and heartbeat converge on one current
-entry. Session, pid, and state are diagnostic telemetry, not inputs to routing,
-nudge, retry, admission, delivery, notification, or policy.
+AJ established the original in-memory observation design. Issue #1378 corrects
+the replacement-runtime owner: authenticated heartbeat POSTs and successful
+Herdr polls converge on one ephemeral master-roster member record, while
+`RuntimeHealth` becomes a projection only. Pre-cutover local activity metadata
+remains tolerated but is not canonical state ingress. Session, pid, source, and
+timestamp metadata remain non-policy inputs; the Phase BA nudge invariant is
+the only policy that consumes canonical state.
 
 | Sprint | Status | Branch | Purpose |
 | --- | --- | --- | --- |
@@ -1431,6 +1439,17 @@ authoritative sprint-by-sprint detail and
 `docs/plans/phase-aq/.audit/qa-evidence-master.json` for QA/merge
 provenance.
 
+### Colima release integration simplification
+
+`COLIMA-SIMPLIFY-R1` is a complete documentation sprint on branch
+`plan/colima-simplify`, targeting `develop`. Its authoritative
+[sprint plan](./plans/phase-aq/sprint-COLIMA-SIMPLIFY-R1.md) replaces the
+multi-party Colima exercise with one unattended testbed command, one aggregate
+JSON result, and a 30-minute command-to-verdict budget. It is independent of
+the current ATM build/rollout and parallel-safe with the separate canonical
+Hermes patch-model work. Future testbed implementation lands as small,
+independently mergeable PRs; no testbed or product code changes in this sprint.
+
 ## 49. Phase AO2 — Benchmark Safety, Evidence, And Transport Performance [COMPLETE — MERGED TO DEVELOP]
 
 Phase AO2 made physical admission benchmarks safe and repeatable, restored
@@ -1536,6 +1555,14 @@ which builds CI-provenanced archives without publishing or modifying the
 vendored `sc-publish` kit. It does not inherit the retired phase's files,
 acceptance criteria, or release receipts.
 
+## 52b. PRERELEASE-R1 — GitHub-only prerelease publish/install
+
+`PRERELEASE-R1` delivers the vendorable `sc-publish` prerelease skill and the
+first `atm-core` adopter: GitHub prerelease Release assets, checksum-verified
+staging, and managed-pair installation without touching production channels or
+the Homebrew formula. The sprint record is
+[`PRERELEASE-R1`](./plans/prerelease/sprint-PRERELEASE-R1.md).
+
 ## 53. Phase AU — Boundary Debt Retirement ✅ COMPLETE
 
 Phase AU retires the 22 pre-existing sc-boundary findings exposed when
@@ -1590,6 +1617,240 @@ Phase AV sprint status:
 | `AV.2` | `complete` | `feature/av2-read-concurrency-requirements` | `docs/requirements.md`, `docs/adr/ADR-059-async-mailbox-read-concurrency.md`, `docs/plans/phase-av/av-closeout-record.md` |
 | `AV.3` | `complete` (PR #1113 merged) | `feature/av3-read-concurrency-gates` | `docs/plans/phase-av/sprint-AV.3-mechanical-hard-gates.md` |
 | `AV.4` | `complete` (PR #1114 merged) | `feature/av4-read-query-benchmarks` | `docs/plans/phase-av/sprint-AV.4-read-query-benchmarks.md` |
+
+## 55. Phase AW — Unified Retained Runtime Logging [COMPLETE — INTEGRATION PR #1199]
+
+Phase AW makes replacement-runtime tracing retained and safely observable:
+AW.1 installs the allowlisted non-blocking tracing bridge, AW.2 persists the
+SQLite diagnostic timeline, AW.3 exposes health and log queries, AW.4 adds
+graft fallback observability, and AW.5 aligns native tool projections.
+The authoritative plan is [phase-aw-plan](./plans/phase-aw/phase-aw-plan.md).
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AW.1` | `complete` | `feature/aw1-tracing-bridge` | `docs/plans/phase-aw/sprint-AW.1-tracing-bridge.md` |
+| `AW.2` | `complete` | `feature/aw2-sqlite-diagnostic-timeline` | `docs/plans/phase-aw/sprint-AW.2-sqlite-diagnostic-timeline.md` |
+| `AW.3` | `complete` | `feature/aw3-health-and-log-query` | `docs/plans/phase-aw/sprint-AW.3-health-and-log-query.md` |
+| `AW.4` | `complete` | `feature/aw4-graft-fallback-observability` | `docs/plans/phase-aw/sprint-AW.4-graft-fallback-observability.md` |
+| `AW.5` | `complete` | `feature/aw5-native-tool-parity` | `docs/plans/phase-aw/sprint-AW.5-native-tool-parity.md` |
+
+## 56. Phase AX — Nudge Templates On Every Backend And Task-State Tracking [COMPLETE — MERGED TO DEVELOP (PR #1253, 98661ea18)]
+
+Phase AX closes three delivery defects found in the 2026-09-04 Herdr
+dogfood run (issue #1173): the Herdr sink bypasses the built-in nudge
+templates and injects fixed wake text; `atm queue` has no template class
+of its own; and task-tagged mail has no state, so a second task can be
+acked while the first is in progress and an idle assignee is never
+reminded. Seven sprints in four tracks: A = `AX.1` queue template class
+→ `AX.2` Herdr template rendering; B = `AX.3` task state machine and
+storage → `AX.4` task CLI and docs, **running in parallel with A**
+(`parallel_safe`: AX.1∥AX.3, AX.2∥AX.3); C = `AX.5` reminder cycle →
+`AX.6` lead notification and doctor, after A and B merge; D = `AX.7`
+live Herdr evidence. `must_follow` edges: AX.1→AX.2, AX.3→AX.4,
+AX.2→AX.5, AX.4→AX.5, AX.5→AX.6, AX.6→AX.7. Branches are worktrees via
+`sc-git-worktree`; PR bases and merges via `gh stack` (sequence in the
+phase plan §6).
+
+Current phase status: AX.1-AX.6 merged into `integrate/phase-ax`; AX.7
+superseded 2026-09-05. `integrate/phase-ax` merged to `develop` 2026-09-06
+23:14:05Z via PR #1253 (merge commit `98661ea18`, parents `9a1e242d1` +
+`247bb1340`). Phase complete. AX7's `QA_RUN_MISSING` triage-report gap (no
+authoritative QA run for a superseded sprint) is an open post-mortem
+follow-up, not a blocker.
+
+The authoritative plan is
+[phase-ax-plan](./plans/phase-ax/phase-ax-plan.md) with per-sprint docs
+under `docs/plans/phase-ax/`, authored on branch `integrate/phase-ax`.
+
+Phase AX sprint status:
+
+| Sprint | Track | Execute | Status | Branch | Artifacts |
+| --- | --- | --- | --- | --- | --- |
+| `AX.1` | A | parallel with AX.3/AX.4 | `complete` | `feature/ax1-queue-template-class` | `docs/plans/phase-ax/sprint-AX.1-queue-template-class.md`, ADR-019 amendment |
+| `AX.2` | A | after AX.1; parallel with AX.3/AX.4 | `complete` | `feature/ax2-herdr-template-rendering` | `docs/plans/phase-ax/sprint-AX.2-herdr-template-rendering.md`, ADR-058 amendment, `boundaries/atm-herdr/herdr-process-adapter.toml`, `docs/atm-herdr/requirements.md` |
+| `AX.3` | B | parallel with AX.1/AX.2 | `complete` | `feature/ax3-task-state-machine` | `docs/plans/phase-ax/sprint-AX.3-task-state-machine.md`, `docs/adr/ADR-062-task-state-machine.md`, ADR-054 amendment, `boundaries/atm-storage/task-store.toml`, `boundaries/atm-storage-rusqlite/task-store-sqlite.toml` |
+| `AX.4` | B | after AX.3; parallel with AX.1/AX.2 | `complete` | `feature/ax4-task-cli-and-docs` | `docs/plans/phase-ax/sprint-AX.4-task-cli-and-docs.md`, `docs/user-documents/tasks.md` |
+| `AX.5` | C | after A and B merge | `complete` | `feature/ax5-task-reminder-cycle` | `docs/plans/phase-ax/sprint-AX.5-task-reminder-cycle.md`, ADR-062 reminder-cycle section |
+| `AX.6` | C | after AX.5 | `complete` | `feature/ax6-lead-notification-doctor` | `docs/plans/phase-ax/sprint-AX.6-lead-notification-doctor.md` |
+| `AX.7` | D | superseded 2026-09-05 (live proof moved to release readiness) | `superseded` | none | `docs/plans/phase-ax/sprint-AX.7-herdr-dogfood-evidence.md` |
+
+## 57. Phase AY — Native-IPC Transport Cutover For Herdr [EXECUTED — PHASE-ENDING GATE IN PROGRESS]
+
+Herdr already runs on Windows: Rand manually verified an atm 1.5.0 self-send,
+and nothing in the current client code blocks it. Phase AY instead moves the
+six-operation client from a per-nudge CLI process to Herdr's native IPC—a
+Unix-domain socket on macOS/Linux and named pipe on Windows—because Phase AX's
+queue templates, built-in nudge rendering, task state/CLI, reminder cycle,
+lead notification, and doctor all depend on that delivery path. It also
+defines the daemon's optional-dependency behavior when Herdr is absent, late,
+or crashed. The CLI remains a bounded fallback. Windows work includes real
+production correctness code—`CREATE_NO_WINDOW`, a bounded kill-then-reap grace
+period, per-call binary re-resolution, and CRLF-tolerant decoding—plus removal
+of three stale scope-outs and closure of the `cfg(unix)` process-test gap. Windows CI
+proves that behavior without live hardware. Live macOS/Windows proof stays in
+release readiness (no sprint carries live evidence, Rand 2026-09-05). No work
+remodels the legacy synchronous daemon; all composition targets the Tokio/Axum
+`atm-http-runtime` cutover architecture.
+
+Nine sprints execute in a documentation lane, a linear implementation
+stack, an independent socket lane, and a code join. AY.1
+runs in parallel with AY.2. The only stacked-PR chain is
+AY.2→AY.3→AY.4→AY.5→AY.6→AY.7, managed noninteractively with the
+`/gh-stack` skill. AY.8 starts independently only after AY.1, AY.2, and
+AY.3 merge; it is parallel-safe with AY.4–AY.7. AY.9 is the standalone
+AY.7+AY.8 code join and the phase's last sprint; the live macOS/Windows
+matrix runs under release readiness once the phase is on develop.
+
+AY.9's production contract is closed and explicit: native socket transport is
+the default, while `herdr.transport = "cli"` remains a permanent explicit
+alternative. The transport is selected once at Tokio bootstrap; a socket
+failure is a typed availability/breaker outcome, never a hidden CLI fallback.
+Doctor displays the active transport and a sanitized endpoint. No CLI removal
+release or ownership-key cleanup is planned, and AY.9 contains no live
+evidence; release readiness owns the live gate.
+
+The authoritative umbrella is
+[Phase AY plan](./plans/phase-ay/phase-ay-plan.md), with one
+authoritative sprint file per sprint under `docs/plans/phase-ay/`.
+
+Status: all Phase AY sprints have merged into `integrate/phase-ay`; the
+phase-ending gate is in progress, and the merge to `develop` is pending Rand
+approval.
+
+Phase AY sprint status:
+
+| Sprint | Track | Execute | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- | --- | --- |
+| `AY.1` | Docs | parallel with AY.2 | `merged` (#1270, 7e40db597) | `feature/ay1-herdr-audit-docs` | `docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md` |
+| `AY.2` | Core stack | parallel with AY.1; stack bottom | `merged` (#1269, 1195614ba) | `feature/ay2-herdr-transport-seam` | `docs/plans/phase-ay/sprint-AY.2-herdr-transport-seam.md` |
+| `AY.3` | Core stack | after AY.2 development and P-E(a); AY.2 merges first | `merged` (#1273, 5f769d488) | `feature/ay3-herdr-endpoint-doctor-config` | `docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md` |
+| `AY.4` | Core stack | after AY.3 development; parallel with AY.8 once eligible | `merged` (#1279, fc736e83e) | `feature/ay4-herdr-breaker-lifecycle` | `docs/plans/phase-ay/sprint-AY.4-herdr-breaker-lifecycle.md` |
+| `AY.5` | Core stack | after AY.4 development; parallel with AY.8 | `merged` (#1282, fa1e7d73b) | `feature/ay5-herdr-entry-control-plane` | `docs/plans/phase-ay/sprint-AY.5-herdr-entry-control-plane.md` |
+| `AY.6` | Core stack | after AY.5 development; parallel with AY.8 | `merged` (#1284, 8b0a6d346) | `feature/ay6-herdr-restart-coordination` | `docs/plans/phase-ay/sprint-AY.6-herdr-restart-coordination.md` |
+| `AY.7` | Core/Windows stack | after AY.6 development; Windows CI lane is the gate; parallel with AY.8 | `merged` (#1285, 94556328c) | `feature/ay7-windows-herdr-process-installer` | `docs/plans/phase-ay/sprint-AY.7-windows-herdr-process-installer.md` |
+| `AY.8` | Socket | after AY.1/AY.2/AY.3 merge and P-E(b); parallel with AY.4–AY.7; standalone | `merged` (#1280, 4407b006e) | `feature/ay8-herdr-socket-transport` | `docs/plans/phase-ay/sprint-AY.8-herdr-socket-transport.md` |
+| `AY.9` | Join | after AY.7/AY.8 merge; standalone code cutover | `merged` (#1295, 7ad3ad7e5, disposition Ship) | `feature/ay9-herdr-socket-cutover` | `docs/plans/phase-ay/sprint-AY.9-herdr-socket-cutover.md` |
+| `AY.13` | Doctor | standalone; Rand 2026-09-07 doctor team-scope requirement; parallel with AY.14 | `merged` (#1300, dd809c15e) | `feature/ay13-doctor-team-scope` | `docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md` |
+| `AY.14` | Herdr/roster | standalone; Rand 2026-09-07 name-collision ruling (roster alias); parallel with AY.13 | `merged` (#1305, 271b387ed) | `feature/ay14-herdr-agent-name-mapping` | `docs/plans/phase-ay/sprint-AY.14-herdr-agent-name-mapping.md` |
+| `AY.15` | Herdr/roster | must_follow AY.14; Rand 2026-09-07 unique_name ruling (alias ?? name unique database-wide); closes AY14-QA-003 | `merged` (#1310, 47f359cf9) | `feature/ay15-herdr-name-uniqueness` | `docs/plans/phase-ay/sprint-AY.15-herdr-name-uniqueness.md` |
+| `DOCTOR-HERDR-TARGET-R1` | Doctor | standalone target-resolution, breaker, and stale-session diagnostics | `complete` | `fix/doctor-herdr-target-resolution` | `docs/plans/doctor/sprint-DOCTOR-HERDR-TARGET-R1.md` |
+
+## 58. Phase AZ — Bounded Nudges And Durable Task Lifecycle [SUPERSEDED BY PHASE BA — RETIRED UNMERGED 2026-09-11]
+
+Superseded by Phase BA, retired unmerged 2026-09-11: the four AZ sprints on
+`integrate/phase-az` (PR #1394) will not merge to `develop`. Issue #1378's
+canonical roster state and HTTP API `1.4.0` (PRs #1381, #1384) merged to
+`develop` independently and remain in force. The text below is the retired
+plan, kept for record.
+
+Phase AZ begins with the AZ.1 metadata-only nudge repair: every Steer, Queue,
+rebuilt Queue, Task, acknowledge-family, and task-reminder path projects only
+persisted message id/title and optional task id. The immutable body remains
+available only through `atm read --message-id`; admission-time
+`build_summary` policy is unchanged.
+
+AZ.2–AZ.4 then replace the message-derived task ledger with a stable logical
+`TaskId`, immutable assignment attempts/events, explicit lifecycle commands,
+atomic terminal handoffs and queue cleanup, and one fair idle attention
+selector over independent ephemeral-message and persistent-task lanes.
+`Blocked -> Assigned` is explicit and never auto-starts. Existing tasks migrate
+at normal priority; one current assignee per task and one active task per
+`(team, agent)` are transactionally enforced.
+
+Issue #1378 is a pre-AZ.4 prerequisite. It makes the RAM master roster the sole
+ephemeral agent-state owner, routes both Herdr polls and authenticated
+heartbeat/hook POSTs through it, and leaves `RuntimeHealth` projection-only.
+Each accepted canonical idle revision may publish one opportunity to AZ.4;
+delivery-channel filtering remains downstream and bare-CLI pull is unchanged.
+
+The governed-interface sequence is HTTP API 1.3.0 → 1.4.0 in AZ.3 and SQLite
+schema 2.0.0 (major task migration) → 2.1.0 (additive attention tables) in
+AZ.2/AZ.4. ADR-063 records the capability-trait recount and v1/v2 coexistence
+bridge. Rand approved that major change on 2026-09-09: ATM `1.6.0` introduces
+v2, every `1.6.x` release retains the bridge, and ATM `1.7.0` is the planned
+removal target and earliest permitted removal release under a separate ADR-061
+major review. ADR-061 D6 and ADR-063 D6 record the decision.
+
+The authoritative umbrella is
+[Phase AZ plan](./plans/phase-az/phase-az-plan.md), with one authoritative
+sprint doc per row below and a maintained
+[issue inventory](./plans/phase-az/issues.md).
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AZ.1` | `retired (unmerged)` | `feature/az1-task-nudge-contract` | bounded notification event/template repair, external hook compatibility, long-body/J2 regressions |
+| `AZ.2` | `retired (unmerged)` | `feature/az2-task-domain-storage` | lifecycle types, immutable attempts/events, SQLite migration, atomic invariants and task-aware nudge cleanup |
+| `AZ.3` | `retired (unmerged)` | `feature/az3-task-command-handoff` | canonical task CLI/API, authorization, atomic handoffs/supersession, legacy adapters |
+| `AZ.4` | `retired (unmerged)` | `feature/az4-attention-scheduler` | one-item idle selector, durable fair interleaving, attempt-aware persistent reminders |
+
+The stack is strict `AZ.1 -> AZ.2 -> AZ.3 -> AZ.4`. Parent development must be
+pushed before child work starts, the parent is merged forward before every
+child development/fix round, and parent PRs merge first. No Phase AZ sprint
+touches the frozen synchronous daemon or uses live daemon/test-daemon, release,
+tag, publish, or installation evidence.
+
+## 59. Phase BA — One Invariant, One Queue, One Task Command Set [LANDED ON integrate/phase-ba 2026-09-12 — review-findings closeout in progress]
+
+Phase BA replaces the retired Phase AZ task work with the simpler design in
+[the Phase BA plan](./plans/phase-ba/phase-ba-plan.md). BA.1 and BA.2 form the
+initial stack; BA.3 follows BA.2, BA.4 and BA.5 then run in parallel, and BA.6
+closes the phase documentation. The six sprints plus three consolidated cleanup
+layers landed on `integrate/phase-ba` at `9f5aef2fe` (2026-09-12) through the
+top PR #1414; the phase PR to `develop` is #1418 (draft until the
+review-findings stack below lands). Post-mortem:
+[`docs/postmortems/phase-ba-postmortem.md`](./postmortems/phase-ba-postmortem.md);
+stack practice: [`docs/development/gh-stack-guidelines.md`](./development/gh-stack-guidelines.md).
+
+| Sprint | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- |
+| `BA.1` | `merged` (into BA.2 stack) | `feature/ba1-ack-task-separation` | `docs/plans/phase-ba/sprint-BA.1-ack-task-separation.md` |
+| `BA.2` | `merged` (#1400) | `feature/ba2-task-identity-queue` | `docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md` |
+| `BA.3` | `merged` (#1402) | `feature/ba3-nudge-invariant` | `docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md` |
+| `BA.4` | `merged` (#1408) | `feature/ba4-atm-task-commands` | `docs/plans/phase-ba/sprint-BA.4-atm-task-commands.md` |
+| `BA.5` | `merged` (#1407) | `feature/ba5-queue-ephemeral-item` | `docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md` |
+| `BA.6` | `merged` (#1412) | `docs/ba6-task-nudge-documentation` | `docs/plans/phase-ba/sprint-BA.6-docs.md` |
+| cleanup | `merged` (#1413, #1414, #1415) | `fix/phase-ba-cleanup`, `fix/phase-ba-cleanup-b`, `fix/phase-ba-merge-fix` | consolidated non-blocking findings, bounded blocking, BA.3 fixtures under merged tick order |
+| review-findings | `in progress` (#1419 …) | `fix/phase-ba-review-1` → `-2` → `-3`, `docs/phase-ba-post-mortem` | phase-ending review, production readiness review, post-mortem — stacked above `integrate/phase-ba` |
+
+## 60. Phase BB — Task Transitions You Can See [MERGED INTO INTEGRATE/PHASE-BB — PHASE-ENDING GATE AND READINESS REVIEW IN PROGRESS; DEVELOP PR PENDING]
+
+Phase BB replaces the two task-family nudge kinds with six per-transition
+kinds so every task transition is visible in the recipient's prompt line, and
+adds `atm task start` for the assignee. Design authority:
+[`docs/plans/nudge-transition-templates/design.md`](./plans/nudge-transition-templates/design.md);
+plan: [the Phase BB plan](./plans/phase-bb/phase-bb-plan.md). Base `develop`
+at `281e6f546`; integration branch `integrate/phase-bb`. All seven sprints
+are merged into `integrate/phase-bb`: stack #1457 landed via #1474, with
+follow-up fixes #1476, #1477 and #1479; BB.7 landed via #1470 and #1478. The
+phase-ending gate and readiness review are in progress, and the develop PR is
+pending. Wave 1 is BB.1, BB.2
+and BB.3 in parallel; BB.4, BB.5 and BB.6 stack on BB.1 in that order; BB.7
+closes the phase documentation after BB.6 and BB.2 merge. Triage seed:
+PR #1431 (SMK-004, SMK-005, SMK-006). BB.7 D6 keeps this table current;
+team-lead lands the final status when the phase PR merges.
+
+| Sprint | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- |
+| `BB.1` | `merged (#1452)` | `feature/bb1-transition-templates` | `docs/plans/phase-bb/sprint-BB.1-transition-templates.md` |
+| `BB.2` | `merged (#1452)` | `feature/bb2-orchestration-templates-1516` | `docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md` |
+| `BB.3` | `merged (#1468)` | `feature/bb3-test-procedure-pages` | `docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md` |
+| `BB.4` | `merged (#1452)` | `feature/bb4-task-start` | `docs/plans/phase-bb/sprint-BB.4-task-start.md` |
+| `BB.5` | `merged (#1452)` | `feature/bb5-assignment-write-task-pass` | `docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md` |
+| `BB.6` | `merged (#1470)` | `feature/bb6-docs-prompt-handoffs` | `docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md` |
+| `BB.7` | `merged (#1470, #1478)` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
+| `BB.8` | `complete (#1500, #1501)` | `feature/bb8-2-colima-driver` | `docs/plans/phase-bb/sprint-BB.8-colima-integration.md` |
+
+## Daemon-Switch Scope Reduction
+
+Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:
+selecting a published release, or selecting a release build from an exactly
+prerelease-tagged worktree for dogfooding. Temporary-launch, quiesce, and
+signing behavior remain independently scoped; no daemon runtime work belongs
+to this line.
+
+| Sprint | Status | Branch | Worktree | Artifacts |
+| --- | --- | --- | --- | --- |
+| `DAEMON-SWITCH-MODES-1` | `in progress` | `fix/daemon-switch-release-and-tagged-modes` | `../atm-core-worktrees/fix/daemon-switch-release-and-tagged-modes` | `REQ-P-DAEMON-SWITCH-002`, ADR-053 amendment, daemon-switch skill/tests |
 
 ## Publishing Improvements
 

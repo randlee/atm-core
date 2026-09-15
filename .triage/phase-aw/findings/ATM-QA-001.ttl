@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "AC6 doc-test-greps-constants enforcement missing for docs/atm-daemon/logging.md" ;
+  triage:description "qa-pr1182-r4 (feature/aw3-health-and-log-query @ 52cd886bd): req-qa: AC6 requires an automated test/lint that greps docs/atm-daemon/logging.md's documented constant values (e.g. DIAGNOSTIC_BATCH_MAX=128) against their source-of-truth definitions in crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs, so future drift between the doc and the code is caught. No such test or lint script exists anywhere in the repo. The doc's content is accurate today (values match the code as of this commit), but nothing guards against a future edit to the constants going unreflected in the doc, or vice versa." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T06:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/AW3-1> ;
+  triage:closedAt "2026-09-05T06:42:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+# HYGIENE FIX (phase-aw integration review, quality-mgr): Finding-level
+# triage:status was left at "open" after closure even though the Occurrence
+# was correctly flipped to "fixed" -- caught during the phase-ending
+# integration review. Corrected to "fixed"; closure evidence unchanged.
+
+# CLOSURE (qa-pr1182-r5, quality-mgr): independently confirmed at 95230ff18
+# in /tmp/verify-aw3-r5 -- arch-ctm's fix (96edb1de9) added
+# ac6_logging_contract_constants_match_the_timeline_source
+# (crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs:539) which asserts
+# docs/atm-daemon/logging.md contains a `NAME = value` substring for each of
+# DIAGNOSTIC_BATCH_MAX, DIAGNOSTIC_FLUSH_INTERVAL_MS,
+# DEGRADATION_RECOVERY_WINDOW_SECS and DEGRADATION_RATE_LIMIT_SECS read
+# directly from the source constants (not hardcoded copies) -- this is a
+# genuine drift guard, not a placeholder. `cargo test -p atm-daemon-bootstrap
+# ac6_logging_contract_constants_match_the_timeline_source`: 1 passed.
+
+<urn:atm:triage:occurrence/ATM-QA-001/AW3-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/logging.md" ;
+  triage:line 6 ;
+  triage:snippet "DIAGNOSTIC_BATCH_MAX=128" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "52cd886bd" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/52cd886bd> .
+
+<urn:atm:triage:worktree/AW3/52cd886bd>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw3-health-and-log-query" ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "52cd886bd" ;
+  triage:orderIndex 5 .

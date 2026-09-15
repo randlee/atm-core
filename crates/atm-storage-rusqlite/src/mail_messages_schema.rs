@@ -196,7 +196,7 @@ fn rebuild_mail_messages_with_nullable_message_text(
             error,
         )
     })?;
-    tracing::info!(
+    tracing::info!(target: "atm_storage_rusqlite::maintenance",
         event = "sqlite.mail_messages.message_text_rebuild",
         db.namespace = %target.display(),
         db.rows_copied = copied,
@@ -216,7 +216,7 @@ fn restore_decomposed_messages_view(
     transaction: &Transaction<'_>,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    crate::template_catalog_schema::ensure_schema(transaction, target)
+    crate::template_catalog_schema::ensure_schema_in_transaction(transaction, target)
 }
 
 #[cfg(test)]

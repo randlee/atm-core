@@ -16,7 +16,7 @@ class HermesAtmRuntimeError(RuntimeError):
 
 @dataclass
 class HermesAtmRuntime:
-    """One profile-owned graft receiver and Telegram delivery callback."""
+    """One profile-owned graft receiver and configured delivery callback."""
 
     session: Any
     chat_id: str
@@ -33,6 +33,7 @@ class HermesAtmRuntime:
         gateway_runner: Any,
         *,
         profile: str,
+        platform: str = "telegram",
         environment: Mapping[str, str] | None = None,
         notice_text: str | None = None,
     ) -> "HermesAtmRuntime":
@@ -50,10 +51,17 @@ class HermesAtmRuntime:
         # Use that active loop as the portable fallback so receiver
         # publication does not fail solely on optional host bookkeeping.
         loop = getattr(gateway_runner, "gateway_loop", None) or asyncio.get_running_loop()
+        platform_name = platform.strip().upper()
+        try:
+            resolved_platform = Platform[platform_name]
+        except KeyError as error:
+            raise HermesAtmRuntimeError(
+                f"Hermes platform {platform!r} is not available for ATM injection"
+            ) from error
         return cls.from_components(
             inject_internal_message=injector,
             loop=loop,
-            platform=Platform.TELEGRAM,
+            platform=resolved_platform,
             profile=profile,
             environment=environment,
             notice_text=notice_text,

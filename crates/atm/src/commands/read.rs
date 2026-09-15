@@ -17,6 +17,12 @@ use crate::output;
 #[derive(Debug, Args)]
 /// Read one ATM mailbox message and optionally update read state.
 pub struct ReadCommand {
+    /// Positional message IDs are rejected with a migration hint. Keeping
+    /// this parser slot lets the CLI explain the supported option instead of
+    /// returning clap's generic unexpected-argument error.
+    #[arg(index = 1, value_name = "MESSAGE_ID")]
+    message_id_positional: Option<String>,
+
     #[arg(long)]
     team: Option<String>,
 
@@ -74,6 +80,9 @@ pub struct ReadCommand {
 
 impl ReadCommand {
     pub async fn run(self, observability: &CliObservability) -> Result<()> {
+        if let Some(message_id) = self.message_id_positional.as_deref() {
+            return Err(positional_message_id_error(message_id).into());
+        }
         let warnings = self.deprecation_warnings();
         let (home_dir, current_dir) = resolve_command_runtime_context("read")?;
         let json = self.json;
@@ -136,9 +145,15 @@ impl ReadCommand {
             filters,
         )
         .map(|query| {
-            query
-                .with_caller_chat_id(caller_context.caller_chat_id)
-                .with_activity_observation(caller_context.activity_observation)
+            // A message ID already identifies a mailbox row within the
+            // caller's agent/team scope. A session-chat filter would hide a
+            // bare-agent message that `atm list` can return by that ID.
+            let query = if self.message_id.is_some() {
+                query
+            } else {
+                query.with_caller_chat_id(caller_context.caller_chat_id)
+            };
+            query.with_activity_observation(caller_context.activity_observation)
         })
         .map_err(Into::into)
     }
@@ -182,6 +197,13 @@ impl ReadCommand {
         }
         warnings
     }
+}
+
+fn positional_message_id_error(message_id: &str) -> atm_core::error::AtmError {
+    atm_core::error::AtmError::validation_with_recovery(
+        format!("positional message ID `{message_id}` is not supported by `atm read`"),
+        "use `atm read --message-id <id>`",
+    )
 }
 
 #[cfg(test)]
@@ -231,6 +253,23 @@ mod tests {
         assert!(query.seen_state_update());
         assert_eq!(query.timeout_secs(), Some(9));
         assert!(query.message_id_filter().is_some());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn exact_message_id_does_not_apply_session_chat_scope() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let mut command = base_command();
+        command.chat_id = Some("session-a".to_string());
+        command.message_id = Some("01KRFK5QTF2R6NRS3Q0F8Z9K0S".to_string());
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert!(query.message_id_filter().is_some());
+        assert_eq!(query.caller_chat_id(), None);
     }
 
     #[test]
@@ -321,19 +360,23 @@ mod tests {
 
     #[test]
     fn cli_rejects_positional_mailbox_target_for_owner_only_read() {
-        let error = crate::commands::Cli::try_parse_from(["atm", "read", "recipient@test-team"])
-            .expect_err("owner-only read must reject positional target");
+        let parsed =
+            crate::commands::Cli::try_parse_from(["atm", "read", "01KX5TEST00000000000000001"])
+                .expect("positional message ID is parsed for an actionable error");
+        let rendered = format!("{parsed:?}");
+        assert!(rendered.contains("message_id_positional"), "{rendered}");
+    }
 
-        let rendered = error.to_string();
-        assert!(
-            rendered.contains("unexpected argument 'recipient@test-team'")
-                || rendered.contains("unexpected argument"),
-            "{rendered}"
-        );
+    #[test]
+    fn positional_message_id_error_points_to_message_id_option() {
+        let error = super::positional_message_id_error("01KX5TEST00000000000000001");
+        assert!(error.message().contains("positional message ID"));
+        assert!(error.message().contains("atm read --message-id <id>"));
     }
 
     fn base_command() -> ReadCommand {
         ReadCommand {
+            message_id_positional: None,
             team: None,
             chat_id: None,
             actor: None,

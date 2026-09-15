@@ -1,0 +1,25 @@
+{
+  "feature": "colima-prompt-handoffs",
+  "generated_at": "2026-09-14T15:52:05Z",
+  "source_revision": "9f2430a00a2013655d84b2ad21b05fd04fa6889a",
+  "container": "hermes-testbed",
+  "atm_version": "1.5.18",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "prompted-task-events-only",
+      "status": "fail",
+      "detail": "Pre-case ran clean: `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` -> `{\"action\": \"clear-nudge-template\", \"team\": \"fx-at11\", \"kind\": \"task_reminder\", \"cleared\": false}`. Case 1 could not proceed past assigning task 1: `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm task assign fx-at11-beta \"AT11 case1 task1 20260914T155159Z\" --json` -> `HTTP client could not connect to the configured daemon endpoint\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.` (exit 4). Repeated this exact command and `atm task list --as fx-at11-beta --team fx-at11 --json` over a ~230s polling window (5s interval up to 150s, plus additional bounded retries) with the same connection-refused result every time, so no task-id was ever minted and no `atm task events <id> --json` evidence for queued/ready/reminder/started could be collected. No observed interval could be derived. PASS criteria (task 1 shows queued, ready, reminder, started in order; tasks 2/3 show queued only) not met: fail."
+    },
+    {
+      "name": "disabled-reminder-doctor-finding",
+      "status": "fail",
+      "detail": "`ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams disable-nudge-template --team fx-at11 --kind task_reminder --json` succeeded -> `{\"action\": \"disable-nudge-template\", \"team\": \"fx-at11\", \"kind\": \"task_reminder\", \"updated_at\": \"2026-09-14T15:51:08.571057029Z\"}` (this command reaches local team-config state without the mailbox daemon). Assigning the new task then failed identically to case 1: `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm task assign fx-at11-beta \"probe2\" --json` -> `HTTP client could not connect to the configured daemon endpoint` (exit 4). `atm doctor --json --team fx-at11` (tried with and without ATM_IDENTITY set) returned the same connection error every time, never producing a doctor JSON body, so `disabled_task_nudge_template_override` could not be observed. PASS criteria not met: fail."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "No tasks were ever created in case 1 or case 2 (every `atm task assign` call failed to connect, exit 4, before any task-id was minted), so there were no open tasks to close with `atm task close`. Ran the required final override reset: `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` -> `{\"action\": \"clear-nudge-template\", \"team\": \"fx-at11\", \"kind\": \"task_reminder\", \"cleared\": true}`, confirming the case-2 disable override was removed."
+    }
+  ]
+}

@@ -21,16 +21,14 @@ impl atm_storage::contract::sealed::Sealed for SqlitePeerConfigStore {}
 
 impl PeerConfigStore for SqlitePeerConfigStore {
     fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, atm_storage::AtmError> {
-        self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let mut statement = connection
                 .prepare(
                     "SELECT bind_addr, advertise_host, enabled
                      FROM peer_https_interfaces ORDER BY bind_addr",
                 )
-                .map_err(|error| {
-                    self.db
-                        .error("failed to prepare HTTPS interface query", error)
-                })?;
+                .map_err(|error| db.error("failed to prepare HTTPS interface query", error))?;
             statement
                 .query_map([], |row| {
                     Ok((
@@ -39,10 +37,10 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                         row.get::<_, i64>(2)?,
                     ))
                 })
-                .map_err(|error| self.db.error("failed to query HTTPS interfaces", error))?
+                .map_err(|error| db.error("failed to query HTTPS interfaces", error))?
                 .map(|row| {
-                    let (bind_addr, advertise_host, enabled) = row
-                        .map_err(|error| self.db.error("failed to read HTTPS interface", error))?;
+                    let (bind_addr, advertise_host, enabled) =
+                        row.map_err(|error| db.error("failed to read HTTPS interface", error))?;
                     Ok(HttpsInterface {
                         bind_addr: parse_bind_addr(&bind_addr)?,
                         advertise_host: parse_host(&advertise_host)?,
@@ -86,7 +84,8 @@ impl PeerConfigStore for SqlitePeerConfigStore {
     }
 
     fn local_certificate(&self) -> Result<Option<LocalCertificate>, atm_storage::AtmError> {
-        let certificate = self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        let certificate = self.db.read(move |connection| {
             connection
                 .query_row(
                     "SELECT fingerprint, private_key_ref
@@ -95,7 +94,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
                 )
                 .optional()
-                .map_err(|error| self.db.error("failed to load local certificate", error))
+                .map_err(|error| db.error("failed to load local certificate", error))
         })?;
         certificate
             .map(|(fingerprint, private_key_ref)| {
@@ -129,13 +128,14 @@ impl PeerConfigStore for SqlitePeerConfigStore {
     }
 
     fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, atm_storage::AtmError> {
-        self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let mut statement = connection
                 .prepare(
                     "SELECT host, fingerprint, enabled, https_port
                      FROM peer_trusted_peers ORDER BY host",
                 )
-                .map_err(|error| self.db.error("failed to prepare trusted-peer query", error))?;
+                .map_err(|error| db.error("failed to prepare trusted-peer query", error))?;
             statement
                 .query_map([], |row| {
                     Ok((
@@ -145,10 +145,10 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                         row.get::<_, u16>(3)?,
                     ))
                 })
-                .map_err(|error| self.db.error("failed to query trusted peers", error))?
+                .map_err(|error| db.error("failed to query trusted peers", error))?
                 .map(|row| {
                     let (host, fingerprint, enabled, https_port) =
-                        row.map_err(|error| self.db.error("failed to read trusted peer", error))?;
+                        row.map_err(|error| db.error("failed to read trusted peer", error))?;
                     Ok(TrustedPeer {
                         host: parse_host(&host)?,
                         fingerprint: parse_fingerprint(fingerprint)?,
@@ -163,15 +163,17 @@ impl PeerConfigStore for SqlitePeerConfigStore {
     }
 
     fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, atm_storage::AtmError> {
-        let peer = self.db.with_connection(|connection| {
+        let db = Arc::clone(&self.db);
+        let host_key = host.clone();
+        let peer = self.db.read(move |connection| {
             connection
                 .query_row(
                     "SELECT fingerprint, enabled, https_port FROM peer_trusted_peers WHERE host = ?1",
-                    params![host.as_str()],
+                    params![host_key.as_str()],
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, u16>(2)?)),
                 )
                 .optional()
-                .map_err(|error| self.db.error("failed to load trusted peer", error))
+                .map_err(|error| db.error("failed to load trusted peer", error))
         })?;
         peer.map(|(fingerprint, enabled, https_port)| {
             Ok(TrustedPeer {

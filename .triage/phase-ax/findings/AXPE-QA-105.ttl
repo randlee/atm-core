@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AX-PHASE-END-1788655446 (phase-ending review) on merge/develop-into-phase-ax at 3afa39160; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1232#issuecomment-5556008121 Native id: ATM-QA-AX-PE-001
+
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-STRUCT-R2/R3 PR #1236 @ 6c7055274.
+<urn:atm:triage:finding/AXPE-QA-105>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-105" ;
+  triage:title "Dead HERDR_WAKE_TEXT constant violates AX.2 acceptance criterion 1" ;
+  triage:description "The develop freshness merge kept the HERDR_WAKE_TEXT constant that develop still uses (lib.rs:643, :1054 on develop 550627d71) while Phase AX removed every use of it, leaving an unused pub const at 3afa39160. AX.2 acceptance criterion 1 requires `grep -rn HERDR_WAKE_TEXT crates docs/adr docs/atm-herdr docs/requirements.md docs/architecture.md boundaries` to return nothing; docs/plans/phase-ax/*.md mentions are the plan itself and are excluded by that grep only for docs/plans, so the const line is the sole violation. Remediation: delete the constant (and any test that referenced only it) on stack #1235; re-run the literal grep and quote it. No earlier QA round caught it because the const arrived from develop after AX.2 closed." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "req-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T01:17:12Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T01:14:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-105/MERGE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-105/MERGE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 15 ;
+  triage:snippet "pub const HERDR_WAKE_TEXT: &str = \"You have unread ATM messages. Run: atm read\";" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "merge/develop-into-phase-ax" ;
+  triage:headSha "3afa39160df6a8ca2e26d690784d80f1c53844d4" ;
+  triage:occursIn <urn:atm:triage:worktree/MERGE/3afa39160df6a8ca2e26d690784d80f1c53844d4> .
+
+<urn:atm:triage:worktree/MERGE/3afa39160df6a8ca2e26d690784d80f1c53844d4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/merge-develop-into-phase-ax" ;
+  triage:branch "merge/develop-into-phase-ax" ;
+  triage:headSha "3afa39160df6a8ca2e26d690784d80f1c53844d4" ;
+  triage:orderIndex 11 .

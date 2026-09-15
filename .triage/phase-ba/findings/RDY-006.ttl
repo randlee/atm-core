@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RDY-006>
+  a triage:Finding ;
+  triage:findingId "RDY-006" ;
+  triage:title "architecture.md pump diagram (lines 351-407) is stale" ;
+  triage:description "solar BA-READINESS Part A @ 9f5aef2fe. Finding: docs/architecture.md lines 351-407's pump diagram describes the pre-BA.3 pump shape, not the current one. Fixed by cipher on fix/phase-ba-review-1 @ 5f2bd3abb (item 7, extended together with ACR-004's notify-drift text), ACCEPTED by fenix." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RDY-006/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RDY-006/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 351 ;
+  triage:snippet "architecture.md pump diagram stale (lines 351-407)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 5f2bd3abb (item 7, extended with ACR-004), ACCEPTED by fenix." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "5f2bd3abb" ;
+  triage:occursIn <urn:atm:triage:worktree/RDY-006/1> .
+
+<urn:atm:triage:worktree/RDY-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack review-findings layer 1, cipher, item 7 (extended with ACR-004)" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "5f2bd3abb" ;
+  triage:orderIndex 7 .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-002>
+  a triage:Finding ;
+  triage:findingId "FTQ-002" ;
+  triage:title "run-hermes-graft-smoke.py read/ack-reply loops busy-poll without backoff" ;
+  triage:description "fenix (ATM 01M2APKAD843RB8WK9EVQFHGH6, 2026-09-12T11:38:45Z), found during BA-SMOKE-EVIDENCE-QA-1789212303 (PR #1428). scripts/phase-ai/run-hermes-graft-smoke.py's read/ack-reply loops busy-poll without backoff. Not blocking; Minor. Distinct from SMK-001 (the same script's requires_ack/atm-ack mismatch, already fixed at 3bc6122b4) -- this is a separate polling-hygiene issue in the same file." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "scripts/phase-ai/run-hermes-graft-smoke.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T11:38:45Z"^^xsd:dateTime ;
+  triage:relatedFinding "SMK-001" ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T11:38:45Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-002/1>
+  a triage:Occurrence ;
+  triage:file "scripts/phase-ai/run-hermes-graft-smoke.py" ;
+  triage:line 1 ;
+  triage:snippet "read/ack-reply loops busy-poll without backoff" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/phase-ba-smoke-graft-ack" ;
+  triage:headSha "3bc6122b4" ;
+  triage:occursIn <urn:atm:triage:worktree/FTQ-002/1> .
+
+<urn:atm:triage:worktree/FTQ-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "post-landing backlog: fix/phase-ba-smoke-graft-ack (fenix), PR #1428" ;
+  triage:branch "fix/phase-ba-smoke-graft-ack" ;
+  triage:headSha "3bc6122b4" ;
+  triage:orderIndex 12 .

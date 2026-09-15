@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AXPE-STRUCT-R2-1788657810 (PR #1236, fix/ax-phase-end-structural @ 0364a1b94); fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1236#issuecomment-5556146083 Native id: AXPE-QA-103-LINTGAP (ruthless-boundary-qa secondary)
+
+# Closed 2026-09-06T02:15:00Z: QA-AXPE-STRUCT-R3 PR #1236 @ 6c7055274.
+<urn:atm:triage:finding/AXPE-QA-114>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-114" ;
+  triage:title "No mechanical guard against the task projection SQL bodies drifting apart" ;
+  triage:description "After AXPE-QA-103, task_sql.rs and task_ledger_reader.rs each own a SELECT statement over tasks/task_events built from the shared TASK_COLUMNS/TASK_EVENT_COLUMNS constants. The self-test task_projection_column_lists_have_one_crate_owner only checks that the column-list constants are declared once; nothing catches the two SQL statement bodies (WHERE/ORDER BY shape) silently diverging on a future schema change. Remediation: add a unit test in atm-storage-rusqlite that asserts the reader's statements are built from the shared constants and match the task_sql shape (e.g. compare the rendered SQL text of both paths against one canonical template), or fold the shape into a shared const fn that both call; no boundary relaxation, no new crate edge." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T01:48:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T01:44:03Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-114/L3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-114/L3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_sql.rs" ;
+  triage:line 83 ;
+  triage:snippet "fn task_projection_column_lists_have_one_crate_owner()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ax-phase-end-structural" ;
+  triage:headSha "0364a1b940c2cb346ca4171e3021a2f5df7e7284" ;
+  triage:occursIn <urn:atm:triage:worktree/L3/0364a1b940c2cb346ca4171e3021a2f5df7e7284> .
+
+<urn:atm:triage:worktree/L3/0364a1b940c2cb346ca4171e3021a2f5df7e7284>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-ax-phase-end-structural" ;
+  triage:branch "fix/ax-phase-end-structural" ;
+  triage:headSha "0364a1b940c2cb346ca4171e3021a2f5df7e7284" ;
+  triage:orderIndex 10 .

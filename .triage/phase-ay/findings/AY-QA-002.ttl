@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY-QA-002>
+  a triage:Finding ;
+  triage:findingId "AY-QA-002" ;
+  triage:title "AY.9 Ship/Defer/Cancel decision line fails the plan's own mandated exact-shape mechanical gate (attributed to fenix, not Rand; markdown-bolded, not plain text)" ;
+  triage:description "quality-mgr, qa-phase-ay-gate (PR #1308, integrate/phase-ay). docs/plans/phase-ay/phase-ay-plan.md's own 'Phase AY exit gate' section (around line 1114) defines the exact required shape for the AY.9 cutover decision -- 'Decision (Rand, YYYY-MM-DD): Ship|Defer <phase>|Cancel' on its own line -- and states quality-mgr's phase-ending gate must refuse the integrate/phase-ay to develop PR while `grep -E '^Decision \\(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\\): (Ship|Defer [A-Z]+|Cancel)$' docs/plans/phase-ay/phase-ay-plan.md` finds no matching line. The actual line recorded at phase-ay-plan.md:1095 reads 'Decision (recorded by fenix, 2026-09-07): **Ship**.' -- attributed to fenix, not Rand (consistent with the file's own earlier framing at line 50, 'recorded by fenix for Rand's approval', which gives no evidence Rand's approval was actually obtained for this specific dated decision line), and wrapped in markdown bold rather than plain text. The mandated grep pattern therefore matches nothing in the file (confirmed: `grep -c` returns 0), and by the plan's own stated mechanism the develop PR should be refused until this is corrected. This is a process/gate-artifact defect, not a code defect: the substance (AY.9 merged, all CI green, qa-pr1295 PASS, AY9-QA-001 closed) may well be accurate and this may only need Rand's actual sign-off recorded in the exact required shape -- but as written the record does not establish that Rand made this decision, only that fenix recorded a proposed outcome. Distinct from ARCH-001 (item-7 decision line, already fixed at facf9e4ee) -- this is the AY.9 top-level Ship/Defer/Cancel decision line, a separate mechanical check in the same gate section. Required correction: either obtain and record Rand's actual dated Ship/Defer/Cancel ruling in the exact plain-text shape the gate's own grep expects, or if Rand already gave this approval elsewhere (not evidenced in this file), cite it and correct the line's attribution and formatting to match." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "phase_end" ;
+  triage:category "gate-artifact-self-consistency" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ay/phase-ay-plan.md (AY.9 decision line, ~line 1095; exit gate mechanical-check spec, ~line 1114)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T20:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY9 ;
+  triage:foundAt "2026-09-07T20:38:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T20:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed concurrently: commit 2fd39b07e (\"docs(phase-ay): AY.9 cutover decision recorded: Ship (Rand, 2026-09-07)\") landed on integrate/phase-ay immediately before this finding was pushed, replacing the fenix-attributed markdown-bolded line with the exact required shape at phase-ay-plan.md:1102. Verified: `grep -E '^Decision \\(Rand, [0-9]{4}-[0-9]{2}-[0-9]{2}\\): (Ship|Defer [A-Z]+|Cancel)$' docs/plans/phase-ay/phase-ay-plan.md` now matches 'Decision (Rand, 2026-09-07): Ship' at head 88b35bbe5. Both exit-gate mechanical checks (this one and the item-7 line closed under ARCH-001) now pass." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY-QA-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY-QA-002/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/phase-ay-plan.md" ;
+  triage:line 1095 ;
+  triage:snippet "Decision (recorded by fenix, 2026-09-07): **Ship**. -- does not match the gate's own required grep pattern for a Rand-attributed plain-text decision line" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "8c30e3c0d" ;
+  triage:fixedAtHeadSha "2fd39b07e" ;
+  triage:occursIn <urn:atm:triage:worktree/AY-QA-002/8c30e3c0d> .
+
+<urn:atm:triage:worktree/AY-QA-002/8c30e3c0d>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "8c30e3c0d" ;
+  triage:orderIndex 0 .

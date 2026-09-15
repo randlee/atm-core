@@ -24,12 +24,18 @@ class PagesSiteTests(unittest.TestCase):
     def test_home_links_to_generated_reports_index(self) -> None:
         parser = LinkParser()
         parser.feed(HOME.read_text(encoding="utf-8"))
-        self.assertIn("reports/index.html", parser.links)
+        self.assertIn("reports/", parser.links)
+        self.assertIn("announcements/", parser.links)
         self.assertTrue((HOME.parent / "reports/index.html").is_file())
 
     def test_pages_workflow_validates_and_uploads_only_site(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("just reports-index --check", workflow)
+        self.assertIn("fetch-depth: 0", workflow)
+        self.assertIn("python3 .just/check_site_generated.py", workflow)
+        self.assertIn("python3 .just/check_site_links.py", workflow)
+        gate = (REPO_ROOT / ".just/check_site_generated.py").read_text(encoding="utf-8")
+        self.assertIn('("scripts/procedures/render_procedure_pages.py", "--check", "just procedures")', gate)
+        self.assertIn('(".just/generate_report_index.py", "--check", "just reports-index")', gate)
         self.assertIn("actions/upload-pages-artifact@v3", workflow)
         self.assertIn("path: site", workflow)
         self.assertIn("actions/deploy-pages@v4", workflow)
@@ -45,9 +51,11 @@ class PagesSiteTests(unittest.TestCase):
         self.assertEqual(workflow_text.count("actions/deploy-pages@"), 1)
         self.assertNotIn("peaceiris/actions-gh-pages", workflow_text)
 
-    def test_workflow_has_integrate_trigger_and_manual_trigger(self) -> None:
+    def test_workflow_has_develop_site_trigger_and_manual_trigger(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("integrate/phase-ai-31-33", workflow)
+        self.assertIn("      - develop\n", workflow)
+        self.assertIn('      - "site/**"\n', workflow)
+        self.assertNotIn("integrate/phase-ai-31-33", workflow)
         self.assertIn("workflow_dispatch:", workflow)
 
 

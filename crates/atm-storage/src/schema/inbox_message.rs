@@ -4,6 +4,8 @@ use serde_json::{Map, Value};
 use std::fmt;
 use ulid::Ulid;
 
+use crate::task_op::{MoveTarget, TaskOp};
+use crate::task_state::TaskCloseOutcome;
 use crate::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName};
 
 #[derive(Debug, Clone)]
@@ -185,6 +187,16 @@ pub struct MessageEnvelope {
     pub expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<MoveTarget>,
+    #[serde(rename = "taskOp", default, skip_serializing_if = "Option::is_none")]
+    pub task_op: Option<TaskOp>,
+    #[serde(
+        rename = "taskComplete",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub task_complete: Option<TaskId>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
@@ -237,6 +249,16 @@ struct RawMessageEnvelope {
     expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     task_id: Option<TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    placement: Option<MoveTarget>,
+    #[serde(rename = "taskOp", default, skip_serializing_if = "Option::is_none")]
+    task_op: Option<TaskOp>,
+    #[serde(
+        rename = "taskComplete",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    task_complete: Option<TaskId>,
     #[serde(flatten)]
     extra: Map<String, Value>,
 }
@@ -246,6 +268,17 @@ impl From<RawMessageEnvelope> for MessageEnvelope {
         let requires_ack = value
             .requires_ack
             .unwrap_or(value.pending_ack_at.is_some() && value.acknowledges_message_id.is_none());
+        let (task_id, task_op) = match (value.task_id, value.task_op, value.task_complete) {
+            (task_id, Some(task_op), _) => (task_id, Some(task_op)),
+            (_, None, Some(task_id)) => (
+                Some(task_id),
+                Some(TaskOp::Close {
+                    outcome: TaskCloseOutcome::Completed,
+                    reason: None,
+                }),
+            ),
+            (task_id, None, None) => (task_id, None),
+        };
         Self {
             from: value.from,
             source_chat_id: value.source_chat_id,
@@ -263,7 +296,10 @@ impl From<RawMessageEnvelope> for MessageEnvelope {
             parent_message_id: value.parent_message_id,
             thread_mode: value.thread_mode,
             expires_at: value.expires_at,
-            task_id: value.task_id,
+            task_id,
+            placement: value.placement,
+            task_op,
+            task_complete: None,
             extra: value.extra,
         }
     }
@@ -284,4 +320,64 @@ pub struct PendingAck {
     pub from: AgentName,
     pub acked: bool,
     pub acked_at: Option<IsoTimestamp>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MessageEnvelope;
+    use crate::types::{AgentName, IsoTimestamp, TaskId};
+    use crate::{TaskCloseOutcome, TaskOp};
+
+    fn envelope(task_complete: Option<TaskId>) -> MessageEnvelope {
+        MessageEnvelope {
+            from: "sender".parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
+            text: "task update".to_owned(),
+            timestamp: "2026-09-04T00:00:00Z"
+                .parse::<IsoTimestamp>()
+                .expect("time"),
+            read: false,
+            source_team: None,
+            destination_chat_id: None,
+            summary: None,
+            message_id: None,
+            requires_ack: false,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            placement: None,
+            task_op: None,
+            task_complete,
+            extra: serde_json::Map::new(),
+        }
+    }
+
+    #[test]
+    fn legacy_task_complete_decodes_to_typed_close_and_omits_absent_carrier() {
+        let absent = serde_json::to_value(envelope(None)).expect("serialize");
+        assert!(absent.get("taskComplete").is_none());
+        let decoded: MessageEnvelope = serde_json::from_value(absent).expect("deserialize");
+        assert_eq!(decoded.task_complete, None);
+
+        let task: TaskId = "AX.3".parse().expect("task");
+        let present = serde_json::to_value(envelope(Some(task.clone()))).expect("serialize");
+        assert_eq!(
+            present.get("taskComplete").and_then(|value| value.as_str()),
+            Some(task.as_str())
+        );
+        let decoded: MessageEnvelope = serde_json::from_value(present).expect("deserialize");
+        assert_eq!(decoded.task_id, Some(task));
+        assert_eq!(
+            decoded.task_op,
+            Some(TaskOp::Close {
+                outcome: TaskCloseOutcome::Completed,
+                reason: None,
+            })
+        );
+        assert_eq!(decoded.task_complete, None);
+    }
 }

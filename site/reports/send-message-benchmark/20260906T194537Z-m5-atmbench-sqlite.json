@@ -1,0 +1,71 @@
+{
+  "baseline": {
+    "p50_floor": 35000.0,
+    "revision": 1
+  },
+  "binary_hashes": {
+    "atm": "97a716c4c8369a4e99c53b8fb6613058c7518fe4ee17c491bd2e975659ba6f67",
+    "atm-daemon": "903180a0a829ab04990a46e4a7f485614c2ddc55a94071ccb533fb477fad26ff"
+  },
+  "campaign_id": "20260906T194537Z-m5-atmbench",
+  "direct_sqlite_message_write": {
+    "accepted_count": 947000,
+    "admissions_per_second": 47287.280907452834,
+    "elapsed_seconds": 20.026526834,
+    "kind": "async_storage_admission",
+    "requested_count": 947000,
+    "worker_count": 512
+  },
+  "durability_after_restart": {
+    "expected_accepted_count": 947000,
+    "method": "isolated_sqlite_exact_count_after_restart",
+    "observed_mailbox_count": 947000,
+    "passed": true
+  },
+  "frames_per_connection": 0,
+  "generated_at": "2026-09-06T19:45:37.483880Z",
+  "host_label": "m5-atmbench",
+  "incomplete_reason": null,
+  "messages_admitted": 947000,
+  "messages_durable": 947000,
+  "messages_requested": 947000,
+  "metrics": {
+    "accepted_count": 947000,
+    "admissions_per_second": {
+      "max": 58436.81519357195,
+      "min": 8323.356819127313,
+      "p50": 48362.62294685552,
+      "p95": 54741.65360850138,
+      "p99": 56667.79322239593
+    },
+    "application_wire_bytes": null,
+    "application_wire_bytes_per_second": null,
+    "connection_count": null,
+    "connections_per_second": null,
+    "first_failure": null,
+    "interval_count": 947,
+    "interval_latency_ms": {
+      "max": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "passed_interval_count": 947,
+    "request_frames_per_second": null,
+    "requested_count": 947000,
+    "response_count": 947000,
+    "time_to_send_1k_s": {
+      "max": 0.120143834,
+      "min": 0.0171125,
+      "p50": 0.020677125,
+      "p95": 0.023742083,
+      "p99": 0.03696375
+    }
+  },
+  "os": "macos",
+  "schema_version": 4,
+  "source_revision": "d53715bd547bf24f0fbadb933f12c997467c1911",
+  "status": "PASS",
+  "target": "sqlite"
+}

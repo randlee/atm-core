@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr (arch-qa) during QA-AXMERGE-AW-R1-1788718929 (QA-1 on PR #1256) on merge/develop-aw-into-phase-ax at db7f31cba; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1256#issuecomment-5561300893 Native id: ARCH-QA-MERGE-001.
+# Fix: fenix (merge resolver) deleted the block at 11cb6e96c on the same branch; .just/lint-config.toml is a frozen file, so no dev agent was dispatched.
+
+# Fixed 2026-09-06: PR #1256 merge/develop-aw-into-phase-ax @ 11cb6e96c, QA-2 PASS (QA-AXMERGE-AW-R2-1788720008, https://github.com/randlee/atm-core/pull/1256#issuecomment-5561359615); closed by fenix on the verdict, 2026-09-06T18:47:42Z.
+<urn:atm:triage:finding/AXPE-QA-120>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-120" ;
+  triage:title "Stale manifest_section_rules entry allows atm-storage as an atm-http-runtime dev-dependency after the allowlist removed it" ;
+  triage:description "The Phase AW -> integrate/phase-ax merge reconciliation of .just/lint-config.toml narrowed the atm-http-runtime manifest_dependency_allowlists entry to exclude atm-storage (matching Phase AX, which removed the dependency from crates/atm-http-runtime/Cargo.toml entirely) but kept develop's paired manifest_section_rules block (lines 230-234 at db7f31cba) that still permits atm-storage in [dev-dependencies] as a 'test-only fixture dependency'. The two rules in one file contradict each other. The block is vacuous today (no atm-storage reference exists in the manifest, so lint_boundaries.py never evaluates it) but documents a policy the allowlist forbids and would silently sanction a reintroduction as a dev-dependency. The block does not exist on integrate/phase-ax 6e8f33ba5; it is leftover from the merge's own incomplete reconciliation, not develop debt. Remediation: delete the block so both rules reflect the tightened policy; python3 .just/lint_boundaries.py must still pass." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "qa_round" ;
+  triage:category "arch-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T18:47:42Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T18:40:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T18:36:56Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-120/MERGE-AW-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-120/MERGE-AW-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 230 ;
+  triage:snippet "[[boundaries.manifest_section_rules]] owner_manifest_path = \"crates/atm-http-runtime/Cargo.toml\" dependency_package = \"atm-storage\" allowed_sections = [\"dev-dependencies\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "merge/develop-aw-into-phase-ax" ;
+  triage:headSha "db7f31cba713f40e1d3d75584e1edab5c091fe30" ;
+  triage:occursIn <urn:atm:triage:worktree/MERGE-AW/db7f31cba713f40e1d3d75584e1edab5c091fe30> .
+
+<urn:atm:triage:worktree/MERGE-AW/db7f31cba713f40e1d3d75584e1edab5c091fe30>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/merge-develop-aw-into-phase-ax" ;
+  triage:branch "merge/develop-aw-into-phase-ax" ;
+  triage:headSha "db7f31cba713f40e1d3d75584e1edab5c091fe30" ;
+  triage:orderIndex 14 .

@@ -24,6 +24,18 @@ optional_variables:
   - blocking_ids_json
 defaults:
   blocking_ids_json: "[]"
+metadata:
+  type: qa-quality-report
+  tags:
+    - stage:qa
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint_id
+    state: qa-approved
+    stage: qa
+    transition: approved
+    iteration_variable: qa_pass
 ---
 # Final Quality Report
 

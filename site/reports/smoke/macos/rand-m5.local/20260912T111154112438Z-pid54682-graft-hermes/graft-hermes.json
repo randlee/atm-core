@@ -1,0 +1,23 @@
+{
+  "feature": "graft-hermes",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20260912T111154112438Z",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.5.16",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "graft outbound durable write and receiver round trip",
+      "status": "FAIL",
+      "detail": "atm_graft is not installed; run maturin develop for crates/atm-graft-python first",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    }
+  ]
+}

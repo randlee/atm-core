@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "report_type": "integration",
+  "generated_at": "2026-09-12T11:10:04Z",
+  "host_label": "hermes-testbed",
+  "report_html": "integration/colima/20260912T111004Z/index.html",
+  "procedure": "colima-hermes-skills",
+  "status": "PASS"
+}

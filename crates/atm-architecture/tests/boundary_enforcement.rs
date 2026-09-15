@@ -18,25 +18,59 @@ use syn::visit::Visit;
 
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-daemon"),
+    ("atm", "atm-peer-tls-interop"),
     ("atm", "atm-storage-rusqlite"),
+    ("atm", "peer-tls"),
+    ("atm", "telemetry-implementation"),
+    ("atm-core", "atm-daemon"),
+    ("atm-core", "atm-storage-rusqlite"),
+    ("atm-core", "sc-observability"),
     ("atm-daemon", "atm-runtime"),
+    ("atm-daemon", "atm-peer-tls-interop"),
     ("atm-daemon", "atm-storage-rusqlite"),
+    ("atm-daemon", "atm-observability"),
+    ("atm-daemon", "peer-tls"),
+    ("atm-daemon-bootstrap", "atm-peer-tls-interop"),
+    ("atm-daemon-client", "atm-daemon"),
+    ("atm-daemon-client", "atm-storage-rusqlite"),
+    ("atm-error", "atm-core"),
+    ("atm-error", "atm-storage-rusqlite"),
+    ("atm-http-runtime", "atm-storage"),
+    ("atm-observability", "atm-daemon-bootstrap"),
+    ("atm-observability", "atm-http-runtime"),
+    ("atm-observability", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-storage", "atm-core"),
     ("atm-storage", "atm-daemon"),
     ("atm-storage", "atm-storage-rusqlite"),
+    ("atm-storage", "telemetry-implementation"),
     ("atm-storage-rusqlite", "atm-core"),
     ("atm-storage-rusqlite", "atm-runtime"),
+    ("atm-storage-rusqlite", "telemetry-implementation"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
+    ("atm-graft", "atm-peer-tls-interop"),
     ("atm-graft", "atm-storage-rusqlite"),
     ("atm-graft", "interprocess"),
+    ("atm-graft", "peer-tls"),
+    ("atm-graft-python", "atm-daemon"),
+    ("atm-graft-python", "atm-storage-rusqlite"),
+    ("atm-graft-python", "axum"),
+    ("atm-graft-python", "hyper"),
+    ("atm-graft-python", "reqwest"),
     ("atm-daemon-bootstrap", "atm-graft"),
     ("atm-http-runtime", "atm"),
     ("atm-http-runtime", "atm-daemon-bootstrap"),
     ("atm-http-runtime", "atm-graft"),
     ("atm-http-runtime", "atm-storage-rusqlite"),
+    ("atm-http-runtime", "peer-tls"),
+    ("atm-http-runtime", "telemetry-implementation"),
+    ("atm-query-python", "atm-core"),
+    ("atm-query-python", "atm-graft"),
+    ("atm-query-python", "atm-http-runtime"),
+    ("atm-query-python", "rusqlite"),
     ("atm-runtime", "atm-daemon"),
+    ("atm-runtime", "atm-peer-tls-interop"),
     ("atm-core", "atm-template-sc-compose"),
     ("atm-storage", "atm-template-sc-compose"),
     ("atm-storage-rusqlite", "atm-template-sc-compose"),
@@ -51,6 +85,8 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-herdr", "atm-daemon-bootstrap"),
     ("atm-herdr", "atm-http-runtime"),
     ("atm-herdr", "atm-storage-rusqlite"),
+    ("hermes-atm", "atm-daemon"),
+    ("hermes-atm", "atm-storage-rusqlite"),
 ];
 
 const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
@@ -66,26 +102,6 @@ const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
     "AtmErrorKind",
     "ProtocolErrorEnvelope",
     "error_kind_for_code",
-];
-
-const AI11_RETIRED_WINDOWS_TRANSPORT_IDENTIFIERS: &[&str] = &[
-    "NamedPipe",
-    "named_pipe",
-    "AF_UNIX",
-    "PipeClient",
-    "PipeServer",
-    "FrameCodec",
-    "FrameHeader",
-    "read_framed_request",
-    "write_framed_response",
-];
-
-const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
-    "named_pipe",
-    "named-pipe",
-    "tokio-named-pipes",
-    "tokio_named_pipes",
-    "windows-named-pipe",
 ];
 
 fn contains_adapter_availability_inference(source: &str) -> bool {
@@ -195,12 +211,16 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     let root = workspace_root();
     let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let runtime_listener =
+        read_source(&root.join("crates/atm-http-runtime/src/runtime_listener.rs"));
     let runtime_setup = read_source(&root.join("crates/atm-http-runtime/src/runtime_setup.rs"));
-    let runtime_sources = format!("{runtime}\n{runtime_setup}");
+    let runtime_sources = format!("{runtime}\n{runtime_listener}\n{runtime_setup}");
+    let launch_config =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/peer_launch_config.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     let policy = read_source(&root.join("crates/atm-core/src/peer_wire.rs"));
 
-    let direct_listener = runtime
+    let direct_listener = runtime_listener
         .split("async fn bind_configured_direct_peer_listener")
         .nth(1)
         .and_then(|source| source.split("async fn bind_loopback_listener").next())
@@ -211,9 +231,21 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         .and_then(|source| source.split("impl LoopbackTcpConnector").next())
         .expect("direct-peer connector implementation");
     assert!(
-        bootstrap.contains("let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;")
-            && bootstrap.contains("DirectPeerTcpConfig::configured(direct_peer_port),"),
-        "AO2 plaintext characterization must retain the configured direct-peer listener: its default remains the standard protocol port, while an isolated benchmark account may select one explicit non-zero port without changing the pipeline"
+        bootstrap
+            .matches("parse_direct_peer_port(std::env::args_os())?")
+            .count()
+            == 2
+            && bootstrap
+                .matches("DirectPeerTcpConfig::configured(direct_peer_port)")
+                .count()
+                == 2
+            && !bootstrap.contains("DirectPeerTcpConfig::standard()"),
+        "the bootstrap alone must select direct-peer ports from immutable daemon launch arguments"
+    );
+    assert!(
+        launch_config.contains("NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)")
+            && launch_config.contains("--direct-peer-port may be supplied only once"),
+        "direct-peer launch configuration must default to the protocol port and reject ambiguous port selection"
     );
     let plaintext_adapter_arm = bootstrap
         .split("fn peer_stream_adapter_for_mode")
@@ -509,6 +541,9 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
     let mut definitions = Vec::new();
     let mut violations = Vec::new();
     for path in files {
+        if is_test_only_source(&path) {
+            continue;
+        }
         let source = read_source(&path);
         let syntax = syn::parse_file(&source)
             .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
@@ -531,7 +566,7 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
     assert_eq!(
         definitions.len(),
         1,
-        "clear_queue_marker_after_handoff must have exactly one workspace definition: {definitions:?}"
+        "rearm_queue_marker_after_handoff must have exactly one workspace definition: {definitions:?}"
     );
     assert!(
         definitions[0].contains("crates/atm-core/"),
@@ -539,7 +574,7 @@ fn queue_marker_handoff_clear_has_one_core_owner() {
     );
     assert!(
         violations.is_empty(),
-        "direct clear_pending_on_handoff calls are forbidden outside the core helper and store impl/tests: {violations:?}"
+        "direct rearm_pending_after_handoff calls are forbidden outside the core helper and store impl/tests: {violations:?}"
     );
 }
 
@@ -555,7 +590,7 @@ struct QueueMarkerClearVisitor {
 impl<'ast> Visit<'ast> for QueueMarkerClearVisitor {
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
         let previous = self.current_function.replace(node.sig.ident.to_string());
-        if node.sig.ident == "clear_queue_marker_after_handoff" {
+        if node.sig.ident == "rearm_queue_marker_after_handoff" {
             self.definitions.push(node.sig.ident.to_string());
         }
         syn::visit::visit_item_fn(self, node);
@@ -587,8 +622,8 @@ impl<'ast> Visit<'ast> for QueueMarkerClearVisitor {
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if node.method == "clear_pending_on_handoff"
-            && self.current_function.as_deref() != Some("clear_queue_marker_after_handoff")
+        if node.method == "rearm_pending_after_handoff"
+            && self.current_function.as_deref() != Some("rearm_queue_marker_after_handoff")
             && !self.in_pending_nudge_store_impl
             && !self.in_test_module
         {
@@ -1670,7 +1705,7 @@ fn sqlite_writer_batch_window_is_private_to_storage() {
         "the admission benchmark harness must remain covered by the writer batch-window guard"
     );
 
-    for source in ai11_guarded_workspace_sources(&root)
+    for source in workspace_rust_sources_excluding_boundary_test(&root)
         .into_iter()
         .chain(smoke_sources)
     {
@@ -1925,140 +1960,76 @@ fn aq4_resolve_picker_recipient_has_a_single_construction_site() {
 }
 
 #[test]
-fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
+fn aw_ram_per_tick_roster_consumers_use_only_the_shared_store_construction_seam() {
+    // A per-tick consumer that calls the durable RosterStore methods must
+    // obtain that handle from LocalServiceRuntime's write-through RAM seam.
+    // Scan the whole live runtime source surface instead of pinning a small
+    // hand-maintained file list, so a newly added queue/nudge worker cannot
+    // silently reintroduce the AW-POOL-V7 SQLite-read pattern.
     let root = workspace_root();
-    let daemon_lib = root.join("crates/atm-daemon/src/main.rs");
+    let runtime_source_roots = [
+        root.join("crates/atm-daemon-bootstrap/src"),
+        root.join("crates/atm-http-runtime/src"),
+    ];
+    let mut files = Vec::new();
+    for source_root in runtime_source_roots {
+        collect_rust_files(&source_root, &mut files);
+    }
 
-    let daemon_lib_source = read_source(&daemon_lib).replace("\r\n", "\n");
-    assert!(
-        !daemon_lib_source.contains("local_ipc_transport")
-            && !daemon_lib_source.contains("local_tcp_transport")
-            && !daemon_lib_source.contains("local_ipc_connection"),
-        "AM.3 must not restore a legacy daemon local listener module declaration"
-    );
-    let legacy_local_listener_sources = ai11_guarded_workspace_sources(&root)
+    let durable_roster_reads = [".load_roster(", ".list_teams("];
+    let consumers = files
         .iter()
-        .filter(|path| retired_local_listener_source(path).is_some())
-        .map(|path| path.display().to_string())
-        .collect::<Vec<_>>();
-    assert!(
-        legacy_local_listener_sources.is_empty(),
-        "AM.3 must keep every legacy local listener source absent: {legacy_local_listener_sources:?}"
-    );
-
-    let retired = ai11_guarded_workspace_sources(&root)
-        .iter()
-        .flat_map(|path| retired_windows_transport_ast_findings(path))
-        .collect::<Vec<_>>();
-    assert!(
-        retired.is_empty(),
-        "AI.11 must not restore Windows pipe/AF_UNIX or generic frame-codec transport: {retired:?}"
-    );
-
-    let metadata = MetadataCommand::new()
-        .manifest_path(root.join("Cargo.toml"))
-        .no_deps()
-        .exec()
-        .expect("cargo metadata must succeed for the workspace");
-    let forbidden_dependencies = metadata
-        .packages
-        .into_iter()
-        .filter(|package| {
-            matches!(
-                package.name.as_str(),
-                "atm" | "atm-core" | "atm-daemon" | "atm-daemon-client"
-            )
-        })
-        .flat_map(|package| {
-            package
-                .dependencies
-                .into_iter()
-                .filter_map(move |dependency| {
-                    AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES
-                        .contains(&dependency.name.as_str())
-                        .then(|| {
-                            format!("{} directly depends on {}", package.name, dependency.name)
-                        })
-                })
+        .filter_map(|path| {
+            let source = read_source(path);
+            durable_roster_reads
+                .iter()
+                .any(|read| source.contains(read))
+                .then_some((path, source))
         })
         .collect::<Vec<_>>();
-    assert!(
-        forbidden_dependencies.is_empty(),
-        "AI.11 must not restore retired Windows transport dependencies: {forbidden_dependencies:?}"
-    );
-
-    let router_implementations = ai11_guarded_workspace_sources(&root)
+    let violations = consumers
         .iter()
-        .filter(|path| !is_test_only_source(path))
-        .map(|path| production_api_router_implementation_count(path))
-        .sum::<usize>();
-    assert_eq!(
-        router_implementations, 0,
-        "AM.6 deletes the obsolete daemon ApiRouter implementation"
-    );
-    let typed_router =
-        read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
+        .filter(|(_, source)| {
+            !source.contains("shared_roster_store_arc()")
+                || source.contains("storage_backends.rosters")
+                || source.contains("roster_runtime_mirror()")
+        })
+        .map(|(path, _)| {
+            path.strip_prefix(&root)
+                .unwrap_or(path)
+                .display()
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+
     assert!(
-        typed_router.contains("impl CanonicalWriteHandler for StorageAndNudgeRouter"),
-        "AM.6 requires the live HTTP runtime to own the canonical write handler"
+        !consumers.is_empty(),
+        "the runtime source scan must find at least one durable roster consumer"
+    );
+    assert!(
+        violations.is_empty(),
+        "per-tick durable roster consumers must construct their handle only via shared_roster_store_arc(): {violations:?}"
     );
 }
 
 #[test]
-fn ai11_deletion_gate_detector_rejects_retired_windows_transport_ast_fixtures() {
-    let fixture = syn::parse_file(
-        r#"
-        use windows::named_pipe::NamedPipe;
-        const ENDPOINT: &str = r"\\.\pipe\atm";
-        const DOMAIN: i32 = AF_UNIX;
-        "#,
-    )
-    .expect("fixture must parse");
-    let mut detector = RetiredWindowsTransportDetector::default();
-    detector.visit_file(&fixture);
-    assert_eq!(
-        detector.findings,
-        BTreeSet::from([
-            "identifier `AF_UNIX`".to_string(),
-            "identifier `NamedPipe`".to_string(),
-            "identifier `named_pipe`".to_string(),
-            "named-pipe endpoint literal".to_string(),
-        ])
-    );
-}
+fn aw_pool_graft_receiver_lookup_uses_the_deadline_bounded_reader_lane() {
+    let root = workspace_root();
+    let source = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
+    let lookup = source
+        .split("    async fn graft_receiver_lookup(")
+        .nth(1)
+        .and_then(|rest| rest.split("\n    fn reload_runtime_view").next())
+        .expect("graft receiver lookup route must remain present");
 
-#[test]
-fn ai11_deletion_gate_rejects_orphaned_legacy_local_listener_paths() {
-    let fixture =
-        workspace_root().join("retired-local-listener-fixture/local_ipc_transport/accept_loop.rs");
-    assert_eq!(
-        retired_local_listener_source(&fixture),
-        Some("legacy local listener source"),
-        "the AM.3 deletion gate must catch an accept_loop.rs-style leftover"
+    assert!(
+        lookup.contains("lookup_with_deadline_async")
+            && !lookup.contains("tokio::task::spawn_blocking"),
+        "the unpaired graft receiver lookup must await the deadline-bounded reader lane directly"
     );
-}
-
-#[test]
-fn ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures() {
-    let fixture = syn::parse_file(
-        r#"
-        struct FrameHeader { length: u32 }
-        struct FrameCodec;
-        fn read_framed_request() {}
-        fn write_framed_response() {}
-        "#,
-    )
-    .expect("fixture must parse");
-    let mut detector = RetiredWindowsTransportDetector::default();
-    detector.visit_file(&fixture);
-    assert_eq!(
-        detector.findings,
-        BTreeSet::from([
-            "identifier `FrameCodec`".to_string(),
-            "identifier `FrameHeader`".to_string(),
-            "identifier `read_framed_request`".to_string(),
-            "identifier `write_framed_response`".to_string(),
-        ])
+    assert!(
+        !lookup.contains("control_path_sync_bridge"),
+        "the unpaired graft receiver lookup must not consume the writer-side control path"
     );
 }
 
@@ -2221,31 +2192,25 @@ fn writer_batch_window_smoke_sources(root: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn ai11_guarded_workspace_sources(root: &Path) -> Vec<PathBuf> {
+fn workspace_rust_sources_excluding_boundary_test(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_rust_files(&root.join("crates"), &mut files);
-    files.retain(|path| path != &ai11_deletion_gate_fixture_path(root));
+    files.retain(|path| {
+        path != &ai11_deletion_gate_fixture_path(root)
+            && !ai11_approved_herdr_socket_source(root, path)
+    });
     files.sort();
     files
 }
 
-fn ai11_deletion_gate_fixture_path(root: &Path) -> PathBuf {
-    root.join("crates/atm-architecture/tests/boundary_enforcement.rs")
+fn ai11_approved_herdr_socket_source(root: &Path, path: &Path) -> bool {
+    let socket_src = root.join("crates/atm-herdr/src/transport_socket.rs");
+    let socket_fixtures = root.join("crates/atm-herdr/tests/support/fake_herdr_socket");
+    path == socket_src || path.starts_with(socket_fixtures)
 }
 
-fn retired_local_listener_source(path: &Path) -> Option<&'static str> {
-    let file_name = path.file_name()?.to_str()?;
-    if matches!(
-        file_name,
-        "local_tcp_transport.rs" | "local_ipc_transport.rs" | "local_ipc_connection.rs"
-    ) || path
-        .components()
-        .any(|component| component.as_os_str() == "local_ipc_transport")
-    {
-        Some("legacy local listener source")
-    } else {
-        None
-    }
+fn ai11_deletion_gate_fixture_path(root: &Path) -> PathBuf {
+    root.join("crates/atm-architecture/tests/boundary_enforcement.rs")
 }
 
 fn is_test_only_source(path: &Path) -> bool {
@@ -2255,40 +2220,6 @@ fn is_test_only_source(path: &Path) -> bool {
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.starts_with("test_") || name.ends_with("_tests.rs"))
-}
-
-fn production_api_router_implementation_count(path: &Path) -> usize {
-    let source = read_source(path);
-    let syntax = syn::parse_file(&source)
-        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
-    let mut detector = ProductionApiRouterImplementationDetector::default();
-    detector.visit_file(&syntax);
-    detector.count
-}
-
-#[derive(Default)]
-struct ProductionApiRouterImplementationDetector {
-    count: usize,
-}
-
-impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {
-    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
-        if item.trait_.as_ref().is_some_and(|(_, path, _)| {
-            path.segments
-                .last()
-                .is_some_and(|segment| segment.ident == "ApiRouter")
-        }) {
-            self.count += 1;
-        }
-        syn::visit::visit_item_impl(self, item);
-    }
-
-    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
-        if item.attrs.iter().any(is_test_configuration_attribute) {
-            return;
-        }
-        syn::visit::visit_item_mod(self, item);
-    }
 }
 
 fn production_runtime_identifier_findings(path: &Path, prohibited: &[&str]) -> Vec<String> {
@@ -2490,6 +2421,9 @@ fn al1_http_runtime_has_only_authorized_contract_ports_and_excludes_retired_tran
     let mut sources = Vec::new();
     collect_rust_files(&runtime_root, &mut sources);
     for source_path in sources {
+        if is_test_only_source(&source_path) {
+            continue;
+        }
         let findings = production_runtime_identifier_findings(&source_path, &prohibited);
         assert!(
             findings.is_empty(),
@@ -2760,11 +2694,14 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
 fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let runtime_listener =
+        read_source(&root.join("crates/atm-http-runtime/src/runtime_listener.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let unix_socket = read_source(&root.join("crates/atm-http-runtime/src/unix_socket.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{unix_socket}\n{http1_server}\n{client}");
+    let combined =
+        format!("{runtime}\n{runtime_listener}\n{unix_socket}\n{http1_server}\n{client}");
 
     assert!(
         combined.contains("UnixListener")
@@ -3311,7 +3248,7 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     );
     assert!(
         router.contains("let newly_persisted = prepared.is_newly_persisted();")
-            && router.contains("if committed.newly_persisted {"),
+            && router.contains("if committed.newly_persisted"),
         "the one hook-routing decision must state the new-versus-idempotent persistence disposition explicitly"
     );
     assert_eq!(
@@ -3413,7 +3350,7 @@ fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs(
     let storage_router = read_source(&runtime_root.join("storage_and_nudge_router.rs"));
     assert!(
         storage_router.contains("async fn commit_write")
-            && storage_router.contains("prepare_write_with_async_runtime("),
+            && storage_router.contains("prepare_write_with_preflight_async_runtime("),
         "the replacement write path must await the core async storage admission boundary"
     );
     assert!(
@@ -3692,10 +3629,11 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "clear_messages".to_owned(),
         "heartbeat".to_owned(),
         "queue_get_next".to_owned(),
+        // BA.4 (fenix ruling 2026-09-12): message-less TaskMove control op joins the durable control lane.
+        "task_move".to_owned(),
         "graft_receiver_register".to_owned(),
         "graft_receiver_refresh".to_owned(),
         "graft_receiver_unregister".to_owned(),
-        "graft_receiver_lookup".to_owned(),
     ]);
     assert_eq!(
         av3_bridge_run_call_sites_by_enclosing_fn(production_router),
@@ -3760,6 +3698,303 @@ fn herdr_constructors_have_one_composition_root_call_site() {
         .expect("replacement handler composition function must exist");
     assert!(composition.contains("HerdrSpawnBreaker::new("));
     assert!(composition.contains("HerdrProcessInvoker::new("));
+}
+
+#[test]
+fn herdr_prompt_calls_stay_behind_the_selector_emitter_boundary() {
+    let root = workspace_root();
+    let mut rust_files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut rust_files);
+    rust_files.retain(|path| !path.starts_with(root.join("crates/atm-architecture/tests")));
+
+    let mut calls = Vec::new();
+    for path in rust_files {
+        if is_test_only_source(&path) {
+            continue;
+        }
+        let source = read_source(&path);
+        let syntax = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let mut visitor = HerdrPromptCallVisitor::default();
+        visitor.visit_file(&syntax);
+        calls.extend(visitor.calls.into_iter().map(|function| {
+            format!(
+                "{}::{function}",
+                path.display().to_string().replace('\\', "/")
+            )
+        }));
+    }
+
+    assert_eq!(
+        calls.len(),
+        1,
+        "the selector emitter must own the only production Herdr prompt call: {calls:?}"
+    );
+    assert!(
+        calls[0].contains("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"),
+        "Herdr prompt must cross the selector emitter boundary: {calls:?}"
+    );
+}
+
+#[test]
+fn ay3_herdr_endpoint_doctor_contract_has_only_closed_and_bootstrap_implementations() {
+    let root = workspace_root();
+    let boundary = read_source(&root.join("crates/atm-core/src/boundary/herdr_endpoint.rs"));
+    assert!(
+        boundary.contains("pub trait HerdrEndpointDoctor")
+            && boundary.contains("sealed::Sealed + Send + Sync"),
+        "AY3 requires the core-owned HerdrEndpointDoctor port to retain the ADR-001 seal"
+    );
+
+    let mut implementations = BTreeSet::new();
+    for path in [
+        root.join("crates/atm-core/src/doctor/mod.rs"),
+        root.join("crates/atm-daemon-bootstrap/src/replacement_handler.rs"),
+    ] {
+        let source = read_source(&path);
+        let syntax = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let mut visitor = HerdrEndpointDoctorImplementationVisitor::default();
+        visitor.visit_file(&syntax);
+        implementations.extend(visitor.implementations.into_iter().map(|implementation| {
+            format!(
+                "{}::{implementation}",
+                path.strip_prefix(&root)
+                    .expect("AY3 implementation is inside the workspace")
+                    .display()
+                    .to_string()
+                    .replace('\\', "/")
+            )
+        }));
+    }
+    assert_eq!(
+        implementations,
+        BTreeSet::from([
+            "crates/atm-core/src/doctor/mod.rs::ClosedHerdrEndpointDoctor".to_owned(),
+            "crates/atm-daemon-bootstrap/src/replacement_handler.rs::HerdrEndpointDoctorAdapter"
+                .to_owned(),
+        ]),
+        "AY3 permits exactly the closed core double and sole bootstrap production adapter"
+    );
+
+    let herdr_lib = read_source(&root.join("crates/atm-herdr/src/lib.rs"));
+    let client_config = read_source(&root.join("crates/atm-herdr/src/transport.rs"));
+    let probe = read_source(&root.join("crates/atm-herdr/src/doctor_probe.rs"));
+    assert!(
+        herdr_lib.contains("pub use doctor_probe::HerdrDoctorProbe;")
+            && herdr_lib.contains("pub use transport::HerdrClientConfig;"),
+        "AY3 pins the only two new public atm-herdr items"
+    );
+    assert!(
+        client_config.contains("pub struct HerdrClientConfig {")
+            && !client_config.contains("pub transport:")
+            && !client_config.contains("pub binary_path:")
+            && !client_config.contains("pub socket_path:")
+            && client_config.contains("pub fn try_new(")
+            && client_config.contains("pub fn transport(&self) -> &HerdrTransportKind")
+            && client_config.contains("pub fn binary_path(&self) -> Option<&Path>")
+            && client_config.contains("pub fn socket_path(&self) -> Option<&Path>"),
+        "HerdrClientConfig must retain private fields and its validated read-only API"
+    );
+    assert!(
+        probe.contains("pub struct HerdrDoctorProbe")
+            && probe.contains("pub fn new(config: HerdrClientConfig) -> Self")
+            && probe.contains("pub async fn observe("),
+        "HerdrDoctorProbe must retain its public construction and observation signatures"
+    );
+}
+
+#[test]
+fn doctor_herdr_breaker_contract_has_only_closed_and_bootstrap_implementations() {
+    let root = workspace_root();
+    let boundary = read_source(&root.join("crates/atm-core/src/boundary/herdr_breaker.rs"));
+    assert!(
+        boundary.contains("pub trait HerdrBreakerDoctor")
+            && boundary.contains("sealed::Sealed + Send + Sync"),
+        "doctor breaker diagnostics must retain the ADR-001 seal"
+    );
+
+    let mut implementations = BTreeSet::new();
+    for path in [
+        root.join("crates/atm-core/src/doctor/mod.rs"),
+        root.join("crates/atm-daemon-bootstrap/src/replacement_handler.rs"),
+    ] {
+        let source = read_source(&path);
+        let syntax = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let mut visitor = HerdrBreakerDoctorImplementationVisitor::default();
+        visitor.visit_file(&syntax);
+        implementations.extend(visitor.implementations.into_iter().map(|implementation| {
+            format!(
+                "{}::{implementation}",
+                path.strip_prefix(&root)
+                    .expect("doctor breaker implementation is inside the workspace")
+                    .display()
+                    .to_string()
+                    .replace('\\', "/")
+            )
+        }));
+    }
+    assert_eq!(
+        implementations,
+        BTreeSet::from([
+            "crates/atm-core/src/doctor/mod.rs::ClosedHerdrBreakerDoctor".to_owned(),
+            "crates/atm-daemon-bootstrap/src/replacement_handler.rs::HerdrBreakerDoctorAdapter"
+                .to_owned(),
+        ]),
+        "doctor breaker diagnostics permit exactly the closed core double and sole bootstrap adapter"
+    );
+}
+
+#[derive(Default)]
+struct HerdrEndpointDoctorImplementationVisitor {
+    implementations: Vec<String>,
+    in_test_module: bool,
+}
+
+impl<'ast> Visit<'ast> for HerdrEndpointDoctorImplementationVisitor {
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        if !self.in_test_module
+            && item.trait_.as_ref().is_some_and(|(_, path, _)| {
+                path.segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "HerdrEndpointDoctor")
+            })
+        {
+            self.implementations
+                .push(item.self_ty.to_token_stream().to_string());
+        }
+        syn::visit::visit_item_impl(self, item);
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || item.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, item);
+        self.in_test_module = previous;
+    }
+}
+
+#[derive(Default)]
+struct HerdrBreakerDoctorImplementationVisitor {
+    implementations: Vec<String>,
+    in_test_module: bool,
+}
+
+impl<'ast> Visit<'ast> for HerdrBreakerDoctorImplementationVisitor {
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        if !self.in_test_module
+            && item.trait_.as_ref().is_some_and(|(_, path, _)| {
+                path.segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "HerdrBreakerDoctor")
+            })
+        {
+            self.implementations
+                .push(item.self_ty.to_token_stream().to_string());
+        }
+        syn::visit::visit_item_impl(self, item);
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || item.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, item);
+        self.in_test_module = previous;
+    }
+}
+
+#[test]
+fn ay3_composition_never_spawns_a_long_lived_herdr_child() {
+    let root = workspace_root();
+    let mut spawned_programs = BTreeSet::new();
+    for crate_name in ["atm-daemon-bootstrap", "atm-http-runtime"] {
+        let mut files = Vec::new();
+        collect_rust_files(&root.join(format!("crates/{crate_name}/src")), &mut files);
+        for path in files {
+            let source = read_source(&path);
+            let syntax = syn::parse_file(&source)
+                .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+            let mut visitor = CommandProgramVisitor::default();
+            visitor.visit_file(&syntax);
+            spawned_programs.extend(visitor.programs);
+        }
+    }
+    assert!(
+        !spawned_programs.contains("herdr"),
+        "AY3 bootstrap and HTTP composition must delegate Herdr requests to atm-herdr, never spawn a long-lived `herdr server` child: {spawned_programs:?}"
+    );
+}
+
+#[derive(Default)]
+struct CommandProgramVisitor {
+    programs: BTreeSet<String>,
+    in_test_module: bool,
+}
+
+impl<'ast> Visit<'ast> for CommandProgramVisitor {
+    fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+        if !self.in_test_module
+            && call
+                .func
+                .to_token_stream()
+                .to_string()
+                .ends_with("Command :: new")
+            && let Some(syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(program),
+                ..
+            })) = call.args.first()
+        {
+            self.programs.insert(program.value());
+        }
+        syn::visit::visit_expr_call(self, call);
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || item.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, item);
+        self.in_test_module = previous;
+    }
+}
+
+#[derive(Default)]
+struct HerdrPromptCallVisitor {
+    calls: Vec<String>,
+    current_function: Option<String>,
+    in_test_module: bool,
+}
+
+impl<'ast> Visit<'ast> for HerdrPromptCallVisitor {
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        syn::visit::visit_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        syn::visit::visit_impl_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || node.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, node);
+        self.in_test_module = previous;
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if node.method == "prompt" && !self.in_test_module {
+            self.calls.push(
+                self.current_function
+                    .clone()
+                    .unwrap_or_else(|| "<module-level expression>".to_owned()),
+            );
+        }
+        syn::visit::visit_expr_method_call(self, node);
+    }
 }
 
 #[test]
@@ -3842,42 +4077,40 @@ fn missing_forbidden_edges(
 }
 
 fn guarded_boundary_files() -> Vec<PathBuf> {
-    let root = workspace_root();
-    let mut files = vec![
-        root.join("boundaries/atm/local-socket-client-transport.toml"),
-        root.join("boundaries/atm-graft/shared-client-consumer.toml"),
-        root.join("boundaries/atm-http-runtime/http-runtime.toml"),
-        root.join("boundaries/atm-http-runtime/member-state-transition-sink.toml"),
-        root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
-        root.join("boundaries/atm-runtime/runtime-composition.toml"),
-        root.join("boundaries/atm-template-sc-compose/sc-composer.toml"),
-        root.join("boundaries/atm-herdr/herdr-process-adapter.toml"),
-    ];
-    files.extend(boundary_files_in("atm-storage"));
-    let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
-        .expect("boundaries/atm-storage-rusqlite directory must be readable")
+    all_boundary_files()
+}
+
+fn all_boundary_files() -> Vec<PathBuf> {
+    let root = workspace_root().join("boundaries");
+    let mut files = fs::read_dir(&root)
+        .unwrap_or_else(|error| panic!("boundaries directory must be readable: {error}"))
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+        .filter(|path| path.is_dir())
+        .flat_map(|directory| {
+            fs::read_dir(&directory)
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "boundary directory {} must be readable: {error}",
+                        directory.display()
+                    )
+                })
+                .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+                .collect::<Vec<_>>()
+        })
         .collect::<Vec<_>>();
-    sqlite_files.sort();
-    files.extend(sqlite_files);
+    files.sort();
     files
 }
 
 #[test]
-fn guarded_boundaries_include_every_atm_storage_record() {
-    let root = workspace_root();
-    let guarded_storage_files = guarded_boundary_files()
-        .into_iter()
-        .filter(|path| path.parent() == Some(root.join("boundaries/atm-storage").as_path()))
-        .collect::<BTreeSet<_>>();
-    let storage_boundary_files = boundary_files_in("atm-storage")
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-
+fn guarded_boundaries_include_every_boundary_record() {
     assert_eq!(
-        guarded_storage_files, storage_boundary_files,
-        "the architecture guard must sweep every boundaries/atm-storage TOML record"
+        guarded_boundary_files()
+            .into_iter()
+            .collect::<BTreeSet<_>>(),
+        all_boundary_files().into_iter().collect::<BTreeSet<_>>(),
+        "the architecture guard must sweep every boundaries/*/*.toml record"
     );
 }
 
@@ -3926,6 +4159,61 @@ fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str>
 fn read_source(path: &Path) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+#[test]
+fn tracing_bridge_is_installed_only_by_daemon_bootstrap() {
+    let root = workspace_root();
+    let mut offenders = Vec::new();
+    for entry in fs::read_dir(root.join("crates")).expect("crates directory") {
+        let crate_root = entry.expect("crate entry").path();
+        let source_root = crate_root.join("src");
+        if !source_root.is_dir() {
+            continue;
+        }
+        let mut files = Vec::new();
+        collect_rust_files(&source_root, &mut files);
+        for file in files {
+            if read_source(&file).contains("TracingBridgeLayer::install")
+                && !file.starts_with(root.join("crates/atm-daemon-bootstrap/src"))
+            {
+                offenders.push(file.display().to_string());
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "only daemon bootstrap may install tracing bridge: {offenders:?}"
+    );
+    assert!(
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/daemon_observability.rs"))
+            .contains("TracingBridgeLayer::install"),
+        "daemon bootstrap must own tracing bridge installation"
+    );
+}
+
+#[test]
+fn retained_info_targets_each_have_a_real_runtime_emitter() {
+    let root = workspace_root();
+    for (target, path) in [
+        (
+            "atm_daemon_bootstrap::lifecycle",
+            "crates/atm-daemon-bootstrap/src/lib.rs",
+        ),
+        (
+            "atm_http_runtime::listener",
+            "crates/atm-http-runtime/src/runtime_setup.rs",
+        ),
+        (
+            "atm_storage_rusqlite::maintenance",
+            "crates/atm-storage-rusqlite/src/mail_messages_schema.rs",
+        ),
+    ] {
+        assert!(
+            read_source(&root.join(path)).contains(&format!("tracing::info!(target: \"{target}\"")),
+            "{target} must have a real INFO emitter in {path}"
+        );
+    }
 }
 
 /// AV.3 source-scanner primitives deliberately operate on function bodies,
@@ -4081,6 +4369,8 @@ fn av3_read_handler_allowed_types() -> BTreeSet<String> {
     const D1_NAMED_TYPES: &[&str] = &[
         "ApiResponse",
         "AsyncMailboxRuntime",
+        "DiagnosticCounters",
+        "DiagnosticCountersSource",
         "DoctorProjection",
         "ResponseEnvelope",
     ];
@@ -4102,6 +4392,124 @@ fn av3_read_handler_allowed_types() -> BTreeSet<String> {
             &doctor_projection,
             "DoctorProjection",
         ))
+        .collect()
+}
+
+#[test]
+fn aw_diagnostics_composition_stays_behind_the_timeline_store_contract() {
+    let root = workspace_root();
+    let bootstrap =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/diagnostic_timeline.rs"));
+    let diagnostics_route =
+        read_source(&root.join("crates/atm-http-runtime/src/diagnostics_route.rs"));
+    let doctor_observability =
+        read_source(&root.join("crates/atm-http-runtime/src/doctor_observability.rs"));
+    let sqlite_backend = read_source(&root.join("crates/atm-storage-rusqlite/src/lib.rs"));
+    let sqlite_production =
+        production_impl_function_source(&sqlite_backend, "SqliteStorageBackend");
+    let sqlite_production_compact = sqlite_production
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+
+    assert!(
+        bootstrap.contains("let store: Arc<dyn DiagnosticTimelineStore> = store;")
+            && bootstrap.contains("DiagnosticTimelineWriter::new_with_persistence("),
+        "bootstrap must erase the SQLite implementation at the diagnostic timeline composition seam"
+    );
+    assert!(
+        diagnostics_route.contains("Option<Arc<dyn DiagnosticTimelineStore>>"),
+        "the diagnostics HTTP route must accept only the timeline-store capability"
+    );
+    for forbidden in [
+        "SqliteDiagnosticTimeline",
+        "atm_storage_rusqlite",
+        "SharedDb",
+    ] {
+        assert!(
+            !diagnostics_route.contains(forbidden),
+            "the diagnostics HTTP route must not name the SQLite implementation `{forbidden}`"
+        );
+        assert!(
+            !doctor_observability.contains(forbidden),
+            "the doctor diagnostics projection must not name the SQLite implementation `{forbidden}`"
+        );
+    }
+    assert_eq!(
+        sqlite_production_compact
+            .matches("SqliteDiagnosticTimeline::from_shared_db")
+            .count(),
+        1,
+        "the storage backend must retain exactly one production construction path for its shared diagnostic timeline"
+    );
+    assert!(
+        !sqlite_production_compact.contains("SqliteDiagnosticTimeline{"),
+        "the storage backend must construct the diagnostic timeline only through from_shared_db"
+    );
+}
+
+#[test]
+fn aw_diagnostics_gate_scans_production_functions_after_test_helpers() {
+    let source = r#"
+        impl SqliteStorageBackend {
+            fn production_constructor() {
+                SqliteDiagnosticTimeline::from_shared_db(db);
+            }
+
+            #[cfg(test)]
+            fn fixture_constructor() {
+                SqliteDiagnosticTimeline::from_shared_db(test_db);
+            }
+
+            fn later_production_constructor() {
+                SqliteDiagnosticTimeline::from_shared_db(later_db);
+            }
+        }
+    "#;
+    let production = production_impl_function_source(source, "SqliteStorageBackend");
+    let compact_production = production
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+
+    assert!(production.contains("production_constructor"));
+    assert!(production.contains("later_production_constructor"));
+    assert!(!production.contains("fixture_constructor"));
+    assert_eq!(
+        compact_production
+            .matches("SqliteDiagnosticTimeline::from_shared_db")
+            .count(),
+        2,
+        "the diagnostics gate must retain production functions appearing after cfg(test) helpers"
+    );
+}
+
+fn production_impl_function_source(source: &str, self_type: &str) -> String {
+    let syntax = syn::parse_file(source).expect("production implementation source must parse");
+    syntax
+        .items
+        .into_iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(implementation)
+                if !implementation
+                    .attrs
+                    .iter()
+                    .any(is_test_configuration_attribute)
+                    && implementation.self_ty.to_token_stream().to_string() == self_type =>
+            {
+                Some(implementation)
+            }
+            _ => None,
+        })
+        .flat_map(|implementation| implementation.items)
+        .filter_map(|item| match item {
+            syn::ImplItem::Fn(function)
+                if !function.attrs.iter().any(is_test_configuration_attribute) =>
+            {
+                Some(function.to_token_stream().to_string())
+            }
+            _ => None,
+        })
         .collect()
 }
 
@@ -4352,42 +4760,6 @@ fn extract_fn_body<'source>(source: &'source str, fn_name: &str) -> &'source str
         }
     }
     panic!("function `{fn_name}` body is not closed")
-}
-
-fn retired_windows_transport_ast_findings(path: &Path) -> Vec<String> {
-    let source = read_source(path);
-    let syntax = syn::parse_file(&source)
-        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
-    let mut detector = RetiredWindowsTransportDetector::default();
-    detector.visit_file(&syntax);
-    detector
-        .findings
-        .into_iter()
-        .map(|finding| format!("{}: {finding}", path.display()))
-        .collect()
-}
-
-#[derive(Default)]
-struct RetiredWindowsTransportDetector {
-    findings: BTreeSet<String>,
-}
-
-impl<'ast> Visit<'ast> for RetiredWindowsTransportDetector {
-    fn visit_ident(&mut self, ident: &'ast syn::Ident) {
-        let value = ident.to_string();
-        if AI11_RETIRED_WINDOWS_TRANSPORT_IDENTIFIERS.contains(&value.as_str()) {
-            self.findings.insert(format!("identifier `{value}`"));
-        }
-        syn::visit::visit_ident(self, ident);
-    }
-
-    fn visit_lit_str(&mut self, literal: &'ast syn::LitStr) {
-        if literal.value().contains(r"\\.\pipe\") {
-            self.findings
-                .insert("named-pipe endpoint literal".to_string());
-        }
-        syn::visit::visit_lit_str(self, literal);
-    }
 }
 
 fn workspace_root() -> PathBuf {

@@ -1,13 +1,14 @@
 use crate::mail_messages_schema::{mail_messages_index_ddl, mail_messages_table_ddl};
 pub(crate) use crate::shared_db_reader_lanes::SharedDb;
 use crate::writer::{WriteOp, WriteOpResult, validate_upsert_message_request};
-use atm_storage::AsyncMailboxReader;
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
+    MessageAdmissionOutcome,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
+use atm_storage::{AsyncMailboxReader, ReadLaneError};
 #[cfg(test)]
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
@@ -76,15 +77,7 @@ CREATE TABLE IF NOT EXISTS team_roster (
 
 CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
     team_name TEXT NOT NULL,
-    template_kind TEXT NOT NULL
-        CHECK(template_kind IN (
-            'delivery',
-            'delivery_ack',
-            'delivery_task',
-            'delivery_task_ack',
-            'acknowledge',
-            'acknowledge_task'
-        )),
+    template_kind TEXT NOT NULL,
     mode TEXT NOT NULL DEFAULT 'override'
         CHECK(mode IN ('override', 'disabled')),
     template_body TEXT NOT NULL,
@@ -126,6 +119,22 @@ CREATE INDEX IF NOT EXISTS idx_peer_https_interfaces_enabled
 CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
     ON peer_trusted_peers(enabled);
 
+CREATE TABLE IF NOT EXISTS diagnostic_events (
+    id INTEGER PRIMARY KEY,
+    ts_unix_ms INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    component TEXT NOT NULL,
+    code TEXT NULL,
+    correlation_id TEXT NULL,
+    origin TEXT NOT NULL,
+    message TEXT NOT NULL,
+    detail TEXT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_events_ts_unix_ms
+    ON diagnostic_events(ts_unix_ms);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_events_component_ts_unix_ms
+    ON diagnostic_events(component, ts_unix_ms);
+
 -- AK.2 retires the worker-only reconciliation policy.  `IF EXISTS` makes the
 -- migration safe for both historical databases and fresh installs.
 DROP TABLE IF EXISTS peer_sync_policies;
@@ -135,26 +144,9 @@ DROP TABLE IF EXISTS peer_sync_policies;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
 
-pub(crate) type SqliteConnection = Connection;
-
-#[derive(Debug, Clone)]
-pub(crate) enum SharedDbTarget {
-    Path(PathBuf),
-    #[cfg(test)]
-    InMemory {
-        uri: String,
-    },
-}
-
-impl SharedDbTarget {
-    pub(crate) fn display(&self) -> String {
-        match self {
-            Self::Path(path) => path.display().to_string(),
-            #[cfg(test)]
-            Self::InMemory { uri } => uri.clone(),
-        }
-    }
-}
+pub(crate) use crate::shared_db_support::{
+    SharedDbTarget, SqliteConnection, ensure_column, sqlite_error, sqlite_open_error,
+};
 
 /// Test-only instrumentation at the concrete SQLite open sites. Entries are
 /// keyed by the target so parallel tests cannot contaminate each other's
@@ -188,6 +180,75 @@ pub(crate) fn opened_connection_count(target: &SharedDbTarget) -> usize {
 }
 
 impl SharedDb {
+    /// Runs one pure synchronous compatibility read on the shared read pool.
+    /// The fixed 10-second pool deadline is intentional for this legacy sync-compat surface;
+    /// Tokio request-level deadlines are enforced by the HTTP runtime adapters.
+    ///
+    /// The `MessageStore` and catalog ports predate their Tokio counterparts,
+    /// so callers remain synchronous. They still enter a defensively opened,
+    /// bounded reader worker rather than the one serial writer connection.
+    pub(crate) fn read<T>(
+        &self,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
+    ) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+    {
+        self.read_with_deadline(self.read_pool.request_deadline(), operation)
+    }
+
+    /// Runs one pure synchronous read with the caller's bounded deadline.
+    pub(crate) fn read_with_deadline<T>(
+        &self,
+        deadline: std::time::Duration,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
+    ) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+    {
+        self.read_pool
+            .submit_blocking(deadline, move |connection, _target| {
+                Ok(operation(connection))
+            })
+            .map_err(AtmError::from)?
+    }
+
+    /// Awaits one pure read on the shared reader pool with the caller's
+    /// deadline. Tokio request paths use this instead of wrapping the
+    /// synchronous compatibility surface in `spawn_blocking`.
+    pub(crate) async fn read_with_deadline_async<T>(
+        &self,
+        deadline: std::time::Duration,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
+    ) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+    {
+        self.read_pool
+            .submit(deadline, move |connection, _target| {
+                operation(connection).map_err(read_lane_storage_error)
+            })
+            .await
+            .map_err(AtmError::from)
+    }
+
+    /// Runs a pure inspection read under the shared pool's tool-class cap.
+    /// Its fixed pool deadline is likewise intentional for the synchronous compatibility port.
+    pub(crate) fn read_tool<T>(
+        &self,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
+    ) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+    {
+        self.read_pool
+            .submit_tool_blocking(
+                self.read_pool.request_deadline(),
+                move |connection, _target| Ok(operation(connection)),
+            )
+            .map_err(AtmError::from)?
+    }
+
     /// Call only from backend-owned blocking code paths.
     ///
     /// Accepted risk: this is enforced as a crate-internal contract rather
@@ -198,12 +259,7 @@ impl SharedDb {
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_connection");
-        let mut lease = crate::control_path_pool::checkout(&self.control_path)?;
-        let outcome = operation(lease.connection());
-        if outcome.is_ok() {
-            lease.park();
-        }
-        outcome
+        self.writer_queue.with_connection(operation)
     }
 
     /// Call only from backend-owned blocking code paths.
@@ -216,7 +272,7 @@ impl SharedDb {
         operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_transaction");
-        self.with_connection(|connection| {
+        self.writer_queue.with_connection(|connection| {
             // Acquire the SQLite writer lock up front so concurrent write paths
             // wait under the configured busy_timeout instead of failing during
             // deferred lock escalation on slower Windows schedulers.
@@ -242,18 +298,69 @@ impl SharedDb {
     }
 
     pub(crate) fn submit_upsert_message(&self, record: Message) -> Result<bool, AtmError> {
+        self.submit_upsert_message_with_provenance(record, atm_storage::MessageWriteOrigin::Local)
+    }
+
+    pub(crate) fn submit_upsert_message_with_provenance(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<bool, AtmError> {
+        let outcome = self.submit_message_admission(record, provenance)?;
+        match outcome.task_rejection {
+            Some(error) => Err(error),
+            None => Ok(outcome.existing.is_none()),
+        }
+    }
+
+    pub(crate) fn submit_message_admission(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         validate_upsert_message_request(&record)?;
-        let result = self
-            .writer
-            .submit(WriteOp::UpsertMessage(Box::new(record)))?;
+        let result = self.writer.submit(WriteOp::UpsertMessage {
+            record: Box::new(record),
+            provenance,
+        })?;
         match result {
-            WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
+            WriteOpResult::UpsertMessage {
+                inserted: true,
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice: reassign_notice.map(|notice| *notice),
+                task_rejection,
+            }),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: Some(existing),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: None,
+                ..
+            } => Err(AtmError::daemon_unavailable(
+                "sqlite writer reported a duplicate without its retained record",
+            )),
             WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
+            | WriteOpResult::DiagnosticsRecorded
+            | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for message upsert",
             )),
         }
@@ -292,20 +399,62 @@ impl SharedDb {
         &self,
         record: Message,
     ) -> Result<Option<Message>, AtmError> {
+        self.submit_upsert_message_with_provenance_async(
+            record,
+            atm_storage::MessageWriteOrigin::Local,
+        )
+        .await
+    }
+
+    pub(crate) async fn submit_upsert_message_with_provenance_async(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<Option<Message>, AtmError> {
+        self.submit_message_admission_async(record, provenance)
+            .await
+            .map(|outcome| outcome.existing)
+    }
+
+    pub(crate) async fn submit_message_admission_async(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         validate_upsert_message_request(&record)?;
         match self
             .writer
-            .submit_async(WriteOp::UpsertMessage(Box::new(record)))
+            .submit_async(WriteOp::UpsertMessage {
+                record: Box::new(record),
+                provenance,
+            })
             .await?
         {
-            WriteOpResult::UpsertMessage { inserted: true, .. } => Ok(None),
+            WriteOpResult::UpsertMessage {
+                inserted: true,
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice: reassign_notice.map(|notice| *notice),
+                task_rejection,
+            }),
             WriteOpResult::UpsertMessage {
                 inserted: false,
                 existing: Some(existing),
-            } => Ok(Some(*existing)),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
             WriteOpResult::UpsertMessage {
                 inserted: false,
                 existing: None,
+                ..
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate without its retained record",
             )),
@@ -314,7 +463,10 @@ impl SharedDb {
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
+            | WriteOpResult::DiagnosticsRecorded
+            | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
         }
@@ -345,21 +497,37 @@ impl SharedDb {
     pub(crate) async fn submit_template_message_admission_async(
         &self,
         admission: TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         admission.validate()?;
         match self
             .writer
             .submit_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
             .await?
         {
-            WriteOpResult::TemplateMessageAdmission { inserted: true, .. } => Ok(None),
+            WriteOpResult::TemplateMessageAdmission {
+                inserted: true,
+                task_assignee,
+                queued_position,
+                reassign_notice,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed: None,
+                task_assignee,
+                queued_position,
+                reassign_notice: reassign_notice.map(|message| *message),
+                task_rejection,
+            }),
             WriteOpResult::TemplateMessageAdmission {
                 inserted: false,
                 existing: Some(existing),
-            } => Ok(Some(*existing)),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
             WriteOpResult::TemplateMessageAdmission {
                 inserted: false,
                 existing: None,
+                ..
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate template admission without its retained record",
             )),
@@ -387,7 +555,10 @@ impl SharedDb {
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
+            | WriteOpResult::DiagnosticsRecorded
+            | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for atomic message commit",
             )),
         }
@@ -408,7 +579,10 @@ impl SharedDb {
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
+            | WriteOpResult::DiagnosticsRecorded
+            | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for acknowledgement admission",
             )),
         }
@@ -430,7 +604,10 @@ impl SharedDb {
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
+            | WriteOpResult::DiagnosticsRecorded
+            | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
             )),
         }
@@ -438,6 +615,12 @@ impl SharedDb {
 
     pub(crate) fn mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
         Arc::clone(&self.mailbox_reader)
+    }
+
+    pub(crate) fn task_ledger_reader(
+        &self,
+    ) -> Arc<dyn atm_storage::AsyncTaskLedgerReader + Send + Sync> {
+        Arc::clone(&self.task_ledger_reader)
     }
 
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
@@ -450,6 +633,14 @@ impl SharedDb {
             #[cfg(test)]
             SharedDbTarget::InMemory { .. } => None,
         }
+    }
+}
+
+fn read_lane_storage_error(error: AtmError) -> ReadLaneError {
+    ReadLaneError::Storage {
+        code: error.code(),
+        message: error.message().to_owned(),
+        cause: error.cause().map(str::to_owned),
     }
 }
 
@@ -578,9 +769,23 @@ pub(crate) fn ensure_schema(
     crate::search_schema::ensure_schema(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
     crate::team_roster_schema::ensure_team_roster_harness_values(connection, target)?;
-    ensure_team_nudge_template_override_columns(connection, target)?;
+    crate::template_override_migration::ensure_team_nudge_template_override_columns(
+        connection, target,
+    )?;
+    crate::template_override_migration::remove_template_override_kind_check(connection, target)?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
+    crate::task_store::ensure_schema(connection, target)?;
+    let normalized = crate::writer::normalize_legacy_assignment_markers(connection, target)?;
+    if normalized > 0 {
+        tracing::info!(
+            subsystem = "atm_storage.task_assignment_migration",
+            action = "normalize_legacy_assignment_markers",
+            outcome = "ok",
+            affected_rows = normalized,
+            "normalized legacy assignment acknowledgement and nudge markers"
+        );
+    }
     ensure_column(
         connection,
         target,
@@ -687,34 +892,6 @@ fn ensure_team_roster_columns(
     )
 }
 
-fn ensure_team_nudge_template_override_columns(
-    connection: &Connection,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    ensure_column(
-        connection,
-        target,
-        "team_nudge_template_overrides",
-        "mode",
-        "ALTER TABLE team_nudge_template_overrides ADD COLUMN mode TEXT NOT NULL DEFAULT 'override';",
-    )?;
-    connection
-        .execute(
-            "UPDATE team_nudge_template_overrides
-             SET mode = 'disabled'
-             WHERE mode = 'override' AND template_body = '';",
-            [],
-        )
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                "failed to normalize legacy empty nudge-template override rows",
-                error,
-            )
-        })?;
-    Ok(())
-}
-
 fn ensure_mail_message_states_nudge_columns(
     connection: &Connection,
     target: &SharedDbTarget,
@@ -771,55 +948,6 @@ fn ensure_mail_messages_message_id_compat(
     )
 }
 
-pub(crate) fn ensure_column(
-    connection: &Connection,
-    target: &SharedDbTarget,
-    table: &str,
-    column: &str,
-    ddl: &str,
-) -> Result<(), AtmError> {
-    let mut statement = connection
-        .prepare(&format!("PRAGMA table_info({table});"))
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                format!("failed to inspect sqlite table {table}"),
-                error,
-            )
-        })?;
-    let columns = statement
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| {
-            sqlite_error(
-                target,
-                format!("failed to enumerate sqlite columns for {table}"),
-                error,
-            )
-        })?;
-    let collected = columns
-        .into_iter()
-        .map(|entry| {
-            entry.map_err(|error| {
-                sqlite_error(
-                    target,
-                    format!("failed to read sqlite column metadata for {table}"),
-                    error,
-                )
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    if collected.into_iter().any(|value| value == column) {
-        return Ok(());
-    }
-    connection.execute_batch(ddl).map_err(|error| {
-        sqlite_error(
-            target,
-            format!("failed to migrate sqlite table {table}"),
-            error,
-        )
-    })
-}
-
 fn table_exists(
     connection: &Connection,
     target: &SharedDbTarget,
@@ -839,57 +967,6 @@ fn table_exists(
                 error,
             )
         })
-}
-
-pub(crate) fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
-    sqlite_error(
-        target,
-        format!("failed to open sqlite database {}", target.display()),
-        source,
-    )
-}
-
-pub(crate) fn sqlite_error(
-    target: &SharedDbTarget,
-    message: impl Into<String>,
-    source: RusqliteError,
-) -> AtmError {
-    let message = message.into();
-    // Every arm keeps the stable code/message contract; the raw SQLite
-    // failure rides along as the machine-preserved cause so a constraint
-    // violation or schema mismatch is diagnosable from the surfaced error.
-    let error =
-        match &source {
-            RusqliteError::SqliteFailure(error, _) => match error.code {
-                rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message),
-                rusqlite::ffi::ErrorCode::DatabaseBusy
-                | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
-                    SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
-                    #[cfg(test)]
-                    SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(format!(
-                        "timed out waiting for sqlite database lock on {}",
-                        target.display()
-                    )),
-                },
-                rusqlite::ffi::ErrorCode::OperationInterrupted => match target {
-                    SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
-                    #[cfg(test)]
-                    SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(
-                        "sqlite query exceeded its caller-provided execution budget",
-                    ),
-                },
-                rusqlite::ffi::ErrorCode::CannotOpen => AtmError::mailbox_write(message),
-                rusqlite::ffi::ErrorCode::ReadOnly => AtmError::mailbox_write(message),
-                rusqlite::ffi::ErrorCode::DatabaseCorrupt
-                | rusqlite::ffi::ErrorCode::NotADatabase => AtmError::mailbox_read(message),
-                rusqlite::ffi::ErrorCode::SystemIoFailure | rusqlite::ffi::ErrorCode::DiskFull => {
-                    AtmError::mailbox_write(message)
-                }
-                _ => AtmError::mailbox_write(message),
-            },
-            _ => AtmError::mailbox_write(message),
-        };
-    error.with_cause(source)
 }
 
 fn json_error(message: impl Into<String>, source: serde_json::Error) -> AtmError {
@@ -928,10 +1005,7 @@ mod tests {
     use crate::shared_db_reader_lanes::open_read_connection_for_target;
     use atm_storage::AtmErrorCode;
 
-    /// Number of control-path borrows a single burst is modelled on. Any
-    /// value comfortably above the connection bound proves reuse rather than
-    /// an accidentally oversized cache.
-    const CONTROL_PATH_BORROWS: usize = 32;
+    const SERIAL_WRITER_BORROWS: usize = 32;
 
     fn count_probe_rows(db: &SharedDb) -> Result<i64, AtmError> {
         db.with_connection(|connection| {
@@ -942,32 +1016,31 @@ mod tests {
     }
 
     #[test]
-    fn control_path_borrows_reuse_one_connection_instead_of_reopening_per_call() {
+    fn serial_writer_queue_reuses_its_one_connection_for_blocking_borrows() {
         let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
         reset_opened_connection_count(db.target());
 
-        for _ in 0..CONTROL_PATH_BORROWS {
-            count_probe_rows(&db).expect("control-path read succeeds");
+        for _ in 0..SERIAL_WRITER_BORROWS {
+            count_probe_rows(&db).expect("serialized writer read succeeds");
         }
 
         assert_eq!(
             opened_connection_count(db.target()),
-            1,
-            "sequential control-path borrows must reuse one connection; opening per call \
-             multiplies descriptor demand by the in-flight admission count"
+            0,
+            "the serial writer queue owns the already-open writer connection"
         );
     }
 
     #[test]
-    fn concurrent_control_path_borrows_stay_within_the_connection_bound() {
+    fn concurrent_blocking_borrows_share_the_serial_writer_connection() {
         let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
-        // Warm the pool so the burst below measures reuse, not first-touch.
+        // The writer queue is assembled before the test counter is reset.
         count_probe_rows(&db).expect("control-path read succeeds");
         reset_opened_connection_count(db.target());
 
-        let barrier = Arc::new(std::sync::Barrier::new(CONTROL_PATH_BORROWS));
+        let barrier = Arc::new(std::sync::Barrier::new(SERIAL_WRITER_BORROWS));
         std::thread::scope(|scope| {
-            for _ in 0..CONTROL_PATH_BORROWS {
+            for _ in 0..SERIAL_WRITER_BORROWS {
                 let db = db.clone();
                 let barrier = Arc::clone(&barrier);
                 scope.spawn(move || {
@@ -976,25 +1049,21 @@ mod tests {
                 });
             }
         });
-        let burst_opens = opened_connection_count(db.target());
-        assert!(
-            burst_opens <= crate::control_path_pool::MAX_CONTROL_PATH_CONNECTIONS,
-            "a control-path burst must never open more connections than the bound"
-        );
+        assert_eq!(opened_connection_count(db.target()), 0);
 
         reset_opened_connection_count(db.target());
-        for _ in 0..CONTROL_PATH_BORROWS {
-            count_probe_rows(&db).expect("control-path read succeeds");
+        for _ in 0..SERIAL_WRITER_BORROWS {
+            count_probe_rows(&db).expect("serialized writer read succeeds");
         }
         assert_eq!(
             opened_connection_count(db.target()),
             0,
-            "after a burst the parked connections must absorb the next round without reopening"
+            "the serial writer queue remains the sole blocking connection"
         );
     }
 
     #[test]
-    fn failed_control_path_borrows_are_not_parked_for_reuse() {
+    fn failed_serial_writer_borrow_keeps_the_queue_available() {
         let db = SharedDb::open_in_memory_for_test().expect("in-memory sqlite boundary");
         reset_opened_connection_count(db.target());
 
@@ -1006,8 +1075,8 @@ mod tests {
 
         assert_eq!(
             opened_connection_count(db.target()),
-            2,
-            "a connection whose operation failed is dropped rather than parked"
+            0,
+            "a returned operation error does not create a competing writer connection"
         );
     }
 
@@ -1155,27 +1224,11 @@ mod tests {
     use std::thread;
 
     #[test]
-    fn stalled_writer_lock_yields_a_typed_lock_error_after_the_busy_timeout() {
-        // Proves the SQLITE_BUSY_TIMEOUT < SERVER_REQUEST_BUDGET contract
-        // holds under real writer-lock contention, not only as the
-        // compile-time assertion in `atm_storage::request_budget`: a second
-        // writer that has to wait out the configured busy_timeout must fail
-        // with a typed lock error, so the daemon can return an actionable
-        // response instead of the request silently overrunning on the
-        // client. This deliberately waits on SQLite's own busy-lock retry
-        // loop instead of a fixed sleep primitive; the elapsed wall time is
-        // the product observable under test, not a synchronization device.
-        //
-        // This intentionally uses a file-backed target rather than the
-        // `cache=shared` in-memory target used by other tests in this
-        // module: SQLite's shared-cache mode reports same-process table
-        // lock conflicts as `SQLITE_LOCKED`, and `busy_timeout`'s retry
-        // handler only fires for `SQLITE_BUSY`, so a shared-cache
-        // in-memory target would fail the second writer immediately
-        // without ever exercising the busy-wait this test verifies.
-        // Production storage (`SharedDbTarget::Path`) always opens plain,
-        // non-shared-cache connections, so this matches production
-        // locking semantics.
+    fn serial_writer_queue_serializes_blocking_control_path_transactions() {
+        // The serial queue owns the only mutable SQLite connection. A
+        // blocking debug/control-path transaction must therefore wait for an
+        // existing borrower instead of opening a competing writer connection
+        // and relying on SQLite busy-lock retries.
         let tempdir = tempfile::tempdir().expect("create temporary database directory");
         let db_path = tempdir.path().join("busy-timeout-contract.db");
         let db = Arc::new(
@@ -1208,31 +1261,46 @@ mod tests {
             .recv()
             .expect("first writer must confirm it holds the lock before the second write starts");
 
-        let started_at = std::time::Instant::now();
-        let result = db.with_transaction(|_connection| Ok(()));
-        let elapsed = started_at.elapsed();
+        let (contender_started_tx, contender_started_rx) = mpsc::channel::<()>();
+        let (result_tx, result_rx) = mpsc::channel();
+        let contender_db = Arc::clone(&db);
+        let contender = thread::spawn(move || {
+            contender_started_tx
+                .send(())
+                .expect("signal that the second control-path transaction started");
+            let started_at = std::time::Instant::now();
+            let result = contender_db.with_transaction(|_connection| Ok(()));
+            result_tx
+                .send((result, started_at.elapsed()))
+                .expect("report second control-path transaction result");
+        });
+
+        contender_started_rx
+            .recv()
+            .expect("second control-path transaction must start");
+        assert!(
+            result_rx
+                .recv_timeout(std::time::Duration::from_millis(25))
+                .is_err(),
+            "the second control-path transaction must remain queued while the first owns the sole writer connection"
+        );
 
         release_tx
             .send(())
             .expect("release the held writer lock so the holder thread can finish");
         holder.join().expect("holder thread panicked");
 
-        let error = result.expect_err(
-            "a second writer contending on an already-held immediate transaction must fail \
-             once the configured busy_timeout elapses",
-        );
-        assert_eq!(
-            error.code(),
-            atm_storage::AtmErrorCode::MailboxLockTimeout,
-            "a busy writer lock must surface as a typed mailbox-lock error, not an \
-             opaque failure: {error:?}"
-        );
-        eprintln!("stalled writer lock typed-error elapsed: {elapsed:?}");
+        let (result, elapsed) = result_rx
+            .recv()
+            .expect("queued control-path transaction must finish after release");
+        contender.join().expect("contender thread panicked");
         assert!(
-            elapsed >= atm_storage::request_budget::SQLITE_BUSY_TIMEOUT / 2,
-            "a stalled writer must actually wait out most of the configured \
-             busy_timeout ({:?}) before failing, not fail immediately: waited {elapsed:?}",
-            atm_storage::request_budget::SQLITE_BUSY_TIMEOUT,
+            result.is_ok(),
+            "the queued control-path transaction must reuse the serial writer connection: {result:?}"
+        );
+        assert!(
+            elapsed >= std::time::Duration::from_millis(25),
+            "the second control-path transaction must wait for the queue owner: waited {elapsed:?}"
         );
     }
 
@@ -1324,8 +1392,11 @@ mod tests {
             )
             .expect("insert legacy empty-body row");
 
-        ensure_team_nudge_template_override_columns(&connection, &target)
-            .expect("migrate override table");
+        crate::template_override_migration::ensure_team_nudge_template_override_columns(
+            &connection,
+            &target,
+        )
+        .expect("migrate override table");
 
         let mode_exists = connection
             .prepare("PRAGMA table_info(team_nudge_template_overrides);")
@@ -1345,6 +1416,183 @@ mod tests {
             )
             .expect("query migrated mode");
         assert_eq!(mode, "disabled");
+    }
+
+    #[test]
+    fn ensure_schema_preserves_pre_seven_retired_kinds_as_stale_and_is_idempotent() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-shared-db-test-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE team_nudge_template_overrides (
+                    team_name TEXT NOT NULL,
+                    template_kind TEXT NOT NULL CHECK(template_kind IN (
+                        'delivery', 'delivery_ack', 'delivery_task', 'delivery_task_ack',
+                        'acknowledge', 'acknowledge_task'
+                    )),
+                    template_body TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (team_name, template_kind)
+                );
+                INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, template_body, updated_at)
+                VALUES
+                    ('test-team', 'delivery_task', '<old-task/>', '2026-09-05T00:00:00Z'),
+                    ('test-team', 'delivery_ack', '<delivery-ack/>', '2026-09-05T00:00:00Z');",
+            )
+            .expect("create six-kind table");
+
+        ensure_schema(&mut connection, &target).expect("migrate six-kind table");
+
+        let row_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM team_nudge_template_overrides WHERE team_name = 'test-team';",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count migrated rows");
+        assert_eq!(
+            row_count, 2,
+            "retired rows must survive for doctor reporting"
+        );
+        let stale_kinds = connection
+            .prepare(
+                "SELECT template_kind FROM team_nudge_template_overrides
+                 WHERE team_name = 'test-team' ORDER BY template_kind;",
+            )
+            .expect("prepare migrated kinds")
+            .query_map([], |row| row.get::<_, String>(0))
+            .expect("query migrated kinds")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("read migrated kinds")
+            .into_iter()
+            .filter(|kind| {
+                kind.parse::<atm_storage::BuiltInNudgeTemplateKind>()
+                    .is_err()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(stale_kinds, vec!["delivery_task"]);
+        connection
+            .execute(
+                "INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                 VALUES ('test-team', 'queue_ack', 'override', '<queue-ack/>', '2026-09-05T00:00:00Z');",
+                [],
+            )
+            .expect("new queue kind should satisfy migrated check");
+        connection
+            .execute(
+                "INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                 VALUES ('test-team', 'task_ready', 'override', '<task-ready/>', '2026-09-05T00:00:00Z');",
+                [],
+            )
+            .expect("new task transition kind should satisfy migrated check");
+        let schema_sql: String = connection
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'team_nudge_template_overrides';",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read migrated schema");
+        assert!(
+            !schema_sql
+                .to_ascii_lowercase()
+                .contains("template_kind text not null check")
+        );
+
+        let schema_before_second_open = schema_sql.clone();
+        ensure_schema(&mut connection, &target).expect("second schema ensure");
+        let schema_after_second_open: String = connection
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'team_nudge_template_overrides';",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read schema after second open");
+        assert_eq!(schema_after_second_open, schema_before_second_open);
+        let row_count_after_second_open: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM team_nudge_template_overrides WHERE team_name = 'test-team';",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count rows after second open");
+        assert_eq!(row_count_after_second_open, 4);
+    }
+
+    #[test]
+    fn ensure_schema_removes_seven_kind_check_without_changing_stale_rows() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-shared-db-test-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE team_nudge_template_overrides (
+                    team_name TEXT NOT NULL,
+                    template_kind TEXT NOT NULL CHECK(template_kind IN (
+                        'delivery', 'delivery_ack', 'queue', 'queue_ack', 'task',
+                        'acknowledge', 'acknowledge_task'
+                    )),
+                    mode TEXT NOT NULL DEFAULT 'override'
+                        CHECK(mode IN ('override', 'disabled')),
+                    template_body TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (team_name, template_kind)
+                );
+                INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                VALUES ('test-team', 'task', 'override', X'003C6F6C642D7461736B2F3E',
+                        '2026-09-05T00:00:00Z');",
+            )
+            .expect("create previous-consumer table");
+
+        let before: (String, String, Vec<u8>, String) = connection
+            .query_row(
+                "SELECT template_kind, mode, CAST(template_body AS BLOB), updated_at
+                 FROM team_nudge_template_overrides;",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("read stale row before migration");
+        ensure_schema(&mut connection, &target).expect("remove kind constraint");
+        let after: (String, String, Vec<u8>, String) = connection
+            .query_row(
+                "SELECT template_kind, mode, CAST(template_body AS BLOB), updated_at
+                 FROM team_nudge_template_overrides;",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("read stale row after migration");
+        assert_eq!(after, before, "the stale row must survive byte-for-byte");
+        connection
+            .execute(
+                "INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                 VALUES ('test-team', 'task_ready', 'override', '<ready/>',
+                         '2026-09-12T00:00:00Z');",
+                [],
+            )
+            .expect("new task transition kind");
+
+        ensure_schema(&mut connection, &target).expect("second schema ensure");
+        let rows: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM team_nudge_template_overrides;",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count rows after idempotent ensure");
+        assert_eq!(rows, 2);
     }
 
     #[test]

@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RDY-002>
+  a triage:Finding ;
+  triage:findingId "RDY-002" ;
+  triage:title "readiness checklist flagged backup/restore behavior already covered by the approved BA.2 contract (dismissed)" ;
+  triage:description "solar BA-READINESS Part A @ 9f5aef2fe. The readiness checklist's criterion for backup-restore-on-CHECK-failure conflicted with sprint-BA.2's already-approved contract (lines 426-430: backup restore + CHECK failure is the intended, approved behavior). fenix's ruling: DISMISSED WITH CITATION -- the checklist criterion, not the code, was wrong." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "release-readiness" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "dismissed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RDY-002/1> ;
+  triage:deferredNote "fenix (ATM 01M2A821M48VWSZ0JGXMA4WWZ7, 2026-09-12T07:24:38Z): dismissal formalized in solar's review-3 commit 85e83e577 (item B1); status unchanged (dismissed, not fixed). Sha remap (fenix ATM 01M2A9NY2AEAKS6EAHY0V4ZDYB, 2026-09-12T07:52:59Z): review-3 rebased onto review-2 33754d69d (force-with-lease); 85e83e577 -> a7877cdbd." ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RDY-002/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md" ;
+  triage:line 426 ;
+  triage:snippet "backup restore + CHECK failure is approved contract, not a defect" ;
+  triage:status "dismissed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "dismissed with citation: sprint-BA.2 lines 426-430 is the approved contract (backup restore + CHECK failure); the readiness checklist criterion that raised this was itself wrong. colima smoke asserts the .pre-ba2 backup, confirming the approved behavior is in place." ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9f5aef2fe" ;
+  triage:occursIn <urn:atm:triage:worktree/RDY-002/1> .
+
+<urn:atm:triage:worktree/RDY-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ba (phase landing head)" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "9f5aef2fe" ;
+  triage:orderIndex 0 .

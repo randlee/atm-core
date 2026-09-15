@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-QA-002>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-QA-002" ;
+  triage:title "FIX-8's ReadLaneError::Storage preserves code but still drops the original AtmError cause on the round trip" ;
+  triage:description "quality-mgr's PR #1244 (A2, fix/aw-pool-read-migration) re-QA: AW-POOL-V9-FIX-8's fix (commit ba8ebc039, mailbox_reader.rs storage_error()) added ReadLaneError::Storage{code, message} and threads the AtmErrorCode correctly through From<ReadLaneError> for AtmError, but still drops the original AtmError's cause() (the raw SQLite driver failure text/source chain) on the round trip back to AtmError. Locations: crates/atm-storage-rusqlite/src/mailbox_reader.rs:162 (storage_error()), crates/atm-storage/src/contract.rs:396-441 (ReadLaneError enum and its From impl). Recommended fix: thread the original AtmError (or at least its cause/source) through ReadLaneError::Storage as well, e.g. add a boxed source field, so From<ReadLaneError> for AtmError can call .with_cause(...) using the original error's cause chain instead of only recovering the code." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T03:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T03:10:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-QA-002/A2-storage-error-162> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-QA-002/A3-storage-error-162> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-QA-002/A2-storage-error-162>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/mailbox_reader.rs" ;
+  triage:line 162 ;
+  triage:snippet "fn storage_error(error: AtmError) -> ReadLaneError { ReadLaneError::Storage { code: error.code(), message: error.message().to_owned(), } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "515111d49c43ebba87f7b1f17e876b555b6c19e9" ;
+  triage:occursIn <urn:atm:triage:worktree/A2/515111d49> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-QA-002/A3-storage-error-162>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/mailbox_reader.rs" ;
+  triage:line 162 ;
+  triage:snippet "fn storage_error(error: AtmError) -> ReadLaneError { ReadLaneError::Storage { code: error.code(), message: error.message().to_owned(), } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-diagnostics-admission" ;
+  triage:headSha "f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb" ;
+  triage:occursIn <urn:atm:triage:worktree/A3/f3f5cd5fb> .
+
+<urn:atm:triage:worktree/A2/515111d49>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "515111d49c43ebba87f7b1f17e876b555b6c19e9" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/A3/f3f5cd5fb>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aw-diagnostics-admission" ;
+  triage:branch "fix/aw-diagnostics-admission" ;
+  triage:headSha "f3f5cd5fb1190e5eb66538b85229a1ede8e5d9cb" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/AW-POOL-V9-QA-002/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-QA-002" ;
+  triage:resolutionNote "quality-mgr targeted re-verify at fix/aw-pool-read-migration@2748eb951 (rust-qa-agent, verified independently against contract.rs/mailbox_reader.rs directly): fix commit 2309b8dd9 (preserve reader failure causes) confirmed an ancestor of 2748eb951. ReadLaneError::Storage now carries a real cause: Option<String> field, populated via error.cause().map(str::to_owned) in read_lane_storage_error/storage_error(). Code preserved structurally; original driver-error text now survives into the outer AtmError.cause() (embedded in Display text, not a separate structured AtmError field). No dedicated unit test asserts the full round-trip -- noted as a minor non-blocking test-gap, not reopened as a finding. A3-branch occurrence (fix/aw-diagnostics-admission) still needs the equivalent fix or a merge-forward from A2 once A2 lands; not yet independently re-verified on A3." ;
+  triage:resolvedAt "2026-09-06T04:45:26Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "2748eb951" ;
+  triage:resolvedBranch "fix/aw-pool-read-migration" .

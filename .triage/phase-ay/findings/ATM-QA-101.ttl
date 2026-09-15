@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-101>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-101" ;
+  triage:title "Duplicate test artifact: unique_name_a19 exists as both a table-driven case and a standalone test fn in roster_store.rs" ;
+  triage:description "quality-mgr qa-pr1310-r9 (PR #1310, AY.15 herdr-name-uniqueness, head 3259d6a72; report: PR #1310 issuecomment 5576663523). Minor. crates/atm-storage-rusqlite/src/roster_store.rs carries the A-19 scenario twice: as a Case id in the table-driven unique_name matrix test (line 800) and as a standalone #[test] fn of the same name (line 983). Both exercise the same behaviour; one is leftover from the round-8 fix. Correction: delete one copy (keep the table-driven case so the matrix stays one row per test) and confirm the matrix doc citation for A-19 points at the surviving test. Non-blocking; rides the next PR touching roster_store.rs. Merged into integrate/phase-ay at 47f359cf9." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "duplication" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/roster_store.rs test module" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T23:41:09Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-08T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 3 (PR #1318, integrate/phase-ay 75c01a5bd). Independently re-verified by quality-mgr via direct file/grep reads (not taken on cipher's commit message alone), cross-checked against schema-reviewer/rust-qa-agent live results. Duplicate standalone test unique_name_a19_removing_a_member_frees_its_effective_name removed from roster_store.rs; sole coverage is the table-driven case at line 800; 12/12 tests pass, no regression." ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T23:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/ATM-QA-101/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/ATM-QA-101/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-101/ATM-QA-101/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/roster_store.rs" ;
+  triage:line 800 ;
+  triage:snippet "id: 'unique_name_a19_removing_a_member_frees_its_effective_name'," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "3259d6a72" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
+  triage:occursIn <urn:atm:triage:worktree/ay15-r9> .
+
+<urn:atm:triage:occurrence/ATM-QA-101/ATM-QA-101/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/roster_store.rs" ;
+  triage:line 983 ;
+  triage:snippet "fn unique_name_a19_removing_a_member_frees_its_effective_name() {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "3259d6a72" ;
+  triage:fixedAtHeadSha "75c01a5bd" ;
+  triage:occursIn <urn:atm:triage:worktree/ay15-r9> .
+
+<urn:atm:triage:worktree/ay15-r9>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r9" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "3259d6a72" ;
+  triage:orderIndex 0 .

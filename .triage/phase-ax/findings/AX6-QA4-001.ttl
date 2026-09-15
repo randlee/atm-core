@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA4-001>
+  a triage:Finding ;
+  triage:findingId "AX6-QA4-001" ;
+  triage:title "RULE-011: live_surface_json() in crates/atm/tests/cli_surface.rs spawns `atm __dump-cli-surface --format json` with no ATM_HOME/ATM_CONFIG_HOME/ATM_LOG_DIR/ATM_TEAMS_DIR isolation" ;
+  triage:description "crates/atm/tests/cli_surface.rs:49 live_surface_json() spawns the atm binary (`__dump-cli-surface --format json`) with zero environment isolation. Every non-help/non-version subcommand runs init_observability() before dispatch (crates/atm/src/main.rs:216, run() at 190-233), and home::host_log_dir() (crates/atm-core/src/home.rs:170-192) falls back to the real user home .atm/logs when ATM_LOG_DIR is unset, so this spawn performs a durable write into the ambient ATM home; it is masked only by CI runners having an ephemeral HOME. Remediation: the same tempfile::tempdir() + Command::env() pattern already used in peer_cli.rs and compose_passthrough.rs (ATM_HOME, ATM_CONFIG_HOME, ATM_LOG_DIR, ATM_TEAMS_DIR). The sibling --version spawn at cli_surface.rs:67 was checked by arch-qa and needs no isolation (clap DisplayVersion short-circuits before init_observability); do not record it as an occurrence." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T20:21:05Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-5 recheck (QA-AX6-R5-1788639500) at head 5120e0800; fixed by arch-ctm fix pass GO-AX6-FIX4-1788639030 (Completion c24). Report: PR #1204 comment 5554531804. Sprint verdict PASS 0/0/0." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T20:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T20:02:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA4-001/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA4-001/AX7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA4-001/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/cli_surface.rs" ;
+  triage:line 49 ;
+  triage:snippet "live_surface_json() spawns with __dump-cli-surface --format json, no env isolation" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "ba19d6236559a65ad4a0b5e4b729fe7fd2f3541f" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/ba19d6236559a65ad4a0b5e4b729fe7fd2f3541f> .
+
+<urn:atm:triage:occurrence/AX6-QA4-001/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/cli_surface.rs" ;
+  triage:line 49 ;
+  triage:snippet "live_surface_json() spawns with __dump-cli-surface --format json, no env isolation" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e249e2f2da915fc57cd5de0931c08f73> .
+
+<urn:atm:triage:worktree/AX6/ba19d6236559a65ad4a0b5e4b729fe7fd2f3541f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "ba19d6236559a65ad4a0b5e4b729fe7fd2f3541f" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/d101fee2e249e2f2da915fc57cd5de0931c08f73>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e249e2f2da915fc57cd5de0931c08f73" ;
+  triage:orderIndex 7 .

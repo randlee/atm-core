@@ -336,6 +336,8 @@ def _drain_ready_lines(process: subprocess.Popen[str], timeout: float) -> tuple[
 
 
 def start_daemon(daemon: Path, env: dict[str, str], timeout: float) -> dict[str, Any]:
+    if ambient_daemon_pids():
+        raise RuntimeError("refusing to launch alongside an ambient same-account atm-daemon")
     process = subprocess.Popen(
         [str(daemon), "--peer-wire-security", "plaintext-test"],
         cwd=ROOT,

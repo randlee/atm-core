@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-058 |
-| Status | Proposed (Phase AQ lane A; dispatch precondition for AQ2.6, critical review B9/I16) |
+| Status | Accepted (Phase AX.2 amendment) |
 | Scope | `HerdrReceivedHook` (AQ2.6) and `HerdrQueueWakePump` (AQ2.7) process contract with the `herdr` CLI, implemented by the `atm-herdr` crate (`docs/atm-herdr/architecture.md`) |
 | Relates to | ADR-001, ADR-054, ADR-056, sprint-AQ2-6, sprint-AQ2-7, sprint-AQ6 (pin-latest preflight) |
 
@@ -166,12 +166,12 @@ atm-core; a fourth (`agent wait`) is documented for completeness but is
 **Immediate steer (AQ2.6, `HerdrReceivedHook`):**
 
 ```text
-herdr agent prompt <AgentName> "You have unread ATM messages. Run: atm read"
+herdr agent prompt <AgentName> <rendered built-in nudge template>
 ```
 
 - `<AgentName>` is argv[3] verbatim (no quoting layer; `src/cli/agent.rs:771-781`).
-- argv[4] is the fixed mailbox-read text. It must be non-empty
-  (`empty_agent_prompt`, `src/app/api/agents.rs:63-65`).
+- argv[4] is the caller-supplied rendered built-in nudge template. It must be
+  non-empty (`empty_agent_prompt`, `src/app/api/agents.rs:63-65`).
 - No `--wait`. Without `--wait`, `--until`/`--timeout` are usage errors
   (exit 2, `src/cli/agent.rs:824-831`), so the steer argv carries neither.
 
@@ -377,7 +377,7 @@ record this in events and the ADR-054 addendum.
 | `agent_target_ambiguous` | prompt, rename *(also reachable from `wait`, not invoked in Phase AQ)* | advisory failure, no retry (operator must fix names) | two or more terminals resolve to the same name (stale/duplicate `agent_name`) | operator renames the duplicate agent(s); atm-core has no automatic disambiguation |
 | `agent_not_ready` | prompt | advisory failure; `release_pending` when post-claim (AQ2.7) | agent still launching, or no longer the pane foreground process | AQ2.7 releases the claim for re-evaluation on the next tick; Steer has no retry mechanism and only logs a warning |
 | `timeout` | *(historical — Herdr's own `wait`-scoped error code; D2 documents it but atm-core does not invoke `wait` in Phase AQ)* | not reachable in Phase AQ | agent never reached `idle`/`done`/`blocked` within a `wait`'s `--timeout` | AQ2.7's own notion of "took too long" is the D10 external child-process bound on `list`/`prompt`, which routes to the D10.1 breaker, not this code |
-| `agent_prompt_failed`, `empty_agent_prompt`, `internal_error`, `server_unavailable` | prompt | advisory failure (`requeue_pending` for AQ2.6 immediate steer — no `PendingNudgeStore` claim exists on that path; `release_pending` for AQ2.7's post-claim prompt, since no input was injected) | PTY write failed; fixed prompt text was empty (should be impossible by construction); Herdr-internal error; server mid-shutdown | retry/re-evaluate; `empty_agent_prompt` specifically indicates an atm-core defect (D2's fixed text is never empty) and must also be logged as a bug |
+| `agent_prompt_failed`, `empty_agent_prompt`, `internal_error`, `server_unavailable` | prompt | advisory failure (`requeue_pending` for AQ2.6 immediate steer — no `PendingNudgeStore` claim exists on that path; `release_pending` for AQ2.7's post-claim prompt, since no input was injected) | PTY write failed; supplied prompt text was empty; Herdr-internal error; server mid-shutdown | retry/re-evaluate; `empty_agent_prompt` indicates an atm-core rendering defect and must also be logged as a bug |
 | `server_not_running`, `protocol_mismatch` | any, including `list` | advisory failure, health counter `herdr_unavailable`; for AQ2.6/AQ2.7 this is one of the three D10.1 breaker triggers (alongside the D10 external-timeout kill) — the breaker opens host-wide, not per-caller | no Herdr server at the resolved socket; or client/server `PROTOCOL_VERSION` mismatch | operator starts/restarts the Herdr server (restart required after a Herdr upgrade for `protocol_mismatch`); `atm doctor` surfaces the `herdr_unavailable` health counter and the D10.1 breaker state |
 | (exit 2, no JSON) | any | atm-core bug: argv construction error, must be impossible by construction | malformed argv (missing/extra positional, disallowed flag combination) | not operator-recoverable; a fixture/unit-test regression that must fail CI before reaching a real invocation |
 
@@ -573,7 +573,10 @@ the adapter, `atm-herdr`) is normatively documented in
 - `--wait`, `agent_prompt_stalled`, `agent send-keys`, `pane send-keys`,
   `pane send-input`, `events.subscribe`/`events.wait`, `herdr api snapshot`.
 - Any Herdr-side queue, per-turn tracking, or idempotency of repeated prompts.
-- Herdr on Windows (named-pipe transport exists but is out of AQ scope).
+- Live Windows evidence is not part of the Phase AQ contract; AY.7 owns
+  Windows process correctness and release readiness owns live platform proof.
+  The named-pipe transport remains part of the supported cross-platform
+  Herdr implementation.
 - Text of `error.message`, `AgentInfo` fields other than `agent_status`,
   and the ordering of JSON keys.
 
@@ -660,3 +663,64 @@ Breaker rules:
   wall-clock attempts and the fourth attempt after `retry_after` succeeds
   and closes the breaker. One breaker implementation, exercised from both
   call sites.
+
+## Amendment — Phase AX.2 rendered prompt text (2026-09-05)
+
+The Herdr prompt contract now receives the rendered built-in nudge template
+from atm-core. `HerdrProcessAdapter::prompt` accepts `(agent, session, text,
+deadline)` and emits exactly `herdr agent prompt <AgentName> <text>`; the
+adapter never composes, interpolates, strips, or joins the text. The session
+continues to travel only through the `HERDR_SESSION` child environment.
+
+The text is the same team-resolved Delivery, Queue, or Task render supplied to
+the tmux and graft sinks. Empty or whitespace-only text is rejected before a
+child is spawned. The line-safety rule is normative: a multi-line rendered
+template remains one argv element byte-for-byte, with exactly four argv
+elements (`agent`, `prompt`, agent name, rendered text). This amendment records
+the operative contract implemented in `atm-core`, `atm-daemon-bootstrap`,
+`atm-http-runtime`, and `atm-herdr`.
+
+## Amendment — Phase AX.6 lead notification (2026-09-05)
+
+`HerdrProcessAdapter::notify(title, body, deadline)` is the public adapter
+operation for daemon escalation notifications. The real adapter emits exactly
+the following argv, with each value as a separate argument:
+
+```text
+["herdr","notification","show",title,"--body",body,"--sound","request"]
+```
+
+The notification is a Herdr notification, not a pane-targeting operation: ATM
+never emits `send-keys`, `send_input`, tmux, or a pane id for this path. The
+adapter applies the caller's bounded deadline and reports a non-zero Herdr
+exit as a typed failure. Lead and configured-recipient mail remain independent
+delivery attempts, so a notification failure does not erase their outcomes.
+
+## Amendment — Phase AY compatibility and Windows scope (2026-09-06)
+
+This amendment supersedes the earlier pin and scope wording while preserving
+the original decision history above.
+
+1. **Cross-platform contract.** D3 specifies Unix-domain sockets on macOS and
+   Linux and Herdr's named pipe on Windows. The transport is an implementation
+   detail: ATM exposes the same command set, typed errors, and breaker
+   semantics on all three platforms. Windows-specific process correctness and
+   CI evidence belong to AY.7; live platform proof belongs to release
+   readiness. The former Windows scope-out is deleted.
+2. **Minimum version.** The former `d79fd746` / protocol-21 pin is replaced by
+   `HERDR_MINIMUM_VERSION` under ADR-061. The current minimum is 0.8.0, and
+   one ATM build supports every Herdr release at or above that floor. v0.8.2
+   is the current design/recording target. Herdr `PROTOCOL_VERSION` remains a
+   secondary bincode-client fact, not the NDJSON compatibility floor; the
+   per-release facts and recordings live in
+   [`docs/atm-herdr/herdr-versions.md`](../atm-herdr/herdr-versions.md).
+3. **Drift and parsing.** New capabilities are additive or runtime-detected;
+   parsers key on stable error codes and tolerate unknown fields, never
+   message text. The v0.8.0 blocked-prompt behaviour and the newer
+   `agent_prompt --wait` outcome are replayed as version deltas without a
+   speculative version adapter.
+4. **AI.11 clarification.** The retired-listener ban governs ATM's own IPC
+   listener. AY.8 may exempt only
+   `crates/atm-herdr/src/transport_socket.rs` for the Herdr client. The
+   `named_pipe` / `NamedPipe` symbols remain banned everywhere else under
+   `crates/`; this amendment does not authorize legacy daemon remodeling.

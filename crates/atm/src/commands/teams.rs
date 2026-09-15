@@ -79,6 +79,12 @@ struct AddMemberCommand {
     session: Option<String>,
 
     #[arg(
+        long,
+        help = "durable roster alias; Herdr members use it as their live-agent target"
+    )]
+    alias: Option<String>,
+
+    #[arg(
         long = "pane-id",
         help = "deprecated compatibility spelling for --backend tmux --target"
     )]
@@ -125,6 +131,15 @@ struct UpdateMemberCommand {
     session: Option<String>,
 
     #[arg(
+        long,
+        help = "durable roster alias; Herdr members use it as their live-agent target"
+    )]
+    alias: Option<String>,
+
+    #[arg(long, help = "remove the member's durable roster alias")]
+    clear_alias: bool,
+
+    #[arg(
         long = "pane-id",
         help = "deprecated compatibility spelling for --backend tmux --target"
     )]
@@ -154,7 +169,10 @@ struct RemoveMemberCommand {
 struct SetNudgeTemplateCommand {
     #[arg(long)]
     team: String,
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "template kind: delivery, delivery_ack, queue, queue_ack, acknowledge, task_queued, task_ready, task_reminder, task_started, task_complete, task_closed"
+    )]
     kind: String,
 
     #[arg(long = "template-body")]
@@ -168,7 +186,10 @@ struct SetNudgeTemplateCommand {
 struct DisableNudgeTemplateCommand {
     #[arg(long)]
     team: String,
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "template kind: delivery, delivery_ack, queue, queue_ack, acknowledge, task_queued, task_ready, task_reminder, task_started, task_complete, task_closed"
+    )]
     kind: String,
 
     #[arg(long)]
@@ -179,7 +200,10 @@ struct DisableNudgeTemplateCommand {
 struct ClearNudgeTemplateCommand {
     #[arg(long)]
     team: String,
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "template kind: delivery, delivery_ack, queue, queue_ack, acknowledge, task_queued, task_ready, task_reminder, task_started, task_complete, task_closed; retired task and acknowledge_task are accepted for deletion"
+    )]
     kind: String,
 
     #[arg(long)]
@@ -264,32 +288,39 @@ impl TeamsCommand {
                 },
             )
         })?;
-        let runtime_states = self.runtime_member_states(&team, observability).await;
-        let projection =
-            atm_core::build_picker_members_projection(&team, &outcome.members, &runtime_states);
+        let runtime_status = match self.runtime_status(&team, observability).await {
+            Ok(status) => Some(status),
+            Err(error) => {
+                tracing::warn!(
+                    event = "picker_runtime_status_unavailable",
+                    team = %team,
+                    error = %error,
+                    "runtime status unavailable; emitting roster with explicit unavailable state"
+                );
+                None
+            }
+        };
+        let projection = atm_core::build_picker_members_projection_from_runtime_status(
+            &team,
+            &outcome.members,
+            runtime_status.as_ref(),
+        );
         output::print_picker_members_projection(&projection, json)
     }
 
-    /// Best-effort live runtime state per member, keyed by name. Returns an
-    /// empty map (every member projects as `dead`, never guessed
-    /// active/idle) when the daemon composition or doctor query itself
-    /// fails -- the picker projection must still return a usable, if
-    /// conservative, document rather than erroring the whole command.
-    async fn runtime_member_states(
+    /// Loads the daemon's runtime status snapshot. Failure is propagated: an
+    /// unavailable runtime must not be misreported as an all-dead team.
+    async fn runtime_status(
         &self,
         team: &atm_core::types::TeamName,
         observability: &CliObservability,
-    ) -> std::collections::BTreeMap<
-        atm_core::types::AgentName,
-        atm_core::protocol::RuntimeMemberState,
-    > {
-        let Ok((home_dir, current_dir)) = resolve_command_runtime_context("teams") else {
-            return std::collections::BTreeMap::new();
-        };
+    ) -> Result<atm_core::protocol::RuntimeStatusSnapshot> {
+        let (home_dir, current_dir) = resolve_command_runtime_context("teams")?;
         let query = atm_core::doctor::DoctorQuery {
             home_dir,
             current_dir,
             team_override: Some(team.clone()),
+            all_teams: false,
             caller_team: atm_core::caller_context::read_cli_team_from_env_or_warn(
                 "atm::teams::members::runtime",
             ),
@@ -297,27 +328,16 @@ impl TeamsCommand {
                 "atm::teams::members::runtime",
             ),
         };
-        let Ok(composition) = CliComposition::bootstrap(
+        let composition = CliComposition::bootstrap(
             "teams",
             observability,
             InvocationDir::new(&query.current_dir),
             AtmHomePath::new(&query.home_dir),
-        ) else {
-            return std::collections::BTreeMap::new();
-        };
-        let Ok(report) = composition.doctor(query).await else {
-            return std::collections::BTreeMap::new();
-        };
+        )?;
+        let report = composition.doctor(query).await?;
         report
             .runtime_status
-            .map(|snapshot| {
-                snapshot
-                    .members
-                    .into_iter()
-                    .map(|observation| (observation.member, observation.state))
-                    .collect()
-            })
-            .unwrap_or_default()
+            .ok_or_else(|| anyhow::anyhow!("daemon doctor response omitted runtime status"))
     }
 }
 
@@ -350,10 +370,14 @@ impl AddMemberCommand {
         member_home_dir: PathBuf,
     ) -> Result<AddMemberRequest> {
         let host = self.host.clone();
-        let request = if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
+        let request = if self.backend.is_some()
+            || self.target.is_some()
+            || self.session.is_some()
+            || self.alias.is_some()
+        {
             if self.pane_id.is_some() {
                 return Err(anyhow::anyhow!(
-                    "--pane-id cannot be combined with --backend, --target, or --session"
+                    "--pane-id cannot be combined with --backend, --target, --session, or --alias"
                 ));
             }
             AddMemberRequest::new_with_backend(
@@ -367,6 +391,8 @@ impl AddMemberCommand {
                     backend: self.backend.as_deref(),
                     target: self.target.as_deref(),
                     session: self.session.as_deref(),
+                    alias: self.alias.as_deref(),
+                    clear_alias: false,
                 },
             )
         } else {
@@ -477,10 +503,15 @@ impl UpdateMemberCommand {
 
     fn build_request(self, caller_context: CallerContext) -> Result<UpdateMemberRequest> {
         let host = self.host.clone();
-        let request = if self.backend.is_some() || self.target.is_some() || self.session.is_some() {
+        let request = if self.backend.is_some()
+            || self.target.is_some()
+            || self.session.is_some()
+            || self.alias.is_some()
+            || self.clear_alias
+        {
             if self.pane_id.is_some() {
                 return Err(anyhow::anyhow!(
-                    "--pane-id cannot be combined with --backend, --target, or --session"
+                    "--pane-id cannot be combined with --backend, --target, --session, or --alias"
                 ));
             }
             UpdateMemberRequest::new_with_backend(
@@ -497,6 +528,8 @@ impl UpdateMemberCommand {
                     backend: self.backend.as_deref(),
                     target: self.target.as_deref(),
                     session: self.session.as_deref(),
+                    alias: self.alias.as_deref(),
+                    clear_alias: self.clear_alias,
                 },
             )
         } else {
@@ -629,6 +662,8 @@ mod tests {
                 backend: None,
                 target: None,
                 session: None,
+                alias: None,
+                clear_alias: false,
                 pane_id: Some("%19".to_string()),
                 host: None,
                 json,
@@ -794,6 +829,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: None,
             json: false,
@@ -818,6 +854,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: None,
             json: false,
@@ -854,6 +891,64 @@ mod tests {
     }
 
     #[test]
+    fn set_nudge_template_rejects_retired_task_kind_with_hint() {
+        for kind in [
+            "task",
+            "acknowledge_task",
+            "delivery_task",
+            "delivery_task_ack",
+        ] {
+            let command = SetNudgeTemplateCommand {
+                team: TEST_TEAM.to_string(),
+                kind: kind.to_string(),
+                template_body: "<atm/>".to_string(),
+                json: false,
+            };
+
+            let error = command
+                .build_request(CallerContext {
+                    caller_identity: TEST_SENDER.parse().expect("caller"),
+                    caller_chat_id: None,
+                    caller_team: TEST_TEAM.parse().expect("team"),
+                    activity_observation: None,
+                })
+                .expect_err("retired kind");
+
+            let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+            assert_eq!(atm_error.code(), AtmErrorCode::MessageValidationFailed);
+            assert!(
+                atm_error.message().contains("use one of task_queued"),
+                "{atm_error}"
+            );
+            assert_eq!(crate::exit_code_for_atm_error(atm_error), 3);
+        }
+    }
+
+    #[test]
+    fn clear_nudge_template_accepts_retired_task_kind_for_deletion() {
+        for kind in [
+            "task",
+            "acknowledge_task",
+            "delivery_task",
+            "delivery_task_ack",
+        ] {
+            let request = ClearNudgeTemplateCommand {
+                team: TEST_TEAM.to_owned(),
+                kind: kind.to_owned(),
+                json: false,
+            }
+            .build_request(CallerContext {
+                caller_team: TEST_TEAM.parse().expect("caller team"),
+                caller_identity: TEST_SENDER.parse().expect("caller identity"),
+                caller_chat_id: None,
+                activity_observation: None,
+            })
+            .expect("retired kind remains clearable");
+            assert_eq!(request.kind, kind);
+        }
+    }
+
+    #[test]
     fn set_nudge_template_build_request_rejects_empty_template_body_before_core() {
         let command = SetNudgeTemplateCommand {
             team: TEST_TEAM.to_string(),
@@ -886,6 +981,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: Some("17".to_string()),
             host: None,
             json: false,
@@ -913,6 +1009,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: Some("rand-m5.local".to_string()),
             json: false,
@@ -941,6 +1038,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: Some("has a space".to_string()),
             json: false,
@@ -966,6 +1064,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             pane_id: None,
             host: None,
             json: false,
@@ -1007,6 +1106,8 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
+            clear_alias: false,
             pane_id: Some("17".to_string()),
             host: None,
             json: true,
@@ -1045,6 +1146,8 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
+            clear_alias: false,
             pane_id: None,
             host: Some("fastpc4.local".to_string()),
             json: false,
@@ -1078,6 +1181,8 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
+            clear_alias: false,
             pane_id: None,
             host: Some("has a space".to_string()),
             json: false,
@@ -1180,8 +1285,9 @@ mod tests {
 
     /// ADR-055 decision (e)/PRD §4.2: `atm teams --json --members` runs end
     /// to end against a real (isolated, sqlite-backed) roster without a live
-    /// daemon -- the runtime-state lookup degrades to an empty map (every
-    /// member projects `dead`) rather than failing the whole command.
+    /// daemon -- runtime enrichment degrades to explicit
+    /// `Unknown` + `Unavailable` (and compatibility `dead`) rather than
+    /// failing the whole command or asserting an offline lifecycle state.
     #[test]
     #[serial_test::serial(env)]
     fn teams_members_projection_runs_without_daemon() {
@@ -1256,6 +1362,7 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
             json: true,
         };
 
@@ -1291,6 +1398,8 @@ mod tests {
             backend: None,
             target: None,
             session: None,
+            alias: None,
+            clear_alias: false,
             json: true,
         };
 

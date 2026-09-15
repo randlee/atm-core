@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-016>
+  a triage:Finding ;
+  triage:findingId "EQ-016" ;
+  triage:title "sqlite target INCOMPLETE in v1.5.19 official benchmark campaign -- durability-count phase fails with 'bounded mailbox reader lane request failed' at 888k messages" ;
+  triage:description "fenix, 2026-09-14, relaying arch-ctm's v1.5.19 official benchmark campaign (20260914T200908Z-m5-atmbench, source a527e8ded, evidence/benchmark-v1.5.19 @ 546daa420, ATM message 01M2GRS1PQ8JX6GKM1JWJR77ZA). This is the first official campaign run on the EQ-006 post-restart durability-count method (`atm list --all --limit 1 --json bucket_counts` after restart). Admission itself was fine: 888000/888000 accepted, p50 45254.96 msg/s vs the 35000.0 floor (would PASS on throughput alone). But the durability-count phase failed outright, verbatim incomplete_reason: 'benchmark durability phase failed: could not count durable benchmark mailbox through atm list: bounded mailbox reader lane request failed. Recovery: Repair mailbox access or wait for the competing operation, then retry.; recovery: keep the benchmark daemon stopped and inspect the disposable benchmark store'. messages_durable is recorded as 0 despite 888000 admitted -- the count itself failed, this is not evidence that messages were actually lost. On the uds target in the same campaign, the identical EQ-006 count method succeeded at 375000 messages. fenix's assessment: likely owner is either the product read path (a bounded reader budget applied when counting a very large mailbox) or the EQ-006 harness's choice of method at this scale -- needs root cause, not a rerun. Evidence: site/reports/send-message-benchmark/20260914T200908Z-m5-atmbench-sqlite.json on evidence/benchmark-v1.5.19 @ 546daa420 (commit 2b98276bb). Not the same defect as the historical AI33-M5-SQLITE-READER-BUDGET-EXHAUSTED (phase-AI, closed 2026-07-30) -- that was a hard MAX_SQLITE_READER_CONNECTIONS=3 cap on the admission path, already removed; this is a different code path (post-restart bulk count) and a different scale (888k, an order of magnitude beyond anything AI33 exercised), surfacing for the first time because EQ-006's count method is new to official campaigns." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "fenix, v1.5.19 official benchmark campaign, relayed 2026-09-14 (ATM message 01M2GRS1PQ8JX6GKM1JWJR77ZA)" ;
+  triage:repeatable false ;
+  triage:sweepScope "The bounded-reader-lane/budget enforcement on the mailbox count read path exercised by `atm list --all --limit 1 --json bucket_counts` at large (888k+) message volumes on sqlite; separately, whether the EQ-006 harness method itself should page/chunk the count instead of a single bounded request at this scale. Needs a root cause identifying which side (product read-path bound vs. harness method) owns the fix before dispatch. Rand decides whether this blocks the v1.5.19 release (per fenix's framing); admission-side throughput itself already clears the floor, only the durability count failed." ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-016/1> ;
+  triage:triageRecordVersion "2" ;
+  triage:fixNote "fenix root-caused this himself and dispatched the fix (fix/eq-016-durability-count): mailbox selection and count were being done outside SQL, which is what the bounded reader lane choked on at scale (888k messages) -- moved into SQL. This turned out to be a genuine product bug, not just a benchmark-harness artifact: it also explains `atm read`/`atm list` timing out against the live daemon for mailboxes over roughly 1.5k messages. Lead-accepted (verdict posted on PR #1519): verified against real M5 atmbench durability artifacts at the merged SHA -- sqlite f1 887000/887000 and f8 918000/918000, both passed, expected_accepted_count == observed_mailbox_count. Lint and test green. Landed via 995f0334850cb964b0802d060d0e77ed7dbf9ebe on PR #1519, merged to develop at 00de2484e78ac7751392fe5afc1a6625b0362f1a. fenix recommends this ships in the v1.5.19 release given the live-daemon timeout impact; that call is Rand's, not asserted here as decided. CONFIRMED (team-lead, 2026-09-15): arch-ctm's v1.5.20 official campaign (evidence/benchmark-v1.5.20 @ 0b99e4ef3) independently re-verifies the fix -- sqlite now full PASS (44438 vs floor 35000, durability 887000/887000, was INCOMPLETE at v1.5.19). The fix is included in v1.5.20 (version bump a72ea2d62, PR #1520)." .
+
+<urn:atm:triage:occurrence/EQ-016/1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260914T200908Z-m5-atmbench-sqlite.json" ;
+  triage:line 1 ;
+  triage:snippet "status: INCOMPLETE; incomplete_reason: 'benchmark durability phase failed: could not count durable benchmark mailbox through atm list: bounded mailbox reader lane request failed'; messages_admitted 888000, messages_durable 0 (count failure, not confirmed loss), messages_requested 888000; admission p50 45254.96 vs floor 35000.0 (would PASS)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "develop" ;
+  triage:headSha "00de2484e" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-016/1> .
+
+<urn:atm:triage:worktree/EQ-016/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "00de2484e" ;
+  triage:orderIndex 1 .

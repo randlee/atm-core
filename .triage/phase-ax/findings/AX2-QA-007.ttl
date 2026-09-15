@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX2-QA-007>
+  a triage:Finding ;
+  triage:findingId "AX2-QA-007" ;
+  triage:title "FakeHerdrProcessAdapter::prompt names its used text parameter _text" ;
+  triage:description "crates/atm-herdr/src/lib.rs: the C2 trait-implementation update on FakeHerdrProcessAdapter::prompt introduced a parameter named _text (Rust's intentionally-unused convention) that the body immediately uses (_text.to_owned()) to populate FakeHerdrCall::Prompt; clippy pedantic used_underscore_binding flags this and it misleads readers. Introduced by the AX.2 diff. Fix: rename to text." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T07:37:02Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr follow-up QA; Resolution event triage:r10 in .sprints/AX/events.ttl; final sprint verdict AX2-QA2 PASS (PR #1186 comment 5550327947)." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX2 ;
+  triage:foundAt "2026-09-05T06:31:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX2-QA-007/AX2-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AX2-QA-007/AX2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 893 ;
+  triage:snippet "fn prompt<'a>( ... ) -> ... // parameter now: text (not _text)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:occursIn <urn:atm:triage:worktree/ax2-herdr-template-rendering/e7d4d545> .
+
+<urn:atm:triage:worktree/ax2-herdr-template-rendering/e7d4d545>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ax2-herdr-template-rendering" ;
+  triage:branch "feature/ax2-herdr-template-rendering" ;
+  triage:headSha "e7d4d54535669339ca184c3eec978f19412d4ec7" ;
+  triage:orderIndex 1 .

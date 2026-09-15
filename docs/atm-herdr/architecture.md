@@ -187,6 +187,7 @@ pub trait HerdrProcessAdapter: Send + Sync {
         &'a self,
         agent: &'a atm_core::types::AgentName,
         session: Option<&'a atm_core::HerdrSession>,
+        text: &'a str,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrPromptOutcome, HerdrError>> + Send + 'a>>;
 
@@ -218,6 +219,14 @@ pub trait HerdrProcessAdapter: Send + Sync {
         session: Option<&'a atm_core::HerdrSession>,
         deadline: atm_core::RequestDeadline,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>>;
+
+    /// Shows a desktop notification without targeting a Herdr pane.
+    fn notify<'a>(
+        &'a self,
+        title: &'a str,
+        body: &'a str,
+        deadline: atm_core::RequestDeadline,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), HerdrError>> + Send + 'a>>;
 }
 
 // -- breaker ------------------------------------------------------------------
@@ -274,6 +283,7 @@ pub mod testing {
         Wait { agent: String, session: Option<atm_core::HerdrSession>, until: Vec<super::HerdrAgentStatus>, timeout: std::time::Duration },
         Get { agent: String, session: Option<atm_core::HerdrSession>, breaker_policy: super::BreakerPolicy },
         List { session: Option<atm_core::HerdrSession> },
+        Notify { title: String, body: String },
     }
 
     /// Records every call for assertion; configurable per-call outcome.
@@ -288,6 +298,7 @@ pub mod testing {
         pub fn queue_wait_result(&self, result: Result<super::HerdrWaitOutcome, super::HerdrError>) { /* .. */ }
         pub fn queue_get_result(&self, result: Result<super::HerdrGetOutcome, super::HerdrError>) { /* .. */ }
         pub fn queue_list_result(&self, result: Result<super::HerdrListOutcome, super::HerdrError>) { /* .. */ }
+        pub fn queue_notify_result(&self, result: Result<(), super::HerdrError>) { /* .. */ }
     }
 
     impl super::HerdrProcessAdapter for FakeHerdrProcessAdapter { /* .. */ }
@@ -308,13 +319,13 @@ HerdrReceivedHook::emit(event)
   |  LocalMessageReceivedBackend::Herdr,
   |  already resolved before this call)
   v
-HerdrProcessInvoker::prompt(agent, session, deadline)
+HerdrProcessInvoker::prompt(agent, session, rendered_nudge, deadline)
                                                  | breaker.permits_spawn()?
                                                  |   no -> return HerdrError::Unavailable (no spawn)
                                                  |   yes
                                                  v
                                                  Command::new("herdr")
-                                                   .args(["agent","prompt",<agent>,WAKE_TEXT])
+                                                   .args(["agent","prompt",<agent>,<rendered_nudge>])
                                                    .env("HERDR_SESSION", s)?  <- only if Some
                                                  | spawn, external 5s deadline (HR-SAFE-002)
                                                  v
@@ -339,21 +350,17 @@ HerdrProcessInvoker::prompt(agent, session, deadline)
 
 ## 6. Data Flow: Queue-Tick Path
 
-Per Rand's 2026-08-26 decision, the AQ2.7 queue pump is a fixed-interval
-poller built on `list` + `prompt`, not a per-member lifecycle-gated
-`wait` loop. Cadence, FIFO ordering, and all queue state live in the
-AQ2.7 pump (`atm-http-runtime`); `atm-herdr` supplies only `list`,
-`prompt`, `get`, and the breaker.
+The Phase BA queue pump is a fixed-interval poller built on roster
+observations, task-ledger reads, and queue claims. Cadence, task ordering,
+disposition, and queue-marker state live in `atm-http-runtime` and
+`atm-storage`; `atm-herdr` supplies only the Herdr process operations.
 
 ```text
-atm-http-runtime (AQ2.7, HerdrQueueWakePump,     atm-herdr                          herdr (external process)
-not owned here)
+atm-http-runtime (Phase BA, HerdrQueueWakePump)  atm-herdr                          herdr (external process)
 ------------------------------------------------ ---------------------------------  -------------------------
 every 5 s tick:
-  list_pending_members()  [atm-storage]
-  | filter DeliveryChannel::HerdrSteer
-  |   [atm-core::delivery_channel]
-  | group pending members by session
+  roster members become candidates
+  | group Herdr-backed candidates by session
   v
 HerdrProcessInvoker::list(session, deadline)        (once per distinct session)
                                                   | breaker.permits_spawn()?
@@ -365,33 +372,43 @@ HerdrProcessInvoker::list(session, deadline)        (once per distinct session)
                                                   <---- Vec<AgentSnapshot> (exit 0),
                                                         or error.code (exit 1) ----
   <-------------------------------------------------|
-  | record_observed_state(member, state,
-  |   RuntimeObservationSource::HerdrPoll)  [atm-http-runtime,
-  |   RuntimeHealth] -- never record_heartbeat; never writes pid
+  | apply successful session-scoped state batch
+  |   [atm-http-runtime -> ephemeral master-roster record]
+  |   working=Active, idle/done=Idle, blocked=Blocked,
+  |   covered unknown/absent=Unknown; never writes pid/session
+  |   failed list preserves state and triggers no nudge
   |
-  | for each pending member whose listed
-  |   status is Idle | Done:
-  |     claim_next_pending(member)  [atm-storage, oldest first: FIFO]
-  |     rebuild_received_hook_dispatch(.., NudgeKind::Queue)  [atm-core]
-  |     -> HerdrReceivedHook (atm-daemon-bootstrap, AQ2.6)
-  |          -> HerdrProcessInvoker::prompt(agent, session, deadline)
-  |               (identical call/diagram to §5)
+  | owed task starts: for each head in `open_tasks_for_team` with
+  |   assigned state and an existing reminder audit, submit the idempotent
+  |   `TaskOp::Start` with no prompt
   |
-  |   at most one prompt per member per tick;
+  | queue drain: `list_pending_members()` supplies `open_mail`; for each
+  |   fresh Idle member, claim the oldest open marker, rebuild the dispatch,
+  |   and hand it to the selected backend
+  |
+  | task pass: `open_tasks_for_team(team)` reads each team's ordered queue;
+  |   `dispose(open_mail, state, head, now, new_episode, refusals)` selects
+  |   Nudge, escalation, or Hold for every observed member
+  |
+  |   at most one queue prompt per member per tick;
   |   a host-wide cap bounds total prompts issued this tick
   v
-match prompt outcome (from §5)
+match queue prompt outcome (from §5)
   AgentBlocked | AgentNotFound  -> release_pending(member, claim)  [atm-storage]
                                     (no retry-budget spend)
-  Accepted                      -> claim completes
-match list outcome
-  HerdrError::ServerNotRunning |
-  HerdrError::ProtocolMismatch |
-  HerdrError::Timeout |
-  (list call itself failed)     -> breaker.record_infrastructure_failure()
-                                    (HR-SAFE-005); listed members this tick
-                                    are skipped, not claimed
+  Accepted                      -> re-arm marker for the next interval
+                                    unless the queue item has closed
+queue marker lifecycle [atm-storage]
+  admission                     -> `nudge_pending_at = now`
+  successful handoff             -> `nudge_pending_at = now + interval`
+  read or acknowledged           -> `nudge_pending_at = NULL`
 ```
+
+Issue #1378 supersedes the historical `RuntimeHealth` write shown by the AQ2.7
+implementation plan. Herdr is still only the process adapter; the Tokio/Axum
+caller updates the same RAM roster state used by authenticated heartbeat POSTs.
+Source and time are metadata, and scheduling consumes the committed canonical
+update rather than the raw `AgentSnapshot`.
 
 ## 7. Error Mapping Table
 
@@ -565,3 +582,81 @@ following are not true:
 - exactly one `HerdrSpawnBreaker::new(` and one `HerdrProcessInvoker::new(`
   call site exist in the workspace, both inside
   `atm-daemon-bootstrap::build_replacement_handler` (finding 101, §9)
+
+## 12. Phase AY compatibility and platform contract
+
+Phase AY carries the Herdr client from the CLI process boundary toward native
+IPC: Unix-domain sockets on macOS/Linux and a named pipe on Windows. The
+transport difference is internal. The ATM-visible command set, typed errors,
+breaker semantics, bounded per-call failure model, and optional-dependency
+behaviour remain the same on all three platforms.
+
+The daemon does not own Herdr. Herdr owns its server, endpoint, session, and
+restart lifecycle; the ATM daemon neither launches Herdr nor waits for it at
+startup. A missing, late, unreachable, or crashed Herdr produces a bounded
+failure on the Herdr harness only. ATM messaging, tmux, Hermes, and doctor
+remain available. This rule applies to both the legacy CLI adapter during the
+AY transition and the native socket adapter; it does not authorize changes to
+the frozen synchronous daemon.
+
+### 12.1 Version-agnostic compatibility
+
+`HERDR_MINIMUM_VERSION` is the release floor and is owned by
+`crates/atm-herdr`; it is currently 0.8.0 under ADR-061. One ATM build
+supports every Herdr release at or above that floor. v0.8.2 is the design and
+recording target, while Herdr's integer `PROTOCOL_VERSION` is only a
+secondary bincode-client fact and is not the NDJSON compatibility floor.
+
+The single client implementation is deliberately version-agnostic:
+
+- new capabilities are additive or detected from `ping.version` and
+  `ping.capabilities`;
+- parsers key on stable error codes, tolerate unknown JSON fields, and never
+  match mutable error-message text;
+- the compatibility ledger at
+  [`herdr-versions.md`](herdr-versions.md) records the six operations,
+  per-release protocol facts, source drift, and the AY.2 recording-manifest
+  path (`crates/atm-herdr/tests/fixtures/herdr-versions/manifest.json`);
+- a release adds a recording set only when drift changes an ATM operation;
+  an unabsorbable change is escalated to Rand for a minimum-version decision
+  or an approved second implementation.
+
+### 12.2 Platform ownership and evidence
+
+The Herdr client contract does not claim live Windows evidence. AY.7 owns
+Windows-specific process correctness: console suppression, per-spawn binary
+resolution, CRLF-tolerant decoding, named-pipe handling, and kill-then-reap
+behaviour. Release readiness owns live Windows proof and the official
+benchmark. AY.1 records the audit and compatibility contract; it does not
+invent a Windows pass result.
+
+The former Phase AQ statement that Windows was outside scope is superseded.
+The supported-platform rule is instead recorded by HR-PLAT-001 and
+HR-LIFE-001 in `docs/atm-herdr/requirements.md` and by the Phase AY amendment
+to ADR-058. The three ATM-owned layers remain separate:
+
+```text
+Herdr lifecycle and endpoint ownership  ->  Herdr
+ATM transport/client + bounded failures ->  atm-herdr
+ATM startup, messaging, doctor policy   ->  atm-http-runtime / composition root
+```
+
+### 12.3 AY.9 transport selection
+
+AY.9 makes the native endpoint transport the production default. The
+bootstrap reader accepts the closed optional `[herdr].transport` value:
+`"socket"` (the omitted-value default) or `"cli"` (the permanent explicit
+alternative). It constructs one validated `HerdrClientConfig` at startup, and
+the one crate-private `atm-herdr` factory selects either the Unix-domain
+socket/Windows named pipe transport or the existing Tokio CLI transport.
+
+This is a startup choice, not a retry policy. A socket connection failure is
+reported through the same typed unavailable/breaker path as other transport
+failures; it never starts a CLI process as a hidden fallback. The private
+transport enum and the raw endpoint type remain inside `atm-herdr`. Doctor
+receives only the active transport kind and a sanitized symbolic endpoint
+display, never a raw user path or a transport implementation value.
+
+The CLI alternative has no removal release or ownership-key cleanup planned.
+AY.9 records automated compatibility and lifecycle gates only; release
+readiness, not this sprint, owns live proof.

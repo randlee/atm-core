@@ -134,9 +134,10 @@ impl AcknowledgementReplyBuilder for AtomicAcknowledgementBuilder {
 pub(crate) fn admit_acknowledgement_write<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
-    request: SendRequest,
+    mut request: SendRequest,
     runtime: &R,
 ) -> Result<AtomicAcknowledgementWrite, AtmError> {
+    canonicalize_local_acknowledgement_caller(runtime, &mut request);
     let provenance = validate_write_provenance(
         if request.to.is_some() {
             WriteIngress::Peer
@@ -201,9 +202,10 @@ pub(crate) fn admit_acknowledgement_write<
 /// source lookup, reply creation, and atomic source transition are one await
 /// on the storage-owned durable-admission lane.
 pub(crate) async fn admit_acknowledgement_write_async(
-    request: SendRequest,
+    mut request: SendRequest,
     runtime: &LocalServiceRuntime,
 ) -> Result<AtomicAcknowledgementWrite, AtmError> {
+    canonicalize_local_acknowledgement_caller(runtime, &mut request);
     let provenance = validate_write_provenance(
         if request.to.is_some() {
             WriteIngress::Peer
@@ -265,6 +267,33 @@ pub(crate) async fn admit_acknowledgement_write_async(
     builder.take()
 }
 
+/// A local acknowledgement does not travel through ordinary send-context
+/// preparation, but it still enters the Tokio daemon with a caller identity.
+/// Resolve that identity against the same immutable RAM roster before locating
+/// the pending source; durable acknowledgement rows must never contain the
+/// caller's roster alias.
+fn canonicalize_local_acknowledgement_caller<
+    R: RetainedServiceRuntime + crate::boundary::sealed::Sealed,
+>(
+    runtime: &R,
+    request: &mut SendRequest,
+) {
+    if request.to.is_some() {
+        return;
+    }
+    if let Some((team, member)) = runtime.resolve_roster_member_at_ingress(
+        &request.caller_team,
+        &request.caller_identity,
+        true,
+    ) {
+        if member != request.caller_identity {
+            request.activity_observation = None;
+        }
+        request.caller_team = team;
+        request.caller_identity = member;
+    }
+}
+
 pub(crate) fn build_atomic_acknowledgement(
     canonical_request: SendRequest,
     actor: AgentName,
@@ -309,6 +338,9 @@ pub(crate) fn build_atomic_acknowledgement(
         thread_mode: None,
         expires_at: None,
         task_id: None,
+        placement: None,
+        task_op: None,
+        task_complete: None,
         extra: serde_json::Map::new(),
     };
     persist_direct_peer_target(&canonical_request, destination, &mut envelope);
@@ -402,6 +434,8 @@ pub(crate) fn canonical_ack_write_request(
     source: &boundary::Message,
 ) -> Result<SendRequest, AtmError> {
     Ok(SendRequest {
+        placement: None,
+        task_op: None,
         home_dir: request.home_dir.clone(),
         current_dir: request.current_dir.clone(),
         caller_identity: actor.clone(),
@@ -409,6 +443,7 @@ pub(crate) fn canonical_ack_write_request(
         caller_team: team.clone(),
         activity_observation: request.activity_observation.clone(),
         authenticated_source_host: None,
+        peer_http_api_version: None,
         origin_message_id: None,
         origin_timestamp: None,
         to: Some(crate::address::AgentAddress::new(
@@ -423,6 +458,7 @@ pub(crate) fn canonical_ack_write_request(
         summary_override: None,
         requires_ack: false,
         task_id: None,
+        task_complete: None,
         parent_message_id: None,
         thread_mode: None,
         expires_at: None,
@@ -438,7 +474,7 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
     agent: &AgentName,
     recovery: &str,
 ) -> Result<(), AtmError> {
-    if runtime.load_roster_member(team, agent)?.is_none() {
+    if runtime.load_roster_member(team, agent).is_none() {
         return Err(AtmError::new(
             crate::error_codes::AtmErrorCode::AgentNotFound,
             format!("agent '{agent}' was not found in team '{team}'\n  Recovery: {recovery}"),

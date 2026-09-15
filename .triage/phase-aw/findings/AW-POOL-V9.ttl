@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-POOL-V9>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9" ;
+  triage:title "control_path_pool is a third, separate pool for roster/graft-lease/nudge/template/peer-config reads and writes; the target design is exactly one serial writer queue plus one capped read pool, with no separate reader lanes" ;
+  triage:description "fenix, writer-side pool read audit (01M1T3E38ZRWKTH14X9MK868T1), V9. SharedDb::with_connection/with_transaction (shared_db.rs:212) are the only debug_assert_blocking_only callers, both invoked from control_path_pool on the writer side (blocking). Production ReaderPool lanes today: 'mailbox' (mailbox_reader.rs:41) and 'search' (search_reader.rs:32) only; a 'doctor' lane exists only in test config (DEFAULT_DOCTOR_READER_CONFIG), no production doctor/diagnostics reader lane exists. control_path_pool's module doc declares a design exemption treating roster/graft-lease/nudge/template/peer-config state as 'bounded low-volume control state' served on the writer side for both reads and writes. RULING (Rand, relayed by fenix, msg 01M1T3GRDS1G9W1AWMCRBSA5VX, verbatim): 'the target design is exactly two things. One serial writer queue for every mutation. One read connection pool of N for every read, reads run in parallel; agents may use all N, tool-class reads (peek/search/doctor/diagnostics) capped at a fraction of N. No control-path pool, no separate reader lanes.' This overrules control_path_pool's stated exemption entirely: it must be deleted, along with the mailbox/search/doctor lane split, and replaced with one read pool serving every read (agent-class uncapped, tool-class -- peek/search/doctor/diagnostics -- capped strictly below the pool's full size). Every remaining control_path_pool write moves to the single writer queue. This finding is the architectural precondition the AW-POOL-V1/V3/V4/V5/V7/V8 fixes route their relocated reads and writes into; fix-round acceptance criteria should be worded as subtraction (remove the pool/lane types) rather than addition." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "architecture-boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-05T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9/shared-db> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9/control-path-pool> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9/shared-db>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 212 ;
+  triage:snippet "with_connection/with_transaction -- only debug_assert_blocking_only callers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v9/ac1088c82> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9/control-path-pool>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/control_path_pool.rs" ;
+  triage:line 1 ;
+  triage:snippet "module doc: bounded low-volume control state served on the writer side for both reads and writes" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v9/ac1088c82> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-v9/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-POOL-V9/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc, after all of FIX-1..FIX-10, ARCH-002, QA-001, and QA-002 are independently confirmed closed (see their own Resolution events). control_path_pool.rs is deleted entirely (398 lines removed, confirmed absent, zero remaining references in lib.rs). No separate mailbox/search/doctor ReaderPoolConfig lanes remain -- reader_pool.rs has a single ReaderPoolConfig type and a single doctor-facing ReaderPoolDoctorReport projection (FIX-2/FIX-5). All previously control-path-pool-routed reads (peer_config_store.rs, pending_nudge_store.rs, nudge_template_override_store.rs, graft_receiver_endpoint_store.rs, template_catalog_store.rs) now route through the shared ReaderPool via SharedDb::read/read_with_deadline; all writes moved to the single writer queue. Rand's ruling (relayed by fenix, 01M1T3GRDS1G9W1AWMCRBSA5VX) is implemented as stated: one serial writer queue for every mutation, one N-sized read pool for every read with tool-class reads capped below N." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

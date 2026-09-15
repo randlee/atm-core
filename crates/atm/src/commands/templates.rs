@@ -63,7 +63,7 @@ fn list(template_type: Option<String>, json: bool) -> Result<()> {
                     "template catalog is not installed in the local runtime",
                 )
             })?
-            .list(TemplateListFilter { template_type })
+            .list_for_tool(TemplateListFilter { template_type })
     })?;
     if json {
         let output = templates.iter().map(summary_output).collect::<Vec<_>>();
@@ -92,7 +92,7 @@ fn schema(sha: TemplateSha, json: bool) -> Result<()> {
                     "template catalog is not installed in the local runtime",
                 )
             })?
-            .load(&sha)
+            .load_for_tool(&sha)
     })?
     .ok_or_else(|| anyhow::anyhow!("no immutable template is registered for SHA {sha}"))?;
     let value = serde_json::json!({

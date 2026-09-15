@@ -23,7 +23,8 @@ Acknowledgement ownership notes:
 
 - `--requires-ack` creates durable sender-owned acknowledgement state at send
   time
-- task-linked sends imply `requires_ack = true`
+- task-linked sends set `requires_ack = false`; readiness is signalled by the
+  task pass
 - plain informational sends remain `requires_ack = false`
 
 References:

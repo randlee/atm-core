@@ -8,9 +8,7 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 use std::num::NonZeroU16;
 
-use crate::composition::{
-    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
-};
+use crate::composition::reload_running_runtime_view_outcome;
 use crate::observability::CliObservability;
 
 /// Manage durable cross-host HTTPS control-plane configuration.
@@ -142,13 +140,13 @@ enum MigrationAction {
 }
 
 impl PeerCommand {
-    pub async fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, _observability: &CliObservability) -> Result<()> {
         match self.command {
             PeerSubcommand::Trust(command) => {
                 let changed =
                     with_default_peer_config_store(|store| command.run_with_store(store))?;
-                if changed {
-                    Self::reload_runtime_view(observability).await?;
+                if changed && !reload_running_runtime_view_outcome().await? {
+                    println!("trusted peer change applies at the next daemon start");
                 }
                 Ok(())
             }
@@ -165,17 +163,6 @@ impl PeerCommand {
             PeerSubcommand::Certificate(command) => command.run_with_store(store),
             PeerSubcommand::Trust(command) => command.run_with_store(store).map(|_| ()),
         }
-    }
-
-    async fn reload_runtime_view(observability: &CliObservability) -> Result<()> {
-        let (home_dir, current_dir) = resolve_command_runtime_context("peer trust reload")?;
-        let composition = CliComposition::bootstrap(
-            "peer trust reload",
-            observability,
-            InvocationDir::new(&current_dir),
-            AtmHomePath::new(&home_dir),
-        )?;
-        Ok(composition.reload_runtime_view().await?)
     }
 }
 
@@ -450,6 +437,11 @@ fn peer(
     fingerprint: String,
     https_port: u16,
 ) -> std::result::Result<TrustedPeer, AtmError> {
+    if fingerprint.len() != 64 || !fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(AtmError::peer_config_validation(
+            "invalid --fingerprint: trusted-peer fingerprints must be exactly 64 hexadecimal characters",
+        ));
+    }
     Ok(TrustedPeer {
         host: trusted_peer_host(&host)?,
         fingerprint: fingerprint
@@ -679,7 +671,7 @@ mod tests {
                 "--host",
                 "peer.example",
                 "--fingerprint",
-                "sha256:peer",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "--yes",
             ],
             vec![
@@ -689,7 +681,7 @@ mod tests {
                 "--host",
                 "peer.example",
                 "--fingerprint",
-                "sha256:replacement",
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 "--yes",
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example", "--yes"],
@@ -777,7 +769,7 @@ mod tests {
                 "--host",
                 "peer.example",
                 "--fingerprint",
-                "sha256:peer-one",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "--yes",
             ],
         )
@@ -792,7 +784,7 @@ mod tests {
                 "--host",
                 "peer.example",
                 "--fingerprint",
-                "sha256:peer-two",
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 "--yes",
             ],
         )
@@ -802,7 +794,7 @@ mod tests {
                 .trusted_peer(&"peer.example".parse().expect("host"))
                 .expect("read replaced peer")
                 .map(|peer| peer.fingerprint.to_string()),
-            Some("sha256:peer-two".to_string())
+            Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string())
         );
         run_peer(
             &store,
@@ -830,12 +822,36 @@ mod tests {
                     "--host",
                     host,
                     "--fingerprint",
-                    "sha256:peer",
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                     "--yes",
                 ],
             )
             .expect_err("literal IP host must be rejected");
             assert!(error.message().contains("not stable peer identities"));
+        }
+        assert!(store.list_trusted_peers().expect("list peers").is_empty());
+    }
+
+    #[test]
+    fn trust_add_and_replace_require_exactly_64_hex_fingerprint_characters() {
+        let store = InMemoryPeerConfigStore::default();
+        for command in ["add", "replace"] {
+            let error = run_peer(
+                &store,
+                &[
+                    "atm",
+                    "trust",
+                    command,
+                    "--host",
+                    "peer.example",
+                    "--fingerprint",
+                    "sha256:test-peer",
+                    "--yes",
+                ],
+            )
+            .expect_err("malformed trusted-peer fingerprint must be rejected");
+            assert_eq!(error.code(), AtmErrorCode::PeerConfigValidationFailed);
+            assert!(error.message().contains("exactly 64 hexadecimal"));
         }
         assert!(store.list_trusted_peers().expect("list peers").is_empty());
     }
@@ -999,7 +1015,7 @@ mod tests {
                 "--host",
                 "peer.example",
                 "--fingerprint",
-                "sha256:peer",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             ],
             vec![
                 "atm",
@@ -1008,7 +1024,7 @@ mod tests {
                 "--host",
                 "peer.example",
                 "--fingerprint",
-                "sha256:peer",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example"],
         ];

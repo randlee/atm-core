@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY15-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY15-QA-001" ;
+  triage:title "CI red at 10bc123f8: atm-runtime doctor_projection test fixture gives team-a and team-b the same literal member name, now rejected by the database-wide unique_name check" ;
+  triage:description "quality-mgr qa-pr1310-r7 (PR #1310, AY.15 herdr-name-uniqueness, FINAL head 10bc123f8; report: PR #1310 issuecomment 5575994618). quality-mgr-discovered (not caught by any of the 5 round-7 reviewers). Test (macos-latest) and Test (ubuntu-latest) both fail deterministically with the identical panic at crates/atm-runtime/src/doctor_projection.rs:429 in doctor_projection::tests::all_team_projection_aggregates_each_roster_through_the_async_loop. The roster() fixture (doctor_projection.rs:402-417) builds one member named the literal 'member' for every team, so save_roster(team-a) then save_roster(team-b) trips D1's new database-wide unique_name enforcement: roster unique-name collision(s): member: (team-a, member), (team-b, member). Valid before this sprint (per-team uniqueness only); a genuine regression in a pre-existing fixture, not a flake (same panic, same line, both OSes, one clean re-run each). Root cause it was missed: rust-qa-agent's round-7 test invocation covered atm-core, atm, atm-herdr, atm-http-runtime, atm-storage-rusqlite, atm-daemon-bootstrap and never atm-runtime. Required correction: give each team's fixture member a team-unique name (or alias) so the fixture satisfies REQ-ROSTER-NAME-001, and run cargo test -p atm-runtime locally before push." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-runtime/src/doctor_projection.rs (tests module), every other multi-team roster fixture in the workspace that reuses one literal member name across teams" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T22:05:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T21:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY15-QA-001/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY15-QA-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/doctor_projection.rs" ;
+  triage:line 408 ;
+  triage:snippet "roster() fixture: agent_name: AgentName::from_validated('member') for every team" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-001/10bc123f8> .
+
+<urn:atm:triage:occurrence/AY15-QA-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/doctor_projection.rs" ;
+  triage:line 429 ;
+  triage:snippet "save_roster(&roster('team-b')).expect('team-b roster') panics on unique-name collision" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/AY15-QA-001/10bc123f8> .
+
+<urn:atm:triage:worktree/AY15-QA-001/10bc123f8>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1310-r7" ;
+  triage:branch "feature/ay15-herdr-name-uniqueness" ;
+  triage:headSha "10bc123f8" ;
+  triage:orderIndex 0 .

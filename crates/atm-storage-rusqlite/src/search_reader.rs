@@ -1,13 +1,12 @@
 //! Bounded backend-owned reader lane for typed search.
 
-use std::sync::Arc;
 use std::time::Duration;
 
-use atm_storage::{AtmError, MessageSearchPage, MessageSearchQuery, ReadLaneError};
+use atm_storage::{AtmError, MessageSearchPage, MessageSearchQuery};
 
+use crate::mailbox_reader::read_lane_storage_error;
 use crate::reader_pool::{ReaderPool, ReaderPoolConfig};
 use crate::search_store::execute_search;
-use crate::shared_db::SharedDbTarget;
 
 pub(crate) struct SearchReader {
     pool: ReaderPool,
@@ -23,20 +22,17 @@ impl std::fmt::Debug for SearchReader {
 }
 
 impl SearchReader {
-    pub(crate) fn start(
-        target: Arc<SharedDbTarget>,
-        config: ReaderPoolConfig,
-    ) -> Result<Self, AtmError> {
-        Ok(Self {
+    pub(crate) fn new(pool: ReaderPool, config: ReaderPoolConfig) -> Self {
+        Self {
             request_deadline: config.request_deadline,
-            pool: ReaderPool::start("search", target, config)?,
-        })
+            pool,
+        }
     }
 
     pub(crate) fn submit(&self, query: MessageSearchQuery) -> Result<MessageSearchPage, AtmError> {
         self.pool
-            .submit_blocking(self.request_deadline, move |connection, target| {
-                execute_search(&query, connection, target).map_err(read_lane_error)
+            .submit_tool_blocking(self.request_deadline, move |connection, target| {
+                execute_search(&query, connection, target).map_err(read_lane_storage_error)
             })
             .map_err(AtmError::from)
     }
@@ -47,19 +43,11 @@ impl SearchReader {
         timeout: Duration,
     ) -> Result<MessageSearchPage, AtmError> {
         self.pool
-            .submit(timeout, move |connection, target| {
-                execute_search(&query, connection, target).map_err(read_lane_error)
+            .submit_tool(timeout, move |connection, target| {
+                execute_search(&query, connection, target).map_err(read_lane_storage_error)
             })
             .await
             .map_err(AtmError::from)
-    }
-
-    pub(crate) fn metrics(&self) -> crate::reader_pool::ReaderLaneMetricsSnapshot {
-        self.pool.metrics()
-    }
-
-    pub(crate) fn record_wal_health(&self, checkpoint_succeeded: bool, frames: u64) {
-        self.pool.record_wal_health(checkpoint_succeeded, frames);
     }
 
     #[cfg(test)]
@@ -70,12 +58,6 @@ impl SearchReader {
         Err(AtmError::daemon_unavailable(
             "SQLite search reader request expired before execution",
         ))
-    }
-}
-
-fn read_lane_error(error: AtmError) -> ReadLaneError {
-    ReadLaneError::Unavailable {
-        message: error.message().to_owned(),
     }
 }
 

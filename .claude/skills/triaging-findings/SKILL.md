@@ -375,10 +375,7 @@ Do not send:
 
 ## ATM Message Contract
 
-Every handoff follows the team protocol:
-1. immediate ACK
-2. work
-3. completion summary
-4. completion ACK by receiver
-
-No silent processing.
+Every handoff follows the Required Flow in
+[`docs/team-protocol.md`](../../../docs/team-protocol.md): task start, work,
+task close. A task close is terminal; the receiver does not acknowledge it. No
+silent processing.

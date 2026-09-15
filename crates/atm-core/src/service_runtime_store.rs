@@ -28,7 +28,9 @@ type DefaultRuntimeFactory = fn() -> Result<LocalServiceRuntime, AtmError>;
 #[derive(Clone)]
 enum DefaultRuntimeProvider {
     Factory(DefaultRuntimeFactory),
-    Instance(LocalServiceRuntime),
+    // Boxed so an installed instance (which grew with AX.3's optional
+    // task-store capability) does not bloat every `Factory` match arm.
+    Instance(Box<LocalServiceRuntime>),
 }
 
 static DEFAULT_RUNTIME_PROVIDER: OnceLock<DefaultRuntimeProvider> = OnceLock::new();
@@ -53,7 +55,7 @@ pub(crate) fn install_default_runtime_factory(factory: DefaultRuntimeFactory) {
 }
 
 pub(crate) fn install_default_runtime_instance(runtime: LocalServiceRuntime) {
-    let _ = DEFAULT_RUNTIME_PROVIDER.set(DefaultRuntimeProvider::Instance(runtime));
+    let _ = DEFAULT_RUNTIME_PROVIDER.set(DefaultRuntimeProvider::Instance(Box::new(runtime)));
 }
 
 pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
@@ -65,7 +67,7 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
     {
         return match provider {
             DefaultRuntimeProvider::Factory(factory) => factory(),
-            DefaultRuntimeProvider::Instance(runtime) => Ok(runtime),
+            DefaultRuntimeProvider::Instance(runtime) => Ok(*runtime),
         };
     }
 
@@ -80,7 +82,7 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
         })
         .and_then(|provider| match provider {
             DefaultRuntimeProvider::Factory(factory) => factory(),
-            DefaultRuntimeProvider::Instance(runtime) => Ok(runtime),
+            DefaultRuntimeProvider::Instance(runtime) => Ok(*runtime),
         })
 }
 
@@ -143,6 +145,18 @@ pub(crate) trait RetainedMailboxRuntime {
         }
         self.persist_message_record(record)?;
         Ok(None)
+    }
+    /// Provenance-aware admission with the governed task-close result from
+    /// the same durable writer transaction.
+    fn admit_message_record_with_outcome(
+        &self,
+        home_dir: &Path,
+        record: boundary::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        let _ = provenance;
+        self.admit_message_record(home_dir, record)
+            .map(atm_storage::MessageAdmissionOutcome::passive)
     }
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
     fn persist_message_records_atomically(
@@ -243,6 +257,16 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
                 envelope: record.envelope,
             })
             .map(|existing| existing.map(shared_message_to_record))
+    }
+
+    fn admit_message_record_with_outcome(
+        &self,
+        _home_dir: &Path,
+        record: boundary::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        self.message_store
+            .admit_message_with_provenance(&record, provenance)
     }
 
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError> {

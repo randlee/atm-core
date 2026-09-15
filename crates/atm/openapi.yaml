@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: v1
+  version: 1.9.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
@@ -27,7 +27,7 @@ paths:
         - $ref: '#/components/parameters/Agent'
         - $ref: '#/components/parameters/ChatId'
       responses:
-        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/ListOutcome' } } } }
         default: { $ref: '#/components/responses/AtmError' }
     post:
       operationId: writeMessage
@@ -51,20 +51,20 @@ paths:
       operationId: inspectMessages
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PeekQuery' } } } }
       responses:
-        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/ReadOutcome' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /messages/read:
     post:
       operationId: readMessages
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReadQuery' } } } }
       responses:
-        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/ReadOutcome' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /doctor:
     get:
       operationId: doctor
       responses:
-        '200': { description: Daemon health, content: { application/json: { schema: { type: object } } } }
+        '200': { description: Daemon health, content: { application/json: { schema: { $ref: '#/components/schemas/DoctorResponse' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /compatibility:
     post:
@@ -87,6 +87,14 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/QueueGetNextRequest' } } } }
       responses:
         '200': { description: Queue messages, content: { application/json: { schema: { $ref: '#/components/schemas/QueueGetNextResponse' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /tasks/move:
+    post:
+      operationId: moveTask
+      description: Local-ingress-only reorder of an open task in its assignee's queue.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveRequest' } } } }
+      responses:
+        '200': { description: Task move result, content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveOutcome' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /graft/receiver/register:
     post:
@@ -155,6 +163,9 @@ components:
         body: { type: string }
         requires_ack: { type: boolean }
         acknowledges_message_id: { type: string }
+        peer_http_api_version:
+          type: string
+          description: Optional cross-host wire API version. The current baseline is 1.4.0; receivers reject only a major-version mismatch.
     PeekQuery:
       type: object
       description: Canonical inspect query; fields are validated by the daemon.
@@ -167,6 +178,115 @@ components:
     ListQuery:
       type: object
       description: Canonical list query; fields are validated by the daemon.
+    DoctorResponse:
+      type: object
+      description: Doctor report. Herdr endpoint presence entries identify both the canonical roster name and the effective Herdr agent name.
+      properties:
+        herdr:
+          $ref: '#/components/schemas/HerdrDoctorReport'
+        runtime_status:
+          $ref: '#/components/schemas/RuntimeStatusSnapshot'
+          description: Optional projection of the daemon's canonical ephemeral master-roster state; added in HTTP API 1.4.0.
+    RuntimeStatusSnapshot:
+      type: object
+      required: [liveness, readiness]
+      properties:
+        liveness: { type: string, enum: [running, unavailable] }
+        readiness: { type: string, enum: [ready, degraded, unavailable] }
+        detail: { type: string, nullable: true }
+        singleton_owner_pid: { type: integer, format: uint32, nullable: true }
+        degraded_ingest: { type: boolean, default: false }
+        member_counts: { $ref: '#/components/schemas/RuntimeStatusCounts' }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/RuntimeMemberObservation' }
+        graft_queue_handoff_failures_total: { type: integer, format: uint64, default: 0 }
+        graft_queue_marker_clear_failures_total: { type: integer, format: uint64, default: 0 }
+        bare_cli_queue_full_drops_total: { type: integer, format: uint64, default: 0 }
+        queue_marker_set_failures_total: { type: integer, format: uint64, default: 0 }
+        herdr_queue_last_tick_at: { type: string, format: date-time, nullable: true }
+        queue_messages_drained_total: { type: integer, format: uint64, default: 0 }
+        queue_drain_failures_total: { type: integer, format: uint64, default: 0 }
+        blocking_core_bridge_stalls_total: { type: integer, format: uint64, default: 0 }
+        write_source_preflight_stalls_total: { type: integer, format: uint64, default: 0 }
+    RuntimeStatusCounts:
+      type: object
+      required: [active_members, idle_members, offline_members, unknown_members]
+      properties:
+        active_members: { type: integer, format: uint64 }
+        idle_members: { type: integer, format: uint64 }
+        offline_members: { type: integer, format: uint64 }
+        unknown_members: { type: integer, format: uint64 }
+    RuntimeMemberObservation:
+      type: object
+      required: [team, member, state]
+      properties:
+        team: { type: string }
+        member: { type: string }
+        state: { type: string, enum: [unknown, identity_conflict, offline, idle, active, blocked] }
+        revision: { type: integer, format: uint64, default: 0, description: Monotonic accepted-observation revision; added in HTTP API 1.4.0. }
+        availability: { $ref: '#/components/schemas/RuntimeObservationAvailability', description: Freshness of the most recent accepted observation attempt; added in HTTP API 1.4.0. }
+        last_observation_attempt_by: { $ref: '#/components/schemas/RuntimeObservationSource', nullable: true, description: Source of the latest accepted attempt; added in HTTP API 1.4.0. }
+        last_observation_attempt_at: { type: string, format: date-time, nullable: true, description: Time of the latest accepted attempt; added in HTTP API 1.4.0. }
+        last_observed_by: { $ref: '#/components/schemas/RuntimeObservationSource', nullable: true, description: Source of the latest successful observation; added in HTTP API 1.4.0. }
+        last_observed_at: { type: string, format: date-time, nullable: true, description: Time of the latest successful observation; added in HTTP API 1.4.0. }
+        session_id: { type: string, nullable: true }
+        pid: { type: integer, format: uint32, nullable: true }
+        last_active_at: { type: string, format: date-time, nullable: true }
+        state_changed_by: { $ref: '#/components/schemas/RuntimeObservationSource', nullable: true }
+        state_changed_at: { type: string, format: date-time, nullable: true }
+        session_changed_by: { $ref: '#/components/schemas/RuntimeObservationSource', nullable: true }
+        session_changed_at: { type: string, format: date-time, nullable: true }
+    RuntimeObservationAvailability:
+      type: string
+      enum: [unobserved, fresh, unavailable]
+      default: unobserved
+    RuntimeObservationSource:
+      type: string
+      enum: [heartbeat, herdr_poll]
+    HerdrDoctorReport:
+      type: object
+      properties:
+        endpoints:
+          type: array
+          items: { $ref: '#/components/schemas/HerdrEndpointDoctorReport' }
+        breaker:
+          $ref: '#/components/schemas/HerdrBreakerDoctorReport'
+    HerdrBreakerDoctorReport:
+      type: object
+      properties:
+        state: { type: string, enum: [closed, open] }
+        retry_after_ms: { type: integer, format: uint64, nullable: true }
+        consecutive_failures: { type: integer, format: uint32, nullable: true }
+        last_error_code: { type: string, nullable: true, description: Last infrastructure error code; added in HTTP API 1.3.0. }
+        last_error_detail: { type: string, nullable: true, description: Last infrastructure error detail; added in HTTP API 1.3.0. }
+    HerdrEndpointDoctorReport:
+      type: object
+      properties:
+        transport: { type: string, enum: [cli, socket], description: Transport used by the Herdr endpoint; added in HTTP API 1.2.0. }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/HerdrMemberPresence' }
+        findings:
+          type: array
+          description: Endpoint-wide target-resolution and named-session findings; added in HTTP API 1.3.0.
+          items: { $ref: '#/components/schemas/DoctorFinding' }
+    DoctorFinding:
+      type: object
+      description: Privacy-safe operator diagnostic.
+      properties:
+        severity: { type: string }
+        code: { type: string, description: Stable ATM_* code; HTTP API 1.8.0 adds ATM_TASK_ALREADY_ACTIVE. }
+        message: { type: string }
+        remediation: { type: string }
+    HerdrMemberPresence:
+      type: object
+      required: [name, outcome]
+      description: Herdr presence result. herdr_agent is the effective Herdr identity and was added in HTTP API 1.2.0.
+      properties:
+        name: { type: string, description: Canonical roster member name. }
+        herdr_agent: { type: string, nullable: true, description: Effective Herdr agent name; nullable for backward-compatible v1.1 payloads; added in HTTP API 1.2.0. }
+        outcome: { type: object, description: Presence probe outcome. }
     SearchRequest:
       type: object
       required: [query]
@@ -241,6 +361,32 @@ components:
       required: [messages]
       properties:
         messages: { type: array, items: { $ref: '#/components/schemas/QueuedNudgeMessage' } }
+    TaskMoveRequest:
+      type: object
+      required: [caller_identity, caller_team, task_id, target]
+      properties:
+        caller_identity: { type: string }
+        caller_team: { type: string }
+        task_id: { type: string }
+        target:
+          oneOf:
+            - type: object
+              required: [to]
+              properties:
+                to: { type: string, enum: [head, end] }
+            - type: object
+              required: [to, task_id]
+              properties:
+                to: { type: string, enum: [before] }
+                task_id: { type: string }
+    TaskMoveOutcome:
+      type: object
+      required: [task_id, assignee, from, to]
+      properties:
+        task_id: { type: string }
+        assignee: { type: string }
+        from: { type: integer, minimum: 1 }
+        to: { type: integer, minimum: 1 }
     QueuedNudgeMessage:
       type: object
       required: [kind, msg_id, body]
@@ -297,12 +443,129 @@ components:
         body: { type: string }
         requires_ack: { type: boolean }
         acknowledges_message_id: { type: string }
-    MessageList:
+    ListOutcome:
       type: object
-      required: [messages]
+      description: Body of the `List` response-envelope variant; path references are corrected under the BB.7 envelope item.
+      required: [action, team, agent, selection_mode, history_collapsed, count, rows, bucket_counts]
       properties:
-        messages: { type: array, items: { $ref: '#/components/schemas/Message' } }
-        cursor: { type: string }
+        action: { type: string }
+        team: { type: string }
+        agent: { type: string }
+        selection_mode: { type: string }
+        history_collapsed: { type: boolean }
+        count: { type: integer }
+        rows: { type: array, items: { $ref: '#/components/schemas/ListRow' } }
+        bucket_counts: { $ref: '#/components/schemas/BucketCounts' }
+        task_rows: { type: array, items: { $ref: '#/components/schemas/TaskRow' }, default: [] }
+        task_event_rows: { type: array, items: { $ref: '#/components/schemas/TaskEventRow' }, default: [] }
+        handoffs: { type: array, items: { $ref: '#/components/schemas/PromptHandoff' }, default: [] }
+    ListRow:
+      type: object
+      required: [message_id, summary, from, timestamp, read, pending_ack, task_id]
+      properties:
+        message_id: { type: string, nullable: true }
+        summary: { type: string }
+        from: { type: string }
+        timestamp: { type: string, format: date-time }
+        read: { type: boolean }
+        pending_ack: { type: boolean }
+        task_id: { type: string, nullable: true }
+    BucketCounts:
+      type: object
+      required: [unread, pending_ack, history]
+      properties:
+        unread: { type: integer }
+        pending_ack: { type: integer }
+        history: { type: integer }
+    TaskRow:
+      type: object
+      required: [team, task_id, assignee, assigner, state, assignment_message_id, description, assigned_at, updated_at, reminder_count, lead_notified_count]
+      properties:
+        team: { type: string }
+        task_id: { type: string }
+        assignee: { type: string }
+        assigner: { type: string }
+        state: { type: string, enum: [assigned, active, complete] }
+        close_outcome: { type: string, nullable: true }
+        position: { type: integer, nullable: true }
+        assignment_message_id: { type: string }
+        description: { type: string }
+        assigned_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_reminded_at: { type: string, format: date-time, nullable: true }
+        reminder_count: { type: integer, format: uint32 }
+        lead_notified_count: { type: integer, format: uint32 }
+    TaskEventRow:
+      type: object
+      required: [team, task_id, assignee, seq, at, event, actor]
+      properties:
+        team: { type: string }
+        task_id: { type: string }
+        assignee: { type: string }
+        seq: { type: integer, format: uint64 }
+        at: { type: string, format: date-time }
+        event: { type: string }
+        from_state: { type: string, nullable: true }
+        to_state: { type: string, nullable: true }
+        close_outcome: { type: string, nullable: true }
+        actor: { type: object }
+        message_id: { type: string, nullable: true }
+        outcome: { type: string, nullable: true }
+        marker: { type: string, nullable: true }
+        detail: { type: string, nullable: true }
+    ReadOutcome:
+      type: object
+      required: [action, team, agent, selection_mode, mutation_applied, count, match_count, additional_match_count, bucket_counts]
+      properties:
+        action: { type: string }
+        team: { type: string }
+        agent: { type: string }
+        selection_mode: { type: string }
+        mutation_applied: { type: boolean }
+        count: { type: integer }
+        message: { $ref: '#/components/schemas/ClassifiedMessage' }
+        selected_message_id: { type: string }
+        match_count: { type: integer }
+        additional_match_count: { type: integer }
+        bucket_counts: { $ref: '#/components/schemas/BucketCounts' }
+    ClassifiedMessage:
+      type: object
+      required: [bucket, class, from, text, timestamp, read, requires_ack]
+      properties:
+        bucket: { type: string, enum: [unread, pending_ack, history] }
+        class: { type: string, enum: [unread, pending_ack, acknowledged, read] }
+        from: { type: string }
+        text: { type: string }
+        timestamp: { type: string, format: date-time }
+        read: { type: boolean }
+        requires_ack: { type: boolean }
+        sourceChatId: { type: string }
+        source_team: { type: string }
+        destinationChatId: { type: string }
+        summary: { type: string }
+        message_id: { type: string }
+        pendingAckAt: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time }
+        acknowledgesMessageId: { type: string }
+        parentMessageId: { type: string }
+        threadMode: { type: string, enum: [add-details, supersede] }
+        expiresAt: { type: string, format: date-time }
+        taskId: { type: string }
+        placement: { type: object }
+        taskOp: { type: object }
+        taskComplete: { type: string }
+    PromptHandoff:
+      type: object
+      required: [team, agent, message_key, kind, task_id, attempt, trigger, at]
+      properties:
+        team: { type: string }
+        agent: { type: string }
+        message_key: { type: string }
+        kind: { type: string, enum: [delivery, delivery_ack, queue, queue_ack, acknowledge, task_queued, task_ready, task_reminder, task_started, task_complete, task_closed] }
+        task_id: { type: string }
+        attempt: { type: integer, format: uint32 }
+        trigger: { type: string, enum: [steer, task_pass] }
+        at: { type: string, format: date-time }
     AtmError:
       type: object
       required: [code, message]

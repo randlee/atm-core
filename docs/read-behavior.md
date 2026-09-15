@@ -35,7 +35,7 @@ The current queue behavior already has useful properties that should survive
 the rewrite:
 - default view shows actionable work only
 - pending-ack messages stay visible until they are acknowledged
-- task-linked ack-required messages arrive already actionable
+- task-linked messages are never ack-required and are actionable on `task_ready`
 - duplicate deliveries should collapse by `message_id` instead of showing the
   same message repeatedly
 - history can still be expanded explicitly without hiding actionable work
@@ -130,7 +130,9 @@ Retained tests and requirements establish these rules:
 Mutation belongs to `atm read`, not to `atm list` or `atm peek`.
 
 Required `atm read` behavior:
-- the selected displayed message is always written back with `read = true`
+- the selected displayed message's legal read/seen transition is offered to
+  the supervised non-blocking handoff; `mutation_applied = true` reports
+  acceptance, not durable `read = true` visibility
 - selected unread messages that do not already require acknowledgement remain
   `NoAckRequired` after display
 - selected unread messages that already require acknowledgement remain
@@ -245,7 +247,8 @@ Disallowed transitions:
 Notes:
 - `read = true` is the base mutation on owner-only `atm read`
 - `atm peek` performs inspection only and applies no mutation
-- task-linked messages are required-ack messages and remain in the pending-ack queue until acknowledged
+- task-linked messages never enter the pending-ack queue; only mail sent with
+  `--requires-ack` does
 
 ## 7. Seen-State Rules
 
@@ -384,8 +387,10 @@ Shared query phases:
 11. Re-run selection and choose one selected message.
 12. Apply legal read-axis and ack-axis transitions for that one message if
     allowed.
-13. Persist state changes atomically.
-14. Update seen-state from the selected message when enabled.
+13. Offer state changes to the supervised non-blocking handoff; the response
+    does not await durable application.
+14. Offer any selected-message seen-state update when enabled, without
+    awaiting durable application.
 15. Return `ReadOutcome` with match metadata.
 
 This order matters.
@@ -394,12 +399,14 @@ In particular:
 - selection must happen before mutation
 - `atm list` must not materialize or render multiple full message bodies
 - `atm read` must choose one message before mutation
-- mutation must happen before final `atm read` output is returned
+- mutation handoff acceptance happens before final `atm read` output is
+  returned; durable visibility may follow later and is observed with a bounded
+  list poll
 - seen-state updates must use the selected/displayed message, not the full
   inbox
-- when the merged inbox surface includes origin inbox files, each
-  selected-message mutation must be written back to the physical source file
-  for that record
+- accepted read/seen transitions target the authoritative ATM store through
+  the supervised handoff; origin inbox files are compatibility inputs, not the
+  mutation destination
 
 ## 11. Output Contract
 
@@ -436,6 +443,7 @@ Each list row:
 - `selected_message_id`
 - `match_count`
 - `additional_match_count`
+- `mutation_applied`
 - `bucket_counts`
 
 `match_count` is the total number of logical current-message matches after all
@@ -443,8 +451,11 @@ filters and successor-chain collapse are applied. `additional_match_count` is
 `match_count - 1` for a successful read.
 
 Cross-document invariants:
-- displayed/read messages always persist `read = true`
-- task-linked messages are ack-required from send time
+- `mutation_applied = true` means the selected message's legal read/seen
+  transition was accepted into the supervised non-blocking handoff, not that
+  `read = true` is already durable; consumers use a bounded later `atm list`
+  poll when durable visibility matters
+- task-linked messages are never ack-required
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
 - `atm clear` never removes pending-ack messages
@@ -482,7 +493,7 @@ An implementation of the queue-inspection surface is acceptable only if:
 - it keeps display buckets separate from the canonical axes
 - it preserves default actionable-queue behavior
 - it preserves the current pending-ack lifecycle
-- it preserves task-linked pending-ack visibility until acknowledgement
+- it never creates pending-ack state for task-linked messages
 - `atm list` stays metadata-only and bounded by query behavior
 - `atm read` returns one message and reports additional matches in metadata
 - no daemon-only logic survives in core queue behavior

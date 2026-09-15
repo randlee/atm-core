@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from enum import Enum
 import sys
 import types
 import unittest
@@ -218,8 +219,9 @@ class RuntimeTests(unittest.TestCase):
             original_config = sys.modules.get("gateway.config")
             sessions = []
 
-            class FakePlatform:
-                TELEGRAM = object()
+            class FakePlatform(Enum):
+                TELEGRAM = "telegram"
+                API_SERVER = "api_server"
 
             gateway_module = types.ModuleType("gateway")
             config_module = types.ModuleType("gateway.config")
@@ -270,6 +272,104 @@ class RuntimeTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_gateway_runner_api_resolves_explicit_api_server_platform(self):
+        async def scenario():
+            import hermes_atm.runtime as module
+
+            original_session = module.atm_graft.PyGraftSession
+            original_gateway = sys.modules.get("gateway")
+            original_config = sys.modules.get("gateway.config")
+
+            class FakePlatform(Enum):
+                TELEGRAM = "telegram"
+                API_SERVER = "api_server"
+
+            gateway_module = types.ModuleType("gateway")
+            config_module = types.ModuleType("gateway.config")
+            config_module.Platform = FakePlatform
+            gateway_module.config = config_module
+            sys.modules["gateway"] = gateway_module
+            sys.modules["gateway.config"] = config_module
+
+            def make_session(caller):
+                return FakeSession(caller)
+
+            module.atm_graft.PyGraftSession = make_session
+            try:
+                injector = FakeInjector()
+                runtime = HermesAtmRuntime.from_gateway_runner(
+                    types.SimpleNamespace(
+                        gateway_loop=asyncio.get_running_loop(),
+                        inject_internal_message=injector,
+                    ),
+                    profile=TEST_PROFILE,
+                    platform="api_server",
+                    environment={
+                        "ATM_HOME": "/tmp/atm",
+                        "ATM_IDENTITY": TEST_IDENTITY,
+                        "ATM_TEAM": TEST_TEAM,
+                        "ATM_CHAT_ID": TEST_CHAT_ID,
+                    },
+                )
+                self.assertIs(runtime.platform, FakePlatform.API_SERVER)
+                runtime.close()
+            finally:
+                module.atm_graft.PyGraftSession = original_session
+                if original_gateway is None:
+                    sys.modules.pop("gateway", None)
+                else:
+                    sys.modules["gateway"] = original_gateway
+                if original_config is None:
+                    sys.modules.pop("gateway.config", None)
+                else:
+                    sys.modules["gateway.config"] = original_config
+
+        asyncio.run(scenario())
+
+    def test_gateway_runner_api_rejects_unavailable_platform(self):
+        async def scenario():
+            import hermes_atm.runtime as module
+
+            original_gateway = sys.modules.get("gateway")
+            original_config = sys.modules.get("gateway.config")
+
+            class FakePlatform(Enum):
+                TELEGRAM = "telegram"
+
+            gateway_module = types.ModuleType("gateway")
+            config_module = types.ModuleType("gateway.config")
+            config_module.Platform = FakePlatform
+            gateway_module.config = config_module
+            sys.modules["gateway"] = gateway_module
+            sys.modules["gateway.config"] = config_module
+            try:
+                with self.assertRaisesRegex(HermesAtmRuntimeError, "not available"):
+                    HermesAtmRuntime.from_gateway_runner(
+                        types.SimpleNamespace(
+                            gateway_loop=asyncio.get_running_loop(),
+                            inject_internal_message=FakeInjector(),
+                        ),
+                        profile=TEST_PROFILE,
+                        platform="missing_platform",
+                        environment={
+                            "ATM_HOME": "/tmp/atm",
+                            "ATM_IDENTITY": TEST_IDENTITY,
+                            "ATM_TEAM": TEST_TEAM,
+                            "ATM_CHAT_ID": TEST_CHAT_ID,
+                        },
+                    )
+            finally:
+                if original_gateway is None:
+                    sys.modules.pop("gateway", None)
+                else:
+                    sys.modules["gateway"] = original_gateway
+                if original_config is None:
+                    sys.modules.pop("gateway.config", None)
+                else:
+                    sys.modules["gateway.config"] = original_config
+
+        asyncio.run(scenario())
+
     def test_gateway_runner_api_uses_running_loop_when_host_omits_loop_attribute(self):
         async def scenario():
             import hermes_atm.runtime as module
@@ -278,8 +378,8 @@ class RuntimeTests(unittest.TestCase):
             original_gateway = sys.modules.get("gateway")
             original_config = sys.modules.get("gateway.config")
 
-            class FakePlatform:
-                TELEGRAM = object()
+            class FakePlatform(Enum):
+                TELEGRAM = "telegram"
 
             gateway_module = types.ModuleType("gateway")
             config_module = types.ModuleType("gateway.config")

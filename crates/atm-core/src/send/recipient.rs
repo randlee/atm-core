@@ -34,7 +34,7 @@ pub(crate) fn validate_non_self_recipient(
 pub(crate) fn resolve_recipient(
     target_address: &AgentAddress,
     caller_team: &TeamName,
-    config: Option<&config::AtmConfig>,
+    _config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedRecipient, AtmError> {
     // `AgentAddress` has already validated the explicit team segment. Never
     // parse it again and silently substitute the caller team on failure.
@@ -44,18 +44,98 @@ pub(crate) fn resolve_recipient(
         .unwrap_or_else(|| caller_team.clone());
 
     Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent_name(target_address.agent(), config)?,
+        agent: target_address.agent().clone(),
         team,
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ResolvedRecipient, validate_non_self_recipient};
+    use super::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
     use crate::address::AgentAddress;
+    use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
+    use crate::caller_context::resolve_roster_alias;
     use crate::error_codes::AtmErrorCode;
     use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::types::{AgentName, TeamName};
+
+    fn member(team: &TeamName, name: &str, alias: Option<&str>) -> RosterEntry {
+        let mut metadata_json = serde_json::Map::new();
+        if let Some(alias) = alias {
+            metadata_json.insert("alias".to_string(), serde_json::json!(alias));
+        }
+        RosterEntry {
+            team_name: team.clone(),
+            agent_name: AgentName::from_validated(name),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::from("worker".to_string()),
+            model: crate::types::ModelName::new("gpt-5").expect("model"),
+            recipient_pane_id: None,
+            metadata_json,
+        }
+    }
+
+    #[test]
+    fn roster_alias_resolves_to_canonical_member() {
+        let team = TeamName::from_validated("test-team");
+        let roster = vec![member(&team, ROLE_TEAM_LEAD, Some("team-lead_atm-dev"))];
+
+        assert_eq!(
+            resolve_roster_alias(
+                &AgentName::from_validated("team-lead_atm-dev"),
+                &team,
+                &roster,
+            ),
+            AgentName::from_validated(ROLE_TEAM_LEAD)
+        );
+    }
+
+    #[test]
+    fn roster_alias_resolves_for_implicit_and_explicit_team_targets() {
+        let team = TeamName::from_validated("test-team");
+        let roster = vec![member(&team, ROLE_TEAM_LEAD, Some("team-lead_atm-dev"))];
+
+        for raw_target in ["team-lead_atm-dev", "team-lead_atm-dev@test-team"] {
+            let target = raw_target.parse::<AgentAddress>().expect("target");
+            let resolved = resolve_recipient(&target, &team, None).expect("parse recipient");
+            assert_eq!(resolved.team, team);
+            assert_eq!(
+                resolve_roster_alias(&resolved.agent, &resolved.team, &roster),
+                AgentName::from_validated(ROLE_TEAM_LEAD),
+                "{raw_target} must resolve through roster alias"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_roster_alias_preserves_the_canonical_parse_result() {
+        let team = TeamName::from_validated("test-team");
+        let target = "unknown-alias@test-team"
+            .parse::<AgentAddress>()
+            .expect("target");
+        let resolved = resolve_recipient(&target, &team, None).expect("parse recipient");
+
+        assert_eq!(
+            resolve_roster_alias(&resolved.agent, &resolved.team, &[]),
+            AgentName::from_validated("unknown-alias")
+        );
+    }
+
+    #[test]
+    fn canonical_name_wins_over_historical_alias_collision() {
+        let team = TeamName::from_validated("test-team");
+        let roster = vec![
+            member(&team, ROLE_TEAM_LEAD, Some("worker")),
+            member(&team, "worker", None),
+        ];
+
+        assert_eq!(
+            resolve_roster_alias(&AgentName::from_validated("worker"), &team, &roster),
+            AgentName::from_validated("worker")
+        );
+    }
 
     #[test]
     fn rejects_case_variant_self_target() {

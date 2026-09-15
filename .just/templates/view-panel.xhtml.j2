@@ -42,7 +42,7 @@ metadata:
   <p class="meta">
     <span class="source-tag">{{ fragment_source }}</span>
   </p>
-{{ body_html }}
+{{ body_html | safe }}
   <script type="text/javascript">
     document.addEventListener("click", async function (event) {
       const button = event.target.closest("[data-copy-text]");

@@ -15,7 +15,7 @@ use std::time::Duration;
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 #[cfg(unix)]
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
 use atm_core::home::current_host_runtime_scope;
@@ -44,18 +44,24 @@ mod atm_temp_config;
 mod atm_temp_sweeper_runtime;
 mod bare_cli_runtime;
 mod daemon_observability;
+mod diagnostic_timeline;
+mod herdr_config;
 mod owner_gate;
 mod peer_launch_config;
 mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
+mod singleton_guard;
+mod sqlite_observability;
 
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 use bare_cli_runtime::BareCliRuntime;
+use herdr_config::daemon_herdr_config;
 use replacement_handler::{
     ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
 };
+use singleton_guard::SingletonGuards;
 
 pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
@@ -90,6 +96,7 @@ pub async fn bootstrap_replacement_observability()
                     "daemon observability bootstrap worker did not complete: {source}"
                 ))
             })??;
+    observability.install_tracing_bridge()?;
     Ok(Arc::new(observability))
 }
 
@@ -179,9 +186,23 @@ pub fn assemble_host_runtime_with_template_composer(
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     template_composer: Option<Arc<dyn TemplateComposer>>,
 ) -> Result<RuntimeAssembly, AtmError> {
+    assemble_host_runtime_with_storage_factory(
+        config_current_dir,
+        non_claude_outbound,
+        template_composer,
+        SqliteStorageFactory::host_scoped(),
+    )
+}
+
+fn assemble_host_runtime_with_storage_factory(
+    config_current_dir: PathBuf,
+    non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
+    template_composer: Option<Arc<dyn TemplateComposer>>,
+    storage_factory: SqliteStorageFactory,
+) -> Result<RuntimeAssembly, AtmError> {
     assemble_runtime(RuntimeAssemblyInputs {
         host_runtime_scope: current_host_runtime_scope()?,
-        storage_factory: Arc::new(SqliteStorageFactory::host_scoped()),
+        storage_factory: Arc::new(storage_factory),
         config_current_dir,
         non_claude_outbound,
         template_composer,
@@ -207,8 +228,16 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 /// must not depend on that directory: [`RuntimeAssembly::for_daemon`] removes
 /// the workspace-backed config doctor before requests can be served.
 pub fn assemble_daemon_runtime() -> Result<RuntimeAssembly, AtmError> {
-    assemble_host_runtime(PathBuf::new(), Arc::new(LocalFileNonClaudeOutbound::new()))
-        .map(RuntimeAssembly::for_daemon)
+    let storage_factory = SqliteStorageFactory::host_scoped()
+        .with_observability(Arc::new(sqlite_observability::DaemonSqliteObservability))
+        .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline));
+    assemble_host_runtime_with_storage_factory(
+        PathBuf::new(),
+        Arc::new(LocalFileNonClaudeOutbound::new()),
+        Some(template_composer()),
+        storage_factory,
+    )
+    .map(RuntimeAssembly::for_daemon)
 }
 
 /// Starts the replacement Tokio/Axum daemon as the only active serving path.
@@ -360,7 +389,7 @@ fn record_peer_wire_mode_selection(
     peer_wire_mode: PeerWireMode,
     peer_stream_adapter: &Option<Arc<dyn PeerStreamAdapter>>,
 ) {
-    tracing::info!(
+    tracing::info!(target: "atm_daemon_bootstrap::lifecycle",
         peer_wire_security = peer_wire_mode.security().as_launch_value(),
         mtls_ready = peer_stream_adapter.is_some(),
         "replacement daemon selected peer-wire mode"
@@ -403,15 +432,16 @@ async fn run_replacement_daemon_with_selector(
     peer_pool_config: PeerPoolConfig,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 ) -> Result<(), AtmError> {
-    install_sqlite_retained_runtime_factory();
-    let scope = current_host_runtime_scope()?;
-    let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
+    let (scope, owner, singleton_guards) = acquire_verified_singleton_scope()?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let bare_cli = BareCliRuntime::default();
     let atm_temp_sweeper =
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
+    let herdr_config = daemon_herdr_config(&ProcessEnvSource)?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
+    let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
+    let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
     let (handler, recovery_sweep) = build_replacement_handler(
         assembly,
@@ -425,13 +455,15 @@ async fn run_replacement_daemon_with_selector(
                 pool_config: peer_pool_config,
             },
             runtime_health: runtime_health.clone(),
+            diagnostic_counters: diagnostic_counters.clone(),
             bare_cli,
+            herdr_config,
             herdr_process,
         },
     )?;
     let config = replacement_runtime_config(
         &scope,
-        &_owner,
+        &owner,
         direct_peer_tcp,
         &peer_stream_adapter,
         peer_pool_config,
@@ -442,15 +474,78 @@ async fn run_replacement_daemon_with_selector(
         peer_wire_mode,
         &peer_stream_adapter,
     );
-    let running = start_replacement_runtime(config, handler.clone(), runtime_health).await?;
+    let running = start_replacement_runtime_or_abort(
+        config,
+        handler.clone(),
+        runtime_health,
+        diagnostic_timeline,
+        diagnostic_counters,
+    )
+    .await?;
     run_until_shutdown(
         running,
         handler,
         workflow_telemetry,
         recovery_sweep,
         atm_temp_sweeper,
+        owner,
+        singleton_guards,
     )
     .await
+}
+
+fn acquire_verified_singleton_scope() -> Result<
+    (
+        atm_core::home::HostRuntimeScope,
+        DaemonOwnerGuard,
+        SingletonGuards,
+    ),
+    AtmError,
+> {
+    install_sqlite_retained_runtime_factory();
+    let scope = current_host_runtime_scope()?;
+    let owner = acquire_singleton_owner(scope.owner_lock.clone());
+    let singleton_guards = SingletonGuards::new();
+    singleton_guards
+        .verify_startup(&owner)
+        .unwrap_or_else(|violation| singleton_guard::abort_for_singleton_violation(violation));
+    Ok((scope, owner, singleton_guards))
+}
+
+fn acquire_singleton_owner(owner_lock: PathBuf) -> DaemonOwnerGuard {
+    DaemonOwnerGuard::acquire_at(owner_lock).unwrap_or_else(|error| {
+        singleton_guard::abort_for_singleton_violation(format!(
+            "ATM daemon singleton violation while acquiring the owner lock: {error}"
+        ))
+    })
+}
+
+async fn start_replacement_runtime_or_abort(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+    diagnostic_timeline: Arc<dyn atm_runtime::DiagnosticTimelineStore>,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    match start_replacement_runtime_with_diagnostics(
+        config,
+        handler,
+        runtime_health,
+        diagnostic_timeline,
+        diagnostic_counters,
+    )
+    .await
+    {
+        Ok(running) => Ok(running),
+        Err(error) if error.code() == AtmErrorCode::DaemonServingStateRejected => {
+            singleton_guard::abort_for_singleton_violation(format!(
+                "ATM daemon singleton violation while binding a fixed endpoint: {error}"
+            ));
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// Advertises readiness, then waits for either a shutdown signal or an
@@ -463,6 +558,8 @@ async fn run_until_shutdown(
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
     atm_temp_sweeper: AtmTempSweeperRuntime,
+    owner: DaemonOwnerGuard,
+    singleton_guards: SingletonGuards,
 ) -> Result<(), AtmError> {
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
@@ -483,6 +580,36 @@ async fn run_until_shutdown(
         workflow_telemetry,
         recovery_sweep,
         atm_temp_sweeper,
+        &owner,
+        &singleton_guards,
+    )
+    .await
+}
+
+#[cfg(test)]
+async fn start_replacement_runtime_for_test(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    start_replacement_runtime(config, handler, runtime_health, None, None).await
+}
+
+async fn start_replacement_runtime_with_diagnostics(
+    config: HttpRuntimeConfig,
+    handler: Arc<StorageAndNudgeRouter>,
+    runtime_health: RuntimeHealth,
+    diagnostic_timeline: Arc<dyn atm_runtime::DiagnosticTimelineStore>,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
+    start_replacement_runtime(
+        config,
+        handler,
+        runtime_health,
+        Some(diagnostic_timeline),
+        diagnostic_counters,
     )
     .await
 }
@@ -491,6 +618,10 @@ async fn start_replacement_runtime(
     config: HttpRuntimeConfig,
     handler: Arc<StorageAndNudgeRouter>,
     runtime_health: RuntimeHealth,
+    diagnostic_timeline: Option<Arc<dyn atm_runtime::DiagnosticTimelineStore>>,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
 ) -> Result<atm_http_runtime::HttpRuntime<atm_http_runtime::Running>, AtmError> {
     // `StorageAndNudgeRouter` forwards `RuntimeMaintenance::start` to the
     // `HerdrQueueWakePump` composed in `build_replacement_handler`. Without
@@ -499,12 +630,16 @@ async fn start_replacement_runtime(
     // wake pump silently never starts in production.
     let maintenance = Arc::clone(&handler) as Arc<dyn atm_http_runtime::RuntimeMaintenance>;
     let runtime_handler: Arc<dyn atm_http_runtime::CanonicalWriteHandler> = handler;
-    HttpRuntimeBuilder::new(config, runtime_handler)
+    let mut builder = HttpRuntimeBuilder::new(config, runtime_handler)
         .with_runtime_health(runtime_health)
-        .with_maintenance(maintenance)
-        .build()?
-        .start()
-        .await
+        .with_maintenance(maintenance);
+    if let Some(timeline) = diagnostic_timeline {
+        builder = builder.with_diagnostic_timeline(timeline);
+    }
+    if let Some(counters) = diagnostic_counters {
+        builder = builder.with_diagnostic_counters(counters);
+    }
+    builder.build()?.start().await
 }
 
 async fn await_runtime_or_shutdown(
@@ -513,31 +648,42 @@ async fn await_runtime_or_shutdown(
     workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
     atm_temp_sweeper: AtmTempSweeperRuntime,
+    owner: &DaemonOwnerGuard,
+    singleton_guards: &SingletonGuards,
 ) -> Result<(), AtmError> {
-    tokio::select! {
-        signal = wait_for_shutdown_signal() => {
-            let signal = signal?;
-            eprintln!("replacement ATM daemon received {}; starting graceful shutdown", signal.as_str());
-            false
+    let mut singleton_recheck = tokio::time::interval(Duration::from_secs(1));
+    singleton_recheck.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        tokio::select! {
+            _ = singleton_recheck.tick() => {
+                singleton_guards
+                    .verify_while_serving(owner)
+                    .unwrap_or_else(|violation| singleton_guard::abort_for_singleton_violation(violation));
+            }
+            signal = wait_for_shutdown_signal() => {
+                let signal = signal?;
+                tracing::info!(target: "atm_daemon_bootstrap::lifecycle", signal = signal.as_str(), "replacement ATM daemon received shutdown signal; starting graceful shutdown");
+                break;
+            }
+            _ = running.wait_for_server_stop() => {
+                tracing::error!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_RUNTIME_UNEXPECTED_STOP", "replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
+                let result = shutdown_replacement_daemon(
+                    running,
+                    handler,
+                    workflow_telemetry,
+                    recovery_sweep,
+                    atm_temp_sweeper,
+                )
+                .await;
+                return match result {
+                    Ok(()) => Err(AtmError::daemon_unavailable(
+                        "replacement HTTP runtime server stopped unexpectedly",
+                    )),
+                    Err(error) => Err(error),
+                };
+            }
         }
-        _ = running.wait_for_server_stop() => {
-            eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-            let result = shutdown_replacement_daemon(
-                running,
-                handler,
-                workflow_telemetry,
-                recovery_sweep,
-                atm_temp_sweeper,
-            )
-            .await;
-            return match result {
-                Ok(()) => Err(AtmError::daemon_unavailable(
-                    "replacement HTTP runtime server stopped unexpectedly",
-                )),
-                Err(error) => Err(error),
-            };
-        }
-    };
+    }
     shutdown_replacement_daemon(
         running,
         handler,
@@ -630,6 +776,7 @@ async fn shutdown_replacement_daemon(
         .await;
     workflow_telemetry.shutdown().await;
     atm_temp_sweeper.shutdown().await;
+    diagnostic_timeline::stop_flush_worker();
     let _stopped = stopped?;
     Ok(())
 }
@@ -805,6 +952,9 @@ pub fn with_default_peer_address_stores<T>(
 }
 
 #[cfg(test)]
+mod herdr_lifecycle_tests;
+
+#[cfg(test)]
 mod replacement_runtime_tests {
     use std::collections::HashMap;
     use std::ffi::OsString;
@@ -814,16 +964,15 @@ mod replacement_runtime_tests {
     use std::time::Duration;
 
     use atm_core::api::ApiRequest;
-    use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
-        BuiltInPostSendDispatch, MessageReceivedHookSelector, RosterEntry, TemplateSource,
+        BuiltInPostSendDispatch, MemberKey, MessageReceivedHookSelector, RosterEntry,
+        TemplateSource,
     };
-    use atm_core::doctor::{DoctorSeverity, HerdrPresenceDoctor};
     use atm_core::observability::NullObservability;
     use atm_core::peer_wire::PeerWireMode;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
-    use atm_core::send::{SendMessageSource, WriteRequest};
-    use atm_core::types::{AgentName, ModelName, TeamName};
+    use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+    use atm_core::types::{AgentName, ModelName, TaskId, TeamName};
     use atm_http_runtime::{
         DirectPeerTcpConfig, HttpRuntimeBuilder, LoopbackTcpConfig, PeerPoolConfig, RuntimeHealth,
         direct_peer_tcp_client,
@@ -834,13 +983,12 @@ mod replacement_runtime_tests {
     use serde_json::Map;
 
     use super::peer_launch_config::parse_peer_pool_config_with_environment;
-    use super::replacement_handler::{HerdrPresenceDoctorAdapter, herdr_presence_finding};
     use super::{
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
-        SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
-        build_replacement_handler, legacy_literal_ip_policy_from_value, parse_direct_peer_port,
-        parse_peer_wire_mode, peer_stream_adapter_for_mode,
-        replacement_runtime_config_with_direct_peer, start_replacement_runtime,
+        SelectedPeerAdapterSelection, ShutdownSignal, active_received_hook_selector_with_health,
+        assemble_host_runtime_with_template_composer, build_replacement_handler,
+        legacy_literal_ip_policy_from_value, parse_peer_wire_mode, peer_stream_adapter_for_mode,
+        replacement_runtime_config_with_direct_peer, start_replacement_runtime_for_test,
         write_ready_signal_if_requested,
     };
     use peer_tls::LegacyLiteralIpPolicy;
@@ -934,41 +1082,6 @@ mod replacement_runtime_tests {
         ])
         .expect_err("one launch mode must select the whole runtime");
         assert!(error.message().contains("only once"));
-    }
-
-    #[test]
-    fn direct_peer_port_defaults_and_accepts_one_explicit_nonzero_value() {
-        assert_eq!(
-            parse_direct_peer_port([OsString::from("atm-daemon")]).expect("standard port"),
-            NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT).expect("non-zero"),
-        );
-        assert_eq!(
-            parse_direct_peer_port([
-                OsString::from("atm-daemon"),
-                OsString::from("--direct-peer-port=43102"),
-            ])
-            .expect("explicit benchmark port"),
-            NonZeroU16::new(43102).expect("non-zero"),
-        );
-    }
-
-    #[test]
-    fn direct_peer_port_rejects_zero_and_duplicates() {
-        let zero = parse_direct_peer_port([
-            OsString::from("atm-daemon"),
-            OsString::from("--direct-peer-port"),
-            OsString::from("0"),
-        ])
-        .expect_err("zero cannot bind a durable launch port");
-        assert!(zero.message().contains("non-zero"));
-
-        let duplicate = parse_direct_peer_port([
-            OsString::from("atm-daemon"),
-            OsString::from("--direct-peer-port=43102"),
-            OsString::from("--direct-peer-port=43103"),
-        ])
-        .expect_err("one daemon has one direct-peer listener");
-        assert!(duplicate.message().contains("only once"));
     }
 
     #[test]
@@ -1113,7 +1226,9 @@ mod replacement_runtime_tests {
                     pool_config: PeerPoolConfig::default(),
                 },
                 runtime_health: runtime_health.clone(),
+                diagnostic_counters: None,
                 bare_cli: Default::default(),
+                herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: None,
             },
         )
@@ -1202,6 +1317,94 @@ mod replacement_runtime_tests {
         let assembly = open_isolated_sqlite_boundary(temporary_root.path())
             .expect("assemble isolated daemon runtime")
             .for_daemon();
+        let runtime = assembly.service_runtime.clone();
+        let team: TeamName = "bootstrap-herdr".parse().expect("team");
+        let mut recipient_metadata =
+            atm_core::delivery_channel::test_backend_type_metadata("herdr");
+        recipient_metadata.insert("herdrSession".to_owned(), serde_json::json!("bootstrap"));
+        runtime
+            .shared_roster_store_arc()
+            .save_roster(&RosterSnapshot {
+                team_name: team.clone(),
+                members: vec![
+                    RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: "recipient".parse().expect("recipient"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::CodexCli,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: None,
+                        metadata_json: recipient_metadata,
+                    },
+                    RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: "no-task".parse().expect("no-task"),
+                        member_kind: RosterMemberKind::Permanent,
+                        harness: RosterHarness::CodexCli,
+                        agent_type: atm_core::schema::AgentType::default(),
+                        model: ModelName::default(),
+                        recipient_pane_id: None,
+                        metadata_json: {
+                            let mut metadata =
+                                atm_core::delivery_channel::test_backend_type_metadata("herdr");
+                            metadata
+                                .insert("herdrSession".to_owned(), serde_json::json!("bootstrap"));
+                            metadata
+                        },
+                    },
+                ],
+                refreshed_at: None,
+            })
+            .expect("seed Herdr roster");
+        let mut task_request = WriteRequest::new(
+            temporary_root.path().join("home"),
+            temporary_root.path().join("home"),
+            "sender".parse::<AgentName>().expect("sender"),
+            "recipient@bootstrap-herdr",
+            team.clone(),
+            SendMessageSource::Inline("bootstrap reminder task".to_owned()),
+            None,
+            true,
+            None,
+            false,
+        )
+        .expect("task request")
+        .with_nudge_mode(NudgeMode::Deferred);
+        task_request.task_id = Some("AX5-BOOTSTRAP".parse::<TaskId>().expect("task id"));
+        let task_message_id = write_mail_with_runtime(task_request, &NullObservability, &runtime)
+            .expect("persist task")
+            .persisted_message_id();
+        let recipient_key = MemberKey::new(
+            team.clone(),
+            "recipient".parse::<AgentName>().expect("recipient"),
+        );
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .rearm_pending_after_handoff(
+                &recipient_key,
+                &task_message_id,
+                atm_core::types::IsoTimestamp::now(),
+            )
+            .expect("simulate the already-drained task marker");
+        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        fake.queue_list_result(Ok(atm_herdr::HerdrListOutcome {
+            agents: vec![
+                atm_herdr::AgentSnapshot {
+                    name: Some("recipient".to_owned()),
+                    pane_id: None,
+                    status: atm_herdr::HerdrAgentStatus::Idle,
+                    workspace_id: None,
+                },
+                atm_herdr::AgentSnapshot {
+                    name: Some("no-task".to_owned()),
+                    pane_id: None,
+                    status: atm_herdr::HerdrAgentStatus::Idle,
+                    workspace_id: None,
+                },
+            ],
+        }));
         let peer_stream_adapter =
             peer_stream_adapter_for_mode(PeerWireMode::plaintext_test(), || {
                 panic!("plaintext bootstrap must not inspect invalid TLS peer configuration")
@@ -1213,9 +1416,8 @@ mod replacement_runtime_tests {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
-                selector_factory: |_, _, _, _| {
-                    Arc::new(NoReceivedHookSelector)
-                        as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                selector_factory: |runtime, herdr_process, health, _| {
+                    active_received_hook_selector_with_health(runtime, herdr_process, health)
                 },
                 daemon_launch_identity: DaemonLaunchIdentity::default(),
                 peer_wire_mode: PeerWireMode::plaintext_test(),
@@ -1224,8 +1426,10 @@ mod replacement_runtime_tests {
                     pool_config: PeerPoolConfig::default(),
                 },
                 runtime_health: runtime_health.clone(),
+                diagnostic_counters: None,
                 bare_cli: Default::default(),
-                herdr_process: None,
+                herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
+                herdr_process: Some(fake.clone()),
             },
         )
         .expect("compose the replacement daemon handler");
@@ -1241,7 +1445,7 @@ mod replacement_runtime_tests {
             PeerPoolConfig::default(),
         );
 
-        let running = start_replacement_runtime(config, handler, runtime_health.clone())
+        let running = start_replacement_runtime_for_test(config, handler, runtime_health.clone())
             .await
             .expect("start the real replacement runtime entry point");
 
@@ -1258,6 +1462,19 @@ mod replacement_runtime_tests {
         })
         .await;
 
+        let observed_prompt =
+            tokio::time::timeout(Duration::from_secs(10), async {
+                loop {
+                    if fake.calls().iter().any(|call| {
+                        matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. })
+                    }) {
+                        return;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await;
+
         running
             .begin_shutdown()
             .finish()
@@ -1268,6 +1485,15 @@ mod replacement_runtime_tests {
             "HerdrQueueWakePump must actually run through the production \
              `start_replacement_runtime` path so its own `RuntimeHealth::record_herdr_queue_tick` \
              completion signal fires, without any fixed wall-clock sleep",
+        );
+        observed_prompt.expect("bootstrap-started pump emits the open task reminder");
+        assert_eq!(
+            fake.calls()
+                .iter()
+                .filter(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::Prompt { .. }))
+                .count(),
+            1,
+            "the idle roster member without an open task receives no prompt"
         );
     }
 
@@ -1316,103 +1542,6 @@ mod replacement_runtime_tests {
                 .text,
             "bootstrap adapter"
         );
-    }
-
-    #[tokio::test]
-    async fn doctor_presence_probe_uses_bypass_and_degrades_outages() {
-        let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        fake.queue_get_result(Err(atm_herdr::HerdrError::AgentNotFound));
-        let roster = atm_core::team_admin::MembersList {
-            team: "team".parse().expect("team"),
-            members: vec![atm_core::team_admin::MemberSummary {
-                name: "receiver".parse().expect("agent"),
-                agent_id: "receiver".to_owned(),
-                agent_type: "worker".to_owned(),
-                harness: atm_core::boundary::RosterHarness::CodexCli,
-                model: ModelName::new("gpt-5").expect("model"),
-                joined_at: None,
-                tmux_pane_id: None,
-                backend: Some("herdr".to_owned()),
-                herdr_session: Some("team-a".to_owned()),
-                local_backend: Some(atm_core::LocalMessageReceivedBackend::Herdr {
-                    session: Some(atm_core::HerdrSession::new("team-a").expect("session")),
-                }),
-                home_dir: std::path::PathBuf::from("/tmp").into(),
-                live_cwd: None,
-                host: None,
-                extra: serde_json::Map::new(),
-            }],
-        };
-        let findings = HerdrPresenceDoctorAdapter {
-            process: fake.clone(),
-        }
-        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
-        .await;
-        assert_eq!(findings.len(), 1);
-        assert_eq!(
-            findings[0].code,
-            atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
-        );
-        assert!(matches!(
-            fake.calls().as_slice(),
-            [atm_herdr::testing::FakeHerdrCall::Get {
-                breaker_policy: atm_herdr::BreakerPolicy::Bypass,
-                ..
-            }]
-        ));
-
-        let outage_fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
-        outage_fake.queue_get_result(Err(atm_herdr::HerdrError::ServerUnavailable));
-        let outage_findings = HerdrPresenceDoctorAdapter {
-            process: outage_fake,
-        }
-        .probe(&roster, RequestDeadline::after(Duration::from_secs(2)))
-        .await;
-        assert_eq!(outage_findings.len(), 1);
-        assert_eq!(outage_findings[0].severity, DoctorSeverity::Info);
-        assert!(
-            outage_findings[0]
-                .message
-                .starts_with("Herdr presence probe skipped:")
-        );
-    }
-
-    #[test]
-    fn doctor_and_emitter_share_herdr_outcome_classification() {
-        let errors = [
-            atm_herdr::HerdrError::AgentBlocked,
-            atm_herdr::HerdrError::AgentNotFound,
-            atm_herdr::HerdrError::AgentNotReady,
-            atm_herdr::HerdrError::AgentTargetAmbiguous,
-            atm_herdr::HerdrError::AgentNotRunning,
-            atm_herdr::HerdrError::AgentPromptStalled,
-            atm_herdr::HerdrError::ServerNotRunning,
-            atm_herdr::HerdrError::ProtocolMismatch,
-            atm_herdr::HerdrError::Timeout,
-            atm_herdr::HerdrError::InvalidAgentName,
-            atm_herdr::HerdrError::EmptyAgentPrompt,
-            atm_herdr::HerdrError::ServerUnavailable,
-            atm_herdr::HerdrError::InternalError,
-            atm_herdr::HerdrError::TimedOut,
-            atm_herdr::HerdrError::Unavailable {
-                retry_after: Duration::from_secs(1),
-            },
-            atm_herdr::HerdrError::Advisory {
-                code: "future_code".to_owned(),
-            },
-        ];
-        for error in errors {
-            let outcome = error.emission_outcome();
-            let finding = herdr_presence_finding(error.clone());
-            if matches!(error, atm_herdr::HerdrError::AgentNotFound) {
-                assert_eq!(
-                    finding.code,
-                    atm_core::error_codes::AtmErrorCode::HerdrAgentNotVisible
-                );
-            } else {
-                assert!(finding.message.contains(outcome), "{outcome}");
-            }
-        }
     }
 
     #[cfg(unix)]

@@ -7,13 +7,13 @@ use atm_core::boundary::{
     self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, TemplateComposer,
 };
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
-use atm_core::doctor::{ReaderLaneDoctorReport, ReaderLanesDoctorReport, RuntimeDoctorPorts};
+use atm_core::doctor::{ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RuntimeDoctorPorts};
 use atm_core::error::AtmError;
 use atm_core::home::HostRuntimeScope;
 use atm_core::{LocalServiceRuntime, load_atm_config};
 use atm_storage::{
-    MessageStore as SharedMessageStore, PeerConfigStore, RosterStore as SharedRosterStore,
-    StorageFactory,
+    DiagnosticTimelineStore, MessageStore as SharedMessageStore, PeerConfigStore,
+    RosterStore as SharedRosterStore, StorageFactory, StorageHandles,
 };
 
 use crate::legacy_storage_adapters::{
@@ -69,14 +69,13 @@ pub struct RuntimeAssembly {
     /// Runtime-inert AV.1a port. AV.1b is the only sprint authorized to wire
     /// an HTTP handler through it.
     pub async_mailbox_runtime: StorageAsyncMailboxRuntime,
-    pub(crate) storage_backends: StorageBackends<
-        Arc<dyn SharedMessageStore + Send + Sync>,
-        Arc<dyn SharedRosterStore + Send + Sync>,
-    >,
+    pub(crate) storage_backends: StorageBackends<Arc<dyn SharedMessageStore + Send + Sync>>,
     pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    /// Read-only retained diagnostic timeline supplied by the selected storage backend.
+    pub diagnostic_timeline: Arc<dyn DiagnosticTimelineStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
-    pub reader_lanes: Option<ReaderLanesDoctorReport>,
+    pub reader_lanes: Option<ReaderPoolDoctorReport>,
     pub workflow_telemetry: WorkflowTelemetryRuntime,
     template_composer: Option<Arc<dyn TemplateComposer>>,
 }
@@ -92,6 +91,7 @@ impl fmt::Debug for RuntimeAssembly {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("peer_config_store", &"dyn PeerConfigStore")
+            .field("diagnostic_timeline", &"dyn DiagnosticTimelineStore")
             .field("doctor_ports", &self.doctor_ports)
             .field("reader_lanes", &self.reader_lanes)
             .field("workflow_telemetry", &"WorkflowTelemetryRuntime")
@@ -143,6 +143,37 @@ impl ConfigDoctor for RuntimeConfigDoctor {
     }
 }
 
+/// Project a storage backend's effective reader pool (and its live metrics,
+/// when available) into the doctor-facing report shape.
+fn reader_pool_doctor_report(storage: &StorageHandles) -> Option<ReaderPoolDoctorReport> {
+    storage.effective_reader_pool().map(|pool| {
+        let metrics = storage
+            .reader_pool_metrics()
+            .map(|m| ReaderPoolMetricsDoctorReport {
+                queue_depth: m.queue_depth,
+                saturated: m.saturated,
+                in_flight: m.in_flight,
+                wait_nanos: m.wait_nanos,
+                execution_nanos: m.execution_nanos,
+                expired_in_queue: m.expired_in_queue,
+                interrupted_while_active: m.interrupted_while_active,
+                quarantined: m.quarantined,
+                current_quarantined_workers: m.current_quarantined_workers,
+                retired_replaced_workers: m.retired_replaced_workers,
+                quarantine_exhausted_rejections: m.quarantine_exhausted_rejections,
+                pool_size: m.pool_size,
+                last_checkpoint_succeeded: m.last_checkpoint_succeeded,
+                current_wal_frames: m.current_wal_frames,
+            });
+        ReaderPoolDoctorReport {
+            pool_size: pool.pool_size,
+            queue_depth: pool.queue_depth,
+            tool_class_max_in_flight: pool.tool_class_max_in_flight,
+            metrics,
+        }
+    })
+}
+
 pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
     let template_composer = inputs.template_composer;
     let workflow_telemetry = inputs
@@ -153,40 +184,34 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let storage = inputs
         .storage_factory
         .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
-    let reader_lanes = storage
-        .effective_reader_lanes()
-        .map(|lanes| ReaderLanesDoctorReport {
-            mailbox: ReaderLaneDoctorReport {
-                pool_size: lanes.mailbox.pool_size,
-                queue_depth: lanes.mailbox.queue_depth,
-            },
-            search: ReaderLaneDoctorReport {
-                pool_size: lanes.search.pool_size,
-                queue_depth: lanes.search.queue_depth,
-            },
-        });
+    let reader_lanes = reader_pool_doctor_report(&storage);
+    let roster = storage.roster();
     let storage_backends = StorageBackends {
         messages: storage.message_store(),
-        rosters: storage.roster_store(),
     };
     let async_message_store = storage.async_message_store();
     let async_mailbox_reader = storage.async_mailbox_reader();
+    let async_task_ledger_reader = storage.async_task_ledger_reader();
     let async_message_search_store = storage.async_message_search_store();
     let template_catalog_store = storage.template_catalog_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
     let pending_nudge_store = storage.pending_nudge_store();
+    let task_store = storage.task_store();
     let graft_receiver_endpoint_store = storage.graft_receiver_endpoint_store();
     let peer_config_store = storage.peer_config_store();
+    let diagnostic_timeline = storage.diagnostic_timeline();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
-        storage_backends.rosters.clone(),
+        roster,
         Arc::clone(&nudge_template_override_store),
         inputs.non_claude_outbound,
     )
     .with_async_message_store(Arc::clone(&async_message_store))
     .with_async_mailbox_reader(Arc::clone(&async_mailbox_reader))
+    .with_async_task_ledger_reader(async_task_ledger_reader)
     .with_async_message_search_store(async_message_search_store)
     .with_pending_nudge_store(pending_nudge_store)
+    .with_task_store(task_store)
     .with_graft_receiver_endpoint_store(graft_receiver_endpoint_store)
     .with_template_rendering(template_catalog_store, template_composer.clone());
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
@@ -202,6 +227,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         storage_backends,
         nudge_template_override_store,
         peer_config_store,
+        diagnostic_timeline,
         doctor_ports,
         reader_lanes,
         workflow_telemetry,
@@ -290,12 +316,22 @@ impl RuntimeAssembly {
         boundary_mail_store_view(self.storage_backends.messages.clone())
     }
 
+    /// Returns the write-through, RAM-backed roster boundary view.
+    ///
+    /// This must go through [`LocalServiceRuntime::shared_roster_store_arc`]:
+    /// the runtime's handle serves every read from the RAM roster mirror and
+    /// writes every mutation through it in the same operation. The raw
+    /// durable roster handle is deliberately absent from this assembly.
     pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {
-        boundary_roster_store_view(self.storage_backends.rosters.clone())
+        boundary_roster_store_view(self.service_runtime.shared_roster_store_arc())
     }
 
+    /// Returns the write-through, RAM-backed roster store seam.
+    ///
+    /// See [`Self::roster_store_arc`] for why this is sourced from the
+    /// runtime's paired write-through roster.
     pub fn shared_roster_store_arc(&self) -> Arc<dyn SharedRosterStore + Send + Sync> {
-        self.storage_backends.rosters.clone()
+        self.service_runtime.shared_roster_store_arc()
     }
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
@@ -331,6 +367,21 @@ mod tests {
 
     use super::{RuntimeConfigDoctor, validate_enabled_peer_configuration};
     use crate::workflow_telemetry::WorkflowTelemetryDiagnostics;
+
+    #[test]
+    fn composition_installs_the_task_store() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-task-store-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("tempdir");
+        let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&root)
+            .expect("compose sqlite runtime");
+
+        assert!(assembly.service_runtime.task_store().is_ok());
+        drop(assembly);
+        std::fs::remove_dir_all(root).expect("remove tempdir");
+    }
 
     #[test]
     fn daemon_config_doctor_does_not_read_a_caller_workspace() {

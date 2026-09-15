@@ -1,7 +1,7 @@
 ---
 title: Mailbox Workflows
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Mailbox Workflows
@@ -87,6 +87,7 @@ atm clear --team atm-dev --idle-only
 Additional runnable examples live in [examples/mailbox/](./examples/mailbox/).
 
 For caller-resolution guidance, see [Identity And Team](./identity-and-team.md).
+For durable assigned/active/closed work, see [Tasks](./tasks.md).
 For recovery and queue diagnostics, see [Troubleshooting](./troubleshooting.md).
 
 Return to the [ATM User Guide](./README.md).

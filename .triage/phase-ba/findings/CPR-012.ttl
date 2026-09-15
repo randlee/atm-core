@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-012>
+  a triage:Finding ;
+  triage:findingId "CPR-012" ;
+  triage:title "Four BA.5 doc-named tests cannot fail" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. Four BA.5 doc-named tests cannot fail. Doc says: sprint-BA.5 AC2: every named test exists and proves its line. Code does: restart_after_claim_reexposes_unread_item overwrites the claim lease with set_marker before observing it, so it passes identically against develop (i.e. it does not test the BA.5 change at all). ack_clears_marker_via_existing_upsert never acknowledges anything. immediate_send_never_carries_marker is vacuous — the fixture never produces a marker regardless. bare_cli_pull_closes_item asserts the opposite of its doc line. Recommendation: Rewrite all four against the property named in the doc. The genuine R3 boundary test in this suite is immediate_send_is_never_reminded — use it as the model. solar review-3 item B3, with negation proof per test." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A821M48VWSZ0JGXMA4WWZ7, 2026-09-12T07:24:38Z): fixed by solar review-3 at 2b599f12c. Sha remap (fenix ATM 01M2A9NY2AEAKS6EAHY0V4ZDYB, 2026-09-12T07:52:59Z): review-3 rebased onto review-2 33754d69d (force-with-lease); 2b599f12c -> c59d7c93b." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-012/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-012/2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/CPR-012/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1 ;
+  triage:snippet "restart_after_claim_reexposes_unread_item, ack_clears_marker_via_existing_upsert, immediate_send_never_carries_marker, and bare_cli_pull_closes_item each pass for reasons unrelated to the property they name" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/2 (fix/phase-ba-review-3 @ c59d7c93b)." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-012/review3> .
+
+<urn:atm:triage:occurrence/CPR-012/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/tests/herdr_nudge_invariant.rs" ;
+  triage:line 1 ;
+  triage:snippet "all four doc-named tests rewritten against the property named in the doc, modeled on immediate_send_is_never_reminded" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "solar fix/phase-ba-review-3 @ c59d7c93b (rebased onto review-2 33754d69d, was 2b599f12c pre-rebase)." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "c59d7c93b" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-012/2> .
+
+<urn:atm:triage:worktree/CPR-012/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar, B3 negation-proof items), rebased onto review-2 33754d69d" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "c59d7c93b" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/CPR-012/review3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar, B3 negation-proof items), above fix/phase-ba-review-2" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 9 .

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr
 from io import StringIO
@@ -21,7 +24,7 @@ SPEC.loader.exec_module(bootstrap)
 class BootstrapTests(unittest.TestCase):
     def test_manifest_has_only_exact_tool_versions(self) -> None:
         manifest = bootstrap.load_manifest()
-        versions = [manifest.rust, manifest.python, manifest.just]
+        versions = [manifest.rust, manifest.python, manifest.windows_python, manifest.just]
         versions.extend(version for _, version in manifest.cargo_tools)
         versions.extend(version for _, version in manifest.python_packages)
         self.assertTrue(all("*" not in version and ">" not in version and "<" not in version for version in versions))
@@ -40,6 +43,65 @@ class BootstrapTests(unittest.TestCase):
     def test_sc_compose_install_never_uses_cargo(self) -> None:
         source = (SCRIPT.parents[1] / "tools" / "bootstrap.py").read_text(encoding="utf-8")
         self.assertNotIn('cargo", "install", "--locked", "--version", version, "sc-compose"', source)
+
+    def test_cargo_binstall_uses_pinned_release_assets(self) -> None:
+        manifest = bootstrap.load_manifest()
+        self.assertEqual(manifest.cargo_binstall, "1.22.0")
+        asset, url = bootstrap.cargo_binstall_install_command(
+            manifest.cargo_binstall, "x86_64-unknown-linux-gnu"
+        )
+        self.assertEqual(asset, "cargo-binstall-x86_64-unknown-linux-gnu.tgz")
+        self.assertEqual(
+            url,
+            "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.22.0/" + asset,
+        )
+        self.assertEqual(
+            dict(manifest.cargo_binstall_checksums)["aarch64-apple-darwin"],
+            "c364fd10e494b4fc0cc88a89995446364379a914930f0b0182b1151ad27690a1",
+        )
+
+    def test_cargo_binstall_windows_asset_is_zip_with_exe(self) -> None:
+        asset = bootstrap.cargo_binstall_asset_name("1.22.0", "x86_64-pc-windows-msvc")
+        self.assertEqual(asset, "cargo-binstall-x86_64-pc-windows-msvc.zip")
+        archive_buffer = io.BytesIO()
+        with bootstrap.zipfile.ZipFile(archive_buffer, "w") as package:
+            package.writestr("cargo-binstall.exe", b"windows binary")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "cargo-binstall.exe"
+            bootstrap._extract_cargo_binstall(archive_buffer.getvalue(), asset, destination)
+            self.assertEqual(destination.read_bytes(), b"windows binary")
+
+    def test_cargo_binstall_checksum_mismatch_is_a_hard_failure(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(bootstrap, "_download_release", return_value=b"tampered"),
+        ):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "cargo-binstall release checksum mismatch"):
+                bootstrap.install_cargo_binstall_release(manifest, dry_run=False)
+
+    def test_cargo_binstall_verified_archive_warns_about_pinned_hash_only(self) -> None:
+        manifest = bootstrap.load_manifest()
+        archive = b"verified archive"
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(
+                bootstrap,
+                "_cargo_binstall_release_checksum",
+                return_value=hashlib.sha256(archive).hexdigest(),
+            ),
+            mock.patch.object(bootstrap, "_download_release", return_value=archive),
+            mock.patch.object(bootstrap, "_extract_cargo_binstall") as extract,
+        ):
+            stderr = StringIO()
+            with redirect_stderr(stderr):
+                bootstrap.install_cargo_binstall_release(manifest, dry_run=False)
+        self.assertIn("verified cargo-binstall against pinned SHA256 only", stderr.getvalue())
+        extract.assert_called_once_with(
+            archive,
+            "cargo-binstall-aarch64-apple-darwin.zip",
+            bootstrap.cargo_bin_path("cargo-binstall"),
+        )
 
     def test_wyvern_uses_the_pinned_release_asset(self) -> None:
         manifest = bootstrap.load_manifest()
@@ -105,7 +167,7 @@ class BootstrapTests(unittest.TestCase):
     def test_binstall_uses_prebuilt_only_and_exact_version(self) -> None:
         command = bootstrap.cargo_binstall_command("cargo-audit", "0.22.2", force=True)
         self.assertEqual(command, [
-            "cargo", "binstall", "--no-confirm", "--disable-telemetry",
+            str(bootstrap.cargo_bin_path("cargo-binstall")), "--no-confirm", "--disable-telemetry",
             "--disable-strategies", "quick-install,compile", "--force", "cargo-audit@0.22.2",
         ])
 
@@ -114,27 +176,14 @@ class BootstrapTests(unittest.TestCase):
             "cargo-modules", "0.26.0", force=True, allowed_strategies=("quick-install",)
         )
         self.assertEqual(command, [
-            "cargo", "binstall", "--no-confirm", "--disable-telemetry",
+            str(bootstrap.cargo_bin_path("cargo-binstall")), "--no-confirm", "--disable-telemetry",
             "--disable-strategies", "compile", "--force", "cargo-modules@0.26.0",
         ])
-
-    def test_registry_tools_are_exact_and_locked(self) -> None:
-        command = bootstrap.cargo_install_command("cargo-audit", "0.22.2", force=True)
-        self.assertEqual(command, ["cargo", "install", "--locked", "--force", "--version", "0.22.2", "cargo-audit"])
-
-    def test_matching_registry_receipt_avoids_a_rebuild(self) -> None:
-        receipt = {"cargo-audit 0.22.2 (registry+https://example.test/index)": {"rustc": "release: 1.94.1"}}
-        with mock.patch.object(bootstrap, "cargo_receipts", return_value=receipt):
-            self.assertTrue(bootstrap.registry_tool_matches("cargo-audit", "0.22.2", "1.94.1"))
-
-    def test_registry_receipt_rejects_an_unpinned_release(self) -> None:
-        receipt = {"cargo-shear 1.13.2 (registry+https://example.test/index)": {"rustc": "release: 1.94.1"}}
-        with mock.patch.object(bootstrap, "cargo_receipts", return_value=receipt):
-            self.assertFalse(bootstrap.registry_tool_matches("cargo-shear", "1.13.3", "1.94.1"))
 
     def test_manifest_uses_current_compatible_stable_releases(self) -> None:
         manifest = bootstrap.load_manifest()
         self.assertEqual(manifest.python, "3.14.7")
+        self.assertEqual(manifest.windows_python, "3.12.10")
         self.assertEqual(manifest.just, "1.58.0")
         self.assertEqual(dict(manifest.cargo_tools), {
             "cargo-deny": "0.20.2",
@@ -148,6 +197,11 @@ class BootstrapTests(unittest.TestCase):
             "cargo-shear": (),
             "cargo-modules": ("quick-install",),
         })
+        self.assertEqual(manifest.cargo_binstall, "1.22.0")
+        self.assertEqual(
+            dict(manifest.cargo_binstall_checksums)["x86_64-pc-windows-msvc"],
+            "0950f5a9f3422f74dea181d11f8b4d4447d1e9d1a9fdadcb72ff5b0b63c95207",
+        )
         self.assertEqual(manifest.sc_compose, "1.6.1")
         self.assertEqual(manifest.wyvern, "0.6.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
@@ -175,7 +229,8 @@ class BootstrapTests(unittest.TestCase):
             mock.patch.object(bootstrap, "verify_seed_tools"),
             mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=Path("/tmp/bootstrap-python")),
             mock.patch.object(bootstrap, "verify_installed_tools") as verify,
-            mock.patch.object(bootstrap, "registry_tool_matches", return_value=False),
+            mock.patch.object(bootstrap, "cargo_binstall_matches", return_value=False),
+            mock.patch.object(bootstrap, "binstall_tool_matches", return_value=False),
             mock.patch.object(bootstrap, "sc_compose_matches", return_value=False),
             mock.patch.object(bootstrap, "wyvern_matches", return_value=False),
             mock.patch.object(bootstrap.subprocess, "run") as run,
@@ -183,6 +238,24 @@ class BootstrapTests(unittest.TestCase):
             bootstrap.bootstrap(manifest, dry_run=True)
         run.assert_not_called()
         verify.assert_not_called()
+
+    def test_bootstrap_installs_pinned_binstall_before_cargo_tools(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with (
+            mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
+            mock.patch.object(bootstrap, "verify_seed_tools"),
+            mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=Path("/tmp/bootstrap-python")),
+            mock.patch.object(bootstrap, "cargo_binstall_matches", return_value=False),
+            mock.patch.object(bootstrap, "install_cargo_binstall_release") as install_binstall,
+            mock.patch.object(bootstrap, "binstall_tool_matches", return_value=True),
+            mock.patch.object(bootstrap, "sc_compose_matches", return_value=True),
+            mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
+            mock.patch.object(bootstrap, "verify_installed_tools"),
+            mock.patch.object(bootstrap, "install_git_hooks"),
+            mock.patch.object(bootstrap, "run"),
+        ):
+            bootstrap.bootstrap(manifest, dry_run=False)
+        install_binstall.assert_called_once_with(manifest, dry_run=False)
 
     def test_pip_installs_inside_the_repository_venv(self) -> None:
         python = (
@@ -208,60 +281,37 @@ class BootstrapTests(unittest.TestCase):
             self.assertTrue(bootstrap.binstall_tool_matches("cargo-audit", "0.22.2"))
             self.assertFalse(bootstrap.binstall_tool_matches("cargo-audit", "0.22.3"))
 
-    def test_ci_rejects_registry_compile_fallback(self) -> None:
+    def test_binstall_failure_is_hard_and_has_no_registry_fallback(self) -> None:
         manifest = bootstrap.load_manifest()
-        calls: list[tuple[list[str], bool]] = []
+        calls: list[list[str]] = []
 
-        def failed_binstall(command: list[str], *, dry_run: bool, allow_failure: bool = False) -> bool:
-            calls.append((command, allow_failure))
-            return False
+        def failed_binstall(command: list[str], *, dry_run: bool) -> None:
+            calls.append(command)
+            raise bootstrap.BootstrapError("prebuilt install failed")
 
         with (
-            mock.patch.dict("os.environ", {"CI": "true"}),
             mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
             mock.patch.object(bootstrap, "verify_seed_tools"),
             mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=Path("/tmp/bootstrap-python")),
-            mock.patch.object(bootstrap, "registry_tool_matches", return_value=False),
+            mock.patch.object(bootstrap, "cargo_binstall_matches", return_value=True),
             mock.patch.object(bootstrap, "binstall_tool_matches", return_value=False),
-            mock.patch.object(bootstrap, "cargo_binstall_available", return_value=True),
             mock.patch.object(bootstrap, "run", side_effect=failed_binstall),
         ):
-            with self.assertRaisesRegex(bootstrap.BootstrapError, "could not install the exact prebuilt cargo-deny"):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "prebuilt install failed"):
                 bootstrap.bootstrap(manifest, dry_run=False)
         self.assertEqual(len(calls), 1)
-        self.assertFalse(calls[0][1])
-
-    def test_local_bootstrap_keeps_registry_fallback(self) -> None:
-        manifest = bootstrap.load_manifest()
-        calls: list[tuple[list[str], bool]] = []
-
-        def failed_binstall(command: list[str], *, dry_run: bool, allow_failure: bool = False) -> bool:
-            calls.append((command, allow_failure))
-            return False
-
-        with (
-            mock.patch.dict("os.environ", {"CI": ""}),
-            mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
-            mock.patch.object(bootstrap, "verify_seed_tools"),
-            mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=Path("/tmp/bootstrap-python")),
-            mock.patch.object(bootstrap, "registry_tool_matches", return_value=False),
-            mock.patch.object(bootstrap, "binstall_tool_matches", return_value=False),
-            mock.patch.object(bootstrap, "cargo_binstall_available", return_value=True),
-            mock.patch.object(bootstrap, "sc_compose_matches", return_value=True),
-            mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
-            mock.patch.object(bootstrap, "verify_installed_tools"),
-            mock.patch.object(bootstrap, "run", side_effect=failed_binstall),
-        ):
-            bootstrap.bootstrap(manifest, dry_run=False)
-        self.assertEqual(calls[0][0][1], "binstall")
-        self.assertTrue(calls[0][1])
-        self.assertEqual(calls[1][0][:2], ["cargo", "install"])
+        self.assertEqual(calls[0][0], str(bootstrap.cargo_bin_path("cargo-binstall")))
+        source = (SCRIPT.parents[1] / "tools" / "bootstrap.py").read_text(encoding="utf-8")
+        self.assertNotIn('"cargo", "install"', source)
 
     def test_ci_uses_the_shared_bootstrap_recipe(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn('python-version: "3.14.7"', workflow)
+        self.assertIn('python: "3.14.7"', workflow)
+        self.assertIn('python: "3.12.10"', workflow)
+        self.assertIn("python-version: ${{ matrix.python }}", workflow)
         self.assertIn("tool: just@1.58.0", workflow)
         self.assertIn("cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c", workflow)
+        self.assertEqual(workflow.count("Pre-seed pinned cargo-binstall (bootstrap also verifies)"), 2)
         self.assertGreaterEqual(workflow.count("run: just bootstrap"), 2)
 
     def test_just_recipes_propagate_the_bootstrap_python_to_children(self) -> None:
@@ -286,9 +336,82 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('PATH=\\"$PATH:/opt/homebrew/bin\\" python3.14', justfile)
         self.assertNotIn("PATH=/opt/homebrew/bin:$PATH python3.14", justfile)
 
-    def test_windows_seed_python_selects_the_pinned_major_minor(self) -> None:
+    def test_windows_seed_python_selects_the_stable_pinned_major_minor(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
-        self.assertIn('if os_family() == "windows" { "py -3.14" }', justfile)
+        self.assertIn('if os_family() == "windows" { "py -3.12" }', justfile)
+
+    def test_seed_python_version_preserves_unix_pin_and_selects_windows_pin(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with mock.patch.object(bootstrap.sys, "platform", "win32"):
+            self.assertEqual(bootstrap.seed_python_version(manifest), "3.12.10")
+        with mock.patch.object(bootstrap.sys, "platform", "linux"):
+            self.assertEqual(bootstrap.seed_python_version(manifest), "3.14.7")
+
+class GitHookTests(unittest.TestCase):
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+    HOOK = REPO_ROOT / ".githooks" / "pre-push"
+    HOOK_REL = ".githooks/pre-push"
+
+    def test_pre_push_hook_is_tracked_and_executable(self) -> None:
+        self.assertTrue(self.HOOK.is_file())
+        # Windows checkouts do not carry the POSIX executable bit, so the
+        # tracked git index mode is the portable source of truth.
+        entry = subprocess.run(
+            ["git", "-C", str(self.REPO_ROOT), "ls-files", "-s", "--", self.HOOK_REL],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        self.assertTrue(entry, f"{self.HOOK_REL} must be tracked by git")
+        self.assertEqual(entry.split()[0], "100755", "hook must be executable in the git index")
+        text = self.HOOK.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("#!/bin/sh"))
+        self.assertIn("cargo fmt --all --check", text)
+        self.assertIn("-D warnings", text)
+        self.assertIn("ATM_SKIP_PUSH_GATE", text)
+
+    def test_install_git_hooks_sets_repo_hooks_path(self) -> None:
+        with mock.patch.object(bootstrap, "run") as run:
+            bootstrap.install_git_hooks(dry_run=True)
+        run.assert_called_once_with(["git", "config", "core.hooksPath", ".githooks"], dry_run=True)
+
+    def test_install_git_hooks_skips_outside_a_checkout(self) -> None:
+        with (
+            mock.patch.object(bootstrap, "inside_git_checkout", return_value=False),
+            mock.patch.object(bootstrap, "run") as run,
+        ):
+            bootstrap.install_git_hooks(dry_run=False)
+        run.assert_not_called()
+
+    def test_install_git_hooks_refuses_when_hook_file_is_missing(self) -> None:
+        with (
+            mock.patch.object(bootstrap, "inside_git_checkout", return_value=True),
+            mock.patch.object(bootstrap, "ROOT", Path("/nonexistent-atm-root")),
+            mock.patch.object(bootstrap, "run") as run,
+        ):
+            with self.assertRaises(bootstrap.BootstrapError):
+                bootstrap.install_git_hooks(dry_run=False)
+        run.assert_not_called()
+
+
+
+    def test_hooks_only_installs_hooks_without_bootstrapping_tools(self) -> None:
+        with (
+            mock.patch.object(bootstrap, "install_git_hooks") as install,
+            mock.patch.object(bootstrap, "bootstrap") as full,
+        ):
+            self.assertEqual(bootstrap.main(["bootstrap.py", "--hooks-only"]), 0)
+        install.assert_called_once_with(dry_run=False)
+        full.assert_not_called()
+
+    def test_hooks_only_surfaces_bootstrap_errors(self) -> None:
+        with mock.patch.object(bootstrap, "install_git_hooks", side_effect=bootstrap.BootstrapError("boom")):
+            self.assertEqual(bootstrap.main(["bootstrap.py", "--hooks-only"]), 1)
+
+    def test_hook_is_pinned_to_lf_line_endings(self) -> None:
+        attributes = self.HOOK.parents[1] / ".gitattributes"
+        self.assertIn(".githooks/* text eol=lf", attributes.read_text(encoding="utf-8"))
+        self.assertNotIn(b"\r\n", self.HOOK.read_bytes(), "hook must be LF-only in the tree")
 
 
 if __name__ == "__main__":

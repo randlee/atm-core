@@ -1,12 +1,19 @@
 ---
 title: Nudge Templates
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Nudge Templates
 
 ATM supports built-in nudge behavior and bounded operator override surfaces.
+
+Repeated open-task reminders can produce daemon escalation notifications. The
+unique roster lead is notified once when the reminder count reaches 10; later
+reminders do not repeat that escalation. A blocked or offline member is
+escalated once for a new observed episode, then held until a new episode.
+These daemon messages are system-generated and are not controlled by the
+eleven built-in template kinds.
 
 ## Purpose
 
@@ -18,19 +25,31 @@ attention.
 This document covers supported template usage and override behavior. It does
 not authorize direct database edits or unsupported template engines.
 
-## Six Built-In Template Kinds
+## Eleven Built-In Template Kinds
 
-ATM ships exactly six built-in template kinds:
+ATM ships exactly eleven built-in template kinds:
 
 - `delivery`
 - `delivery_ack`
-- `delivery_task`
-- `delivery_task_ack`
+- `queue`
+- `queue_ack`
 - `acknowledge`
-- `acknowledge_task`
+- `task_queued`
+- `task_ready`
+- `task_reminder`
+- `task_started`
+- `task_complete`
+- `task_closed`
 
-The `delivery*` forms are for delivered work notifications. The
-`acknowledge*` forms are intentionally compact acknowledgement nudges.
+`NudgeKind` selects the delivery (`delivery`, `delivery_ack`) or queue
+(`queue`, `queue_ack`) family. Task transitions select one of the six task
+kinds; their durable state and event audit are defined in ADR-062. The
+`acknowledge` form is an intentionally compact acknowledgement nudge.
+
+`task_queued` is informational. `task_ready` and `task_reminder` tell an
+assignee to read and act on the task; `task_started`, `task_complete`, and
+`task_closed` record the transition for the receiving mailbox. Use [Tasks](./tasks.md)
+for the CLI lifecycle and outcomes.
 
 ## Supported Placeholders
 
@@ -41,9 +60,16 @@ Built-in template rendering supports exactly these placeholders:
 - `{{message_id}}`
 - `{{description}}`
 - `{{task_id}}`
+- `{{position}}`
+- `{{attempt}}`
+- `{{assignee}}`
+- `{{outcome}}`
+- `{{by}}`
 
 There is no Jinja evaluation, no conditionals, and no template-side branching.
-ATM performs direct placeholder substitution only.
+ATM performs direct placeholder substitution only. Task-specific values are
+populated by the corresponding queued, reminder, started, complete, or closed
+transition; a value not applicable to that transition is empty.
 
 ## Precedence
 
@@ -66,18 +92,23 @@ Empty-string template bodies are invalid. Use the explicit team-admin commands
 instead:
 
 ```bash
-atm teams set-nudge-template --team atm-dev --kind delivery_ack --template-body '<atm from="{{from}}" message-id="{{message_id}}"><action>read atm --team {{team}}</action><action>ack the message</action><description>{{description}}</description><action>execute the assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>'
+atm teams set-nudge-template --team atm-dev --kind delivery_ack --template-body '<atm from="{{from}}" message-id="{{message_id}}"><action>atm read --message-id {{message_id}}</action><action>ack the message</action><description>{{description}}</description><action>execute the assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>'
 atm teams disable-nudge-template --team atm-dev --kind delivery_ack
 atm teams clear-nudge-template --team atm-dev --kind delivery_ack
 ```
 
-## Default XML Bodies
+## Default ATM Wire Bodies
+
+These `.xml` examples are ATM's XML-shaped nudge wire syntax, not documents
+for a generic XML parser. In particular, task markers such as `ready` are bare
+ATM attributes because that is the exact emitted wire form. Keep template
+bodies in the supported ATM syntax shown here.
 
 Delivery without required acknowledgement:
 
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
-  <action>read atm --team {{team}}</action>
+  <action>atm read --message-id {{message_id}}</action>
   <description>{{description}}</description>
   <action>execute the assigned task</action>
   <when idle="immediate" busy="after-current-task"/>
@@ -89,7 +120,7 @@ Delivery with required acknowledgement:
 
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
-  <action>read atm --team {{team}}</action>
+  <action>atm read --message-id {{message_id}}</action>
   <action>ack the message</action>
   <description>{{description}}</description>
   <action>execute the assigned task</action>
@@ -98,30 +129,47 @@ Delivery with required acknowledgement:
 </atm>
 ```
 
-Task delivery without required acknowledgement:
+Queue without required acknowledgement:
 
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
-  <action>read atm --team {{team}}</action>
-  <task id="{{task_id}}">{{description}}</task>
+  <action>atm read --message-id {{message_id}}</action>
+  <description>{{description}}</description>
   <action>execute the assigned task</action>
-  <when idle="immediate" busy="after-current-task"/>
   <console announce="concise" pause="false"/>
 </atm>
 ```
 
-Task delivery with required acknowledgement:
+Queue with required acknowledgement:
 
 ```xml
 <atm from="{{from}}" message-id="{{message_id}}">
-  <action>read atm --team {{team}}</action>
+  <action>atm read --message-id {{message_id}}</action>
   <action>ack the message</action>
-  <task id="{{task_id}}">{{description}}</task>
+  <description>{{description}}</description>
   <action>execute the assigned task</action>
-  <when idle="immediate" busy="after-current-task"/>
   <console announce="concise" pause="false"/>
 </atm>
 ```
+
+Task-ready messages are emitted by the task pass and never require
+acknowledgement:
+
+```xml
+<atm task="{{task_id}}" ready message="{{message_id}}" from="{{from}}">
+  <action>atm read --message-id {{message_id}}</action>
+  <action>atm task start {{task_id}}</action>
+  <action>execute the assigned task</action>
+  <console announce="concise" pause="false"/>
+</atm>
+```
+
+The former `task` and `acknowledge_task` kinds are retired and rejected on
+input; task transitions use the six named kinds above.
+
+On database open, ATM upgrades the override table to the eleven-kind constraint,
+preserves every supported row, and removes only retired rows. The migration is
+idempotent and accepts new task-transition overrides after the upgrade.
 
 Compact acknowledgement defaults:
 

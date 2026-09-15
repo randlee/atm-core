@@ -29,6 +29,10 @@ Purpose:
   codes (ADR-058 D8)
 - own the per-host `HerdrSpawnBreaker` circuit-breaker type
   (ADR-058 D10.1)
+- own the validated `HerdrClientConfig` and concrete `HerdrDoctorProbe`
+  public surface used by the daemon bootstrap's sealed endpoint-doctor
+  adapter; probe construction is pure, while its bounded status/member calls
+  map every closed `HerdrError` variant into core-owned typed observations
 - own a `test-utils`-gated fake adapter for use by every consumer crate's
   tests
 
@@ -56,12 +60,16 @@ Rules:
   per-tick prompt cap, and FIFO claim ordering all belong to
   `atm-http-runtime`'s `HerdrQueueWakePump`, which only calls this
   crate's `list` and `prompt` methods (Rand's 2026-08-26 decision)
+- `atm-herdr` reports typed snapshots only; it neither owns nor mutates the
+  canonical ephemeral master-roster member state, reads `RuntimeHealth`, nor
+  decides whether a returned state is eligible for a nudge
 - `atm-herdr` must not fall back to `agent send-keys`, `pane send-keys`,
   `pane send-input`, `tmux send-keys`, or any other raw-keystroke or
   terminal-automation delivery mechanism on any code path
 - `atm-herdr` must never pass a sender's original ATM message body to
-  Herdr; the only text it writes into a Herdr child's argv is the fixed
-  mailbox-read prompt constant (ADR-058 D2)
+  Herdr; the only text it writes into a Herdr child's argv is the caller-
+  supplied rendered built-in nudge template for the recipient team and kind
+  (ADR-058 D2 as amended)
 - `atm-herdr` must never read `HERDR_SESSION` or `HERDR_SOCKET_PATH` from
   its own process environment to select a session; the caller's explicit
   `Option<&HerdrSession>` argument is the only session source (ADR-058 D1)
@@ -131,7 +139,10 @@ create a cycle.
 
 - `AtmError` — the workspace-wide error type a caller may fold a
   `HerdrError` into at its own boundary via `From<HerdrError> for
-  AtmError`; `atm-herdr` itself never constructs an `AtmError` internally
+  AtmError`. From AY.3 (P-E(a) ruling) this crate has exactly two
+  `AtmError` construction sites — `From<HerdrError> for AtmError` and
+  `HerdrClientConfig::try_new` (`AtmErrorCode::ConfigParseFailed`) — and
+  adds no other construction site and no new error family
 - `HerdrError` — this crate's own closed error enum (see
   [`architecture.md`](./architecture.md) §4, §7), covering every Herdr
   `error.code` this crate's contract parses plus this crate's own

@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-POOL-V1>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V1" ;
+  triage:title "atm send's template/schema validation read runs inside the writer transaction, holding the serial writer slot for work that may reject and never write" ;
+  triage:description "fenix writer-pool audit V1 (crates/atm-core/src/send/persistence.rs:89-116,171-199), refined by three Rand rulings. RULING on classification (verbatim, 01M1T3NEJC2T5Y3Z21CM1X0JNC): 'you would may need to read to validate the json matches schema prior to writing. you can do the read on the read pool, validate and if validate passes, then start the write transaction.' RULING on rationale (verbatim, 01M1T3NZFM9GBSP06A15QE39ZH): 'doing the read/validate as part of write consumes a write space for something that might fail and never write' -- i.e. a validation read inside the write transaction holds the single serial writer slot for work that may be rejected, stalling every other queued write behind it. RULING on immutability (verbatim, 01M1T3THS8P4JDMGR3M6D2HSV2): 'templates are stored by sha. if template changes, it has a new sha and is a new entry in table.' Content-addressed template rows can never be stale once read, so they never qualify for the read-modify-write exception (01M1T3QFQ3MXYB5NM5VXEG41EP: the exception applies 'unless it is a situation that the read will be stale/out-of date') -- they must run on the read pool unconditionally, with no transaction. Corrected scope note (01M1T3SR666ZBE3THTDZH9BBZZ, retracting an earlier misreading in 01M1T3RQ3MAMDYXGMJAMSRRZT2): render-path CODE (crate::read::render, the template composer) may change as needed; only the underlying persisted DATA (templates, message content) is asserted immutable, not the code that reads it. Acceptance for V1: template catalog reads (load/load_decomposed_message) run on the read pool ahead of the write; the write transaction contains no read; the post-send mailbox echo renders via the async reader path, never inline on the executor. Depends on AW-POOL-V9's single-read-pool architecture for the destination the relocated reads land in." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-05T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V1/persistence-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V1/persistence-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V1/persistence-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/persistence.rs" ;
+  triage:line 89 ;
+  triage:snippet "template/schema validation read inside the writer transaction" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v1/ac1088c82> .
+
+<urn:atm:triage:occurrence/AW-POOL-V1/persistence-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/persistence.rs" ;
+  triage:line 171 ;
+  triage:snippet "post-send mailbox echo rendered inline rather than via the async reader path" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw-v1/ac1088c82> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-v1/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-POOL-V1/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V1" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: persistence.rs now has zero \"template\" references (grep-confirmed); inline template/schema-validation reads were eliminated from the write transaction by the on-demand render refactor (read/render.rs), so the writer path holds no validation read." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "c325a346055f" ;
+  triage:resolvedBranch "integrate/phase-aw" .

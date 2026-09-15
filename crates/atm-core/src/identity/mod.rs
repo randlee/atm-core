@@ -22,7 +22,7 @@ pub(crate) fn resolve_actor_identity(
     config: Option<&AtmConfig>,
 ) -> Result<AgentName, AtmError> {
     if let Some(actor) = actor_override.filter(|value| !value.trim().is_empty()) {
-        return resolve_aliased_agent(actor, config);
+        return parse_agent_identity(actor);
     }
 
     if let Some(identity) = hook::read_hook_identity()? {
@@ -45,11 +45,11 @@ pub(crate) fn resolve_sender_identity(
     config: Option<&AtmConfig>,
 ) -> Result<AgentName, AtmError> {
     if let Some(sender) = sender_override.filter(|value| !value.trim().is_empty()) {
-        return resolve_aliased_agent(sender.trim(), config);
+        return parse_agent_identity(sender.trim());
     }
 
     if let Some(identity) = hook::read_hook_identity()? {
-        return resolve_aliased_agent(identity.as_str(), config);
+        return parse_agent_identity(identity.as_str());
     }
 
     resolve_runtime_sender_identity(config)
@@ -70,8 +70,8 @@ pub(crate) fn resolve_runtime_sender_identity(
         .ok_or_else(AtmError::identity_unavailable)
 }
 
-fn resolve_aliased_agent(value: &str, config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
-    crate::config::aliases::resolve_agent_name(value, config)
+fn parse_agent_identity(value: &str) -> Result<AgentName, AtmError> {
+    value.parse()
 }
 
 #[cfg(test)]
@@ -100,8 +100,6 @@ mod tests {
     #[cfg(unix)]
     use super::resolve_sender_identity;
     use super::{resolve_hook_identity, resolve_runtime_sender_identity};
-    #[cfg(unix)]
-    use crate::roles::ROLE_TEAM_LEAD;
 
     #[test]
     #[serial_test::serial(env)]
@@ -192,7 +190,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial(env)]
-    fn send_sender_identity_applies_alias_to_hook_identity() {
+    fn send_sender_identity_uses_hook_identity_without_config_alias_resolution() {
         let _env_lock = lock_env();
         let original_identity = env::var_os("ATM_IDENTITY");
         remove_env_var("ATM_IDENTITY");
@@ -209,16 +207,9 @@ mod tests {
         )
         .expect("hook file");
 
-        let mut aliases = std::collections::BTreeMap::new();
-        aliases.insert("lead".to_string(), ROLE_TEAM_LEAD.to_string());
-        let config = AtmConfig {
-            aliases,
-            ..Default::default()
-        };
-
         assert_eq!(
-            resolve_sender_identity(None, Some(&config)).expect("send identity"),
-            AgentName::from_validated(ROLE_TEAM_LEAD)
+            resolve_sender_identity(None, None).expect("send identity"),
+            AgentName::from_validated("lead")
         );
 
         let _ = fs::remove_file(hook_path);

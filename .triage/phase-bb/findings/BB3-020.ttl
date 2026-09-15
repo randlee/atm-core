@@ -1,0 +1,97 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-020>
+  a triage:Finding ;
+  triage:findingId "BB3-020" ;
+  triage:title "report_runtime.py's cross-cutting placement under scripts/smoke/ is inconsistent with the repo's other cross-domain utility location" ;
+  triage:description "quality-mgr BB3-QA3-1789250000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1445#issuecomment-5648698551, 2026-09-12T21:08:20Z; BB3-QA3-M4), reviewed at 66be1d012. scripts/smoke/report_runtime.py is consumed cross-domain by both scripts/smoke/* and scripts/fuzz/render_report.py, but lives under scripts/smoke/ rather than top-level scripts/, where the repo's other genuinely cross-cutting utility (scripts/public_redaction.py) already lives. Non-blocking placement inconsistency." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "maintainability" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/report_runtime.py" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:deferredNote "Consider moving report_runtime.py to top-level scripts/, matching scripts/public_redaction.py's placement, since it is consumed outside scripts/smoke/. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) fixed this on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA; QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1). Core relocation FIXED at f94125cf5 under BB3-QA4-1789262000 (PR #1455 comment, 2026-09-12T23:24:52Z): report_runtime.py moved to top-level scripts/, matching scripts/public_redaction.py's placement; all real import sites updated. REOPENED per fenix's correction (2026-09-12T23:32:13Z): not fully closed -- residual (Minor) is scripts/smoke/test_report_runtime.py belongs in .just/tests (sibling-test convention) and a stale path comment remains at scripts/phase-ai/test_run_hermes_graft_live.py:32. In the BB3-FIX-R5-1789264000 fence, closes on cipher's fix at fix/bb3-qa4-r5 (cut from a7d4664d1, feature/bb6-storage-prompt-handoffs, top of stack #1457). cipher's BB3 R5 final push landed at fix/bb3-qa4-r5 @ 5da523f81 (parent merge-forward 16f2ab124), 2026-09-13T00:45:41Z, self-reported fresh just smoke fast 8/8, evidence archived outside tree, reports index unchanged. Fixed-pending-QA. Per cipher's task-close (relayed by fenix, 2026-09-13T00:52:35Z), this finding's fix landed at f6214af22. QA-R5 dispatched (BB3-QA-R5-1789273000) on PR #1463 @ 5da523f81, frozen, base ref for the diff 40ccd403e." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-020/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-020/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-020/3> ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "6" .
+
+<urn:atm:triage:occurrence/BB3-020/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/report_runtime.py" ;
+  triage:line 1 ;
+  triage:snippet "consumed cross-domain by scripts/smoke/* and scripts/fuzz/render_report.py, but lives under scripts/smoke/ rather than top-level scripts/ where the other cross-cutting utility (public_redaction.py) lives" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-020/1> .
+
+<urn:atm:triage:worktree/BB3-020/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1455, fix/bb3-qa3-r4" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB3-020/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_report_runtime.py" ;
+  triage:line 1 ;
+  triage:snippet "residual: test file not moved to .just/tests (sibling-test convention); stale path comment remains at scripts/phase-ai/test_run_hermes_graft_live.py:32" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-020/2> .
+
+<urn:atm:triage:worktree/BB3-020/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5 (cut from a7d4664d1, feature/bb6-storage-prompt-handoffs, top of stack #1457)" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB3-020/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_report_runtime.py" ;
+  triage:line 1 ;
+  triage:snippet "cipher's BB3 R5 final push; fixed-pending-QA at fix/bb3-qa4-r5 @ 5da523f81" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-020/3> .
+
+<urn:atm:triage:worktree/BB3-020/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/BB3-020/1>
+  a triage:Resolution ;
+  triage:resolutionNote "report_runtime.py moved to top-level scripts/, matching scripts/public_redaction.py's placement; all real import sites updated. Residual minor cosmetic leftovers noted (test file not yet moved to the sibling-test convention; a stale comment at scripts/phase-ai/test_run_hermes_graft_live.py:32 still names the old path) -- non-blocking, recommended for a future layer." ;
+  triage:resolvedAt "2026-09-12T23:24:52Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .
+
+<urn:atm:triage:resolution/BB3-020/2>
+  a triage:Resolution ;
+  triage:resolutionNote "quality-mgr BB3-QA-R5-1789273000 (PR #1463 comment, 'Verified fixed (no residual action)', 2026-09-13T01:11:21Z): confirmed fully fixed and independently verified this round. Test file relocated to .just/tests/test_report_runtime.py, matching the sibling-test convention, and the stale path comment at scripts/phase-ai/test_run_hermes_graft_live.py:32 is fixed. No residual action; this record's prior carry-forward text describing the test-location/comment residual is now historical only -- both items are resolved." ;
+  triage:resolvedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .

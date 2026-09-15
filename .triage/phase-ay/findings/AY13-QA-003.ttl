@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY13-QA-003>
+  a triage:Finding ;
+  triage:findingId "AY13-QA-003" ;
+  triage:title "req-qa ATM-QA-002: docs/project-plan.md had no AY.13 (or AY.10-AY.12) entry in the Phase AY sprint sequencing table" ;
+  triage:description "quality-mgr qa-pr1300-r1 (PR #1300, AY.13 doctor team scope). req-qa found docs/project-plan.md's Phase AY sprint table listed only AY.1 through AY.9 at PR #1300 head, with no AY.13 row, so the sprint doc's frontmatter claims (parallel_with: [AY.9, AY.10, AY.11], execution_track: parallel) were unverifiable against the authoritative plan baseline, creating a cross-document consistency gap." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "plan-traceability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/project-plan.md Phase AY sprint table" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY13 ;
+  triage:foundAt "2026-09-07T17:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY13-QA-003/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY13-QA-003/1> ;
+  triage:closedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY13-QA-003/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1695 ;
+  triage:snippet "Phase AY sprint table listed only AY.1..AY.9, no AY.13 row" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:occursIn <urn:atm:triage:worktree/AY13-QA-003/98ac5c7d2> .
+
+<urn:atm:triage:worktree/AY13-QA-003/98ac5c7d2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay13-doctor-team-scope" ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/AY13-QA-003/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:fixCommit "e1b8c329d" ;
+  triage:fixBranch "integrate/phase-ay" ;
+  triage:verifiedInRound "qa-pr1300-r2" ;
+  triage:resolutionNote "fenix landed e1b8c329d on integrate/phase-ay (docs(phase-ay): AY.13/AY.14 rows in project-plan sprint table). Verified directly: docs/project-plan.md line 1696 now contains a full AY.13 row ('standalone; Rand 2026-09-07 doctor team-scope requirement; parallel with AY.14', status dispatched, branch feature/ay13-doctor-team-scope, doc link), and line 1697 an AY.14 row. Closing on this evidence." .

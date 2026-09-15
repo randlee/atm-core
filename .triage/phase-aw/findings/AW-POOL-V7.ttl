@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AW-POOL-V7>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V7" ;
+  triage:title "No unified write-through RAM roster exists; herdr_queue_wake reads teams/rosters from SQLite via the writer-side pool on every tick, and roster mutations do not update any in-memory mirror in the same operation" ;
+  triage:description "fenix writer-pool audit V7, escalated through three Rand rulings (01M1T44TGQYFNA4NADZ0NGGC3M, 01M1T45T3DAW53W7N5BQ83GJG3, 01M1T465CWB6F1G4K1QY3Z76A0) and independently confirmed BLOCKING by both arch-ctm (01M1T470FMK7EA6EV9R5PCAVMD) and fenix's own direct read at integrate/phase-aw@ac1088c82. Confirmed facts: RosterSnapshotCache (crates/atm-core/src/service_runtime.rs:39, load at :633, load_team_roster/load_roster_member at :606-618, cache internals :200-233) is a lazy, read-only DB projection with no team-enumeration and no ephemeral-state columns; it is invalidated only by clear_roster_cache on the authenticated control-plane reload boundary (crates/atm-storage-rusqlite/src/storage_and_nudge_router.rs:794-802) and by one test -- it is NOT write-through. team_admin save_roster/update_member/remove_member (crates/atm-core/src/team_admin/member_mutation.rs:336-377) persist via replace_roster directly against the roster table without touching the cache, so RAM lags the database until an explicit reload. herdr_queue_wake::tick_once bypasses the cache entirely: it takes shared_roster_store_arc() (herdr_queue_wake.rs:114) and herdr_candidates() (:473-489) performs list_teams() + load_roster() per team on every tick, through the writer-side control_path_pool. RULING (Rand, verbatim, 01M1T44TGQYFNA4NADZ0NGGC3M): 'the RAM roster is a critical item. It was carefully designed and has columns (state) that are not in database. we must guarantee that any write to roster db is reflected in RAM. then the ephemeral state info is mutable based on state changes.' Required design: (a) one in-memory roster per team owned by the runtime holding durable columns plus ephemeral state columns (herdr presence/wake state, etc.) that never hit the database; (b) every roster DB mutation (add/update/remove member) goes through the single writer path and updates the RAM roster in the SAME operation -- no invalidate-on-reload model; (c) ephemeral state mutates in RAM only, on state changes; (d) every roster consumer (admission, send/recipient resolution, herdr queue-wake, doctor/diagnostics, graft) reads RAM only, zero roster SELECTs on any request or tick path. Explicit non-requirement (Rand, verbatim, 01M1T45T3DAW53W7N5BQ83GJG3 and 01M1T465CWB6F1G4K1QY3Z76A0): reader/writer race ordering on the RAM roster is a don't-care symmetrically for add, update, and remove -- 'if there is a race between atm send agent-a and atm team remove-member agent-a, who cares'; 'same thing w/ add member.' Do NOT raise roster-read staleness-during-a-race as a finding; the only invariant is write-through (DB write and RAM update in one operation), consistent with the existing immutable-message/race-tolerant-state design principle. This is a superset of and supersedes any narrower V7 framing that treated only the herdr tick's SQLite reads as the defect -- the missing write-through RAM roster itself is the root finding." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "concurrency-architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-05T23:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V7/cache> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V7/mutation> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V7/tick> ;
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-09-06T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/AW-POOL-V7/cache>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 613 ;
+  triage:snippet "load_team_roster only caches one requested team; cleared only on authenticated reload" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "d514f0370" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster-v7/d514f0370> .
+
+<urn:atm:triage:occurrence/AW-POOL-V7/mutation>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 336 ;
+  triage:snippet "save_roster/update_member/remove_member persist via replace_roster without updating RosterSnapshotCache" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "d514f0370" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster-v7/d514f0370> .
+
+<urn:atm:triage:occurrence/AW-POOL-V7/tick>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 114 ;
+  triage:snippet "shared_roster_store_arc() -> herdr_candidates() -> list_teams()+load_roster() per tick" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "d514f0370" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-aw-ram-roster-v7/d514f0370> .
+
+<urn:atm:triage:worktree/integrate-phase-aw-v7/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .
+
+# Closure (appended 2026-09-06 by fenix at quality-mgr's request): fixed on
+# fix/aw-ram-roster@d514f0370 (PR #1240), qa-pr1240-r3 PASS with zero findings;
+# d514f0370 verified as an ancestor of origin/fix/aw-ram-roster before recording.
+<urn:atm:triage:worktree/fix-aw-ram-roster-v7/d514f0370>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-ram-roster" ;
+  triage:branch "fix/aw-ram-roster" ;
+  triage:headSha "d514f0370" ;
+  triage:orderIndex 2 .

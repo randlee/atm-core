@@ -1,0 +1,36 @@
+---
+name: plan-review-notice
+version: 1.0.0
+description: durable notice that one in-process (background-agent) plan review round ran, so plan activity stays observable in ATM search.
+format: xml
+required_variables:
+  - phase
+  - reviewer
+  - round_index
+  - pr_number
+  - branch
+  - commit
+  - verdict
+  - summary
+metadata:
+  type: plan-review-notice
+  tags:
+    - stage:plan
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: plan-review-notice
+    stage: plan
+    transition: notice
+    iteration_variable: round_index
+---
+<plan-review-notice phase="{{ phase }}" reviewer="{{ reviewer }}" round="{{ round_index }}" verdict="{{ verdict }}">
+  <pr-number>{{ pr_number }}</pr-number>
+  <branch>{{ branch }}</branch>
+  <commit>{{ commit }}</commit>
+  <summary>
+{{ summary }}
+  </summary>
+  <note>Informational only. No reply or task action is required.</note>
+</plan-review-notice>

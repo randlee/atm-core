@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AX-PHASE-END-1788655446 (phase-ending review) on merge/develop-into-phase-ax at 3afa39160; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1232#issuecomment-5556008121 Native id: RBP-F002
+
+# Waived 2026-09-06T02:15:00Z: Rand ruling 2026-09-05 (non-blocking phase-end findings do not gate the phase); deferred to post-mortem follow-up, tracked as randlee/atm-core#1243.
+<urn:atm:triage:finding/AXPE-RBP-002>
+  a triage:Finding ;
+  triage:findingId "AXPE-RBP-002" ;
+  triage:title "atm-storage-rusqlite duplicates state/event/outcome name mappings instead of using the canonical as_str" ;
+  triage:description "atm-storage-rusqlite reimplements identical state_name/event_name/outcome_name string mappings as private free functions (twice, task_store.rs and writer/task_ops.rs) instead of calling the canonical .as_str() on the atm-storage enums. Remediation: delete the copies and call .as_str(). Deferred to the phase post-mortem follow-ups (non-blocking)." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "phase_end_review" ;
+  triage:category "rust-best-practices-agent" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "waived" ;
+  triage:closedAt "2026-09-06T02:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T01:17:12Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T01:14:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-RBP-002/MERGE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-RBP-002/MERGE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/task_ops.rs" ;
+  triage:line 1 ;
+  triage:snippet "fn state_name / event_name / outcome_name (duplicated from task_store.rs)" ;
+  triage:status "waived" ;
+  triage:closed true ;
+  triage:branch "merge/develop-into-phase-ax" ;
+  triage:headSha "3afa39160df6a8ca2e26d690784d80f1c53844d4" ;
+  triage:occursIn <urn:atm:triage:worktree/MERGE/3afa39160df6a8ca2e26d690784d80f1c53844d4> .
+
+<urn:atm:triage:worktree/MERGE/3afa39160df6a8ca2e26d690784d80f1c53844d4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/merge-develop-into-phase-ax" ;
+  triage:branch "merge/develop-into-phase-ax" ;
+  triage:headSha "3afa39160df6a8ca2e26d690784d80f1c53844d4" ;
+  triage:orderIndex 11 .

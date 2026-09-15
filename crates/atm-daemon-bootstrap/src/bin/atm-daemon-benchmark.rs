@@ -13,7 +13,10 @@ use std::{env, process};
 
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
-use atm_core::send::{SendMessageSource, WriteRequest, prepare_write_with_async_runtime};
+use atm_core::send::{
+    SendMessageSource, WriteRequest, preflight_write_source_request,
+    prepare_write_with_preflight_async_runtime,
+};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_daemon_bootstrap::BenchmarkHookMode;
 use atm_storage::{Message, MessageEnvelope, MessageKey};
@@ -367,6 +370,9 @@ fn direct_storage_message(target: &DirectStorageTarget, run_id: &str, sequence: 
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            placement: None,
+            task_op: None,
+            task_complete: None,
             extra: serde_json::Map::new(),
         },
     }
@@ -451,10 +457,13 @@ async fn run_direct_core_write_interval(
                 if sequence >= messages.get() {
                     return Ok::<usize, AtmError>(accepted);
                 }
-                prepare_write_with_async_runtime(
-                    direct_core_write_request(&home, sequence_offset + sequence)?,
+                let request = direct_core_write_request(&home, sequence_offset + sequence)?;
+                let source_preflight = preflight_write_source_request(&runtime, &request)?;
+                prepare_write_with_preflight_async_runtime(
+                    request,
                     &NullObservability,
                     &runtime,
+                    source_preflight,
                 )
                 .await?;
                 accepted += 1;

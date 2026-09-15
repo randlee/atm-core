@@ -329,7 +329,8 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_sqlite_state() {
         .expect("task inbox message");
     assert_eq!(task_message.task_id.as_deref(), Some("TASK-123"));
     assert_eq!(task_message.summary.as_deref(), Some("manual summary"));
-    assert!(task_message.pending_ack_at.is_some());
+    // BB.5: a task-linked send never carries a pending-ack marker.
+    assert!(task_message.pending_ack_at.is_none());
     assert!(plain_message.task_id.is_none());
     assert!(plain_message.pending_ack_at.is_none());
 
@@ -347,10 +348,14 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_sqlite_state() {
         "plain SQLite state should not require ack: {state:?}"
     );
     assert!(
-        state["messages"][task_state_key]["pendingAckAt"]
-            .as_str()
+        state["messages"][task_state_key.clone()]
+            .as_object()
             .is_some(),
-        "task SQLite state should preserve pending ack: {state:?}"
+        "task SQLite state missing: {state:?}"
+    );
+    assert!(
+        state["messages"][task_state_key]["pendingAckAt"].is_null(),
+        "task SQLite state must not carry a pending-ack marker (BB.5): {state:?}"
     );
 }
 
@@ -1431,7 +1436,7 @@ impl Fixture {
         seed_sqlite_roster(
             self.sqlite_db_path().as_path(),
             team,
-            &[TEAM_LEAD, TEST_RECIPIENT],
+            &[(TEAM_LEAD, Some("broken-dev-lead")), (TEST_RECIPIENT, None)],
         );
     }
 
@@ -1507,28 +1512,45 @@ fn create_team_with_config(
         serde_json::to_vec(&config).expect("team config"),
     )
     .expect("write team config");
-    seed_sqlite_roster(sqlite_db_path, team, members);
+    let roster_members = members
+        .iter()
+        .map(|member| (*member, None))
+        .collect::<Vec<_>>();
+    seed_sqlite_roster(sqlite_db_path, team, &roster_members);
 }
 
 #[allow(
     deprecated,
     reason = "mailbox locking tests still seed the retained sqlite runtime through legacy core boundary shims"
 )]
-fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&str]) {
+fn seed_sqlite_roster(
+    sqlite_db_path: &std::path::Path,
+    team: &str,
+    members: &[(&str, Option<&str>)],
+) {
     let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
     let roster_store = assembly.roster_store_arc();
     let team = team.parse::<TeamName>().expect("team");
     let members = members
         .iter()
-        .map(|name| atm_core::boundary::RosterEntry {
-            team_name: team.clone(),
-            agent_name: (*name).parse::<AgentName>().expect("agent"),
-            member_kind: atm_core::boundary::RosterMemberKind::Permanent,
-            harness: atm_core::boundary::RosterHarness::ClaudeCode,
-            agent_type: atm_core::schema::AgentType::default(),
-            model: atm_core::types::ModelName::default(),
-            recipient_pane_id: None,
-            metadata_json: serde_json::Map::new(),
+        .map(|(name, alias)| {
+            let mut metadata_json = serde_json::Map::new();
+            if let Some(alias) = alias {
+                metadata_json.insert(
+                    "alias".to_owned(),
+                    serde_json::Value::String((*alias).to_owned()),
+                );
+            }
+            atm_core::boundary::RosterEntry {
+                team_name: team.clone(),
+                agent_name: (*name).parse::<AgentName>().expect("agent"),
+                member_kind: atm_core::boundary::RosterMemberKind::Permanent,
+                harness: atm_core::boundary::RosterHarness::ClaudeCode,
+                agent_type: atm_core::schema::AgentType::default(),
+                model: atm_core::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json,
+            }
         })
         .collect::<Vec<_>>();
     roster_store
@@ -1612,6 +1634,9 @@ fn pending_ack_message_at(
         thread_mode: None,
         expires_at: None,
         task_id: None,
+        placement: None,
+        task_op: None,
+        task_complete: None,
         extra: serde_json::Map::new(),
     }
 }
@@ -1644,6 +1669,9 @@ fn read_message_at(
         thread_mode: None,
         expires_at: None,
         task_id: None,
+        placement: None,
+        task_op: None,
+        task_complete: None,
         extra: serde_json::Map::new(),
     }
 }
@@ -1676,6 +1704,9 @@ fn unread_message_at(
         thread_mode: None,
         expires_at: None,
         task_id: None,
+        placement: None,
+        task_op: None,
+        task_complete: None,
         extra: serde_json::Map::new(),
     }
 }

@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-002>
+  a triage:Finding ;
+  triage:findingId "FTQ-002" ;
+  triage:title "Flaky wall-clock assertion in the load-shed test" ;
+  triage:description "Minor finding from quality-mgr's PR #1211 QA verdict: wall-clock-based timing assertion in load-shed test at crates/atm-http-runtime/src/message_handler.rs:1741 is timing-sensitive under load. Same class as busy-poll/deadline findings fixed in B1-B8 on fix/aw-readiness-tests. fenix has decided: fix on fix/aw-readiness-easy's next round, after PR #1211 (27dffb109) merges forward into this branch — ordering dependency noted to avoid branch divergence." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T18:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T18:19:50Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWReadinessReview ;
+  triage:foundAt "2026-09-05T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/FTQ-002-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-002/FTQ-002-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 1741 ;
+  triage:snippet "assert!(started.elapsed() < Duration::from_secs(1)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "aec9e5ed" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-EASY/aec9e5ed> .
+
+<urn:atm:triage:worktree/AW-EASY/aec9e5ed>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "aec9e5ed" ;
+  triage:orderIndex 1 .
+
+# quality-mgr, 2026-09-05, qa-pr1215-r4: independently confirmed by req-qa and
+# flaky-test-qa on fix/aw-readiness-easy at 450f36b91. No Instant/elapsed/sleep
+# timing assertion remains anywhere in message_handler.rs; the explicit Gate
+# (wait_until_entered) synchronization is intact and no new timing dependency
+# was introduced. just lint 36/36 passed in this worktree.
+
+# Developer fix evidence; QA retains authority to close the canonical finding.
+<urn:atm:triage:occurrence/FTQ-002/FTQ-002-fixed-efc01fd3a>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 1716 ;
+  triage:snippet "explicit Gate synchronization proves the first request holds the permit before load-shed assertions" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "efc01fd3a" ;
+  triage:occursIn <urn:atm:triage:worktree/AW-EASY/efc01fd3a> .
+
+<urn:atm:triage:worktree/AW-EASY/efc01fd3a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-aw-readiness-easy" ;
+  triage:branch "fix/aw-readiness-easy" ;
+  triage:headSha "efc01fd3a" ;
+  triage:orderIndex 2 .

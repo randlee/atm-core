@@ -17,6 +17,7 @@ if str(JUST_DIR) not in sys.path:
 from lint_common import LintReport
 from lint_common import build_report
 from lint_common import classify_rust_test_scope
+from lint_common import is_rust_test_cfg_attribute
 from lint_common import discover_repo_root
 from lint_common import format_duration
 from lint_common import is_code_line
@@ -303,6 +304,12 @@ version = "0.1.0"
 
         self.assertEqual(scope[:3], [False, False, False])
         self.assertEqual(scope[3:], [True, True, True, True, True, True, True])
+
+    def test_cfg_test_attribute_parser_handles_nested_and_negated_conditions(self) -> None:
+        self.assertTrue(is_rust_test_cfg_attribute('#[cfg(any(test, feature = "test-utils"))]'))
+        self.assertTrue(is_rust_test_cfg_attribute('#![cfg(all(unix, test))]'))
+        self.assertFalse(is_rust_test_cfg_attribute("#[cfg(not(test))]"))
+        self.assertFalse(is_rust_test_cfg_attribute("#[cfg(feature = \"contest\")]"))
 
     def test_classify_rust_test_scope_marks_cfg_any_test_utils_items(self) -> None:
         lines = [

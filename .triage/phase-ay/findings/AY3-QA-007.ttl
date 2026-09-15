@@ -1,0 +1,77 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY3-QA-007>
+  a triage:Finding ;
+  triage:findingId "AY3-QA-007" ;
+  triage:title "transport_cli.rs serde_json parse error discarded before ProtocolMismatch" ;
+  triage:description "crates/atm-herdr/src/transport_cli.rs:204 discards the serde_json::from_str error before mapping to HerdrError::ProtocolMismatch, losing the parse diagnostic (RBP-F003, rust-best-practices-agent). Same pattern family as AY3-QA-003 and AY3-QA-006." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-herdr/src" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T12:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "quality-mgr overrides the prior 'fixed_partial / deferred to post-phase closeout' disposition with evidence at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493): ruthless-boundary-qa disputed fenix's carry-forward framing, citing crates/atm-herdr/src/transport_cli.rs as already fully fixed and merged (PR #1273, commits b8afa814f/c8bfb76e3/d02d621d/52321871b). quality-mgr independently re-verified by direct grep at this head: spawn_unavailable/server_unavailable (transport_cli.rs:191-218) set io_error_kind on both the spawn error path (line 141) and the child.wait() error path (lines 145, 260); decode_envelope (lines 331-337) maps JSON parse failure to HerdrError::ProtocolMismatch instead of discarding it; regression tests spawn_not_found_preserves_io_error_kind, spawn_permission_denied_preserves_io_error_kind, decode_envelope_reports_protocol_mismatch_on_parse_failure (lines 361-395) all present and passing. The fix is complete on this branch, not merely partial; closing as fixed rather than fixed_partial." ;
+  triage:foundIn triage:AY3 ;
+  triage:foundAt "2026-09-07T03:42:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-007/AY3-QA-007-WK1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-007/AY3-QA-007-WK2-1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY3-QA-007/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY3-QA-007/AY3-QA-007-WK1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 204 ;
+  triage:snippet ".map_err(|_| HerdrError::ProtocolMismatch)?" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/WK1/45701a81e> .
+
+<urn:atm:triage:occurrence/AY3-QA-007/AY3-QA-007-WK2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport_cli.rs" ;
+  triage:line 199 ;
+  triage:snippet ".map_err(|_| HerdrError::ProtocolMismatch)?" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "1770ac80e" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/WK2/1770ac80e> ;
+  triage:note "quality-mgr ttl-reconcile-ay-r1: still genuinely open on integrate/phase-ay. Re-verified at current integrate HEAD b6f087f92: transport_cli.rs's decode_envelope still discards the serde_json parse error before ProtocolMismatch. Awaits merge-forward of PR #1273 (still OPEN as of this reconciliation)." .
+
+<urn:atm:triage:resolution/AY3-QA-007/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "52321871b" ;
+  triage:fixBranch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:verifiedInRound "ttl-reconcile-ay-r1 (content-verified against QA-AY3-R3/R4 evidence)" ;
+  triage:resolutionNote "Content-verified fixed on feature/ay3-herdr-endpoint-doctor-config: git show c8bfb76e3:crates/atm-herdr/src/transport_cli.rs shows decode_envelope's serde_json::from_str now maps its error via .map_err(|error| HerdrError::ProtocolMismatch { message: format!(\"failed to decode Herdr response: {error}\") }), preserving the parse diagnostic. Matches commit 52321871b ('fix(herdr): preserve protocol mismatch diagnostics'), verified by QA-AY3-R3 (PASS 0/0/0 at b8afa814f) and QA-AY3-R4 (FAIL only on AY3-QA-002 at c8bfb76e3). Finding-level status set to fixed_partial, not fixed: PR #1273 has not merged to integrate/phase-ay, and the integrate occurrence (WK2) remains open." .
+
+<urn:atm:triage:worktree/WK1/45701a81e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/WK2/1770ac80e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "1770ac80e" ;
+  triage:orderIndex 2 .

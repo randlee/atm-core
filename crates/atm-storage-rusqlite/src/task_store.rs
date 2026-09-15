@@ -1,0 +1,850 @@
+use std::sync::Arc;
+
+use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use atm_storage::{
+    AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, MoveTarget,
+    PromptHandoff, PromptTrigger, QueuePosition, ReminderOutcome, TaskActor, TaskCloseOutcome,
+    TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStateTag, TaskStore,
+};
+use rusqlite::{Connection, OptionalExtension, Row, params};
+
+use super::SqliteTaskStore;
+use crate::shared_db::SharedDb;
+use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
+use crate::task_sql;
+
+pub(crate) const TASK_TABLES_DDL: &str = r#"
+CREATE TABLE IF NOT EXISTS tasks (
+    team TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    assignee TEXT NOT NULL,
+    assigner TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('assigned', 'active', 'complete')),
+    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled')),
+    position INTEGER NULL CHECK(position IS NULL OR position >= 1),
+    assignment_message_id TEXT NOT NULL,
+    description TEXT NOT NULL,
+    assigned_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_reminded_at TEXT NULL,
+    reminder_count INTEGER NOT NULL DEFAULT 0,
+    lead_notified_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (team, task_id),
+    CHECK ((state = 'complete') = (close_outcome IS NOT NULL)),
+    CHECK ((state = 'complete') = (position IS NULL))
+);
+
+CREATE TABLE IF NOT EXISTS task_events (
+    team TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    assignee TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    at TEXT NOT NULL,
+    event TEXT NOT NULL,
+    from_state TEXT NULL,
+    to_state TEXT NULL,
+    close_outcome TEXT NULL CHECK(close_outcome IN ('completed', 'refused', 'cancelled')),
+    actor TEXT NOT NULL,
+    message_id TEXT NULL,
+    outcome TEXT NULL CHECK(outcome IN ('emitted', 'unrenderable', 'blocked')),
+    marker TEXT NULL CHECK(marker IN ('resend', 'assignment_missing')),
+    detail TEXT NULL,
+    PRIMARY KEY (team, task_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS prompt_handoffs (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    message_key TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
+    trigger TEXT NOT NULL CHECK(trigger IN ('steer', 'task_pass')),
+    at TEXT NOT NULL,
+    UNIQUE (team, agent, message_key, kind, attempt)
+);
+CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id, at);
+"#;
+
+pub(crate) const TASK_INDEX_DDL: &str = r#"
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_agent
+    ON tasks(team, assignee) WHERE state = 'active';
+
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_position_per_member
+    ON tasks(team, assignee, position) WHERE state <> 'complete';
+
+CREATE INDEX IF NOT EXISTS tasks_open_by_member
+    ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
+"#;
+
+const ESCALATION_RECIPIENTS_DDL: &str = r#"
+CREATE TABLE IF NOT EXISTS escalation_recipients (
+    scope_key TEXT NOT NULL,
+    address TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (scope_key, address)
+);
+"#;
+
+/// Initializes the task-ledger schema outside the generic shared DB module.
+pub(crate) fn ensure_schema(
+    connection: &mut SqliteConnection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    crate::task_migration::migrate_task_identity(connection, target)?;
+    drop_legacy_prompt_handoffs(connection, target)?;
+    connection
+        .execute_batch(&format!(
+            "{TASK_TABLES_DDL}{TASK_INDEX_DDL}{ESCALATION_RECIPIENTS_DDL}"
+        ))
+        .map_err(|error| sqlite_error(target, "failed to initialize task ledger schema", error))
+}
+
+fn drop_legacy_prompt_handoffs(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let sql: Option<String> = connection
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'prompt_handoffs'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to inspect prompt handoff schema", error))?;
+    if sql.is_some_and(|sql| {
+        sql.contains("UNIQUE (team, agent, message_key, attempt)")
+            && !sql.contains("UNIQUE (team, agent, message_key, kind, attempt)")
+    }) {
+        connection
+            .execute_batch("DROP TABLE prompt_handoffs;")
+            .map_err(|error| {
+                sqlite_error(target, "failed to reshape prompt handoff schema", error)
+            })?;
+    }
+    Ok(())
+}
+
+impl SqliteTaskStore {
+    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
+
+    pub(crate) fn decode_row(row: &Row<'_>) -> rusqlite::Result<TaskRow> {
+        let team: String = row.get(0)?;
+        let task_id: String = row.get(1)?;
+        let assignee: String = row.get(2)?;
+        let assigner: String = row.get(3)?;
+        let state: String = row.get(4)?;
+        let close_outcome: Option<String> = row.get(5)?;
+        let position: Option<u32> = row.get(6)?;
+        let assignment_message_id: String = row.get(7)?;
+        let description: String = row.get(8)?;
+        let assigned_at: String = row.get(9)?;
+        let updated_at: String = row.get(10)?;
+        let last_reminded_at: Option<String> = row.get(11)?;
+        let reminder_count: u32 = row.get(12)?;
+        let lead_notified_count: u32 = row.get(13)?;
+        Ok(TaskRow {
+            team: parse(&team, "task team")?,
+            task_id: parse(&task_id, "task id")?,
+            assignee: parse(&assignee, "task assignee")?,
+            assigner: parse(&assigner, "task assigner")?,
+            state: parse_state(&state, close_outcome.as_deref())?,
+            position: position.and_then(atm_storage::QueuePosition::new),
+            assignment_message_id: parse(&assignment_message_id, "assignment message id")?,
+            description,
+            assigned_at: parse(&assigned_at, "task assigned timestamp")?,
+            updated_at: parse(&updated_at, "task updated timestamp")?,
+            last_reminded_at: last_reminded_at
+                .as_deref()
+                .map(|value| parse(value, "task reminder timestamp"))
+                .transpose()?,
+            reminder_count,
+            lead_notified_count,
+        })
+    }
+
+    pub(crate) fn decode_event_row(row: &Row<'_>) -> rusqlite::Result<TaskEventRow> {
+        let close_outcome: Option<String> = row.get(8)?;
+        let actor: String = row.get(9)?;
+        let message_id: Option<String> = row.get(10)?;
+        let outcome: Option<String> = row.get(11)?;
+        let marker: Option<String> = row.get(12)?;
+        Ok(TaskEventRow {
+            team: parse(&row.get::<_, String>(0)?, "event team")?,
+            task_id: parse(&row.get::<_, String>(1)?, "event task id")?,
+            assignee: parse(&row.get::<_, String>(2)?, "event assignee")?,
+            seq: row.get(3)?,
+            at: parse(&row.get::<_, String>(4)?, "event timestamp")?,
+            event: parse_event(&row.get::<_, String>(5)?)?,
+            from_state: row
+                .get::<_, Option<String>>(6)?
+                .as_deref()
+                .map(|state| {
+                    parse_state(
+                        state,
+                        if state == "complete" {
+                            close_outcome.as_deref()
+                        } else {
+                            None
+                        },
+                    )
+                })
+                .transpose()?,
+            to_state: row
+                .get::<_, Option<String>>(7)?
+                .as_deref()
+                .map(|state| {
+                    parse_state(
+                        state,
+                        if state == "complete" {
+                            close_outcome.as_deref()
+                        } else {
+                            None
+                        },
+                    )
+                })
+                .transpose()?,
+            actor: if actor == atm_storage::DAEMON_ACTOR_NAME {
+                TaskActor::Daemon
+            } else {
+                TaskActor::Member(parse(&actor, "event actor")?)
+            },
+            message_id: message_id
+                .as_deref()
+                .map(|value| parse(value, "event message id"))
+                .transpose()?,
+            outcome: outcome.as_deref().map(parse_outcome).transpose()?,
+            marker: marker.as_deref().map(parse_marker).transpose()?,
+            detail: row.get(13)?,
+        })
+    }
+
+    pub(crate) fn decode_prompt_handoff(row: &Row<'_>) -> rusqlite::Result<PromptHandoff> {
+        Ok(PromptHandoff {
+            team: parse(&row.get::<_, String>(0)?, "prompt handoff team")?,
+            agent: parse(&row.get::<_, String>(1)?, "prompt handoff agent")?,
+            message_key: parse(&row.get::<_, String>(2)?, "prompt handoff message key")?,
+            kind: parse(&row.get::<_, String>(3)?, "prompt handoff kind")?,
+            task_id: parse(&row.get::<_, String>(4)?, "prompt handoff task id")?,
+            attempt: row.get(5)?,
+            trigger: parse_prompt_trigger(&row.get::<_, String>(6)?)?,
+            at: parse(&row.get::<_, String>(7)?, "prompt handoff timestamp")?,
+        })
+    }
+
+    fn load_row(
+        &self,
+        connection: &Connection,
+        member: &MemberKey,
+        task_id: &TaskId,
+    ) -> Result<Option<TaskRow>, AtmError> {
+        task_sql::select_task_row(connection, member.team(), task_id)
+            .map_err(|error| self.db.error("failed to load task row", error))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn append_event(
+        &self,
+        connection: &Connection,
+        member: &MemberKey,
+        task_id: &TaskId,
+        at: IsoTimestamp,
+        event: TaskEventKind,
+        state: TaskState,
+        actor: &str,
+        message_id: Option<&AtmMessageId>,
+        outcome: Option<ReminderOutcome>,
+    ) -> Result<(), AtmError> {
+        let seq: u64 = connection
+            .query_row(
+                "SELECT COALESCE(MAX(seq), 0) + 1 FROM task_events
+                 WHERE team = ?1 AND task_id = ?2",
+                params![member.team().as_str(), task_id.as_str()],
+                |row| row.get(0),
+            )
+            .map_err(|error| {
+                self.db
+                    .error("failed to allocate task event sequence", error)
+            })?;
+        connection
+            .execute(
+                "INSERT INTO task_events(
+                     team, task_id, assignee, seq, at, event, from_state, to_state, actor,
+                     message_id, outcome, marker, detail
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, NULL, NULL)",
+                params![
+                    member.team().as_str(),
+                    task_id.as_str(),
+                    member.agent().as_str(),
+                    seq,
+                    at.to_string(),
+                    event_name(event),
+                    state_name(state),
+                    actor,
+                    message_id.map(ToString::to_string),
+                    outcome.map(outcome_name),
+                ],
+            )
+            .map_err(|error| self.db.error("failed to append task event", error))?;
+        Ok(())
+    }
+}
+
+impl atm_storage::contract::sealed::Sealed for SqliteTaskStore {}
+
+impl TaskStore for SqliteTaskStore {
+    fn load_task(&self, team: &TeamName, task_id: &TaskId) -> Result<Option<TaskRow>, AtmError> {
+        self.db.with_connection(|connection| {
+            task_sql::select_task_row(connection, team, task_id)
+                .map_err(|error| self.db.error("failed to load task row", error))
+        })
+    }
+
+    fn open_tasks(&self, member: &MemberKey) -> Result<Vec<TaskRow>, AtmError> {
+        self.db.with_connection(|connection| {
+            task_sql::select_open_tasks_for_member(connection, member.team(), member.agent())
+                .map_err(|error| self.db.error("failed to list open tasks", error))
+        })
+    }
+
+    fn list_tasks(
+        &self,
+        team: &TeamName,
+        member: Option<&AgentName>,
+    ) -> Result<Vec<TaskRow>, AtmError> {
+        self.db.with_connection(|connection| {
+            task_sql::select_tasks_for_team(connection, team, member)
+                .map_err(|error| self.db.error("failed to list tasks", error))
+        })
+    }
+
+    fn list_task_events(
+        &self,
+        team: &TeamName,
+        task_id: &TaskId,
+        assignee: Option<&AgentName>,
+    ) -> Result<Vec<TaskEventRow>, AtmError> {
+        self.db.with_connection(|connection| {
+            task_sql::select_task_events(connection, team, task_id, assignee)
+                .map_err(|error| self.db.error("failed to list task events", error))
+        })
+    }
+
+    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<(), AtmError> {
+        self.db.with_connection(|connection| {
+            let sql = format!(
+                "INSERT OR IGNORE INTO prompt_handoffs({})
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                task_sql::PROMPT_HANDOFF_COLUMNS
+            );
+            connection
+                .execute(
+                    &sql,
+                    params![
+                        handoff.team.as_str(),
+                        handoff.agent.as_str(),
+                        handoff.message_key.as_str(),
+                        handoff.kind.as_str(),
+                        handoff.task_id.as_str(),
+                        handoff.attempt,
+                        handoff.trigger.as_str(),
+                        handoff.at.to_string(),
+                    ],
+                )
+                .map(|_| ())
+                .map_err(|error| self.db.error("failed to record prompt handoff", error))
+        })
+    }
+
+    fn move_task(
+        &self,
+        team: &TeamName,
+        task_id: &TaskId,
+        actor: &AgentName,
+        target: &MoveTarget,
+        at: IsoTimestamp,
+    ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+        match self.db.submit_writer_op(crate::writer::WriteOp::TaskMove {
+            team: team.clone(),
+            task_id: task_id.clone(),
+            actor: actor.clone(),
+            target: target.clone(),
+            at,
+        })? {
+            crate::writer::WriteOpResult::TaskMoved(outcome) => Ok(outcome),
+            _ => Err(AtmError::mailbox_write(
+                "task move writer returned an unexpected result",
+            )),
+        }
+    }
+
+    fn record_reminder(
+        &self,
+        member: &MemberKey,
+        task_id: &TaskId,
+        at: IsoTimestamp,
+        outcome: ReminderOutcome,
+    ) -> Result<TaskRow, AtmError> {
+        self.db.with_transaction(|connection| {
+            let row = self.load_row(connection, member, task_id)?.ok_or_else(|| {
+                AtmError::validation("cannot record a reminder for a missing task")
+            })?;
+            connection
+                .execute(
+                    "UPDATE tasks SET reminder_count = reminder_count + 1, last_reminded_at = ?4,
+                     updated_at = ?4 WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+                    params![
+                        member.team().as_str(),
+                        task_id.as_str(),
+                        member.agent().as_str(),
+                        at.to_string()
+                    ],
+                )
+                .map_err(|error| self.db.error("failed to record task reminder", error))?;
+            self.append_event(
+                connection,
+                member,
+                task_id,
+                at,
+                TaskEventKind::Reminded,
+                row.state,
+                atm_storage::DAEMON_ACTOR_NAME,
+                None,
+                Some(outcome),
+            )?;
+            self.load_row(connection, member, task_id)?
+                .ok_or_else(|| AtmError::mailbox_write("task disappeared after reminder write"))
+        })
+    }
+
+    fn record_lead_notified(
+        &self,
+        member: &MemberKey,
+        task_id: &TaskId,
+        at: IsoTimestamp,
+        lead: &AgentName,
+        message_id: &AtmMessageId,
+    ) -> Result<(), AtmError> {
+        self.db.with_transaction(|connection| {
+            let row = self.load_row(connection, member, task_id)?.ok_or_else(|| {
+                AtmError::validation("cannot record lead notification for a missing task")
+            })?;
+            connection.execute(
+                "UPDATE tasks SET lead_notified_count = lead_notified_count + 1, updated_at = ?4
+                   WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+                params![member.team().as_str(), task_id.as_str(), member.agent().as_str(), at.to_string()],
+            ).map_err(|error| self.db.error("failed to record lead notification", error))?;
+            self.append_event(connection, member, task_id, at, TaskEventKind::LeadNotified, row.state,
+                lead.as_str(), Some(message_id), None)
+        })
+    }
+
+    fn list_escalation_recipients(
+        &self,
+        scope: &EscalationScope,
+    ) -> Result<Vec<atm_storage::AgentAddress>, AtmError> {
+        let scope_key = scope.key();
+        self.db.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT address FROM escalation_recipients
+                     WHERE scope_key = ?1 ORDER BY address ASC",
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to prepare escalation recipient list", error)
+                })?;
+            let rows = statement
+                .query_map([&scope_key], |row| row.get(0))
+                .map_err(|error| self.db.error("failed to list escalation recipients", error))?;
+            let mut recipients = Vec::new();
+            for row in rows {
+                let address: String = row.map_err(|error| {
+                    self.db
+                        .error("failed to decode escalation recipient", error)
+                })?;
+                match address.parse() {
+                    Ok(address) => recipients.push(address),
+                    Err(error) => tracing::warn!(
+                        subsystem = "task_store",
+                        action = "escalation_recipient_decode",
+                        outcome = "skipped_invalid",
+                        scope = %scope_key,
+                        address,
+                        error = %error,
+                        "Stored escalation recipient address is invalid"
+                    ),
+                }
+            }
+            Ok(recipients)
+        })
+    }
+
+    fn add_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &atm_storage::AgentAddress,
+        at: atm_storage::types::IsoTimestamp,
+    ) -> Result<bool, AtmError> {
+        let scope_key = scope.key();
+        let address = address.to_string();
+        self.db.with_transaction(|connection| {
+            let already_present: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM escalation_recipients
+                      WHERE scope_key = ?1 AND address = ?2)",
+                    params![scope_key, address],
+                    |row| row.get(0),
+                )
+                .map_err(|error| self.db.error("failed to check escalation recipient", error))?;
+            if already_present {
+                return Ok(false);
+            }
+            let count: usize = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM escalation_recipients WHERE scope_key = ?1",
+                    [&scope_key],
+                    |row| row.get(0),
+                )
+                .map_err(|error| self.db.error("failed to count escalation recipients", error))?;
+            if count >= MAX_ESCALATION_RECIPIENTS {
+                return Err(AtmError::validation(format!(
+                    "escalation recipient scope already has the maximum of {MAX_ESCALATION_RECIPIENTS} recipients"
+                )));
+            }
+            let inserted = connection
+                .execute(
+                    "INSERT OR IGNORE INTO escalation_recipients(scope_key, address, added_at)
+                     VALUES (?1, ?2, ?3)",
+                    params![scope_key, address, at.to_string()],
+                )
+                .map_err(|error| self.db.error("failed to add escalation recipient", error))?;
+            Ok(inserted == 1)
+        })
+    }
+
+    fn remove_escalation_recipient(
+        &self,
+        scope: &EscalationScope,
+        address: &atm_storage::AgentAddress,
+    ) -> Result<bool, AtmError> {
+        let scope_key = scope.key();
+        let address = address.to_string();
+        self.db.with_connection(|connection| {
+            let removed = connection
+                .execute(
+                    "DELETE FROM escalation_recipients WHERE scope_key = ?1 AND address = ?2",
+                    params![scope_key, address],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to remove escalation recipient", error)
+                })?;
+            Ok(removed == 1)
+        })
+    }
+}
+
+fn parse<T: std::str::FromStr>(value: &str, subject: &str) -> rusqlite::Result<T>
+where
+    T::Err: std::fmt::Display + Send + Sync + 'static,
+{
+    value.parse().map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            0,
+            rusqlite::types::Type::Text,
+            format!("invalid {subject}: {error}").into(),
+        )
+    })
+}
+
+fn parse_state(value: &str, close_outcome: Option<&str>) -> rusqlite::Result<TaskState> {
+    let tag = match value {
+        "assigned" => TaskStateTag::Assigned,
+        "active" => TaskStateTag::Active,
+        "complete" => TaskStateTag::Complete,
+        _ => return Err(invalid(value, "task state")),
+    };
+    let outcome = close_outcome.map(parse_close_outcome).transpose()?;
+    TaskState::from_parts(tag, outcome).map_err(|error| invalid(error.message(), "task state"))
+}
+fn parse_close_outcome(value: &str) -> rusqlite::Result<TaskCloseOutcome> {
+    match value {
+        "completed" => Ok(TaskCloseOutcome::Completed),
+        "refused" => Ok(TaskCloseOutcome::Refused),
+        "cancelled" => Ok(TaskCloseOutcome::Cancelled),
+        _ => Err(invalid(value, "task close outcome")),
+    }
+}
+fn parse_event(value: &str) -> rusqlite::Result<TaskEventKind> {
+    match value {
+        "assigned" => Ok(TaskEventKind::Assigned),
+        "acked" => Ok(TaskEventKind::Acked),
+        "started" => Ok(TaskEventKind::Started),
+        "completed" => Ok(TaskEventKind::Completed),
+        "refused" => Ok(TaskEventKind::Refused),
+        "cancelled" => Ok(TaskEventKind::Cancelled),
+        "reassigned" => Ok(TaskEventKind::Reassigned),
+        "reopened" => Ok(TaskEventKind::Reopened),
+        "rejected" => Ok(TaskEventKind::Rejected),
+        "reminded" => Ok(TaskEventKind::Reminded),
+        "lead_notified" => Ok(TaskEventKind::LeadNotified),
+        "moved" => Ok(TaskEventKind::Moved),
+        "migrated" => Ok(TaskEventKind::Migrated),
+        _ => Err(invalid(value, "task event")),
+    }
+}
+fn parse_outcome(value: &str) -> rusqlite::Result<ReminderOutcome> {
+    match value {
+        "emitted" => Ok(ReminderOutcome::Emitted),
+        "unrenderable" => Ok(ReminderOutcome::Unrenderable),
+        "blocked" => Ok(ReminderOutcome::Blocked),
+        _ => Err(invalid(value, "reminder outcome")),
+    }
+}
+fn parse_marker(value: &str) -> rusqlite::Result<TaskEventMarker> {
+    match value {
+        "resend" => Ok(TaskEventMarker::Resend),
+        "assignment_missing" => Ok(TaskEventMarker::AssignmentMissing),
+        _ => Err(invalid(value, "task marker")),
+    }
+}
+fn parse_prompt_trigger(value: &str) -> rusqlite::Result<PromptTrigger> {
+    match value {
+        "steer" => Ok(PromptTrigger::Steer),
+        "task_pass" => Ok(PromptTrigger::TaskPass),
+        _ => Err(invalid(value, "prompt trigger")),
+    }
+}
+fn invalid(value: &str, subject: &str) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        0,
+        rusqlite::types::Type::Text,
+        format!("invalid {subject}: {value}").into(),
+    )
+}
+
+const fn state_name(value: TaskState) -> &'static str {
+    match value {
+        TaskState::Assigned => "assigned",
+        TaskState::Active => "active",
+        TaskState::Complete(_) => "complete",
+    }
+}
+const fn event_name(value: TaskEventKind) -> &'static str {
+    match value {
+        TaskEventKind::Assigned => "assigned",
+        TaskEventKind::Acked => "acked",
+        TaskEventKind::Started => "started",
+        TaskEventKind::Completed => "completed",
+        TaskEventKind::Refused => "refused",
+        TaskEventKind::Cancelled => "cancelled",
+        TaskEventKind::Reassigned => "reassigned",
+        TaskEventKind::Reopened => "reopened",
+        TaskEventKind::Rejected => "rejected",
+        TaskEventKind::Reminded => "reminded",
+        TaskEventKind::LeadNotified => "lead_notified",
+        TaskEventKind::Moved => "moved",
+        TaskEventKind::Migrated => "migrated",
+    }
+}
+const fn outcome_name(value: ReminderOutcome) -> &'static str {
+    match value {
+        ReminderOutcome::Emitted => "emitted",
+        ReminderOutcome::Unrenderable => "unrenderable",
+        ReminderOutcome::Blocked => "blocked",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SqliteStorageBackend;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tracing_subscriber::layer::{Context, Layer};
+    use tracing_subscriber::prelude::*;
+
+    struct WarningCounter(Arc<AtomicUsize>);
+
+    impl<S> Layer<S> for WarningCounter
+    where
+        S: tracing::Subscriber,
+    {
+        fn on_event(&self, event: &tracing::Event<'_>, _context: Context<'_, S>) {
+            if *event.metadata().level() == tracing::Level::WARN {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    }
+
+    const TEST_TEAM: &str = "ax6-recipient-test";
+    const DAEMON_RECIPIENT: &str = "ops@ax6-recipient-test";
+    const TEAM_RECIPIENT: &str = "team-ops@ax6-recipient-test";
+
+    fn address(value: &str) -> atm_storage::AgentAddress {
+        value.parse().expect("valid test recipient address")
+    }
+
+    #[test]
+    fn escalation_recipients_are_scoped_deduplicated_and_capped() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.task_store();
+        let daemon = EscalationScope::Daemon;
+        let team_name: TeamName = TEST_TEAM.parse().expect("team");
+        let team = EscalationScope::Team(team_name.clone());
+        let now = IsoTimestamp::now();
+        let daemon_recipient = address(DAEMON_RECIPIENT);
+        let team_recipient = address(TEAM_RECIPIENT);
+
+        assert!(
+            store
+                .add_escalation_recipient(&daemon, &daemon_recipient, now)
+                .expect("daemon add")
+        );
+        assert!(
+            !store
+                .add_escalation_recipient(&daemon, &daemon_recipient, now)
+                .expect("duplicate add")
+        );
+        assert_eq!(
+            store
+                .list_escalation_recipients(&daemon)
+                .expect("daemon list"),
+            vec![daemon_recipient.clone()]
+        );
+        assert_eq!(
+            store
+                .effective_escalation_recipients(&team_name)
+                .expect("daemon fallback"),
+            vec![daemon_recipient.clone()]
+        );
+
+        assert!(
+            store
+                .add_escalation_recipient(&team, &team_recipient, now)
+                .expect("team add")
+        );
+        assert_eq!(
+            store
+                .effective_escalation_recipients(&team_name)
+                .expect("team override"),
+            vec![team_recipient.clone()]
+        );
+        assert!(
+            store
+                .remove_escalation_recipient(&team, &team_recipient)
+                .expect("team remove")
+        );
+        assert_eq!(
+            store
+                .effective_escalation_recipients(&team_name)
+                .expect("fallback after remove"),
+            vec![daemon_recipient]
+        );
+
+        for index in 0..MAX_ESCALATION_RECIPIENTS.saturating_sub(1) {
+            let recipient = address(&format!("ops-{index}@{TEST_TEAM}"));
+            assert!(
+                store
+                    .add_escalation_recipient(&daemon, &recipient, now)
+                    .expect("recipient add")
+            );
+        }
+        let overflow = address(&format!("overflow@{TEST_TEAM}"));
+        let error = store
+            .add_escalation_recipient(&daemon, &overflow, now)
+            .expect_err("scope cap");
+        assert!(error.message().contains("maximum"));
+    }
+
+    #[test]
+    fn invalid_escalation_recipient_row_is_skipped_without_hiding_valid_rows() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = Arc::clone(&backend.task_store);
+        let team_name: TeamName = TEST_TEAM.parse().expect("team");
+        let scope = EscalationScope::Team(team_name);
+        let now = IsoTimestamp::now();
+        let valid = address(TEAM_RECIPIENT);
+        store
+            .add_escalation_recipient(&scope, &valid, now)
+            .expect("valid recipient");
+        store
+            .db
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "INSERT INTO escalation_recipients(scope_key, address, added_at)
+                         VALUES (?1, ?2, ?3)",
+                        params![scope.key(), "not an address", now.to_string()],
+                    )
+                    .expect("insert invalid legacy row");
+                Ok(())
+            })
+            .expect("seed invalid recipient");
+
+        let warnings = Arc::new(AtomicUsize::new(0));
+        let subscriber = tracing_subscriber::registry().with(WarningCounter(Arc::clone(&warnings)));
+        let recipients = tracing::subscriber::with_default(subscriber, || {
+            store
+                .list_escalation_recipients(&scope)
+                .expect("recipient list")
+        });
+        assert_eq!(recipients, vec![valid]);
+        assert_eq!(warnings.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn concurrent_recipient_adds_do_not_exceed_scope_cap() {
+        use std::sync::{Arc, Barrier};
+
+        // A real on-disk (WAL) database, not the in-memory shared-cache
+        // fixture: shared-cache in-memory SQLite raises SQLITE_LOCKED for
+        // cross-connection table contention, which busy_timeout does not
+        // retry, unlike the file-locking WAL uses in production (and here).
+        let tempdir = tempfile::tempdir().expect("temporary database directory");
+        let backend = SqliteStorageBackend::new(tempdir.path().join("recipient-add-race.db"))
+            .expect("backend");
+        let store = backend.task_store();
+        let scope = EscalationScope::Daemon;
+        let now = IsoTimestamp::now();
+        for index in 0..MAX_ESCALATION_RECIPIENTS.saturating_sub(1) {
+            let recipient = address(&format!("seed-{index}@ax6-test"));
+            store
+                .add_escalation_recipient(&scope, &recipient, now)
+                .expect("seed recipient");
+        }
+        let start = Arc::new(Barrier::new(2));
+        let handles: Vec<_> = ["first@ax6-test", "second@ax6-test"]
+            .into_iter()
+            .map(|raw_address| {
+                let store = Arc::clone(&store);
+                let start = Arc::clone(&start);
+                let scope = scope.clone();
+                let address = address(raw_address);
+                std::thread::spawn(move || {
+                    start.wait();
+                    store.add_escalation_recipient(&scope, &address, now)
+                })
+            })
+            .collect();
+        let outcomes: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("add thread"))
+            .collect();
+
+        assert_eq!(
+            outcomes.iter().filter(|outcome| outcome.is_ok()).count(),
+            1,
+            "exactly one interleaved add can claim the final slot"
+        );
+        assert_eq!(
+            store
+                .list_escalation_recipients(&scope)
+                .expect("recipient list")
+                .len(),
+            MAX_ESCALATION_RECIPIENTS
+        );
+    }
+}

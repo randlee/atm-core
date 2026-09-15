@@ -458,7 +458,7 @@ fn single_statement_error() -> AtmError {
 mod tests {
     use super::{open_defensive_connection, sql_error};
     use crate::observability::NullSqliteObservability;
-    use crate::reader_pool::{DEFAULT_DOCTOR_READER_CONFIG, ReaderLanesConfig, ReaderPool};
+    use crate::reader_pool::SharedReadPoolConfig;
     use crate::shared_db::{
         SharedDbTarget, opened_connection_count, reset_opened_connection_count,
     };
@@ -473,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn default_reader_lane_composition_opens_the_documented_connection_budget() {
+    fn default_shared_read_pool_opens_the_documented_connection_budget() {
         let root = tempfile::tempdir().expect("temporary SQLite root");
         let path = root.path().join("mail.db");
         let target = SharedDbTarget::Path(path.clone());
@@ -482,21 +482,15 @@ mod tests {
         let _database = SharedDb::open_with_reader_lanes(
             &path,
             Arc::new(NullSqliteObservability),
-            ReaderLanesConfig::default(),
+            SharedReadPoolConfig::default(),
         )
-        .expect("default writer, mailbox, and search lanes");
-        let _doctor = ReaderPool::start(
-            "doctor",
-            Arc::new(target.clone()),
-            DEFAULT_DOCTOR_READER_CONFIG,
-        )
-        .expect("default doctor lane");
+        .expect("default writer and shared read pool");
         let _analyst = open_defensive_connection(&path).expect("analyst read connection");
 
         let opened = opened_connection_count(&target);
-        assert_eq!(opened, 12, "writer + mailbox + search + doctor + analyst");
+        assert_eq!(opened, 10, "writer + shared read pool + analyst");
         assert!(
-            opened <= 22,
+            opened <= 18,
             "opened connections must fit the worst-case cap"
         );
     }

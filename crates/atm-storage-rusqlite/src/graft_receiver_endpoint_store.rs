@@ -1,9 +1,10 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use atm_storage::OwnerGeneration;
 use atm_storage::contract::{
-    GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
-    GraftReceiverRegistration, sealed,
+    AsyncGraftReceiverEndpointStore, GraftEndpointStoreError, GraftReceiverEndpointStore,
+    GraftReceiverLease, GraftReceiverRegistration, sealed,
 };
 use atm_storage::types::{AgentName, LocalCapability, TeamName};
 use chrono::{DateTime, Utc};
@@ -32,6 +33,57 @@ impl sealed::Sealed for SqliteGraftReceiverEndpointStore {}
 // architectural self-loop.
 fn storage_error(error: atm_storage::AtmError) -> GraftEndpointStoreError {
     GraftEndpointStoreError::storage(&error)
+}
+
+macro_rules! lookup_lease {
+    ($connection:expr, $db:expr, $team:expr, $agent:expr) => {
+        $connection
+            .query_row(
+                "SELECT endpoint, capability, owner_generation,
+                    registered_at, last_seen_at, unreachable_at
+             FROM graft_receiver_endpoints
+             WHERE team = ?1 AND agent = ?2;",
+                params![$team.as_str(), $agent.as_str()],
+                |row| {
+                    let endpoint = row.get::<_, String>(0)?.parse().map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            0,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
+                        )
+                    })?;
+                    let capability = LocalCapability::parse_base64url(&row.get::<_, String>(1)?)
+                        .map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                1,
+                                rusqlite::types::Type::Text,
+                                Box::new(std::io::Error::other(error.to_string())),
+                            )
+                        })?;
+                    Ok(GraftReceiverLease {
+                        endpoint,
+                        capability,
+                        owner_generation: OwnerGeneration::new(row.get::<_, String>(2)?).map_err(
+                            |error| {
+                                rusqlite::Error::FromSqlConversionFailure(
+                                    2,
+                                    rusqlite::types::Type::Text,
+                                    Box::new(std::io::Error::other(error.to_string())),
+                                )
+                            },
+                        )?,
+                        registered_at: parse_timestamp(row.get::<_, String>(3)?)?,
+                        last_seen_at: parse_timestamp(row.get::<_, String>(4)?)?,
+                        unreachable_since: row
+                            .get::<_, Option<String>>(5)?
+                            .map(parse_timestamp)
+                            .transpose()?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|error| $db.error("failed to look up graft receiver endpoint", error))
+    };
 }
 
 impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
@@ -103,16 +155,19 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
             })
             .map_err(storage_error)?;
         if changed == 0 {
+            let lookup_team = team.clone();
+            let lookup_agent = agent.clone();
+            let db = Arc::clone(&self.db);
             let present: bool = self
                 .db
-                .with_connection(|connection| {
+                .read(move |connection| {
                     connection
                         .query_row(
                             "SELECT EXISTS(SELECT 1 FROM graft_receiver_endpoints WHERE team = ?1 AND agent = ?2)",
-                            params![team.as_str(), agent.as_str()],
+                            params![lookup_team.as_str(), lookup_agent.as_str()],
                             |row| row.get(0),
                         )
-                        .map_err(|error| self.db.error("failed to inspect graft receiver lease", error))
+                        .map_err(|error| db.error("failed to inspect graft receiver lease", error))
                 })
                 .map_err(storage_error)?;
             return Err(if present {
@@ -175,8 +230,11 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        let team = team.clone();
+        let agent = agent.clone();
+        let db = Arc::clone(&self.db);
         self.db
-            .with_connection(|connection| {
+            .read(move |connection| {
                 connection
                     .query_row(
                         "SELECT endpoint, capability, owner_generation,
@@ -222,10 +280,23 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
                         },
                     )
                     .optional()
-                    .map_err(|error| {
-                        self.db
-                            .error("failed to look up graft receiver endpoint", error)
-                    })
+                    .map_err(|error| db.error("failed to look up graft receiver endpoint", error))
+            })
+            .map_err(storage_error)
+    }
+
+    fn lookup_with_deadline(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        deadline: Duration,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        let team = team.clone();
+        let agent = agent.clone();
+        let db = Arc::clone(&self.db);
+        self.db
+            .read_with_deadline(deadline, move |connection| {
+                lookup_lease!(connection, db.as_ref(), &team, &agent)
             })
             .map_err(storage_error)
     }
@@ -265,6 +336,26 @@ impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
     }
 }
 
+#[async_trait::async_trait]
+impl AsyncGraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
+    async fn lookup_with_deadline_async(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        deadline: Duration,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        let team = team.clone();
+        let agent = agent.clone();
+        let db = Arc::clone(&self.db);
+        self.db
+            .read_with_deadline_async(deadline, move |connection| {
+                lookup_lease!(connection, db.as_ref(), &team, &agent)
+            })
+            .await
+            .map_err(storage_error)
+    }
+}
+
 fn parse_timestamp(value: String) -> Result<DateTime<Utc>, rusqlite::Error> {
     DateTime::parse_from_rfc3339(&value)
         .map(|timestamp| timestamp.with_timezone(&Utc))
@@ -282,6 +373,7 @@ mod tests {
     use super::*;
     use atm_storage::types::{AgentName, TeamName};
     use chrono::TimeZone;
+    use std::time::Duration;
 
     fn names() -> (TeamName, AgentName) {
         (
@@ -360,6 +452,50 @@ mod tests {
             .unregister(&team, &agent, &generation(GENERATION_ONE))
             .expect("unregister");
         assert_eq!(store.lookup(&team, &agent).expect("lookup"), None);
+    }
+
+    #[test]
+    fn deadline_aware_lookup_rejects_an_expired_reader_submission() {
+        let store = store();
+        let (team, agent) = names();
+
+        let error = store
+            .lookup_with_deadline(&team, &agent, Duration::ZERO)
+            .expect_err("an expired deadline must not use the default reader deadline");
+
+        assert!(error.to_string().contains("deadline"));
+    }
+
+    #[tokio::test]
+    async fn async_lookup_returns_hit_miss_and_deadline_error_from_reader_pool() {
+        let store = store();
+        let (team, agent) = names();
+        let registration = registration(GENERATION_ONE, "127.0.0.1:43101");
+        store
+            .register(&registration, timestamp(10))
+            .expect("register fixture lease");
+
+        let hit = store
+            .lookup_with_deadline_async(&team, &agent, Duration::from_secs(1))
+            .await
+            .expect("async reader-pool lookup")
+            .expect("registered lease");
+        assert_eq!(hit.endpoint, registration.endpoint);
+
+        let missing_agent = AgentName::from_validated("no-lease");
+        assert_eq!(
+            store
+                .lookup_with_deadline_async(&team, &missing_agent, Duration::from_secs(1))
+                .await
+                .expect("async missing lookup"),
+            None
+        );
+
+        let error = store
+            .lookup_with_deadline_async(&team, &agent, Duration::ZERO)
+            .await
+            .expect_err("expired async deadline must not enter the default reader deadline");
+        assert!(error.to_string().contains("deadline"));
     }
 
     #[test]

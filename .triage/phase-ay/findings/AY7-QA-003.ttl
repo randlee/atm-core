@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY7-QA-003>
+  a triage:Finding ;
+  triage:findingId "AY7-QA-003" ;
+  triage:title "windows_process_confinement guard's cfg(windows) marker is over-broad, fails on integrate/phase-ay independent of PR #1294" ;
+  triage:description "fenix addendum to qa-pr1294-r1 (PR #1294, worktree merge/develop-1.5.6-into-phase-ay). cargo test -p atm-herdr --test windows_process_confinement fails on integrate/phase-ay head 94556328c itself (and unchanged on #1294's d4c88a4c6) -- pre-existing red, not introduced by the develop-1.5.6 merge. crates/atm-herdr/tests/windows_process_confinement.rs (AY.7, added d915a2447, PR #1285) asserts every atm-herdr src file other than transport_cli.rs is free of four markers: creation_flags, CREATE_NO_WINDOW, herdr.exe, cfg(windows). crates/atm-herdr/src/transport_socket.rs (AY.8, added e480a2756, PR #1280) legitimately uses #[cfg(windows)] at lines 110, 367, 384, 805 for named-pipe transport I/O (connect_named_pipe, retry_pipe_busy, a #[tokio::test] gated on windows) -- none of these are CLI-process-spawning code; they are the Windows named-pipe half of the herdr IPC transport, architecturally distinct from the CLI subprocess-launch confinement the guard exists to enforce. Confirmed by direct read of transport_socket.rs:105-115, 363-390, 800-810 -- no creation_flags/CREATE_NO_WINDOW/herdr.exe present there, only the generic platform-cfg attribute. AY.7 and AY.8 each landed green independently (different PRs, guard test only sees its own branch's src/ tree); the conflict only surfaces once both are present on the same tree, which first happened when AY.7+AY.8 merged into integrate/phase-ay. Post-merge-forward CI also red: gh run 34139080903/34139081008 on the merged integrate head fails the same way. Root cause: the guard's marker list conflates 'any Windows-specific code' with 'Windows CLI-process-spawning code' -- cfg(windows) alone is not a process marker, creation_flags/CREATE_NO_WINDOW/herdr.exe are. Fix is narrowing the guard test's marker list (drop the bare cfg(windows) entry, keep the three real process-spawning markers), not touching transport_socket.rs, which is correct as written." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-herdr/tests/windows_process_confinement.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY7 ;
+  triage:foundAt "2026-09-07T15:57:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-003/integrate-94556328c> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-003/pr1294-d4c88a4c6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-003/integrate-67d082dbe> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY7-QA-003/1> ;
+  triage:closedAt "2026-09-07T16:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY7-QA-003/integrate-94556328c>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/windows_process_confinement.rs" ;
+  triage:line 10 ;
+  triage:snippet "\"cfg(windows)\", // over-broad: matches transport_socket.rs's legitimate named-pipe cfg(windows) blocks" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "94556328c" ;
+  triage:occursIn <urn:atm:triage:worktree/AY7-QA-003/94556328c> .
+
+<urn:atm:triage:occurrence/AY7-QA-003/pr1294-d4c88a4c6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/windows_process_confinement.rs" ;
+  triage:line 10 ;
+  triage:snippet "\"cfg(windows)\", // same over-broad marker, unchanged by the develop-1.5.6 merge" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "merge/develop-1.5.6-into-phase-ay" ;
+  triage:headSha "d4c88a4c6" ;
+  triage:occursIn <urn:atm:triage:worktree/AY7-QA-003/d4c88a4c6> .
+
+<urn:atm:triage:occurrence/AY7-QA-003/integrate-67d082dbe>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/tests/windows_process_confinement.rs" ;
+  triage:line 6 ;
+  triage:snippet "const WINDOWS_PROCESS_MARKERS: &[&str] = &[\"creation_flags\", \"CREATE_NO_WINDOW\", \"herdr.exe\"];" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "67d082dbe" ;
+  triage:occursIn <urn:atm:triage:worktree/AY7-QA-003/67d082dbe> .
+
+<urn:atm:triage:worktree/AY7-QA-003/94556328c>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "94556328c" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AY7-QA-003/d4c88a4c6>
+  a triage:WorktreeSnapshot ;
+  triage:path "merge/develop-1.5.6-into-phase-ay" ;
+  triage:branch "merge/develop-1.5.6-into-phase-ay" ;
+  triage:headSha "d4c88a4c6" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AY7-QA-003/67d082dbe>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "67d082dbe" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/AY7-QA-003/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T16:10:00Z"^^xsd:dateTime ;
+  triage:fixCommit "dec2a280f" ;
+  triage:fixBranch "merge/develop-1.5.6-into-phase-ay" ;
+  triage:verifiedInRound "qa-pr1294-r1" ;
+  triage:resolutionNote "PR #1294 admin-merged into integrate/phase-ay at 67d082dbe (Rand's merge decision). Confirmed git merge-base --is-ancestor dec2a280f 67d082dbe (YES). Content-verified at the merged head: crates/atm-herdr/tests/windows_process_confinement.rs's WINDOWS_PROCESS_MARKERS now reads &[\"creation_flags\", \"CREATE_NO_WINDOW\", \"herdr.exe\"] -- the bare cfg(windows) entry is gone, transport_socket.rs untouched. Ran cargo test -p atm-herdr --test windows_process_confinement directly in the integrate/phase-ay worktree at 67d082dbe: 1 passed, 0 failed. Closing all three occurrences on this evidence." .

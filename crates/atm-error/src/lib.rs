@@ -59,12 +59,67 @@ mod tests {
     }
 
     #[test]
+    fn blocking_bridge_deadline_codes_keep_distinct_stable_wire_spellings() {
+        for (code, wire) in [
+            (
+                AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
+                "ATM_BLOCKING_BRIDGE_DEADLINE_BEFORE_START",
+            ),
+            (
+                AtmErrorCode::BlockingBridgeDeadlineAfterStart,
+                "ATM_BLOCKING_BRIDGE_DEADLINE_AFTER_START",
+            ),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
     fn error_codes_round_trip_through_json() {
         let code = AtmErrorCode::MessageValidationFailed;
         let encoded = serde_json::to_string(&code).expect("serialize error code");
         let decoded: AtmErrorCode = serde_json::from_str(&encoded).expect("deserialize error code");
 
         assert_eq!(decoded, code);
+    }
+
+    #[test]
+    fn task_rejection_codes_keep_distinct_stable_wire_spellings() {
+        for (code, wire) in [
+            (AtmErrorCode::TaskNotFound, "ATM_TASK_NOT_FOUND"),
+            (AtmErrorCode::TaskAlreadyActive, "ATM_TASK_ALREADY_ACTIVE"),
+            (AtmErrorCode::TaskAlreadyClosed, "ATM_TASK_ALREADY_CLOSED"),
+            (
+                AtmErrorCode::TaskNotCounterparty,
+                "ATM_TASK_NOT_COUNTERPARTY",
+            ),
+            (
+                AtmErrorCode::TaskStaleCounterparty,
+                "ATM_TASK_STALE_COUNTERPARTY",
+            ),
+            (AtmErrorCode::TaskMoveInvalid, "ATM_TASK_MOVE_INVALID"),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
+    fn retained_diagnostics_codes_keep_distinct_stable_wire_spellings() {
+        for (code, wire) in [
+            (
+                AtmErrorCode::RetainedDiagnosticsHealthOk,
+                "ATM_RETAINED_DIAGNOSTICS_HEALTH_OK",
+            ),
+            (
+                AtmErrorCode::WarningRetainedDiagnosticsDegraded,
+                "ATM_WARNING_RETAINED_DIAGNOSTICS_DEGRADED",
+            ),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
     }
 
     #[test]

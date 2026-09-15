@@ -1,27 +1,23 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::net::SocketAddr;
-use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::error::{AtmError, AtmErrorCode};
+use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
-use crate::types::{
-    AgentName, HostName, IsoTimestamp, LocalCapability, MemberKey, ModelName, OwnerGeneration,
-    PaneId, TaskId, TeamName,
-};
+use crate::task_state::TaskCloseOutcome;
+use crate::types::{AgentName, IsoTimestamp, MemberKey, ModelName, PaneId, TaskId, TeamName};
 
 #[doc(hidden)]
 pub mod sealed {
     pub trait Sealed {}
 }
 
-fn require_non_blank(value: String, subject: &str) -> Result<String, AtmError> {
+pub(crate) fn require_non_blank(value: String, subject: &str) -> Result<String, AtmError> {
     if value.trim().is_empty() {
         return Err(AtmError::validation(format!("{subject} must not be blank")));
     }
@@ -85,49 +81,10 @@ impl AsRef<str> for MessageKey {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(transparent)]
-pub struct TaskState(String);
-
-impl TaskState {
-    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(value.into(), "task state").map(Self)
-    }
-}
-
-impl AsRef<str> for TaskState {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Deref for TaskState {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl fmt::Display for TaskState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
-    }
-}
-
-impl FromStr for TaskState {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value)
-    }
-}
-
-impl PartialEq<&str> for TaskState {
-    fn eq(&self, other: &&str) -> bool {
-        self.as_ref() == *other
-    }
-}
+pub use crate::peer_contract::*;
+pub use crate::read_lane_error::ReadLaneError;
+pub use crate::task_state::{TaskEventRow, TaskRow};
+pub use crate::task_store::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
@@ -167,15 +124,20 @@ impl FromStr for AckTransition {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum BuiltInNudgeTemplateKind {
     Delivery,
     DeliveryAck,
-    DeliveryTask,
-    DeliveryTaskAck,
+    Queue,
+    QueueAck,
     Acknowledge,
-    AcknowledgeTask,
+    TaskQueued,
+    TaskReady,
+    TaskReminder,
+    TaskStarted,
+    TaskComplete,
+    TaskClosed,
 }
 
 impl BuiltInNudgeTemplateKind {
@@ -183,10 +145,15 @@ impl BuiltInNudgeTemplateKind {
         match self {
             Self::Delivery => "delivery",
             Self::DeliveryAck => "delivery_ack",
-            Self::DeliveryTask => "delivery_task",
-            Self::DeliveryTaskAck => "delivery_task_ack",
+            Self::Queue => "queue",
+            Self::QueueAck => "queue_ack",
             Self::Acknowledge => "acknowledge",
-            Self::AcknowledgeTask => "acknowledge_task",
+            Self::TaskQueued => "task_queued",
+            Self::TaskReady => "task_ready",
+            Self::TaskReminder => "task_reminder",
+            Self::TaskStarted => "task_started",
+            Self::TaskComplete => "task_complete",
+            Self::TaskClosed => "task_closed",
         }
     }
 }
@@ -201,17 +168,7 @@ impl FromStr for BuiltInNudgeTemplateKind {
     type Err = AtmError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "delivery" => Ok(Self::Delivery),
-            "delivery_ack" => Ok(Self::DeliveryAck),
-            "delivery_task" => Ok(Self::DeliveryTask),
-            "delivery_task_ack" => Ok(Self::DeliveryTaskAck),
-            "acknowledge" => Ok(Self::Acknowledge),
-            "acknowledge_task" => Ok(Self::AcknowledgeTask),
-            other => Err(AtmError::validation(format!(
-                "unsupported built-in nudge template kind `{other}`"
-            ))),
-        }
+        crate::validation::parse_built_in_template_kind(value)
     }
 }
 
@@ -227,6 +184,12 @@ pub struct TeamNudgeTemplateOverrideRow {
     pub team_name: TeamName,
     pub kind: BuiltInNudgeTemplateKind,
     pub mode: TeamNudgeTemplateOverrideMode,
+    pub updated_at: IsoTimestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StaleNudgeTemplateOverrideKind {
+    pub kind: String,
     pub updated_at: IsoTimestamp,
 }
 
@@ -267,6 +230,34 @@ pub struct Message {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
+}
+
+/// Result of admitting one immutable message and applying any governed task
+/// operation carried by that newly inserted local message.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MessageAdmissionOutcome {
+    pub existing: Option<Message>,
+    pub already_closed: Option<TaskCloseOutcome>,
+    /// Assignee snapshot for an applied start or close operation.
+    pub task_assignee: Option<AgentName>,
+    /// Landed queue position for an assignment admitted by this write.
+    pub queued_position: Option<u32>,
+    /// Canonical reassignment notice inserted atomically for the old assignee.
+    pub reassign_notice: Option<Message>,
+    /// A governed task operation rejected after its report was retained as
+    /// ordinary mail. Callers must complete ordinary post-write handling
+    /// before surfacing this error to the sender.
+    pub task_rejection: Option<AtmError>,
+}
+
+impl MessageAdmissionOutcome {
+    #[must_use]
+    pub fn passive(existing: Option<Message>) -> Self {
+        Self {
+            existing,
+            ..Self::default()
+        }
+    }
 }
 
 /// Aggregate display counts for one mailbox without materializing its messages.
@@ -342,6 +333,18 @@ pub struct MessageQuery {
     pub limit: Option<usize>,
 }
 
+/// A storage-owned, criteria-based mailbox page.
+///
+/// Unlike [`MessageQuery`], this carries the complete typed predicate to the
+/// reader backend so it can apply visibility, successor collapse, ordering,
+/// and a page limit before it materializes message envelopes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MailboxListQuery {
+    pub filters: crate::search::SearchFilters,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
 /// The mailbox a read operation is authorized to inspect.
 ///
 /// This deliberately travels with every asynchronous mailbox request instead
@@ -388,51 +391,6 @@ impl ReadDeadline {
     #[must_use]
     pub const fn remaining(self) -> Duration {
         self.remaining
-    }
-}
-
-/// Explicit resource-management outcomes from a bounded reader lane.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ReadLaneError {
-    UnauthorizedScope,
-    Saturated { reason: &'static str },
-    DeadlineExpired { stage: &'static str },
-    Unavailable { message: String },
-}
-
-impl fmt::Display for ReadLaneError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnauthorizedScope => {
-                formatter.write_str("mailbox scope does not authorize this read")
-            }
-            Self::Saturated { reason } => {
-                write!(formatter, "mailbox reader lane is saturated: {reason}")
-            }
-            Self::DeadlineExpired { stage } => {
-                write!(formatter, "mailbox reader deadline expired while {stage}")
-            }
-            Self::Unavailable { message } => {
-                write!(formatter, "mailbox reader lane is unavailable: {message}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for ReadLaneError {}
-
-/// Translates the storage-owned reader-lane outcomes exactly once into the
-/// stable ATM error vocabulary. The original lane outcome remains attached as
-/// the machine-visible cause instead of being flattened into unavailability.
-impl From<ReadLaneError> for AtmError {
-    fn from(error: ReadLaneError) -> Self {
-        let code = match &error {
-            ReadLaneError::UnauthorizedScope => AtmErrorCode::MailboxReadFailed,
-            ReadLaneError::Saturated { .. } => AtmErrorCode::DaemonConnectionSaturated,
-            ReadLaneError::DeadlineExpired { .. } => AtmErrorCode::MailboxLockTimeout,
-            ReadLaneError::Unavailable { .. } => AtmErrorCode::DaemonUnavailable,
-        };
-        AtmError::new(code, "bounded mailbox reader lane request failed").with_cause(error)
     }
 }
 
@@ -570,6 +528,148 @@ pub struct RosterSnapshot {
     pub refreshed_at: Option<IsoTimestamp>,
 }
 
+/// One durable roster identity in the database-wide Herdr namespace.
+///
+/// `unique_name` is the trimmed roster alias when present, otherwise the
+/// canonical member name.  It deliberately remains a `String`: old databases
+/// must remain readable even when a legacy alias needs remediation on the
+/// next roster write.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RosterUniqueName {
+    pub team_name: TeamName,
+    pub agent_name: AgentName,
+    pub unique_name: String,
+}
+
+impl RosterUniqueName {
+    #[must_use]
+    pub fn from_member(member: &RosterMember) -> Self {
+        let unique_name = member
+            .metadata_json
+            .get("alias")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|alias| !alias.is_empty())
+            .unwrap_or(member.agent_name.as_str())
+            .to_owned();
+        Self {
+            team_name: member.team_name.clone(),
+            agent_name: member.agent_name.clone(),
+            unique_name,
+        }
+    }
+}
+
+/// Returns every member in a collision group, ordered by effective name.
+///
+/// Keeping this scan in the shared storage contract makes preflight,
+/// transactional enforcement, and doctor diagnostics agree on the exact
+/// `alias ?? canonical` rule while remaining usable by non-SQLite stores.
+#[must_use]
+pub fn roster_unique_name_collisions(names: &[RosterUniqueName]) -> Vec<RosterUniqueName> {
+    let mut sorted = names.to_vec();
+    sorted.sort_by(|left, right| {
+        left.unique_name
+            .cmp(&right.unique_name)
+            .then_with(|| left.team_name.cmp(&right.team_name))
+            .then_with(|| left.agent_name.cmp(&right.agent_name))
+    });
+
+    let mut collisions = Vec::new();
+    let mut start = 0;
+    while start < sorted.len() {
+        let end = sorted[start + 1..]
+            .iter()
+            .position(|entry| entry.unique_name != sorted[start].unique_name)
+            .map_or(sorted.len(), |offset| start + offset + 1);
+        if end - start > 1 {
+            collisions.extend_from_slice(&sorted[start..end]);
+        }
+        start = end;
+    }
+    collisions
+}
+
+/// Returns proposed effective names that differ from the persisted roster.
+///
+/// A write is allowed to preserve legacy collisions among untouched rows. The
+/// returned delta is therefore the only part of a proposed roster whose
+/// collisions can reject the write.
+#[must_use]
+pub fn roster_write_delta(
+    persisted: &[RosterUniqueName],
+    proposed: &[RosterUniqueName],
+) -> Vec<RosterUniqueName> {
+    proposed
+        .iter()
+        .filter(|proposed| {
+            persisted
+                .iter()
+                .find(|persisted| {
+                    persisted.team_name == proposed.team_name
+                        && persisted.agent_name == proposed.agent_name
+                })
+                .is_none_or(|persisted| persisted.unique_name != proposed.unique_name)
+        })
+        .cloned()
+        .collect()
+}
+
+/// Narrows a database-wide collision set to the groups `team` participates in.
+///
+/// A roster write is scoped to one team, so it is answerable only for the
+/// collisions its own proposed roster is part of.  Collisions between two
+/// other teams are pre-existing data the write neither creates nor can
+/// repair; rejecting the write for them makes every roster write in the
+/// database fail once any duplicate exists anywhere, with no CLI path back
+/// out.  The whole colliding group is retained so the diagnostic still names
+/// the other team the caller has to avoid.
+#[must_use]
+pub fn team_scoped_roster_unique_name_collisions(
+    collisions: &[RosterUniqueName],
+    team: &TeamName,
+) -> Vec<RosterUniqueName> {
+    let scoped = collisions
+        .iter()
+        .filter(|collision| collision.team_name == *team)
+        .map(|collision| collision.unique_name.as_str())
+        .collect::<BTreeSet<_>>();
+    collisions
+        .iter()
+        .filter(|collision| scoped.contains(collision.unique_name.as_str()))
+        .cloned()
+        .collect()
+}
+
+/// Builds the single operator-facing diagnostic for durable roster identity
+/// collisions.  Both preflight and transaction enforcement use this wording
+/// so a race cannot change the error contract seen by CLI or HTTP callers.
+#[must_use]
+pub fn roster_unique_name_collision_error(collisions: &[RosterUniqueName]) -> AtmError {
+    let mut by_name = BTreeMap::<&str, Vec<(&TeamName, &AgentName)>>::new();
+    for collision in collisions {
+        by_name
+            .entry(&collision.unique_name)
+            .or_default()
+            .push((&collision.team_name, &collision.agent_name));
+    }
+    let details = by_name
+        .into_iter()
+        .map(|(unique_name, owners)| {
+            let owners = owners
+                .into_iter()
+                .map(|(team, member)| format!("({team}, {member})"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("`{unique_name}`: {owners}")
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    AtmError::validation(format!(
+        "roster unique-name collision(s): {details}; choose a distinct --alias for one conflicting member"
+    ))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MessageReceivedEvent {
     pub team: TeamName,
@@ -621,6 +721,17 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         }
         self.save_message(message)?;
         Ok(None)
+    }
+    /// Provenance-aware admission that also returns the governed task-close
+    /// result produced by a newly inserted local message.
+    fn admit_message_with_provenance(
+        &self,
+        message: &Message,
+        provenance: MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
+        let _ = provenance;
+        self.save_message_if_absent(message)
+            .map(MessageAdmissionOutcome::passive)
     }
     /// Commits related immutable mailbox records as one durable unit.
     ///
@@ -689,12 +800,24 @@ pub trait AsyncMessageStore: MessageStore {
         self.save_message_if_absent(&message)
     }
 
+    /// Async companion to [`MessageStore::admit_message_with_provenance`].
+    async fn admit_message_with_provenance_async(
+        &self,
+        message: Message,
+        provenance: MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
+        let _ = provenance;
+        self.save_message_if_absent_async(message)
+            .await
+            .map(MessageAdmissionOutcome::passive)
+    }
+
     /// Atomically admits a mailbox record and its template decomposition on
     /// the backend-owned async writer lane.
     async fn admit_template_message_async(
         &self,
         _admission: crate::TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         Err(AtmError::daemon_unavailable(
             "message store does not implement async template-message admission",
         ))
@@ -725,6 +848,44 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError>;
 
+    /// Lists a bounded page after applying the storage-owned typed criteria.
+    ///
+    /// This is deliberately separate from the narrow legacy-compatible
+    /// [`MessageQuery`] shape: callers that need mailbox display selection
+    /// must not load an entire mailbox merely to select one page.
+    async fn list_matching_messages(
+        &self,
+        scope: MailboxScope,
+        query: MailboxListQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError>;
+
+    /// Runs a bounded exploratory mailbox list through the tool-class slice
+    /// of the shared reader pool.
+    ///
+    /// Implementations that do not distinguish reader-pool classes retain
+    /// the ordinary read-only behavior. SQLite overrides this so operator and
+    /// CLI enumeration cannot consume every reader worker.
+    async fn list_messages_for_tool(
+        &self,
+        scope: MailboxScope,
+        query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.list_messages(scope, query, deadline).await
+    }
+
+    /// Counts messages through the storage-owned SQL criteria path.  This
+    /// deliberately returns aggregates rather than materialized messages so a
+    /// mailbox list can report buckets without exhausting its read deadline.
+    async fn count_messages(
+        &self,
+        scope: MailboxScope,
+        filters: crate::search::SearchFilters,
+        group_by: Option<crate::search::SearchCountGroupBy>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<crate::search::SearchCount>, ReadLaneError>;
+
     async fn load_message(
         &self,
         scope: MailboxScope,
@@ -732,16 +893,14 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Option<Message>, ReadLaneError>;
 
-    /// Bounded roster projection used only to validate an explicitly
-    /// addressed mailbox. It remains on the read-only lane.
+    /// Bounded read-only roster projection for validating an addressed mailbox.
     async fn mailbox_member_exists(
         &self,
         scope: MailboxScope,
         deadline: ReadDeadline,
     ) -> Result<bool, ReadLaneError>;
 
-    /// Bounded durable seen-state projection. The daemon never reads a
-    /// caller-owned seen-state file while servicing an HTTP mailbox request.
+    /// Bounded durable seen state; never reads a caller-owned watermark file.
     async fn load_seen_watermark(
         &self,
         scope: MailboxScope,
@@ -753,253 +912,269 @@ pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
-}
 
-/// Registration payload for one loopback graft receiver lease.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftReceiverRegistration {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub endpoint: SocketAddr,
-    pub capability: LocalCapability,
-    pub owner_generation: OwnerGeneration,
-}
-
-/// Durable graft receiver endpoint and its liveness observations.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftReceiverLease {
-    pub endpoint: SocketAddr,
-    pub capability: LocalCapability,
-    pub owner_generation: OwnerGeneration,
-    pub registered_at: DateTime<Utc>,
-    pub last_seen_at: DateTime<Utc>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub unreachable_since: Option<DateTime<Utc>>,
-}
-
-/// Errors returned by the durable graft receiver endpoint store.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GraftEndpointStoreError {
-    /// Reserved for a future caller that cannot prove same-host exclusivity
-    /// (ADR-056): same-host callers instead prove exclusivity through the
-    /// receiver's flock and are never rejected by this variant today.
-    AlreadyActive,
-    /// The supplied owner generation does not own the stored lease.
-    NotOwner,
-    /// No lease row exists for this receiver.
-    Absent,
-    /// The backend could not complete the requested operation.
+    /// Lists every effective roster name across the durable database.
     ///
-    /// Preserves the originating [`AtmError`]'s code and cause chain (RBP-F001)
-    /// instead of flattening it into an opaque string, so callers can
-    /// distinguish e.g. a caller-input constraint violation from a true
-    /// backend outage rather than collapsing every failure into one generic
-    /// presentation.
-    Storage {
-        code: crate::error_codes::AtmErrorCode,
-        message: String,
-        cause: Option<String>,
-    },
+    /// Backends with a native projection should override this with one query.
+    /// The fallback preserves the contract for narrow test doubles.
+    fn unique_names(&self) -> Result<Vec<RosterUniqueName>, AtmError> {
+        let mut names = Vec::new();
+        for team in self.list_teams()? {
+            names.extend(
+                self.load_roster(&team)?
+                    .members
+                    .iter()
+                    .map(RosterUniqueName::from_member),
+            );
+        }
+        Ok(names)
+    }
 }
 
-impl GraftEndpointStoreError {
-    /// Wraps a structured backend [`AtmError`] as a [`Self::Storage`]
-    /// variant, preserving its code and cause instead of flattening it into
-    /// an opaque string.
+/// Runtime-owned live state for one known roster member.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeMemberState {
+    #[default]
+    Unknown,
+    IdentityConflict,
+    Offline,
+    Idle,
+    Active,
+    Blocked,
+}
+
+/// Provenance of one accepted runtime observation.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeObservationSource {
+    Heartbeat,
+    HerdrPoll,
+}
+
+/// Whether the source supplied a usable state in its most recent accepted
+/// mutation. An unavailable observation retains the last known state while
+/// making that staleness explicit to scheduling callers.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeObservationAvailability {
+    #[default]
+    Unobserved,
+    Fresh,
+    Unavailable,
+}
+
+/// Monotonic accepted-state-observation sequence for one roster member.
+/// Heartbeats and successful poll observations advance it, including
+/// same-state observations. Failed/incomplete polls update availability
+/// metadata without creating a new revision; an Idle revision is therefore a
+/// stable attention-opportunity seam for Phase AZ scheduling.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RosterStateRevision(u64);
+
+impl RosterStateRevision {
     #[must_use]
-    pub fn storage(error: &AtmError) -> Self {
-        Self::Storage {
-            code: error.code(),
-            message: error.message().to_string(),
-            cause: error.cause().map(ToOwned::to_owned),
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    #[must_use]
+    pub fn next(self) -> Self {
+        Self(self.0.saturating_add(1))
+    }
+}
+
+/// Heartbeat-owned process/session metadata. Herdr mutations omit this value
+/// and therefore cannot erase identity learned from an authenticated hook.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RosterRuntimeIdentity {
+    pub pid: u32,
+    pub session_id: Option<crate::types::SessionId>,
+}
+
+/// The single ephemeral lifecycle record attached to a master-roster member.
+/// Source and timestamps describe accepted mutations; they do not grant one
+/// source precedence over another.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RosterRuntimeObservation {
+    pub revision: RosterStateRevision,
+    pub state: RuntimeMemberState,
+    pub availability: RuntimeObservationAvailability,
+    pub last_observation_attempt_by: Option<RuntimeObservationSource>,
+    pub last_observation_attempt_at: Option<IsoTimestamp>,
+    pub last_observed_by: Option<RuntimeObservationSource>,
+    pub last_observed_at: Option<IsoTimestamp>,
+    pub pid: Option<u32>,
+    pub session_id: Option<crate::types::SessionId>,
+    pub last_active_at: Option<IsoTimestamp>,
+    pub state_changed_by: Option<RuntimeObservationSource>,
+    pub state_changed_at: Option<IsoTimestamp>,
+    pub session_changed_by: Option<RuntimeObservationSource>,
+    pub session_changed_at: Option<IsoTimestamp>,
+}
+
+/// One accepted-order mutation of a roster member's canonical runtime state.
+/// `state: None` records source unavailability while retaining the last known
+/// state. `identity: None` preserves existing heartbeat identity metadata.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RosterRuntimeObservationUpdate {
+    agent: AgentName,
+    state: Option<RuntimeMemberState>,
+    availability: RuntimeObservationAvailability,
+    source: RuntimeObservationSource,
+    observed_at: IsoTimestamp,
+    identity: Option<RosterRuntimeIdentity>,
+}
+
+impl RosterRuntimeObservationUpdate {
+    /// Constructs one successful state observation. Successful observations
+    /// are always fresh and advance the member revision when accepted.
+    #[must_use]
+    pub fn observed(
+        agent: AgentName,
+        state: RuntimeMemberState,
+        source: RuntimeObservationSource,
+        observed_at: IsoTimestamp,
+        identity: Option<RosterRuntimeIdentity>,
+    ) -> Self {
+        Self {
+            agent,
+            state: Some(state),
+            availability: RuntimeObservationAvailability::Fresh,
+            source,
+            observed_at,
+            identity,
         }
     }
-}
 
-impl fmt::Display for GraftEndpointStoreError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::AlreadyActive => formatter.write_str("graft receiver lease is already active"),
-            Self::NotOwner => {
-                formatter.write_str("graft receiver lease is owned by another generation")
-            }
-            Self::Absent => formatter.write_str("graft receiver lease is absent"),
-            Self::Storage {
-                code,
-                message,
-                cause,
-            } => match cause {
-                Some(cause) => write!(
-                    formatter,
-                    "graft receiver endpoint storage failed ({code}): {message}: {cause}"
-                ),
-                None => write!(
-                    formatter,
-                    "graft receiver endpoint storage failed ({code}): {message}"
-                ),
-            },
+    /// Constructs one unavailable-source observation. It preserves the last
+    /// successful state and identity and does not advance the member revision.
+    #[must_use]
+    pub fn unavailable(
+        agent: AgentName,
+        source: RuntimeObservationSource,
+        observed_at: IsoTimestamp,
+    ) -> Self {
+        Self {
+            agent,
+            state: None,
+            availability: RuntimeObservationAvailability::Unavailable,
+            source,
+            observed_at,
+            identity: None,
         }
     }
-}
 
-/// Durable registry for same-host graft receiver endpoints.
-pub trait GraftReceiverEndpointStore: sealed::Sealed + Send + Sync {
-    fn register(
-        &self,
-        registration: &GraftReceiverRegistration,
-        now: DateTime<Utc>,
-    ) -> Result<(), GraftEndpointStoreError>;
+    #[must_use]
+    pub fn agent(&self) -> &AgentName {
+        &self.agent
+    }
 
-    fn refresh(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        owner_generation: &OwnerGeneration,
-        now: DateTime<Utc>,
-    ) -> Result<(), GraftEndpointStoreError>;
+    #[must_use]
+    pub fn state(&self) -> Option<RuntimeMemberState> {
+        self.state
+    }
 
-    fn unregister(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        owner_generation: &OwnerGeneration,
-    ) -> Result<(), GraftEndpointStoreError>;
+    #[must_use]
+    pub fn availability(&self) -> RuntimeObservationAvailability {
+        self.availability
+    }
 
-    fn lookup(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError>;
+    #[must_use]
+    pub fn source(&self) -> RuntimeObservationSource {
+        self.source
+    }
 
-    fn mark_unreachable(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        owner_generation: &OwnerGeneration,
-        now: DateTime<Utc>,
-    ) -> Result<(), GraftEndpointStoreError>;
-}
+    #[must_use]
+    pub fn observed_at(&self) -> IsoTimestamp {
+        self.observed_at
+    }
 
-/// A non-empty, opaque certificate fingerprint. It cannot be confused with a
-/// private-key reference at storage and transport boundaries.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(try_from = "String", into = "String")]
-pub struct CertificateFingerprint(String);
-
-impl CertificateFingerprint {
-    pub fn as_str(&self) -> &str {
-        &self.0
+    #[must_use]
+    pub fn identity(&self) -> Option<&RosterRuntimeIdentity> {
+        self.identity.as_ref()
     }
 }
 
-impl fmt::Display for CertificateFingerprint {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
-    }
+/// Result of applying one canonical state mutation. Missing roster members
+/// are omitted from a batch result, so consumers cannot schedule from an
+/// observation that raced with removal from the master roster.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RosterRuntimeMutationOutcome {
+    pub agent: AgentName,
+    pub previous_state: RuntimeMemberState,
+    pub current: RosterRuntimeObservation,
+    pub state_changed: bool,
+    pub pid_changed: bool,
 }
 
-impl FromStr for CertificateFingerprint {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        require_non_blank(value.to_owned(), "certificate fingerprint").map(Self)
-    }
+/// Ephemeral per-member roster state that never round-trips through the
+/// durable roster store. Nothing here is ever read from or written to a
+/// durable backend.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RosterMemberEphemeralState {
+    /// The canonical lifecycle state used by runtime projections and
+    /// scheduling decisions.
+    pub runtime: RosterRuntimeObservation,
+    /// Set/cleared by Herdr queue-wake bookkeeping when a member's steer
+    /// target is pending a wake attempt.
+    pub herdr_wake_pending: bool,
 }
 
-impl TryFrom<String> for CertificateFingerprint {
-    type Error = AtmError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        value.parse()
-    }
-}
-
-impl From<CertificateFingerprint> for String {
-    fn from(value: CertificateFingerprint) -> Self {
-        value.0
-    }
-}
-
-/// A non-empty opaque reference to locally held private-key material.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(try_from = "String", into = "String")]
-pub struct PrivateKeyRef(String);
-
-impl PrivateKeyRef {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for PrivateKeyRef {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
-    }
-}
-
-impl FromStr for PrivateKeyRef {
-    type Err = AtmError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        require_non_blank(value.to_owned(), "certificate key reference").map(Self)
-    }
-}
-
-impl TryFrom<String> for PrivateKeyRef {
-    type Error = AtmError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        value.parse()
-    }
-}
-
-impl From<PrivateKeyRef> for String {
-    fn from(value: PrivateKeyRef) -> Self {
-        value.0
-    }
-}
-
-/// One durable HTTPS listener configuration. This is control-plane state only;
-/// it contains no delivery, retry, or mailbox data.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct HttpsInterface {
-    pub bind_addr: std::net::SocketAddr,
-    pub advertise_host: HostName,
-    pub enabled: bool,
-}
-
-/// Public identity of the local TLS certificate. The private key is referenced
-/// indirectly so doctor and callers cannot read secret material from storage.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LocalCertificate {
-    pub fingerprint: CertificateFingerprint,
-    pub private_key_ref: PrivateKeyRef,
-}
-
-/// One exact, pinned peer allowed to use the cross-host HTTPS listener.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TrustedPeer {
-    pub host: HostName,
-    pub fingerprint: CertificateFingerprint,
-    pub enabled: bool,
-    pub https_port: NonZeroU16,
-}
-
-/// Backend-neutral durable cross-host configuration.
+/// Cross-crate seam for the runtime-owned, write-through in-memory roster
+/// mirror. Every roster consumer reads through this handle after startup
+/// hydration; a durable roster write updates the backing mirror in the same
+/// operation through the paired [`RosterStore`] write-through implementation.
 ///
-/// This boundary deliberately excludes transport state, retries, receipts,
-/// and mailbox state. HTTPS adapters consume this contract but never SQLite
-/// implementation types.
-pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
-    fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
-    fn save_interface(&self, interface: &HttpsInterface) -> Result<(), AtmError>;
-    fn remove_interface(&self, bind_addr: std::net::SocketAddr) -> Result<bool, AtmError>;
-    fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError>;
-    fn save_local_certificate(&self, certificate: &LocalCertificate) -> Result<(), AtmError>;
-    fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError>;
-    fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
-    fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
-    fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
+/// The concrete write-through implementation (the [`RosterStore`] impl and
+/// the state backing both this trait and that impl) is authorized only at
+/// the `atm-storage-rusqlite` composition boundary (see
+/// `boundaries/atm-storage-rusqlite/roster-store-sqlite.toml`). This trait
+/// exists so `atm-core` and other consumer crates can hold and call the
+/// mirror without depending on that concrete backend crate.
+pub trait RosterRuntimeMirror: sealed::Sealed + Send + Sync {
+    /// Reads one team's roster from RAM. Never issues a durable read.
+    fn load_team_roster(&self, team: &TeamName) -> Vec<RosterMember>;
+    /// Reads one roster member from RAM. Never issues a durable read.
+    fn load_roster_member(&self, team: &TeamName, agent: &AgentName) -> Option<RosterMember>;
+    /// Enumerates every team currently held in RAM. Never issues a durable read.
+    fn list_teams(&self) -> Vec<TeamName>;
+    /// Reads one member's ephemeral (non-durable) roster state from RAM.
+    fn ephemeral_state(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Option<RosterMemberEphemeralState>;
+    /// Applies one accepted-order batch of runtime observations under the
+    /// team's roster lock. Missing members produce no outcome.
+    fn apply_runtime_observations(
+        &self,
+        team: &TeamName,
+        updates: &[RosterRuntimeObservationUpdate],
+    ) -> Vec<RosterRuntimeMutationOutcome>;
+    /// Reads one team's canonical runtime observations from RAM in roster
+    /// order. Never issues a durable read.
+    fn load_runtime_observations(
+        &self,
+        team: &TeamName,
+    ) -> Vec<(AgentName, RosterRuntimeObservation)>;
+    /// Sets one member's Herdr wake-pending ephemeral flag in RAM only.
+    /// Returns `false` without effect when the member is not present in the
+    /// current roster snapshot.
+    fn set_herdr_wake_pending(&self, team: &TeamName, agent: &AgentName, pending: bool) -> bool;
+    /// Re-hydrates the RAM roster mirror from the durable roster store.
+    ///
+    /// This is *not* the write-through synchronization mechanism -- every
+    /// durable roster write already updates RAM in the same operation. This
+    /// exists only for an authenticated control-plane reload boundary that
+    /// wants to re-derive RAM from durable state (e.g. after an out-of-band
+    /// durable migration).
+    ///
+    /// # Errors
+    /// Returns an error if the durable roster store cannot be read; RAM is
+    /// left unchanged on failure.
+    fn reload_from_durable(&self) -> Result<(), AtmError>;
 }
 
 pub trait StorageNotifier: sealed::Sealed + Send + Sync {
@@ -1008,6 +1183,16 @@ pub trait StorageNotifier: sealed::Sealed + Send + Sync {
 }
 
 pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
+    fn list_stale_template_override_kinds(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<StaleNudgeTemplateOverrideKind>, AtmError>;
+
+    fn list_template_overrides(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<TeamNudgeTemplateOverrideRow>, AtmError>;
+
     fn load_template_override(
         &self,
         team: &TeamName,
@@ -1027,11 +1212,7 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
         kind: BuiltInNudgeTemplateKind,
     ) -> Result<TeamNudgeTemplateOverrideRow, AtmError>;
 
-    fn clear_template_override(
-        &self,
-        team: &TeamName,
-        kind: BuiltInNudgeTemplateKind,
-    ) -> Result<bool, AtmError>;
+    fn clear_template_override(&self, team: &TeamName, kind: &str) -> Result<bool, AtmError>;
 }
 
 /// Maximum automatic delivery attempts for one deferred (queue-kind) nudge.
@@ -1102,25 +1283,17 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
     /// Returns [`AtmError`] if the underlying storage operation fails.
     fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError>;
 
-    /// Clears the marker for one message on the read path.
+    /// Re-arms one just-handed-off message at its next due time while it is
+    /// still open. A message read between claim and handoff is not re-armed.
     ///
     /// # Errors
     ///
     /// Returns [`AtmError`] if the underlying storage operation fails.
-    fn clear_pending_on_read(&self, member: &MemberKey, msg: &AtmMessageId)
-    -> Result<(), AtmError>;
-
-    /// Clears the marker for exactly one just-handed-off message.
-    ///
-    /// Unconditional and idempotent.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] if the underlying storage operation fails.
-    fn clear_pending_on_handoff(
+    fn rearm_pending_after_handoff(
         &self,
         member: &MemberKey,
         msg: &AtmMessageId,
+        next_due: IsoTimestamp,
     ) -> Result<(), AtmError>;
 
     /// Enumerates members holding at least one eligible pending marker.
@@ -1131,6 +1304,56 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
     fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError>;
 }
 
+/// One configurable pending-store double shared across workspace tests.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-utils"))]
+pub struct DummyPendingNudgeStore(pub(crate) crate::testing::PendingStoreState);
+
+#[cfg(any(test, feature = "test-utils"))]
+impl sealed::Sealed for DummyPendingNudgeStore {}
+
+#[cfg(any(test, feature = "test-utils"))]
+impl PendingNudgeStore for DummyPendingNudgeStore {
+    fn mark_pending(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        at: IsoTimestamp,
+    ) -> Result<bool, AtmError> {
+        self.mark(member, msg, at)
+    }
+
+    fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+        self.claim(member)
+    }
+
+    fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.requeue(member, claim)
+    }
+
+    fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.release(member, claim)
+    }
+
+    fn rearm_pending_after_handoff(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        next_due: IsoTimestamp,
+    ) -> Result<(), AtmError> {
+        if let Some(failure) = self.rearm_failure() {
+            return Err(failure);
+        }
+        self.inner().map_or(Ok(()), |inner| {
+            inner.rearm_pending_after_handoff(member, msg, next_due)
+        })
+    }
+
+    fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
+        self.list()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1138,9 +1361,9 @@ mod tests {
         GraftReceiverEndpointStore, GraftReceiverRegistration, Message, MessageKey, MessageQuery,
         MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
         PendingNudgeStore, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
-        RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier,
-        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, derive_ack_requirement,
-        sealed,
+        RosterMemberKind, RosterSnapshot, RosterStore, RosterUniqueName,
+        StaleNudgeTemplateOverrideKind, StorageNotifier, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow, derive_ack_requirement, roster_write_delta, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -1151,6 +1374,31 @@ mod tests {
     use chrono::Utc;
     use serde_json::Map;
     use std::net::SocketAddr;
+
+    #[test]
+    fn roster_write_delta_only_contains_changed_or_new_effective_names() {
+        let team_a: TeamName = "team-a".parse().expect("team");
+        let member: AgentName = "bob".parse().expect("agent");
+        let unchanged = RosterUniqueName {
+            team_name: team_a.clone(),
+            agent_name: member.clone(),
+            unique_name: "bob".to_owned(),
+        };
+        let changed = RosterUniqueName {
+            unique_name: "bobby".to_owned(),
+            ..unchanged.clone()
+        };
+        let added = RosterUniqueName {
+            team_name: "team-b".parse().expect("team"),
+            agent_name: "sam".parse().expect("agent"),
+            unique_name: "sam".to_owned(),
+        };
+
+        assert_eq!(
+            roster_write_delta(&[unchanged], &[changed.clone(), added.clone()]),
+            vec![changed, added]
+        );
+    }
 
     #[derive(Default)]
     struct DummyStore;
@@ -1219,6 +1467,20 @@ mod tests {
     impl sealed::Sealed for DummyNudgeTemplateOverrideStore {}
 
     impl NudgeTemplateOverrideStore for DummyNudgeTemplateOverrideStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<StaleNudgeTemplateOverrideKind>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn list_template_overrides(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(Vec::new())
+        }
+
         fn load_template_override(
             &self,
             _team: &TeamName,
@@ -1256,68 +1518,8 @@ mod tests {
             })
         }
 
-        fn clear_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: BuiltInNudgeTemplateKind,
-        ) -> Result<bool, AtmError> {
+        fn clear_template_override(&self, _team: &TeamName, _kind: &str) -> Result<bool, AtmError> {
             Ok(true)
-        }
-    }
-
-    #[derive(Default)]
-    struct DummyPendingNudgeStore;
-
-    impl sealed::Sealed for DummyPendingNudgeStore {}
-
-    impl PendingNudgeStore for DummyPendingNudgeStore {
-        fn mark_pending(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-            _at: IsoTimestamp,
-        ) -> Result<bool, AtmError> {
-            Ok(true)
-        }
-
-        fn claim_next_pending(&self, _member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-            Ok(None)
-        }
-
-        fn requeue_pending(
-            &self,
-            _member: &MemberKey,
-            _claim: &NudgeClaim,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn release_pending(
-            &self,
-            _member: &MemberKey,
-            _claim: &NudgeClaim,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn clear_pending_on_read(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            _member: &MemberKey,
-            _msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-            Ok(Vec::new())
         }
     }
 
@@ -1327,7 +1529,8 @@ mod tests {
         let message_store: &dyn MessageStore = &store;
         let roster_store: &dyn RosterStore = &store;
         let notifier: &dyn StorageNotifier = &store;
-        let pending_nudge_store: &dyn PendingNudgeStore = &DummyPendingNudgeStore;
+        let pending_nudge_store: &dyn PendingNudgeStore =
+            &crate::testing::DummyPendingNudgeStore::default();
         let override_store: &dyn NudgeTemplateOverrideStore = &DummyNudgeTemplateOverrideStore;
         let graft_receiver_endpoint_store: &dyn GraftReceiverEndpointStore =
             &DummyGraftReceiverEndpointStore;
@@ -1359,6 +1562,9 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                placement: None,
+                task_op: None,
+                task_complete: None,
                 extra: Map::new(),
             },
         };
@@ -1448,11 +1654,8 @@ mod tests {
             .release_pending(&member, &claim)
             .expect("release pending");
         pending_nudge_store
-            .clear_pending_on_read(&member, &msg)
-            .expect("clear pending on read");
-        pending_nudge_store
-            .clear_pending_on_handoff(&member, &msg)
-            .expect("clear pending on handoff");
+            .rearm_pending_after_handoff(&member, &msg, IsoTimestamp::now())
+            .expect("rearm pending after handoff");
         assert!(
             pending_nudge_store
                 .list_pending_members()
@@ -1501,6 +1704,62 @@ mod tests {
     }
 
     #[test]
+    fn eleven_kinds_round_trip_as_str_from_str() {
+        let kinds = [
+            BuiltInNudgeTemplateKind::Delivery,
+            BuiltInNudgeTemplateKind::DeliveryAck,
+            BuiltInNudgeTemplateKind::Queue,
+            BuiltInNudgeTemplateKind::QueueAck,
+            BuiltInNudgeTemplateKind::Acknowledge,
+            BuiltInNudgeTemplateKind::TaskQueued,
+            BuiltInNudgeTemplateKind::TaskReady,
+            BuiltInNudgeTemplateKind::TaskReminder,
+            BuiltInNudgeTemplateKind::TaskStarted,
+            BuiltInNudgeTemplateKind::TaskComplete,
+            BuiltInNudgeTemplateKind::TaskClosed,
+        ];
+        for kind in kinds {
+            assert_eq!(kind.as_str().parse::<BuiltInNudgeTemplateKind>(), Ok(kind));
+        }
+    }
+
+    #[test]
+    fn retired_kinds_parse_to_hint_naming_the_six() {
+        for retired in [
+            "task",
+            "acknowledge_task",
+            "delivery_task",
+            "delivery_task_ack",
+        ] {
+            let error = retired
+                .parse::<BuiltInNudgeTemplateKind>()
+                .expect_err("retired kind");
+            for replacement in [
+                "task_queued",
+                "task_ready",
+                "task_reminder",
+                "task_started",
+                "task_complete",
+                "task_closed",
+            ] {
+                assert!(error.message().contains(replacement));
+            }
+        }
+    }
+
+    #[test]
+    fn unknown_template_kind_is_rejected_by_rust_validation() {
+        let error = "future_unregistered_kind"
+            .parse::<BuiltInNudgeTemplateKind>()
+            .expect_err("unknown kind");
+        assert!(
+            error
+                .message()
+                .contains("unsupported built-in nudge template kind")
+        );
+    }
+
+    #[test]
     fn derive_ack_requirement_ignores_task_id_and_uses_only_requires_ack_and_acknowledged_at() {
         let base = MessageEnvelope {
             from: "sender".parse().expect("agent"),
@@ -1520,6 +1779,9 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: Some("AD.99".parse().expect("task")),
+            placement: None,
+            task_op: None,
+            task_complete: None,
             extra: Map::new(),
         };
 

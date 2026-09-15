@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-13T08:04:36.184252Z",
+  "source_revision": "5f2b1bb3d0820dce5aaedf02a5d047379186740e",
+  "image": {
+    "tag": "loki/hermes-testbed:bb-1517-5f2b1bb3d",
+    "id": "sha256:a5bf8c79a74f8cedb32d646a86b22ced5e8cb766ecbe60bff5d294b0239f93b5",
+    "sha256": "sha256:a5bf8c79a74f8cedb32d646a86b22ced5e8cb766ecbe60bff5d294b0239f93b5",
+    "architecture": "arm64"
+  },
+  "container": "hermes-testbed-bb-1517-bb6",
+  "atm_version": null,
+  "procedure": "colima-prompt-handoffs",
+  "procedure_revision": "a2491a6c69e99e93bc971be69a51f5c7dd24f96a",
+  "procedure_revision_inferred": false,
+  "status": "PASS",
+  "steps": [
+    {
+      "order": 1,
+      "name": "prompt-handoffs",
+      "procedure": "colima-prompt-handoffs",
+      "procedure_revision": "a2491a6c69e99e93bc971be69a51f5c7dd24f96a",
+      "procedure_revision_inferred": false,
+      "status": "PASS",
+      "generated_at": "2026-09-13T08:04:36.184252Z",
+      "container": "hermes-testbed-bb-1517-bb6",
+      "payload": "steps/01-prompt-handoffs/step.json",
+      "panel": "steps/01-prompt-handoffs/panel.xhtml"
+    }
+  ]
+}

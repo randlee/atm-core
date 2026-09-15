@@ -244,8 +244,11 @@ Notes:
 - the first concrete implementation remains `atm-storage-rusqlite`
 - [../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md](../adr/ADR-024-nudge-template-override-storage-ownership-relocation.md)
   supersedes ADR-021's older `atm-core` ownership assumption
-- `atm` remains the owner of the six built-in product template bodies and the
-  bounded placeholder substitution/rendering policy.
+- `atm` remains the owner of the seven built-in product template bodies —
+  `delivery`, `delivery_ack`, `queue`, `queue_ack`, `task`, `acknowledge`, and
+  `acknowledge_task` — and the bounded placeholder substitution/rendering
+  policy. `NudgeKind` selects the delivery or queue family; task-tagged
+  messages select `task`.
 - Accepted row semantics are explicit:
   - no row => product default
   - override row => stored non-empty template body
@@ -556,3 +559,27 @@ Notes:
 - The live snapshot contract now carries liveness, readiness, singleton-owner,
   SQLite-ready, degraded-ingest, and member-count fields rather than a generic
   placeholder string.
+
+## HerdrEndpointDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/herdr-endpoint-doctor.toml](../../boundaries/atm-core/herdr-endpoint-doctor.toml)
+
+Purpose:
+- Own the sealed, I/O-free endpoint-diagnostics contract used by `atm doctor`.
+- Carry only typed, privacy-safe endpoint observations and member-presence
+  outcomes across the core boundary.
+
+Rules:
+- `atm-core` owns `HerdrEndpointDoctor`, its DTOs, and the closed default;
+  `atm-daemon-bootstrap` owns the sole production adapter and `atm-herdr`
+  owns the concrete probe and Herdr error mapping.
+- The contract has exactly two implementations: `ClosedHerdrEndpointDoctor`
+  in core and `HerdrEndpointDoctorAdapter` in bootstrap. The port must not
+  grow a compatibility implementation or an unsealed mock.
+- Core neither performs Herdr I/O nor depends on `atm-herdr` or Tokio. A
+  single roster snapshot is used for configuration and endpoint observations;
+  `presence_findings` is the only flattening path into doctor findings.
+- Endpoint values are already-sanitized symbolic display values. Raw homes,
+  config roots, sockets, and named pipes never enter core, report JSON, or
+  human output; the separate host-wide breaker report is not endpoint state.

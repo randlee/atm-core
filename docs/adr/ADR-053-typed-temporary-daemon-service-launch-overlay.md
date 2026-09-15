@@ -70,9 +70,9 @@ Platform adapters provide the same contract while preserving native ownership:
 - **macOS:** read/hash the controlled source LaunchAgent plist, write an owned
   overlay copy with one typed `ProgramArguments` addition, bootstrap that
   overlay, and bootstrap the untouched original plist on restore.
-- **Windows:** capture the named SCM service's exact `BINARY_PATH_NAME`, use a
-  round-trip-tested Windows argv codec to form an owned typed overlay, and
-  restore the exact captured scalar through SCM.
+- **Windows:** no temporary-launch backend (amended 2026-09-05, see below).
+  `temporary-launch` on Windows fails closed with an explicit error; it must
+  not substitute an SCM service for the per-user scheduled task.
 - **Linux:** accept only an unambiguous systemd `--user` unit command shape,
   install an owned drop-in that resets/replaces `ExecStart` with one typed
   addition, and remove only that owned drop-in on restoration.
@@ -97,8 +97,9 @@ Apple Development signing checks remain mandatory before lifecycle mutation.
   normal daemon launch remains mTLS.
 - A crash is diagnosable and safe to recover; it cannot silently replace an
   operator's current service configuration with a synthesized default.
-- macOS, Windows, and Linux share product semantics but may reject a service
+- macOS and Linux share product semantics but may reject a service
   configuration that their narrow adapter cannot preserve losslessly.
+  Windows has no temporary-launch adapter.
 - Lifecycle/setup work stays outside benchmark samples, preserving the
   plaintext admission pipeline and its performance evidence.
 
@@ -126,16 +127,110 @@ Apple Development signing checks remain mandatory before lifecycle mutation.
 
 - Unit/failure-injection tests prove journal-before-mutation, exact restoration,
   and refusal of a second session/normal mutation while recovery is pending.
-- macOS plist, Windows argv/SCM, and Linux unit/drop-in contract tests reject
+- macOS plist and Linux unit/drop-in contract tests reject
   malformed, ambiguous, duplicate-mode, and changed-source configurations
   before service mutation.
 - Each supported operating system has a real managed-service proof using the
   selected signed release pair: mTLS begin/restore and plaintext-test
   begin/restore both pass doctor, curl receiver, CLI loopback, and same-host
-  send/read checks.  Windows and Linux are not considered complete on fake
-  boundaries alone.
+  send/read checks.  Linux is not considered complete on fake boundaries
+  alone.  Windows is out of scope for this evidence.
 - Architecture evidence proves this feature is absent from `atm-http-runtime`,
   router, persistence, direct-peer connector, and benchmark `run_profile`.
 - Session evidence records selected pair identity, adapter, mode, phase timing,
   redacted configuration digests, and recovery disposition.  It records no
   primary-database mutation.
+
+## Amendment 2026-09-05 — Windows removed from the temporary-launch scope
+
+Rand's ruling: `daemon-switch` is a tool that switches the daemon and CLI
+pair; what it switches to depends on the situation (benchmarks run on a
+dedicated fixture, integration testing runs in Colima).  It was carrying too
+many requirements.  The Windows managed daemon is a per-user scheduled task
+(`windows-provision`, PR #1223), not an SCM service; an SCM service would run
+under a different account, so the exact `BINARY_PATH_NAME` round trip this
+ADR originally required no longer describes a supported backend.
+
+Effect:
+
+- The typed temporary-launch overlay is a macOS LaunchAgent and Linux systemd
+  `--user` capability only.
+- On Windows, `temporary-launch` fails closed with an explicit `SwitchError`
+  and never creates or edits an SCM service as a fallback.
+- `REQ-P-DAEMON-SWITCH-001` is narrowed to match.  The Windows argv codec
+  remains in the codebase only as a tested utility; it carries no service
+  contract.
+
+## Addendum 2026-09-07 — explicit Herdr entry control plane
+
+`daemon-switch herdr-entry {install,remove,status [--repair]}` is a separate,
+operator-invoked transaction for per-user Herdr start-at-login definitions. It
+does not alter the selected ATM pair, the temporary-launch overlay journal, or
+the daemon lifecycle. No switch, restart, restore, or daemon startup path
+calls it implicitly.
+
+The command consumes only native `atm doctor --json` endpoint data. It creates
+at most one marker-bearing object per configured non-socket endpoint: a macOS
+LaunchAgent (`RunAtLoad`, no `KeepAlive`), Linux systemd user unit plus enabled
+state, or Windows interactive-user logon scheduled task. The default command
+is `herdr server`; a named session is `herdr --session <name> server`.
+Explicit socket-path endpoints remain externally owned. Windows refuses an
+entry belonging to another account, service, or session 0.
+
+Each entry has its own durable journal in the ADR-053 journal directory,
+separate from temporary-launch recovery state. Install is `plan -> journal ->
+atomic write -> native register -> verify -> complete`; remove verifies the
+marker and digest before `journal -> unregister -> delete -> verify ->
+complete`. Foreign definitions, digest mismatches, and incomplete work fail
+closed. Repair is explicit: it completes a verified registration or rolls back
+only the marker-bearing partial object. The public machine contract is exactly
+one JSON envelope on stdout and exit 0 (success), 3 (safe refusal), or 4
+(operational failure).
+
+## Addendum 2026-09-07 — coordinated Herdr endpoint restart
+
+`daemon-switch restart --restart-herdr [<default-or-session>]` is the only
+restart coordinator. It is never part of `switch`, `restore`, ordinary
+`restart`, daemon startup, or an entry install. It reads one native doctor
+projection to select a configured endpoint, resolves the AY.5 deterministic
+identifier and owned/complete entry, and rejects socket-path or unowned
+endpoints without mutation. A default is inferred only when doctor returns one
+endpoint.
+
+When the installed client is newer than the reported running server and the
+endpoint advertises `capabilities.live_handoff: true`, the coordinator invokes
+the endpoint-scoped `herdr server live-handoff` command. Capability `false` or
+`null`, equal/unknown versions, and every other condition take the destructive
+stop path: stdout remains machine JSON, stderr warns that agent panes exit,
+and `--stop-herdr-panes` is required before scoped `server stop` and the
+already-owned native entry is relaunched. The coordinator neither updates
+Herdr nor supervises it. A failed handoff stops immediately because Herdr owns
+its own rollback.
+
+The operation has one 120-second overall deadline, 30-second child-command
+deadline, and injected-time bounded verification reads; only fresh doctor
+state `ok` yields success. Timeout, selection, acknowledgement, doctor, and
+entry failures retain a stable code and the 0/3/4 JSON exit classes. Ordinary
+ATM restart has a separate read-only preflight: it refuses before any service
+mutation while any configured endpoint is `client_server_mismatch`, listing
+only endpoint names and identifiers. No daemon code, transport selection,
+polling loop, startup dependency, or process ownership is introduced.
+
+## Amendment 2026-09-09 — GitHub prerelease pair selection
+
+Rand authorized issue #1350 on 2026-09-09, adding a third ordinary pair
+selection mode: `daemon-switch switch --prerelease <X.Y.Z|latest>`. The mode
+resolves only a published, non-draft GitHub prerelease whose tag uses the
+manifest-declared prerelease prefix. It downloads the manifest-declared host
+archive and `checksums.txt`, verifies the archive digest, stages the matched
+CLI/daemon pair under the manifest-declared install root, and applies the same
+platform signing requirements as a tagged worktree build before the ordinary
+selector, restart, and doctor proof transaction.
+
+The mode does not publish a package, accept caller-supplied binary paths, or
+alter a Homebrew formula. Stable `--release` resolution continues to reject
+prereleases, and `--worktree` continues to require an exact prerelease tag on
+the selected worktree HEAD. The GitHub-only publish/install boundary from
+issue #1350 excludes Homebrew taps, crates.io, PyPI/TestPyPI, Winget, and
+Scoop. Repository-specific prefix and install-root values have one owner: the
+release artifact manifest.

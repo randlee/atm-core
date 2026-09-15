@@ -52,6 +52,12 @@ how a *session* receives a nudge already selected by this taxonomy, not a
 second nudge-kind vocabulary. The two must not be merged into one enum; a
 Hermes session mode is downstream of, not a synonym for, `NudgeKind`.
 
+The built-in template taxonomy has eleven kinds: `delivery`, `delivery_ack`,
+`queue`, `queue_ack`, `acknowledge`, `task_queued`, `task_ready`,
+`task_reminder`, `task_started`, `task_complete`, and `task_closed`. The six
+task kinds are selected by the explicit `TaskTransition` carried by the
+post-send event.
+
 ### (b) `nudge_pending_at` column, derived FIFO, atomic claim
 
 `mail_message_states` gains `nudge_pending_at TEXT NULL` and
@@ -280,6 +286,45 @@ an optimization; AQ1's test suite proves it directly (duplicate write → zero
 - `ADR-018` §3's capability-trait cap is now at six traits including
   `PendingNudgeStore`; a seventh optional capability trait requires counting
   from this ADR forward, not from ADR-018's original baseline.
+
+### Phase-AX amendment (2026-09-04)
+
+`TaskStore` is the seventh optional storage capability trait. It is justified
+because task-ledger reads and append-only reminder/lead audit records are a
+separate durable domain, while message-derived state transitions remain inside
+the existing backend writer transaction. This recounts the ADR-018 §3 cap from
+the six traits recorded above; it does not widen `MessageStore`.
+
+### Phase-BA amendment (2026-09-11)
+
+An `atm queue` item is a scheduling view over its message, not a task: no task
+row, no task state, no `task_events` entry. Its lifecycle is the message's own
+read and acknowledgement state: it is open while unread, or while unacknowledged
+when the message has `requires_ack`, and closed otherwise. The existing
+`PendingNudgeStore` marker (`nudge_pending_at`) is the item: it is read as
+"next prompt due at", re-armed to now + `TASK_REMINDER_INTERVAL_MS` after each
+successful handoff, and cleared when the item closes. Messages that never
+carried the marker (immediate sends) are never reminded. For an idle member
+the pending drain discharges queued messages before the task pass (ADR-062,
+Phase BA amendment). No column or mechanism is added.
+
+Phase BB removes the assignment's pending-nudge marker: the task pass owns
+every task prompt.
+
+### Phase-BB amendment (2026-09-12)
+
+`task` and `acknowledge_task` are retired built-in template kinds. Six
+transition-specific task kinds replace them: `task_queued`, `task_ready`,
+`task_reminder`, `task_started`, `task_complete`, and `task_closed`.
+`PostSendHookEvent` gains the additive optional `task_transition` field; both
+the `atm-graft` loopback receiver and `atm-graft-python` callback adapter decode
+the widened event while leaving the Python callback shape unchanged, satisfying
+the both-sides rule in (g). This amendment also adds the doctor finding codes
+`stale_nudge_template_override` and `disabled_task_nudge_template_override`,
+the typed stale-row projection `StaleNudgeTemplateOverrideKind`, and the
+set-time validation entry point `validate_built_in_nudge_template_body` to the
+frozen identifier inventory. They are the operator-facing diagnostics and
+supporting override-lifecycle identifiers introduced above.
 
 ## Rejected alternatives
 

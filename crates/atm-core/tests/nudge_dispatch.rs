@@ -5,7 +5,9 @@ use std::fs;
 use atm_core::boundary::{
     MemberKey, NudgeKind, PostSendBuiltInTarget, RosterEntry, RosterHarness, RosterMemberKind,
 };
-use atm_core::nudge_dispatch::rebuild_received_hook_dispatch;
+use atm_core::nudge_dispatch::{
+    load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
+};
 use atm_core::observability::NullObservability;
 use atm_core::schema::AgentType;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
@@ -81,9 +83,13 @@ fn rebuild_matches_write_time_dispatch_for_a_pending_tmux_recipient() {
     let message_id = outcome.persisted_message_id();
 
     let member = MemberKey::new(team, "recipient".parse().expect("agent"));
-    let rebuilt = rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue)
-        .expect("rebuild succeeds")
-        .expect("dispatch rebuilt");
+    let message = load_received_hook_dispatch_message(&runtime, &member, message_id)
+        .expect("message loads")
+        .expect("message belongs to recipient");
+    let rebuilt =
+        rebuild_received_hook_dispatch(&runtime, &member, message_id, NudgeKind::Queue, &message)
+            .expect("rebuild succeeds")
+            .expect("dispatch rebuilt");
 
     assert_eq!(rebuilt.kind, NudgeKind::Queue);
     assert!(matches!(
@@ -105,8 +111,7 @@ fn rebuild_returns_none_for_a_message_not_addressed_to_member() {
     let message_id = outcome.persisted_message_id();
 
     let wrong_member = MemberKey::new(team, "sender".parse().expect("agent"));
-    let rebuilt =
-        rebuild_received_hook_dispatch(&runtime, &wrong_member, message_id, NudgeKind::Queue)
-            .expect("rebuild does not error");
-    assert!(rebuilt.is_none());
+    let message = load_received_hook_dispatch_message(&runtime, &wrong_member, message_id)
+        .expect("message lookup does not error");
+    assert!(message.is_none());
 }

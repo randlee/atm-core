@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-POOL-V9-FIX-5>
+  a triage:Finding ;
+  triage:findingId "AW-POOL-V9-FIX-5" ;
+  triage:title "ReaderLaneMetrics collected but never surfaced to doctor/metrics" ;
+  triage:description "reader_pool.rs:155 ReaderLaneMetrics (queue depth, saturation, quarantine/retirement counts) is collected but #[allow(dead_code)]'d and never wired into the doctor endpoint or any metrics surface -- for a pool-consolidation PR whose whole purpose is capacity/saturation visibility, operators have zero doctor-visible signal into it. Recommend landing together with AW-POOL-V9-FIX-2 (doctor lane projection) since both touch the same doctor-endpoint wiring." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "observability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T02:12:04Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWWriterPoolAudit ;
+  triage:foundAt "2026-09-06T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-5/A1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-POOL-V9-FIX-5/A2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-5/A1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 155 ;
+  triage:snippet "#[allow(dead_code)] struct ReaderLaneMetrics { queue_depth, saturated, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "27c87de" ;
+  triage:occursIn <urn:atm:triage:worktree/aw-pool-consolidate/27c87de> .
+
+<urn:atm:triage:occurrence/AW-POOL-V9-FIX-5/A2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/reader_pool.rs" ;
+  triage:line 155 ;
+  triage:snippet "#[allow(dead_code)] struct ReaderLaneMetrics { queue_depth, saturated, ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "27c87de" ;
+  triage:occursIn <urn:atm:triage:worktree/aw-pool-read-migration/27c87de> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/e53e585>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "e53e585" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/aw-pool-consolidate/27c87de>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aw-pool-consolidate" ;
+  triage:branch "fix/aw-pool-consolidate" ;
+  triage:headSha "27c87de" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/aw-pool-read-migration/27c87de>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/aw-pool-read-migration" ;
+  triage:branch "fix/aw-pool-read-migration" ;
+  triage:headSha "27c87de" ;
+  triage:orderIndex 3 .
+<urn:atm:triage:resolution/AW-POOL-V9-FIX-5/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-POOL-V9-FIX-5" ;
+  triage:resolutionNote "quality-mgr closure pass on integrate/phase-aw at e8825d5cc. ReaderLaneMetrics/ReaderLaneMetricsSnapshot carry no #[allow(dead_code)] on the merged head and are wired into the doctor endpoint via ReaderPoolMetricsDoctorReport (doctor/report.rs:286-296: queue_depth, saturated, in_flight, wait_nanos, execution_nanos, expired_in_queue, interrupted_while_active, quarantined, current_quarantined_workers, retired_replaced_workers), populated at the same composition.rs:171 doctor-report construction site fixed for FIX-2. Confirmed by direct grep/read." ;
+  triage:resolvedAt "2026-09-06T05:30:00Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "e8825d5cc" ;
+  triage:resolvedBranch "integrate/phase-aw" .

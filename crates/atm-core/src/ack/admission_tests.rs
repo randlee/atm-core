@@ -123,6 +123,45 @@ fn local_ack_admission_transitions_source_and_shapes_reply() {
 }
 
 #[test]
+fn unique_name_d10_ack_alias_is_canonicalized_before_pending_source_lookup() {
+    let message_id = AtmMessageId::new();
+    let mut alias_metadata = Map::new();
+    alias_metadata.insert(
+        "alias".to_owned(),
+        serde_json::Value::String("recipient-alias".to_owned()),
+    );
+    let runtime = runtime_with_pending_source(message_id).with_team_roster(vec![RosterEntry {
+        team_name: TeamName::from_validated(TEST_TEAM),
+        agent_name: AgentName::from_validated(CALLER),
+        member_kind: RosterMemberKind::Permanent,
+        harness: RosterHarness::ClaudeCode,
+        agent_type: crate::schema::AgentType::Worker,
+        model: crate::types::ModelName::default(),
+        recipient_pane_id: None,
+        metadata_json: alias_metadata,
+    }]);
+    let mut request = ack_write_request(message_id);
+    request.caller_identity = AgentName::from_validated("recipient-alias");
+
+    let write = admit_acknowledgement_write(request, &runtime)
+        .expect("alias caller resolves to canonical pending mailbox owner");
+
+    assert_eq!(write.canonical_request.caller_identity.as_str(), CALLER);
+    assert_eq!(write.reply.envelope.from.as_str(), CALLER);
+    let records = runtime.persisted_records.lock().expect("records lock");
+    let reply = records
+        .iter()
+        .find(|record| record.envelope.acknowledges_message_id == Some(message_id))
+        .expect("canonical acknowledgement reply");
+    assert_eq!(reply.envelope.from.as_str(), CALLER);
+    assert!(
+        !serde_json::to_string(reply)
+            .expect("serialize canonical acknowledgement reply")
+            .contains("recipient-alias")
+    );
+}
+
+#[test]
 fn client_supplied_destination_is_rejected_without_peer_provenance() {
     let message_id = AtmMessageId::new();
     let runtime = runtime_with_pending_source(message_id);
@@ -371,7 +410,10 @@ impl atm_storage::RosterStore for SingleMemberRoster {
     }
 
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
-        unreachable!("admission entry tests never enumerate teams")
+        // Runtime construction hydrates the RAM roster from the durable
+        // store exactly once at startup, exercising `list_teams` even though
+        // admission tests otherwise never enumerate teams themselves.
+        Ok(vec![TeamName::from_validated(TEST_TEAM)])
     }
 }
 
@@ -380,6 +422,20 @@ struct NoopNudgeTemplateOverrideStore;
 impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
 
 impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+    fn list_stale_template_override_kinds(
+        &self,
+        _team: &TeamName,
+    ) -> Result<Vec<crate::boundary::StaleNudgeTemplateOverrideKind>, AtmError> {
+        Ok(Vec::new())
+    }
+
+    fn list_template_overrides(
+        &self,
+        _team: &TeamName,
+    ) -> Result<Vec<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+        Ok(Vec::new())
+    }
+
     fn load_template_override(
         &self,
         _team: &TeamName,
@@ -405,19 +461,18 @@ impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideSt
         unreachable!("admission entry tests never touch the override-store boundary")
     }
 
-    fn clear_template_override(
-        &self,
-        _team: &TeamName,
-        _kind: crate::boundary::BuiltInNudgeTemplateKind,
-    ) -> Result<bool, AtmError> {
+    fn clear_template_override(&self, _team: &TeamName, _kind: &str) -> Result<bool, AtmError> {
         unreachable!("admission entry tests never touch the override-store boundary")
     }
 }
 
 fn local_runtime(store: Arc<InMemoryAsyncStore>, attach_async_store: bool) -> LocalServiceRuntime {
+    let roster =
+        atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(SingleMemberRoster))
+            .expect("write-through roster fixture hydrates from the in-memory fake");
     let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         store.clone(),
-        Arc::new(SingleMemberRoster),
+        roster,
         Arc::new(NoopNudgeTemplateOverrideStore),
         Arc::new(crate::LocalFileNonClaudeOutbound::new()),
     );
@@ -445,7 +500,8 @@ fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
         runtime
             .graft_receiver_lease(
                 &TeamName::from_validated(TEST_TEAM),
-                &AgentName::from_validated(CALLER)
+                &AgentName::from_validated(CALLER),
+                std::time::Duration::from_secs(10),
             )
             .expect("unconfigured lease default"),
         None
@@ -471,7 +527,8 @@ fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
         runtime
             .graft_receiver_lease(
                 &TeamName::from_validated(TEST_TEAM),
-                &AgentName::from_validated(CALLER)
+                &AgentName::from_validated(CALLER),
+                std::time::Duration::from_secs(10),
             )
             .expect("configured lease lookup"),
         None
@@ -479,8 +536,8 @@ fn graft_receiver_runtime_wiring_and_unconfigured_defaults_are_explicit() {
 }
 
 /// Minimal executor: with in-memory stores the admission future never pends,
-/// so a noop-waker poll loop is sufficient and atm-core keeps its zero
-/// tokio dev-dependency footprint.
+/// so a noop-waker poll loop is sufficient and atm-core keeps its
+/// runtime-neutral production dependency footprint.
 fn block_on<F: std::future::Future>(future: F) -> F::Output {
     let waker = std::task::Waker::noop();
     let mut context = std::task::Context::from_waker(waker);

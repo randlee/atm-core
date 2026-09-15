@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY-QA-001" ;
+  triage:title "HTTP_API_VERSION not bumped despite four sets of additive minor wire-field changes landed across AY.3/AY.13/AY.14 (ADR-061 missing-bump, Blocking)" ;
+  triage:description "schema-reviewer, qa-phase-ay-gate (PR #1308, integrate/phase-ay at d1bf1d7d7). Phase AY lands at least four additive, correctly-defaulted (Option/bool/Vec with #[serde(default)] and skip_serializing_if where applicable) field additions to types reachable from RequestEnvelope/ResponseEnvelope: DoctorQuery.all_teams (AY.13, crates/atm-core/src/doctor/mod.rs:85-86); DoctorReport.team_scope/team_rosters/alias_mismatches (AY.13, crates/atm-core/src/doctor/report.rs:421-446); MemberSummary.alias (AY.14, crates/atm-core/src/team_admin.rs:68-69); and AY.3's doctor endpoint transport/endpoint observation fields (crates/atm-core/src/doctor/mod.rs). Despite this, HTTP_API_VERSION in crates/atm-core/src/protocol.rs:96 is still '1.1.0', the same value ADR-061 records as the wire snapshot from before any of these fields existed (package version has since moved to 1.5.7). Per ADR-061 D3 ('a minor change requires the matching version bump in the same change set') and its Blocking Posture ('a wire change without the matching version bump is Blocking'), no sprint doc under docs/plans/phase-ay/ proposes or records a matching minor bump, and no .triage record or Rand ruling exempts these Doctor-only report fields from the counter. The change shape itself is correct and backward-compatible (an older client/replayed record still deserializes cleanly) -- this is purely a missing version-constant bump plus its accompanying ADR-061 record, not a functional defect. Required correction: bump HTTP_API_VERSION to the next minor (e.g. 1.2.0) in crates/atm-core/src/protocol.rs, record the bump and the four contributing field additions in ADR-061 (or a phase-ay closeout note referencing it), and confirm no other governed-interface constant needs the same treatment for this phase." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "phase_end" ;
+  triage:category "adr-061-compliance" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/protocol.rs, docs/adr/ADR-061*.md, crates/atm-core/src/doctor/mod.rs, crates/atm-core/src/doctor/report.rs, crates/atm-core/src/team_admin.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T20:35:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
+  triage:foundIn triage:AY15 ;
+  triage:foundAt "2026-09-07T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY-QA-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY-QA-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 96 ;
+  triage:snippet "HTTP_API_VERSION = \"1.1.0\" unchanged despite additive wire-field changes across AY.3/AY.13/AY.14" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "d1bf1d7d7" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/AY-QA-001/d1bf1d7d7> .
+
+<urn:atm:triage:worktree/AY-QA-001/d1bf1d7d7>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "d1bf1d7d7" ;
+  triage:orderIndex 0 .

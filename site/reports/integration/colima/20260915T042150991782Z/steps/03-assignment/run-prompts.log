@@ -1,0 +1,5 @@
+prompt: /opt/testbed/prompts/atm-team/AT10-assignment.md (agent=claude-code model=sonnet timeout=900s)
+All six cases passed and cleanup left every member (alpha, beta, gamma) idle with an empty queue.
+
+SMOKE-REPORT-WRITTEN /opt/testbed/results/prompt-AT10.json
+VERDICT AT10: pass (/opt/testbed/results/prompt-AT10.json)

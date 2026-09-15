@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RDY-005>
+  a triage:Finding ;
+  triage:findingId "RDY-005" ;
+  triage:title "project-plan / frontmatter / design header stale for Phase BA" ;
+  triage:description "solar BA-READINESS Part A @ 9f5aef2fe. Finding: docs/project-plan.md and related frontmatter/design headers were stale for Phase BA's actual shipped state. Fixed directly by fenix on the docs/phase-ba-post-mortem layer -- no dev dispatch needed." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RDY-005/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RDY-005/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1 ;
+  triage:snippet "project-plan / frontmatter / design header stale for Phase BA" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "fixed directly by fenix on the docs/phase-ba-post-mortem layer (local head 94b03b414), not routed to a dev." ;
+  triage:branch "docs/phase-ba-post-mortem" ;
+  triage:headSha "94b03b414" ;
+  triage:occursIn <urn:atm:triage:worktree/RDY-005/1> .
+
+<urn:atm:triage:worktree/RDY-005/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "fenix's own docs layer, phase-end post-mortem doc" ;
+  triage:branch "docs/phase-ba-post-mortem" ;
+  triage:headSha "94b03b414" ;
+  triage:orderIndex 10 .

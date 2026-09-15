@@ -1,16 +1,3 @@
 [daemon_singleton]
-# Explicit Tier 3 daemon-runtime exceptions belong here when they exist.
-# An empty allow-list is explicit: no exceptions are currently approved.
-# Each entry should be narrow, file-scoped, category-scoped, and carry a reason.
-#
-# Example:
-# [[daemon_singleton.allow]]
-# path = "crates/atm/tests/daemon_runtime.rs"
-# categories = ["spawn_test_daemon", "daemon_guard", "direct_atm_daemon_command", "daemon_socket_path"]
-# reason = "Dedicated Tier 3 daemon-runtime suite for singleton ownership."
-# require_unix_gating = true
-
-[[daemon_singleton.allow]]
-path = "crates/atm/src/commands/doctor.rs"
-categories = ["atm_daemon_bin"]
-reason = "The hermetic direct-local doctor unit test clears inherited ATM_DAEMON_BIN to prove no caller-selected daemon bootstrap leaks into the local path."
+# No allow-list entries are permitted. A second daemon is a product-integrity
+# violation, so tests, tools, and build profiles have no exception path.

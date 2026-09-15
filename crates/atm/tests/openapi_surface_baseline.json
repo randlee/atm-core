@@ -23,7 +23,7 @@
         "responses": {
           "200": {
             "error": false,
-            "schema": null
+            "schema": "#/components/schemas/DoctorResponse"
           },
           "default": {
             "error": true,
@@ -133,7 +133,7 @@
         "responses": {
           "200": {
             "error": false,
-            "schema": "#/components/schemas/MessageList"
+            "schema": "#/components/schemas/ListOutcome"
           },
           "default": {
             "error": true,
@@ -163,7 +163,7 @@
         "responses": {
           "200": {
             "error": false,
-            "schema": "#/components/schemas/MessageList"
+            "schema": "#/components/schemas/ReadOutcome"
           },
           "default": {
             "error": true,
@@ -179,7 +179,7 @@
         "responses": {
           "200": {
             "error": false,
-            "schema": "#/components/schemas/MessageList"
+            "schema": "#/components/schemas/ReadOutcome"
           },
           "default": {
             "error": true,
@@ -235,6 +235,22 @@
           }
         }
       }
+    },
+    "/tasks/move": {
+      "post": {
+        "operation_id": "moveTask",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/TaskMoveOutcome"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
     }
   },
   "schemas": {
@@ -260,6 +276,53 @@
         "message"
       ]
     },
+    "BucketCounts": {
+      "properties": [
+        "history",
+        "pending_ack",
+        "unread"
+      ],
+      "required": [
+        "history",
+        "pending_ack",
+        "unread"
+      ]
+    },
+    "ClassifiedMessage": {
+      "properties": [
+        "acknowledgedAt",
+        "acknowledgesMessageId",
+        "bucket",
+        "class",
+        "destinationChatId",
+        "expiresAt",
+        "from",
+        "message_id",
+        "parentMessageId",
+        "pendingAckAt",
+        "placement",
+        "read",
+        "requires_ack",
+        "sourceChatId",
+        "source_team",
+        "summary",
+        "taskComplete",
+        "taskId",
+        "taskOp",
+        "text",
+        "threadMode",
+        "timestamp"
+      ],
+      "required": [
+        "bucket",
+        "class",
+        "from",
+        "read",
+        "requires_ack",
+        "text",
+        "timestamp"
+      ]
+    },
     "ClearQuery": {
       "properties": [],
       "required": []
@@ -270,6 +333,22 @@
     },
     "CompatibilityVerdict": {
       "properties": [],
+      "required": []
+    },
+    "DoctorFinding": {
+      "properties": [
+        "code",
+        "message",
+        "remediation",
+        "severity"
+      ],
+      "required": []
+    },
+    "DoctorResponse": {
+      "properties": [
+        "herdr",
+        "runtime_status"
+      ],
       "required": []
     },
     "GraftReceiverLease": {
@@ -347,9 +426,90 @@
       "properties": [],
       "required": []
     },
+    "HerdrBreakerDoctorReport": {
+      "properties": [
+        "consecutive_failures",
+        "last_error_code",
+        "last_error_detail",
+        "retry_after_ms",
+        "state"
+      ],
+      "required": []
+    },
+    "HerdrDoctorReport": {
+      "properties": [
+        "breaker",
+        "endpoints"
+      ],
+      "required": []
+    },
+    "HerdrEndpointDoctorReport": {
+      "properties": [
+        "findings",
+        "members",
+        "transport"
+      ],
+      "required": []
+    },
+    "HerdrMemberPresence": {
+      "properties": [
+        "herdr_agent",
+        "name",
+        "outcome"
+      ],
+      "required": [
+        "name",
+        "outcome"
+      ]
+    },
+    "ListOutcome": {
+      "properties": [
+        "action",
+        "agent",
+        "bucket_counts",
+        "count",
+        "handoffs",
+        "history_collapsed",
+        "rows",
+        "selection_mode",
+        "task_event_rows",
+        "task_rows",
+        "team"
+      ],
+      "required": [
+        "action",
+        "agent",
+        "bucket_counts",
+        "count",
+        "history_collapsed",
+        "rows",
+        "selection_mode",
+        "team"
+      ]
+    },
     "ListQuery": {
       "properties": [],
       "required": []
+    },
+    "ListRow": {
+      "properties": [
+        "from",
+        "message_id",
+        "pending_ack",
+        "read",
+        "summary",
+        "task_id",
+        "timestamp"
+      ],
+      "required": [
+        "from",
+        "message_id",
+        "pending_ack",
+        "read",
+        "summary",
+        "task_id",
+        "timestamp"
+      ]
     },
     "Message": {
       "properties": [
@@ -367,18 +527,31 @@
         "to"
       ]
     },
-    "MessageList": {
-      "properties": [
-        "cursor",
-        "messages"
-      ],
-      "required": [
-        "messages"
-      ]
-    },
     "PeekQuery": {
       "properties": [],
       "required": []
+    },
+    "PromptHandoff": {
+      "properties": [
+        "agent",
+        "at",
+        "attempt",
+        "kind",
+        "message_key",
+        "task_id",
+        "team",
+        "trigger"
+      ],
+      "required": [
+        "agent",
+        "at",
+        "attempt",
+        "kind",
+        "message_key",
+        "task_id",
+        "team",
+        "trigger"
+      ]
     },
     "QueueGetNextRequest": {
       "properties": [
@@ -410,9 +583,106 @@
         "msg_id"
       ]
     },
+    "ReadOutcome": {
+      "properties": [
+        "action",
+        "additional_match_count",
+        "agent",
+        "bucket_counts",
+        "count",
+        "match_count",
+        "message",
+        "mutation_applied",
+        "selected_message_id",
+        "selection_mode",
+        "team"
+      ],
+      "required": [
+        "action",
+        "additional_match_count",
+        "agent",
+        "bucket_counts",
+        "count",
+        "match_count",
+        "mutation_applied",
+        "selection_mode",
+        "team"
+      ]
+    },
     "ReadQuery": {
       "properties": [],
       "required": []
+    },
+    "RuntimeMemberObservation": {
+      "properties": [
+        "availability",
+        "last_active_at",
+        "last_observation_attempt_at",
+        "last_observation_attempt_by",
+        "last_observed_at",
+        "last_observed_by",
+        "member",
+        "pid",
+        "revision",
+        "session_changed_at",
+        "session_changed_by",
+        "session_id",
+        "state",
+        "state_changed_at",
+        "state_changed_by",
+        "team"
+      ],
+      "required": [
+        "member",
+        "state",
+        "team"
+      ]
+    },
+    "RuntimeObservationAvailability": {
+      "properties": [],
+      "required": []
+    },
+    "RuntimeObservationSource": {
+      "properties": [],
+      "required": []
+    },
+    "RuntimeStatusCounts": {
+      "properties": [
+        "active_members",
+        "idle_members",
+        "offline_members",
+        "unknown_members"
+      ],
+      "required": [
+        "active_members",
+        "idle_members",
+        "offline_members",
+        "unknown_members"
+      ]
+    },
+    "RuntimeStatusSnapshot": {
+      "properties": [
+        "bare_cli_queue_full_drops_total",
+        "blocking_core_bridge_stalls_total",
+        "degraded_ingest",
+        "detail",
+        "graft_queue_handoff_failures_total",
+        "graft_queue_marker_clear_failures_total",
+        "herdr_queue_last_tick_at",
+        "liveness",
+        "member_counts",
+        "members",
+        "queue_drain_failures_total",
+        "queue_marker_set_failures_total",
+        "queue_messages_drained_total",
+        "readiness",
+        "singleton_owner_pid",
+        "write_source_preflight_stalls_total"
+      ],
+      "required": [
+        "liveness",
+        "readiness"
+      ]
     },
     "SearchHit": {
       "properties": [
@@ -452,6 +722,92 @@
         "hits"
       ]
     },
+    "TaskEventRow": {
+      "properties": [
+        "actor",
+        "assignee",
+        "at",
+        "close_outcome",
+        "detail",
+        "event",
+        "from_state",
+        "marker",
+        "message_id",
+        "outcome",
+        "seq",
+        "task_id",
+        "team",
+        "to_state"
+      ],
+      "required": [
+        "actor",
+        "assignee",
+        "at",
+        "event",
+        "seq",
+        "task_id",
+        "team"
+      ]
+    },
+    "TaskMoveOutcome": {
+      "properties": [
+        "assignee",
+        "from",
+        "task_id",
+        "to"
+      ],
+      "required": [
+        "assignee",
+        "from",
+        "task_id",
+        "to"
+      ]
+    },
+    "TaskMoveRequest": {
+      "properties": [
+        "caller_identity",
+        "caller_team",
+        "target",
+        "task_id"
+      ],
+      "required": [
+        "caller_identity",
+        "caller_team",
+        "target",
+        "task_id"
+      ]
+    },
+    "TaskRow": {
+      "properties": [
+        "assigned_at",
+        "assignee",
+        "assigner",
+        "assignment_message_id",
+        "close_outcome",
+        "description",
+        "last_reminded_at",
+        "lead_notified_count",
+        "position",
+        "reminder_count",
+        "state",
+        "task_id",
+        "team",
+        "updated_at"
+      ],
+      "required": [
+        "assigned_at",
+        "assignee",
+        "assigner",
+        "assignment_message_id",
+        "description",
+        "lead_notified_count",
+        "reminder_count",
+        "state",
+        "task_id",
+        "team",
+        "updated_at"
+      ]
+    },
     "WorkflowProjectionRequest": {
       "properties": [
         "end",
@@ -487,6 +843,7 @@
         "body",
         "from",
         "message_id",
+        "peer_http_api_version",
         "requires_ack",
         "to"
       ],

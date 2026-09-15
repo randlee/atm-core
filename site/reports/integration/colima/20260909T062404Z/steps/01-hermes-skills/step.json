@@ -1,0 +1,369 @@
+{
+  "feature": "colima-hermes-skills",
+  "host": "hermes-testbed",
+  "platform": "linux",
+  "run_id": "20260909T062404Z",
+  "status": "PASS",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "ATM 1.5.14",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "127.0.0.1 (sentences enter by docker exec; --no-peer)",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "herdr transport (atm doctor, fixture daemon)",
+      "status": "PASS",
+      "detail": "socket ({'kind': 'ok', 'version': '0.8.2', 'protocol': 20})",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Start line",
+      "status": "PASS",
+      "detail": "01M22DF72YMKCCGD2HREQKSGJ7",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Daemon answers",
+      "status": "PASS",
+      "detail": "status healthy, client 1.5.14, daemon 1.5.14",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Roster complete",
+      "status": "PASS",
+      "detail": "all 5 members present (stub-alpha, stub-beta, tester, hermes, oversight)",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Doctor passes",
+      "status": "PASS",
+      "detail": "error_count 0",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Self round trip",
+      "status": "PASS",
+      "detail": "message 01M22DFP25K793P9527JGXDTZS sent and read",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Cross-host peer",
+      "status": "PASS",
+      "detail": "localhost enabled, message 01M22DFZGD96007V5YPWBM01CN sent to oversight@testbed",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / hermes: Start line",
+      "status": "PASS",
+      "detail": "01M22DFJWRZS9F8Y9BNBGQPQZE",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / hermes: Daemon answers",
+      "status": "PASS",
+      "detail": "status: healthy, client: 1.5.14, daemon: 1.5.14",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / hermes: Roster complete",
+      "status": "PASS",
+      "detail": "all 5 expected members present, 0 added",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / hermes: Doctor passes",
+      "status": "PASS",
+      "detail": "error_count: 0, warning_count: 0",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / hermes: Self round trip",
+      "status": "PASS",
+      "detail": "sent: 01M22DG8AXFH72BTRWBTVP6YC2, count: 1, mutation_applied: true, unread: 0",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / tester: Self round trip",
+      "status": "PASS",
+      "detail": "message 01M22DJ2PCSPCYP3B4QZK2ZJ92, count 1, mutation_applied true",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / tester: Send",
+      "status": "PASS",
+      "detail": "message 01M22DJ7K4DC3HD5S2J1VV9WNN to hermes@testbed, requires_ack true",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / tester: Partner's message arrives",
+      "status": "PASS",
+      "detail": "10 seconds, message 01M22DJJE5T8GE7RT2R4CWK0FR from hermes@testbed, read false",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / tester: Peek does not mutate",
+      "status": "PASS",
+      "detail": "mutation_applied false, read status unchanged",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / tester: Read by id",
+      "status": "PASS",
+      "detail": "count 1, mutation_applied true",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / tester: Read marked it",
+      "status": "PASS",
+      "detail": "read status changed to true",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / tester: Stale-connection probe",
+      "status": "PASS",
+      "detail": "exit code 0, connection stable",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / tester: Ack",
+      "status": "PASS",
+      "detail": "acknowledged 01M22DJJE5T8GE7RT2R4CWK0FR with ack reply 01M22DKHMJN3BNJPF0YCJ02AH4",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / tester: Your message got acked",
+      "status": "PASS",
+      "detail": "0 seconds, ack 01M22DKQFKY75A9RZGSMQTZMFP received",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / hermes: Self round trip",
+      "status": "PASS",
+      "detail": "sent: 01M22DHZ8YP7Y3WCPNBXFKTEDQ, count: 1, mutation_applied: true, unread: 0",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / hermes: Send",
+      "status": "PASS",
+      "detail": "01M22DJJE5T8GE7RT2R4CWK0FR",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / hermes: Partner message arrives",
+      "status": "PASS",
+      "detail": "0s, id: 01M22DJ7K4DC3HD5S2J1VV9WNN, read: false",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / hermes: Peek does not mutate",
+      "status": "PASS",
+      "detail": "mutation_applied: false, read: false",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / hermes: Read by id",
+      "status": "PASS",
+      "detail": "count: 1, mutation_applied: true",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / hermes: Read marked it",
+      "status": "PASS",
+      "detail": "read: true",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / hermes: Stale-connection probe",
+      "status": "PASS",
+      "detail": "exit: 0",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / hermes: Ack",
+      "status": "PASS",
+      "detail": "exit: 0",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-smoke / hermes: Partner ack received",
+      "status": "PASS",
+      "detail": "01M22DKHMJN3BNJPF0YCJ02AH4, count: 1",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-hermes-ready / tester: Start line",
+      "status": "PASS",
+      "detail": "01M22DMTHV4JRAGM6XD2VJDA98",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-hermes-ready / tester: Roster",
+      "status": "PASS",
+      "detail": "hermes@testbed found",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-hermes-ready / tester: Receivers registered",
+      "status": "PASS",
+      "detail": "hermes: 2026-09-09T06:28:35.506598009Z (recent)",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-hermes-ready / tester: Ping",
+      "status": "PASS",
+      "detail": "message 01M22DND4G6K7BP5KHA9AAGBJZ sent to hermes@testbed, run_id 1788935320",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-hermes-ready / tester: Pong",
+      "status": "PASS",
+      "detail": "reply received in 0 seconds, ack from hermes@testbed",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-nudge-roundtrip / hermes: Start line",
+      "status": "PASS",
+      "detail": "01M22DPKZ4R7Q0Z5MES3CH5R16",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-nudge-roundtrip / hermes: Nudge received",
+      "status": "PASS",
+      "detail": "id: 01M22DPMF16Y05F77BRV733XN2",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-nudge-roundtrip / hermes: Read by id",
+      "status": "PASS",
+      "detail": "count: 1, mutation_applied: true",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-nudge-roundtrip / hermes: Ack natively",
+      "status": "PASS",
+      "detail": "reply: roundtrip 1788935360, reply_id: 01M22DQ75CDJP6BJA8HY3F0S8R",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-nudge-roundtrip / hermes: List after idle",
+      "status": "PASS",
+      "detail": "exit: 0, count: 1",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-nudge-roundtrip / tester: Start line",
+      "status": "PASS",
+      "detail": "01M22DPFJ1105V98BF3B89F907",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-nudge-roundtrip / tester: Send",
+      "status": "PASS",
+      "detail": "message 01M22DPMF16Y05F77BRV733XN2 to hermes@testbed, run_id 1788935360, requires_ack true",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-nudge-roundtrip / tester: Ack arrives",
+      "status": "PASS",
+      "detail": "20 seconds, message 01M22DQ75CDJP6BJA8HY3F0S8R with roundtrip 1788935360",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB4-006>
+  a triage:Finding ;
+  triage:findingId "BB4-006" ;
+  triage:title "docs/architecture.md's Task Storage table still teaches the pre-BB.4 idempotent-resend behavior with no Phase-BB amendment" ;
+  triage:description "quality-mgr BB4-QA2-1789254000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1446#issuecomment-5649061544, 2026-09-12T22:19:10Z; RBQA-F001), reviewed at a66fbcbb3. docs/architecture.md:2924's Task Storage table (active x Started cell) still reads 'idempotent -> active' with no Phase-BB amendment note in this section -- the exact behavior ADR-062 was corrected away from this round (BB.4 now rejects with ATM_TASK_ALREADY_ACTIVE, no silent resend). BB.4's own 'Requirements/ADRs edited' field only names docs/requirements.md and ADR-062; architecture.md was never in scope for the edit that fixed the other two docs, so it is the one retained doc surface still describing the superseded transition." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/architecture.md:2924" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T22:19:10Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: add a Phase-BB amendment note under the existing Phase-BA amendment (after line 2918) and correct the active/Started cell to state the reject-with-ATM_TASK_ALREADY_ACTIVE contract, mirroring ADR-062's corrected wording (see BB4-005). Correction (fenix, 2026-09-12T22:27:39Z): not solar's -- Phase BB resumed in collapsed form and fenix fixed this directly on the bottom feature/bb-collapsed @ b74f0d6ef (docs commit); routed to fenix, fixed-pending-QA. Solar has no open BB task; do not route anything to him." ;
+  triage:foundIn triage:BB4 ;
+  triage:foundAt "2026-09-12T22:19:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB4-006/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB4-006/1> ;
+  triage:closedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB4-006/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2924 ;
+  triage:snippet "Task Storage table active x Started cell still reads 'idempotent -> active', no Phase-BB amendment note; supersedes to reject-with-ATM_TASK_ALREADY_ACTIVE per ADR-062 this round" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb4-qa1-r1" ;
+  triage:headSha "a66fbcbb3" ;
+  triage:occursIn <urn:atm:triage:worktree/BB4-006/1> .
+
+<urn:atm:triage:worktree/BB4-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1446, fix/bb4-qa1-r1" ;
+  triage:branch "fix/bb4-qa1-r1" ;
+  triage:headSha "a66fbcbb3" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB4-006/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2924 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at f23d87928. docs/architecture.md:2924 Phase BB amendment note added, matches ADR-062." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:occursIn <urn:atm:triage:worktree/BB4-006/2> .
+
+<urn:atm:triage:worktree/BB4-006/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1468, fix/bb3-qa5-r6" ;
+  triage:branch "fix/bb3-qa5-r6" ;
+  triage:headSha "f23d87928" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB4-006/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:fixCommit "f23d87928" ;
+  triage:fixBranch "fix/bb3-qa5-r6" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch2" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at f23d87928. docs/architecture.md:2924 Phase BB amendment note added, matches ADR-062." .

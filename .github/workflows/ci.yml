@@ -7,6 +7,14 @@ on:
   push:
     branches: [develop, main]
 
+# One live run per ref: a new push to a PR branch cancels the queued/running
+# run for the superseded commit instead of stacking a full matrix behind it.
+# Pushes to develop/main are never cancelled (every landed commit gets a run,
+# classified by its own change set like a PR).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ci-scope:
     name: Classify CI scope
@@ -21,16 +29,26 @@ jobs:
       - id: scope
         shell: bash
         run: |
-          # Pushes always exercise the runtime.  A pull request containing only
-          # documentation or skill Markdown does not change executable code, so
-          # it does not run the long-lived daemon smoke matrix.
-          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+          # A change set containing only documentation, site content, report
+          # templates, release manifests, triage/sprint records, or agent
+          # configuration (.claude/, .codex/, .agents/, .cursor/) does not change
+          # executable code, so it does not run the long-lived daemon smoke
+          # matrix.  Pull requests and pushes use the same criteria: a PR is
+          # classified against its base, a push against the previous head of
+          # the branch.  Anything else (workflow_call, a branch creation with
+          # no previous head) exercises the runtime.
+          case "${{ github.event_name }}" in
+            pull_request) range_start="${{ github.event.pull_request.base.sha }}" ;;
+            push)         range_start="${{ github.event.before }}" ;;
+            *)            range_start="" ;;
+          esac
+          if [[ -z "$range_start" || "$range_start" =~ ^0+$ ]] || ! git cat-file -e "$range_start^{commit}" 2>/dev/null; then
             echo "runtime=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          changed_files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA")"
-          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|.*\.md$)' <<< "$changed_files"; then
+          changed_files="$(git diff --name-only "$range_start" "$GITHUB_SHA")"
+          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|templates/|release/|\.triage/|\.sprints/|\.claude/|\.codex/|\.agents/|\.cursor/|.*\.md$)' <<< "$changed_files"; then
             echo "runtime=true" >> "$GITHUB_OUTPUT"
           else
             echo "runtime=false" >> "$GITHUB_OUTPUT"
@@ -41,7 +59,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # PR runs lint on ubuntu only; the macOS/Windows lint legs are kept
+        # for pushes to develop/main. macOS runner slots are the CI queue's
+        # bottleneck and lint output is platform-independent for this repo.
+        # Each leg carries its exact interpreter pin: Unix uses the 3.14.7
+        # contract, Windows uses the separate stable pin because CPython
+        # 3.14.7 corrupts the lint scanner there (see tools/bootstrap.toml).
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"ubuntu-latest","python":"3.14.7"}]' || '[{"os":"ubuntu-latest","python":"3.14.7"},{"os":"macos-latest","python":"3.14.7"},{"os":"windows-latest","python":"3.12.10"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +81,7 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14.7"
+          python-version: ${{ matrix.python }}
 
       - name: Expose Cargo binaries on PATH
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
@@ -91,7 +115,7 @@ jobs:
         with:
           tool: just@1.58.0
 
-      - name: Install cargo-binstall
+      - name: Pre-seed pinned cargo-binstall (bootstrap also verifies)
         uses: cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c # v1.22.0
         with:
           version: "1.22.0"
@@ -147,36 +171,45 @@ jobs:
 
   clippy:
     name: Clippy
-    needs: [fmt]
+    needs: [fmt, ci-scope]
     runs-on: ubuntu-latest
     steps:
+      - name: Documentation-only clippy skip
+        if: ${{ needs.ci-scope.outputs.runtime != 'true' }}
+        run: echo "Clippy is intentionally skipped for documentation-only changes."
       - uses: actions/checkout@v4
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
 
       - name: Install Rust toolchain
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.94.1"
           components: clippy, rustfmt
 
       - name: Cache cargo registry
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ubuntu-clippy-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo index
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ubuntu-clippy-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo build
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: target
           key: ubuntu-clippy-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run clippy
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
@@ -189,11 +222,16 @@ jobs:
         include:
           - os: ubuntu-latest
             release_artifact: linux-x86_64
+            python: "3.14.7"
           - os: macos-latest
             release_artifact: macos-aarch64
+            python: "3.14.7"
           - os: windows-latest
             release_artifact: windows-x86_64
-    runs-on: ${{ matrix.os }}
+            python: "3.12.10"
+    # Documentation-only changes keep the required check names but run the
+    # skip step on ubuntu instead of waiting for a macOS/Windows runner slot.
+    runs-on: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os || 'ubuntu-latest' }}
     steps:
       - name: Documentation-only runtime skip
         if: ${{ needs.ci-scope.outputs.runtime != 'true' }}
@@ -217,7 +255,7 @@ jobs:
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14.7"
+          python-version: ${{ matrix.python }}
 
       - name: Install just
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
@@ -264,7 +302,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bootstrap-
 
-      - name: Install cargo-binstall
+      - name: Pre-seed pinned cargo-binstall (bootstrap also verifies)
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c # v1.22.0
         with:
@@ -314,6 +352,24 @@ jobs:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
         run: cargo test --workspace --exclude atm-daemon --verbose
 
+      - name: Run Herdr transport fixtures
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: cargo test -p atm-herdr --all-features --verbose
+        env:
+          # AY.7's Windows-only integration test writes a deterministic
+          # doctor-contract fixture here. It is CI evidence, not live Herdr
+          # evidence, and is uploaded only from the Windows lane below.
+          ATM_WINDOWS_PROCESS_AUDIT_DIR: ${{ runner.temp }}/atm-herdr-process-audit
+
+      - name: Upload Windows Herdr process-audit doctor fixture
+        if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-herdr-process-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/atm-herdr-process-audit/windows-ci-doctor.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Run ATM CLI surface compatibility contract
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface --verbose
@@ -339,6 +395,42 @@ jobs:
               environment.write(f"ATM_GRAFT_WHEEL={wheels[0].resolve()}\n")
               environment.write(f"ATM_WHEEL_OUTPUT_DIR={Path('bridge-wheels').resolve()}\n")
 
+      - name: Install Hermes parity fixture packages
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          wheels = Path("release-wheels")
+          graft = sorted(wheels.glob("atm_graft*.whl"))
+          hermes = sorted(wheels.glob("hermes_atm*.whl"))
+          if len(graft) != 1 or len(hermes) != 1:
+              raise RuntimeError(
+                  f"expected one atm-graft and one hermes-atm wheel, found {graft=} {hermes=}"
+              )
+          subprocess.run(
+              [
+                  sys.executable,
+                  "-m",
+                  "pip",
+                  "install",
+                  "--disable-pip-version-check",
+                  "--no-deps",
+                  "--requirement",
+                  "tools/bootstrap-requirements.txt",
+              ],
+              check=True,
+          )
+          subprocess.run(
+              [sys.executable, "-m", "pip", "install", "--no-deps", str(graft[0]), str(hermes[0])],
+              check=True,
+          )
+          subprocess.run(
+              [sys.executable, "-c", "import atm_graft, hermes_atm"], check=True
+          )
+
       - name: Run Hermes graft steer boundary tests
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python .just/run_hermes_graft_bridge_tests.py
@@ -357,6 +449,12 @@ jobs:
       - name: Test admission-capacity benchmark runner
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: just test-admission-capacity
+
+      - name: Run CI-only CLI/native parity fixture
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        env:
+          ATM_CLI_PARITY_CI: "1"
+        run: python scripts/ci/cli_native_parity.py
 
       - name: Run graft receiver crash/reclaim proof
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}

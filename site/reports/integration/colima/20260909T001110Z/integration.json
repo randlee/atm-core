@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-09T00:11:10Z",
+  "source_revision": null,
+  "image": {
+    "tag": null,
+    "id": null,
+    "sha256": null,
+    "architecture": null
+  },
+  "container": "hermes-testbed",
+  "atm_version": null,
+  "procedure": "colima-hermes-skills",
+  "procedure_revision": "6040ecf36a3ac43d40207869d281114c719533ea",
+  "procedure_revision_inferred": true,
+  "status": "FAIL",
+  "steps": [
+    {
+      "order": 1,
+      "name": "hermes-skills",
+      "procedure": "colima-hermes-skills",
+      "procedure_revision": "6040ecf36a3ac43d40207869d281114c719533ea",
+      "procedure_revision_inferred": true,
+      "status": "FAIL",
+      "generated_at": "2026-09-09T00:11:10Z",
+      "container": "hermes-testbed",
+      "payload": "steps/01-hermes-skills/step.json",
+      "panel": "steps/01-hermes-skills/panel.xhtml"
+    }
+  ]
+}

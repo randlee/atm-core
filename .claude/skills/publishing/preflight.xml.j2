@@ -38,7 +38,7 @@ required_variables:
     Run every independent non-disclosing check and return sanitized results for every manifest channel.
   </constraints>
   <workflow>
-    <step id="a">ACK immediately, then verify that the assigned state and preflight stage comply with the referenced policy.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line&gt;"`, then verify that the assigned state and preflight stage comply with the referenced policy.</step>
     <step id="b">Validate the manifest and candidate tag, run Release Preflight, and retain the complete sanitized per-channel result.</step>
     <step id="c">Send {{ recipient }} a fenced JSON completion envelope with candidate commit, authorization result, and every channel result.</step>
   </workflow>

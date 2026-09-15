@@ -36,7 +36,7 @@ required_variables:
     Never request, inspect, print, or locally replace a GitHub Actions secret.
   </constraints>
   <workflow>
-    <step id="a">ACK immediately, verify the assignment against the shared policy, and stop with a sanitized error if it is not authorized.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line&gt;"`, verify the assignment against the shared policy, and stop with a sanitized error if it is not authorized.</step>
     <step id="b">Execute only the assigned root release or failed-channel recovery. Preserve passed channels and collect every channel result.</step>
     <step id="c">Send {{ recipient }} a fenced JSON completion envelope with release tag, exact commit, and complete per-channel results.</step>
   </workflow>

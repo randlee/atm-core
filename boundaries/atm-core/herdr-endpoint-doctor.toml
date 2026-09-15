@@ -1,0 +1,93 @@
+boundary_id = "BOUNDARY-HerdrEndpointDoctor"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "HerdrEndpointDoctor"
+
+[public]
+trait = "HerdrEndpointDoctor"
+notes = "AY.3 (AYP-R4-003) replaces the unsealed HerdrPresenceDoctor with the ADR-001 sealed HerdrEndpointDoctor port. atm-core owns the trait, the seal, and every endpoint doctor DTO; atm-herdr fills those DTOs from its own HerdrError inventory; atm-daemon-bootstrap supplies the only production adapter. The port yields one exhaustive typed state per configured endpoint and no aggregate herdr.state / herdr.remedy (AYP-R4-002); the host-wide HerdrBreakerDoctorReport stays a separate contract (AYP-R3-006)."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_herdr::transport"]
+
+[ownership]
+io_owns = [
+  "herdr_endpoint_diagnostics",
+  "herdr_endpoint_display_sanitization",
+  "herdr_presence_projection",
+]
+io_forbidden = [
+  "process_spawn",
+  "socket_io",
+  "sqlite",
+  "tmux_send_keys",
+]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-daemon-bootstrap", "atm-herdr", "atm-runtime"]
+allowed_dependencies = []
+forbidden_edges = [
+  "atm-core -> atm-daemon",
+  "atm-core -> atm-herdr",
+  "atm-core -> atm-storage-rusqlite",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["HerdrEndpointDisplay::from_relative"]
+
+[contracts]
+request_types = ["MembersList", "RequestDeadline", "HerdrRosterMember"]
+response_types = [
+  "HerdrEndpointObservation",
+  "HerdrDoctorState",
+  "HerdrEndpointDisplay",
+  "HerdrBinaryResolution",
+  "HerdrMemberPresence",
+  "HerdrPresenceOutcome",
+  "HerdrVersion",
+  "DoctorFinding",
+]
+error_types = ["AtmError"]
+notes = [
+  "The port returns Vec<HerdrEndpointObservation>; presence_findings(observations) is the only path from observations to DoctorFinding, so doctor never probes a member twice (AYP-R5-001, AYP-R6-002).",
+  "Every endpoint-bearing value, including endpoint fields inside a HerdrDoctorState variant, is a HerdrEndpointDisplay carrying $XDG_CONFIG_HOME, $HOME, %APPDATA%, or <configured>/<file-name>; raw home, config-root, socket, and pipe strings never cross the atm-herdr boundary into atm-core, JSON, human output, snapshots, or logs (AY.3 C6).",
+  "capabilities.live_handoff is Option<bool> kept whenever the server answered, independent of state (AYP-R6-001); there is no BreakerOpen endpoint state (AY.3 C4).",
+]
+
+[testing]
+allowed_test_double_paths = [
+  "crate::doctor::ClosedHerdrEndpointDoctor",
+  "atm_runtime::doctor_projection::tests::CountingEndpoint",
+]
+forbidden_test_bypasses = ["std::process::Command", "tokio::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HERDR-ENDPOINT-DOCTOR-REFERENCES"]
+review_gates = [
+  "adr_001_sealed_supertrait",
+  "one_production_endpoint_doctor_adapter",
+  "no_aggregate_herdr_state",
+  "privacy_preserving_endpoint_display",
+  "no_herdr_io_at_construction",
+]
+
+[enforcement.io_forbidden_source_modules]
+process_spawn = ["atm_daemon_bootstrap::replacement_handler"]
+socket_io = ["atm_daemon_bootstrap::replacement_handler"]
+sqlite = ["atm_daemon_bootstrap::replacement_handler"]
+tmux_send_keys = ["atm_daemon_bootstrap::replacement_handler"]
+
+[status]
+state = "active"
+notes = [
+  "Phase AY P-E(a) boundary ruling drafted 2026-09-06 for sprint AY.3; the approved bundle is AY.3's first commit and the developer neither authors nor weakens it.",
+  "AY.3 D2 flips this record to active when the sealed trait lands: declare `pub trait HerdrEndpointDoctor: sealed::Sealed + Send + Sync` in crates/atm-core/src/boundary/herdr_endpoint.rs (the atm-architecture guard resolves trait-only core contracts from crates/atm-core/src/boundary only; store.rs and mail.rs are the precedent), re-exported from crates/atm-core/src/doctor/mod.rs alongside the DTOs, keep ClosedHerdrEndpointDoctor in atm-core, and keep HerdrEndpointDoctorAdapter in crates/atm-daemon-bootstrap/src/replacement_handler.rs as the single production implementation; boundary_enforcement.rs pins exactly those two implementations.",
+  "atm_herdr::transport is recorded as the composition root because its private endpoint-display helper is the only site permitted to call HerdrEndpointDisplay::from_relative (AY.3 C6 sanitizer); HerdrDoctorProbe consumes the already-sanitized display and no other production reference outside atm-core is permitted by this record.",
+  "atm-core stays Tokio-free and gains no atm-core -> atm-herdr edge (AY.3 A6): the atm-herdr edge is a declared forbidden edge here, and the Tokio ban is enforced by the atm-core manifest dependency allowlist in .just/lint-config.toml, which lists no tokio entry. A `tokio` forbidden_edges entry is deliberately omitted because boundary_toml_forbidden_edges_match_rust_guard_catalog admits workspace-crate edges only.",
+  "HerdrPresenceDoctor and ClosedHerdrPresenceDoctor are deleted by AY.3 D5; no compatibility shim is retained.",
+]

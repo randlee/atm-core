@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY9-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY9-QA-001" ;
+  triage:title "boundaries lint fails: transport.rs calls HerdrEndpointDisplay::from_relative outside its sole permitted composition root, boundaries/atm-core/herdr-endpoint-doctor.toml not updated for the AY.9 C1a amendment" ;
+  triage:description "quality-mgr qa-pr1295-r1 (PR #1295, AY.9 herdr-socket-cutover, dedicated QA worktree pinned at ba7966c32). Live CI run 34142141660 (head ba7966c32) fails job 'Just lint (ubuntu-latest)' at the 'boundaries' check with exit code 1: crates/atm-herdr/src/transport.rs:189,200,231,247 all trip 'BOUNDARY-HerdrEndpointDoctor forbids external reference HerdrEndpointDisplay::from_relative'. boundaries/atm-core/herdr-endpoint-doctor.toml's [status].notes states 'atm_herdr::doctor_probe is recorded as a composition root because HerdrDoctorProbe is the only site permitted to call HerdrEndpointDisplay::from_relative (AY.3 C6 sanitizer); no production reference outside atm-core is permitted by this record,' and [composition].roots = ['atm_herdr::doctor_probe'] / [references].forbidden = ['HerdrEndpointDisplay::from_relative'] encode exactly that. The AY.9 sprint doc's own C1a allowlist explicitly relocated the HerdrEndpoint-to-HerdrEndpointDisplay conversion into transport.rs ('crates/atm-herdr/src/doctor_probe.rs (the one assignment/call site that hard-codes doctor transport CLI and endpoint None; added by fenix 2026-09-07 as a C1a plan defect found during AY.9 D4, arch-ctm msg 01M1Y9F78Z4Q1W4K5NHHA294AQ; conversion stays in transport.rs so HerdrEndpoint never crosses the crate)') -- so the dev correctly implemented the sprint doc's stated C1a intent, but the C1a allowlist never added boundaries/atm-core/herdr-endpoint-doctor.toml itself, so the TOML's composition-root/forbidden-reference contract was never updated to match. The CI-enforced boundary lint (.just/lint_boundaries.py, LINT-BOUNDARY-HERDR-ENDPOINT-DOCTOR-REFERENCES) therefore correctly flags the mismatch: it is enforcing a now-stale contract against code the sprint doc itself directed. This is a genuine hard CI gate failure (job conclusion=failure, not pending/flaky) at the pinned head, confirmed live via gh api jobs/101806869635/logs and the uploaded just-lint-logs-ubuntu-latest artifact's 20260907161650-boundaries.log. All other lint categories (fmt, clippy, deny, shear, arch-gates, version, adr-index, unix-gating, sc-boundary, pytests, etc.) pass at this head; locally-run cargo fmt --check, cargo clippy --workspace --all-targets -D warnings, cargo test -p atm-herdr --all-features (48+3+8+1 passed), cargo test -p atm-daemon-bootstrap (83 passed incl. herdr_lifecycle_tests L1-L12), and cargo test -p atm-architecture --test boundary_enforcement (95 passed incl. ay3_herdr_endpoint_doctor_contract_has_only_closed_and_bootstrap_implementations) all pass -- this is exclusively a Python-lint boundary-TOML/reality mismatch, not a Rust defect. Fix is a boundary-doc update to boundaries/atm-core/herdr-endpoint-doctor.toml: add the AY.9 composition root (transport.rs's socket_endpoint_display/configured_endpoint_display/named_pipe_display helper family, or the module atm_herdr::transport) alongside/in place of atm_herdr::doctor_probe, and update the stale [status].notes prose accordingly -- not a code change to transport.rs, which correctly implements C1a/C2's sanitizer contract (verified: from_relative call sites only ever originate from within crate-private transport.rs helpers reachable solely via HerdrIo::endpoint_display, itself only called from doctor_probe.rs; no leak of raw paths). Per repo boundary-doc governance this TOML edit needs boundary-guard review before merge, same as any other boundary-policy change." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "contract-fidelity" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundaries/atm-core/herdr-endpoint-doctor.toml, crates/atm-herdr/src/transport.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T16:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY9 ;
+  triage:foundAt "2026-09-07T16:25:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY9-QA-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY9-QA-001/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY9-QA-001/1> ;
+  triage:closedAt "2026-09-07T17:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY9-QA-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport.rs" ;
+  triage:line 189 ;
+  triage:snippet "HerdrEndpointDisplay::from_relative(HerdrEndpointDisplayRoot::XdgConfigHome, relative, false).ok()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay9-herdr-socket-cutover" ;
+  triage:headSha "ba7966c32" ;
+  triage:occursIn <urn:atm:triage:worktree/AY9-QA-001/ba7966c32> .
+
+<urn:atm:triage:occurrence/AY9-QA-001/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/herdr-endpoint-doctor.toml" ;
+  triage:line 15 ;
+  triage:snippet "roots = [\"atm_herdr::transport\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay9-herdr-socket-cutover" ;
+  triage:headSha "d06d82b69" ;
+  triage:occursIn <urn:atm:triage:worktree/AY9-QA-001/d06d82b69> .
+
+<urn:atm:triage:worktree/AY9-QA-001/ba7966c32>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1295-r1" ;
+  triage:branch "feature/ay9-herdr-socket-cutover" ;
+  triage:headSha "ba7966c32" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AY9-QA-001/d06d82b69>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1295-r2" ;
+  triage:branch "feature/ay9-herdr-socket-cutover" ;
+  triage:headSha "d06d82b69" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AY9-QA-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T17:10:00Z"^^xsd:dateTime ;
+  triage:fixCommit "d06d82b697514111b3542df1f3bc563de31672ca" ;
+  triage:fixBranch "feature/ay9-herdr-socket-cutover" ;
+  triage:verifiedInRound "qa-pr1295-r2" ;
+  triage:resolutionNote "PR #1295 head advanced to d06d82b69 via a single TOML-only commit (fix(boundary): align Herdr doctor sanitizer root, authored by Rand). Diff confirmed to touch exactly boundaries/atm-core/herdr-endpoint-doctor.toml, 2 insertions/2 deletions: [composition].roots flipped from atm_herdr::doctor_probe to atm_herdr::transport, and the [status].notes prose updated to state that transport.rs's private endpoint-display helper is the sole permitted from_relative call site, with HerdrDoctorProbe consuming the already-sanitized display -- matching the AY.9 C1a intent exactly, no other policy field (forbidden references, ownership, visibility) touched. git merge-base --is-ancestor d06d82b69 d06d82b69 confirms the fix commit is the pinned re-verify head itself. Live CI at d06d82b69 (gh pr checks 1295 --json) shows Just lint (ubuntu-latest) SUCCESS -- boundaries check now passes -- plus Clippy, Format check, Classify CI scope, all five Hermes ATM jobs, and all three Test-matrix legs (Test ubuntu-latest, Test macos-latest, Test windows-latest) all SUCCESS: 17/17 checks green. qa-pr1295-r2 additionally re-verified locally: diff scope limited to the TOML, from_relative call sites confirmed still only in transport.rs (4 sites, lines 189/200/231/247), doctor_probe.rs confirmed to have zero direct HerdrEndpointDisplay references (consumes the sanitized display only), and local lint/build/test all green. Closing on this evidence." .

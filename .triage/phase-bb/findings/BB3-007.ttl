@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-007>
+  a triage:Finding ;
+  triage:findingId "BB3-007" ;
+  triage:title "Sprint doc's 'no file overlap with BB.2' claim is false; status fields flipped by dev instead of lead" ;
+  triage:description "quality-mgr QA1-B6 + fenix critical review I6, reviewed at 27e21224c. The sprint doc's header table (L15) claims 'File overlap with BB.1, BB.2: none ... BB.2 touches .claude/skills/**' (implying BB.3 does not). The actual diff shows BB.3 itself edits .claude/skills/html-report/templates/fuzz-run-report.html.j2 (+6 lines: new procedure_label/procedure_href frontmatter defaults and a conditional 'Procedure:' link block) -- a real, non-trivial edit inside BB.2's claimed exclusive territory, confirmed via git diff origin/integrate/phase-bb...HEAD. Also templates/benchmark-report/benchmark-run.xhtml.j2 is an undeclared out-of-footprint edit. Separately, docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md:2 and docs/project-plan.md:1829 were flipped to 'complete' by the dev; BB.7 owns project-plan and status is set by the lead at closure, not the dev mid-sprint -- both to be reverted in the fix round." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:deferredNote "Routed to cipher's BB3-FIX-R1: revert both status flips (sprint doc + project-plan), reconcile the sprint doc's file-overlap claim with the actual html-report/benchmark-report template edits." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T19:14:53Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-007/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB3-007/1> ;
+  triage:closedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB3-007/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md" ;
+  triage:line 15 ;
+  triage:snippet "header table claims no file overlap with BB.2's .claude/skills/** footprint, but BB.3 edits .claude/skills/html-report/templates/fuzz-run-report.html.j2; sprint-doc and project-plan status fields flipped to complete by the dev, not the lead" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-007/1> .
+
+<urn:atm:triage:worktree/BB3-007/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1436, feature/bb3-test-procedure-pages" ;
+  triage:branch "feature/bb3-test-procedure-pages" ;
+  triage:headSha "27e21224c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB3-007/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T20:20:11Z"^^xsd:dateTime ;
+  triage:fixCommit "791680c2ae8155bced4fd5fd2888c5a607228f01" ;
+  triage:fixBranch "feature/bb3-test-procedure-pages" ;
+  triage:verifiedInRound "BB3-FIX-R1" ;
+  triage:resolutionNote "Confirmed fixed by quality-mgr's own independent verification in BB3-QA2: git diff 791680c2a..d2c69e9f6 (and against the pre-sprint base) for templates/benchmark-report/benchmark-run.xhtml.j2 and scripts/smoke/benchmark_report.py returns empty -- the undeclared out-of-footprint edit was cleanly reverted with no residual gap. Status flips and file-overlap claim also corrected." .

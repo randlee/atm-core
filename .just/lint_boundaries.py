@@ -229,6 +229,16 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "writer_lane": (r"\bSqliteWriter\b", r"\b(?:writer|write)_lane\b"),
     "task_changed_notifications": (r"\btask_changed_notifications\b", r"\bTaskChanged(?:Notification|Event)?\b", r"\btask_changed\b"),
+    "task_state_transition": (
+        r"\btask_state_transition\b",
+        r"\bapply_task_(?:assignment|completion|acknowledgement)\s*\(",
+        r"\bUPDATE\s+tasks\s+SET\s+state\b",
+    ),
+    "task_body_dereference": (
+        r"\btask_body_dereference\b",
+        r"\bTaskProvider\b",
+        r"\b(?:load|read|resolve)_task_body\s*\(",
+    ),
     "template_rendering": (r"\btemplate_rendering\b", r"\b(?:render|render_template)\s*\(", r"\bTemplateRenderer\b"),
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),
@@ -384,6 +394,7 @@ class BoundaryRecord:
     io_forbidden: tuple[str, ...]
     allowed_dependents: tuple[str, ...]
     allowed_dependencies: tuple[str, ...]
+    allowed_dev_dependencies: tuple[str, ...]
     forbidden_edges: tuple[str, ...]
     references_scope: str
     forbidden_references: tuple[str, ...]
@@ -1328,6 +1339,15 @@ def build_boundary_record(
         ("dependencies", "allowed_dependencies"),
         field_name="dependencies.allowed_dependencies",
     )
+    raw_allowed_dev_dependencies = nested_get(data, ("dependencies", "allowed_dev_dependencies"))
+    if raw_allowed_dev_dependencies is None:
+        allowed_dev_dependencies, allowed_dev_dependency_errors = [], []
+    else:
+        allowed_dev_dependencies, allowed_dev_dependency_errors = validate_list_field(
+            data,
+            ("dependencies", "allowed_dev_dependencies"),
+            field_name="dependencies.allowed_dev_dependencies",
+        )
     forbidden_edges, forbidden_edge_errors = validate_list_field(
         data,
         ("dependencies", "forbidden_edges"),
@@ -1406,6 +1426,7 @@ def build_boundary_record(
         + io_forbidden_errors
         + allowed_dependent_errors
         + allowed_dependency_errors
+        + allowed_dev_dependency_errors
         + forbidden_edge_errors
         + forbidden_reference_errors
         + test_double_errors
@@ -1571,6 +1592,7 @@ def build_boundary_record(
         io_forbidden=tuple(io_forbidden),
         allowed_dependents=tuple(allowed_dependents),
         allowed_dependencies=tuple(allowed_dependencies),
+        allowed_dev_dependencies=tuple(allowed_dev_dependencies),
         forbidden_edges=tuple(forbidden_edges),
         references_scope=references_scope,
         forbidden_references=tuple(forbidden_references),
@@ -1887,7 +1909,7 @@ def collect_manifest_dependency_allowlist_violations(
                     )
                 )
             else:
-                documented = set(record.allowed_dependencies)
+                documented = set(record.allowed_dependencies) | set(record.allowed_dev_dependencies)
                 allowlisted = set(allowlist.allowed_dependencies)
                 missing = sorted(allowlisted - documented)
                 extra = sorted(documented - allowlisted)
@@ -1902,13 +1924,37 @@ def collect_manifest_dependency_allowlist_violations(
 
         manifest = tomllib_load(info.path)
         actual_dependencies: set[str] = set()
-        for _section_name, dependencies in dependency_sections(manifest):
+        actual_production_dependencies: set[str] = set()
+        actual_dev_dependencies: set[str] = set()
+        for section_name, dependencies in dependency_sections(manifest):
             for dependency_name, dependency in dependencies.items():
                 package_name = dependency_package_name(dependency_name, dependency)
                 dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
-                actual_dependencies.add(
-                    dependency_info.crate_dir_name if dependency_info is not None else package_name
-                )
+                canonical_name = dependency_info.crate_dir_name if dependency_info is not None else package_name
+                actual_dependencies.add(canonical_name)
+                if section_name.endswith("dev-dependencies"):
+                    actual_dev_dependencies.add(canonical_name)
+                else:
+                    actual_production_dependencies.add(canonical_name)
+
+        if allowlist.boundary_record_path is not None:
+            record = records_by_path.get(allowlist.boundary_record_path)
+            if record is not None and record.allowed_dev_dependencies:
+                documented_production = set(record.allowed_dependencies)
+                documented_dev = set(record.allowed_dev_dependencies)
+                production_missing = sorted(actual_production_dependencies - documented_production)
+                production_extra = sorted(documented_production - actual_production_dependencies)
+                dev_missing = sorted(actual_dev_dependencies - documented_dev)
+                dev_extra = sorted(documented_dev - actual_dev_dependencies)
+                if production_missing or production_extra or dev_missing or dev_extra:
+                    violations.append(
+                        BoundaryViolation(
+                            record.location,
+                            "boundary record dependency sections diverge from Cargo.toml "
+                            f"(production missing {production_missing!r}; production extra {production_extra!r}; "
+                            f"dev missing {dev_missing!r}; dev extra {dev_extra!r})",
+                        )
+                    )
 
         allowed_dependencies = set(allowlist.allowed_dependencies)
         location = f"{manifest_path.as_posix()} [manifest-dependency-allowlist]"

@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-PRE-001>
+  a triage:Finding ;
+  triage:findingId "BA3-PRE-001" ;
+  triage:title "BA.3 workspace does not compile: notify() removed from HerdrProcessAdapter but bootstrap still implements it" ;
+  triage:description "fenix pre-review of BA.3 COMPLETE sha 82ff24ded (PR #1402), comment https://github.com/randlee/atm-core/pull/1402#issuecomment-5642824942. Verified on a detached worktree of 82ff24ded with a fresh target dir. cargo clippy --all-targets --all-features (and any workspace build) fails: error[E0407]: method `notify` is not a member of trait `HerdrProcessAdapter` at crates/atm-daemon-bootstrap/src/received_hook_selector.rs:221. The notify method was removed from atm_herdr::HerdrProcessAdapter (per an earlier ruling) but the bootstrap implementation still provides it, so the push's claimed \"cargo test --workspace --no-fail-fast\" cannot actually have run against this tree. Fix task BA3-FIX-R1 dispatched to arch-ctm." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "compile-failure" ;
+  triage:severity "blocking" ;
+  triage:source "fenix pre-review" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon-bootstrap/src/received_hook_selector.rs (HerdrProcessAdapter impls)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T02:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-PRE-001/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BA3-PRE-001/1> ;
+  triage:closedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-PRE-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 221 ;
+  triage:snippet "error[E0407]: method `notify` is not a member of trait `HerdrProcessAdapter`" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "82ff24ded" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-PRE-001/1> .
+
+<urn:atm:triage:worktree/BA3-PRE-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "detached worktree of 82ff24ded (fenix pre-review, fresh target dir)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "82ff24ded" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/BA3-PRE-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "fenix" ;
+  triage:resolvedAt "2026-09-12T03:05:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c13f9bddf" ;
+  triage:fixBranch "feature/ba3-nudge-invariant" ;
+  triage:verifiedInRound "BA3-FIX-R1" ;
+  triage:resolutionNote "fenix's BA3-FIX-R1 acceptance (PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643008880): detached-worktree build at c13f9bddf -- cargo fmt/clippy/test all clean; HerdrProcessAdapter::notify gone including received_hook_selector.rs." .
+

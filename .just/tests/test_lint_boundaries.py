@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 import sys
 import tempfile
@@ -20,6 +21,7 @@ from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import parse_simple_yaml_document
 from lint_boundaries import run
+from run_lint import build_tasks
 
 
 ROOT_MANIFEST = """\
@@ -199,6 +201,17 @@ notes = []
 
 
 class LintBoundariesTests(unittest.TestCase):
+    def test_declared_peer_dial_lint_rule_resolves_to_registered_runner(self) -> None:
+        records, parse_violations = parse_boundary_records(REPO_ROOT)
+        self.assertEqual(parse_violations, [])
+        runtime = next(
+            record
+            for record in records
+            if record.source_path == Path("boundaries/atm-http-runtime/http-runtime.toml")
+        )
+        self.assertIn("peer-dial-seam", runtime.lint_rules)
+        self.assertIn("peer-dial-seam", build_tasks(REPO_ROOT))
+
     def test_graft_shared_client_has_no_direct_interprocess_dependency(self) -> None:
         manifest = tomllib.loads(
             (REPO_ROOT / "crates/atm-graft/Cargo.toml").read_text(encoding="utf-8")
@@ -1138,6 +1151,65 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                 rendered,
             )
 
+    def test_atm_http_runtime_test_fixture_dependencies_are_rejected_in_production(self) -> None:
+        """C10: each AW.3 runtime fixture edge is forbidden outside dev-dependencies."""
+        section_rules = "\n".join(
+            f'''[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
+dependency_package = "{package}"
+allowed_sections = ["dev-dependencies"]
+message = "{message}"
+'''
+            for package, message in (
+                ("atm-storage", "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency"),
+                ("atm-runtime-test-support", "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency"),
+                ("serde_yaml", "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency"),
+                ("tempfile", "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency"),
+            )
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".just").mkdir()
+            (repo_root / "Cargo.toml").write_text(
+                "[workspace]\nmembers = [\"crates/atm-http-runtime\"]\nresolver = \"2\"\n",
+                encoding="utf-8",
+            )
+            (repo_root / ".just/lint-config.toml").write_text(
+                "[boundaries]\ndoc_glob = \"docs/*/boundaries.md\"\ntoml_glob = \"boundaries/*/*.toml\"\n\n"
+                + section_rules,
+                encoding="utf-8",
+            )
+            runtime_dir = repo_root / "crates/atm-http-runtime"
+            runtime_dir.mkdir(parents=True)
+            (runtime_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "atm-http-runtime"
+version = "0.1.0"
+
+[dependencies]
+atm-storage = { path = "../atm-storage" }
+atm-runtime-test-support = { path = "../atm-runtime-test-support" }
+serde_yaml = "0.9"
+tempfile = "3"
+""",
+                encoding="utf-8",
+            )
+            self.write_scb_config_support(repo_root)
+            self.write_scb_retained_support(repo_root)
+            self.write_scb_workspace_support(repo_root)
+            self.write_scb_singleton_support(repo_root)
+            self.write_scb_observability_support(repo_root)
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            for message in (
+                "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency",
+                "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency",
+                "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency",
+                "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency",
+            ):
+                self.assertIn(f"crates/atm-http-runtime/Cargo.toml [dependencies]: {message}", rendered)
+
     def test_collect_boundary_violations_flags_forbidden_reference_outside_owner(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -1407,6 +1479,38 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
         self.assertTrue(declared)
         self.assertEqual(declared - set(IO_FORBIDDEN_SOURCE_PATTERNS), set())
         self.assertTrue(all(patterns for patterns in IO_FORBIDDEN_SOURCE_PATTERNS.values()))
+
+    def test_io_forbidden_source_pattern_keys_are_unique(self) -> None:
+        source = (JUST_DIR / "lint_boundaries.py").read_text(encoding="utf-8")
+        tree = ast.parse(source, filename="lint_boundaries.py")
+        assignment = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "IO_FORBIDDEN_SOURCE_PATTERNS"
+        )
+        self.assertIsInstance(assignment.value, ast.Dict)
+        keys = [key.value for key in assignment.value.keys if isinstance(key, ast.Constant)]
+        self.assertEqual(len(keys), len(set(keys)), "IO_FORBIDDEN_SOURCE_PATTERNS has duplicate keys")
+
+    def test_task_store_task_state_transition_tag_has_no_false_positive_on_real_repo(
+        self,
+    ) -> None:
+        """AX.3: BOUNDARY-TaskStore forbids task_state_transition; the sole
+        legitimate application site (writer/ops.rs, owned by
+        BOUNDARY-TaskStore-Sqlite) is not itself a TaskStore implementation,
+        so the pattern must not flag it or either DummyTaskStore/SqliteTaskStore
+        implementation file."""
+        records, parse_violations = parse_boundary_records(REPO_ROOT)
+        self.assertEqual(parse_violations, [])
+        rendered = [
+            violation.render()
+            for violation in collect_io_forbidden_source_violations(REPO_ROOT, records)
+        ]
+        self.assertFalse(
+            any("task_state_transition" in item for item in rendered), rendered
+        )
 
     def test_io_forbidden_mapping_catches_temporary_source_violation(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

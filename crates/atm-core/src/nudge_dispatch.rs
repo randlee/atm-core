@@ -10,26 +10,39 @@
 //! store reload helper this module wraps.
 
 use crate::boundary::{
-    BuiltInPostSendDispatch, MemberKey, MessageKey, NudgeKind, PostSendHookEvent,
+    BuiltInPostSendDispatch, MemberKey, Message, MessageKey, NudgeKind, PostSendHookEvent,
+    TaskTransition,
 };
 use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
-use crate::schema::AtmMessageId;
+use crate::schema::{AtmMessageId, authenticated_source_host};
 use crate::send::NudgeMode;
 use crate::send::hook::build_built_in_dispatch;
 use crate::service_runtime::LocalServiceRuntime;
+use atm_storage::TaskRow;
 
-/// Clears the exact durable queue marker after a successful handoff.
+const fn task_pass_transition(reminder_count: u32) -> TaskTransition {
+    if reminder_count == 0 {
+        TaskTransition::Ready
+    } else {
+        TaskTransition::Reminder {
+            attempt: reminder_count,
+        }
+    }
+}
+
+/// Re-arms the exact durable queue marker after a successful handoff.
 ///
 /// Marker cleanup is deliberately best-effort: the handoff has already
 /// succeeded, so cleanup must never turn that success into a failed delivery.
 /// A failed clear is logged and retried once. `record_failure` is invoked for
 /// each failed attempt so the composition layer can project the failure into
 /// its runtime-health counters without making core depend on that layer.
-pub fn clear_queue_marker_after_handoff(
+pub fn rearm_queue_marker_after_handoff(
     service_runtime: &LocalServiceRuntime,
     member: &MemberKey,
     message_id: &AtmMessageId,
+    next_due: atm_storage::types::IsoTimestamp,
     mut record_failure: impl FnMut(),
 ) {
     let store = match service_runtime.pending_nudge_store() {
@@ -47,7 +60,7 @@ pub fn clear_queue_marker_after_handoff(
             return;
         }
     };
-    if let Err(error) = store.clear_pending_on_handoff(member, message_id) {
+    if let Err(error) = store.rearm_pending_after_handoff(member, message_id, next_due) {
         record_failure();
         tracing::warn!(
             subsystem = "atm_core.queue",
@@ -57,7 +70,7 @@ pub fn clear_queue_marker_after_handoff(
             msg_id = %message_id,
             "queue delivery succeeded but pending marker clear failed; retrying"
         );
-        if let Err(retry_error) = store.clear_pending_on_handoff(member, message_id) {
+        if let Err(retry_error) = store.rearm_pending_after_handoff(member, message_id, next_due) {
             record_failure();
             tracing::warn!(
                 subsystem = "atm_core.queue",
@@ -71,39 +84,48 @@ pub fn clear_queue_marker_after_handoff(
     }
 }
 
-/// Rebuilds the receiver-hook dispatch for one already-persisted message.
+/// Loads one queued message for receiver-hook dispatch reconstruction.
+///
+/// Composition owns this durable read and must place it on the reader path
+/// before passing the returned message to [`rebuild_received_hook_dispatch`].
+pub fn load_received_hook_dispatch_message(
+    runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    message_id: AtmMessageId,
+) -> Result<Option<Message>, AtmError> {
+    let key = MessageKey::from(message_id);
+    Ok(runtime
+        .message_store
+        .load_message(&key)?
+        .filter(|message| &message.team == member.team() && &message.agent == member.agent()))
+}
+
+/// Rebuilds the receiver-hook dispatch for one already-loaded message.
 ///
 /// `kind` selects the rebuilt dispatch's [`NudgeKind`] (a queue claim always
 /// rebuilds `Queue`; a diagnostic replay may request `Steer`). Returns
-/// `Ok(None)` when the message does not exist, is not addressed to `member`,
-/// or resolves to no first-party delivery capability for the recipient —
-/// the same conditions under which the write-time planner omits a dispatch.
+/// `Ok(None)` when the loaded message resolves to no first-party delivery
+/// capability for the recipient — the same condition under which the
+/// write-time planner omits a dispatch.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] if the message store or roster lookups fail, or if
-/// the recipient is no longer present in the roster.
+/// Returns [`AtmError`] if the recipient is no longer present in the roster.
 pub fn rebuild_received_hook_dispatch(
     runtime: &LocalServiceRuntime,
     member: &MemberKey,
     message_id: AtmMessageId,
     kind: NudgeKind,
+    message: &Message,
 ) -> Result<Option<BuiltInPostSendDispatch>, AtmError> {
-    let key = MessageKey::from(message_id);
-    let Some(message) = runtime
-        .message_store
-        .load_message(&key)?
-        .filter(|message| &message.team == member.team() && &message.agent == member.agent())
-    else {
+    if &message.team != member.team() || &message.agent != member.agent() {
         return Ok(None);
-    };
-
+    }
     let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
         runtime,
         member.team(),
         member.agent(),
     )?;
-
     // Mapping mirrors `send::hook::post_send_event_from_message`
     // (write-time), adapted to the persisted `Message` shape returned by a
     // reload instead of the in-memory `LogicalMessage` retained across a
@@ -129,6 +151,7 @@ pub fn rebuild_received_hook_dispatch(
         requires_ack: message.envelope.requires_ack,
         is_ack: message.envelope.acknowledges_message_id.is_some(),
         task_id: message.envelope.task_id.clone(),
+        task_transition: None,
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };
 
@@ -137,11 +160,43 @@ pub fn rebuild_received_hook_dispatch(
         NudgeKind::Queue => NudgeMode::Deferred,
     };
 
-    Ok(build_built_in_dispatch(
+    build_built_in_dispatch(runtime, &delivery_snapshot, &event, nudge_mode)
+}
+
+/// Builds a deferred Task reminder without requiring the assignment message
+/// to remain in the mailbox. A missing assignment record only removes the
+/// optional source-host attribution; the durable task row remains sufficient
+/// to render the reminder body.
+pub fn build_task_reminder_dispatch(
+    runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    row: &TaskRow,
+) -> Result<Option<BuiltInPostSendDispatch>, AtmError> {
+    let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
         runtime,
-        &delivery_snapshot,
-        &event,
-        &message.envelope.text,
-        nudge_mode,
-    ))
+        member.team(),
+        member.agent(),
+    )?;
+    let sender_host = runtime
+        .message_store
+        .load_message(&MessageKey::from(row.assignment_message_id))?
+        .map(|message| authenticated_source_host(&message.envelope))
+        .transpose()?
+        .flatten();
+    let event = PostSendHookEvent {
+        sender: row.assigner.clone(),
+        sender_chat_id: None,
+        sender_team: row.team.clone(),
+        sender_host,
+        recipient: row.assignee.clone(),
+        recipient_team: row.team.clone(),
+        message_id: row.assignment_message_id,
+        description: row.description.clone(),
+        requires_ack: false,
+        is_ack: false,
+        task_id: Some(row.task_id.clone()),
+        task_transition: Some(task_pass_transition(row.reminder_count)),
+        recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
+    };
+    build_built_in_dispatch(runtime, &delivery_snapshot, &event, NudgeMode::Deferred)
 }

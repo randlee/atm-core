@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SMK-005>
+  a triage:Finding ;
+  triage:findingId "SMK-005" ;
+  triage:title "No nudge handoff/re-prompt is recorded in any observable diagnostic surface" ;
+  triage:description "fenix (ATM 01M2B4STTJ43RE7XY9WA1FRHM4, 2026-09-12T15:46:58Z), found while root-causing the SMK-004 'rogue' nudge investigation. Reconstructing why team-lead's nudge-test-2 receipt arrived >=1 min after all three test tasks closed required direct reads of mail_message_states + task_events (undocumented, internal tables) -- no nudge handoff or 60s re-prompt (TASK_REMINDER_INTERVAL_MS) is recorded anywhere in a supported diagnostic surface: `atm log filter` (jsonl) had only CLI command records for the window, `--source timeline` returned nothing after 11:25Z, and the launchd stderr log had stopped on 2026-09-07. A handoff record per emitted nudge (member, message_id, kind, attempt) in the diagnostic timeline would have answered this investigation in one query instead of a manual join across two internal tables. Minor; operator/diagnostic tooling gap, not a correctness defect." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T15:46:58Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2B6TBESXVSRCSZS2Q14PBFX, 2026-09-12T16:22:12Z): design landed for review, no dispatch yet -- PR #1432 (docs-only, develop) docs/plans/nudge-transition-templates/design.md proposes nudge_handoffs recording per emitted nudge (member, message_id, kind, attempt), directly closing this observability gap, alongside the six-task-kind TaskTransition model. Issue #1433 tracks it. This is SMK-005's resolution pointer; #1431 stays held pending Rand's approval of the design. fenix (ATM 01M2BFXF4PKA287Z7JGG71KFZF, 2026-09-12T19:01:11Z), Rand's ruling: #1432's design is merged (develop @ 1595424dc); #1431's hold reason is gone. dispatchReady already true. resolvesVia Phase BB sprint BB.6 (prompt_handoffs) -- BB.6 owns the nudge_handoffs recording that closes this observability gap. Status stays open; the BB.6 sprint QA closes this record once its fix is verified landed, not team-lead directly." ;
+  triage:relatedFinding "SMK-004" ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T15:46:58Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SMK-005/1> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/SMK-005/1>
+  a triage:Occurrence ;
+  triage:file "file_only" ;
+  triage:line 1 ;
+  triage:snippet "no handoff/re-prompt record (member, message_id, kind, attempt) in any supported diagnostic surface -- `atm log filter` jsonl had only CLI command records, `--source timeline` returned nothing after 11:25Z, launchd stderr log stopped 2026-09-07; investigation required direct reads of mail_message_states + task_events" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "281e6f546" ;
+  triage:occursIn <urn:atm:triage:worktree/SMK-005/1> .
+
+<urn:atm:triage:worktree/SMK-005/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "post-landing backlog: develop @ 281e6f546 (Phase BA merged)" ;
+  triage:branch "develop" ;
+  triage:headSha "281e6f546" ;
+  triage:orderIndex 12 .

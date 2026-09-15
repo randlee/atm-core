@@ -8,18 +8,21 @@
 //! message and roster contracts.
 
 mod analyst_query;
-mod control_path_pool;
+mod diagnostic_timeline;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
 mod mail_messages_schema;
 #[cfg(test)]
 mod mailbox_metadata;
+#[cfg(test)]
+mod mailbox_metadata_types;
 mod mailbox_reader;
 mod nudge_template_override_store;
 mod observability;
 mod peer_config_store;
 mod pending_nudge_store;
 mod reader_pool;
+pub mod roster_runtime;
 mod roster_store;
 mod schema_support;
 mod search_reader;
@@ -28,9 +31,18 @@ mod search_store;
 mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
+mod shared_db_support;
+mod sql_filters;
+mod task_ledger_reader;
+mod task_migration;
+mod task_sql;
+mod task_store;
 mod team_roster_schema;
 mod template_catalog_schema;
 mod template_catalog_store;
+mod template_override_migration;
+#[cfg(any(test, feature = "test-support"))]
+mod test_support;
 mod writer;
 
 pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};
@@ -43,23 +55,27 @@ pub use crate::analyst_query::{
 };
 #[cfg(test)]
 use crate::mailbox_metadata::query_mailbox_metadata_rows;
+#[cfg(test)]
+pub use crate::observability::NullSqliteObservability;
 pub use crate::observability::{
-    NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
-    SqliteObservabilityOutcome,
+    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
-    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMailboxReader,
-    AsyncMessageStore, GraftReceiverEndpointStore, MailboxBucketCounts, MailboxScope, Message,
-    MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource,
+    AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncMessageStore, AsyncTaskLedgerReader,
+    MailboxBucketCounts, MailboxScope, Message, MessageKey, MessageQuery, MessageStore,
+    PeerConfigStore, RosterStore,
 };
 use atm_storage::schema::MessageEnvelope;
-#[cfg(test)]
-use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TemplateCatalogStore};
+use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TaskStore, TemplateCatalogStore};
 use atm_storage::{
-    AtmError, EffectiveReaderLane, EffectiveReaderLanes, IsoTimestamp, StorageFactory,
+    AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
+};
+pub use diagnostic_timeline::{
+    DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
+    DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_PRUNE_CHECK_EVERY, SqliteDiagnosticTimeline,
 };
 use graft_receiver_endpoint_store::SqliteGraftReceiverEndpointStore;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -69,6 +85,13 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use template_catalog_store::template_catalog_store;
+#[cfg(any(test, feature = "test-support"))]
+pub use test_support::{
+    TemplateAdmissionMessage, TemplateAdmissionSnapshot, diagnostic_queue_batches_for_test,
+    inspect_mail_message_state_columns_for_test, inspect_message_ack_state_for_test,
+    inspect_pending_marker_state_for_test, inspect_template_admission_for_test,
+};
+pub use writer::DiagnosticTimelinePersistenceStats;
 
 #[cfg(any(test, feature = "test-support"))]
 #[derive(Debug)]
@@ -87,33 +110,6 @@ impl Drop for SqliteWriterLockGuard {
 #[cfg(any(test, feature = "test-support"))]
 pub struct TestOnlySqliteWriterLockGuard {
     _guard: SqliteWriterLockGuard,
-}
-
-/// Test-only projection of template-admission state.
-///
-/// Keeping this probe in SQLite test support lets the replacement HTTP runtime
-/// prove durable rows without importing SQLite or opening a database itself.
-#[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TemplateAdmissionSnapshot {
-    pub template_count: usize,
-    pub decomposed_count: usize,
-    pub messages: Vec<TemplateAdmissionMessage>,
-}
-
-/// One durable message projection returned by [`TemplateAdmissionSnapshot`].
-#[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TemplateAdmissionMessage {
-    pub message_key: String,
-    pub template_sha: Option<String>,
-    pub vars_json: Option<String>,
-    pub category: Option<String>,
-    pub content_format: Option<String>,
-    pub tags_json: String,
-    pub message_text: Option<String>,
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -137,73 +133,6 @@ pub fn hold_sqlite_writer_lock_for_test(
     path: impl AsRef<Path>,
 ) -> Result<TestOnlySqliteWriterLockGuard, AtmError> {
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
-}
-
-/// Reads only durable template-admission projections for black-box tests.
-///
-/// Production code must use the sealed storage contracts. This helper is
-/// test-support-only so the Tokio HTTP runtime never owns a database handle.
-#[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
-pub fn inspect_template_admission_for_test(
-    path: impl AsRef<Path>,
-    message_keys: &[String],
-) -> Result<TemplateAdmissionSnapshot, AtmError> {
-    let connection = Connection::open(path.as_ref()).map_err(|error| {
-        AtmError::mailbox_read(format!(
-            "failed to inspect template-admission fixture: {error}"
-        ))
-    })?;
-    let (template_count, decomposed_count): (i64, i64) = connection
-        .query_row(
-            "SELECT
-                (SELECT COUNT(*) FROM message_templates),
-                (SELECT COUNT(*) FROM decomposed_messages)",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|error| {
-            AtmError::mailbox_read(format!(
-                "failed to count template-admission fixture rows: {error}"
-            ))
-        })?;
-    let messages = message_keys
-        .iter()
-        .map(|message_key| {
-            connection
-                .query_row(
-                    "SELECT message_key, template_sha, vars_json, category, content_format,
-                            tags_json, message_text
-                     FROM mail_messages WHERE message_key = ?1",
-                    params![message_key],
-                    |row| {
-                        Ok(TemplateAdmissionMessage {
-                            message_key: row.get(0)?,
-                            template_sha: row.get(1)?,
-                            vars_json: row.get(2)?,
-                            category: row.get(3)?,
-                            content_format: row.get(4)?,
-                            tags_json: row.get(5)?,
-                            message_text: row.get(6)?,
-                        })
-                    },
-                )
-                .map_err(|error| {
-                    AtmError::mailbox_read(format!(
-                        "failed to inspect template-admission message '{message_key}': {error}"
-                    ))
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(TemplateAdmissionSnapshot {
-        template_count: usize::try_from(template_count).map_err(|_| {
-            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
-        })?,
-        decomposed_count: usize::try_from(decomposed_count).map_err(|_| {
-            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
-        })?,
-        messages,
-    })
 }
 
 /// Installs a test-only SQLite trigger that deterministically rejects mailbox
@@ -233,28 +162,7 @@ pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<
 }
 
 #[cfg(test)]
-#[allow(
-    dead_code,
-    reason = "metadata positive-path fields are owned by the query DTO while current tests exercise malformed-row validation"
-)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SqliteMailboxMetadataRow {
-    pub message_key: MessageKey,
-    pub message_id: Option<AtmMessageId>,
-    pub parent_message_id: Option<AtmMessageId>,
-    pub thread_mode: Option<ThreadMode>,
-    pub from_agent: AgentName,
-    pub source_chat_id: Option<atm_storage::types::ChatId>,
-    pub destination_chat_id: Option<atm_storage::types::ChatId>,
-    pub summary: Option<String>,
-    pub message_at: IsoTimestamp,
-    pub read: bool,
-    pub requires_ack: bool,
-    pub pending_ack: bool,
-    pub acknowledged_at: Option<IsoTimestamp>,
-    pub expires_at: Option<IsoTimestamp>,
-    pub task_id: Option<atm_storage::types::TaskId>,
-}
+pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 
 #[derive(Debug)]
 struct SqliteMessageStore {
@@ -273,6 +181,11 @@ struct SqliteNudgeTemplateOverrideStore {
 
 #[derive(Debug)]
 struct SqlitePendingNudgeStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
+struct SqliteTaskStore {
     db: Arc<SharedDb>,
 }
 
@@ -308,7 +221,7 @@ impl SqliteMessageStore {
     }
 
     fn load_message_state_row(
-        &self,
+        db: &SharedDb,
         connection: &Connection,
         team: &TeamName,
         agent: &AgentName,
@@ -330,10 +243,7 @@ impl SqliteMessageStore {
                 },
             )
             .optional()
-            .map_err(|error| {
-                self.db
-                    .error("failed to load sqlite message-state row", error)
-            })?
+            .map_err(|error| db.error("failed to load sqlite message-state row", error))?
             .map(|(read, pending_ack_at, acknowledged_at, expires_at)| {
                 Ok(StoredMailMessageState {
                     read: read != 0,
@@ -390,6 +300,15 @@ impl MessageStore for SqliteMessageStore {
         }).map(Some)
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        message: &Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        self.db
+            .submit_message_admission(message.clone(), provenance)
+    }
+
     fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
         self.db.submit_upsert_messages_atomically(messages.to_vec())
     }
@@ -403,13 +322,16 @@ impl MessageStore for SqliteMessageStore {
     }
 
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
-        let record = self.db.with_connection(|connection| {
+        let key = key.clone();
+        let query_key = key.clone();
+        let db = Arc::clone(&self.db);
+        let record = self.db.read(move |connection| {
             let loaded = connection
                 .query_row(
                     "SELECT team, agent, envelope_json
                      FROM mail_messages
                      WHERE message_key = ?1;",
-                    params![key.as_ref()],
+                    params![query_key.as_ref()],
                     |row| {
                         Ok((
                             row.get::<_, String>(0)?,
@@ -419,20 +341,21 @@ impl MessageStore for SqliteMessageStore {
                     },
                 )
                 .optional()
-                .map_err(|error| self.db.error("failed to load sqlite message", error))?;
+                .map_err(|error| db.error("failed to load sqlite message", error))?;
 
             if let Some((team, agent, envelope_json)) = loaded {
                 let team: TeamName = team.parse().map_err(|error| {
                     AtmError::validation(format!(
-                        "failed to parse sqlite team for message {key}: {error}"
+                        "failed to parse sqlite team for message {query_key}: {error}"
                     ))
                 })?;
                 let agent: AgentName = agent.parse().map_err(|error| {
                     AtmError::validation(format!(
-                        "failed to parse sqlite agent for message {key}: {error}"
+                        "failed to parse sqlite agent for message {query_key}: {error}"
                     ))
                 })?;
-                let state = self.load_message_state_row(connection, &team, &agent, key)?;
+                let state =
+                    Self::load_message_state_row(&db, connection, &team, &agent, &query_key)?;
                 Ok(Some((team, agent, envelope_json, state)))
             } else {
                 Ok(None)
@@ -454,7 +377,9 @@ impl MessageStore for SqliteMessageStore {
     }
 
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError> {
-        self.db.with_connection(|connection| {
+        let query = query.clone();
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let limit = query
                 .limit
                 // The shared contract accepts usize, but SQLite LIMIT is i64.
@@ -482,7 +407,7 @@ impl MessageStore for SqliteMessageStore {
                      ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC
                      LIMIT ?5;",
                 )
-                .map_err(|error| self.db.error("failed to prepare sqlite message list query", error))?;
+                .map_err(|error| db.error("failed to prepare sqlite message list query", error))?;
             let rows = statement
                 .query_map(
                     params![
@@ -494,12 +419,12 @@ impl MessageStore for SqliteMessageStore {
                     ],
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
                 )
-                .map_err(|error| self.db.error("failed to execute sqlite message list query", error))?;
+                .map_err(|error| db.error("failed to execute sqlite message list query", error))?;
 
             let mut messages = Vec::new();
             for row in rows {
                 let (message_key, envelope_json) =
-                    row.map_err(|error| self.db.error("failed to decode sqlite message row", error))?;
+                    row.map_err(|error| db.error("failed to decode sqlite message row", error))?;
                 let message_key = MessageKey::new(message_key).map_err(|error| {
                     AtmError::validation(format!(
                         "failed to parse sqlite message key during list: {error}"
@@ -507,7 +432,13 @@ impl MessageStore for SqliteMessageStore {
 
                 })?;
                 let state =
-                    self.load_message_state_row(connection, &query.team, &query.agent, &message_key)?;
+                    Self::load_message_state_row(
+                        &db,
+                        connection,
+                        &query.team,
+                        &query.agent,
+                        &message_key,
+                    )?;
                 let envelope: MessageEnvelope =
                     deserialize_json(&envelope_json, "sqlite message envelope")?;
                 let envelope = Self::apply_loaded_state(envelope, state.as_ref());
@@ -527,7 +458,10 @@ impl MessageStore for SqliteMessageStore {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<MailboxBucketCounts>, AtmError> {
-        self.db.with_connection(|connection| {
+        let team = team.clone();
+        let agent = agent.clone();
+        let db = Arc::clone(&self.db);
+        self.db.read(move |connection| {
             let sql = "WITH visible AS (
                     SELECT
                         mail_messages.message_id,
@@ -581,8 +515,7 @@ impl MessageStore for SqliteMessageStore {
                     Ok((row.get(0)?, row.get(1)?, row.get(2)?))
                 })
                 .map_err(|error| {
-                    self.db
-                        .error("failed to aggregate sqlite mailbox bucket counts", error)
+                    db.error("failed to aggregate sqlite mailbox bucket counts", error)
                 })?;
             Ok(Some(MailboxBucketCounts {
                 unread: usize::try_from(unread).map_err(|_| {
@@ -641,10 +574,20 @@ impl AsyncMessageStore for SqliteMessageStore {
         self.db.submit_upsert_message_async(message).await
     }
 
+    async fn admit_message_with_provenance_async(
+        &self,
+        message: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+        self.db
+            .submit_message_admission_async(message, provenance)
+            .await
+    }
+
     async fn admit_template_message_async(
         &self,
         admission: atm_storage::TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
         self.db
             .submit_template_message_admission_async(admission)
             .await
@@ -665,12 +608,15 @@ pub struct SqliteStorageBackend {
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     pending_nudge_store: Arc<SqlitePendingNudgeStore>,
+    task_store: Arc<SqliteTaskStore>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
     message_search_store: Arc<dyn MessageSearchStore>,
     async_message_search_store: Arc<dyn AsyncMessageSearchStore>,
     async_mailbox_reader: Arc<dyn AsyncMailboxReader>,
+    async_task_ledger_reader: Arc<dyn AsyncTaskLedgerReader>,
+    diagnostic_timeline: Arc<SqliteDiagnosticTimeline>,
 }
 
 impl std::fmt::Debug for SqliteStorageBackend {
@@ -683,10 +629,44 @@ impl std::fmt::Debug for SqliteStorageBackend {
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
 /// an executable composition root through [`StorageFactory`].
-#[derive(Debug, Clone, Default)]
 pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
-    reader_lanes: reader_pool::ReaderLanesConfig,
+    read_pool_config: reader_pool::SharedReadPoolConfig,
+    observability: Arc<dyn SqliteObservability>,
+    timeline_observer: Option<Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>>,
+}
+
+impl Default for SqliteStorageFactory {
+    fn default() -> Self {
+        Self {
+            database_path: None,
+            read_pool_config: reader_pool::SharedReadPoolConfig::default(),
+            observability: Arc::new(observability::PassiveSqliteObservability),
+            timeline_observer: None,
+        }
+    }
+}
+
+impl Clone for SqliteStorageFactory {
+    fn clone(&self) -> Self {
+        Self {
+            database_path: self.database_path.clone(),
+            read_pool_config: self.read_pool_config,
+            observability: Arc::clone(&self.observability),
+            timeline_observer: self.timeline_observer.as_ref().map(Arc::clone),
+        }
+    }
+}
+
+impl std::fmt::Debug for SqliteStorageFactory {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SqliteStorageFactory")
+            .field("database_path", &self.database_path)
+            .field("read_pool_config", &self.read_pool_config)
+            .field("timeline_observer", &self.timeline_observer.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl SqliteStorageFactory {
@@ -698,19 +678,36 @@ impl SqliteStorageFactory {
     pub fn at_path(path: impl Into<PathBuf>) -> Self {
         Self {
             database_path: Some(path.into()),
-            reader_lanes: reader_pool::ReaderLanesConfig::default(),
+            ..Self::default()
         }
+    }
+
+    /// Bootstrap supplies the retained JSONL adapter at the concrete storage
+    /// composition root. Tests retain the null adapter by default.
+    pub fn with_observability(mut self, observability: Arc<dyn SqliteObservability>) -> Self {
+        self.observability = observability;
+        self
+    }
+
+    /// Called after the backend opens so the bridge sink uses its existing
+    /// writer worker rather than creating a competing SQLite connection.
+    pub fn with_timeline_observer(
+        mut self,
+        observer: Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>,
+    ) -> Self {
+        self.timeline_observer = Some(observer);
+        self
     }
 
     #[allow(
         dead_code,
-        reason = "The composition root uses default ReaderLanesConfig until AV.1b exposes config-file parsing; this builder seam is intentionally testable now."
+        reason = "The composition root uses the default shared read-pool configuration until it is exposed through config-file parsing; this builder seam is intentionally testable now."
     )]
-    pub(crate) fn with_reader_lanes(
+    pub(crate) fn with_read_pool_config(
         mut self,
-        reader_lanes: reader_pool::ReaderLanesConfig,
+        read_pool_config: reader_pool::SharedReadPoolConfig,
     ) -> Self {
-        self.reader_lanes = reader_lanes;
+        self.read_pool_config = read_pool_config;
         self
     }
 
@@ -723,81 +720,107 @@ impl SqliteStorageFactory {
 
 impl StorageFactory for SqliteStorageFactory {
     fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
-        let effective_reader_lanes = EffectiveReaderLanes {
-            mailbox: EffectiveReaderLane {
-                pool_size: self.reader_lanes.mailbox.pool_size.get(),
-                queue_depth: self.reader_lanes.mailbox.queue_depth.get(),
-            },
-            search: EffectiveReaderLane {
-                pool_size: self.reader_lanes.search.pool_size.get(),
-                queue_depth: self.reader_lanes.search.queue_depth.get(),
-            },
+        let effective_reader_pool = EffectiveReaderPool {
+            pool_size: self.read_pool_config.pool.pool_size.get(),
+            queue_depth: self.read_pool_config.pool.queue_depth.get(),
+            tool_class_max_in_flight: self.read_pool_config.pool.tool_class_max_in_flight,
         };
-        let backend = SqliteStorageBackend::new_with_reader_lanes(
-            self.database_path(durable_state_root),
-            self.reader_lanes,
-        )?;
+        let backend = Arc::new(
+            SqliteStorageBackend::new_with_observability_and_read_pool_config(
+                self.database_path(durable_state_root),
+                Arc::clone(&self.observability),
+                self.read_pool_config,
+            )?,
+        );
+        if let Some(observer) = &self.timeline_observer {
+            observer(backend.diagnostic_timeline());
+        }
+        let metrics_backend = Arc::clone(&backend);
+        let reader_pool_metrics: Arc<dyn Fn() -> Option<EffectiveReaderPoolMetrics> + Send + Sync> =
+            Arc::new(move || {
+                let snapshot = metrics_backend.reader_lane_metrics();
+                snapshot
+                    .lane("shared")
+                    .map(|lane| EffectiveReaderPoolMetrics {
+                        queue_depth: lane.queue_depth,
+                        saturated: lane.saturated,
+                        in_flight: lane.in_flight,
+                        wait_nanos: lane.wait_nanos,
+                        execution_nanos: lane.execution_nanos,
+                        expired_in_queue: lane.expired_in_queue,
+                        interrupted_while_active: lane.interrupted_while_active,
+                        quarantined: lane.quarantined,
+                        current_quarantined_workers: lane.current_quarantined_workers,
+                        retired_replaced_workers: lane.retired_replaced_workers,
+                        quarantine_exhausted_rejections: lane.quarantine_exhausted_rejections,
+                        pool_size: lane.pool_size,
+                        last_checkpoint_succeeded: lane.last_checkpoint_succeeded,
+                        current_wal_frames: lane.current_wal_frames,
+                    })
+            });
+        // The write-through roster seam hydrates its RAM mirror here, fail
+        // closed: a durable roster read failure at startup aborts backend
+        // construction instead of silently starting with an incomplete RAM
+        // roster for the process lifetime.
+        let roster = roster_runtime::build_write_through_roster(backend.roster_store())?;
         Ok(StorageHandles::from_parts(StorageHandleParts {
             message_store: backend.message_store(),
             async_message_store: backend.async_message_store(),
             async_mailbox_reader: backend.async_mailbox_reader(),
-            roster_store: backend.roster_store(),
+            async_task_ledger_reader: backend.async_task_ledger_reader(),
+            roster,
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
+            task_store: backend.task_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
             message_search_store: backend.message_search_store(),
             async_message_search_store: backend.async_message_search_store(),
-            effective_reader_lanes: Some(effective_reader_lanes),
+            diagnostic_timeline: backend.diagnostic_timeline(),
+            effective_reader_pool: Some(effective_reader_pool),
+            reader_pool_metrics: Some(reader_pool_metrics),
         }))
     }
 }
 
 impl SqliteStorageBackend {
     pub fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
-        Self::new_with_observability(path, Arc::new(NullSqliteObservability))
-    }
-
-    pub(crate) fn new_with_reader_lanes(
-        path: impl AsRef<Path>,
-        reader_lanes: reader_pool::ReaderLanesConfig,
-    ) -> Result<Self, AtmError> {
-        Self::new_with_observability_and_reader_lanes(
-            path,
-            Arc::new(NullSqliteObservability),
-            reader_lanes,
-        )
+        Self::new_with_observability(path, Arc::new(observability::PassiveSqliteObservability))
     }
 
     pub fn new_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
-        Self::new_with_observability_and_reader_lanes(
+        Self::new_with_observability_and_read_pool_config(
             path,
             observability,
-            reader_pool::ReaderLanesConfig::default(),
+            reader_pool::SharedReadPoolConfig::default(),
         )
     }
 
-    fn new_with_observability_and_reader_lanes(
+    pub(crate) fn new_with_observability_and_read_pool_config(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
-        reader_lanes: reader_pool::ReaderLanesConfig,
+        read_pool_config: reader_pool::SharedReadPoolConfig,
     ) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_with_reader_lanes(
             path,
             observability,
-            reader_lanes,
+            read_pool_config,
         )?);
         Ok(Self {
+            diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
+                &db,
+            ))),
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -806,6 +829,7 @@ impl SqliteStorageBackend {
             message_search_store: search_store(Arc::clone(&db)),
             async_message_search_store: async_search_store(Arc::clone(&db)),
             async_mailbox_reader: db.mailbox_reader(),
+            async_task_ledger_reader: db.task_ledger_reader(),
         })
     }
 
@@ -813,12 +837,16 @@ impl SqliteStorageBackend {
     pub(crate) fn in_memory_for_test() -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_in_memory_for_test()?);
         Ok(Self {
+            diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
+                &db,
+            ))),
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
             nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
                 Arc::clone(&db),
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
+            task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -827,6 +855,7 @@ impl SqliteStorageBackend {
             message_search_store: search_store(Arc::clone(&db)),
             async_message_search_store: async_search_store(Arc::clone(&db)),
             async_mailbox_reader: db.mailbox_reader(),
+            async_task_ledger_reader: db.task_ledger_reader(),
         })
     }
 
@@ -840,6 +869,15 @@ impl SqliteStorageBackend {
 
     pub fn async_mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {
         self.async_mailbox_reader.clone()
+    }
+
+    pub fn async_task_ledger_reader(&self) -> Arc<dyn AsyncTaskLedgerReader + Send + Sync> {
+        self.async_task_ledger_reader.clone()
+    }
+
+    /// Best-effort diagnostic timeline sharing this backend's sole writer.
+    pub fn diagnostic_timeline(&self) -> Arc<SqliteDiagnosticTimeline> {
+        Arc::clone(&self.diagnostic_timeline)
     }
 
     pub fn save_message_record(
@@ -871,9 +909,13 @@ impl SqliteStorageBackend {
         self.pending_nudge_store.clone()
     }
 
+    pub fn task_store(&self) -> Arc<dyn TaskStore + Send + Sync> {
+        self.task_store.clone()
+    }
+
     pub fn graft_receiver_endpoint_store(
         &self,
-    ) -> Arc<dyn GraftReceiverEndpointStore + Send + Sync> {
+    ) -> Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync> {
         self.graft_receiver_endpoint_store.clone()
     }
 
@@ -969,26 +1011,30 @@ impl SqliteStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::{SqliteStorageBackend, SqliteStorageFactory};
-    use crate::reader_pool::ReaderLanesConfig;
+    use crate::reader_pool::SharedReadPoolConfig;
     use atm_storage::contract::{
-        AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, MailboxScope, Message,
-        MessageKey, MessageQuery, ReadDeadline, ReadLaneError, RosterHarness, RosterMember,
-        RosterMemberKind, RosterSnapshot,
+        AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, MailboxListQuery,
+        MailboxScope, Message, MessageKey, MessageQuery, ReadDeadline, ReadLaneError,
+        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
-        DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
-        SearchDeadline, SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
-        SearchMetadataMatch, SearchValue, SimpleAggregate, StorageFactory, TemplateFirstSeen,
-        TemplateFrontmatter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
+        DecomposedMessageRecord, InstanceTag, MemberKey, MergedVarsJson, MessageSearchQuery,
+        MessageWriteOrigin, MoveTarget, QueuePosition, SearchAckState, SearchAtom,
+        SearchCountGroupBy, SearchDeadline, SearchExpression, SearchFilters, SearchGroupBy,
+        SearchGroupField, SearchKey, SearchLimit, SearchMailboxSelection, SearchMetadataMatch,
+        SearchReadState, SearchValue, SimpleAggregate, StorageFactory, TaskCloseOutcome, TaskEvent,
+        TaskEventKind, TaskOp, TaskState, TemplateFirstSeen, TemplateFrontmatter,
+        TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
         TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
     use serde_json::Map;
-    use std::sync::Arc;
+    use std::sync::{Arc, Barrier, mpsc};
+    use std::time::Duration;
 
     type OrdinaryMessageColumns = (
         Option<String>,
@@ -1014,20 +1060,281 @@ mod tests {
         "test-agent".parse().expect("agent")
     }
 
+    fn seed_move_task(backend: &SqliteStorageBackend, task: &str, recipient: &str) {
+        let id = AtmMessageId::new();
+        let mut record = message(&format!("atm:{id}"), task);
+        record.agent = recipient.parse().expect("recipient");
+        record.envelope.message_id = Some(id);
+        record.envelope.from = "lead".parse().expect("lead");
+        record.envelope.task_id = Some(task.parse().expect("task"));
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("assign");
+    }
+
+    fn start_task(backend: &SqliteStorageBackend, task_id: &atm_storage::TaskId) {
+        let message_id = AtmMessageId::new();
+        let mut start = message(&format!("atm:{message_id}"), "start");
+        start.envelope.message_id = Some(message_id);
+        start.envelope.from = agent();
+        start.agent = "lead".parse().expect("assigner");
+        start.envelope.task_id = Some(task_id.clone());
+        start.envelope.task_op = Some(TaskOp::Start);
+        let admission = backend
+            .message_store()
+            .admit_message_with_provenance(&start, MessageWriteOrigin::Local)
+            .expect("start task");
+        assert_eq!(admission.task_assignee, Some(agent()));
+    }
+
+    fn move_task(
+        backend: &SqliteStorageBackend,
+        task: &str,
+        target: MoveTarget,
+    ) -> Result<QueuePosition, AtmError> {
+        match backend
+            .message_store
+            .db
+            .submit_writer_op(crate::writer::WriteOp::TaskMove {
+                team: team(),
+                task_id: task.parse().expect("task"),
+                actor: "lead".parse().expect("actor"),
+                target,
+                at: IsoTimestamp::now(),
+            })? {
+            crate::writer::WriteOpResult::TaskMoved((_, _, position)) => Ok(position),
+            _ => panic!("wrong writer result"),
+        }
+    }
+
+    fn task_positions(backend: &SqliteStorageBackend, member: &str) -> Vec<(String, u32)> {
+        let key = MemberKey::new(team(), member.parse().expect("member"));
+        let mut rows = backend
+            .task_store()
+            .open_tasks(&key)
+            .expect("open tasks")
+            .into_iter()
+            .map(|row| {
+                (
+                    row.task_id.to_string(),
+                    row.position.expect("position").get(),
+                )
+            })
+            .collect::<Vec<_>>();
+        rows.sort_by_key(|(_, position)| *position);
+        rows
+    }
+
     #[test]
-    fn reader_lane_configuration_is_threaded_through_storage_factory_and_validated() {
+    fn move_head_end_before_land_at_expected_positions() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        for task in ["T1", "T2", "T3"] {
+            seed_move_task(&backend, task, "test-agent");
+        }
+        start_task(&backend, &"T1".parse().unwrap());
+        assert_eq!(
+            move_task(&backend, "T3", MoveTarget::Head).unwrap().get(),
+            2
+        );
+        assert_eq!(move_task(&backend, "T3", MoveTarget::End).unwrap().get(), 3);
+        assert_eq!(
+            move_task(
+                &backend,
+                "T3",
+                MoveTarget::Before {
+                    task_id: "T2".parse().unwrap(),
+                },
+            )
+            .unwrap()
+            .get(),
+            2
+        );
+        assert_eq!(
+            task_positions(&backend, "test-agent"),
+            vec![("T1".into(), 1), ("T3".into(), 2), ("T2".into(), 3)]
+        );
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        for task in ["T1", "T2"] {
+            seed_move_task(&backend, task, "test-agent");
+        }
+        assert_eq!(
+            move_task(&backend, "T2", MoveTarget::Head).unwrap().get(),
+            1
+        );
+    }
+
+    #[test]
+    fn move_before_target_of_other_member_is_rejected() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        seed_move_task(&backend, "T1", "test-agent");
+        seed_move_task(&backend, "T2", "other-agent");
+        let error = move_task(
+            &backend,
+            "T1",
+            MoveTarget::Before {
+                task_id: "T2".parse().unwrap(),
+            },
+        )
+        .expect_err("foreign member target");
+        assert_eq!(error.code(), atm_storage::AtmErrorCode::TaskMoveInvalid);
+        assert!(error.message().contains("not an open queued task"));
+        let events = backend
+            .task_store()
+            .list_task_events(&team(), &"T1".parse().unwrap(), None)
+            .unwrap();
+        assert_eq!(events.last().unwrap().event, TaskEventKind::Rejected);
+    }
+
+    #[test]
+    fn move_of_active_task_is_a_noop_with_moved_event() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        seed_move_task(&backend, "T1", "test-agent");
+        let id = AtmMessageId::new();
+        let mut start = message(&format!("atm:{id}"), "start");
+        start.envelope.message_id = Some(id);
+        start.envelope.from = agent();
+        start.agent = "lead".parse().unwrap();
+        start.envelope.task_id = Some("T1".parse().unwrap());
+        start.envelope.task_op = Some(TaskOp::Start);
+        backend.message_store().save_message(&start).unwrap();
+        let before = task_positions(&backend, "test-agent");
+        assert_eq!(move_task(&backend, "T1", MoveTarget::End).unwrap().get(), 1);
+        assert_eq!(task_positions(&backend, "test-agent"), before);
+        let events = backend
+            .task_store()
+            .list_task_events(&team(), &"T1".parse().unwrap(), None)
+            .unwrap();
+        assert_eq!(events.last().unwrap().detail.as_deref(), Some("1→1"));
+    }
+
+    #[test]
+    fn renumber_swap_of_positions_one_and_two_never_violates_unique_index() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        for task in ["T1", "T2", "T3", "T4"] {
+            seed_move_task(&backend, task, "test-agent");
+        }
+        move_task(&backend, "T2", MoveTarget::Head).expect("swap positions one and two");
+        move_task(&backend, "T4", MoveTarget::Head).expect("move tail over queue");
+        assert_eq!(
+            task_positions(&backend, "test-agent"),
+            vec![
+                ("T4".into(), 1),
+                ("T2".into(), 2),
+                ("T1".into(), 3),
+                ("T3".into(), 4),
+            ]
+        );
+    }
+
+    #[test]
+    fn close_of_complete_row_delivers_mail_and_returns_already_closed() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        seed_move_task(&backend, "T1", "test-agent");
+
+        let task_id: atm_storage::TaskId = "T1".parse().expect("task id");
+        let mut first_close = message("atm:first-close", "completed");
+        first_close.envelope.from = "lead".parse().expect("lead");
+        first_close.envelope.task_id = Some(task_id.clone());
+        first_close.envelope.task_op = Some(TaskOp::Close {
+            outcome: TaskCloseOutcome::Completed,
+            reason: None,
+        });
+        let first_admission = backend
+            .message_store()
+            .admit_message_with_provenance(&first_close, MessageWriteOrigin::Local)
+            .expect("first close");
+        assert_eq!(first_admission.task_assignee, Some(agent()));
+
+        let move_error =
+            move_task(&backend, "T1", MoveTarget::End).expect_err("complete task cannot move");
+        assert_eq!(
+            move_error.code(),
+            atm_storage::AtmErrorCode::TaskAlreadyClosed
+        );
+
+        // Complete rows are intercepted by the writer before the state
+        // authority's deliberately unreachable complete-row Start arm.
+        let mut late_start = message("atm:late-start", "start");
+        late_start.envelope.from = agent();
+        late_start.agent = "lead".parse().expect("assigner");
+        late_start.envelope.task_id = Some(task_id.clone());
+        late_start.envelope.task_op = Some(TaskOp::Start);
+        let start_error = backend
+            .message_store()
+            .save_message(&late_start)
+            .expect_err("complete task cannot start");
+        assert_eq!(
+            start_error.code(),
+            atm_storage::AtmErrorCode::TaskAlreadyClosed
+        );
+        assert!(start_error.message().contains("no open task T1"));
+
+        let events_before = backend
+            .task_store()
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("events")
+            .len();
+
+        let mut report = message("atm:already-closed", "late refusal report");
+        report.envelope.from = "lead".parse().expect("lead");
+        report.envelope.task_id = Some(task_id.clone());
+        report.envelope.task_op = Some(TaskOp::Close {
+            outcome: TaskCloseOutcome::Refused,
+            reason: Some("too late".to_owned()),
+        });
+        let admission = backend
+            .message_store()
+            .admit_message_with_provenance(&report, MessageWriteOrigin::Local)
+            .expect("already-closed report is ordinary mail");
+
+        assert!(admission.existing.is_none());
+        assert_eq!(admission.already_closed, Some(TaskCloseOutcome::Completed));
+        assert_eq!(admission.task_assignee, None);
+        assert_eq!(
+            backend
+                .task_store()
+                .list_task_events(&team(), &task_id, Some(&agent()))
+                .expect("events")
+                .len(),
+            events_before
+        );
+        assert_eq!(
+            backend
+                .message_store()
+                .load_message(&report.message_key)
+                .expect("load report")
+                .expect("report")
+                .envelope
+                .task_id,
+            None
+        );
+        assert_eq!(
+            backend
+                .task_store()
+                .load_task(&team(), &task_id)
+                .expect("task row")
+                .expect("task")
+                .state,
+            TaskState::Complete(TaskCloseOutcome::Completed)
+        );
+    }
+
+    #[test]
+    fn shared_read_pool_configuration_is_threaded_through_storage_factory_and_validated() {
         let root = tempfile::tempdir().expect("temporary storage root");
-        let config = ReaderLanesConfig {
-            max_connections: std::num::NonZeroUsize::new(21).expect("non-zero maximum connections"),
-            ..ReaderLanesConfig::default()
+        let config = SharedReadPoolConfig {
+            max_connections: std::num::NonZeroUsize::new(17).expect("non-zero maximum connections"),
+            ..SharedReadPoolConfig::default()
         };
         let error = SqliteStorageFactory::at_path(root.path().join("mail.db"))
-            .with_reader_lanes(config)
+            .with_read_pool_config(config)
             .open(root.path())
-            .expect_err("over-budget reader lane configuration must fail startup");
+            .expect_err("over-budget shared read-pool configuration must fail startup");
         let message = error.message();
-        assert!(message.contains("mailbox_pool=4"));
-        assert!(message.contains("max_connections=21"));
+        assert!(message.contains("read_pool=8"));
+        assert!(message.contains("max_connections=17"));
     }
 
     #[tokio::test]
@@ -1056,15 +1363,11 @@ mod tests {
             .expect("bounded read");
         backend.checkpoint_wal().expect("checkpoint");
         let metrics = backend.reader_lane_metrics();
-        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
-        let search = metrics.lane("search").expect("search lane metrics");
-        assert_eq!(metrics.iter().count(), 2);
-        assert!(metrics.lane("doctor").is_none());
-        assert_eq!(mailbox.lane, "mailbox");
-        assert_eq!(search.lane, "search");
-        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(mailbox.current_wal_frames.is_some());
-        assert_eq!(search.last_checkpoint_succeeded, Some(true));
+        let shared = metrics.lane("shared").expect("shared pool metrics");
+        assert_eq!(metrics.iter().count(), 1);
+        assert_eq!(shared.lane, "shared");
+        assert_eq!(shared.last_checkpoint_succeeded, Some(true));
+        assert!(shared.current_wal_frames.is_some());
     }
 
     #[tokio::test]
@@ -1133,8 +1436,8 @@ mod tests {
                     .expect("progressing checkpoint");
                 let metrics = sampler_backend.reader_lane_metrics();
                 let frames = metrics
-                    .lane("mailbox")
-                    .expect("mailbox lane metrics")
+                    .lane("shared")
+                    .expect("shared read-pool metrics")
                     .current_wal_frames
                     .expect("checkpoint records mailbox WAL frames");
                 assert!(frames <= 512, "WAL frames stay bounded during load");
@@ -1148,13 +1451,10 @@ mod tests {
         let samples = checkpoint_task.await.expect("checkpoint sampler join");
         assert_eq!(samples.len(), 24, "sample every writer commit during load");
         let metrics = backend.reader_lane_metrics();
-        let mailbox = metrics.lane("mailbox").expect("mailbox lane metrics");
-        let search = metrics.lane("search").expect("search lane metrics");
-        assert_eq!(mailbox.current_quarantined_workers, 0);
-        assert_eq!(mailbox.last_checkpoint_succeeded, Some(true));
-        assert!(mailbox.current_wal_frames.is_some());
-        assert_eq!(search.last_checkpoint_succeeded, Some(true));
-        assert!(search.current_wal_frames.is_some());
+        let shared = metrics.lane("shared").expect("shared read-pool metrics");
+        assert_eq!(shared.current_quarantined_workers, 0);
+        assert_eq!(shared.last_checkpoint_succeeded, Some(true));
+        assert!(shared.current_wal_frames.is_some());
     }
 
     fn message(key: &str, text: &str) -> Message {
@@ -1182,8 +1482,39 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                placement: None,
+                task_op: None,
+                task_complete: None,
                 extra: Map::new(),
             },
+        }
+    }
+
+    struct TestReplyBuilder {
+        actor: AgentName,
+    }
+
+    impl AcknowledgementReplyBuilder for TestReplyBuilder {
+        fn build_reply(&self, source: &Message) -> Result<Message, atm_storage::AtmError> {
+            let source_id = source
+                .envelope
+                .message_id
+                .ok_or_else(|| atm_storage::AtmError::validation("test source has no id"))?;
+            let mut reply = source.clone();
+            let reply_id = AtmMessageId::new();
+            reply.message_key = MessageKey::new(format!("atm:{reply_id}"))?;
+            reply.envelope.message_id = Some(reply_id);
+            reply.envelope.from = self.actor.clone();
+            reply.envelope.text = "acknowledged".to_owned();
+            reply.envelope.read = false;
+            reply.envelope.requires_ack = false;
+            reply.envelope.pending_ack_at = None;
+            reply.envelope.acknowledged_at = None;
+            reply.envelope.acknowledges_message_id = Some(source_id);
+            reply.envelope.parent_message_id = Some(source_id);
+            reply.envelope.task_id = None;
+            reply.envelope.task_complete = None;
+            Ok(reply)
         }
     }
 
@@ -2236,6 +2567,21 @@ mod tests {
         assert_eq!(loaded.content_bytes, template.content_bytes);
         assert_eq!(loaded.content_text, template.content_text);
         assert_eq!(
+            catalog
+                .load_for_tool(&template.sha)
+                .expect("tool-capped load")
+                .expect("template exists")
+                .sha,
+            template.sha
+        );
+        assert_eq!(
+            catalog
+                .list_for_tool(TemplateListFilter::default())
+                .expect("tool-capped list")
+                .len(),
+            1
+        );
+        assert_eq!(
             loaded
                 .frontmatter
                 .template_tags
@@ -2538,6 +2884,7 @@ mod tests {
         let template = template_registration('b');
         let admission = TemplateMessageAdmission {
             record: message.clone(),
+            provenance: atm_storage::MessageWriteOrigin::Local,
             decomposition: DecomposedMessageAdmission {
                 template: template.clone(),
                 message: DecomposedMessageRecord {
@@ -2561,6 +2908,7 @@ mod tests {
                 .admit_template_message_async(admission.clone())
                 .await
                 .expect("first admission")
+                .existing
                 .is_none()
         );
         assert!(
@@ -2569,6 +2917,7 @@ mod tests {
                 .admit_template_message_async(admission)
                 .await
                 .expect("idempotent admission")
+                .existing
                 .is_some()
         );
         backend
@@ -2591,6 +2940,70 @@ mod tests {
                 Ok(())
             })
             .expect("stored decomposed row");
+    }
+
+    #[tokio::test]
+    async fn rejected_template_task_report_retains_ordinary_decomposition() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        seed_move_task(&backend, "T1", "test-agent");
+        let message_id = AtmMessageId::new();
+        let mut report = message(&format!("atm:{message_id}"), "rendered report");
+        report.envelope.message_id = Some(message_id);
+        report.envelope.from = "intruder".parse().expect("intruder");
+        report.envelope.task_id = Some("T1".parse().expect("task"));
+        report.envelope.task_op = Some(TaskOp::Close {
+            outcome: TaskCloseOutcome::Completed,
+            reason: Some("report".to_owned()),
+        });
+        let template = template_registration('c');
+        let outcome = backend
+            .async_message_store()
+            .admit_template_message_async(TemplateMessageAdmission {
+                record: report.clone(),
+                provenance: MessageWriteOrigin::Local,
+                decomposition: DecomposedMessageAdmission {
+                    template: template.clone(),
+                    message: DecomposedMessageRecord {
+                        key: report.message_key.clone(),
+                        template_sha: template.sha.clone(),
+                        vars: MergedVarsJson::from_merged_object(
+                            [("name".to_owned(), serde_json::json!("report"))]
+                                .into_iter()
+                                .collect(),
+                        ),
+                        category: Some("report".to_owned()),
+                        tags: instance_tags(&["phase-ba"]),
+                        content_format: Some("markdown".to_owned()),
+                        workflow: None,
+                    },
+                },
+            })
+            .await
+            .expect("rejected report admission commits");
+        assert!(outcome.task_rejection.is_some());
+        assert_eq!(outcome.task_assignee, None);
+
+        let retained = backend
+            .message_store()
+            .load_message(&report.message_key)
+            .expect("load retained report")
+            .expect("retained report");
+        assert_eq!(retained.envelope.task_id, None);
+        assert_eq!(retained.envelope.task_op, None);
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let template_sha: Option<String> = connection
+                    .query_row(
+                        "SELECT template_sha FROM mail_messages WHERE message_key = ?1",
+                        params![report.message_key.as_str()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert_eq!(template_sha.as_deref(), Some(template.sha.as_str()));
+                Ok(())
+            })
+            .expect("template decomposition retained");
     }
 
     #[test]
@@ -3048,6 +3461,338 @@ mod tests {
         assert_eq!(counts.history, 1);
     }
 
+    #[tokio::test]
+    async fn mailbox_reader_counts_buckets_without_materializing_messages() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut unread = message("atm:count-unread", "unread");
+        let mut pending = message("atm:count-pending", "pending");
+        let mut history = message("atm:count-history", "history");
+        pending.envelope.requires_ack = true;
+        pending.envelope.pending_ack_at = Some(IsoTimestamp::from_datetime(Utc::now()));
+        history.envelope.read = true;
+        for record in [&mut unread, &mut pending, &mut history] {
+            store.save_message(record).expect("save message");
+        }
+
+        let counts = backend
+            .async_mailbox_reader()
+            .count_messages(
+                MailboxScope::new(team(), agent()),
+                SearchFilters {
+                    team: Some(team()),
+                    agent: Some(agent()),
+                    ..SearchFilters::default()
+                },
+                Some(SearchCountGroupBy::Bucket),
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader count");
+
+        let count_for = |bucket| {
+            counts
+                .iter()
+                .find_map(|entry| match entry.key {
+                    Some(atm_storage::SearchCountKey::Bucket(found)) if found == bucket => {
+                        Some(entry.count)
+                    }
+                    _ => None,
+                })
+                .unwrap_or_default()
+        };
+        assert_eq!(
+            count_for(atm_storage::MailboxBucket::Unread),
+            1,
+            "the SQL aggregate reports unread independently"
+        );
+        assert_eq!(
+            count_for(atm_storage::MailboxBucket::PendingAck),
+            1,
+            "the SQL aggregate reports pending acknowledgements independently"
+        );
+        assert_eq!(
+            count_for(atm_storage::MailboxBucket::History),
+            1,
+            "the SQL aggregate reports history independently"
+        );
+
+        let listed = backend
+            .async_mailbox_reader()
+            .list_matching_messages(
+                MailboxScope::new(team(), agent()),
+                MailboxListQuery {
+                    filters: SearchFilters {
+                        team: Some(team()),
+                        agent: Some(agent()),
+                        current_only: true,
+                        mailbox_selection: Some(SearchMailboxSelection::All),
+                        ..SearchFilters::default()
+                    },
+                    limit: None,
+                },
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader list");
+        let mut listed_buckets = [0_usize; 3];
+        for message in listed {
+            let bucket = if message.envelope.pending_ack_at.is_some()
+                && message.envelope.acknowledged_at.is_none()
+            {
+                1
+            } else if message.envelope.read {
+                2
+            } else {
+                0
+            };
+            listed_buckets[bucket] += 1;
+        }
+        assert_eq!(
+            [
+                count_for(atm_storage::MailboxBucket::Unread),
+                count_for(atm_storage::MailboxBucket::PendingAck),
+                count_for(atm_storage::MailboxBucket::History),
+            ],
+            listed_buckets,
+            "grouped SQL buckets match the same criteria reader list"
+        );
+    }
+
+    #[tokio::test]
+    async fn criteria_count_honors_unread_pending_sender_and_tag_filters() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut unread = message("atm:criteria-unread", "unread");
+        unread.envelope.from = "unread-sender".parse().expect("sender");
+        let mut pending = message("atm:criteria-pending", "pending");
+        pending.envelope.from = "pending-sender".parse().expect("sender");
+        pending.envelope.requires_ack = true;
+        pending.envelope.pending_ack_at = Some(IsoTimestamp::from_datetime(Utc::now()));
+        let tagged = message("atm:criteria-tagged", "tagged");
+        for record in [&unread, &pending, &tagged] {
+            store.save_message(record).expect("save message");
+        }
+        let template = template_registration('e');
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: tagged.message_key.clone(),
+                    template_sha: template.sha,
+                    vars: MergedVarsJson::default(),
+                    category: None,
+                    tags: instance_tags(&["eq016"]),
+                    content_format: Some("markdown".to_owned()),
+                    workflow: None,
+                },
+            })
+            .expect("decompose tagged message");
+        let reader = backend.async_mailbox_reader();
+        let count = |filters| async {
+            reader
+                .count_messages(
+                    MailboxScope::new(team(), agent()),
+                    filters,
+                    None,
+                    ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+                )
+                .await
+                .expect("criteria count")[0]
+                .count
+        };
+        let base = || SearchFilters {
+            team: Some(team()),
+            agent: Some(agent()),
+            current_only: true,
+            ..SearchFilters::default()
+        };
+
+        let mut unread_filter = base();
+        unread_filter.read_state = Some(SearchReadState::Unread);
+        assert_eq!(count(unread_filter).await, 3, "unread count is SQL-owned");
+
+        let mut pending_filter = base();
+        pending_filter.from_agent = Some("pending-sender".parse().expect("sender"));
+        pending_filter.ack_state = Some(SearchAckState::Pending);
+        assert_eq!(
+            count(pending_filter).await,
+            1,
+            "pending-ack count respects the sender filter"
+        );
+
+        let mut tag_filter = base();
+        tag_filter.tags = vec!["eq016".to_owned()];
+        assert_eq!(
+            count(tag_filter).await,
+            1,
+            "tag count uses the SQL filter generator"
+        );
+    }
+
+    #[tokio::test]
+    async fn mailbox_reader_current_only_count_collapses_successors() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let source_id = AtmMessageId::new();
+        let reply_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "source");
+        let mut reply = message(&format!("atm:{reply_id}"), "reply");
+        source.envelope.message_id = Some(source_id);
+        reply.envelope.message_id = Some(reply_id);
+        reply.envelope.parent_message_id = Some(source_id);
+        store.save_message(&source).expect("save source");
+        store.save_message(&reply).expect("save reply");
+
+        let old = store
+            .mailbox_bucket_counts(&team(), &agent())
+            .expect("old aggregate")
+            .expect("sqlite aggregate");
+        let counts = backend
+            .async_mailbox_reader()
+            .count_messages(
+                MailboxScope::new(team(), agent()),
+                SearchFilters {
+                    team: Some(team()),
+                    agent: Some(agent()),
+                    current_only: true,
+                    ..SearchFilters::default()
+                },
+                Some(SearchCountGroupBy::Bucket),
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader count");
+
+        let count_for = |bucket| {
+            counts
+                .iter()
+                .find_map(|entry| match entry.key {
+                    Some(atm_storage::SearchCountKey::Bucket(found)) if found == bucket => {
+                        Some(entry.count)
+                    }
+                    _ => None,
+                })
+                .unwrap_or_default()
+        };
+        assert_eq!(count_for(atm_storage::MailboxBucket::Unread), old.unread);
+        assert_eq!(
+            count_for(atm_storage::MailboxBucket::PendingAck),
+            old.pending_ack
+        );
+        assert_eq!(count_for(atm_storage::MailboxBucket::History), old.history);
+    }
+
+    #[tokio::test]
+    async fn criteria_reader_preserves_envelope_state_when_no_state_row_exists() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let mut record = message("atm:envelope-state", "read in envelope");
+        record.envelope.read = true;
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("save message");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "DELETE FROM mail_message_states WHERE message_key = ?1",
+                        params![record.message_key.as_str()],
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                Ok(())
+            })
+            .expect("remove state row to model a legacy durable message");
+
+        let listed = backend
+            .async_mailbox_reader()
+            .list_matching_messages(
+                MailboxScope::new(team(), agent()),
+                MailboxListQuery {
+                    filters: SearchFilters {
+                        team: Some(team()),
+                        agent: Some(agent()),
+                        current_only: true,
+                        mailbox_selection: Some(SearchMailboxSelection::All),
+                        ..SearchFilters::default()
+                    },
+                    limit: Some(1),
+                },
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("criteria reader list");
+
+        assert!(
+            listed[0].envelope.read,
+            "a NULL state join retains envelope read=true"
+        );
+    }
+
+    #[tokio::test]
+    async fn criteria_reader_collapses_successors_before_limit() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let source_id = AtmMessageId::new();
+        let reply_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "superseded source");
+        let mut reply = message(&format!("atm:{reply_id}"), "terminal reply");
+        let mut independent = message("atm:independent", "independent terminal");
+        source.envelope.message_id = Some(source_id);
+        reply.envelope.message_id = Some(reply_id);
+        reply.envelope.parent_message_id = Some(source_id);
+        source.envelope.timestamp =
+            IsoTimestamp::from_datetime(Utc::now() + chrono::Duration::seconds(2));
+        reply.envelope.timestamp =
+            IsoTimestamp::from_datetime(Utc::now() + chrono::Duration::seconds(1));
+        independent.envelope.timestamp = IsoTimestamp::from_datetime(Utc::now());
+        for record in [&source, &reply, &independent] {
+            backend
+                .message_store()
+                .save_message(record)
+                .expect("save message");
+        }
+        let query = |limit| MailboxListQuery {
+            filters: SearchFilters {
+                team: Some(team()),
+                agent: Some(agent()),
+                current_only: true,
+                mailbox_selection: Some(SearchMailboxSelection::All),
+                ..SearchFilters::default()
+            },
+            limit: Some(limit),
+        };
+        let reader = backend.async_mailbox_reader();
+        let one = reader
+            .list_matching_messages(
+                MailboxScope::new(team(), agent()),
+                query(1),
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("page one");
+        let two = reader
+            .list_matching_messages(
+                MailboxScope::new(team(), agent()),
+                query(2),
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("page two");
+
+        assert_eq!(
+            one,
+            vec![reply.clone()],
+            "the superseded row cannot consume limit one"
+        );
+        assert_eq!(
+            two,
+            vec![reply, independent],
+            "limit two returns both terminal messages"
+        );
+    }
+
     #[test]
     fn sqlite_backend_saves_loads_lists_and_deletes_messages() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
@@ -3213,6 +3958,21 @@ mod tests {
         assert_eq!(listed.len(), 2);
         assert!(listed.contains(&first));
         assert!(listed.contains(&second));
+        let tool_listed = reader
+            .list_messages_for_tool(
+                scope.clone(),
+                MessageQuery {
+                    team: team(),
+                    agent: agent(),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                },
+                deadline,
+            )
+            .await
+            .expect("tool-class reader list");
+        assert_eq!(tool_listed, listed);
         assert_eq!(
             reader
                 .load_message(scope.clone(), first.message_key.clone(), deadline)
@@ -3421,6 +4181,599 @@ mod tests {
     }
 
     #[test]
+    fn task_messages_transition_locally_and_peer_receipts_do_not_create_rows() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3".parse().expect("task id");
+        let lead: AgentName = "lead".parse().expect("lead");
+        let member = MemberKey::new(team(), agent());
+
+        let assignment_id = AtmMessageId::new();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "first assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = lead.clone();
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        assignment.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store.save_message(&assignment).expect("assign task");
+
+        let assigned = tasks
+            .load_task(member.team(), &task_id)
+            .expect("load assigned task")
+            .expect("task row");
+        assert_eq!(assigned.state, TaskState::Assigned);
+        assert_eq!(assigned.assignment_message_id, assignment_id);
+
+        let resend_id = AtmMessageId::new();
+        let mut resend = message(&format!("atm:{resend_id}"), "refreshed assignment");
+        resend.envelope.message_id = Some(resend_id);
+        resend.envelope.from = lead.clone();
+        resend.envelope.task_id = Some(task_id.clone());
+        store.save_message(&resend).expect("resend task");
+        let refreshed = tasks
+            .load_task(member.team(), &task_id)
+            .expect("load refreshed task")
+            .expect("task row");
+        assert_eq!(refreshed.state, TaskState::Assigned);
+        assert_eq!(refreshed.assignment_message_id, resend_id);
+        assert_eq!(refreshed.description, "refreshed assignment");
+
+        let mut completion = message("atm:complete-task", "completed");
+        completion.envelope.from = lead;
+        completion.envelope.task_id = Some(task_id.clone());
+        completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
+        store
+            .save_message(&completion)
+            .expect("complete task as assigner");
+        let completed = tasks
+            .load_task(member.team(), &task_id)
+            .expect("load completed task")
+            .expect("task row");
+        assert_eq!(
+            completed.state,
+            TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+        );
+        assert!(
+            store
+                .load_message(&resend.message_key)
+                .expect("load refreshed assignment")
+                .expect("assignment")
+                .envelope
+                .acknowledged_at
+                .is_some()
+        );
+        let events = tasks
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("task events");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[1].event, TaskEventKind::Completed);
+
+        let peer_task: atm_storage::TaskId = "AX.3-peer".parse().expect("peer task");
+        let mut peer = message("atm:peer-task", "peer receipt");
+        peer.envelope.task_id = Some(peer_task.clone());
+        store
+            .admit_message_with_provenance(&peer, MessageWriteOrigin::Peer)
+            .expect("persist peer receipt");
+        assert!(
+            tasks
+                .load_task(member.team(), &peer_task)
+                .expect("load peer task")
+                .is_none()
+        );
+
+        let events = tasks
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("task events");
+        let replayed = events
+            .iter()
+            .filter_map(|event| match event.event {
+                TaskEventKind::Assigned => Some(TaskEvent::Assigned),
+                TaskEventKind::Completed => Some(TaskEvent::Completed(
+                    atm_storage::TaskCloseOutcome::Completed,
+                )),
+                TaskEventKind::Acked
+                | TaskEventKind::Started
+                | TaskEventKind::Refused
+                | TaskEventKind::Cancelled
+                | TaskEventKind::Reassigned
+                | TaskEventKind::Reopened
+                | TaskEventKind::Rejected
+                | TaskEventKind::Reminded
+                | TaskEventKind::LeadNotified
+                | TaskEventKind::Moved
+                | TaskEventKind::Migrated => None,
+            })
+            .try_fold(None, |state, event| {
+                let assignee = agent();
+                atm_storage::transition(
+                    state,
+                    event,
+                    &task_id,
+                    &assignee,
+                    state.map(|_| &assignee),
+                    &assignee,
+                )
+                .map(|transition| Some(transition.0))
+            })
+            .expect("task event replay");
+        assert_eq!(replayed, Some(completed.state), "AC5 event replay");
+    }
+
+    #[test]
+    fn ack_of_assignment_writes_no_task_event() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3-untouched".parse().expect("task id");
+        let assignment_id = AtmMessageId::new();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "task assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = "lead".parse().expect("assigner");
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        assignment.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store.save_message(&assignment).expect("save assignment");
+        let member = MemberKey::new(team(), agent());
+        let before = tasks
+            .load_task(member.team(), &task_id)
+            .expect("load task")
+            .expect("task row");
+        let before_events = tasks
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("load events");
+
+        store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: team(),
+                    agent: agent(),
+                    message_id: assignment_id,
+                },
+                Arc::new(TestReplyBuilder { actor: agent() }),
+            )
+            .expect("acknowledge assignment");
+
+        let after = tasks
+            .load_task(member.team(), &task_id)
+            .expect("load task after acknowledgement")
+            .expect("task row after acknowledgement");
+        assert_eq!(after, before);
+        assert_eq!(
+            tasks
+                .list_task_events(&team(), &task_id, Some(&agent()))
+                .expect("load events after acknowledgement"),
+            before_events
+        );
+    }
+
+    #[test]
+    fn close_of_active_row_keeps_original_acknowledged_at() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3-active-close".parse().expect("task id");
+        let assignment_id = AtmMessageId::new();
+        let acknowledged_at = IsoTimestamp::now();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "active assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = "lead".parse().expect("assigner");
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        assignment.envelope.acknowledged_at = Some(acknowledged_at);
+        store.save_message(&assignment).expect("save assignment");
+
+        start_task(&backend, &task_id);
+
+        let mut completion = message("atm:active-close", "completed");
+        completion.envelope.from = "lead".parse().expect("assigner");
+        completion.envelope.task_id = Some(task_id.clone());
+        completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
+        store
+            .save_message(&completion)
+            .expect("complete active task");
+
+        let member = MemberKey::new(team(), agent());
+        assert_eq!(
+            tasks
+                .load_task(member.team(), &task_id)
+                .expect("load completed task")
+                .expect("task row")
+                .state,
+            TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+        );
+        assert_eq!(
+            store
+                .load_message(&assignment.message_key)
+                .expect("load assignment")
+                .expect("assignment row")
+                .envelope
+                .acknowledged_at,
+            Some(acknowledged_at)
+        );
+    }
+
+    #[test]
+    fn close_of_never_acked_active_row_sets_acknowledged_at() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3-active-close-unacked".parse().expect("task id");
+        let assignment_id = AtmMessageId::new();
+        let mut assignment = message(&format!("atm:{assignment_id}"), "active assignment");
+        assignment.envelope.message_id = Some(assignment_id);
+        assignment.envelope.from = "lead".parse().expect("assigner");
+        assignment.envelope.task_id = Some(task_id.clone());
+        assignment.envelope.requires_ack = true;
+        store.save_message(&assignment).expect("save assignment");
+
+        start_task(&backend, &task_id);
+
+        let mut completion = message("atm:active-close-unacked", "completed");
+        completion.envelope.from = "lead".parse().expect("assigner");
+        completion.envelope.task_id = Some(task_id.clone());
+        completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
+        store
+            .save_message(&completion)
+            .expect("complete active task");
+
+        let member = MemberKey::new(team(), agent());
+        assert_eq!(
+            tasks
+                .load_task(member.team(), &task_id)
+                .expect("load completed task")
+                .expect("task row")
+                .state,
+            TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+        );
+        assert!(
+            store
+                .load_message(&assignment.message_key)
+                .expect("load assignment")
+                .expect("assignment row")
+                .envelope
+                .acknowledged_at
+                .is_some(),
+            "closing an active task acknowledges its assignment"
+        );
+    }
+
+    #[test]
+    fn ack_of_assignment_when_another_task_is_active_succeeds() {
+        struct ReplyBuilder {
+            actor: AgentName,
+        }
+
+        impl AcknowledgementReplyBuilder for ReplyBuilder {
+            fn build_reply(&self, source: &Message) -> Result<Message, atm_storage::AtmError> {
+                let source_id = source
+                    .envelope
+                    .message_id
+                    .ok_or_else(|| atm_storage::AtmError::validation("source has no id"))?;
+                let reply_id = AtmMessageId::new();
+                let mut reply = source.clone();
+                reply.message_key = MessageKey::new(format!("atm:{reply_id}"))?;
+                reply.envelope.message_id = Some(reply_id);
+                reply.envelope.from = self.actor.clone();
+                reply.envelope.text = "acknowledged".to_owned();
+                reply.envelope.read = false;
+                reply.envelope.requires_ack = false;
+                reply.envelope.pending_ack_at = None;
+                reply.envelope.acknowledged_at = None;
+                reply.envelope.acknowledges_message_id = Some(source_id);
+                reply.envelope.task_id = None;
+                reply.envelope.task_complete = None;
+                Ok(reply)
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let tasks = backend.task_store();
+        let lead: AgentName = "lead".parse().expect("lead");
+        let member = MemberKey::new(team(), agent());
+        let first_id: atm_storage::TaskId = "AX.3-first".parse().expect("first task");
+        let second_id: atm_storage::TaskId = "AX.3-second".parse().expect("second task");
+
+        let assignment = |task_id: &atm_storage::TaskId| {
+            let message_id = AtmMessageId::new();
+            let mut message = message(&format!("atm:{message_id}"), "task assignment");
+            message.envelope.message_id = Some(message_id);
+            message.envelope.from = lead.clone();
+            message.envelope.task_id = Some(task_id.clone());
+            message.envelope.requires_ack = true;
+            message.envelope.pending_ack_at = Some(IsoTimestamp::now());
+            message
+        };
+        let first = assignment(&first_id);
+        let second = assignment(&second_id);
+        store.save_message(&first).expect("first assignment");
+        store.save_message(&second).expect("second assignment");
+        start_task(&backend, &first_id);
+        let first_events_before_ack = tasks
+            .list_task_events(&team(), &first_id, Some(&agent()))
+            .expect("first events before acknowledgement");
+
+        let first_message_id = first.envelope.message_id.expect("first id");
+        store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: first.team.clone(),
+                    agent: first.agent.clone(),
+                    message_id: first_message_id,
+                },
+                Arc::new(ReplyBuilder { actor: agent() }),
+            )
+            .expect("first acknowledgement");
+        assert_eq!(
+            tasks
+                .load_task(member.team(), &first_id)
+                .expect("first task")
+                .expect("first row")
+                .state,
+            TaskState::Active
+        );
+        let first_events = tasks
+            .list_task_events(&team(), &first_id, Some(&agent()))
+            .expect("first events");
+        assert_eq!(first_events, first_events_before_ack);
+        assert_eq!(
+            first_events
+                .iter()
+                .map(|event| event.seq)
+                .collect::<Vec<_>>(),
+            (1..=first_events.len() as u64).collect::<Vec<_>>(),
+            "task event sequences are gapless per task key"
+        );
+
+        let second_message_id = second.envelope.message_id.expect("second id");
+        store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: second.team.clone(),
+                    agent: second.agent.clone(),
+                    message_id: second_message_id,
+                },
+                Arc::new(ReplyBuilder { actor: agent() }),
+            )
+            .expect("second acknowledgement succeeds while another task is active");
+        assert_eq!(
+            tasks
+                .load_task(member.team(), &second_id)
+                .expect("second task")
+                .expect("second row")
+                .state,
+            TaskState::Assigned
+        );
+        assert!(
+            store
+                .load_message(&second.message_key)
+                .expect("second source")
+                .expect("second source row")
+                .envelope
+                .pending_ack_at
+                .is_none(),
+            "the successful acknowledgement clears the source pending state"
+        );
+        let second_events = tasks
+            .list_task_events(&team(), &second_id, Some(&agent()))
+            .expect("second events");
+        assert_eq!(second_events.len(), 1);
+
+        let mut third_party_completion = message("atm:third-party-completion", "not allowed");
+        third_party_completion.envelope.from = "intruder".parse().expect("intruder");
+        third_party_completion.envelope.task_id = Some(second_id.clone());
+        third_party_completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
+        let third_party_error = store
+            .save_message(&third_party_completion)
+            .expect_err("G2 rejects a third-party completion");
+        assert!(third_party_error.message().contains(second_id.as_str()));
+        let retained_report = store
+            .load_message(&third_party_completion.message_key)
+            .expect("load rejected G2 completion")
+            .expect("G2 rejection retains the report as plain mail");
+        assert_eq!(retained_report.envelope.text, "not allowed");
+        assert_eq!(retained_report.envelope.task_id, None);
+        assert_eq!(retained_report.envelope.task_op, None);
+
+        let missing_id: atm_storage::TaskId = "AX.3-missing".parse().expect("task");
+        let mut unknown_completion = message("atm:unknown-completion", "not a task");
+        unknown_completion.envelope.from = "intruder".parse().expect("intruder");
+        unknown_completion.envelope.task_id = Some(missing_id.clone());
+        unknown_completion.envelope.task_op = Some(TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        });
+        store
+            .save_message(&unknown_completion)
+            .expect_err("unknown completion must be rejected");
+        assert!(
+            store
+                .load_message(&unknown_completion.message_key)
+                .expect("load rejected completion")
+                .is_none(),
+            "a rejected completion writes no message"
+        );
+        let missing_events = tasks
+            .list_task_events(&team(), &missing_id, Some(&agent()))
+            .expect("missing-task events");
+        assert_eq!(missing_events.len(), 1);
+        assert_eq!(missing_events[0].event, TaskEventKind::Rejected);
+
+        let fanout_id: atm_storage::TaskId = "AX.3-fanout".parse().expect("fanout task");
+        let mut first_fanout = assignment(&fanout_id);
+        first_fanout.message_key = MessageKey::new("atm:fanout-first").expect("first key");
+        let mut second_fanout = assignment(&fanout_id);
+        second_fanout.agent = "other-recipient".parse().expect("other recipient");
+        second_fanout.message_key = MessageKey::new("atm:fanout-second").expect("second key");
+        store
+            .save_message(&first_fanout)
+            .expect("first fanout task");
+        store
+            .save_message(&second_fanout)
+            .expect("second fanout task");
+        let fanout = tasks
+            .list_tasks(&team(), None)
+            .expect("fanout task rows")
+            .into_iter()
+            .filter(|row| row.task_id == fanout_id)
+            .collect::<Vec<_>>();
+        assert_eq!(fanout.len(), 1, "one task id retains one canonical row");
+        assert_eq!(fanout[0].assignee, second_fanout.agent);
+    }
+
+    #[test]
+    fn ack_with_no_task_row_succeeds() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let task_id: atm_storage::TaskId = "AX.3-missing-row".parse().expect("task id");
+        let message_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{message_id}"), "peer assignment");
+        source.envelope.message_id = Some(message_id);
+        source.envelope.task_id = Some(task_id.clone());
+        source.envelope.requires_ack = true;
+        source.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store
+            .admit_message_with_provenance(&source, MessageWriteOrigin::Peer)
+            .expect("save peer assignment");
+
+        store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: team(),
+                    agent: agent(),
+                    message_id,
+                },
+                Arc::new(TestReplyBuilder { actor: agent() }),
+            )
+            .expect("acknowledge peer assignment");
+
+        assert!(
+            backend
+                .task_store()
+                .load_task(&team(), &task_id)
+                .expect("load missing task row")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn historic_acked_event_rows_still_decode() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let task_id: atm_storage::TaskId = "AX.3-historic-acked".parse().expect("task id");
+        let at = IsoTimestamp::now().to_string();
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "INSERT INTO task_events
+                         (team, task_id, assignee, seq, at, event, from_state, to_state, actor,
+                          message_id, outcome, marker, detail)
+                         VALUES (?1, ?2, ?3, 1, ?4, 'acked', 'assigned', 'active', ?3,
+                                 NULL, NULL, NULL, NULL)",
+                        params![team().as_str(), task_id.as_str(), agent().as_str(), at],
+                    )
+                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                Ok(())
+            })
+            .expect("insert historic acked event");
+
+        let events = backend
+            .task_store()
+            .list_task_events(&team(), &task_id, Some(&agent()))
+            .expect("decode historic event");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event, TaskEventKind::Acked);
+    }
+
+    #[tokio::test]
+    async fn peer_task_receipts_are_noops_through_the_async_writer_lane() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let tasks = backend.task_store();
+        let task_id: atm_storage::TaskId = "AX.3-async-peer".parse().expect("task id");
+        let mut peer = message("atm:async-peer-task", "peer receipt");
+        peer.envelope.task_id = Some(task_id.clone());
+
+        backend
+            .async_message_store()
+            .admit_message_with_provenance_async(peer, MessageWriteOrigin::Peer)
+            .await
+            .expect("persist peer receipt");
+        assert!(
+            tasks
+                .load_task(&team(), &task_id)
+                .expect("load peer task")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn sqlite_acknowledgement_errors_explain_missing_and_non_pending_sources() {
+        struct UnusedReplyBuilder;
+
+        impl AcknowledgementReplyBuilder for UnusedReplyBuilder {
+            fn build_reply(&self, _source: &Message) -> Result<Message, atm_storage::AtmError> {
+                panic!("the builder must not run for rejected acknowledgement sources");
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let missing_id = AtmMessageId::new();
+        let source = AcknowledgementSource {
+            team: team(),
+            agent: agent(),
+            message_id: missing_id,
+        };
+        let missing = store
+            .acknowledge_message_atomically(&source, Arc::new(UnusedReplyBuilder))
+            .expect_err("unknown acknowledgement source");
+        assert!(missing.message().contains("was not found"));
+        assert!(missing.message().contains("not addressed to the caller"));
+        assert!(
+            !missing
+                .message()
+                .contains("Correct the invalid ATM request or state before retrying")
+        );
+
+        let not_pending_id = AtmMessageId::new();
+        let mut not_pending = message(&format!("atm:{not_pending_id}"), "already read");
+        not_pending.envelope.message_id = Some(not_pending_id);
+        store.save_message(&not_pending).expect("save source");
+        let source = AcknowledgementSource {
+            team: not_pending.team,
+            agent: not_pending.agent,
+            message_id: not_pending_id,
+        };
+        let not_pending = store
+            .acknowledge_message_atomically(&source, Arc::new(UnusedReplyBuilder))
+            .expect_err("non-pending acknowledgement source");
+        assert!(
+            not_pending
+                .message()
+                .contains("not pending acknowledgement")
+        );
+        assert!(
+            !not_pending
+                .message()
+                .contains("Correct the invalid ATM request or state before retrying")
+        );
+    }
+
+    #[test]
     fn sqlite_backend_saves_loads_and_lists_rosters() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.roster_store();
@@ -3444,6 +4797,100 @@ mod tests {
         let loaded = store.load_roster(&team).expect("load roster");
         assert_eq!(loaded.members.len(), 1);
         assert_eq!(store.list_teams().expect("list teams"), vec![team]);
+    }
+
+    fn unique_name_roster(team: &str, agent: &str, alias: Option<&str>) -> RosterSnapshot {
+        let team_name: TeamName = team.parse().expect("team");
+        let mut metadata_json = Map::new();
+        if let Some(alias) = alias {
+            metadata_json.insert("alias".to_string(), serde_json::json!(alias));
+        }
+        RosterSnapshot {
+            team_name: team_name.clone(),
+            members: vec![RosterMember {
+                team_name,
+                agent_name: agent.parse().expect("agent"),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: AgentType::Worker,
+                model: ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json,
+            }],
+            refreshed_at: None,
+        }
+    }
+
+    #[test]
+    fn roster_aliases_are_globally_unique_under_the_single_writer_lane() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.roster_store();
+        store
+            .save_roster(&unique_name_roster("team-a", "alpha", Some("shared-alias")))
+            .expect("first alias");
+        let duplicate = store
+            .save_roster(&unique_name_roster("team-b", "beta", Some("shared-alias")))
+            .expect_err("cross-team duplicate alias");
+        assert!(duplicate.message().contains("team-a"));
+        store
+            .save_roster(&unique_name_roster("team-b", "beta", Some("alpha")))
+            .expect("a canonical name is available once its owner has an alias");
+    }
+
+    fn run_concurrent_unique_name_writes(
+        left: RosterSnapshot,
+        right: RosterSnapshot,
+    ) -> [Result<(), AtmError>; 2] {
+        let concurrent_backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let concurrent_store = concurrent_backend.roster_store();
+        let barrier = Arc::new(Barrier::new(2));
+        let (sender, receiver) = mpsc::channel();
+        let left_store = Arc::clone(&concurrent_store);
+        let left_barrier = Arc::clone(&barrier);
+        let left_sender = sender.clone();
+        let left_handle = std::thread::spawn(move || {
+            left_barrier.wait();
+            left_sender
+                .send(left_store.save_roster(&left))
+                .expect("test receiver is alive");
+        });
+        let right_store = Arc::clone(&concurrent_store);
+        let right_sender = sender;
+        let right_handle = std::thread::spawn(move || {
+            barrier.wait();
+            right_sender
+                .send(right_store.save_roster(&right))
+                .expect("test receiver is alive");
+        });
+        let results = [
+            receiver
+                .recv_timeout(Duration::from_secs(1))
+                .expect("left or right writer completed before deadline"),
+            receiver
+                .recv_timeout(Duration::from_secs(1))
+                .expect("both writers completed before deadline"),
+        ];
+        left_handle.join().expect("left writer");
+        right_handle.join().expect("right writer");
+        results
+    }
+
+    #[test]
+    fn unique_name_a21_concurrent_canonical_adds_allow_exactly_one() {
+        let results = run_concurrent_unique_name_writes(
+            unique_name_roster("race-a", "alpha", None),
+            unique_name_roster("race-b", "alpha", None),
+        );
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    }
+
+    #[test]
+    fn unique_name_a22_concurrent_alias_and_canonical_adds_allow_exactly_one() {
+        let results = run_concurrent_unique_name_writes(
+            unique_name_roster("race-a", "robert", Some("alpha")),
+            unique_name_roster("race-b", "alpha", None),
+        );
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     }
 
     #[test]

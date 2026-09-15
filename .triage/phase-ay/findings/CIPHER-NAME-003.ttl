@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CIPHER-NAME-003>
+  a triage:Finding ;
+  triage:findingId "CIPHER-NAME-003" ;
+  triage:title "add-member rejects blank aliases instead of normalizing empty and whitespace aliases to no alias" ;
+  triage:description "Independent review of integrate/phase-ay at 10b044c0c. REQ-ROSTER-NAME-002 defines empty or whitespace-only alias as no alias, and matrix A-18 requires the same duplicate-name behavior as an omitted alias. parse_alias returns an add-member validation error for a blank value when allow_clear is false, while update-member uses the same input as a clear operation. The CLI add path therefore rejects input that the requirement says must normalize to None rather than behaving like an omitted alias." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-compliance" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/team_admin/member_mutation.rs; add-member CLI and request DTO parsing" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-07T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Confirmed fixed at phase-ay gate round 2 (PR #1308, integrate/phase-ay 0da9a26ec9f0493e5b2e6778ebf815efa8b78493). Independently re-verified by quality-mgr plus the round-2 reviewer set (req-qa, arch-qa, ruthless-boundary-qa) against live file:line evidence, not taken on a prior round's say-so." ;
+  triage:foundIn triage:AY14 ;
+  triage:foundAt "2026-09-07T20:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CIPHER-NAME-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CIPHER-NAME-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ;
+  triage:line 891 ;
+  triage:snippet "parse_alias returns add-member --alias must not be blank instead of normalizing empty or whitespace input to None (A-18)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:fixedAtHeadSha "0da9a26ec9f0493e5b2e6778ebf815efa8b78493" ;
+  triage:occursIn <urn:atm:triage:worktree/CIPHER-NAME-003-10b> .
+
+<urn:atm:triage:worktree/CIPHER-NAME-003-10b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "10b044c0cf49f1b2c1aebad9e7acdf5886083e9b" ;
+  triage:orderIndex 0 .

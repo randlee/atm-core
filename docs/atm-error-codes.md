@@ -164,6 +164,24 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_WAIT_TIMEOUT`
 - `ATM_ACK_INVALID_STATE`
 - `ATM_CLEAR_INVALID_STATE`
+- `ATM_ROSTER_NO_LEAD` — assign one lead: `atm teams update-member <team>
+  <member> --agent-type lead`
+- `ATM_ROSTER_MULTIPLE_LEADS` — keep one lead: `atm teams update-member <team>
+  <member> --agent-type <other type>`
+- `ATM_ROSTER_RESERVED_NAME` — rename the member: `atm-daemon is reserved for
+  daemon-originated messages`
+- `ATM_TASK_STALLED` — check the assignee or close the task: `atm task close
+  <task_id> completed --stdin`
+- `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to
+  its Herdr agent and answer the prompt`
+- `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` — Herdr exposes an unnamed agent;
+  run `herdr agent rename <pane_id> <target>` rather than only labelling its pane
+- `ATM_HERDR_AGENT_NOT_VISIBLE` — the configured Herdr target does not resolve;
+  inspect `atm doctor --json` and rename the Herdr agent or correct the roster alias
+- `ATM_HERDR_UNAVAILABLE` — the Herdr process breaker is open or the endpoint is
+  unavailable; retry after the reported breaker delay or start the Herdr server
+- `ATM_HERDR_PROMPT_FAILED` — Herdr rejected a nudge prompt; inspect the target
+  state and retry after correcting the reported condition
 
 ### 5.6 Observability
 
@@ -376,6 +394,21 @@ Error codes should describe the failure class, not a specific prose message.
       ```text
       Remount or move the ATM home to a writable filesystem, then retry the ATM command.
       ```
+
+### `atm doctor` team scope
+
+`atm doctor` resolves its roster scope using the following precedence:
+
+| Invocation | Scope |
+| --- | --- |
+| `--team <team>` | The explicitly named team; this overrides `ATM_TEAM`. |
+| `ATM_TEAM=<team>` | Only the ambient caller team when no `--team` is supplied. |
+| `--all-teams` | Every team in the canonical roster store. |
+| Neither a team nor `--all-teams` | Every canonical roster team, plus an informational finding explaining that no team was resolved. |
+
+`--team` and `--all-teams` are mutually exclusive and return an argument
+conflict (exit status 2). JSON reports identify the effective scope in
+`team_scope`; all-team reports contain one roster in `team_rosters` per team.
 
 ### 5.10 Runtime Families
 
@@ -599,6 +632,10 @@ Classification rules:
 | `TEMPLATE_TAG_RESERVED` | `operator_actionable` |
 | `ATM_WARNING_SQLITE_HEALTH_DEGRADED` | `warning_only` |
 | `ATM_WARNING_ROSTER_DRIFT` | `warning_only` |
+| `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` | `warning_only` |
+| `ATM_HERDR_AGENT_NOT_VISIBLE` | `operator_actionable` |
+| `ATM_HERDR_UNAVAILABLE` | `retryable` |
+| `ATM_HERDR_PROMPT_FAILED` | `retryable` |
 | `ATM_POST_SEND_PANE_MISSING` | `retryable` |
 | `ATM_POST_SEND_TMUX_SEND_FAILED` | `retryable` |
 | `ATM_POST_SEND_GRAFT_UNAVAILABLE` | `retryable` |

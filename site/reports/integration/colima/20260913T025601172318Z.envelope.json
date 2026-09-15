@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "report_type": "integration",
+  "generated_at": "2026-09-13T02:56:01.172523Z",
+  "host_label": "hermes-testbed",
+  "report_html": "integration/colima/20260913T025601172318Z/index.html",
+  "procedure": "colima-prompt-handoffs",
+  "status": "PASS",
+  "source_revision": "0b9b3e4f3bba57798783fa121b618680b2873a07"
+}

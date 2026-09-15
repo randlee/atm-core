@@ -370,8 +370,9 @@ Store-family rule:
 - task storage is currently out of scope; any future task storage line starts
   from canonical Claude-code schema rather than from preserved transition
   scaffolding
-- daemon-owned live `pid` state and other session-transient runtime data stay
-  outside `RosterStore`
+- canonical live state, `pid`, session, freshness, and revision stay in the
+  ephemeral half of the write-through RAM master-roster record exposed through
+  `RosterRuntimeMirror`; they never enter the durable `RosterStore`
 - `TeamConfig` / `config.json` stays a config-ingress document, not the durable
   roster contract or the daemon runtime team-discovery surface
 - `MailStore` must not become the catch-all owner for unrelated future domains
@@ -526,10 +527,10 @@ Approved canonical roster-member schema direction:
 - `recipient_pane_id` when known, only if the U.7 roster review keeps a
   runtime/routing field on canonical member rows
 
-`pid` is not part of the canonical roster-member schema. It is transient
-daemon-owned runtime state and must not be treated as a roster-member identity,
-harness field, or durable SQLite roster field in the U.7 canonical member
-model.
+`pid` is not part of the durable canonical roster-member schema. It is
+transient metadata on that member's ephemeral RAM master-roster record and must
+not be treated as a roster-member identity, harness field, policy input, or
+durable SQLite field in the U.7 canonical member model.
 
 Observability boundary note:
 - `AgentMember.extra` is intentionally out of scope for the L.4 observability

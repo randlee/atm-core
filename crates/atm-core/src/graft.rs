@@ -29,7 +29,7 @@ use crate::local_http::LocalCapability;
 use crate::protocol::OwnerGeneration;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
-use crate::service_runtime::RetainedServiceRuntime;
+use crate::service_runtime::{GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE, RetainedServiceRuntime};
 use crate::types::{AgentName, ChatId, TeamName};
 
 pub const MAX_GRAFT_POST_SEND_FRAME_BYTES: usize = 1024 * 1024;
@@ -48,8 +48,6 @@ pub struct GraftPostSendRequest {
     /// Canonical database-resolved `<atm …>` nudge text. The receiver must
     /// inject this text, never substitute the stored message description.
     pub rendered_nudge: String,
-    /// Immutable message content associated with `rendered_nudge`.
-    pub message_body: String,
 }
 
 const fn default_graft_kind() -> NudgeKind {
@@ -96,7 +94,6 @@ where
         recipient,
         recipient_team,
         rendered_nudge,
-        message_body,
     }) = &dispatch.target
     else {
         return Err(AtmError::validation(
@@ -104,7 +101,7 @@ where
         ));
     };
     if runtime
-        .load_roster_member(recipient_team, recipient)?
+        .load_roster_member(recipient_team, recipient)
         .is_none()
     {
         return Err(AtmError::new(
@@ -112,7 +109,12 @@ where
             "receiver endpoint is unavailable because the recipient is absent from the roster",
         ));
     };
-    let Some(lease) = runtime.graft_receiver_lease(recipient_team, recipient)? else {
+    let Some(lease) = runtime.graft_receiver_lease(
+        recipient_team,
+        recipient,
+        GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE,
+    )?
+    else {
         return Err(graft_receiver_not_registered_error(
             recipient_team,
             recipient,
@@ -125,7 +127,6 @@ where
             event: dispatch.event.clone(),
             kind: dispatch.kind,
             rendered_nudge: rendered_nudge.clone(),
-            message_body: message_body.clone(),
         },
         deadline,
     );
@@ -710,6 +711,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: None,
         }
     }
@@ -737,7 +739,6 @@ mod tests {
             event: test_event(),
             kind: NudgeKind::Steer,
             rendered_nudge: "<atm>test nudge</atm>".to_string(),
-            message_body: "full immutable body".to_string(),
         };
         let endpoint = listener.local_addr().expect("local addr");
         let capability = listener.capability().clone();
@@ -763,7 +764,6 @@ mod tests {
             .read_request(&mut stream, Duration::from_secs(3))
             .expect("read request");
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
-        assert_eq!(received.message_body, "full immutable body");
         assert_eq!(received.event.description, "loopback graft transport");
         assert_eq!(received.kind, NudgeKind::Steer);
         listener
@@ -781,8 +781,7 @@ mod tests {
             "capability_base64url": "capability",
             "request": {
                 "event": event,
-                "rendered_nudge": "<atm>legacy</atm>",
-                "message_body": "legacy body"
+                "rendered_nudge": "<atm>legacy</atm>"
             }
         });
         let decoded: GraftPostSendWireRequest =
@@ -796,7 +795,6 @@ mod tests {
             event: test_event(),
             kind: NudgeKind::Queue,
             rendered_nudge: "<atm>queued</atm>".to_owned(),
-            message_body: "queued body".to_owned(),
         };
         let wire = GraftPostSendWireRequest {
             capability_base64url: "capability".to_owned(),
@@ -828,7 +826,6 @@ mod tests {
                     event: test_event(),
                     kind: NudgeKind::Steer,
                     rendered_nudge: "<atm>test nudge</atm>".to_string(),
-                    message_body: "full immutable body".to_string(),
                 },
             };
             super::write_graft_post_send_message(&mut stream, &wire, "write", "oversized")
@@ -927,7 +924,6 @@ mod tests {
                 recipient: event.recipient.clone(),
                 recipient_team: event.recipient_team.clone(),
                 rendered_nudge: "<atm>test nudge</atm>".to_string(),
-                message_body: "full immutable body".to_string(),
             }),
             event,
             kind: NudgeKind::Steer,
@@ -991,6 +987,7 @@ mod tests {
             &self,
             _team: &TeamName,
             _agent: &AgentName,
+            _deadline: Duration,
         ) -> Result<Option<atm_storage::GraftReceiverLease>, AtmError> {
             Ok(self.lease.get())
         }
@@ -1045,19 +1042,12 @@ mod tests {
             Ok(())
         }
 
-        fn load_roster_member(
-            &self,
-            team: &TeamName,
-            agent: &AgentName,
-        ) -> Result<Option<RosterEntry>, AtmError> {
-            Ok(Some(roster_entry(team, agent)))
+        fn load_roster_member(&self, team: &TeamName, agent: &AgentName) -> Option<RosterEntry> {
+            Some(roster_entry(team, agent))
         }
 
-        fn load_team_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
-            Ok(vec![roster_entry(
-                team,
-                &AgentName::from_validated(TEST_QA),
-            )])
+        fn load_team_roster(&self, team: &TeamName) -> Vec<RosterEntry> {
+            vec![roster_entry(team, &AgentName::from_validated(TEST_QA))]
         }
     }
 
@@ -1104,6 +1094,56 @@ mod tests {
                 RequestDeadline::after(Duration::from_secs(3)),
             )
         })
+    }
+
+    fn deliver_through_listener_capturing_request(
+        runtime: &GraftLeaseTestRuntime,
+        listener: &GraftReceiverListener,
+    ) -> (Result<PostSendEmissionPath, AtmError>, GraftPostSendRequest) {
+        std::thread::scope(|scope| {
+            let receiver = scope.spawn(|| {
+                let mut stream = loop {
+                    if let Some(stream) = listener.poll_accept().expect("poll accept") {
+                        break stream;
+                    }
+                    std::thread::yield_now();
+                };
+                let request = listener
+                    .read_request(&mut stream, Duration::from_secs(3))
+                    .expect("read request");
+                listener
+                    .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+                    .expect("write response");
+                request
+            });
+            let outcome = deliver_published_receiver_hook(
+                runtime,
+                &dispatch_for(test_event()),
+                RequestDeadline::after(Duration::from_secs(3)),
+            );
+            (outcome, receiver.join().expect("receiver thread"))
+        })
+    }
+
+    #[test]
+    fn graft_emitter_serializes_only_event_kind_and_rendered_nudge() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_QA);
+        let listener = bind_listener(tempdir.path(), &team, &agent, None).expect("bind listener");
+        let runtime = GraftLeaseTestRuntime::with_lease(Some(lease_for(&listener)));
+
+        let (outcome, request) = deliver_through_listener_capturing_request(&runtime, &listener);
+        assert_eq!(
+            outcome.expect("graft emitter delivery"),
+            PostSendEmissionPath::GraftPort
+        );
+        let serialized = serde_json::to_value(&request).expect("serialize graft request");
+        let object = serialized.as_object().expect("request object");
+        let mut keys = object.keys().map(String::as_str).collect::<Vec<_>>();
+        keys.sort_unstable();
+        assert_eq!(keys, vec!["event", "kind", "rendered_nudge"]);
+        assert!(!serialized.to_string().contains("full immutable body"));
     }
 
     // AC1 (PR #1048): delivery through a registered lease succeeds via the

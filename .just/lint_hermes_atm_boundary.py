@@ -11,6 +11,7 @@ import sys
 import tomllib
 
 from lint_common import build_report, discover_repo_root, monotonic_now, print_report
+from check_version_sync import validate_workspace_version
 
 
 LINT_NAME = "hermes-atm-boundary"
@@ -66,8 +67,17 @@ def collect_violations(repo_root: Path) -> list[Violation]:
         violations.append(Violation(str(BOUNDARY_PATH), "forbidden references must cover rusqlite and reqwest"))
 
     dependencies = package.get("project", {}).get("dependencies", [])
-    if dependencies != ["atm-graft>=1.4,<1.5"]:
-        violations.append(Violation(str(PACKAGE_PATH), "dependencies must be exactly the public atm-graft 1.4.x contract"))
+    workspace_version = validate_workspace_version(repo_root)
+    major, minor = (int(part) for part in workspace_version.split(".")[:2])
+    expected_dependency = f"atm-graft>={major}.{minor},<{major}.{minor + 1}"
+    if dependencies != [expected_dependency]:
+        violations.append(
+            Violation(
+                str(PACKAGE_PATH),
+                f"dependencies must be exactly the public atm-graft {major}.{minor}.x contract "
+                f'("{expected_dependency}"), tracking the current workspace minor version',
+            )
+        )
     package_text = (repo_root / PACKAGE_PATH).read_text(encoding="utf-8").lower()
     for dependency in FORBIDDEN_DEPENDENCIES:
         if dependency in package_text:

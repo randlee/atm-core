@@ -1,8 +1,10 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::address::AgentAddress;
 use crate::boundary::{ConfigDoctorReport, MailStoreDoctorReport, RosterStoreDoctorReport};
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
@@ -10,6 +12,11 @@ use crate::peer_wire::PeerWireSecurity;
 use crate::protocol::{ReleaseVersion, RuntimeStatusSnapshot};
 use crate::team_admin::MembersList;
 use crate::types::{AgentName, TeamName};
+
+use super::{
+    HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay, HerdrEndpointObservation,
+    HerdrEndpointProvenance, HerdrMemberPresence, HerdrTransportKind,
+};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -216,6 +223,82 @@ pub struct PostSendDoctorReport {
     pub recipient_paths: Vec<RecipientDeliveryPathReport>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TeamEscalationRecipientsDoctorReport {
+    pub team: TeamName,
+    pub recipients: Vec<EscalationRecipientAddress>,
+    pub source: EscalationRecipientSource,
+}
+
+/// Validated escalation address with the doctor's established string wire shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct EscalationRecipientAddress(
+    #[serde(with = "escalation_recipient_address_serde")] AgentAddress,
+);
+
+impl From<AgentAddress> for EscalationRecipientAddress {
+    fn from(address: AgentAddress) -> Self {
+        Self(address)
+    }
+}
+
+impl FromStr for EscalationRecipientAddress {
+    type Err = crate::error::AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        AgentAddress::from_str(value).map(Self)
+    }
+}
+
+impl std::fmt::Display for EscalationRecipientAddress {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+mod escalation_recipient_address_serde {
+    use super::AgentAddress;
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::str::FromStr;
+
+    pub fn serialize<S: Serializer>(
+        address: &AgentAddress,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&address.to_string())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<AgentAddress, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        AgentAddress::from_str(&value).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EscalationRecipientSource {
+    DaemonDefault,
+    Team,
+}
+
+impl std::fmt::Display for EscalationRecipientSource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::DaemonDefault => "daemon default",
+            Self::Team => "team",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct EscalationRecipientsDoctorReport {
+    pub daemon: Vec<EscalationRecipientAddress>,
+    pub teams: Vec<TeamEscalationRecipientsDoctorReport>,
+}
+
 /// Safe projection of one registry-backed graft receiver lease.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftReceiverLeaseDoctorReport {
@@ -247,6 +330,10 @@ pub struct HerdrBreakerDoctorReport {
     pub retry_after_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consecutive_failures: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error_code: Option<AtmErrorCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error_detail: Option<String>,
 }
 
 impl Default for HerdrBreakerDoctorReport {
@@ -255,20 +342,9 @@ impl Default for HerdrBreakerDoctorReport {
             state: HerdrBreakerDoctorState::Closed,
             retry_after_ms: None,
             consecutive_failures: None,
+            last_error_code: None,
+            last_error_detail: None,
         }
-    }
-}
-
-pub trait HerdrBreakerDoctor: Send + Sync {
-    fn report(&self) -> HerdrBreakerDoctorReport;
-}
-
-#[derive(Debug, Default)]
-pub struct ClosedHerdrBreakerDoctor;
-
-impl HerdrBreakerDoctor for ClosedHerdrBreakerDoctor {
-    fn report(&self) -> HerdrBreakerDoctorReport {
-        HerdrBreakerDoctorReport::default()
     }
 }
 
@@ -280,19 +356,111 @@ pub struct HerdrQueuePumpDoctorReport {
     pub breaker: HerdrBreakerDoctorReport,
 }
 
-/// Effective capacity selected by the running daemon for one reader lane.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ReaderLaneDoctorReport {
-    pub pool_size: usize,
-    pub queue_depth: usize,
+/// The capability subset of a Herdr endpoint which is useful to an operator.
+/// Keeping this nested leaves the endpoint state solely responsible for health
+/// and its remedy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HerdrEndpointCapabilitiesDoctorReport {
+    #[serde(default)]
+    pub live_handoff: Option<bool>,
 }
 
-/// Effective mailbox and search reader-lane capacities supplied by the
-/// replacement runtime's live storage assembly.
+/// One privacy-safe endpoint result rendered by `atm doctor`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HerdrEndpointDoctorReport {
+    pub session: Option<crate::delivery_channel::HerdrSession>,
+    pub provenance: HerdrEndpointProvenance,
+    #[serde(default)]
+    pub transport: HerdrTransportKind,
+    pub endpoint: Option<HerdrEndpointDisplay>,
+    pub binary: Option<HerdrBinaryResolution>,
+    pub state: HerdrDoctorState,
+    pub remedy: String,
+    pub capabilities: HerdrEndpointCapabilitiesDoctorReport,
+    pub members: Vec<HerdrMemberPresence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub findings: Vec<DoctorFinding>,
+}
+
+impl From<HerdrEndpointObservation> for HerdrEndpointDoctorReport {
+    fn from(observation: HerdrEndpointObservation) -> Self {
+        let remedy = observation.state.remedy().to_owned();
+        Self {
+            session: observation.session,
+            provenance: observation.provenance,
+            transport: observation.transport,
+            endpoint: observation.endpoint,
+            binary: observation.binary,
+            state: observation.state,
+            remedy,
+            capabilities: HerdrEndpointCapabilitiesDoctorReport {
+                live_handoff: observation.live_handoff,
+            },
+            members: observation.members,
+            findings: observation.findings,
+        }
+    }
+}
+
+/// The complete Herdr surface in a doctor report. `configured` remains null
+/// only when the roster/configuration input was unavailable; a missing Herdr
+/// backend on an available roster is represented by `false`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HerdrDoctorReport {
+    pub configured: Option<bool>,
+    #[serde(default)]
+    pub endpoints: Vec<HerdrEndpointDoctorReport>,
+    #[serde(default)]
+    pub breaker: HerdrBreakerDoctorReport,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<DoctorFinding>,
+}
+
+/// Live metrics snapshot for the single shared reader pool, surfaced
+/// alongside its effective capacity.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ReaderPoolMetricsDoctorReport {
+    pub queue_depth: usize,
+    pub saturated: u64,
+    pub in_flight: usize,
+    pub wait_nanos: u64,
+    pub execution_nanos: u64,
+    pub expired_in_queue: u64,
+    pub interrupted_while_active: u64,
+    pub quarantined: u64,
+    pub current_quarantined_workers: usize,
+    pub retired_replaced_workers: u64,
+    pub quarantine_exhausted_rejections: u64,
+    pub pool_size: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_checkpoint_succeeded: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_wal_frames: Option<u64>,
+}
+
+/// Effective capacity and live metrics selected by the running daemon for
+/// the single shared reader pool (mailbox and search reads draw from the
+/// same pool, so this is one report, not two).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ReaderLanesDoctorReport {
-    pub mailbox: ReaderLaneDoctorReport,
-    pub search: ReaderLaneDoctorReport,
+pub struct ReaderPoolDoctorReport {
+    pub pool_size: usize,
+    pub queue_depth: usize,
+    pub tool_class_max_in_flight: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<ReaderPoolMetricsDoctorReport>,
+}
+
+/// A difference between a local rmux pane alias and durable roster metadata.
+///
+/// This is diagnostic-only. The configuration alias is never used to resolve
+/// an ATM recipient or identity, and it is never persisted outside the roster.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DoctorAliasMismatch {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub config_alias: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roster_alias: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -306,9 +474,22 @@ pub struct DoctorReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub daemon_context: Option<DoctorExecutionContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reader_lanes: Option<ReaderLanesDoctorReport>,
+    pub reader_lanes: Option<ReaderPoolDoctorReport>,
+    /// Effective doctor scope: `single` or `all_teams`.
+    #[serde(default)]
+    pub team_scope: String,
+    /// The authoritative scope decision consumed by runtime projections.
+    /// This is not serialized; `team_scope` remains the stable wire field.
+    #[serde(skip, default)]
+    pub resolved_team_scope: super::DoctorTeamScope,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
+    /// One roster block for every team when the effective scope is all teams.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub team_rosters: Vec<MembersList>,
+    /// Local rmux aliases that differ from the durable roster alias.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alias_mismatches: Vec<DoctorAliasMismatch>,
     #[serde(default)]
     pub graft_receivers: GraftReceiversDoctorReport,
     pub observability: AtmObservabilityHealth,
@@ -317,7 +498,11 @@ pub struct DoctorReport {
     #[serde(default)]
     pub herdr_queue_pump: HerdrQueuePumpDoctorReport,
     #[serde(default)]
+    pub herdr: HerdrDoctorReport,
+    #[serde(default)]
     pub post_send: PostSendDoctorReport,
+    #[serde(default)]
+    pub escalation_recipients: EscalationRecipientsDoctorReport,
     pub config: ConfigDoctorReport,
     pub mail_store: MailStoreDoctorReport,
     pub roster_store: RosterStoreDoctorReport,
@@ -339,8 +524,14 @@ impl DoctorReport {
 
 #[cfg(test)]
 mod tests {
-    use super::PeerWireSecurityStatus;
+    use super::{
+        EscalationRecipientAddress, EscalationRecipientSource, EscalationRecipientsDoctorReport,
+        HerdrEndpointCapabilitiesDoctorReport, PeerWireSecurityStatus,
+        TeamEscalationRecipientsDoctorReport,
+    };
     use crate::peer_wire::PeerWireSecurity;
+    use crate::test_support::TEST_TEAM;
+    use crate::types::TeamName;
 
     #[test]
     fn peer_wire_security_status_is_typed_and_preserves_public_json_values() {
@@ -353,5 +544,39 @@ mod tests {
                 .expect("diagnostic status serializes"),
             "\"plaintext-test\""
         );
+    }
+
+    #[test]
+    fn herdr_capability_serializes_unknown_as_explicit_null() {
+        let value = serde_json::to_value(HerdrEndpointCapabilitiesDoctorReport::default())
+            .expect("capability report serializes");
+
+        assert!(value.get("live_handoff").is_some());
+        assert!(value["live_handoff"].is_null());
+    }
+
+    #[test]
+    fn escalation_recipient_report_round_trips_address_strings() {
+        let report = EscalationRecipientsDoctorReport {
+            daemon: vec![format!("ops@{TEST_TEAM}").parse().expect("address")],
+            teams: vec![TeamEscalationRecipientsDoctorReport {
+                team: TeamName::from_validated("team-a"),
+                recipients: vec![
+                    "team-ops@team-a"
+                        .parse::<EscalationRecipientAddress>()
+                        .expect("address"),
+                ],
+                source: EscalationRecipientSource::Team,
+            }],
+        };
+
+        let wire = serde_json::to_vec(&report).expect("doctor report serializes");
+        let wire_value: serde_json::Value = serde_json::from_slice(&wire).expect("wire JSON");
+        assert_eq!(wire_value["daemon"][0], format!("ops@{TEST_TEAM}"));
+        assert_eq!(wire_value["teams"][0]["recipients"][0], "team-ops@team-a");
+        let decoded: EscalationRecipientsDoctorReport =
+            serde_json::from_slice(&wire).expect("doctor report deserializes");
+
+        assert_eq!(decoded, report);
     }
 }

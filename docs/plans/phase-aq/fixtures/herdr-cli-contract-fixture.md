@@ -48,8 +48,11 @@ Conventions:
 argv:
 
 ```text
-["herdr","agent","prompt","agent-a","You have unread ATM messages. Run: atm read"]
+["herdr","agent","prompt","agent-a","<rendered built-in nudge template>"]
 ```
+
+The fourth element is the rendered built-in nudge template supplied by
+atm-core; it is passed byte-for-byte, including embedded newlines.
 
 Request id: `cli:agent:prompt` (`src/cli/agent.rs:833`).
 
@@ -395,6 +398,20 @@ bound (5 s) rather than F2's per-member wait bound, since a doctor probe is
 a synchronous, bounded read like `prompt`, not a long-lived wait.
 
 ---
+
+## F6. Lead escalation notification (AX6)
+
+AX6 uses the public `HerdrProcessAdapter::notify` operation for lead and
+blocked-task escalation. The exact argv is:
+
+```text
+["herdr","notification","show","Task escalation","--body","task t-42 has been reminded 10 times","--sound","request"]
+```
+
+The title and body are each one argv element, including any newlines in the
+body. There is no pane target, session argument, tmux operation, or shell
+interpolation. A successful command exits `0`; a non-zero exit is a typed
+adapter failure and does not change the independent mail-write results.
 
 ## F4. Launch convention only (never emitted by the daemon)
 

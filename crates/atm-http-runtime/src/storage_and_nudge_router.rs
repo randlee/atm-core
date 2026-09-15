@@ -21,183 +21,29 @@ use atm_core::error::AtmError;
 use atm_core::graft_store_error;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
+use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
 use atm_core::protocol::{
     CompatibilityVerdict, GraftReceiverRegistration, GraftReceiverUnregistration, ReleaseVersion,
-    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope,
+    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope, TaskMoveOutcome,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
-use atm_core::send::{NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
+use atm_core::send::{
+    NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_preflight_async_runtime,
+};
 use atm_runtime::{AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext};
 
 use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
 use crate::RuntimeHealth;
 use crate::bare_cli_fifo::{BareCliFifo, BareCliQueueFullDrops, drain_bare_cli_messages};
+use crate::doctor_observability::{append_counter_finding, project_counter_health};
+use crate::router_support::{
+    ControlPathSyncBridge, DetachedReceivedHooks, WriteSourcePreflightBridge, append_warnings,
+    hook_warning, receiver_hook_deadline, retry_deferred_marker, validate_graft_receiver_member,
+    write_response,
+};
 
-fn retry_deferred_marker<F>(health: &RuntimeHealth, mut mark: F) -> Result<(), AtmError>
-where
-    F: FnMut() -> Result<(), AtmError>,
-{
-    match mark() {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            health.record_queue_marker_set_failure();
-            tracing::warn!(
-                subsystem = "atm_core.queue",
-                action = "queue_marker_set",
-                outcome = "failed",
-                %error,
-                "retrying deferred write queue marker"
-            );
-            match mark() {
-                Ok(()) => Ok(()),
-                Err(retry_error) => {
-                    health.record_queue_marker_set_failure();
-                    Err(retry_error)
-                }
-            }
-        }
-    }
-}
-
-/// Bounded bridge for synchronous core operations that are not storage-writer
-/// submissions.
-///
-/// Durable message admission uses the async storage boundary directly. The
-/// deferred queue marker is the one post-admission exception: its capability
-/// is intentionally synchronous, so the marker transaction enters this bridge
-/// before the request leaves the router.
-#[derive(Clone)]
-struct ControlPathSyncBridge {
-    permits: Arc<tokio::sync::Semaphore>,
-    runtime_health: RuntimeHealth,
-}
-
-impl ControlPathSyncBridge {
-    fn new(capacity: NonZeroUsize, runtime_health: RuntimeHealth) -> Self {
-        Self {
-            permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
-            runtime_health,
-        }
-    }
-
-    async fn run<T, F>(&self, deadline: RequestDeadline, job: F) -> Result<T, AtmError>
-    where
-        T: Send + 'static,
-        F: FnOnce() -> Result<T, AtmError> + Send + 'static,
-    {
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "request deadline expired before replacement blocking core operation",
-            )
-        })?;
-        let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
-            .await
-            .map_err(|_| {
-                AtmError::daemon_unavailable(
-                    "request deadline expired before replacement blocking core operation",
-                )
-            })?
-            .map_err(|_| {
-                AtmError::daemon_unavailable("replacement blocking core bridge is shutting down")
-            })?;
-        if deadline.expired() {
-            return Err(AtmError::daemon_unavailable(
-                "request deadline expired before replacement blocking core operation started",
-            ));
-        }
-        // The blocking job itself is intentionally not wrapped in a
-        // `tokio::time::timeout`: a durable storage write must run to
-        // completion rather than be abandoned mid-transaction. `elapsed` is
-        // therefore observability, not enforcement -- it records when a job
-        // outlived the budget it was dispatched with, without changing
-        // whether or how long the job runs.
-        let started_at = std::time::Instant::now();
-        let outcome = tokio::task::spawn_blocking(job).await.map_err(|source| {
-            AtmError::new(
-                atm_core::error::AtmErrorCode::InternalError,
-                "replacement storage write task ended unexpectedly",
-            )
-            .with_cause(source)
-        })?;
-        let elapsed = started_at.elapsed();
-        if elapsed > remaining {
-            self.runtime_health.record_blocking_core_bridge_stall();
-            tracing::warn!(
-                subsystem = "atm_http_runtime.blocking_core_bridge",
-                action = "blocking_job",
-                outcome = "budget_exceeded",
-                elapsed = ?elapsed,
-                budget = ?remaining,
-                "blocking core bridge job outlived its remaining request budget"
-            );
-        }
-        drop(permit);
-        outcome
-    }
-}
-
-/// Receiver-hook work that a peer response does not wait for.
-///
-/// A peer write is acknowledged as soon as the message is durably persisted,
-/// so its receiver hook (a tmux nudge, a graft handoff) cannot run on the
-/// response path without risking the caller's absolute request budget. The
-/// hook is therefore detached from the response but never unobserved: every
-/// warning it produces is logged with the originating request id and counted
-/// on `RuntimeHealth`, and daemon shutdown drains whatever is still in
-/// flight instead of abandoning it mid-emission.
-#[derive(Clone, Default)]
-struct DetachedReceivedHooks {
-    tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
-}
-
-impl DetachedReceivedHooks {
-    fn observe<F>(&self, runtime_health: RuntimeHealth, request_id: RequestId, hook: F)
-    where
-        F: Future<Output = Vec<WarningEntry>> + Send + 'static,
-    {
-        let task = tokio::spawn(async move {
-            for warning in hook.await {
-                runtime_health.record_detached_received_hook_warning();
-                tracing::warn!(
-                    subsystem = "atm_http_runtime.received_hook",
-                    action = "peer_received_hook",
-                    outcome = "warning",
-                    %request_id,
-                    code = ?warning.code,
-                    detail = %warning.message,
-                    "receiver hook reported a warning after the peer write was durably persisted"
-                );
-            }
-        });
-        let mut tasks = self.lock();
-        tasks.retain(|task| !task.is_finished());
-        tasks.push(task);
-    }
-
-    /// Awaits every in-flight detached hook, bounded by `deadline`.
-    ///
-    /// Tasks that outlive the bound stay detached: this drain must not delay
-    /// daemon shutdown past its own budget.
-    async fn drain(&self, deadline: std::time::Duration) {
-        let pending = std::mem::take(&mut *self.lock());
-        let _timed_out = tokio::time::timeout(deadline, async {
-            for task in pending {
-                let _joined = task.await;
-            }
-        })
-        .await;
-    }
-
-    /// The registry holds only `JoinHandle`s and nothing under this guard can
-    /// panic, so a poisoned lock would mean an unrelated invariant already
-    /// broke; surfacing it is correct.
-    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<tokio::task::JoinHandle<()>>> {
-        self.tasks
-            .lock()
-            .expect("detached received-hook registry is never held across a panic")
-    }
-}
+mod roster_ingress;
 
 /// The replacement implementation of the canonical write operation.
 ///
@@ -210,12 +56,14 @@ pub struct StorageAndNudgeRouter {
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
     control_path_sync_bridge: ControlPathSyncBridge,
+    write_source_preflight_bridge: WriteSourcePreflightBridge,
     async_mailbox_runtime: Option<Arc<dyn AsyncMailboxRuntime>>,
     doctor_projection: Option<Arc<dyn DoctorProjection>>,
     daemon_home: PathBuf,
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
+    diagnostic_counters: Option<Arc<dyn DiagnosticCountersSource>>,
     direct_peer_port: NonZeroU16,
     peer_connection_pool: Option<PeerConnectionPool>,
     shared_direct_peer_client: Option<reqwest::Client>,
@@ -227,6 +75,44 @@ pub struct StorageAndNudgeRouter {
 }
 
 impl StorageAndNudgeRouter {
+    pub(crate) fn dispatch(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.dispatch_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
+    }
+
+    pub(super) async fn list_messages(
+        &self,
+        query: ListQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        self.list_messages_impl(query, deadline).await
+    }
+
+    pub(super) async fn peek_messages(
+        &self,
+        query: PeekQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        self.peek_messages_impl(query, deadline).await
+    }
+
+    pub(super) async fn receive_messages(
+        &self,
+        query: ReadQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        self.receive_messages_impl(query, deadline).await
+    }
+
     #[must_use]
     pub fn new(
         service_runtime: LocalServiceRuntime,
@@ -243,12 +129,14 @@ impl StorageAndNudgeRouter {
                 NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
                 runtime_health.clone(),
             ),
+            write_source_preflight_bridge: WriteSourcePreflightBridge::new(runtime_health.clone()),
             async_mailbox_runtime: None,
             doctor_projection: None,
             daemon_home,
             runtime_health,
             doctor_ports: None,
             daemon_context: None,
+            diagnostic_counters: None,
             direct_peer_port: crate::direct_peer_port(),
             peer_connection_pool: None,
             shared_direct_peer_client: None,
@@ -294,9 +182,33 @@ impl StorageAndNudgeRouter {
         runtime_health: RuntimeHealth,
         doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     ) -> Self {
-        self.control_path_sync_bridge.runtime_health = runtime_health.clone();
+        self.control_path_sync_bridge = ControlPathSyncBridge::new(
+            NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
+            runtime_health.clone(),
+        );
+        self.write_source_preflight_bridge =
+            WriteSourcePreflightBridge::new(runtime_health.clone());
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
+        self
+    }
+
+    /// Installs the process-owned retained-diagnostic counter projection for
+    /// the doctor report. The runtime sees only the core snapshot contract.
+    #[must_use]
+    pub fn with_diagnostic_counters(mut self, counters: Arc<dyn DiagnosticCountersSource>) -> Self {
+        self.diagnostic_counters = Some(counters);
+        self
+    }
+
+    /// Installs the optional bootstrap diagnostic projection without forcing
+    /// focused runtime fixtures to construct a tracing bridge.
+    #[must_use]
+    pub fn with_diagnostic_counters_option(
+        mut self,
+        counters: Option<Arc<dyn DiagnosticCountersSource>>,
+    ) -> Self {
+        self.diagnostic_counters = counters;
         self
     }
 
@@ -377,16 +289,22 @@ impl StorageAndNudgeRouter {
         request: atm_core::send::WriteRequest,
         deadline: RequestDeadline,
     ) -> Result<CommittedWrite, AtmError> {
-        let mut prepared = prepare_write_with_async_runtime(
+        let source_preflight = self
+            .write_source_preflight_bridge
+            .preflight(deadline, self.service_runtime.clone(), request.clone())
+            .await?;
+        let mut prepared = prepare_write_with_preflight_async_runtime(
             request,
             self.observability.as_ref(),
             &self.service_runtime,
+            source_preflight,
         )
         .await?;
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
         let persisted_timestamp = prepared.persisted_timestamp();
+        let task_rejection = prepared.task_rejection();
         let received_hook_dispatches = if newly_persisted {
             prepared.build_received_hook_dispatches(&self.service_runtime)
         } else {
@@ -429,14 +347,15 @@ impl StorageAndNudgeRouter {
             persisted_timestamp,
             newly_persisted,
             received_hook_dispatches,
+            task_rejection,
         })
     }
 
-    /// Delivers one locally admitted host-qualified write using the daemon's
-    /// selected peer-wire mode. The record is already durable at this point;
-    /// this method creates neither a second application route nor delivery
-    /// recovery state. Per ADR-057, connection reuse can redial only before
-    /// exchange; it never retries a request after handing it to the sender.
+    /// Delivers a host-qualified write through the selected peer-wire mode.
+    ///
+    /// Cross-host writes are intentionally not admitted into the local mailbox:
+    /// without the durable outbox design, a failed peer exchange must leave no
+    /// misleading local echo or local nudge behind.
     async fn dispatch_resolved_peer_write(
         &self,
         request: &atm_core::send::WriteRequest,
@@ -444,9 +363,11 @@ impl StorageAndNudgeRouter {
         timestamp: atm_core::types::IsoTimestamp,
         deadline: RequestDeadline,
         _request_id: RequestId,
-    ) -> Result<(), AtmError> {
+    ) -> Result<WriteOutcome, AtmError> {
         let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
-            return Ok(());
+            return Err(AtmError::validation(
+                "cross-host delivery requires a host-qualified recipient",
+            ));
         };
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable(
@@ -474,13 +395,30 @@ impl StorageAndNudgeRouter {
                 )?,
             },
         };
-        let request = request.clone().with_origin_metadata(message_id, timestamp);
+        let request = request
+            .clone()
+            .with_origin_metadata(message_id, timestamp)
+            .with_peer_http_api_version();
         match client
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
             .await?
             .into_inner()
         {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+                tracing::info!(
+                    subsystem = "atm_core.peer",
+                    action = "peer_send",
+                    outcome = "delivered",
+                    peer_host = %host,
+                    message_id = %message_id,
+                    "host-qualified message delivered to peer"
+                );
+                Ok(WriteOutcome::Sent(outcome))
+            }
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                Ok(WriteOutcome::Acknowledged(outcome))
+            }
+            ResponseEnvelope::Error(error) => Err(error),
             response => Err(AtmError::new(
                 atm_core::error_codes::AtmErrorCode::InternalError,
                 "cross-host daemon-owned delivery returned a non-write response",
@@ -489,11 +427,43 @@ impl StorageAndNudgeRouter {
         }
     }
 
+    /// Routes a raw local host-qualified write before local admission.
+    ///
+    /// Prepared ACK replies are different: they acquire their recipient only
+    /// after commit and are handled by the post-commit branch in
+    /// `write_with_request_id`.
+    async fn dispatch_raw_host_qualified_local_write(
+        &self,
+        request: &atm_core::send::WriteRequest,
+        ingress: &AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Result<Option<WriteOutcome>, AtmError> {
+        if *ingress != AuthenticatedIngress::Local
+            || request
+                .to
+                .as_ref()
+                .and_then(|recipient| recipient.host())
+                .is_none()
+        {
+            return Ok(None);
+        }
+        let (message_id, timestamp) = atm_core::schema::AtmMessageId::new_with_timestamp();
+        self.dispatch_resolved_peer_write(request, message_id, timestamp, deadline, request_id)
+            .await
+            .map(Some)
+    }
+
     async fn emit_received_hook(
         &self,
         dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
         deadline: RequestDeadline,
     ) -> Vec<WarningEntry> {
+        let Some(deadline) = receiver_hook_deadline(deadline) else {
+            return vec![hook_warning(AtmError::daemon_unavailable(
+                "received-message hook was skipped to reserve the durable write response handoff",
+            ))];
+        };
         if deadline.expired() {
             return vec![hook_warning(AtmError::daemon_unavailable(
                 "received-message hook was skipped because the request deadline was exhausted after persistence",
@@ -514,10 +484,23 @@ impl StorageAndNudgeRouter {
                 )));
                 break;
             };
-            match tokio::time::timeout(remaining, emitter.emit_received_message(dispatch, deadline))
-                .await
+            match tokio::time::timeout(
+                remaining,
+                emitter.emit_received_message(dispatch.clone(), deadline),
+            )
+            .await
             {
-                Ok(Ok(_)) => {}
+                Ok(Ok(_)) => {
+                    crate::prompt_handoff_record::record_prompt_handoff(
+                        self.control_path_sync_bridge.blocking_bridge(),
+                        deadline,
+                        self.service_runtime.task_store(),
+                        &dispatch,
+                        atm_core::boundary::PromptTrigger::Steer,
+                        dispatch.event.message_id.timestamp(),
+                    )
+                    .await;
+                }
                 Ok(Err(error)) => warnings.push(hook_warning(error)),
                 Err(_) => warnings.push(hook_warning(AtmError::daemon_unavailable(
                     "received-message hook timed out after durable message persistence",
@@ -561,6 +544,7 @@ impl StorageAndNudgeRouter {
             ApiRequest::QueueGetNext(request) => {
                 self.queue_get_next(request, ingress, deadline).await
             }
+            ApiRequest::TaskMove(request) => self.task_move(request, ingress, deadline).await,
             ApiRequest::GraftReceiverRegister(request) => {
                 self.graft_receiver_register(request, ingress, deadline)
                     .await
@@ -579,62 +563,6 @@ impl StorageAndNudgeRouter {
             }
             ApiRequest::ReloadRuntimeView => self.reload_runtime_view(ingress),
         }
-    }
-
-    async fn list_messages(
-        &self,
-        query: ListQuery,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "async mailbox runtime was not installed at daemon startup",
-            )
-        })?;
-        let command = atm_core::list::prepare_async_list(&query)?;
-        runtime
-            .list_command(command, deadline)
-            .await
-            .map(ResponseEnvelope::List)
-            .map(ApiResponse::new)
-    }
-
-    async fn peek_messages(
-        &self,
-        query: PeekQuery,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "async mailbox runtime was not installed at daemon startup",
-            )
-        })?;
-        let command = atm_core::read::async_projection::prepare_async_peek(&query)?;
-        runtime
-            .peek_command(command, deadline)
-            .await
-            .map(Box::new)
-            .map(ResponseEnvelope::Peek)
-            .map(ApiResponse::new)
-    }
-
-    async fn receive_messages(
-        &self,
-        query: ReadQuery,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "async mailbox runtime was not installed at daemon startup",
-            )
-        })?;
-        let command = atm_core::read::async_projection::prepare_async_read(&query)?;
-        runtime
-            .read_command(command, deadline)
-            .await
-            .map(Box::new)
-            .map(ResponseEnvelope::Receive)
-            .map(ApiResponse::new)
     }
 
     async fn clear_messages(
@@ -658,6 +586,39 @@ impl StorageAndNudgeRouter {
             .await
     }
 
+    async fn task_move(
+        &self,
+        request: atm_core::protocol::TaskMoveRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if ingress != AuthenticatedIngress::Local {
+            return Err(AtmError::validation(
+                "task move is available only through authenticated local HTTP adapters",
+            ));
+        }
+        let runtime = self.service_runtime.clone();
+        self.control_path_sync_bridge
+            .run(deadline, move || {
+                let (assignee, from, to) = runtime.task_store()?.move_task(
+                    &request.caller_team,
+                    &request.task_id,
+                    &request.caller_identity,
+                    &request.target,
+                    atm_core::types::IsoTimestamp::now(),
+                )?;
+                Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
+                    TaskMoveOutcome {
+                        task_id: request.task_id,
+                        assignee,
+                        from,
+                        to,
+                    },
+                )))
+            })
+            .await
+    }
+
     async fn doctor(
         &self,
         query: DoctorQuery,
@@ -673,6 +634,10 @@ impl StorageAndNudgeRouter {
         let runtime_health = self.runtime_health.clone();
         let bare_cli_queue_full_drops = self.bare_cli_queue_full_drops.clone();
         let daemon_context = self.daemon_context.clone();
+        let diagnostic_counters = self.diagnostic_counters.as_deref().map_or_else(
+            DiagnosticCounters::default,
+            DiagnosticCountersSource::snapshot,
+        );
         let mut initial_runtime_status = runtime_health.snapshot();
         initial_runtime_status.bare_cli_queue_full_drops_total =
             bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
@@ -689,7 +654,12 @@ impl StorageAndNudgeRouter {
             .await?;
         let mut runtime_status = report.member_roster.as_ref().map_or_else(
             || runtime_health.snapshot(),
-            |roster| runtime_health.snapshot_with_roster(roster),
+            |roster| {
+                let observations = self
+                    .service_runtime
+                    .roster_runtime_observations(&roster.team);
+                runtime_health.snapshot_with_member_observations(&roster.team, &observations)
+            },
         );
         runtime_status.bare_cli_queue_full_drops_total =
             bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
@@ -700,6 +670,8 @@ impl StorageAndNudgeRouter {
             .expect("projection retains runtime status");
         report.herdr_queue_pump.last_tick_at = runtime_status.herdr_queue_last_tick_at;
         report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
+        project_counter_health(&mut report.observability, diagnostic_counters);
+        append_counter_finding(&mut report.findings, diagnostic_counters);
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
@@ -728,20 +700,57 @@ impl StorageAndNudgeRouter {
             ));
         }
         let runtime = self.service_runtime.clone();
-        let health = self.runtime_health.clone();
         let sink = self.member_state_transition_sink.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
-                validate_heartbeat_member(&runtime, &request.team, &request.member)?;
-                Ok(request)
+                let next_state = match request.activity {
+                    atm_core::protocol::HeartbeatActivity::ActiveToolUse => {
+                        atm_core::protocol::RuntimeMemberState::Active
+                    }
+                    atm_core::protocol::HeartbeatActivity::Idle => {
+                        atm_core::protocol::RuntimeMemberState::Idle
+                    }
+                    atm_core::protocol::HeartbeatActivity::SessionEnded => {
+                        atm_core::protocol::RuntimeMemberState::Offline
+                    }
+                };
+                let update = atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                    request.member.clone(),
+                    next_state,
+                    atm_core::protocol::RuntimeObservationSource::Heartbeat,
+                    request.observed_at,
+                    Some(atm_core::protocol::RosterRuntimeIdentity {
+                        pid: request.pid,
+                        session_id: request.session_id.clone(),
+                    }),
+                );
+                let outcome = runtime
+                    .apply_roster_runtime_observations(&request.team, &[update])
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| {
+                        AtmError::agent_not_found(request.member.as_str(), request.team.as_str())
+                    })?;
+                let transition = (outcome.state_changed
+                    && outcome.current.state == atm_core::protocol::RuntimeMemberState::Idle)
+                    .then_some(outcome.previous_state);
+                let response = atm_core::protocol::TeamMemberHeartbeatResponse {
+                    team: request.team.clone(),
+                    member: request.member.clone(),
+                    pid: request.pid,
+                    pid_changed: outcome.pid_changed,
+                    state: outcome.current.state,
+                    last_active_at: outcome.current.last_active_at,
+                    session_id: outcome.current.session_id,
+                };
+                Ok((response, transition))
             })
             .await
-            .map(|request| {
+            .map(|(response, transition)| {
                 let member = atm_core::boundary::MemberKey::new(
-                    request.team.clone(),
-                    request.member.clone(),
+                    response.team.clone(),
+                    response.member.clone(),
                 );
-                let (response, transition) = health.record_heartbeat(&request);
                 if let (Some(from), Some(sink)) = (transition, sink.as_ref()) {
                     sink.on_transition(&member, from, atm_core::protocol::RuntimeMemberState::Idle);
                 }
@@ -865,17 +874,20 @@ impl StorageAndNudgeRouter {
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         require_local_graft_ingress(ingress)?;
-        let runtime = self.service_runtime.clone();
-        let store = runtime.graft_receiver_endpoint_store()?;
-        self.control_path_sync_bridge
-            .run(deadline, move || {
-                validate_graft_receiver_member(&runtime, &team, &agent)?;
-                let lease = store.lookup(&team, &agent).map_err(graft_store_error)?;
-                Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverLookup(
-                    lease,
-                )))
-            })
+        validate_graft_receiver_member(&self.service_runtime, &team, &agent)?;
+        let remaining = deadline.remaining().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "request deadline expired before graft receiver lease lookup",
+            )
+        })?;
+        let store = self.service_runtime.graft_receiver_endpoint_store()?;
+        let lease = store
+            .lookup_with_deadline_async(&team, &agent, remaining)
             .await
+            .map_err(graft_store_error)?;
+        Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverLookup(
+            lease,
+        )))
     }
 
     fn reload_runtime_view(&self, ingress: AuthenticatedIngress) -> Result<ApiResponse, AtmError> {
@@ -884,7 +896,11 @@ impl StorageAndNudgeRouter {
                 "runtime reload is available only through authenticated local HTTP adapters",
             ));
         }
-        self.service_runtime.clear_roster_cache();
+        // Write-through already keeps the RAM roster mirror synchronized
+        // with every durable mutation; this re-hydration is not the
+        // synchronization mechanism, it only re-derives RAM from durable
+        // state for the rare case of an out-of-band durable change.
+        self.service_runtime.reload_roster_from_durable_store()?;
         Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
     }
 }
@@ -905,6 +921,7 @@ struct CommittedWrite {
     persisted_timestamp: atm_core::types::IsoTimestamp,
     newly_persisted: bool,
     received_hook_dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
+    task_rejection: Option<AtmError>,
 }
 
 impl atm_core::boundary::sealed::Sealed for StorageAndNudgeRouter {}
@@ -942,26 +959,39 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
+            if let Some(outcome) = self
+                .dispatch_raw_host_qualified_local_write(&request, &ingress, deadline, request_id)
+                .await?
+            {
+                return Ok(ApiResponse::new(write_response(outcome)));
+            }
             let mut committed = self.commit_write(request, deadline).await?;
-            if ingress == AuthenticatedIngress::Local
-                && committed.newly_persisted
+            // ACK replies may acquire their host-qualified recipient while the
+            // write is prepared.  These must be forwarded after their local
+            // durable record is created; raw host-qualified sends returned
+            // above and therefore never reach this post-commit path.
+            let is_remote_recipient = ingress == AuthenticatedIngress::Local
                 && committed
                     .canonical_request
                     .to
                     .as_ref()
                     .and_then(|recipient| recipient.host())
-                    .is_some()
-            {
-                self.dispatch_resolved_peer_write(
-                    &committed.canonical_request,
-                    committed.message_id,
-                    committed.persisted_timestamp,
-                    deadline,
-                    request_id,
-                )
-                .await?;
+                    .is_some();
+            if committed.newly_persisted && is_remote_recipient {
+                let _ = self
+                    .dispatch_resolved_peer_write(
+                        &committed.canonical_request,
+                        committed.message_id,
+                        committed.persisted_timestamp,
+                        deadline,
+                        request_id,
+                    )
+                    .await?;
             }
-            if committed.newly_persisted {
+            if committed.newly_persisted && !is_remote_recipient {
+                // A host-qualified local admission has already been handed to
+                // its peer above. Its receiver hook belongs to that peer's
+                // ingress, not to this sender's local roster.
                 let hook = self.clone();
                 let hook_task = async move {
                     hook.emit_received_hook(committed.received_hook_dispatches, deadline)
@@ -982,6 +1012,9 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     append_warnings(&mut committed.outcome, warnings);
                 }
             }
+            if let Some(error) = committed.task_rejection {
+                return Err(error);
+            }
             Ok(ApiResponse::new(write_response(committed.outcome)))
         })
     }
@@ -992,12 +1025,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        self.dispatch_with_request_id(
-            request,
-            ingress,
-            deadline,
-            atm_core::protocol::next_request_id(),
-        )
+        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
     }
 
     fn dispatch_with_request_id(
@@ -1019,7 +1047,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
     }
 }
 
-fn compatibility_verdict(
+pub(crate) fn compatibility_verdict(
     preflight: atm_core::protocol::CompatibilityPreflight,
 ) -> CompatibilityVerdict {
     let daemon_release = ReleaseVersion::current();
@@ -1046,18 +1074,18 @@ fn compatibility_verdict(
     }
 }
 
-fn validate_heartbeat_member(
+pub(crate) fn validate_heartbeat_member(
     runtime: &LocalServiceRuntime,
     team: &atm_core::types::TeamName,
     member: &atm_core::types::AgentName,
 ) -> Result<(), AtmError> {
-    if runtime.load_roster_member(team, member)?.is_none() {
+    if runtime.load_roster_member(team, member).is_none() {
         return Err(AtmError::agent_not_found(member.as_str(), team.as_str()));
     }
     Ok(())
 }
 
-fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Result<(), AtmError> {
+pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Result<(), AtmError> {
     if ingress != AuthenticatedIngress::Local {
         return Err(AtmError::validation(
             "graft receiver registration is available only through authenticated local HTTP adapters",
@@ -1066,71 +1094,40 @@ fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Result<(), AtmE
     Ok(())
 }
 
-fn validate_graft_receiver_member(
-    runtime: &LocalServiceRuntime,
-    team: &atm_core::types::TeamName,
-    agent: &atm_core::types::AgentName,
-) -> Result<(), AtmError> {
-    if runtime.load_roster_member(team, agent)?.is_none() {
-        return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
-    }
-    Ok(())
-}
-
-fn append_warnings(outcome: &mut WriteOutcome, warnings: Vec<WarningEntry>) {
-    match outcome {
-        WriteOutcome::Sent(outcome) => outcome.warnings.extend(warnings),
-        WriteOutcome::Acknowledged(outcome) => outcome.warnings.extend(warnings),
-    }
-}
-
-fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
-    match outcome {
-        WriteOutcome::Sent(outcome) => ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
-        WriteOutcome::Acknowledged(outcome) => {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-        }
-    }
-}
-
-fn hook_warning(error: AtmError) -> WarningEntry {
-    WarningEntry::with_code(
-        error.code(),
-        format!("message received successfully, but its receiver hook did not run: {error}"),
-        Some("inspect the receiver hook endpoint or harness, then continue normally"),
-    )
-}
-
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
     use std::path::{Path, PathBuf};
     use std::pin::Pin;
     use std::sync::Arc;
-    use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::{Condvar, Mutex};
     use std::time::Duration;
 
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeClaim,
-        NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath,
-        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+        PromptHandoff, PromptTrigger, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
+    use atm_core::observability_counters::{
+        DiagnosticCounters, DiagnosticCountersSource, RetainedObservabilityHealth,
+    };
     use atm_core::protocol::{
         GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
         QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
-        RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+        RuntimeReadinessState, SendResponseEnvelope, TaskMoveRequest, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
     };
-    use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
+    use atm_core::test_support as atm_storage;
+    use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime::{
         DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig,
@@ -1141,15 +1138,17 @@ mod tests {
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
+    use atm_storage::testing::DummyPendingNudgeStore;
     use atm_storage::{
-        MessageKey, MessageQuery, MessageStore, RosterSnapshot, RosterStore as StorageRosterStore,
-        TemplateFrontmatter, TemplateSha,
+        AsyncTaskLedgerReader, MessageKey, MessageQuery, MessageStore, MoveTarget, RosterSnapshot,
+        RosterStore as StorageRosterStore, TaskStore, TemplateFrontmatter, TemplateSha,
     };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
     use axum::http::{Request, StatusCode};
     use tempfile::TempDir;
     use tower::ServiceExt;
+    use tracing_subscriber::prelude::*;
 
     use super::{ControlPathSyncBridge, StorageAndNudgeRouter, retry_deferred_marker};
     use crate::{
@@ -1172,6 +1171,96 @@ mod tests {
         saw_durable_record: AtomicBool,
         failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
+    }
+
+    struct CounterFixture(DiagnosticCounters);
+
+    #[derive(Clone, Default)]
+    struct PromptHandoffErrorLayer {
+        events: Arc<Mutex<Vec<PromptHandoffErrorEvent>>>,
+    }
+
+    struct PromptHandoffErrorEvent {
+        subsystem: String,
+        action: String,
+        outcome: String,
+        reason: String,
+        message_id: String,
+        kind: String,
+        trigger: String,
+        error_code: String,
+        error: String,
+    }
+
+    #[derive(Default)]
+    struct PromptHandoffErrorFields {
+        subsystem: String,
+        action: String,
+        outcome: String,
+        reason: String,
+        message_id: String,
+        kind: String,
+        trigger: String,
+        error_code: String,
+        error: String,
+    }
+
+    impl tracing::field::Visit for PromptHandoffErrorFields {
+        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+            match field.name() {
+                "subsystem" => self.subsystem = value.to_owned(),
+                "action" => self.action = value.to_owned(),
+                "outcome" => self.outcome = value.to_owned(),
+                "reason" => self.reason = value.to_owned(),
+                "message_id" => self.message_id = value.to_owned(),
+                "kind" => self.kind = value.to_owned(),
+                "trigger" => self.trigger = value.to_owned(),
+                "error_code" => self.error_code = value.to_owned(),
+                "error" => self.error = value.to_owned(),
+                _ => {}
+            }
+        }
+
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            self.record_str(field, format!("{value:?}").trim_matches('"'));
+        }
+    }
+
+    impl<S> tracing_subscriber::Layer<S> for PromptHandoffErrorLayer
+    where
+        S: tracing::Subscriber,
+    {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _context: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() != tracing::Level::ERROR {
+                return;
+            }
+            let mut fields = PromptHandoffErrorFields::default();
+            event.record(&mut fields);
+            self.events
+                .lock()
+                .expect("handoff error events")
+                .push(PromptHandoffErrorEvent {
+                    subsystem: fields.subsystem,
+                    action: fields.action,
+                    outcome: fields.outcome,
+                    reason: fields.reason,
+                    message_id: fields.message_id,
+                    kind: fields.kind,
+                    trigger: fields.trigger,
+                    error_code: fields.error_code,
+                    error: fields.error,
+                });
+        }
+    }
+
+    impl DiagnosticCountersSource for CounterFixture {
+        fn snapshot(&self) -> DiagnosticCounters {
+            self.0
+        }
     }
 
     struct CancellationMarker(Arc<AtomicBool>);
@@ -1246,67 +1335,6 @@ mod tests {
         }
     }
 
-    struct FailingMarkPendingStore {
-        inner: Arc<dyn PendingNudgeStore + Send + Sync>,
-        remaining_failures: AtomicUsize,
-    }
-
-    impl atm_storage::contract::sealed::Sealed for FailingMarkPendingStore {}
-
-    impl PendingNudgeStore for FailingMarkPendingStore {
-        fn mark_pending(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-            at: IsoTimestamp,
-        ) -> Result<bool, AtmError> {
-            let previous = self
-                .remaining_failures
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
-                    remaining.checked_sub(1)
-                })
-                .unwrap_or(0);
-            if previous > 0 {
-                return Err(AtmError::daemon_unavailable(
-                    "test pending-marker store failure",
-                ));
-            }
-            self.inner.mark_pending(member, msg, at)
-        }
-
-        fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-            self.inner.claim_next_pending(member)
-        }
-
-        fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.requeue_pending(member, claim)
-        }
-
-        fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.release_pending(member, claim)
-        }
-
-        fn clear_pending_on_read(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_read(member, msg)
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_handoff(member, msg)
-        }
-
-        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-            self.inner.list_pending_members()
-        }
-    }
-
     struct FixtureTemplateComposer {
         source_bytes: Vec<u8>,
         inspection: atm_core::TemplateInspection,
@@ -1371,6 +1399,75 @@ mod tests {
         }
     }
 
+    struct BlockingTemplateComposer {
+        source_bytes: Vec<u8>,
+        inspection: atm_core::TemplateInspection,
+        release: Arc<(Mutex<bool>, Condvar)>,
+        started: AtomicUsize,
+    }
+
+    impl BlockingTemplateComposer {
+        fn new(body: &str) -> Self {
+            let fixture = FixtureTemplateComposer::new(body);
+            Self {
+                source_bytes: fixture.source_bytes,
+                inspection: fixture.inspection,
+                release: Arc::new((Mutex::new(false), Condvar::new())),
+                started: AtomicUsize::new(0),
+            }
+        }
+
+        fn release(&self) {
+            let (released, wake) = &*self.release;
+            *released
+                .lock()
+                .expect("release stalled template verification") = true;
+            wake.notify_all();
+        }
+    }
+
+    impl atm_core::boundary::sealed::Sealed for BlockingTemplateComposer {}
+
+    impl atm_core::TemplateComposer for BlockingTemplateComposer {
+        fn inspect(
+            &self,
+            source: &atm_core::TemplateSource,
+        ) -> Result<atm_core::TemplateInspection, AtmError> {
+            assert_eq!(source.raw_file_bytes, self.source_bytes);
+            self.started.fetch_add(1, Ordering::SeqCst);
+            let (released, wake) = &*self.release;
+            let mut released = released
+                .lock()
+                .expect("wait for stalled template verification");
+            while !*released {
+                released = wake
+                    .wait(released)
+                    .expect("stalled template verification wait");
+            }
+            Ok(self.inspection.clone())
+        }
+
+        fn render_within_root(
+            &self,
+            source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+            _root: &atm_core::TemplateRoot,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            let text = std::str::from_utf8(&source.raw_file_bytes)
+                .map_err(|_| AtmError::template_content_not_utf8())?
+                .to_owned();
+            Ok(atm_core::RenderedBody { text })
+        }
+
+        fn render_without_includes(
+            &self,
+            _source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            unreachable!("HTTP runtime tests require confinement-aware rendering")
+        }
+    }
+
     struct HarnessReceivedHookSelector {
         tmux: Arc<RecordingReceivedHook>,
         graft: Arc<RecordingReceivedHook>,
@@ -1399,6 +1496,8 @@ mod tests {
         router: StorageAndNudgeRouter,
         message_store: Arc<dyn MessageStore + Send + Sync>,
         pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+        task_store: Arc<dyn TaskStore + Send + Sync>,
+        async_task_ledger_reader: Arc<atm_runtime_test_support::InMemoryTaskLedgerReader>,
         received_hook: Arc<RecordingReceivedHook>,
         runtime_health: RuntimeHealth,
         database_path: PathBuf,
@@ -1453,6 +1552,38 @@ mod tests {
                 })
             },
         )
+    }
+
+    #[tokio::test]
+    async fn router_peer_ingress_rejects_task_move() {
+        let fixture = fixture(true, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        let task_id = "T1".parse().expect("task id");
+        let before = fixture
+            .task_store
+            .list_task_events(&team, &task_id, None)
+            .expect("events before");
+        let error = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::TaskMove(TaskMoveRequest {
+                    caller_identity: "sender-a".parse().expect("agent"),
+                    caller_team: team.clone(),
+                    task_id: task_id.clone(),
+                    target: MoveTarget::Head,
+                })),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("peer ingress must reject task move");
+        assert!(error.message().contains("authenticated local HTTP"));
+        let after = fixture
+            .task_store
+            .list_task_events(&team, &task_id, None)
+            .expect("events after");
+        assert_eq!(after, before, "rejection must occur before the writer lane");
     }
 
     fn fixture_with_selector<F>(
@@ -1516,6 +1647,12 @@ mod tests {
             .service_runtime
             .pending_nudge_store()
             .expect("sqlite pending-nudge store");
+        let task_store = assembly
+            .service_runtime
+            .task_store()
+            .expect("sqlite task store");
+        let async_task_ledger_reader =
+            Arc::new(atm_runtime_test_support::InMemoryTaskLedgerReader::default());
         let pending_nudge_store_for_runtime =
             pending_store_with_failures(&pending_nudge_store, pending_marker_failures);
         let received_hook = Arc::new(RecordingReceivedHook {
@@ -1539,6 +1676,11 @@ mod tests {
             attach_graft_receiver_store(service_runtime, &database_path, with_recipient);
         let service_runtime =
             service_runtime.with_pending_nudge_store(pending_nudge_store_for_runtime);
+        let async_reader_for_runtime: Arc<dyn AsyncTaskLedgerReader + Send + Sync> =
+            async_task_ledger_reader.clone();
+        let service_runtime = service_runtime
+            .with_task_store(Arc::clone(&task_store))
+            .with_async_task_ledger_reader(async_reader_for_runtime);
         let router = StorageAndNudgeRouter::new(
             service_runtime,
             Arc::new(NullObservability),
@@ -1551,6 +1693,8 @@ mod tests {
             router,
             message_store,
             pending_nudge_store,
+            task_store,
+            async_task_ledger_reader,
             received_hook,
             runtime_health: health,
             database_path,
@@ -1559,15 +1703,34 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn router_fixture_retains_the_composed_async_task_ledger_reader() {
+        let fixture = fixture(false, None, None);
+        assert!(
+            fixture
+                .async_task_ledger_reader
+                .list_tasks(
+                    "test-team".parse().expect("team"),
+                    None,
+                    atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+                )
+                .await
+                .expect("task-ledger reader list")
+                .is_empty()
+        );
+    }
+
     fn pending_store_with_failures(
         store: &Arc<dyn PendingNudgeStore + Send + Sync>,
         failures: Option<usize>,
     ) -> Arc<dyn PendingNudgeStore + Send + Sync> {
         match failures {
-            Some(failures) => Arc::new(FailingMarkPendingStore {
-                inner: Arc::clone(store),
-                remaining_failures: AtomicUsize::new(failures),
-            }),
+            Some(failures) => Arc::new(
+                DummyPendingNudgeStore::delegating(Arc::clone(store)).with_mark_failure(
+                    AtmError::daemon_unavailable("test pending-marker store failure"),
+                    failures,
+                ),
+            ),
             None => Arc::clone(store),
         }
     }
@@ -1579,7 +1742,7 @@ mod tests {
         roster_store
             .save_roster(&RosterSnapshot {
                 team_name: team.clone(),
-                members: ["recipient", "sender"]
+                members: ["recipient", "sender", "third"]
                     .into_iter()
                     .map(|agent_name| RosterEntry {
                         team_name: team.clone(),
@@ -1639,6 +1802,29 @@ mod tests {
         .expect("write request")
     }
 
+    fn task_write_request(fixture: &Fixture, task_id: &str) -> WriteRequest {
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        request.task_id = Some(task_id.parse().expect("task id"));
+        request.requires_ack = true;
+        request
+    }
+
+    async fn prompt_handoffs(fixture: &Fixture, task_id: &str) -> Vec<PromptHandoff> {
+        let reader = open_sqlite_boundary(&fixture.database_path)
+            .expect("reopen SQLite boundary")
+            .service_runtime
+            .async_task_ledger_reader()
+            .expect("async task-ledger reader");
+        reader
+            .list_prompt_handoffs(
+                "test-team".parse().expect("team"),
+                task_id.parse::<TaskId>().expect("task id"),
+                atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
+            )
+            .await
+            .expect("list prompt handoffs")
+    }
+
     fn template_write_request(fixture: &Fixture, body: &str) -> WriteRequest {
         let template_path = fixture._temporary_root.path().join("notice.j2");
         std::fs::write(&template_path, body).expect("write template fixture");
@@ -1659,6 +1845,17 @@ mod tests {
             category: Some("assignment".to_owned()),
             tags: vec!["phase-an".to_owned()],
             content_format: Some("markdown".to_owned()),
+        };
+        request
+    }
+
+    fn file_write_request(fixture: &Fixture) -> WriteRequest {
+        let file_path = fixture._temporary_root.path().join("caller-file.txt");
+        std::fs::write(&file_path, "file body").expect("write caller file fixture");
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        request.message_source = SendMessageSource::File {
+            path: file_path,
+            message: Some("file message".to_owned()),
         };
         request
     }
@@ -1691,6 +1888,243 @@ mod tests {
                 NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
             ),
         )
+    }
+
+    async fn start_task_lifecycle_daemon(
+        fixture: &Fixture,
+    ) -> (
+        crate::HttpRuntime<crate::Running>,
+        Arc<dyn atm_core::api::DaemonApiClient>,
+    ) {
+        let assembly = open_sqlite_boundary(&fixture.database_path)
+            .expect("reopen durable runtime for daemon lifecycle test");
+        let mailbox_runtime = assembly
+            .async_mailbox_runtime
+            .with_state_handoff(HandoffConfig::default())
+            .expect("configure daemon mailbox runtime");
+        let handler = StorageAndNudgeRouter::new(
+            assembly.service_runtime,
+            Arc::new(NullObservability),
+            Arc::new(FixedReceivedHookSelector {
+                emitter: fixture.received_hook.clone(),
+            }),
+            fixture.home_dir.clone(),
+        )
+        .with_async_mailbox_runtime(Arc::new(mailbox_runtime));
+        let endpoint_record = fixture
+            ._temporary_root
+            .path()
+            .join("task-lifecycle-http.json");
+        let daemon_instance_id = ulid::Ulid::new();
+        std::fs::write(
+            fixture
+                ._temporary_root
+                .path()
+                .join(atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE),
+            format!("1:task-lifecycle-test:{daemon_instance_id}\n"),
+        )
+        .expect("write task lifecycle daemon owner record");
+        let config = HttpRuntimeConfig::new(
+            LoopbackTcpConfig::new(
+                "127.0.0.1:0".parse().expect("ephemeral loopback address"),
+                endpoint_record.clone(),
+                daemon_instance_id,
+            ),
+            None,
+            RuntimeLimits::new(
+                NonZeroUsize::new(4096).expect("body limit"),
+                NonZeroUsize::new(4).expect("connection limit"),
+            ),
+            RuntimeTimeouts::new(
+                NonZeroDuration::new(Duration::from_secs(5)).expect("request timeout"),
+                NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+            ),
+        );
+        let running = HttpRuntimeBuilder::new(config, Arc::new(handler))
+            .build()
+            .expect("configure task lifecycle daemon")
+            .start()
+            .await
+            .expect("start task lifecycle daemon");
+        let client = crate::loopback_tcp_client(endpoint_record, Duration::from_secs(5))
+            .expect("task lifecycle daemon client");
+        (running, client)
+    }
+
+    fn assignment_request(fixture: &Fixture, from: &str, to: &str, task_id: &str) -> WriteRequest {
+        WriteRequest::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            from.parse().expect("assignment caller"),
+            &format!("{to}@test-team"),
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline(format!("assign {task_id}")),
+            None,
+            false,
+            Some(task_id.parse().expect("task id")),
+            false,
+        )
+        .expect("assignment request")
+    }
+
+    fn lifecycle_list_query(
+        fixture: &Fixture,
+        caller: &str,
+        target: Option<&str>,
+    ) -> atm_core::list::ListQuery {
+        atm_core::list::ListQuery::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            caller.parse().expect("list caller"),
+            target,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("lifecycle list query")
+    }
+
+    async fn daemon_request(
+        client: &Arc<dyn atm_core::api::DaemonApiClient>,
+        request: ApiRequest,
+    ) -> ResponseEnvelope {
+        client
+            .execute(request)
+            .await
+            .expect("daemon API exchange")
+            .into_inner()
+    }
+
+    async fn task_events_via_daemon(
+        fixture: &Fixture,
+        client: &Arc<dyn atm_core::api::DaemonApiClient>,
+        task_id: &str,
+    ) -> serde_json::Value {
+        let query = lifecycle_list_query(fixture, "sender", None).with_task_ledger(
+            atm_core::list::TaskLedgerQuery::Events {
+                task_id: task_id.parse().expect("task id"),
+                member: None,
+            },
+        );
+        serde_json::to_value(
+            daemon_request(
+                client,
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    query,
+                ))),
+            )
+            .await,
+        )
+        .expect("serialize task events")
+    }
+
+    async fn mailbox_via_daemon(
+        fixture: &Fixture,
+        client: &Arc<dyn atm_core::api::DaemonApiClient>,
+        member: &str,
+    ) -> serde_json::Value {
+        let query = lifecycle_list_query(fixture, member, Some(member));
+        serde_json::to_value(
+            daemon_request(
+                client,
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    query,
+                ))),
+            )
+            .await,
+        )
+        .expect("serialize mailbox")
+    }
+
+    #[tokio::test]
+    async fn non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon() {
+        let fixture = fixture(true, None, None);
+        let (running, client) = start_task_lifecycle_daemon(&fixture).await;
+        let assigned = daemon_request(
+            &client,
+            ApiRequest::new(RequestEnvelope::Write(Box::new(assignment_request(
+                &fixture,
+                "sender",
+                "recipient",
+                "EQ008-T1",
+            )))),
+        )
+        .await;
+        assert!(matches!(assigned, ResponseEnvelope::Send(_)));
+        let events_before = task_events_via_daemon(&fixture, &client, "EQ008-T1").await;
+        let mail_before = mailbox_via_daemon(&fixture, &client, "third").await;
+
+        let refused = daemon_request(
+            &client,
+            ApiRequest::new(RequestEnvelope::Write(Box::new(assignment_request(
+                &fixture,
+                "recipient",
+                "third",
+                "EQ008-T1",
+            )))),
+        )
+        .await;
+        let ResponseEnvelope::Error(error) = refused else {
+            panic!("non-assigner reassignment must return a structured refusal");
+        };
+        assert_eq!(error.code(), atm_storage::AtmErrorCode::TaskNotCounterparty);
+        assert!(error.detail().contains("task EQ008-T1"));
+        assert!(error.detail().contains("assigned by sender"));
+        assert!(error.detail().contains("caller recipient"));
+        assert_eq!(
+            task_events_via_daemon(&fixture, &client, "EQ008-T1").await,
+            events_before
+        );
+        assert_eq!(
+            mailbox_via_daemon(&fixture, &client, "third").await,
+            mail_before
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("task lifecycle daemon shuts down");
+    }
+
+    #[tokio::test]
+    async fn recorded_assigner_reassign_still_succeeds_through_daemon() {
+        let fixture = fixture(true, None, None);
+        let (running, client) = start_task_lifecycle_daemon(&fixture).await;
+        for recipient in ["recipient", "third"] {
+            let response = daemon_request(
+                &client,
+                ApiRequest::new(RequestEnvelope::Write(Box::new(assignment_request(
+                    &fixture, "sender", recipient, "EQ008-T2",
+                )))),
+            )
+            .await;
+            assert!(matches!(response, ResponseEnvelope::Send(_)));
+        }
+
+        let events = task_events_via_daemon(&fixture, &client, "EQ008-T2").await;
+        let rows = events["List"]["task_event_rows"]
+            .as_array()
+            .unwrap_or_else(|| panic!("task event rows in {events}"));
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["event"], "assigned");
+        assert_eq!(rows[1]["event"], "reassigned");
+        assert_eq!(rows[1]["assignee"], "third");
+        assert_eq!(
+            mailbox_via_daemon(&fixture, &client, "third").await["List"]["count"],
+            1
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("task lifecycle daemon shuts down");
     }
 
     /// Hang detector for two-runtime router tests that dispatch a canonical
@@ -1922,8 +2356,77 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: None,
         }
+    }
+
+    fn task_handoff_dispatch(task_id: Option<&str>) -> BuiltInPostSendDispatch {
+        let mut event = hook_event();
+        event.task_id = task_id.map(|value| value.parse().expect("task id"));
+        event.task_transition = Some(atm_core::boundary::TaskTransition::Ready);
+        BuiltInPostSendDispatch {
+            event,
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: "recipient".parse().expect("recipient"),
+                recipient_team: "test-team".parse().expect("team"),
+                rendered_nudge: "task prompt".to_owned(),
+            }),
+            kind: NudgeKind::Steer,
+        }
+    }
+
+    fn assert_prompt_handoff_error(
+        layer: &PromptHandoffErrorLayer,
+        dispatch: &BuiltInPostSendDispatch,
+        reason: crate::router_support::PromptHandoffFailureReason,
+    ) {
+        let events = layer.events.lock().expect("handoff error events");
+        assert_eq!(events.len(), 1, "one structured handoff error is logged");
+        assert_eq!(events[0].subsystem, "prompt_handoff");
+        assert_eq!(events[0].action, "prompt_handoff_record_failed");
+        assert_eq!(events[0].outcome, "failed");
+        assert_eq!(events[0].reason, reason.as_str());
+        assert_eq!(events[0].message_id, dispatch.event.message_id.to_string());
+        assert_eq!(events[0].kind, "task_ready");
+        assert_eq!(events[0].trigger, "steer");
+    }
+
+    #[tokio::test]
+    async fn task_store_acquisition_failure_logs_the_real_error() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let dispatch = task_handoff_dispatch(Some("BB6-STORE-ACQUIRE"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_secs(1)),
+            Err(AtmError::daemon_unavailable(
+                "injected task-store acquisition failure",
+            )),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Storage,
+        );
+        let events = layer.events.lock().expect("handoff error events");
+        assert_eq!(events[0].error_code, "ATM_DAEMON_UNAVAILABLE");
+        assert!(
+            events[0]
+                .error
+                .contains("injected task-store acquisition failure")
+        );
     }
 
     #[test]
@@ -1965,7 +2468,6 @@ mod tests {
                 recipient: "recipient".parse().expect("recipient"),
                 recipient_team: "test-team".parse().expect("team"),
                 rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
-                message_body: "message body".to_owned(),
             }),
             kind: NudgeKind::Steer,
         };
@@ -2092,15 +2594,10 @@ mod tests {
         );
     }
 
-    /// AC1: a deterministic (non-wall-clock) `observed_at` proves the
-    /// existing Heartbeat route drives `RuntimeHealth`'s member-state
-    /// projection end to end. AQ3's own observation sink does not exist yet
-    /// (this sprint is upstream of AQ3), so this test covers the AC1 claim
-    /// as it is actually implementable today: the router's real dispatch
-    /// path into `RuntimeHealth::record_heartbeat` and its snapshot.
+    /// A deterministic `observed_at` proves the real Heartbeat route mutates
+    /// the canonical ephemeral master-roster record, not `RuntimeHealth`.
     #[tokio::test]
-    async fn heartbeat_route_drives_runtime_health_member_state_transitions_with_a_deterministic_clock()
-     {
+    async fn heartbeat_route_drives_canonical_roster_state_with_a_deterministic_clock() {
         let fixture = fixture(true, None, None);
         let observed_at: atm_core::types::IsoTimestamp = "2026-01-01T00:00:00Z"
             .parse()
@@ -2123,12 +2620,15 @@ mod tests {
             .await
             .expect("authorized heartbeat");
 
-        let snapshot = fixture.router.runtime_health.snapshot();
-        let member = snapshot
-            .members
-            .iter()
-            .find(|observation| observation.member.as_str() == "recipient")
-            .expect("heartbeat route projected the member into RuntimeHealth");
+        let member = fixture
+            .router
+            .service_runtime
+            .roster_ephemeral_state(
+                &"test-team".parse().expect("team"),
+                &"recipient".parse().expect("agent"),
+            )
+            .expect("heartbeat member remains in the master roster")
+            .runtime;
         assert_eq!(
             member.state,
             atm_core::protocol::RuntimeMemberState::Active,
@@ -2159,12 +2659,13 @@ mod tests {
             .expect("second authorized heartbeat");
         let idle_state = fixture
             .router
-            .runtime_health
-            .snapshot()
-            .members
-            .into_iter()
-            .find(|observation| observation.member.as_str() == "recipient")
-            .expect("member remains projected")
+            .service_runtime
+            .roster_ephemeral_state(
+                &"test-team".parse().expect("team"),
+                &"recipient".parse().expect("agent"),
+            )
+            .expect("member remains in canonical roster")
+            .runtime
             .state;
         assert_eq!(
             idle_state,
@@ -2217,7 +2718,7 @@ mod tests {
             QueuedNudgeMessage {
                 kind: NudgeKind::Queue,
                 msg_id: AtmMessageId::new(),
-                body: "queued through the real handler".to_owned(),
+                body: "<atm><action>queue</action></atm>".to_owned(),
             },
         )
         .expect("seed FIFO");
@@ -2238,7 +2739,75 @@ mod tests {
             panic!("expected a QueueGetNext response");
         };
         assert_eq!(response.messages.len(), 1);
-        assert_eq!(response.messages[0].body, "queued through the real handler");
+        assert_eq!(
+            response.messages[0].body,
+            "<atm><action>queue</action></atm>"
+        );
+    }
+
+    pub(crate) struct BareCliPullFixture {
+        pub(crate) _temporary_root: TempDir,
+        pub(crate) router: StorageAndNudgeRouter,
+        pub(crate) runtime: LocalServiceRuntime,
+        pub(crate) pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+        pub(crate) home_dir: PathBuf,
+        pub(crate) current_dir: PathBuf,
+        pub(crate) member: MemberKey,
+        pub(crate) message_id: AtmMessageId,
+    }
+
+    pub(crate) fn bare_cli_pull_fixture() -> BareCliPullFixture {
+        let fixture = fixture(true, None, None);
+        let member = MemberKey::new(
+            "test-team".parse().expect("team"),
+            "recipient".parse().expect("agent"),
+        );
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_nudge_mode(NudgeMode::Deferred);
+        request.to = Some("recipient@test-team".parse().expect("recipient"));
+        let message_id = atm_core::send::write_mail_with_runtime(
+            request,
+            &NullObservability,
+            &fixture.router.service_runtime,
+        )
+        .expect("deferred queue write")
+        .persisted_message_id();
+        fixture
+            .pending_nudge_store
+            .mark_pending(&member, &message_id, IsoTimestamp::now())
+            .expect("mark queue item pending");
+        let claim = fixture
+            .pending_nudge_store
+            .claim_next_pending(&member)
+            .expect("claim queue item")
+            .expect("queue item claim");
+        assert_eq!(claim.msg, message_id);
+
+        let fifo: BareCliFifo = Default::default();
+        let drops: BareCliQueueFullDrops = Default::default();
+        append_bare_cli_message(
+            &fifo,
+            &drops,
+            member.clone(),
+            QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: message_id,
+                body: "queued".to_owned(),
+            },
+        )
+        .expect("seed FIFO");
+        let runtime = fixture.router.service_runtime.clone();
+        let router = fixture.router.with_bare_cli_fifo(fifo, drops);
+        BareCliPullFixture {
+            _temporary_root: fixture._temporary_root,
+            router,
+            runtime,
+            pending_nudge_store: fixture.pending_nudge_store,
+            home_dir: fixture.home_dir,
+            current_dir: fixture.current_dir,
+            member,
+            message_id,
+        }
     }
 
     /// AC6 migration case: a stale FIFO entry from an earlier bare-CLI
@@ -2262,7 +2831,7 @@ mod tests {
             QueuedNudgeMessage {
                 kind: NudgeKind::Queue,
                 msg_id: AtmMessageId::new(),
-                body: "queued before the migration".to_owned(),
+                body: "<atm><action>queued-before-migration</action></atm>".to_owned(),
             },
         )
         .expect("seed stale FIFO entry");
@@ -2320,12 +2889,16 @@ mod tests {
             1,
             "the stale FIFO entry still drains after the member's classification inputs changed"
         );
-        assert_eq!(response.messages[0].body, "queued before the migration");
+        assert_eq!(
+            response.messages[0].body,
+            "<atm><action>queued-before-migration</action></atm>"
+        );
     }
 
     #[tokio::test]
-    async fn doctor_reports_bootstrap_injected_server_version() {
+    async fn doctor_observability_fields_match_health_projection() {
         let fixture = fixture(true, None, None);
+        fixture.runtime_health.record_write_source_preflight_stall();
         let assembly =
             open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
         let doctor_projection = StorageDoctorProjection::start(
@@ -2343,11 +2916,21 @@ mod tests {
             http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
             peer_wire_security: None,
         };
+        let counters = DiagnosticCounters {
+            jsonl_forwarded_total: 13,
+            jsonl_dropped_queue_full_total: 2,
+            jsonl_dropped_reentrant_total: 1,
+            timeline_written_total: 11,
+            timeline_dropped_queue_full_total: 3,
+            timeline_dropped_persist_error_total: 1,
+        };
+        let expected_health = RetainedObservabilityHealth::from(counters);
         let response = fixture
             .router
             .clone()
             .with_doctor_projection(Arc::new(doctor_projection))
             .with_daemon_context(daemon_context.clone())
+            .with_diagnostic_counters(Arc::new(CounterFixture(counters)))
             .dispatch(
                 ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
                     atm_core::doctor::DoctorQuery::default(),
@@ -2362,23 +2945,62 @@ mod tests {
                 assert_eq!(report.daemon_context, Some(daemon_context));
                 assert_eq!(report.herdr_queue_pump.last_tick_at, None);
                 assert_eq!(report.herdr_queue_pump.breaker, report.herdr_breaker);
+                assert_eq!(
+                    report.observability.jsonl.forwarded_total,
+                    expected_health.jsonl.forwarded_total
+                );
+                assert_eq!(
+                    report.observability.jsonl.dropped_queue_full_total,
+                    expected_health.jsonl.dropped_queue_full_total
+                );
+                assert_eq!(
+                    report.observability.jsonl.dropped_reentrant_total,
+                    expected_health.jsonl.dropped_reentrant_total
+                );
+                assert_eq!(
+                    report.observability.timeline.written_total,
+                    expected_health.timeline.written_total
+                );
+                assert_eq!(
+                    report.observability.timeline.dropped_queue_full_total,
+                    expected_health.timeline.dropped_queue_full_total
+                );
+                assert_eq!(
+                    report.observability.timeline.dropped_persist_error_total,
+                    expected_health.timeline.dropped_persist_error_total
+                );
+                assert_eq!(report.observability.degraded, expected_health.degraded);
+                assert!(report.findings.iter().any(|finding| {
+                    finding.code
+                        == atm_core::error::AtmErrorCode::WarningRetainedDiagnosticsDegraded
+                }));
+                assert_eq!(
+                    report
+                        .runtime_status
+                        .expect("doctor projects replacement runtime health")
+                        .write_source_preflight_stalls_total,
+                    1
+                );
+                assert!(report.findings.iter().any(|finding| {
+                    finding
+                        .message
+                        .contains("write source preflight has 1 stalled")
+                }));
             }
             other => panic!("expected doctor report, got {other:?}"),
         }
     }
 
     #[tokio::test]
-    async fn doctor_projection_serializes_effective_storage_reader_lane_settings() {
+    async fn doctor_projection_serializes_effective_shared_storage_reader_settings() {
         let fixture = fixture(true, None, None);
         let assembly =
             open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
         let reader_lanes = assembly
             .reader_lanes
-            .expect("SQLite assembly exposes its effective reader lanes");
-        assert_eq!(reader_lanes.mailbox.pool_size, 4);
-        assert_eq!(reader_lanes.mailbox.queue_depth, 16);
-        assert_eq!(reader_lanes.search.pool_size, 2);
-        assert_eq!(reader_lanes.search.queue_depth, 8);
+            .expect("SQLite assembly exposes its effective reader pool");
+        assert_eq!(reader_lanes.pool_size, 8);
+        assert_eq!(reader_lanes.queue_depth, 32);
         let projection = StorageDoctorProjection::start(
             DoctorProjectionConfig {
                 reader_lanes: Some(reader_lanes),
@@ -2398,10 +3020,8 @@ mod tests {
             .await
             .expect("doctor report");
         let json = serde_json::to_value(&report).expect("doctor report serializes");
-        assert_eq!(json["reader_lanes"]["mailbox"]["pool_size"], 4);
-        assert_eq!(json["reader_lanes"]["mailbox"]["queue_depth"], 16);
-        assert_eq!(json["reader_lanes"]["search"]["pool_size"], 2);
-        assert_eq!(json["reader_lanes"]["search"]["queue_depth"], 8);
+        assert_eq!(json["reader_lanes"]["pool_size"], 8);
+        assert_eq!(json["reader_lanes"]["queue_depth"], 32);
     }
 
     #[tokio::test]
@@ -2500,10 +3120,14 @@ mod tests {
 
     #[test]
     fn mailbox_and_doctor_handlers_never_enter_the_blocking_core_bridge() {
-        let source = include_str!("storage_and_nudge_router.rs")
-            .split("\n#[cfg(test)]\nmod tests")
-            .next()
-            .expect("production source");
+        let source = [
+            include_str!("storage_and_nudge_router.rs")
+                .split("\n#[cfg(test)]\nmod tests")
+                .next()
+                .expect("production source"),
+            include_str!("storage_and_nudge_router/roster_ingress.rs"),
+        ]
+        .concat();
         for handler in [
             "list_messages",
             "peek_messages",
@@ -2520,6 +3144,87 @@ mod tests {
                 "{handler} must not acquire the global blocking bridge"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn sqlite_runtime_composes_the_async_task_ledger_reader() {
+        let root = tempfile::tempdir().expect("temporary runtime root");
+        let assembly = open_sqlite_boundary(root.path().join("mail.sqlite"))
+            .expect("assemble SQLite boundary");
+        let reader = assembly
+            .service_runtime
+            .async_task_ledger_reader()
+            .expect("installed async task-ledger reader");
+        let tasks = reader
+            .list_tasks(
+                "test-team".parse().expect("team"),
+                None,
+                atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("task-ledger reader list");
+        assert!(tasks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime() {
+        let fixture = fixture(true, None, None);
+        let mut write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        write.task_id = Some("t-42".parse().expect("task id"));
+        write.requires_ack = true;
+        fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed task through canonical write path");
+        let team: TeamName = "test-team".parse().expect("team");
+        fixture.async_task_ledger_reader.replace_rows(
+            fixture
+                .task_store
+                .list_tasks(&team, Some(&"recipient".parse().expect("member")))
+                .expect("task-store list"),
+            Vec::new(),
+        );
+
+        let query = atm_core::list::ListQuery::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            "sender".parse().expect("caller"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::Actionable,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query")
+        .with_task_ledger(atm_core::list::TaskLedgerQuery::Tasks {
+            member: Some("recipient".parse().expect("member")),
+        });
+        let listed = fixture
+            .router
+            .dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    query,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("list task ledger through task store")
+            .into_inner();
+
+        assert!(matches!(listed, ResponseEnvelope::List(outcome)
+            if outcome.task_rows.len() == 1
+                && outcome.task_rows[0].task_id.as_str() == "t-42"
+                && outcome.task_rows[0].state == atm_storage::TaskState::Assigned));
     }
 
     #[tokio::test]
@@ -2942,6 +3647,270 @@ mod tests {
         )
         .await
         .expect("infallible Axum service")
+    }
+
+    #[tokio::test]
+    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist() {
+        let composer = Arc::new(BlockingTemplateComposer::new("template body"));
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(composer.clone()),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let first_request = template_write_request(&fixture, "template body");
+        let second_request = template_write_request(&fixture, "template body");
+        let first_router = fixture.router.clone();
+        let second_router = fixture.router.clone();
+        let first = tokio::spawn(async move {
+            first_router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(first_request))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_millis(250)),
+                )
+                .await
+        });
+        let second = tokio::spawn(async move {
+            second_router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(second_request))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_millis(250)),
+                )
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while composer.started.load(Ordering::SeqCst) != 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("two template verifications occupy the bounded preflight");
+
+        let list = atm_core::list::ListQuery::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            "sender".parse().expect("sender"),
+            None,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("task-ledger list query")
+        .with_task_ledger(atm_core::list::TaskLedgerQuery::Tasks { member: None });
+        let listed = tokio::time::timeout(
+            Duration::from_millis(100),
+            fixture.router.dispatch(
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    list,
+                ))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            ),
+        )
+        .await
+        .expect("list stays schedulable while template verification is stalled")
+        .expect("list succeeds while template verification is stalled")
+        .into_inner();
+        assert!(matches!(listed, ResponseEnvelope::List(_)));
+
+        let blocked = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
+                    &fixture,
+                    "template body",
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_millis(25)),
+            )
+            .await
+            .expect_err("a saturated template preflight fails before durable admission");
+        assert_eq!(
+            blocked.code(),
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert!(
+            blocked.message().contains("notice.j2"),
+            "the bounded error identifies the caller template path"
+        );
+        assert!(
+            fixture
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("recipient"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("inspect persisted template messages")
+                .is_empty(),
+            "a template verification deadline cannot persist a partial message"
+        );
+        let first_error = tokio::time::timeout(Duration::from_secs(1), first)
+            .await
+            .expect("first stalled source preflight reaches its deadline")
+            .expect("first stalled request joins")
+            .expect_err("first stalled source preflight fails closed");
+        let second_error = tokio::time::timeout(Duration::from_secs(1), second)
+            .await
+            .expect("second stalled source preflight reaches its deadline")
+            .expect("second stalled request joins")
+            .expect_err("second stalled source preflight fails closed");
+        assert_eq!(
+            first_error.code(),
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert_eq!(
+            second_error.code(),
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert_eq!(
+            fixture
+                .runtime_health
+                .snapshot()
+                .write_source_preflight_stalls_total,
+            2,
+            "each abandoned source preflight remains visible to doctor"
+        );
+
+        composer.release();
+    }
+
+    #[tokio::test]
+    async fn file_source_preflight_shares_bounded_admission_and_fails_closed() {
+        let composer = Arc::new(BlockingTemplateComposer::new("template body"));
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(composer.clone()),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let mut stalled = tokio::task::JoinSet::new();
+        for _ in 0..2 {
+            let router = fixture.router.clone();
+            let request = template_write_request(&fixture, "template body");
+            stalled.spawn(async move {
+                router
+                    .dispatch(
+                        ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(Duration::from_millis(250)),
+                    )
+                    .await
+            });
+        }
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while composer.started.load(Ordering::SeqCst) != 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("two stalled source preflights occupy the bounded bridge");
+
+        let error = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(file_write_request(
+                    &fixture,
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_millis(25)),
+            )
+            .await
+            .expect_err("file preflight cannot bypass saturated bounded admission");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert!(error.message().contains("caller-file.txt"));
+        assert!(
+            fixture
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("recipient"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("inspect persisted file messages")
+                .is_empty(),
+            "a file source that cannot preflight must not persist"
+        );
+
+        composer.release();
+        while let Some(result) = stalled.join_next().await {
+            let _ = result.expect("stalled preflight task joins");
+        }
+    }
+
+    #[tokio::test]
+    async fn ten_concurrent_template_writes_persist_before_each_receiver_hook() {
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for("template body")),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let mut writes = tokio::task::JoinSet::new();
+        for _ in 0..10 {
+            let router = fixture.router.clone();
+            let request = template_write_request(&fixture, "template body");
+            writes.spawn(async move {
+                router
+                    .dispatch(
+                        ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(Duration::from_secs(2)),
+                    )
+                    .await
+            });
+        }
+        while let Some(result) = writes.join_next().await {
+            result
+                .expect("concurrent template write joins")
+                .expect("concurrent template write persists");
+        }
+        assert_eq!(
+            fixture
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect receiver hooks")
+                .len(),
+            10,
+            "every durable write reaches the accepted receiver hook"
+        );
+        assert!(
+            fixture
+                .received_hook
+                .saw_durable_record
+                .load(Ordering::SeqCst),
+            "receiver hooks observe only already-persisted writes"
+        );
     }
 
     #[tokio::test]
@@ -3452,6 +4421,243 @@ mod tests {
                 .is_some(),
             "the emitted message remains durable after the write response"
         );
+    }
+
+    #[tokio::test]
+    async fn steer_emit_records_handoff_with_trigger_steer() {
+        let fixture = fixture(true, None, None);
+        let write = task_write_request(&fixture, "BB6-STEER");
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let handoffs = prompt_handoffs(&fixture, "BB6-STEER").await;
+        assert_eq!(handoffs.len(), 1, "one successful steer writes one handoff");
+        assert_eq!(handoffs[0].trigger, PromptTrigger::Steer);
+        assert_eq!(handoffs[0].attempt, 0);
+        assert_eq!(handoffs[0].kind.as_str(), "task_queued");
+    }
+
+    #[tokio::test]
+    async fn steer_of_non_task_message_records_no_handoff() {
+        let fixture = fixture(true, None, None);
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert!(
+            prompt_handoffs(&fixture, "BB6-NOT-A-TASK").await.is_empty(),
+            "a dispatch without task_transition writes no handoff"
+        );
+    }
+
+    #[test]
+    fn queue_claim_records_no_handoff() {
+        let queue_claim = include_str!("herdr_queue_wake.rs");
+        assert!(
+            !queue_claim.contains("record_prompt_handoff"),
+            "queue claim remains outside the task-linked handoff writer"
+        );
+    }
+
+    #[test]
+    fn deferred_task_linked_message_is_impossible_after_bb5() {
+        let send_source = include_str!("../../atm-core/src/send/mod.rs");
+        let start = send_source
+            .find("pub(crate) fn send_mode_for_task_request")
+            .expect("task send-mode selector");
+        let body = &send_source[start..];
+        let end = body
+            .find("pub(crate) fn finalize_send_outcome")
+            .expect("following send function");
+        let body = &body[..end];
+        assert!(body.contains("if task_id.is_some()"));
+        assert!(body.contains("NudgeMode::Immediate"));
+        assert!(body.contains("request.nudge_mode"));
+        assert!(
+            !body.contains("NudgeMode::Deferred"),
+            "task-linked requests cannot enter the deferred claim path"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_failure_logs_prompt_handoff_record_failed_and_emission_succeeds() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        store.set_fail_prompt_handoffs(true);
+        let dispatch = task_handoff_dispatch(Some("BB6-STORAGE-FAILURE"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+        let sink_result = PostSendEmissionPath::GraftPort;
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_secs(1)),
+            Ok(store),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_eq!(sink_result, PostSendEmissionPath::GraftPort);
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Storage,
+        );
+    }
+
+    #[tokio::test]
+    async fn steer_with_exhausted_deadline_skips_record_with_failure_log() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        let dispatch = task_handoff_dispatch(Some("BB6-EXPIRED"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::ZERO),
+            Ok(store.clone()),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Timeout,
+        );
+        let rows = AsyncTaskLedgerReader::list_prompt_handoffs(
+            store.as_ref(),
+            "test-team".parse().expect("team"),
+            "BB6-EXPIRED".parse().expect("task id"),
+            atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
+        )
+        .await
+        .expect("list handoffs");
+        assert!(rows.is_empty(), "expired recording writes no row");
+    }
+
+    #[tokio::test]
+    async fn record_bridge_saturated_logs_and_emission_succeeds() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let release = Arc::new(AtomicBool::new(false));
+        let worker_release = Arc::clone(&release);
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let occupying_bridge = bridge.clone();
+        let occupying = tokio::spawn(async move {
+            occupying_bridge
+                .run(RequestDeadline::after(Duration::from_secs(2)), move || {
+                    started_tx.send(()).expect("signal occupied bridge");
+                    while !worker_release.load(Ordering::Acquire) {
+                        std::thread::yield_now();
+                    }
+                    Ok(())
+                })
+                .await
+        });
+        started_rx.await.expect("bridge job starts");
+        let dispatch = task_handoff_dispatch(Some("BB6-SATURATED"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_millis(20)),
+            Ok(Arc::new(atm_storage::DummyTaskStore::default())),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+        release.store(true, Ordering::Release);
+        occupying
+            .await
+            .expect("occupying task joins")
+            .expect("job exits");
+
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Saturated,
+        );
+    }
+
+    #[tokio::test]
+    async fn record_bridge_timeout_logs_and_emission_succeeds() {
+        let dispatch = task_handoff_dispatch(Some("BB6-TIMEOUT"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        store.set_prompt_handoff_delay(Duration::from_millis(100));
+        let timer_fired = Arc::new(AtomicBool::new(false));
+        let timer_observed = Arc::clone(&timer_fired);
+        let timer = tokio::spawn(async move {
+            tokio::task::yield_now().await;
+            timer_observed.store(true, Ordering::Release);
+        });
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_millis(20)),
+            Ok(store),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+        timer.await.expect("independent timer joins");
+
+        assert!(
+            timer_fired.load(Ordering::Acquire),
+            "Tokio worker remains live"
+        );
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Timeout,
+        );
+    }
+
+    #[test]
+    fn prompt_handoff_failure_classification_uses_codes_not_wording() {
+        for (code, expected) in [
+            (
+                atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
+                crate::router_support::PromptHandoffFailureReason::Saturated,
+            ),
+            (
+                atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart,
+                crate::router_support::PromptHandoffFailureReason::Timeout,
+            ),
+        ] {
+            let error = AtmError::new(code, "deliberately unrelated wording");
+            assert_eq!(
+                crate::prompt_handoff_record::failure_reason(&error),
+                expected
+            );
+        }
     }
 
     #[tokio::test]
@@ -4304,7 +5510,9 @@ mod tests {
             .expect("ephemeral remote direct peer listener is bound")
             .port();
 
-        let mut local = fixture(true, None, None);
+        // The sender need not carry a local roster entry for a recipient
+        // resolved to a remote host. That peer owns receiver-hook selection.
+        let mut local = fixture(false, None, None);
         local.router = local
             .router
             .clone()
@@ -4327,10 +5535,37 @@ mod tests {
             )
             .await
             .expect("local daemon owns host-qualified delivery");
-        assert!(matches!(
-            response.into_inner(),
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-        ));
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("local daemon must own host-qualified delivery");
+        };
+        assert!(
+            outcome.warnings.is_empty(),
+            "a sender-local missing roster entry is not a failed remote receiver hook"
+        );
+        assert!(
+            local
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect local hook emissions")
+                .is_empty(),
+            "the sender must not run a receiver hook for a remote recipient"
+        );
+        assert!(
+            local
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("agent"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("read local recipient mailbox")
+                .is_empty(),
+            "a host-qualified send must not leave a local mailbox echo"
+        );
         assert_eq!(
             remote
                 .message_store
@@ -4344,13 +5579,23 @@ mod tests {
                 .expect("read remote recipient mailbox")
                 .len(),
             1,
-            "the peer listener receives exactly the locally admitted canonical write"
+            "the peer listener receives exactly one canonical write"
         );
         remote_runtime
             .begin_shutdown()
             .finish()
             .await
             .expect("remote runtime drains");
+        assert_eq!(
+            remote
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect remote hook emissions")
+                .len(),
+            1,
+            "the peer ingress owns exactly one receiver hook"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -4598,6 +5843,107 @@ mod tests {
             .finish()
             .await
             .expect("remote direct peer runtime drains");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn local_ack_returns_peer_delivery_failure_after_the_local_commit() {
+        let remote = fixture(true, None, None);
+        let remote_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(remote.router.clone()),
+        )
+        .build()
+        .expect("valid remote direct peer configuration")
+        .start()
+        .await
+        .expect("remote direct peer runtime starts");
+        let remote_port = remote_runtime
+            .direct_peer_address()
+            .expect("ephemeral remote direct peer listener is bound")
+            .port();
+
+        let mut local = fixture(true, None, None);
+        local.router = local
+            .router
+            .clone()
+            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+        let local_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(local.router.clone()),
+        )
+        .build()
+        .expect("valid local direct peer configuration")
+        .start()
+        .await
+        .expect("local direct peer runtime starts");
+        let local_port = local_runtime
+            .direct_peer_address()
+            .expect("ephemeral local direct peer listener is bound")
+            .port();
+
+        let received_id = AtmMessageId::new();
+        let mut incoming = write_request(remote.home_dir.clone(), remote.current_dir.clone())
+            .with_origin_metadata(received_id, atm_core::types::IsoTimestamp::now());
+        incoming.requires_ack = true;
+        let local_peer_client = direct_peer_tcp_client(
+            "127.0.0.1".parse().expect("loopback source host"),
+            std::num::NonZeroU16::new(local_port).expect("non-zero port"),
+            Duration::from_secs(5),
+        )
+        .expect("local direct peer client");
+        local_peer_client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(incoming))))
+            .await
+            .expect("incoming required message reaches local daemon");
+
+        remote_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("remote direct peer runtime drains before acknowledgement");
+
+        let acknowledgement = atm_core::ack::AckRequest {
+            home_dir: local.home_dir.clone(),
+            current_dir: local.current_dir.clone(),
+            caller_identity: "recipient".parse().expect("recipient"),
+            caller_chat_id: None,
+            caller_team: "test-team".parse().expect("team"),
+            activity_observation: None,
+            message_id: received_id,
+            reply_body: "received".to_owned(),
+        }
+        .into_write_request();
+        let error = local
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+            )
+            .await
+            .expect_err("post-commit peer acknowledgement forwarding failure reaches the caller");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed,
+            "a committed acknowledgement still reports that peer acceptance was unconfirmed"
+        );
+        assert!(
+            local
+                .message_store
+                .load_message(&MessageKey::from(received_id))
+                .expect("read acknowledged local source")
+                .expect("received source remains durable")
+                .envelope
+                .acknowledged_at
+                .is_some(),
+            "the acknowledgement's local state transition commits before the failed peer forward"
+        );
+
+        local_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("local direct peer runtime drains");
     }
 
     #[tokio::test]
@@ -4926,6 +6272,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn failed_steer_sink_records_no_handoff() {
+        let fixture = fixture(
+            true,
+            Some(AtmError::daemon_unavailable(
+                "intentional steer sink failure",
+            )),
+            None,
+        );
+        let write = task_write_request(&fixture, "BB6-FAILED-STEER");
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert!(
+            prompt_handoffs(&fixture, "BB6-FAILED-STEER")
+                .await
+                .is_empty(),
+            "a failed steer sink writes no handoff"
+        );
+    }
+
+    #[tokio::test]
     async fn axum_route_without_a_selected_receiver_hook_keeps_durable_success() {
         let fixture = fixture_with_selector(true, None, None, |_| Arc::new(NoReceivedHookSelector));
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
@@ -5065,7 +6433,6 @@ mod tests {
                 recipient: "recipient".parse().expect("recipient"),
                 recipient_team: "test-team".parse().expect("team"),
                 rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
-                message_body: "message body".to_owned(),
             }),
             kind: NudgeKind::Steer,
         };
@@ -5074,7 +6441,7 @@ mod tests {
             .router
             .emit_received_hook(
                 Ok(vec![dispatch]),
-                RequestDeadline::after(Duration::from_millis(50)),
+                RequestDeadline::after(Duration::from_millis(300)),
             )
             .await;
 

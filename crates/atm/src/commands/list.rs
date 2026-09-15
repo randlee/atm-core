@@ -78,7 +78,7 @@ impl ListCommand {
         })?;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
-        ListQuery::new(
+        let query = ListQuery::new(
             home_dir,
             current_dir,
             caller_context.caller_identity,
@@ -91,8 +91,8 @@ impl ListCommand {
             timestamp_filter,
             self.task.as_deref(),
             self.contains.as_deref(),
-        )
-        .map_err(Into::into)
+        )?;
+        Ok(query)
     }
 
     fn selection_mode(&self) -> atm_core::types::ReadSelection {

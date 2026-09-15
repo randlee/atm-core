@@ -2,11 +2,16 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Accepted |
-| Scope | Phase AJ runtime observation |
-| Relates to | `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`, ADR-015 |
+| Status | Accepted — amended by issue #1378 and Phase BA |
+| Scope | Phase AJ runtime observation; canonical roster-state amendment |
+| Relates to | `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`, ADR-014, ADR-015, ADR-062, issue #1378 |
 
-## Decision
+## Original Phase AJ decision
+
+The following records the implemented Phase AJ baseline. The issue #1378
+amendment below supersedes its owner and accepted state-ingress set, and the
+Phase BA task-reminder exception narrows its blanket ban on state-based
+attention; all other attribution and trust-boundary clauses remain active.
 
 Session, pid, heartbeat activity, and derived agent state are in-memory,
 best-effort telemetry. They are forbidden inputs to routing, nudge,
@@ -63,7 +68,52 @@ session for its matching member. JSON retains raw values; human output omits
 default `Unknown` / absent-session telemetry and never uses display state to
 make a workflow decision.
 
-## Implementation evidence
+## Issue #1378 amendment
+
+The original default-deny policy remains, with one explicit exception and a
+corrected owner:
+
+1. The write-through RAM master roster owns exactly one ephemeral
+   `RuntimeMemberState` per durable `(team, member)`. `RuntimeHealth` is a
+   projection-only reader under ADR-014; it must not retain or merge a second
+   member-state map.
+2. Authenticated local heartbeat POSTs and successful Herdr list polls converge
+   on that same record. Source and timestamps describe the latest accepted
+   observation; they do not create source-specific states. Accepted ingress
+   order remains authoritative. The pre-cutover `ActivityObservation` request
+   field remains tolerated for wire compatibility but is not canonical state
+   ingress and cannot produce a runtime observation source.
+3. Each accepted state observation advances a typed `RosterStateRevision` and
+   `last_observed_at`, even for same-state evidence. `state_changed_at` still
+   changes only on a state edge. A failed/incomplete poll makes no state or
+   revision write; it may update typed availability/attempt metadata.
+4. A successful Herdr poll maps working to `Active`, idle/done to `Idle`,
+   blocked to `Blocked`, and covered unknown/absent members to `Unknown`.
+   `Offline` remains exclusive to an explicit heartbeat `SessionEnded` event;
+   no failed poll, timeout, absent snapshot, or projection gap may synthesize
+   `Offline` or `Dead`.
+5. Task-reminder eligibility is the sole policy exception (ADR-062, Phase BA
+   amendment). The reminder path reads the exact canonical `RuntimeMemberState`
+   from the master roster: `Idle` is eligible, `Active` is never interrupted,
+   `Blocked` and `Offline` receive no reminder and are escalated. It must not
+   consume `PickerMemberStatus`, a `RuntimeHealth` projection, or raw Herdr
+   list results as its eligibility authority. Poll/heartbeat ingress never
+   reads queues/tasks or emits directly; delivery-channel policy remains
+   downstream.
+6. Session, pid, source, and freshness metadata remain forbidden policy inputs.
+   Any additional state consumer still requires a requirement, ADR, boundary
+   record, and regression test.
+
+This amendment deliberately removes the older claim that every derived state
+is telemetry-only. It does not authorize state-based routing or delivery, and
+it does not modify the frozen synchronous daemon.
+
+## Phase AJ baseline implementation evidence
+
+This table identifies the pre-#1378 implementation that the amendment replaces
+where it names `RuntimeStatusCache` as the member-state owner. The issue #1378
+fix must replace those anchors with master-roster mutation/projection evidence;
+the table remains as historical traceability for the retained AJ clauses.
 
 | Clause | Source symbol | Test evidence |
 | --- | --- | --- |

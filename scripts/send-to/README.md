@@ -15,7 +15,10 @@ Shortcut that receives Finder files. The native picker is AppleScript's
 `osascript Choose from list`; cancel exits nonzero and does not invoke `atm
 send`. `atm-send-to.command` also raises a native `osascript display
 notification` if the pipeline fails, since a Quick Action has no visible
-terminal to show stderr in.
+terminal to show stderr in. (`ATM_SEND_TO_NOTIFIER` is a test-only seam that
+replaces that notification -- and `nautilus-atm-send-to.sh`'s `notify-send`
+one -- with a non-UI action so the test suite never raises a real desktop
+notification; production launches never set it.)
 
 ## Windows Explorer SendTo
 

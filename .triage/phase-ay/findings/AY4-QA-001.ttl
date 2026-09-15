@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY4-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY4-QA-001" ;
+  triage:title "No stall-injection gate for FakeHerdrProcessAdapter::notify() blocks A2/L12 coverage" ;
+  triage:description "Sprint doc L12 requires: 'Desktop notification stalls beyond HERDR_NOTIFY_DEADLINE -> the attempt returns within the five-second absolute bound with notify_ok == false; durable lead and recipient writes remain successful.' FakeHerdrProcessAdapter::notify() (crates/atm-herdr/src/lib.rs:867-887) takes a _deadline parameter but never reads it, and unlike prompt()/list() (which use prompt_gate/list_gate plus block_next_prompt()/block_next_list() to inject a stall) it has no notify_gate/block_next_notify() equivalent -- it always returns synchronously from queued results with no way to simulate a stalling notification. As written, the A2/L12 notify-stall-bounded-by-deadline behavior cannot be exercised by any test against this fake; independently re-verified by quality-mgr by reading lib.rs:690-889 line-by-line against the diff b8afa814f..296376da0, confirming req-qa's finding." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T23:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY4 ;
+  triage:foundAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY4-QA-001/AY4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY4-QA-001/AY4-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY4-QA-001/AY4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 867 ;
+  triage:snippet "fn notify<'a>(&'a self, title: &'a str, body: &'a str, _deadline: RequestDeadline) -> ... { ... state.notify_results.pop_front() ... }" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "296376da0" ;
+  triage:occursIn <urn:atm:triage:worktree/AY4/296376da0> .
+
+<urn:atm:triage:occurrence/AY4-QA-001/AY4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/lib.rs" ;
+  triage:line 734 ;
+  triage:snippet "pub fn block_next_notify(&self) -> Arc<tokio::sync::Notify> { ... state.notify_gate = Some(...) }" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "edb2ed877" ;
+  triage:occursIn <urn:atm:triage:worktree/AY4/edb2ed877> ;
+  triage:note "quality-mgr qa-pr1279-r3 close-out (final task's original dispatched fork was lost to a host disk-full outage 2026-09-07 through 2026-09-11; closed directly by quality-mgr on resumption). Confirmed at PR #1279 head edb2ed877: notify_gate field, block_next_notify() (lib.rs:734), and the reworked notify() (lib.rs:878-892) now honor the gate the same way prompt_gate/list_gate already did, closing the A2/L12 stall-injection gap. Live CI confirmed green at this exact head: gh run 34086314808, all three Test-matrix legs (ubuntu/macos/windows) pass, headSha matches PR #1279 exactly." .
+
+<urn:atm:triage:worktree/AY4/296376da0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay4-herdr-breaker-lifecycle" ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "296376da0" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AY4/edb2ed877>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1279-r3" ;
+  triage:branch "feature/ay4-herdr-breaker-lifecycle" ;
+  triage:headSha "edb2ed877" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-006>
+  a triage:Finding ;
+  triage:findingId "EQ-006" ;
+  triage:title "Direct sqlite3 access in benchmark/admission-capacity scripts violates Rand's 'never touch sqlite' ruling" ;
+  triage:description "Rand ruling, 2026-09-14 (relayed by fenix during BB.8.2): 'we should never touch sqlite', covering test, fixture, benchmark and driver code -- storage access belongs behind the daemon/HTTP-runtime boundary, not direct sqlite3 opens from scripts. fenix identified BB.8.2's own direct-sqlite sites (run_colima.py reset SQL, run_bb6_prompt_handoffs.py sqlite_count/prompt_handoff_rows) and is fixing those inside PR #1501 directly (SQL deleted / replaced with `atm task events --json`). This finding is scoped to the remaining atm-core sites fenix identified as outside BB.8.2: scripts/smoke/benchmark_snapshot.py (sqlite3.connect at lines 160, 306-307, 398, 431-432 -- reads, copies and writes mail.db snapshots); scripts/smoke/admission_capacity_support.py (lines 26, 759-766 -- read-only sqlite3 open of the benchmark mail.db); scripts/smoke/run_admission_capacity.py (line 502 -- checkpoint_closed_database on mail.db). Testbed-repo sites (seam_harness.py roster read, atm-troubleshoot skill sqlite3 select) are out of scope here -- routed to a randlee/atm-hermes-testbed issue separately." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "architectural_ruling" ;
+  triage:category "architecture" ;
+  triage:severity "important" ;
+  triage:source "Rand ruling 2026-09-14, relayed by fenix (ATM message 01M2EXF67W0A744S2YDW2NT3ZX)" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/benchmark_snapshot.py:160,306-307,398,431-432; scripts/smoke/admission_capacity_support.py:26,759-766; scripts/smoke/run_admission_capacity.py:502" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-006/1>, <urn:atm:triage:occurrence/EQ-006/2>, <urn:atm:triage:occurrence/EQ-006/3> ;
+  triage:triageRecordVersion "2" ;
+  triage:fixNote "cipher's fix (PR #1506): scripts/smoke/benchmark_snapshot.py and its test module deleted outright -- no more sqlite snapshot read/copy/write of mail.db. admission_capacity_support.py and run_admission_capacity.py's remaining sqlite reads replaced with a public CLI durability count; an R3 correction fixed an initial undercount (atm list's --limit-capped count) by summing uncapped bucket_counts instead. No direct sqlite3 access remains in any of the three scripts. Landed via 723f5f3d0 (remove benchmark SQLite snapshot access) + fefe2b443 (use uncapped public mailbox durability counts), merged to develop at 617a25f5b." .
+
+<urn:atm:triage:occurrence/EQ-006/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_snapshot.py" ;
+  triage:line 160 ;
+  triage:snippet "sqlite3.connect(...) -- direct sqlite access to read/copy/write mail.db benchmark snapshots (also lines 306-307, 398, 431-432)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "develop" ;
+  triage:headSha "617a25f5b" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-006/1> .
+
+<urn:atm:triage:occurrence/EQ-006/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/admission_capacity_support.py" ;
+  triage:line 26 ;
+  triage:snippet "sqlite3 read-only open of the benchmark mail.db (also lines 759-766)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "develop" ;
+  triage:headSha "617a25f5b" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-006/1> .
+
+<urn:atm:triage:occurrence/EQ-006/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 502 ;
+  triage:snippet "checkpoint_closed_database on mail.db -- direct sqlite checkpoint call" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "develop" ;
+  triage:headSha "617a25f5b" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-006/1> .
+
+<urn:atm:triage:worktree/EQ-006/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "617a25f5b" ;
+  triage:orderIndex 1 .

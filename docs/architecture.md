@@ -134,6 +134,17 @@ Phase-S portability note:
   contract
 - Phase S planning is tracked in [`docs/plans/phase-S/plan-phase-S.md`](./plan-phase-S.md)
 
+### 1.4 Herdr local steer backend
+
+The Herdr local-steer client is documented in
+[`docs/atm-herdr/architecture.md`](./atm-herdr/architecture.md), especially
+section 12's Phase AY compatibility and platform contract. Its normative
+requirements, including the cross-platform command/error/lifecycle contract,
+are in [`docs/atm-herdr/requirements.md`](./atm-herdr/requirements.md).
+The Phase AQ2-6 Windows deferral is superseded: AY.7 owns Windows process
+correctness and release-readiness owns live Windows proof, while the supported
+Herdr contract remains shared across macOS, Linux, and Windows.
+
 Phase-AA simplification note:
 - the current daemon composition root and daemon-routed doctor model are not
   the intended steady-state architecture
@@ -1078,11 +1089,12 @@ Each list row contains:
 Read-mutation output invariants:
 - when `mutation_applied = true` and a selected message is present, that
   message and `selected_message_id` must identify the same durable message
-- read-side mutation may mark the selected message `read = true`, but it must
-  still return that same message in the payload instead of re-running unread
-  selection and swapping in a different unread message
-- `bucket_counts` must describe the post-mutation mailbox state produced by
-  that command execution
+- a read-side transition may later mark the selected message `read = true`;
+  the returned payload retains that selected-message identity rather than
+  re-running unread selection and swapping in a different unread message
+- `bucket_counts` describe the reader-lane snapshot. Read-side state-handoff
+  acceptance does not promise durable visibility in that response; consumers
+  use a bounded later list poll when durability matters.
 - ack-side mutation remains separate; only `atm ack` clears
   `pending_ack_at` and sets `acknowledged_at`
 
@@ -1118,9 +1130,10 @@ The queue-query services derive `MessageClass` from `(ReadState, AckState)` and
 apply display-bucket selection to the derived class, not to raw persisted
 fields.
 
-For merged inbox surfaces, any displayed-message mutation must be written back
-to the physical inbox file that contributed the displayed record. The merged
-view is a read projection, not a synthetic write target.
+For merged inbox surfaces, a displayed message's legal read/seen transition is
+offered to the supervised non-blocking handoff for the authoritative ATM store.
+The merged view is a read projection, not a mutation target; retained origin
+inbox files are compatibility inputs rather than the write destination.
 
 ### 6.3 Ack Service
 
@@ -1396,21 +1409,24 @@ Architectural rules:
 The retained `members` surface is a local roster inspection service.
 
 Architectural rules:
-- it must succeed without daemon or hook-only state; live runtime enrichment is
-  best-effort and the command falls back to the durable local roster when the
-  daemon is unavailable
+- it must succeed without runtime or hook-only state; when the replacement
+  runtime is reachable it projects the canonical ephemeral master-roster state,
+  and when unavailable it falls back to durable roster identity with explicit
+  `Unknown`/unavailable enrichment rather than manufacturing `Dead`
 - it must load the roster from local team config
 - it should order members deterministically, with `team-lead` first when
   present
 - it may surface persisted member metadata already present in config
-- daemon-sourced session, pid, state, and timestamp enrichment may be layered
+- runtime-sourced session, pid, state, availability, and timestamp enrichment may be layered
   on without changing the base local verification purpose of the command; the
-  enrichment is diagnostic telemetry and is never required for roster
-  inspection to succeed
+  metadata is diagnostic and is never required for roster inspection to
+  succeed; the nudge path reads the canonical state owner, never this display
+  projection
 - this daemon-free fallback is the CLI-side half of the runtime-health
   observation boundary described in Section 21.6.3: `MembersCommand::run`
   renders the retained roster even when `runtime_snapshot` cannot obtain a
-  daemon response, while any returned observation remains telemetry only
+  runtime response, while any returned observation remains a projection of the
+  master-roster record
 
 ## 7. Read Pipeline
 
@@ -1429,13 +1445,16 @@ The accepted read pipeline stages are:
 4. apply sender, timestamp, selection-mode, and seen-state filters
 5. sort newest-first and apply limit
 6. apply legal read/seen mutations for displayed messages
-7. persist any read/seen state changes atomically
-8. return outcome
+7. offer any legal read/seen state changes to the supervised non-blocking
+   handoff without awaiting durable application
+8. return the reader-lane outcome and handoff-acceptance result
 
 Architectural rules:
 - no accepted read path depends on watcher events, reconcile completion, or
   mailbox-file ingest
 - durable ATM state, not merged mailbox-file truth, is authoritative for read
+- accepted handoff does not promise durable visibility in the returned read
+  outcome; a consumer that requires it uses a bounded later `atm list` poll
 - any retained mailbox-file compatibility readers are historical or
   repair-only surfaces and do not redefine the accepted read contract
 
@@ -1917,7 +1936,7 @@ Current runtime boundary rule:
 - read-time duplicate collapse by `message_id`
 - workflow axis classification
 - workflow axis transitions
-- task-linked ack-required classification
+- task-linked classification (never ack-required, ADR-062)
 - seen-state behavior
 - timeout behavior
 - ack transition behavior
@@ -2531,21 +2550,23 @@ surface only.
 
 ### 21.1 Authoritative State
 
-ATM moves to a split state model:
+ATM uses one logical master-roster record with split persistence domains:
 
 - SQLite is the authoritative durable store for:
   - messages
   - ack/task state
   - read/clear/delete message state
   - team roster
-- daemon memory is the authoritative live runtime view for:
-  - current agent status
-  - `pid`: transient daemon-owned process identity cached as the primary
-    liveness field
+- the write-through RAM master roster is the authoritative live runtime view
+  for each durable member's:
+  - one current `RuntimeMemberState`
+  - typed observation revision, source, and freshness/edge timestamps
+  - `pid`: transient process identity cached as diagnostic metadata, never a
+    second liveness state or policy input
   - `last_active_at`: daemon-memory-only runtime state used for live overlays
 
-SQLite may persist last-observed status for diagnostics, but that snapshot is
-not the live truth.
+SQLite must not persist live state or its observation metadata. `RuntimeHealth`
+and command output project the RAM roster; they do not own another member map.
 
 ### 21.1.1 SQLite Schema Contract
 
@@ -2733,9 +2754,12 @@ Architectural rules:
   (ADR-054), and neither kind ever precedes persistence
 - the shipped default emitter path is the receiver-only
   `MessageReceivedHookEmitter` delivery path
-- the built-in renderer selects exactly one of six named template kinds:
-  `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
-  `acknowledge`, and `acknowledge_task`
+- the built-in renderer selects exactly one of eleven named template kinds:
+  `delivery`, `delivery_ack`, `queue`, `queue_ack`, `acknowledge`,
+  `task_queued`, `task_ready`, `task_reminder`, `task_started`,
+  `task_complete`, and `task_closed`; `task` and `acknowledge_task` are
+  retired, `NudgeKind` selects the delivery or queue family, and a task-linked
+  message selects the kind named by its `task_transition`
 - any team-scoped built-in template override row must be resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract before the built-in
   emitter/render path runs; `atm` and `atm-core` must not perform direct
@@ -2758,7 +2782,6 @@ Architectural rules:
   success
 - the accepted compact built-in acknowledge forms are:
   - `<atm kind="ack" from="..." message-id="..."/>`
-  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
 - the accepted seam is a dedicated post-send emitter with optional direct
   notification-log append at the event site, not
   `DeliveryPlan`/`NotificationSink` or a daemon-owned notification
@@ -2798,10 +2821,10 @@ Hard invariant:
 - it must be impossible for two active ATM daemons to run on one host at the
   same time
 
-Daemon responsibilities:
+Replacement-runtime responsibilities:
 - transport listeners
 - route selection
-- live status cache
+- canonical ephemeral member state in the write-through RAM master roster
 - daemon-facing diagnostics and health queries used by `atm doctor`
 - direct post-send emission routing
 
@@ -2869,7 +2892,7 @@ Scope rule:
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains
 
-#### Task Storage (Deferred)
+#### Task Storage
 
 Phase `AC` closeout note:
 - speculative `TaskStore` and `TaskStoreDoctor` surfaces were deleted in
@@ -2878,6 +2901,61 @@ Phase `AC` closeout note:
 - if approved later, task storage starts from canonical Claude-code task
   schema plus Pydantic validation rather than from preserved transition
   scaffolding
+
+Phase-AX amendment (2026-09-04): superseded. Task storage is approved in
+Phase AX (phase plan §2). ADR-062 defines the daemon-owned,
+message-derived Rust state machine implemented by `atm-storage` and
+`atm-storage-rusqlite`; the Claude-code-schema-plus-Pydantic direction is
+withdrawn because the daemon already persists source messages, its write path
+has no Python, and a Claude Code task list is a per-session harness artifact,
+not a cross-host record. The AC.6 deletion stands: ADR-062 is a fresh design,
+not a revival of deleted scaffolding.
+
+Phase-BA amendment (2026-09-11): the task ledger keys one row per
+`(team, task_id)`, enforces at most one `active` task per agent with a
+database unique index, and orders each agent's queue by
+`(position, assigned_at, task_id)` with `assigned_at` reset only by reassign/reopen and never by move; see
+requirements Sections 15.4 and 22.1.
+
+| state | `Assigned` | `Started` | `Completed(outcome)` |
+| --- | --- | --- | --- |
+| none | → `assigned` | reject: no open task | reject: no open task |
+| `assigned` | same agent: resend with no event; other agent: reassign in place → `assigned` | → `active`; reject when the assignee already has an active task | → `complete(outcome)` |
+| `active` | same agent: resend with no event; other agent: reassign in place → `assigned` and free the old active slot | reject `ATM_TASK_ALREADY_ACTIVE`: the write fails, nothing is delivered, one state-neutral `rejected` event is appended (Phase BB amendment, ADR-062) | → `complete(outcome)` |
+| `complete` | reopen the same id → `assigned` | ordinary mail write reports `already_closed` | ordinary mail write reports `already_closed` |
+
+The runtime's pure disposition function combines the canonical roster state,
+the head open task, pending mail, the reminder threshold, and the consecutive
+refusal run. It nudges only an `Idle` assignee, never diverts an `Active`
+assignee, and turns `Blocked`, `Offline`, stalled, and refusal-threshold states
+into terminal escalation/hold decisions without a parallel task state machine.
+
+An `atm queue` message is an ephemeral scheduling item, not a task row. Its own
+unread or pending-ack state is the lifecycle, and `nudge_pending_at` is the next
+prompt time. Handoff re-arms that marker; read, acknowledgement when required,
+or task close discharges it. The queue item is considered before the next task
+and never appears in `atm task list`.
+
+Historical inherited boundary limitations recorded during the pre-BA review
+(all four were fixed at the Phase BA shipped head `9f5aef2fe`):
+
+- `RBP-F001`: the `TaskStore` escalation-recipient methods still expose raw
+  `String` / `&str` values. `AgentAddress` validation occurs at the runtime
+  use site, not at the storage trait boundary.
+- `RBP-F002`: `load_escalation_targets` currently maps roster-store read
+  failures to `Result<_, ()>`, so the helper does not retain the underlying
+  error context.
+- `RSH-001`: the queue pump's `run_blocking` helper awaits `spawn_blocking`
+  without its own timeout. Its current closures are local SQLite operations,
+  not network calls.
+- `RBQA-BA5-F004`: the six-method `PendingNudgeStore` test surface is
+  reimplemented by four hand-written doubles across consumer crates; there is
+  no shared configurable double yet.
+
+Phase BA closeout — shipped state (2026-09-12): `RBP-F001`, `RBP-F002`,
+`RSH-001`, and `RBQA-BA5-F004` are historical finding labels, not open
+limitations. The shipped storage-boundary validation, error propagation,
+bounded blocking work, and shared test surface are the current contract.
 
 #### RosterStore
 
@@ -3059,8 +3137,9 @@ Architectural rules:
 - CLI doctor code may answer direct local config/store checks without daemon
   routing, but daemon-owned runtime state still crosses one explicit request /
   response boundary
-- the daemon owns collection of runtime-only health such as:
-  - heartbeat-driven runtime member state
+- the runtime-health projection reads runtime-only signals such as:
+  - canonical ephemeral master-roster member state, updated by authenticated
+    heartbeat POST and successful Herdr poll ingress
   - singleton ownership state
   - live status-cache health
   - ingest backlog / degraded-ingest state
@@ -3072,10 +3151,20 @@ Architectural rules:
   - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
-- Runtime observation (state, pid, session, and timestamps) is daemon-memory
-  telemetry. Only heartbeat and successful environment-attested local CLI or
-  graft ingress update it; it never selects routing, nudge, retry, admission,
-  delivery, notification, or policy behavior.
+- Runtime member state and its pid/session/timestamp metadata live only in the
+  RAM master roster. Authenticated heartbeat POST and successful Herdr poll
+  ingress converge there. `RuntimeHealth` projects it and must not merge or
+  retain a second member map. Pre-cutover local activity metadata is tolerated
+  for wire compatibility but does not mutate canonical state.
+- Session, pid, source, and timestamps never select routing, retry, admission,
+  delivery, or notification behavior. The nudge invariant (requirements
+  Section 15.4) is the only policy that reads runtime member state; it reads
+  the exact canonical `RuntimeMemberState`, never a `RuntimeHealth` or picker
+  projection.
+- A failed Herdr poll preserves prior state and triggers no nudge. A
+  successful covered unknown/absent result becomes `Unknown`; only explicit
+  heartbeat `SessionEnded` becomes `Offline`. Projection gaps never render
+  `Dead`.
 - Changed trusted pid/session replaces the current observation and emits
   retained diagnostic evidence. It does not reject ingress, create an
   `IdentityConflict` lifecycle state, degrade readiness, or alter cache policy.
@@ -3098,8 +3187,9 @@ The daemon runtime must use one documented operational contract.
 Daemon singleton is requirement `#1`.
 
 Architectural rules:
-- only one `atm-daemon` process may exist anywhere on the host for the
-  supported runtime model
+- only one `atm-daemon` process may exist per OS account per host for the
+  supported runtime model (Rand, 2026-09-08.)
+- a container is its own host for this requirement (Rand, 2026-09-08.)
 - singleton enforcement uses at least:
   - a pre-spawn launch gate before fork/exec
   - a daemon-side startup gate before serving state

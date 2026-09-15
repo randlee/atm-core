@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY7-QA-002>
+  a triage:Finding ;
+  triage:findingId "AY7-QA-002" ;
+  triage:title "D5 windows-process-audit.md doctor artifact not produced on failing CI run; audit table still all-placeholder" ;
+  triage:description "quality-mgr qa-pr1285-r2 (PR #1285 @ 718f14a13, CI run 34094274172). .github/workflows/ci.yml's 'Upload Windows Herdr process-audit doctor fixture' step (uploads windows-herdr-process-audit-<run_id> containing windows-ci-doctor.json) sits immediately after the 'Run replacement-workspace tests excluding legacy atm-daemon' step and carries no if: always() / continue-on-error guard, only the ci-scope/matrix.os gate. Because that prior test step failed (AY7-QA-001), GitHub Actions skipped the upload step by default: gh api repos/randlee/atm-core/actions/runs/34094274172/artifacts lists only 6 wheel/sdist artifacts, no windows-herdr-process-audit-* artifact. Separately, docs/atm-herdr/windows-process-audit.md's Windows-observation column is still 100% placeholder text ('no recorded Windows Herdr observation ... AY.7 / release readiness: authoritative owner') across every row at 718f14a13 -- D5 requires filling these cells from the Windows CI lane's test output and the doctor JSON artifact, which has not been done on any run yet, not only this failing one. D5 is blocked pending both a green windows-latest Test leg (so the upload step runs) and an actual doc-fill pass using that artifact's content." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope ".github/workflows/ci.yml, docs/atm-herdr/windows-process-audit.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T08:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY7 ;
+  triage:foundAt "2026-09-07T08:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-002/AY7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY7-QA-002/AY7-2> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY7-QA-002/1> ;
+  triage:closedAt "2026-09-07T09:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY7-QA-002/AY7-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-herdr/windows-process-audit.md" ;
+  triage:line 1 ;
+  triage:snippet "Windows observation column: 'no recorded Windows Herdr observation ... AY.7 / release readiness: authoritative owner' (all rows, unfilled)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay7-windows-herdr-process-installer" ;
+  triage:headSha "718f14a13" ;
+  triage:occursIn <urn:atm:triage:worktree/AY7/718f14a13> .
+
+<urn:atm:triage:occurrence/AY7-QA-002/AY7-2>
+  a triage:Occurrence ;
+  triage:file ".github/workflows/ci.yml" ;
+  triage:line 1 ;
+  triage:snippet "Upload step now guarded: if: always() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest', retains if-no-files-found: error; docs/atm-herdr/windows-process-audit.md rows filled from CI run 34098877486 evidence" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay7-windows-herdr-process-installer" ;
+  triage:headSha "b4fe93a19" ;
+  triage:occursIn <urn:atm:triage:worktree/AY7/b4fe93a19> .
+
+<urn:atm:triage:worktree/AY7/718f14a13>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1285-r1" ;
+  triage:branch "feature/ay7-windows-herdr-process-installer" ;
+  triage:headSha "718f14a13" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AY7/b4fe93a19>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1285-r1" ;
+  triage:branch "feature/ay7-windows-herdr-process-installer" ;
+  triage:headSha "b4fe93a19" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AY7-QA-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T09:10:00Z"^^xsd:dateTime ;
+  triage:fixCommit "b4fe93a19" ;
+  triage:fixBranch "feature/ay7-windows-herdr-process-installer" ;
+  triage:verifiedInRound "qa-pr1285-r3" ;
+  triage:resolutionNote "arch-ctm's FIX-AY7-R2 (commits bb657d0ce, b4fe93a19) added if: always() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' to the doctor-artifact upload step in .github/workflows/ci.yml (retaining if-no-files-found: error), and filled every row of docs/atm-herdr/windows-process-audit.md's Windows-observation column from real evidence. Verified: gh run view 34098877486 --json jobs shows Test (windows-latest) conclusion=success at head bb657d0ce4324b3526a2ed6f63ec820f26b4a87e, all three Test-matrix legs green; gh api repos/randlee/atm-core/actions/runs/34098877486/artifacts confirms windows-herdr-process-audit-34098877486 present (artifact id 10010390205); downloaded and read windows-ci-doctor.json (herdr.configured=true, breaker.state=closed, 3 CLI-transport endpoints default/blue/green) -- content matches what the doc cites. Read docs/atm-herdr/windows-process-audit.md in full at b4fe93a19: every row cites run 34098877486 and head bb657d0ce4324b3526a2ed6f63ec820f26b4a87e, and rows with evidence gaps honestly state 'not covered' rather than fabricating claims (e.g. live-prompt result, agent-list operation specifics). Cross-checked all 5 test names cited in the doc against the real windows-latest job log (job 101669721560, gh api .../logs --allow-escape-sequences) -- all pass twice with no failures. Secrets/PII sweep of both the doc and the artifact JSON: clean. D5 is satisfied on this evidence." .

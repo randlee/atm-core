@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -10,11 +11,12 @@ use tempfile::tempdir;
 
 use super::{
     ResolvedRecipient, SendExecutionContext, WarningEntry, build_send_delivery_plan,
-    persist_message, prepare_threaded_message,
+    persist_message, prepare_send_context, prepare_threaded_message,
 };
 use crate::boundary::{
-    MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
-    NonClaudeOutboundDeliveryRequest, RosterEntry, RosterHarness, RosterMemberKind,
+    HerdrNudgeTarget, LocalSteerTarget, LocalTmuxNudgeTarget, MailMessageState,
+    MailStoreMailboxMetadataRow, Message, MessageKey, NonClaudeOutboundDeliveryRequest,
+    PostSendBuiltInTarget, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -31,7 +33,84 @@ use crate::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendReques
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-use crate::types::{AgentName, CommandAction, IsoTimestamp, TeamName};
+use crate::types::{AgentName, CommandAction, IsoTimestamp, PaneId, TaskId, TeamName};
+
+#[test]
+fn writer_rejects_task_op_on_foreign_team_or_host_recipient() {
+    let temporary = std::env::temp_dir();
+    let mut request = SendRequest::new(
+        temporary.clone(),
+        temporary,
+        "sender".parse().unwrap(),
+        "recipient@other-team",
+        "local-team".parse().unwrap(),
+        SendMessageSource::Inline("task".to_owned()),
+        None,
+        false,
+        Some("T1".parse().unwrap()),
+        false,
+    )
+    .unwrap();
+    request.task_op = Some(atm_storage::TaskOp::Start);
+    let foreign = super::validate_task_request(&mut request).expect_err("foreign team");
+    assert!(
+        foreign
+            .message()
+            .contains("task commands are local-team only")
+    );
+
+    request.to = Some("recipient@local-team.example.test".parse().unwrap());
+    let hosted = super::validate_task_request(&mut request).expect_err("host target");
+    assert!(
+        hosted
+            .message()
+            .contains("task commands are local-team only")
+    );
+}
+
+#[test]
+fn legacy_task_complete_request_closes_the_task() {
+    let temporary = std::env::temp_dir();
+    let producer_1_4_json = serde_json::json!({
+        "home_dir": temporary,
+        "current_dir": std::env::temp_dir(),
+        "caller_identity": "sender",
+        "caller_team": "local-team",
+        "to": {"agent": "recipient"},
+        "message_source": {"Inline": "task"},
+        "summary_override": null,
+        "requires_ack": false,
+        "task_complete": "T1",
+        "dry_run": false
+    });
+    let mut request_1_4: SendRequest =
+        serde_json::from_value(producer_1_4_json).expect("1.4.0 request");
+    super::validate_task_request(&mut request_1_4).expect("legacy close normalizes");
+    assert_eq!(request_1_4.task_id.as_ref().map(TaskId::as_str), Some("T1"));
+    assert_eq!(
+        request_1_4.task_op,
+        Some(atm_storage::TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        })
+    );
+    assert_eq!(request_1_4.task_complete, None);
+
+    let mut mismatch = request_1_4.clone();
+    mismatch.task_op = None;
+    mismatch.task_id = Some("T1".parse().expect("task id"));
+    mismatch.task_complete = Some("T2".parse().expect("task id"));
+    let error = super::validate_task_request(&mut mismatch).expect_err("mismatch rejected");
+    assert!(error.message().contains("name different tasks"));
+    assert!(error.message().contains("Recovery:"));
+
+    let mut explicit = mismatch;
+    explicit.task_op = Some(atm_storage::TaskOp::Start);
+    super::validate_task_request(&mut explicit).expect("typed operation wins");
+    assert_eq!(explicit.task_id.as_ref().map(TaskId::as_str), Some("T1"));
+    assert_eq!(explicit.task_op, Some(atm_storage::TaskOp::Start));
+    assert_eq!(explicit.task_complete, None);
+}
 
 pub(crate) fn message(
     from: &str,
@@ -58,6 +137,9 @@ pub(crate) fn message(
         thread_mode,
         expires_at: None,
         task_id: None,
+        placement: None,
+        task_op: None,
+        task_complete: None,
         extra: Map::new(),
     }
 }
@@ -92,6 +174,7 @@ pub(crate) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
+    team_roster_override: Option<Vec<RosterEntry>>,
     pub(crate) roster_member_missing: bool,
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
@@ -110,6 +193,7 @@ impl TestRuntime {
             commit_error_message,
             recipient_harness,
             claude_roster_members: vec![AgentName::from_validated("recipient")],
+            team_roster_override: None,
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
@@ -118,6 +202,11 @@ impl TestRuntime {
             mailbox_metadata_queries: AtomicUsize::new(0),
             persisted_states: Mutex::new(Vec::new()),
         }
+    }
+
+    pub(crate) fn with_team_roster(mut self, roster: Vec<RosterEntry>) -> Self {
+        self.team_roster_override = Some(roster);
+        self
     }
 }
 
@@ -172,15 +261,17 @@ impl RetainedServiceRuntime for TestRuntime {
         Ok(())
     }
 
-    fn load_roster_member(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
+    fn load_roster_member(&self, team: &TeamName, agent: &AgentName) -> Option<RosterEntry> {
         if self.roster_member_missing {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(RosterEntry {
+        if let Some(roster) = &self.team_roster_override {
+            return roster
+                .iter()
+                .find(|entry| entry.team_name == *team && entry.agent_name == *agent)
+                .cloned();
+        }
+        Some(RosterEntry {
             team_name: team.clone(),
             agent_name: agent.clone(),
             member_kind: RosterMemberKind::Permanent,
@@ -192,29 +283,54 @@ impl RetainedServiceRuntime for TestRuntime {
             model: crate::types::ModelName::default(),
             recipient_pane_id: None,
             metadata_json: Map::new(),
-        }))
+        })
     }
 
-    fn load_team_roster(
-        &self,
-        team: &TeamName,
-    ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
+    fn load_team_roster(&self, team: &TeamName) -> Vec<RosterEntry> {
         if self.roster_member_missing {
-            return Ok(Vec::new());
+            return Vec::new();
         }
-        Ok(vec![RosterEntry {
-            team_name: team.clone(),
-            agent_name: AgentName::from_validated("recipient"),
-            member_kind: RosterMemberKind::Permanent,
-            harness: match self.recipient_harness {
-                DeliveryHarnessPath::ClaudeCode => RosterHarness::ClaudeCode,
-                DeliveryHarnessPath::NonClaude => RosterHarness::CodexCli,
-            },
-            agent_type: crate::schema::AgentType::default(),
-            model: crate::types::ModelName::default(),
-            recipient_pane_id: None,
-            metadata_json: Map::new(),
-        }])
+        if let Some(roster) = &self.team_roster_override {
+            return roster
+                .iter()
+                .filter(|entry| entry.team_name == *team)
+                .cloned()
+                .collect();
+        }
+        vec![roster_entry(
+            AgentName::from_validated("recipient"),
+            self.recipient_harness,
+        )]
+    }
+
+    fn list_roster_teams(&self) -> Vec<TeamName> {
+        self.team_roster_override
+            .as_ref()
+            .map(|roster| {
+                roster
+                    .iter()
+                    .map(|entry| entry.team_name.clone())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect()
+            })
+            .unwrap_or_else(|| vec![TeamName::from_validated(TEST_TEAM)])
+    }
+}
+
+fn roster_entry(agent_name: AgentName, harness: DeliveryHarnessPath) -> RosterEntry {
+    RosterEntry {
+        team_name: TeamName::from_validated(TEST_TEAM),
+        agent_name,
+        member_kind: RosterMemberKind::Permanent,
+        harness: match harness {
+            DeliveryHarnessPath::ClaudeCode => RosterHarness::ClaudeCode,
+            DeliveryHarnessPath::NonClaude => RosterHarness::CodexCli,
+        },
+        agent_type: crate::schema::AgentType::default(),
+        model: crate::types::ModelName::default(),
+        recipient_pane_id: None,
+        metadata_json: Map::new(),
     }
 }
 
@@ -323,6 +439,179 @@ impl RetainedMailboxRuntime for TestRuntime {
     }
 }
 
+#[test]
+fn write_ingress_carries_canonical_roster_members_forward() {
+    let root = tempdir().expect("root");
+    let team = TeamName::from_validated(TEST_TEAM);
+    let roster = [("sender", "sender-alias"), ("recipient", "recipient-alias")]
+        .into_iter()
+        .map(|(name, alias)| {
+            let mut metadata_json = Map::new();
+            metadata_json.insert(
+                "alias".to_owned(),
+                serde_json::Value::String(alias.to_owned()),
+            );
+            RosterEntry {
+                team_name: team.clone(),
+                agent_name: AgentName::from_validated(name),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: crate::schema::AgentType::Worker,
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json,
+            }
+        })
+        .collect();
+    let runtime = TestRuntime {
+        team_roster_override: Some(roster),
+        ..TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode)
+    };
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("sender-alias");
+    request.to = Some("recipient-alias".parse().expect("alias target"));
+
+    let context = prepare_send_context(&runtime, &mut request).expect("admitted context");
+
+    assert_eq!(request.caller_identity.as_str(), "sender");
+    assert_eq!(context.canonical_sender.as_str(), "sender");
+    assert_eq!(context.recipient.agent.as_str(), "recipient");
+}
+
+#[test]
+fn unique_name_d03_default_retained_runtime_resolves_bare_alias_to_remote_owner() {
+    let root = tempdir().expect("root");
+    let local_team = TeamName::from_validated(TEST_TEAM);
+    let remote_team = TeamName::from_validated("remote-team");
+    let mut alias_metadata = Map::new();
+    alias_metadata.insert(
+        "alias".to_owned(),
+        serde_json::Value::String("remote-alias".to_owned()),
+    );
+    let runtime = TestRuntime {
+        team_roster_override: Some(vec![
+            RosterEntry {
+                team_name: local_team.clone(),
+                agent_name: AgentName::from_validated("sender"),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: crate::schema::AgentType::Worker,
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: Map::new(),
+            },
+            RosterEntry {
+                team_name: remote_team.clone(),
+                agent_name: AgentName::from_validated("recipient"),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: crate::schema::AgentType::Worker,
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: alias_metadata,
+            },
+        ]),
+        ..TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode)
+    };
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("sender");
+    request.caller_team = local_team;
+    request.to = Some("remote-alias".parse().expect("bare alias target"));
+
+    let context = prepare_send_context(&runtime, &mut request).expect("admitted context");
+
+    assert_eq!(context.recipient.team, remote_team);
+    assert_eq!(context.recipient.agent.as_str(), "recipient");
+}
+
+#[test]
+fn unique_name_d13_host_qualified_alias_keeps_wire_token_and_resolves_on_ingress() {
+    let root = tempdir().expect("root");
+    let local_team = TeamName::from_validated(TEST_TEAM);
+    let remote_team = TeamName::from_validated("remote-team");
+    let mut alias_metadata = Map::new();
+    alias_metadata.insert(
+        "alias".to_owned(),
+        serde_json::Value::String("remote-alias".to_owned()),
+    );
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode).with_team_roster(vec![
+        RosterEntry {
+            team_name: local_team.clone(),
+            agent_name: AgentName::from_validated("sender"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Worker,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: Map::new(),
+        },
+        RosterEntry {
+            team_name: remote_team.clone(),
+            agent_name: AgentName::from_validated("recipient"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Worker,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: alias_metadata,
+        },
+    ]);
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("sender");
+    request.caller_team = local_team;
+    request.to = Some(
+        "remote-alias@remote-team.remote.example.test"
+            .parse()
+            .expect("host-qualified alias target"),
+    );
+
+    let context = prepare_send_context(&runtime, &mut request).expect("admitted context");
+
+    assert_eq!(context.recipient.team, remote_team);
+    assert_eq!(context.recipient.agent.as_str(), "recipient");
+    let forwarded = request.to.expect("wire target remains present");
+    assert_eq!(forwarded.agent().as_str(), "remote-alias");
+    assert_eq!(forwarded.team().map(TeamName::as_str), Some("remote-team"));
+    assert_eq!(
+        forwarded.host().map(|host| host.as_str()),
+        Some("remote.example.test")
+    );
+}
+
+#[test]
+fn unique_name_d12_self_send_via_alias_is_rejected_after_ingress_resolution() {
+    let root = tempdir().expect("root");
+    let team = TeamName::from_validated(TEST_TEAM);
+    let mut metadata_json = Map::new();
+    metadata_json.insert(
+        "alias".to_owned(),
+        serde_json::Value::String("sender-alias".to_owned()),
+    );
+    let runtime = TestRuntime {
+        team_roster_override: Some(vec![RosterEntry {
+            team_name: team.clone(),
+            agent_name: AgentName::from_validated("sender"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: crate::schema::AgentType::Worker,
+            model: crate::types::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json,
+        }]),
+        ..TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode)
+    };
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("sender");
+    request.to = Some("sender-alias".parse().expect("alias target"));
+
+    let error = match prepare_send_context(&runtime, &mut request) {
+        Ok(_) => panic!("canonicalized self-address must be rejected"),
+        Err(error) => error,
+    };
+
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
+}
+
 pub(super) fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {
     DeliveryRecipientSnapshot {
         agent: AgentName::from_validated("recipient"),
@@ -331,11 +620,116 @@ pub(super) fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipie
         recipient_pane_id: None,
         local_tmux_post_send: false,
         local_herdr_post_send: false,
+        herdr_agent: None,
         herdr_session: None,
         graft_post_send: false,
         bare_cli_post_send: false,
         roster_backed: true,
     }
+}
+
+#[test]
+fn tmux_and_herdr_dispatches_share_the_rendered_template() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let event = PostSendHookEvent {
+        sender: AgentName::from_validated(TEST_SENDER),
+        sender_chat_id: None,
+        sender_team: TeamName::from_validated(TEST_TEAM),
+        sender_host: None,
+        recipient: AgentName::from_validated("recipient"),
+        recipient_team: TeamName::from_validated(TEST_TEAM),
+        message_id: "01KZ0000000000000000000000".parse().expect("message"),
+        description: "rendered description".to_owned(),
+        requires_ack: false,
+        is_ack: false,
+        task_id: None,
+        task_transition: None,
+        recipient_pane_id: Some(PaneId::from_cli("%1").expect("pane")),
+    };
+    let mut tmux_snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    tmux_snapshot.recipient_pane_id = event.recipient_pane_id.clone();
+    tmux_snapshot.local_tmux_post_send = true;
+    let tmux = super::hook::build_built_in_dispatch(
+        &runtime,
+        &tmux_snapshot,
+        &event,
+        crate::send::NudgeMode::Immediate,
+    )
+    .expect("tmux dispatch result")
+    .expect("tmux dispatch");
+    let mut herdr_snapshot = tmux_snapshot.clone();
+    herdr_snapshot.local_tmux_post_send = false;
+    herdr_snapshot.local_herdr_post_send = true;
+    let herdr = super::hook::build_built_in_dispatch(
+        &runtime,
+        &herdr_snapshot,
+        &event,
+        crate::send::NudgeMode::Immediate,
+    )
+    .expect("Herdr dispatch result")
+    .expect("Herdr dispatch");
+    let PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Tmux(LocalTmuxNudgeTarget {
+        rendered_nudge: tmux_text,
+        ..
+    })) = tmux.target
+    else {
+        panic!("expected tmux target");
+    };
+    let PostSendBuiltInTarget::LocalSteer(LocalSteerTarget::Herdr(HerdrNudgeTarget {
+        rendered_nudge: herdr_text,
+        ..
+    })) = herdr.target
+    else {
+        panic!("expected Herdr target");
+    };
+    let mut bare_cli_snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    bare_cli_snapshot.bare_cli_post_send = true;
+    let bare_cli = super::hook::build_built_in_dispatch(
+        &runtime,
+        &bare_cli_snapshot,
+        &event,
+        crate::send::NudgeMode::Immediate,
+    )
+    .expect("bare-CLI dispatch result")
+    .expect("bare-CLI dispatch");
+    let PostSendBuiltInTarget::QueuePull(target) = bare_cli.target else {
+        panic!("expected bare-CLI queue-pull target");
+    };
+    assert_eq!(target.body, tmux_text);
+    assert!(!target.body.contains("full immutable body"));
+    assert_eq!(tmux_text, herdr_text);
+}
+
+#[test]
+fn post_send_herdr_skips_a_nonconforming_canonical_recipient_without_panicking() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let event = PostSendHookEvent {
+        sender: AgentName::from_validated(TEST_SENDER),
+        sender_chat_id: None,
+        sender_team: TeamName::from_validated(TEST_TEAM),
+        sender_host: None,
+        recipient: AgentName::from_validated("TeamLead"),
+        recipient_team: TeamName::from_validated(TEST_TEAM),
+        message_id: "01KZ0000000000000000000000".parse().expect("message"),
+        description: "invalid herdr canonical name".to_owned(),
+        requires_ack: false,
+        is_ack: false,
+        task_id: None,
+        task_transition: None,
+        recipient_pane_id: None,
+    };
+    let mut snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    snapshot.local_herdr_post_send = true;
+
+    let dispatch = super::hook::build_built_in_dispatch(
+        &runtime,
+        &snapshot,
+        &event,
+        crate::send::NudgeMode::Immediate,
+    )
+    .expect("invalid fallback is advisory, not an error");
+
+    assert!(dispatch.is_none(), "invalid Herdr fallback must be skipped");
 }
 
 pub(super) fn outbound_message() -> InboxMessage {
@@ -358,6 +752,9 @@ pub(super) fn outbound_message() -> InboxMessage {
         thread_mode: None,
         expires_at: None,
         task_id: Some("task-123".parse().expect("task id")),
+        placement: None,
+        task_op: None,
+        task_complete: None,
         extra: Map::new(),
     }
 }
@@ -371,7 +768,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         SendMessageSource::Inline("hello".to_string()),
         Some("hello".to_string()),
         false,
-        Some("task-123".parse().expect("task id")),
+        None,
         false,
     )
     .expect("test send request")
@@ -429,6 +826,8 @@ fn path_body_detection_emits_structured_warning_event() {
         message_id: AtmMessageId::new(),
         requires_ack: false,
         task_id: None,
+        task_complete: None,
+        already_closed: None,
         summary: Some("path reference".to_owned()),
         message: None,
         warnings: Vec::new(),
@@ -471,6 +870,9 @@ impl ObservabilityPort for RecordingObservability {
             query_state: Some(AtmObservabilityHealthState::Unavailable),
             maintenance: None,
             diagnostic: None,
+            jsonl: Default::default(),
+            timeline: Default::default(),
+            degraded: Vec::new(),
             detail: Some("test observer".to_string()),
         })
     }
@@ -648,6 +1050,26 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
 }
 
 #[test]
+fn rejected_task_report_uses_plain_message_post_write_snapshot() {
+    let mut message = outbound_message();
+    message.task_id = Some("T1".parse().expect("task id"));
+    message.task_op = Some(atm_storage::TaskOp::Close {
+        outcome: atm_storage::TaskCloseOutcome::Completed,
+        reason: Some("report".to_owned()),
+    });
+    let persistence = crate::send::DeliveryPersistenceResult::persisted(message)
+        .with_task_rejection(Some(AtmError::validation(
+            "task close rejected; report delivered",
+        )));
+
+    assert!(persistence.task_rejection.is_some());
+    assert_eq!(persistence.original_message.task_id, None);
+    assert_eq!(persistence.original_message.task_op, None);
+    assert_eq!(persistence.original_message.task_complete, None);
+    assert_eq!(persistence.original_message.placement, None);
+}
+
+#[test]
 fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
     let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -676,6 +1098,54 @@ fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
             .is_empty(),
         "a failed SQLite admission must not leave a persisted record"
     );
+}
+
+#[test]
+fn send_aliases_are_resolved_before_any_message_is_persisted() {
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let sender_alias = format!("sender_{TEST_TEAM}");
+    let recipient_alias = format!("recipient_{TEST_TEAM}");
+    let mut sender = roster_entry(
+        AgentName::from_validated("canonical-sender"),
+        DeliveryHarnessPath::ClaudeCode,
+    );
+    sender
+        .metadata_json
+        .insert("alias".to_string(), serde_json::json!(&sender_alias));
+    let mut recipient = roster_entry(
+        AgentName::from_validated("canonical-recipient"),
+        DeliveryHarnessPath::ClaudeCode,
+    );
+    recipient
+        .metadata_json
+        .insert("alias".to_string(), serde_json::json!(&recipient_alias));
+    runtime.team_roster_override = Some(vec![sender, recipient]);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = send_request(tempdir.path());
+    request.caller_identity = AgentName::from_validated(sender_alias.clone());
+    request.to = Some(
+        format!("{recipient_alias}@{TEST_TEAM}")
+            .parse()
+            .expect("alias recipient"),
+    );
+    request.task_id = Some("task-123".parse().expect("task id"));
+
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("alias send succeeds");
+    assert_eq!(outcome.sender.as_str(), "canonical-sender");
+    assert_eq!(outcome.agent.as_str(), "canonical-recipient");
+    let records = runtime.persisted_records.lock().expect("records lock");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].agent.as_str(), "canonical-recipient");
+    assert_eq!(records[0].envelope.from.as_str(), "canonical-sender");
+    assert_eq!(
+        records[0].envelope.task_id.as_ref().map(TaskId::as_str),
+        Some("task-123")
+    );
+    let serialized = serde_json::to_string(&records[0]).expect("serialize message");
+    assert!(!serialized.contains(&sender_alias));
+    assert!(!serialized.contains(&recipient_alias));
 }
 
 #[test]
@@ -852,7 +1322,7 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
 
 #[test]
 #[serial_test::serial(env)]
-fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
+fn plain_file_task_envelope_does_not_infer_requires_ack() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
@@ -873,7 +1343,7 @@ fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
     let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect("plain file task envelope send succeeds");
 
-    assert!(outcome.requires_ack);
+    assert!(!outcome.requires_ack);
     assert!(outcome.task_id.is_none());
     let records = runtime
         .persisted_records
@@ -882,8 +1352,8 @@ fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
         .clone();
     assert_eq!(records.len(), 1);
     let record = &records[0];
-    assert!(record.envelope.requires_ack);
-    assert!(record.envelope.pending_ack_at.is_some());
+    assert!(!record.envelope.requires_ack);
+    assert!(record.envelope.pending_ack_at.is_none());
     assert!(record.envelope.task_id.is_none());
 }
 
@@ -958,22 +1428,17 @@ fn send_request_new_rejects_invalid_caller_team_before_command_execution() {
 }
 
 #[test]
-fn resolve_recipient_rejects_invalid_alias_target() {
-    let mut aliases = std::collections::BTreeMap::new();
-    aliases.insert("tl".to_string(), "../bad-agent".to_string());
-    let config = AtmConfig {
-        aliases,
-        ..Default::default()
-    };
+fn resolve_recipient_forwards_member_token_without_config_alias_resolution() {
+    let config = AtmConfig::default();
 
-    let error = super::resolve_recipient(
+    let recipient = super::resolve_recipient(
         &"tl".parse().expect("address"),
         &TEST_TEAM.parse().expect("team"),
         Some(&config),
     )
-    .expect_err("invalid alias target");
+    .expect("recipient");
 
-    assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
+    assert_eq!(recipient.agent.as_str(), "tl");
 }
 
 #[test]

@@ -174,6 +174,9 @@ mod tests {
                 query_state: Some(AtmObservabilityHealthState::Unavailable),
                 maintenance: None,
                 diagnostic: None,
+                jsonl: Default::default(),
+                timeline: Default::default(),
+                degraded: Vec::new(),
                 detail: Some("test observer".to_string()),
             })
         }
@@ -203,10 +206,14 @@ mod tests {
                 thread_mode: None,
                 expires_at: None,
                 task_id: None,
+                placement: None,
+                task_op: None,
+                task_complete: None,
                 extra: Map::new(),
             },
             false,
             false,
+            None,
         )
         .expect("logical message")
     }
@@ -219,6 +226,7 @@ mod tests {
             recipient_pane_id: None,
             local_tmux_post_send: false,
             local_herdr_post_send: false,
+            herdr_agent: None,
             herdr_session: None,
             graft_post_send: false,
             bare_cli_post_send: false,

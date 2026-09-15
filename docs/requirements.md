@@ -63,6 +63,29 @@ Phase-AC supersession note:
   names; a later approved task-storage phase would reintroduce a fresh
   canonical design instead of reviving speculative transition scaffolding
 
+Phase-AX amendment (2026-09-04): superseded. Task storage is approved in
+Phase AX (phase plan §2). Its canonical model is ADR-062's daemon-owned,
+message-derived Rust state machine in `atm-storage` and
+`atm-storage-rusqlite`; the Claude-code-schema-plus-Pydantic direction is
+withdrawn because task state derives from messages already persisted by the
+daemon, the write path has no Python, and a Claude Code task list is a
+per-session harness artifact rather than a cross-host record. The AC.6
+deletion stands: ADR-062 revives none of that scaffolding.
+
+Phase-AX.6 amendment (2026-09-05): lead notification and escalation are part
+of the retained task surface. `atm-daemon` is the reserved daemon actor and
+cannot be added to or renamed in the roster. Configured daemon and per-team
+escalation recipients are additive fan-out destinations, with a per-tick cap
+of eight.
+
+Phase-BA amendment (2026-09-11): escalation is one ordinary message to the
+roster lead and to every configured escalation recipient, resolved
+independently. An open task escalates once when its reminder count reaches 10
+and nudging then stops until the task changes state (start or close) or is
+reassigned or reopened — a change in the assignee's
+runtime state alone does not resume it; a `Blocked` or `Offline` assignee
+escalates once per episode and receives zero nudges. See Section 15.4.
+
 The retained product surface is:
 - `atm send`
 - `atm list`
@@ -76,6 +99,12 @@ The retained product surface is:
 
 Approved additive CLI feature for the Phase `Y` line:
 - `atm help`
+
+Approved additive CLI feature for the Phase `AX` line:
+- `atm escalation add|remove|list`
+
+Approved additive CLI feature for the Phase `BA` line:
+- `atm task assign|close|move|list|events`
 
 The system must preserve the retained command behavior unless these
 requirements explicitly retire or change it.
@@ -191,12 +220,15 @@ Satisfied by:
   auto-start it when absent.
 
 - `REQ-P-RUNTIME-002` Daemon singleton is ATM daemon requirement `#1`:
-  exactly one `atm-daemon` process may exist anywhere on the host for the
-  supported runtime model, and no code path may intentionally or accidentally
-  allow a second daemon to reach serving state.
+  exactly one `atm-daemon` process may exist per OS account per host. (Rand,
+  2026-09-08.) A container is its own host for this requirement. (Rand,
+  2026-09-08.) Daemons serving separate OS accounts on one physical machine
+  are not a violation. (Rand, 2026-09-08.) No code path may intentionally or
+  accidentally allow a second daemon for the same OS account to reach serving
+  state.
 
-- `REQ-P-RUNTIME-003` Daemon singleton enforcement must use multiple guard
-  layers:
+- `REQ-P-RUNTIME-003` Daemon singleton enforcement per OS account per host
+  must use multiple guard layers. (Rand, 2026-09-08.)
   - a pre-spawn launch gate that serializes daemon creation attempts
   - a daemon-side startup gate that refuses serving state when ownership is
     already held
@@ -309,13 +341,35 @@ Satisfied by:
     captured original configuration; ambiguous, missing, changed, or
     unsupported service configuration fails closed before an unsafe mutation
   - adapters must preserve platform-native ownership: an owned macOS
-    LaunchAgent plist copy, exact Windows SCM `BINARY_PATH_NAME` round trip,
-    or an owned systemd `--user` drop-in.  They must not rewrite an unknown
-    source configuration or start a direct child daemon as fallback
+    LaunchAgent plist copy or an owned systemd `--user` drop-in.  They must
+    not rewrite an unknown source configuration or start a direct child
+    daemon as fallback.  Windows has no temporary-launch adapter: the managed
+    daemon is a per-user scheduled task and `temporary-launch` fails closed
+    (ADR-053 amendment 2026-09-05)
   - after successful restoration, the same selected pair starts through the
     ordinary managed service without the temporary argument and doctor proves
     normal mTLS/default state; selected-pair and applicable signing gates
     remain mandatory for every lifecycle-changing operation
+- `REQ-P-DAEMON-SWITCH-002` `daemon-switch` switches one matched CLI/daemon
+  pair in exactly three ordinary situations: `switch --release
+  <X.Y.Z|latest>` selects the platform's stable published release without
+  caller-supplied binary paths; `switch --prerelease <X.Y.Z|latest>` selects
+  a GitHub prerelease Release, checksum-verifies and stages its manifest-
+  declared host archive, applies the platform's required signing, and leaves
+  the Homebrew formula unchanged; and `switch --worktree <path>` selects a
+  dogfooding worktree build.  Both release selectors resolve through the
+  GitHub Releases API and fail explicitly when offline.  A worktree switch
+  requires an exact `prerelease/vX.Y.Z` tag on its
+  HEAD, where `X.Y.Z` equals the workspace and both release binaries; `--bump`
+  may run the patch++ prerelease-tag helper and release build first.  The tag
+  prevents speculative code from reporting a released version.  Each mode
+  verifies the pair, switches selectors, restarts the one managed daemon, and
+  ends with `status --doctor` on macOS, Linux, and Windows.  Raw `--cli` /
+  `--daemon` paths remain only for fixtures and Colima; a pair outside a
+  platform release root that reports a published version is refused unless the
+  caller explicitly opts out.  All other daemon-switch ceremony is deferred to
+  a later plan (Rand, 2026-09-05 and 2026-09-09; ADR-053 amendments; issue
+  #1350).
   - evidence may expose redacted service metadata, pair identity, mode,
     digests, phase durations, and recovery outcome, but never private keys,
     certificate contents, raw trust records, or primary-database state
@@ -327,6 +381,54 @@ Satisfied by:
   This requirement is governed by ADR-053 and composes with ADR-026,
   ADR-047, ADR-052, `REQ-P-BENCHMARK-001`, and
   `REQ-CORE-TRANSPORT-002B1`.
+
+  Herdr entry-management addendum (AY.5): the same operator control plane
+  additionally exposes exactly `herdr-entry install`, `remove`, and `status
+  [--repair]`. This is an explicit, independent transaction; ordinary
+  `switch`, `restart`, `restore`, and daemon startup never invoke it. The
+  command reads Herdr configuration and its ordered endpoint list only from
+  native `atm doctor --json`: `configured: true` is required for install,
+  `false` is a safe refusal, and null, missing, malformed, or nonzero doctor
+  output is `HERDR_DOCTOR_UNREADABLE` (exit 4), never a Python fallback.
+  
+  Herdr restart-coordination addendum (AY.6): `restart --restart-herdr
+  [<default-or-session>]` is a distinct, explicit operator action. It selects
+  exactly one endpoint from native doctor data and the AY.5 owned-entry
+  projection; an omitted selector is valid only for one configured endpoint.
+  Socket-path, foreign/missing, or journal-active entries fail closed. When
+  the doctor reports that the installed client is newer than the running
+  server and `capabilities.live_handoff` is exactly true, it invokes the
+  selected scoped `herdr server live-handoff`; otherwise it emits a pane-loss
+  warning and requires `--stop-herdr-panes` before scoped `server stop` and
+  entry-owned relaunch. It never invokes `herdr update`, starts or restarts
+  ATM, takes ownership of Herdr, or runs implicitly during switch, restore, or
+  ordinary restart. Every command and the whole operation are deadline-bound;
+  a fresh native doctor read must report the selected endpoint `ok` before
+  success. The single JSON envelope uses exit 0/3/4. Exact refusals are
+  `HERDR_NOT_CONFIGURED`, `HERDR_DOCTOR_UNREADABLE`,
+  `HERDR_RESTART_ENDPOINT_REQUIRED`, `HERDR_RESTART_ENDPOINT_UNKNOWN`,
+  `HERDR_RESTART_SOCKET_PATH`, `HERDR_RESTART_PANES_ACK_REQUIRED`,
+  `HERDR_RESTART_NO_LIVE_HANDOFF`, `HERDR_RESTART_TIMEOUT`, and
+  `HERDR_RESTART_VERIFY_TIMEOUT`; an Herdr/entry failure is
+  `HERDR_RESTART_HERDR_FAILED`. Before an ordinary ATM restart mutates its
+  managed service, daemon-switch re-reads doctor and refuses all
+  `client_server_mismatch` endpoints with `HERDR_RESTART_ENDPOINTS_PENDING`.
+  Default and named sessions receive deterministic per-user native entry
+  identifiers; an endpoint configured with explicit socket-path provenance is
+  externally owned and is refused. Every owned object carries
+  `managed-by=atm daemon-switch` and a canonical-render digest.
+
+  Install journals `planned -> written -> registered -> verified` durably
+  before each mutation, atomically writes the owned object, registers it with
+  the native per-user manager, verifies marker/digest/registration, then
+  completes the journal. Remove verifies ownership first and unregisters then
+  deletes only a marker-bearing, digest-matching object. An incomplete journal
+  blocks install/remove; `status --repair` either completes verified
+  registration or unregisters and removes the marker-bearing partial object.
+  Foreign collisions, digest mismatch, Windows account/session mismatch, and
+  ambiguity fail closed without overwrite or deletion. Every result is exactly
+  one stdout JSON object with `ok`, `code`, `message`, `remedy`, and `entries`;
+  success exits 0, safe refusals exit 3, and operational failures exit 4.
 
 - `REQ-P-DAEMON-DISPATCHER-001` Request work accepted by the daemon must remain
   tracked by runtime-owned drain accounting until it finishes or is cancelled.
@@ -394,9 +496,12 @@ Satisfied by:
 - file-reference policy handling for `send --file`
 - origin-inbox merge / ingest compatibility for Claude-owned inbox files
 - ATM-owned read/ack/clear/task state in SQLite
+- daemon and per-team escalation-recipient state in SQLite
+- lead and escalation-recipient notifications for repeated or blocked tasks
 - structured logging through `sc-observability`
 - log query and follow through `sc-observability`
 - local diagnostics through `atm doctor`
+- the Phase `AX` additive CLI feature `atm escalation`
 - local team discovery and recovery through `atm teams`
 - local roster verification through `atm members`
 - native agent/plugin notification interface
@@ -776,8 +881,9 @@ Required config fields:
 
 Supported optional config fields:
 - `[atm].team_members`
-- `[atm].aliases`
 - `[[atm.post_send_hooks]]`
+- `[atm].aliases` is retired (below, and `REQ-ROSTER-NAME-007/008`): atm
+  ignores it except for the doctor pane-alias diagnostic
 
 Runtime caller-context rules:
 - repo-local `.atm.toml` `[atm].identity` and the legacy top-level `identity`
@@ -813,8 +919,13 @@ Runtime caller-context rules:
   for runtime identity resolution and `atm doctor` must flag them for removal
 - `.atm.toml` may define `[atm].team_members` as the baseline team roster that
   should always be present in `config.json`
-- `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
-  canonical member identities
+- `.atm.toml` `[atm].aliases` is retired. Rand (2026-09-07): ".atm.toml
+  is ONLY used by hmux and 'atm doctor' to display a warning if alias is
+  not consistent. NOTHING else in atm uses .atm.toml alias." Member
+  aliases live only in the roster (`REQ-ROSTER-NAME-002`); atm-core reads
+  no alias table from `.atm.toml`; the only `.atm.toml` alias use in
+  `atm` is the doctor pane-alias consistency warning
+  (`REQ-ROSTER-NAME-008`).
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
   best-effort recipient-scoped post-send automation
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
@@ -822,7 +933,15 @@ Runtime caller-context rules:
   must be rejected with migration guidance directing operators to
   `[[atm.post_send_hooks]]`
 - config sections outside ATM-owned config, such as `[rmux]` or future
-  `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`
+  `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`,
+  with one diagnostic-only exception: `atm doctor` may read
+  `[[rmux.windows.panes]].alias` from the `.atm.toml` discovered from its
+  caller cwd and compare it with the durable alias of the named pane member
+  for that caller's `ATM_TEAM`
+- that doctor comparison is validation only: it never supplies an alias to
+  member creation, identity or recipient resolution, sends, or writes; it
+  does not widen under `--all-teams`, and a missing or unparsable `.atm.toml`
+  skips the comparison without failing doctor
 
 ### 3.3.1 Config And Schema Recovery
 
@@ -869,6 +988,155 @@ Required diagnostics:
 Operator examples and safe repair guidance live in
 [`persisted-data-repair.md`](./persisted-data-repair.md).
 
+### 3.3.2 Member Naming, Alias, And Herdr Agent Name
+
+Rand (2026-09-07), the whole section in one line: "This really is a simple
+UX abstraction. Both names work user facing, everything under the hood
+used member-name except herdr which uses unique-name." Every requirement
+below is that sentence spelled out: the alias is a user-facing token,
+substituted for the member name at the CLI edge; storage, wire, mailbox,
+audit and routing see only the member name; Herdr alone sees
+`unique_name = alias ?? member name`, which must be unique across the
+database.
+
+Product requirement IDs: `REQ-ROSTER-NAME-001` through `REQ-ROSTER-NAME-010`.
+
+Source rulings (Rand, 2026-09-07, verbatim): "the requirement comes from
+herdr agent name MUST be unique which means herdr agent name must be unique
+on atm database."; "herdr agent name = alias. if alias is null/empty, alias
+would be equal to member name"; "this allows us to have the same name on
+different teams (we should guarantee uniqueness of names per team already)
+by simply adding an alias for the conflicting name."; "we call this 'alias'
+because using the alias for cross-team messaging has value independent of
+herdr."; "so basically, there should be a query across all team roster for
+'unique-name' which would return alias ?? name."; "if the list of unique-name collides with a
+proposed alias ?? name, add member must fail"; "the alias should never be
+used in database." (scoped later the same day by Rand: "alias MUST be in
+database AND in immutable roster in RAM"; the earlier sentence applies to
+message, ack, audit and task-state rows only, see REQ-ROSTER-NAME-009);
+"alias would be
+acceptable at all user/agent facing interfaces and would immediately be
+replaced at the ingress interface."
+
+Definitions:
+- canonical member name: the roster `agent_name`; the only name stored in
+  any non-roster row
+- alias: the optional roster attribute `metadata_json["alias"]`; an empty or
+  whitespace-only alias is the same as no alias
+- effective name (the Herdr agent name): the alias when present, otherwise
+  the canonical member name; `effective(member) = alias ?? agent_name`
+
+- `REQ-ROSTER-NAME-001` Canonical member names are unique within a team.
+  `add-member` rejects a canonical name already present in the same team.
+- `REQ-ROSTER-NAME-002` Effective names are unique across the whole ATM
+  database: for any two distinct roster rows in any teams,
+  `effective(a) != effective(b)`. The check covers every combination:
+  canonical vs canonical, canonical vs alias, alias vs canonical, alias vs
+  alias. It applies to members of every backend, not only Herdr members,
+  because the backend may change later.
+- `REQ-ROSTER-NAME-003` The same canonical name may exist in several teams
+  when the effective names differ. The first member of a name in the
+  database needs no alias; a later member of that name in another team must
+  carry an alias, or an alias must already be on the earlier member. The
+  rejection error names the conflicting team and member and states the
+  `--alias` remedy.
+- `REQ-ROSTER-NAME-004` Uniqueness is enforced inside the roster store's
+  write transaction on every write path (`add-member`, `set-member`
+  including alias change and alias clear, restore/import, daemon and HTTP
+  member mutation), not only in the CLI. Two concurrent writers of the same
+  effective name: exactly one succeeds. Removing a member or deleting a team
+  frees its effective name.
+- `REQ-ROSTER-NAME-005` Grammar: canonical names and aliases follow the ATM
+  segment rules (ASCII letters, digits, `-`, `_`; non-empty). A member whose
+  backend is Herdr additionally requires its effective name to satisfy
+  Herdr's live-agent grammar `[a-z][a-z0-9_-]{0,31}`; this is validated when
+  the member is added, when its alias changes, and when its backend becomes
+  Herdr. Comparison is exact (case-sensitive); ATM does not fold case.
+- `REQ-ROSTER-NAME-006` Every Herdr call for a member (prompt, get, wait,
+  list matching, presence probe) targets the effective name, never the
+  canonical name directly when an alias exists. Logs and doctor output show
+  both (`member = team/agent`, `herdr_agent = <effective>`).
+  - Socket transport and doctor endpoint reporting address roster session
+    `default` through Herdr's default server socket; every other session name
+    uses `sessions/<name>/herdr.sock`, unless explicit `[herdr] socket_path`
+    takes precedence.
+- `REQ-ROSTER-NAME-007` Ingress replacement: an alias is accepted wherever a
+  member name is accepted (send recipient, `--as`, `ATM_IDENTITY`, read and
+  peek filters, ack, `set-member`/`remove-member` arguments) and is replaced
+  by the canonical name at daemon ingress (`REQ-ROSTER-NAME-010`), before validation, self-send
+  checks, mailbox lookup, routing, audit and persistence. Resolution order:
+  a canonical name in the addressed team wins (Rand, 2026-09-07: "`atm send
+  bob` would send bob based on ATM_TEAM just like today"); then the roster
+  alias. `.atm.toml` is not an input (see §3.3). Because aliases are unique
+  database-wide, a bare alias with no `@team` resolves to its member in any
+  team (cross-team addressing by alias alone). An unknown name falls through
+  to the existing canonical parse/lookup error unchanged. An ambient
+  activity observation attested to an alias is dropped on replacement.
+- `REQ-ROSTER-NAME-008` `.atm.toml` pane `alias` keys are spawner input
+  only. Rand (2026-09-07): ".atm.toml alias is ONLY read in doctor as a
+  diagnostic message IF alias in roster != alias in .atm.toml". `atm
+  doctor` emits one diagnostic line per pane whose alias differs from (or
+  is missing in) the roster alias for the caller's team (§3.3); nothing
+  else in `atm` reads a `.atm.toml` alias.
+- `REQ-ROSTER-NAME-009` Upgrade. Rand (2026-09-07): "where we will run
+  into issues are when upgrade occurs. if non-unique names show up in
+  database, hmux spawn will reject a new member when its add-member call
+  reuses a colliding effective name, so that should force the team to be
+  re-constructed before it can actually go live in herdr." No migration
+  rewrites, renames, aliases, or deletes existing roster
+  rows, and opening a database that already holds duplicate effective names
+  must not fail. On the next roster write, enforcement is delta-scoped: only
+  effective names changed or added by that write are checked against the
+  database-wide namespace. Untouched legacy collision rows remain readable and
+  writable, and `atm doctor` reports them as findings. A write that creates a
+  new collision fails with the `REQ-ROSTER-NAME-003` error naming every
+  conflicting `(team, member)` pair and the `--alias` remedy; a write that
+  repairs a colliding member, removes it, or changes only metadata while its
+  effective name is unchanged succeeds. This lets operators repair legacy
+  collisions one member at a time before a team goes live in Herdr. (2026-09-09)
+  Delta-scoped enforcement is the retained ruling for upgrade compatibility:
+  pre-existing collisions are doctor findings, not a blanket write lock.
+  `hmux session` and `hmux launch` reuse existing roster rows and apply aliases
+  through `update-member`; only `hmux spawn` registers a new member through
+  `add-member`.
+- Rand (2026-09-07) on why persistence is canonical-only: "by always using
+  the non-alias name when writing to database, we avoid missing things on
+  query. i.e. team-lead-alias becomes team-lead when written to database".
+- `REQ-ROSTER-NAME-010` Alias parity at every CLI argument. Rand
+  (2026-09-07): "From any cli command accepting team-member name, alias must
+  be allowed AND substituted before sending over wire. i.e. atm send
+  team-lead-alias <message> || atm send team-lead-alias@team <message> or
+  any args i.e. --as team-lead-alias, --from team-lead-alias ..."; "basically
+  if all prompts are written for either member name or alias, it will work
+  the same". Every `atm` argument, option, or environment variable that
+  names a team member (positional recipients, `name@team` forms, `--as`,
+  `--from`, `--to`, member arguments of `atm teams`, nudge and doctor
+  targets, chat-id and qualified-identity forms) accepts the alias. The
+  substitution point is daemon ingress, not the CLI. Rand (2026-09-07): "I
+  would probably allow the daemon to do the replacement. cli doesn't need
+  to query for alias before sending. alias would be in immutable roster,
+  so replacement on ingress to the daemon is the logical single point to
+  translate." The CLI passes the token through unchanged; the daemon's
+  request ingress (HTTP runtime, peer receive) replaces every member-name
+  field against the in-memory roster before validation, self-send checks,
+  mailbox lookup, routing, audit and persistence. The substitution point
+  is the existing check, not a new one. Rand (2026-09-07): "the
+  substitution point should be the point where team-member is checked
+  against immutable roster in RAM already."; "It should simply change to
+  instead of returning a bool/enum (member-valid), it would return
+  (member-valid, member-name)". That membership check returns the
+  canonical member name alongside validity, and every caller uses the
+  returned canonical name from there on. A prompt or script
+  written with aliases and the same prompt written with canonical names
+  produce identical daemon-side handling and identical persisted rows.
+  Cross-host: Rand (2026-09-07): "alias@team.host works". The sending
+  daemon forwards the alias unchanged for a remote team; the receiving
+  daemon's ingress substitutes the canonical name, so persisted rows are
+  canonical on both hosts.
+
+The full permutation matrix and its test mapping live in
+`docs/plans/phase-ay/herdr-naming-test-matrix.md`.
+
 ### 3.4 Claude Settings Resolution
 
 The system must resolve Claude settings for file-reference policy checks.
@@ -904,7 +1172,7 @@ Required integration rules:
 - `atm-core` must keep the shared crates behind an ATM-owned injected boundary
 - `atm` owns the concrete shared-crate bootstrap and dependency wiring
 - the active release baseline uses the published
-  `sc-observability = "1.0.0"` crates.io dependency
+  `sc-observability = "=1.2.0"` crates.io dependency
 - the same pinned Rust toolchain must be used locally and in CI across ATM and
   `sc-*` repos
 - the concrete integration work is planned in Phase K of
@@ -1039,9 +1307,15 @@ Alias rules:
 - sender aliases may be accepted on input, but canonical sender identity
   remains the routing and validation identity
 - same-team messages keep current canonical sender projection behavior
-- cross-team messages may project an alias-oriented sender in the persisted
-  `from` field only when ATM also stores the canonical sender identity in
-  SQLite-owned state for routing, validation, and audit
+- the persisted `from` and `to` of every message, acknowledgement, audit and
+  task-state row carry canonical member names only, for same-team and
+  cross-team messages alike. The alias itself is stored: Rand
+  (2026-09-07): "alias MUST be in database AND in immutable roster in
+  RAM". It lives in the roster row and its RAM mirror only; message, ack,
+  audit and task-state rows carry the canonical name (Rand: "the alias
+  should never be used in database" refers to those rows)
+- roster aliases (§3.3.2) are the only alias source; `.atm.toml`
+  `[atm].aliases` is retired (§3.3)
 
 Post-send-hook rules:
 - ATM always has one shipped default post-send path in the installed binary:
@@ -1091,18 +1365,24 @@ Post-send-hook rules:
   `home_dir` metadata rather than the caller's live process working directory
 - if no matching external `[[atm.post_send_hooks]]` rule is configured, ATM
   must still attempt the shipped built-in in-process post-send path
-- the built-in shipped nudge path must support exactly six named template
+- the built-in shipped nudge path must support exactly eleven named template
   cases:
   - `delivery`
   - `delivery_ack`
-  - `delivery_task`
-  - `delivery_task_ack`
+  - `queue`
+  - `queue_ack`
   - `acknowledge`
-  - `acknowledge_task`
+  - `task_queued`
+  - `task_ready`
+  - `task_reminder`
+  - `task_started`
+  - `task_complete`
+  - `task_closed`
+  `NudgeKind` selects the delivery or queue family; a task-linked message
+  selects the kind named by its `task_transition`.
 - the default built-in acknowledge nudge shapes are intentionally compact:
   - `<atm kind="ack" from="..." message-id="..."/>`
-  - `<atm kind="ack" from="..." message-id="..." task-id="..."/>`
-- teams may override any subset of those six built-in template bodies through
+- teams may override any subset of those eleven built-in template bodies through
   host-scoped, team-keyed ATM-managed override rows resolved through the
   storage-neutral `NudgeTemplateOverrideStore` contract
 - built-in precedence is:
@@ -1183,6 +1463,7 @@ Write one message into one target inbox.
 - `--from <name>`
 - `--requires-ack`
 - `--task-id <id>`
+- `--task-complete` (requires `--task-id`)
 
 Retired from the current implementation:
 - `--offline-action`
@@ -1304,12 +1585,26 @@ Required behavior:
 
 Required behavior:
 - persist `taskId`
-- require acknowledgement for any task-linked message
 - reject blank task ids
+- acknowledgement MUST NOT read, gate on, or change task state
 
 If `--task-id` is present:
 - treat the message as task-linked mail
-- imply `--requires-ack`
+- task-linked mail never requires acknowledgement; readiness is signalled by
+  `task_ready`, and the assignee starts the task with `atm task start`
+- reject `--requires-ack` because it conflicts with `--task-id`
+
+`--task-complete` closes the task named by `--task-id` with outcome
+`completed`; it requires `--task-id` and carries the mandatory completion
+report. It is the alias of `atm task close <id> completed`.
+
+Required behavior:
+1. the assigner or assignee MUST be able to close the task
+2. the report message MUST be delivered before the close is applied
+3. closing an already-complete task MUST deliver the message and report the
+   condition to the caller
+4. closing a task id that never existed MUST fail without writing a message
+5. `atm send <agent> --task-id <id>` MUST be the alias of `atm task assign`
 
 ### 6.6 Output Contract
 
@@ -1326,6 +1621,7 @@ JSON output must include:
 - `message_id`
 - `requires_ack`
 - `task_id`
+- `task_complete` when a completion was requested
 
 Dry-run JSON output must include:
 - `action = "send"`
@@ -1335,6 +1631,7 @@ Dry-run JSON output must include:
 - `dry_run = true`
 - `requires_ack`
 - `task_id`
+- `task_complete` when a completion was requested
 
 ## 7. Queue Inspection Surfaces (`atm list`, `atm peek`, and `atm read`)
 
@@ -1428,6 +1725,14 @@ Legacy `atm read` flag migration:
 
 Additional supported flags:
 - `--limit <n>`
+- `--tasks [--member <name>]` lists durable task rows for the selected team
+- `--task-events <task-id> [--member <name>]` lists append-only audit rows
+  for one task
+
+`--tasks` and `--task-events` are mutually exclusive and each conflicts with
+every mailbox filter, including `--task`; `--member` is only valid with one of
+those task-ledger surfaces. Their JSON results are bare arrays of `TaskRow` or
+`TaskEventRow`, respectively, rather than the mailbox-list envelope.
 
 Required behavior:
 - load the mailbox/query surface through a bounded metadata-first query path
@@ -1499,7 +1804,8 @@ Additional supported flags:
 
 Required behavior:
 - return exactly one full message
-- mutate owner-visible seen/read state when a message is selected
+- offer the selected message's legal owner-visible seen/read transition to the
+  supervised non-blocking handoff when a message is selected
 - when `--message-id <id>` is present, resolve that exact message when present
 - collapse successor/update chains to their terminal node before selector-based
   matching so superseded predecessors do not appear as separate current
@@ -1525,17 +1831,19 @@ Required behavior:
 - when no selector is provided, prioritize pending-ack messages ahead of
   unread messages that do not require acknowledgement
 - support optional wait mode with timeout
-- write the selected message back through the read-axis mutation rules
-- persist read-triggered state changes back to the physical inbox file that
-  owns the selected displayed message when origin inbox files are present in
-  the merged surface
-- when a read-side mutation is applied, the returned `message` payload and
-  `selected_message_id` must still refer to that same mutated durable message;
-  `atm read` must not mark one message read and then silently swap the output
-  payload to a different unread message
-- `bucket_counts` in the read outcome must describe the post-mutation mailbox
-  state produced by that command execution rather than stale pre-mutation
-  counts
+- offer the selected message's legal read-axis transition to the supervised
+  non-blocking state handoff without awaiting durable application
+- route the accepted transition to the authoritative ATM store; retained
+  origin inbox files are compatibility inputs rather than the read mutation
+  destination
+- when a read-side transition is accepted, the returned `message` payload and
+  `selected_message_id` must still refer to that same selected message; `atm
+  read` must not accept a transition for one message and then silently swap the
+  output payload to a different unread message
+- `bucket_counts` in the read outcome describe the reader-lane snapshot. A
+  read-side transition accepted by the non-blocking handoff MAY become visible
+  later; consumers requiring durable visibility use a bounded `atm list`
+  poll as specified in §7.12.
 
 ### 7.6 Shared Message Classification And Deduplication
 
@@ -1644,7 +1952,9 @@ Peek mutation rule:
 - `atm peek` never mutates mailbox state
 
 Read mutation rules:
-- any selected `atm read` message is written back with `read = true`
+- any selected `atm read` message's legal read/seen transition is offered to
+  the supervised non-blocking handoff; `mutation_applied = true` reports
+  acceptance, not durable `read = true` visibility
 - `atm read` must never create a new pending-ack obligation on display
 - displaying a message never promotes acknowledgement state
 - only sender-owned durable `requires_ack` intent may create `pending_ack_at`
@@ -1702,10 +2012,17 @@ Every list row must include:
 When `mutation_applied = true` and `message` is present:
 - `message.message_id` and `selected_message_id` must identify the same
   durable message
-- `bucket_counts` must reflect the mailbox state after the read-side mutation
-  completes
+- it means the read/seen transition was accepted by the supervised,
+  non-blocking read-state handoff; it does **not** mean that transition is
+  durable or visible in this response
+- `message.read` and `bucket_counts` are the reader-lane snapshot and MAY
+  still show the pre-handoff state. Both bare `atm read --json` and
+  `atm read --json --message-id <id>` use the same acceptance semantics.
+- consumers requiring durable visibility MUST poll `atm list --json` with a
+  bounded deadline. A handoff overflow or process exit leaves the message
+  unread/unseen and re-presented; `atm doctor` reports handoff degradation.
 - the read-side mutation contract is distinct from `atm ack`; read may mark a
-  message `read = true`, but only ack clears `pending_ack_at` and sets
+  message read after the handoff drains, but only ack clears `pending_ack_at` and sets
   `acknowledged_at`
 
 Human-readable `atm peek` and `atm read` output must render one message body
@@ -1752,6 +2069,25 @@ adapter.
 The handoff behavior is a product decision recorded in ADR-059. The ADR
 records permanent drop and synchronous write-through as rejected alternatives
 and their operator consequences.
+
+### 7.14 Write-Source Preflight Concurrency
+
+Caller-owned `--file` and template source paths are a write-admission concern
+but MUST NOT consume Tokio worker capacity or reader-lane capacity while their
+filesystem policy is evaluated.
+
+- `R-WRITE-PREFLIGHT-1` File and template source preparation MUST run through
+  a bounded blocking admission of capacity two. Inline bodies do not require
+  blocking admission.
+- `R-WRITE-PREFLIGHT-2` Source preparation MUST observe the request deadline.
+  A request unable to start or finish preflight in time MUST fail closed before
+  durable admission; it MUST NOT persist a partial message.
+- `R-WRITE-PREFLIGHT-3` A timed-out source-preflight job retains its permit
+  until its blocking work exits. This bounds permanently stalled filesystem
+  operations to two, leaves read-family work schedulable, and forbids treating
+  an abandoned response as a successful write.
+- `R-WRITE-PREFLIGHT-4` Every source-preflight job that outlives its deadline
+  MUST be counted and surfaced through `atm doctor` for the daemon lifetime.
 
 ## 8. `atm ack`
 
@@ -2103,6 +2439,10 @@ The initial doctor implementation must cover:
 - `sc-observability` initialization health
 - active shared log path visibility
 - `sc-observability` query-health readiness for `atm log`
+- open-task reminder thresholds and lead-notification audit outcomes
+- blocked runtime episode escalation and retry behavior
+- daemon and per-team escalation recipient configuration and effective-source
+  reporting
 
 Caller-context behavior for `atm doctor`:
 
@@ -2138,6 +2478,14 @@ Each doctor finding must expose at least:
 
 The obsolete config-identity finding must use:
 - `ATM_WARNING_IDENTITY_DRIFT`
+
+Phase AX.6 doctor findings must use these warning codes and actionable guidance:
+
+- `ATM_ROSTER_NO_LEAD` — `assign one lead: atm teams update-member <team> <member> --agent-type lead`
+- `ATM_ROSTER_MULTIPLE_LEADS` — `keep one lead: atm teams update-member <team> <member> --agent-type <other type>`
+- `ATM_ROSTER_RESERVED_NAME` — `rename the member: atm-daemon is reserved for daemon-originated messages`
+- `ATM_TASK_STALLED` — `check the assignee or close the task: atm task close <task_id> completed --stdin`
+- `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt`
 
 Critical findings must cause a non-zero exit status.
 
@@ -2189,6 +2537,9 @@ Bare `atm teams` must:
 - persist the member's durable `home_dir` on the canonical ATM roster row and
   project that same `home_dir` into compatibility `config.json.members`
 - create any required local inbox state atomically with the roster update
+- reject the reserved member name `atm-daemon` with
+  `ATM_MESSAGE_VALIDATION_FAILED`; an existing legacy row may remain and is
+  reported by `atm doctor` as `ATM_ROSTER_RESERVED_NAME`
 
 `atm teams update-member` must:
 - validate that the target team exists
@@ -2208,6 +2559,9 @@ Bare `atm teams` must:
 - project the repaired metadata deterministically into compatibility
   `config.json`
 - preserve unchanged member metadata when a field is not supplied
+- reject the reserved member name `atm-daemon` with
+  `ATM_MESSAGE_VALIDATION_FAILED`; an existing legacy row may remain and is
+  reported by `atm doctor` as `ATM_ROSTER_RESERVED_NAME`
 
 `atm teams remove-member` must:
 - require the caller identity to belong to the target team
@@ -2622,10 +2976,77 @@ The implementation must encode legal transitions in code structure, not only in 
 Messages with `taskId` are task-linked messages.
 
 Required rules:
-- every task-linked message must require acknowledgement
-- a task-linked message remains actionable until acknowledged
-- a task-linked message must continue to appear in `atm read` until acknowledged
-- a task-linked message must never be removed by `atm clear` before acknowledgement
+- a task-linked message never requires acknowledgement; readiness is signalled
+  by the task pass (`task_ready`), and start by `atm task start`
+- acknowledgement is message hygiene only: `atm ack` MUST NOT read, gate on,
+  or change task state, and task admission MUST NOT reject a message ack
+- every transition, rejection, and reminder is append-only audit data; a
+  same-agent resend of an open task id records no task event and changes no task
+  state; it refreshes only the assignment message linkage (Phase BA design
+  §3.1a); the durable tables and replay contract are
+  defined by ADR-062
+
+Task lifecycle (Phase BA):
+1. A task MUST exist as exactly one row per `(team, task_id)`.
+2. Task state MUST be `assigned` (queued), `active` (working), or closed.
+3. An agent MUST hold at most one `active` task; the database MUST enforce
+   this with a unique index on `(team, assignee)` restricted to
+   `state = 'active'`. The index fires when a task **starts** (the implicit
+   `assigned → active` move; rejected as `ActiveElsewhere`), never at
+   `atm task assign` admission — any number of `assigned` rows may queue
+   behind the active one.
+4. Starting a task MUST be `atm task start <id>` by the assignee; it MUST move
+   the task from `assigned` to `active`, MUST move it to the head of the queue,
+   and MUST send the assigner a start message. The daemon MUST NOT start a task.
+5. An agent's queue MUST be ordered by `(position, assigned_at, task_id)`;
+   `assigned_at` MUST be the time of the current assignment; it is reset only by reassignment or reopen and never by a queue move; a new task's default position MUST be the
+   end of the queue.
+6. `atm task move <id> --before <other> | --head | --end` MUST reposition an
+   `assigned` task only; `--head` MUST place it next up behind the active
+   task, and the active task MUST never be repositioned or preempted.
+7. Closing a task MUST record one typed outcome from
+   `completed | refused | cancelled` with optional reason text,
+   MUST remove the task from the queue, and MUST append a timestamped event.
+8. Reassignment and reopening MUST use `atm task assign` on the same id:
+   an open id may be reassigned in place, and a closed id may be reopened;
+   neither operation creates a second row or permits simultaneous assignees.
+   Every transition MUST append exactly one `task_events` row under that id;
+   `reassigned` and `reopened` are event kinds, not outcomes.
+9. `atm task` MUST be the closed subcommand set `assign`, `start`, `close`,
+   `move`, `list`, `events`; `atm send <agent> --task-id <id>` MUST alias `assign`
+   and `atm send <assigner> --task-complete --task-id <id>` MUST alias
+   `close <id> completed` with a mandatory report.
+10. Close MUST deliver the report message before applying the close; an
+    already-complete task MUST deliver and inform the caller; a task id that
+    never existed MUST fail without writing a message.
+11. `atm task list` MUST show the caller's queue in order and `--all` MUST show
+    every member's queue; agent state shown there MUST be read live from the
+    canonical roster record and MUST NOT be persisted.
+12. `atm queue` MUST deliver as an ephemeral queue item that is a scheduling
+    view over the message, never a task row or `task_events` entry; it MUST
+    close on read, or on ack when `requires_ack` is set, and MUST be
+    discharged before the next task is nudged.
+13. A refusal MUST release the next queued task; consecutive refusals by one
+    agent MUST escalate instead of continuing to feed.
+
+Nudge invariant (Phase BA):
+14. Nudge eligibility MUST consume the exact canonical `RuntimeMemberState`
+    from the ephemeral roster record; it MUST NOT consume
+    `PickerMemberStatus`, a `RuntimeHealth` projection, raw Herdr output, or
+    heartbeat DTOs.
+15. `Idle` with an open task MUST be nudged, no more than once per 60 seconds
+    per task. The first prompt is `task_ready`; later prompts are
+    `task_reminder` with a rising attempt. Every assignment produces one
+    `task_queued` line at write time.
+16. `Active` MUST never be nudged or diverted to another task.
+17. `Blocked` or `Offline` MUST escalate once per episode and MUST receive
+    zero nudges.
+18. Escalation MUST be one ordinary message to the roster lead (when exactly
+    one) and to every configured escalation recipient, resolved
+    independently; when a task's reminder count reaches 10 it MUST escalate
+    once and nudging MUST stop until the task changes state (start or close) or
+    is reassigned or reopened; a change in the assignee's
+    runtime state alone does not resume nudging.
 
 ## 16. Observability Requirements
 
@@ -2862,7 +3283,6 @@ Because `sc-observability` is newly introduced into ATM, the rewrite must add ex
 - best-effort emission failure behavior
 - two-axis state classification
 - two-axis state transition enforcement
-- task-linked ack-required transition behavior
 - log query by severity
 - log query by structured field match
 - log follow/tail behavior
@@ -3049,8 +3469,8 @@ The rewrite is ready when:
 - workflow-axis classification is correct
 - workflow-axis transitions are encoded in implementation structure
 - display buckets are derived consistently from the two-axis model
-- task-linked messages remain pending until acknowledged unless the operator
-  explicitly acknowledges them through `atm ack`
+- task-linked messages never require acknowledgement; readiness is signalled by
+  `task_ready`, and the assignee starts the task with `atm task start`
 - observability integration is exercised by automated tests
 - the file-by-file migration plan is complete enough to implement directly
 - daemon singleton is enforced as requirement `#1` with the documented
@@ -3061,8 +3481,11 @@ The rewrite is ready when:
   lint`
 
 Cross-document invariants that must remain true:
-- `taskId` implies ack-required behavior at send time
-- displayed messages always persist `read = true`
+- `taskId` implies task-linked mail that never requires acknowledgement;
+  readiness is signalled by `task_ready`, and start by `atm task start`
+- a displayed message with `mutation_applied = true` has had its legal
+  read/seen transition accepted into the supervised non-blocking handoff;
+  durable `read = true` visibility may follow later
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
 - `atm clear` never removes pending-ack messages
@@ -3624,6 +4047,25 @@ mail correctness.
 
 ### 22.1 SQLite Mail And Roster Ownership
 
+#### Task storage
+
+`TaskStore` is the sealed, backend-neutral task-ledger capability. SQLite owns
+the `tasks` and append-only `task_events` tables; `MessageWriteOrigin`
+distinguishes local task-bearing messages from peer receipts so only local
+writer admission and `atm task` commands apply task transitions.
+
+Task ledger shape (Phase BA):
+1. `tasks` MUST have `PRIMARY KEY (team, task_id)`.
+2. `tasks` MUST carry a unique index on `(team, assignee)` restricted to
+   `state = 'active'`.
+3. `tasks` MUST carry a queue `position` column separate from `assigned_at`;
+   `assigned_at` records the current assignment and is reset by reassign/reopen,
+   never by move.
+4. Close MUST record a typed outcome (`completed | refused | cancelled`).
+   `reassigned` and `reopened` are same-id event kinds produced by `assign`.
+5. `tasks` and `task_events` rows MUST NOT be deleted; a task id that ever
+   existed MUST always resolve.
+
 - `REQ-CORE-RUNTIME-001` ATM mail and team roster state must move to SQLite as
   the authoritative source of truth.
 
@@ -3705,41 +4147,62 @@ mail correctness.
   state. The daemon must not maintain a replay store, remote outbox, or retry
   state.
 
-- `REQ-CORE-RUNTIME-002` Live agent status must not use SQLite as its
-  authoritative live truth.
+- `REQ-CORE-RUNTIME-002` Each durable roster member must have exactly one
+  canonical live agent state, owned by the runtime's ephemeral master-roster
+  record and never by SQLite.
 
   Required behavior:
-  - live status is runtime-owned daemon state
+  - live status is runtime-owned state layered on the matching master-roster
+    member in the write-through RAM roster mirror
   - SQLite stores canonical roster membership and optional routing metadata,
-    but not the current process `pid`
-  - daemon memory caches the current `pid` as observational metadata, not a
-    liveness-policy input
-  - daemon runtime state must include `last_active_at` for each known active
-    agent/member entry
+    but not lifecycle state, state revision, observation timestamps, current
+    process `pid`, or session id
+  - the ephemeral record contains one `RuntimeMemberState`; latest observation source,
+    typed observation availability, `last_observation_attempt_at`,
+    `last_observed_at`, `state_changed_at`, pid, session, and a monotonically
+    increasing `RosterStateRevision` are metadata for that one state, not
+    parallel state authorities
+  - daemon memory caches the current `pid` and session as observational
+    metadata, not independent liveness-policy inputs
+  - daemon runtime state includes `last_active_at` for each known active
+    member entry
   - the shared protocol must expose typed heartbeat request/response DTOs for
     runtime state updates and observational pid continuity
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
-  - roster truth and live-status truth must remain distinct
-- `pid` is transient daemon-owned runtime state rather than durable roster
-  truth and must not be persisted in SQLite
+  - durable roster fields and ephemeral live fields share one logical member
+    record while retaining distinct persistence domains
+  - roster removal atomically removes its ephemeral state; re-addition starts
+    at `Unknown` with a new revision sequence
+  - all live-state readers, including nudge scheduling, runtime health,
+    doctor, `teams`, and `members`, read this record or a scoped projection of
+    it; a second global member-state map is forbidden
+  - `pid` is transient runtime state rather than durable roster truth and must
+    not be persisted in SQLite
 
 > **Phase AJ implemented contract.** The following clauses are reconciled with
 > the merged AJ.1–AJ.8 source and named tests in ADR-045's evidence table.
 
-- `REQ-CORE-RUNTIME-004` Runtime observation is best-effort telemetry, not a
-  business-policy input.
+- `REQ-CORE-RUNTIME-004` Accepted runtime observations converge on the one
+  ephemeral master-roster state. Runtime health is a projection, and the
+  Section 15.4 nudge invariant is the only workflow policy that may consume
+  the canonical state.
 
   Required behavior:
-  - successful heartbeat and successful local `send`, `read`, or `ack` may
-    update in-memory observation only
-  - graft may update observation only through its environment-derived caller
-    context; no other ingress or daemon side effect may synthesize an update
-  - each defined state/session value retains independent source and timestamp;
-    absent/default values are no-ops and cannot overwrite prior valid data;
-    accepted ingress order, not client-clock ordering, determines the current
-    observation; a trusted changed pid/session becomes the current observation
-    and is retained as diagnostic evidence only
+  - an authenticated local heartbeat POST (including an external hook's
+    startup/active, idle, or stop event) and each successful Herdr `agent list`
+    poll update the same in-memory member record
+  - no other ingress or daemon side effect may synthesize a canonical state
+    update; the pre-cutover `ActivityObservation` request field remains
+    tolerated as transient compatibility metadata but cannot update this record
+  - accepted runtime ingress order, not client-clock ordering, determines the
+    current state; every accepted state observation advances the per-member
+    `RosterStateRevision` and `last_observed_at`, including same-state evidence,
+    while `state_changed_at` changes only on a lifecycle edge
+  - each defined session/pid value retains source and timestamp metadata;
+    absent metadata is a no-op and cannot overwrite prior defined metadata; a
+    trusted changed pid/session becomes the current metadata and is retained as
+    diagnostic evidence only
   - every actual pid/session mutation, including initial set, emits one
     structured info audit event with prior/new value, member, source, and time;
     no-op input emits no mutation event
@@ -3747,58 +4210,75 @@ mail correctness.
     observation metadata: it is true only when a prior defined pid is replaced
     by a different defined pid; initial pid observation is audited but is not a
     replacement
-  - normal heartbeat, CLI, and graft updates may not restore `Unknown` or clear
-    a defined session; roster removal drops its runtime entry and a later re-add
-    starts without observation
+  - heartbeat updates may not clear a defined session; a successful Herdr poll
+    maps working → `Active`, idle/done → `Idle`, blocked
+    → `Blocked`, and an unknown or absent member in the poll's covered roster
+    scope → `Unknown`
+  - a failed or incomplete Herdr poll is not a state observation: it preserves
+    the prior state and revision, marks observation availability unavailable
+    with an attempt timestamp, records a structured refresh diagnostic, and
+    triggers no nudge
+  - a successful Herdr result is applied as one scoped batch so readers cannot
+    observe a half-updated poll and the runtime does not clone the roster once
+    per member
+  - state ingress for a member absent from the current master roster must not
+    auto-create membership; it returns or records existing
+    `ATM_MEMBER_NOT_FOUND` without panic or state mutation
   - `Unknown` means no trustworthy state observation; `Offline` means an
     explicit heartbeat session-end observation. They are distinct values and
     must not be substituted for one another
-  - trusted environment-attested CLI/graft `send`, `read`, and `ack` transition
-    state to `Active`; heartbeat activity transitions to `Active`, `Idle`, or
-    `Offline` only from its explicit activity value
+  - heartbeat activity transitions to `Active`, `Idle`, or `Offline` only from
+    its explicit activity value
   - each cache member carries `state_changed_at`; it changes only on a real
     lifecycle-state transition and is shown only for defined non-default state;
     human roster output renders its relative age while structured output keeps
     the absolute timestamp; repeated same-state evidence never resets it
-  - external hook heartbeat mapping is startup/active → `ActiveToolUse`, idle
-    → `Idle`, and stop → `SessionEnded`; ATM consumes, but does not install or
-    emit, those hooks
+  - external hook heartbeat mapping is startup/active → `ActiveToolUse`/`Active`,
+    idle → `Idle`, and stop → `SessionEnded`/`Offline`; ATM consumes, but does
+    not install or emit, those hooks
   - identity change and malformed/suppressed observation are retained
     anomalies, not roster lifecycle state. They must not reject ingress, emit
     `IdentityConflict`, degrade readiness, alter cache eviction, or alter
     routing, notification, or delivery behavior. A future doctor phase may
     diagnose them.
-  - local observation requires matching, parseable `ATM_IDENTITY` and
-    `ATM_TEAM`; args-only or mismatched invocation leaves normal command
-    behavior unchanged and suppresses observation
   - local read/write request DTOs carry one optional `ActivityObservation`
-    (team, member, optional session/pid), constructed only by that
-    environment-attestation step; the daemon accepts it only on existing
-    authenticated local UDS/loopback ingress, and remote HTTPS ingress clears
-    it before shared dispatch
-  - session, pid, heartbeat activity, and derived state must not drive routing,
-    nudge, notification, retry, admission, delivery, or policy logic
-  - any exception requires an explicit requirement, ADR, boundary record, and
-    test; telemetry never enters SQLite, durable roster state, mail rows, or
-    message payloads
-  - the existing roster-view command may display a member's non-default state
-    age, defined pid, and shortened session identifier as an observational
-    projection; JSON preserves raw values. Default `Unknown` state with no
-    session/pid is omitted from human output
+    (team, member, optional session/pid) for pre-cutover compatibility; it is
+    never canonical state ingress, and remote HTTPS ingress clears it before
+    shared dispatch
+  - session, pid, and observation metadata must not drive routing,
+    notification, retry, admission, or delivery logic
+  - the sole state-policy exception is the Section 15.4 nudge invariant: the
+    nudge path MUST consume the exact canonical `RuntimeMemberState` and MUST
+    NOT consume `PickerMemberStatus`, a `RuntimeHealth` projection, raw Herdr
+    output, or heartbeat DTOs; `Idle` with an open task MUST be nudged
+    (rate-limited), `Active` MUST never be nudged or diverted, and `Blocked`
+    or `Offline` MUST escalate once with zero nudges
+  - Herdr polling and heartbeat handlers update state only; neither ingress
+    may inspect queues/tasks or emit a nudge directly
+  - any further exception requires an explicit requirement, ADR, boundary
+    record, and test; telemetry never enters SQLite, durable roster state, mail
+    rows, or message payloads
+  - roster-view commands display exact state plus availability/freshness from
+    the canonical record and may also show state age, defined pid, and shortened
+    session identifier; JSON preserves raw values. Human output may omit only
+    default `Unknown`/`Unobserved` with no session/pid, and must not collapse a
+    missing/unavailable projection into `Dead`
 
 ### 22.2 Singleton Daemon Runtime
 
-- `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per host in the current architecture
-  runtime.
+- `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per OS account per host in the
+  current architecture runtime. (Rand, 2026-09-08.) A container is its own host for this
+  requirement. (Rand, 2026-09-08.)
 
   Required behavior:
-  - it must be impossible for two active ATM daemons to run on one host at the
-    same time
+  - it must be impossible for two active ATM daemons for one OS account to run
+    on one host at the same time (Rand, 2026-09-08.)
   - daemon startup must fail deterministically when a live daemon already owns
-    the host runtime
+    the same OS-account runtime (Rand, 2026-09-08.)
   - stale daemon ownership artifacts may be cleaned up only when they are
     proven stale
-  - stale cleanup must never allow two live daemons
+  - stale cleanup must never allow two live daemons for the same OS account
+    (Rand, 2026-09-08.)
 
 - `REQ-CORE-DAEMON-002` The daemon must be a thin runtime wrapper rather than a
   unique business-logic layer.
@@ -4493,7 +4973,7 @@ mail correctness.
     persistence
   - the shipped default post-send path is the built-in in-process
     implementation
-  - teams may override any subset of the six built-in nudge template bodies
+  - teams may override any subset of the eleven built-in nudge template bodies
     through host-scoped, team-keyed ATM-managed override rows resolved through
     the storage-neutral `NudgeTemplateOverrideStore` contract
   - emission failure must be logged and surfaced as a sender-visible warning
@@ -4607,8 +5087,10 @@ mail correctness.
   and boundary invariants.
 
   Required behavior:
-  - impossible to run two active ATM daemons on one host
-  - daemon singleton remains host-wide rather than socket-path-local
+  - impossible to run two active ATM daemons for one OS account on one host (Rand,
+    2026-09-08.)
+  - daemon singleton remains per OS account per host rather than socket-path-local (Rand,
+    2026-09-08.)
   - daemon unavailability after one auto-start attempt fails clearly with no
     hidden direct I/O fallback
   - every subsystem performs external I/O only through its owning trait

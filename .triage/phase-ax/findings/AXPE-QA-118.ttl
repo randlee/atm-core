@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# Filed by quality-mgr during QA-AXPE-RECHECK-FIX-R1-1788718441 (QA-1 on PR #1255) on fix/ax-phase-end-recheck-fixes at 6dd403525; fenix-recorded. Report: https://github.com/randlee/atm-core/pull/1255#issuecomment-5561237864 Native id: ATM-QA-205. Follows AXPE-RSH-003 (partial fix).
+
+# Fixed 2026-09-06: PR #1255 fix/ax-phase-end-recheck-fixes @ c02ccbe6b, QA-2 PASS (QA-AXPE-RECHECK-FIX-R2-1788719605, https://github.com/randlee/atm-core/pull/1255#issuecomment-5561333419); closed by fenix on the verdict, 2026-09-06T18:44:00Z.
+<urn:atm:triage:finding/AXPE-QA-118>
+  a triage:Finding ;
+  triage:findingId "AXPE-QA-118" ;
+  triage:title "Herdr wake-up rejection warn! subsystem value diverges from the sibling convention" ;
+  triage:description "The AXPE-RSH-003 fix on PR #1255 added the missing subsystem/action fields to the tracing::warn!(\"Herdr wake-up was not accepted\") in HerdrReceivedHook::emit_received_message (crates/atm-daemon-bootstrap/src/received_hook_selector.rs:445 at 6dd403525) but set subsystem = \"received_hook_selector\", a value no other site uses: the same event class in crates/atm-http-runtime/src/herdr_queue_wake.rs and herdr_queue_wake_escalation.rs uses subsystem = \"herdr_queue_wake\" (24 sites workspace-wide), so retained-log and doctor filters on that value miss this event. Fenix ruling 2026-09-06: use subsystem = \"herdr_queue_wake\" (matches every other Herdr wake-up site in code; ADR-058's documented \"atm_core.herdr\" value is used by zero code sites and is a separate pre-existing doc/code drift, out of scope). Remediation: one-line value change; keep action = \"herdr_prompt\" and the other fields. Verified: grep -rc 'subsystem = \"herdr_queue_wake\"' crates yields 24 matches." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "qa_round" ;
+  triage:category "rust-service-hardening-agent" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-06T18:44:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T18:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-06T18:25:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AXPE-QA-118/FIX-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AXPE-QA-118/FIX-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 445 ;
+  triage:snippet "tracing::warn!(subsystem = \"received_hook_selector\", action = \"herdr_prompt\", backend = \"herdr\", member = %dispatch.event.recipient, error = ?error, outcome, \"Herdr wake-up was not accepted\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ax-phase-end-recheck-fixes" ;
+  triage:headSha "6dd4035257dc8eb65c66b622b1a2572af54badfe" ;
+  triage:occursIn <urn:atm:triage:worktree/FIX/6dd4035257dc8eb65c66b622b1a2572af54badfe> .
+
+<urn:atm:triage:worktree/FIX/6dd4035257dc8eb65c66b622b1a2572af54badfe>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-ax-phase-end-recheck-fixes" ;
+  triage:branch "fix/ax-phase-end-recheck-fixes" ;
+  triage:headSha "6dd4035257dc8eb65c66b622b1a2572af54badfe" ;
+  triage:orderIndex 13 .

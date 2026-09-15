@@ -379,8 +379,8 @@ mod tests {
             &self,
             team: &TeamName,
             agent: &AgentName,
-        ) -> Result<Option<boundary::RosterEntry>, AtmError> {
-            Ok(self.roster_present.then(|| boundary::RosterEntry {
+        ) -> Option<boundary::RosterEntry> {
+            self.roster_present.then(|| boundary::RosterEntry {
                 team_name: team.clone(),
                 agent_name: agent.clone(),
                 member_kind: RosterMemberKind::Permanent,
@@ -389,14 +389,11 @@ mod tests {
                 model: crate::types::ModelName::default(),
                 recipient_pane_id: None,
                 metadata_json: Map::new(),
-            }))
+            })
         }
 
-        fn load_team_roster(
-            &self,
-            _team: &TeamName,
-        ) -> Result<Vec<boundary::RosterEntry>, AtmError> {
-            Ok(Vec::new())
+        fn load_team_roster(&self, _team: &TeamName) -> Vec<boundary::RosterEntry> {
+            Vec::new()
         }
     }
 

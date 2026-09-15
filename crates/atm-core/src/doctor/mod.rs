@@ -1,16 +1,21 @@
+mod ax6;
 pub mod health;
+mod herdr_state;
 pub mod report;
+mod roster_names;
+mod team_scope;
 
 #[cfg(test)]
 use std::collections::BTreeSet;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::pin::Pin;
 
 use crate::api::RequestDeadline;
 use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
 use crate::config;
-use crate::delivery_channel::local_message_received_backend;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 #[cfg(test)]
@@ -19,44 +24,59 @@ use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
-use crate::team_admin::{MembersList, ordered_roster_member_summaries};
+use crate::team_admin::MembersList;
 use crate::types::{AgentName, TeamName};
 use atm_storage::PeerConfigStore;
 use std::sync::Arc;
 
-pub use report::{
-    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, ClosedHerdrBreakerDoctor, DaemonRuntimeDoctorReport,
-    DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
-    DoctorSeverity, DoctorStatus, DoctorSummary, GraftReceiverLeaseDoctorReport,
-    GraftReceiversDoctorReport, HerdrBreakerDoctor, HerdrBreakerDoctorReport,
-    HerdrBreakerDoctorState, HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport,
-    PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
-    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, ReaderLaneDoctorReport,
-    ReaderLanesDoctorReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+use team_scope::{
+    graft_receivers_for_teams, load_scoped_rosters, push_doctor_error_for_team, teams_for_scope,
 };
 
-/// Async application port for the live Herdr visibility checks performed by
-/// the replacement daemon's doctor route. The core report owns finding shape;
-/// the composition root owns the concrete Herdr adapter.
-pub trait HerdrPresenceDoctor: Send + Sync {
-    fn probe<'a>(
-        &'a self,
-        roster: &'a MembersList,
-        caller_deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>>;
-}
+pub use crate::boundary::{HerdrBreakerDoctor, HerdrEndpointDoctor};
+pub use herdr_state::{
+    HerdrBinaryProvenance, HerdrBinaryResolution, HerdrDoctorState, HerdrEndpointDisplay,
+    HerdrEndpointDisplayRoot, HerdrEndpointObservation, HerdrEndpointProvenance,
+    HerdrMemberPresence, HerdrPresenceOutcome, HerdrRosterMember, HerdrTransportKind, HerdrVersion,
+};
+pub use report::{
+    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorAliasMismatch,
+    DoctorEnvironmentVisibility, DoctorExecutionContext, DoctorFinding, DoctorReport,
+    DoctorSeverity, DoctorStatus, DoctorSummary, EscalationRecipientAddress,
+    EscalationRecipientSource, EscalationRecipientsDoctorReport, GraftReceiverLeaseDoctorReport,
+    GraftReceiversDoctorReport, HerdrBreakerDoctorReport, HerdrBreakerDoctorState,
+    HerdrDoctorReport, HerdrEndpointCapabilitiesDoctorReport, HerdrEndpointDoctorReport,
+    HerdrQueuePumpDoctorReport, LegacyLiteralIpPeerDoctorReport, PeerAuthorityDoctorReport,
+    PeerConfigDoctorReport, PeerWireSecurityStatus, PostSendDoctorReport, PostSendHookRuleIndex,
+    PostSendHookRuleReport, ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport,
+    RecipientDeliveryPath, RecipientDeliveryPathReport, TeamEscalationRecipientsDoctorReport,
+};
+pub use team_scope::DoctorTeamScope;
 
 #[derive(Debug, Default)]
-pub struct ClosedHerdrPresenceDoctor;
+pub struct ClosedHerdrEndpointDoctor;
 
-impl HerdrPresenceDoctor for ClosedHerdrPresenceDoctor {
-    fn probe<'a>(
+impl crate::boundary::sealed::Sealed for ClosedHerdrEndpointDoctor {}
+
+impl HerdrEndpointDoctor for ClosedHerdrEndpointDoctor {
+    fn observe<'a>(
         &'a self,
         _roster: &'a MembersList,
         _caller_deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Vec<DoctorFinding>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Vec<HerdrEndpointObservation>> + Send + 'a>> {
         Box::pin(async { Vec::new() })
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ClosedHerdrBreakerDoctor;
+
+impl crate::boundary::sealed::Sealed for ClosedHerdrBreakerDoctor {}
+
+impl HerdrBreakerDoctor for ClosedHerdrBreakerDoctor {
+    fn report(&self) -> HerdrBreakerDoctorReport {
+        HerdrBreakerDoctorReport::default()
     }
 }
 
@@ -74,6 +94,9 @@ pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub team_override: Option<TeamName>,
+    /// Inspect every team in the canonical roster instead of resolving one.
+    #[serde(default)]
+    pub all_teams: bool,
     /// Caller's `ATM_TEAM`, captured in the invoking CLI process.
     #[serde(default)]
     pub caller_team: Option<TeamName>,
@@ -99,7 +122,7 @@ pub struct RuntimeDoctorPorts {
     pub mail_store_doctor: Arc<dyn MailStoreDoctor + Send + Sync>,
     pub roster_store_doctor: Arc<dyn RosterStoreDoctor + Send + Sync>,
     pub herdr_breaker: Arc<dyn HerdrBreakerDoctor>,
-    pub herdr_presence: Arc<dyn HerdrPresenceDoctor>,
+    pub herdr_endpoint: Arc<dyn HerdrEndpointDoctor>,
 }
 
 impl std::fmt::Debug for RuntimeDoctorPorts {
@@ -109,9 +132,75 @@ impl std::fmt::Debug for RuntimeDoctorPorts {
             .field("mail_store_doctor", &"dyn MailStoreDoctor")
             .field("roster_store_doctor", &"dyn RosterStoreDoctor")
             .field("herdr_breaker", &"dyn HerdrBreakerDoctor")
-            .field("herdr_presence", &"dyn HerdrPresenceDoctor")
+            .field("herdr_endpoint", &"dyn HerdrEndpointDoctor")
             .finish()
     }
+}
+
+/// Flattens endpoint observations into the retained doctor-finding surface.
+/// Member order follows the nonserialized roster ordinal, and infrastructure
+/// trouble remains one global informational finding after member findings.
+#[must_use]
+pub fn presence_findings(observations: &[HerdrEndpointObservation]) -> Vec<DoctorFinding> {
+    presence_findings_with_team(observations, None)
+}
+
+/// Flattens Herdr observations while attributing every finding to its roster
+/// team. This is used by the all-team doctor projection, where otherwise a
+/// presence failure would be ambiguous in the combined report.
+#[must_use]
+pub fn presence_findings_for_team(
+    observations: &[HerdrEndpointObservation],
+    team: &TeamName,
+) -> Vec<DoctorFinding> {
+    presence_findings_with_team(observations, Some(team))
+}
+
+fn presence_findings_with_team(
+    observations: &[HerdrEndpointObservation],
+    team: Option<&TeamName>,
+) -> Vec<DoctorFinding> {
+    let mut findings = observations
+        .iter()
+        .flat_map(|observation| observation.findings.iter().cloned())
+        .map(|finding| scope_finding(finding, team))
+        .collect::<Vec<_>>();
+    let mut members = observations
+        .iter()
+        .flat_map(|observation| observation.members.iter())
+        .collect::<Vec<_>>();
+    members.sort_by_key(|member| member.ordinal);
+    let mut infrastructure = None;
+    for member in members {
+        match &member.outcome {
+            HerdrPresenceOutcome::Visible => {}
+            HerdrPresenceOutcome::Finding { finding } => {
+                findings.push(scope_finding(finding.clone(), team))
+            }
+            HerdrPresenceOutcome::Infrastructure { code, detail } => {
+                infrastructure.get_or_insert((*code, detail.clone()));
+            }
+        }
+    }
+    if let Some((_code, detail)) = infrastructure {
+        findings.push(scope_finding(
+            DoctorFinding {
+                severity: DoctorSeverity::Info,
+                code: AtmErrorCode::HerdrUnavailable,
+                message: format!("Herdr presence probe skipped: {detail}"),
+                remediation: None,
+            },
+            team,
+        ));
+    }
+    findings
+}
+
+fn scope_finding(mut finding: DoctorFinding, team: Option<&TeamName>) -> DoctorFinding {
+    if let Some(team) = team {
+        finding.message = team_scope::team_message(team, finding.message);
+    }
+    finding
 }
 
 /// Run the ATM doctor checks for config, roster, and observability health.
@@ -138,25 +227,28 @@ pub fn run_doctor_with_runtime(
     let (observability_health, finding) = doctor_observability_status(observability);
     let mut findings = Vec::new();
     push_obsolete_identity_warning(config.as_ref(), &mut findings);
-    let member_roster = doctor_context.resolved_team.as_ref().and_then(|team| {
-        load_member_roster(
-            runtime,
-            team,
-            doctor_context.environment.atm_identity.as_ref(),
-            Some(query.current_dir.as_path()),
-            &mut findings,
-        )
-    });
-    let graft_receivers = doctor_context
-        .resolved_team
-        .as_ref()
-        .map(|team| graft_receivers_doctor_report(runtime, team, &mut findings))
-        .unwrap_or_default();
+    let teams = teams_for_scope(runtime, &doctor_context.team_scope, &mut findings);
+    let (member_roster, team_rosters) = load_scoped_rosters(
+        runtime,
+        &teams,
+        &doctor_context.team_scope,
+        doctor_context.environment.atm_identity.as_ref(),
+        Some(query.current_dir.as_path()),
+        &mut findings,
+    );
+    let graft_receivers = graft_receivers_for_teams(
+        runtime,
+        &teams,
+        doctor_context.team_scope.is_all_teams(),
+        &mut findings,
+    );
     findings.push(finding);
     Ok(build_doctor_report(
         findings,
         doctor_context.environment,
+        doctor_context.team_scope,
         member_roster,
+        team_rosters,
         graft_receivers,
         PostSendDoctorReport::default(),
         crate::boundary::ConfigDoctorReport::default(),
@@ -168,6 +260,7 @@ pub fn run_doctor_with_runtime(
         None,
         None,
         HerdrBreakerDoctorReport::default(),
+        EscalationRecipientsDoctorReport::default(),
     ))
 }
 
@@ -185,20 +278,30 @@ pub fn run_doctor_with_runtime_ports(
     let mut drift_findings = Vec::new();
     let mut reports = inspect_runtime_doctor_sections(runtime_doctors, &mut general_findings);
     push_obsolete_identity_finding(config.as_ref(), &mut reports.config);
-    let member_roster = doctor_context.resolved_team.as_ref().and_then(|team| {
-        load_member_roster(
-            runtime,
-            team,
-            doctor_context.environment.atm_identity.as_ref(),
-            Some(query.current_dir.as_path()),
-            &mut drift_findings,
-        )
-    });
-    let graft_receivers = doctor_context
-        .resolved_team
-        .as_ref()
-        .map(|team| graft_receivers_doctor_report(runtime, team, &mut general_findings))
-        .unwrap_or_default();
+    let teams = teams_for_scope(runtime, &doctor_context.team_scope, &mut general_findings);
+    let (member_roster, team_rosters) = load_scoped_rosters(
+        runtime,
+        &teams,
+        &doctor_context.team_scope,
+        doctor_context.environment.atm_identity.as_ref(),
+        Some(query.current_dir.as_path()),
+        &mut drift_findings,
+    );
+    let graft_receivers = graft_receivers_for_teams(
+        runtime,
+        &teams,
+        doctor_context.team_scope.is_all_teams(),
+        &mut general_findings,
+    );
+    push_template_override_findings(runtime, &teams, &mut general_findings);
+    let escalation_recipients = ax6::task_and_roster_findings(
+        runtime,
+        match &doctor_context.team_scope {
+            DoctorTeamScope::Single(team) => Some(team),
+            DoctorTeamScope::AllTeams { .. } => None,
+        },
+        &mut general_findings,
+    );
     let findings = collect_doctor_findings(
         &reports,
         &drift_findings,
@@ -210,13 +313,18 @@ pub fn run_doctor_with_runtime_ports(
         config.as_ref(),
         member_roster.as_ref(),
         runtime,
-        doctor_context.resolved_team.as_ref(),
+        match &doctor_context.team_scope {
+            DoctorTeamScope::Single(team) => Some(team),
+            DoctorTeamScope::AllTeams { .. } => None,
+        },
     );
 
     Ok(build_doctor_report(
         findings,
         doctor_context.environment,
+        doctor_context.team_scope,
         member_roster,
+        team_rosters,
         graft_receivers,
         post_send,
         reports.config,
@@ -228,7 +336,77 @@ pub fn run_doctor_with_runtime_ports(
         None,
         None,
         runtime_doctors.herdr_breaker.report(),
+        escalation_recipients,
     ))
+}
+
+fn push_template_override_findings(
+    runtime: &LocalServiceRuntime,
+    teams: &[TeamName],
+    findings: &mut Vec<DoctorFinding>,
+) {
+    use crate::boundary::{BuiltInNudgeTemplateKind as K, TeamNudgeTemplateOverrideMode};
+
+    for team in teams {
+        match runtime
+            .nudge_template_override_store
+            .list_stale_template_override_kinds(team)
+        {
+            Ok(rows) => {
+                for row in rows {
+                    let kind = row.kind;
+                    let updated_at = row.updated_at;
+                    findings.push(DoctorFinding {
+                        severity: DoctorSeverity::Warning,
+                        code: AtmErrorCode::WarningObservabilityHealthDegraded,
+                        message: format!(
+                            "stale_nudge_template_override: team {team} has retired template kind `{kind}` last updated {updated_at}"
+                        ),
+                        remediation: Some(format!(
+                            "atm teams clear-nudge-template --team {team} --kind {kind}"
+                        )),
+                    });
+                }
+            }
+            Err(error) => {
+                push_doctor_error_for_team(findings, DoctorSeverity::Warning, error, Some(team))
+            }
+        }
+
+        match runtime
+            .nudge_template_override_store
+            .list_template_overrides(team)
+        {
+            Ok(rows) => {
+                for row in rows.into_iter().filter(|row| {
+                    matches!(
+                        row.kind,
+                        K::TaskQueued
+                            | K::TaskReady
+                            | K::TaskReminder
+                            | K::TaskStarted
+                            | K::TaskComplete
+                            | K::TaskClosed
+                    ) && matches!(row.mode, TeamNudgeTemplateOverrideMode::Disabled)
+                }) {
+                    let kind = row.kind;
+                    findings.push(DoctorFinding {
+                        severity: DoctorSeverity::Warning,
+                        code: AtmErrorCode::WarningObservabilityHealthDegraded,
+                        message: format!(
+                            "disabled_task_nudge_template_override: team {team} has disabled `{kind}`"
+                        ),
+                        remediation: Some(format!(
+                            "atm teams clear-nudge-template --team {team} --kind {kind}"
+                        )),
+                    });
+                }
+            }
+            Err(error) => {
+                push_doctor_error_for_team(findings, DoctorSeverity::Warning, error, Some(team))
+            }
+        }
+    }
 }
 
 /// Add asynchronous, composition-owned presence findings and refresh the
@@ -245,7 +423,7 @@ pub fn peer_config_doctor_report(
     store: &(dyn PeerConfigStore + Send + Sync),
 ) -> (PeerConfigDoctorReport, Vec<DoctorFinding>) {
     match peer_config_doctor_report_inner(store) {
-        Ok(report) => (report, Vec::new()),
+        Ok((report, findings)) => (report, findings),
         Err(error) => {
             let finding = DoctorFinding {
                 severity: DoctorSeverity::Error,
@@ -269,30 +447,77 @@ pub fn peer_config_doctor_report(
 
 fn peer_config_doctor_report_inner(
     store: &(dyn PeerConfigStore + Send + Sync),
-) -> Result<PeerConfigDoctorReport, crate::error::AtmError> {
+) -> Result<(PeerConfigDoctorReport, Vec<DoctorFinding>), crate::error::AtmError> {
     let interfaces = store.list_interfaces()?;
     let peers = store.list_trusted_peers()?;
     let certificate = store.local_certificate()?;
-    Ok(PeerConfigDoctorReport {
-        configured_interface_count: interfaces.len(),
-        enabled_interface_count: interfaces
-            .iter()
-            .filter(|interface| interface.enabled)
-            .count(),
-        certificate_fingerprint: certificate.map(|certificate| certificate.fingerprint.to_string()),
-        trusted_peer_count: peers.len(),
-        enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
-        trusted_peers: peers
-            .iter()
-            .map(|peer| PeerAuthorityDoctorReport {
-                host: peer.host.to_string(),
-                https_port: peer.https_port.get(),
-                enabled: peer.enabled,
-            })
-            .collect(),
-        legacy_literal_ip_peers: legacy_literal_ip_peer_reports(&peers),
-        validation_failure: None,
-    })
+    let findings = peer_config_doctor_warnings(&interfaces, &peers);
+    Ok((
+        PeerConfigDoctorReport {
+            configured_interface_count: interfaces.len(),
+            enabled_interface_count: interfaces
+                .iter()
+                .filter(|interface| interface.enabled)
+                .count(),
+            certificate_fingerprint: certificate
+                .map(|certificate| certificate.fingerprint.to_string()),
+            trusted_peer_count: peers.len(),
+            enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
+            trusted_peers: peers
+                .iter()
+                .map(|peer| PeerAuthorityDoctorReport {
+                    host: peer.host.to_string(),
+                    https_port: peer.https_port.get(),
+                    enabled: peer.enabled,
+                })
+                .collect(),
+            legacy_literal_ip_peers: legacy_literal_ip_peer_reports(&peers),
+            validation_failure: None,
+        },
+        findings,
+    ))
+}
+
+fn peer_config_doctor_warnings(
+    interfaces: &[atm_storage::HttpsInterface],
+    peers: &[atm_storage::TrustedPeer],
+) -> Vec<DoctorFinding> {
+    let malformed_fingerprint_findings = peers
+        .iter()
+        .filter(|peer| {
+            let fingerprint = peer.fingerprint.as_str();
+            fingerprint.len() != 64 || !fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+        .map(|peer| DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::PeerConfigValidationFailed,
+            message: format!(
+                "trusted peer '{}' has a malformed certificate fingerprint",
+                peer.host
+            ),
+            remediation: Some(
+                "Replace the trusted peer fingerprint with exactly 64 hexadecimal characters."
+                    .to_string(),
+            ),
+        });
+    let literal_advertise_host_findings = interfaces
+        .iter()
+        .filter(|interface| !interface.advertise_host.is_durable_hostname())
+        .map(|interface| DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::PeerConfigValidationFailed,
+            message: format!(
+                "peer interface {} advertises literal IP '{}' instead of a stable hostname",
+                interface.bind_addr, interface.advertise_host
+            ),
+            remediation: Some(
+                "Set --advertise-host to a stable hostname; literal IP addresses remain supported for compatibility."
+                    .to_string(),
+            ),
+        });
+    malformed_fingerprint_findings
+        .chain(literal_advertise_host_findings)
+        .collect()
 }
 
 /// Projects legacy literal-IP trusted-peer rows (enabled or disabled) with
@@ -324,7 +549,7 @@ fn legacy_literal_ip_peer_reports(
 }
 
 struct DoctorRunContext {
-    resolved_team: Option<TeamName>,
+    team_scope: DoctorTeamScope,
     environment: DoctorEnvironmentVisibility,
 }
 
@@ -332,8 +557,19 @@ fn doctor_run_context(
     query: &DoctorQuery,
     config: Option<&crate::config::AtmConfig>,
 ) -> DoctorRunContext {
+    let resolved_team = resolved_doctor_team(query, config);
     DoctorRunContext {
-        resolved_team: resolved_doctor_team(query, config),
+        team_scope: if query.all_teams {
+            DoctorTeamScope::AllTeams {
+                resolved_none: false,
+            }
+        } else if let Some(team) = resolved_team.clone() {
+            DoctorTeamScope::Single(team)
+        } else {
+            DoctorTeamScope::AllTeams {
+                resolved_none: true,
+            }
+        },
         environment: health::environment_visibility(
             query.home_dir.clone(),
             query.team_override.clone(),
@@ -347,7 +583,9 @@ fn doctor_run_context(
 fn build_doctor_report(
     findings: Vec<DoctorFinding>,
     environment: DoctorEnvironmentVisibility,
+    team_scope: DoctorTeamScope,
     member_roster: Option<MembersList>,
+    team_rosters: Vec<MembersList>,
     graft_receivers: GraftReceiversDoctorReport,
     post_send: PostSendDoctorReport,
     config: crate::boundary::ConfigDoctorReport,
@@ -359,6 +597,7 @@ fn build_doctor_report(
     runtime_status: Option<crate::protocol::RuntimeStatusSnapshot>,
     bootstrap_trace: Option<BootstrapTraceReport>,
     herdr_breaker: HerdrBreakerDoctorReport,
+    escalation_recipients: EscalationRecipientsDoctorReport,
 ) -> DoctorReport {
     let summary = summarize_doctor_findings(&findings);
     let recommendations = collect_recommendations(&findings);
@@ -370,15 +609,24 @@ fn build_doctor_report(
         client_context: doctor_client_context(&environment),
         daemon_context: None,
         reader_lanes: None,
+        team_scope: team_scope.report_name().to_owned(),
+        resolved_team_scope: team_scope,
         member_roster,
+        team_rosters,
+        alias_mismatches: Vec::new(),
         graft_receivers,
         observability: observability_health,
         herdr_queue_pump: HerdrQueuePumpDoctorReport {
             breaker: herdr_breaker.clone(),
             ..HerdrQueuePumpDoctorReport::default()
         },
+        herdr: HerdrDoctorReport {
+            breaker: herdr_breaker.clone(),
+            ..HerdrDoctorReport::default()
+        },
         herdr_breaker,
         post_send,
+        escalation_recipients,
         config,
         mail_store,
         roster_store,
@@ -394,23 +642,45 @@ const ACTIVE_LEASE_WINDOW_SECONDS: i64 = 15;
 fn graft_receivers_doctor_report(
     runtime: &impl RetainedServiceRuntime,
     team: &TeamName,
+    team_context: bool,
     findings: &mut Vec<DoctorFinding>,
 ) -> GraftReceiversDoctorReport {
-    let roster = match runtime.load_team_roster(team) {
-        Ok(roster) => roster,
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return GraftReceiversDoctorReport::default();
-        }
-    };
+    const LEASE_LOOKUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+    let lookup_started = std::time::Instant::now();
+    let roster = runtime.load_team_roster(team);
     let now = chrono::Utc::now();
     let receivers = roster
         .into_iter()
         .filter_map(|member| {
-            let lease = match runtime.graft_receiver_lease(team, &member.agent_name) {
+            if lookup_started.elapsed() >= LEASE_LOOKUP_BUDGET {
+                findings.push(DoctorFinding {
+                    severity: DoctorSeverity::Warning,
+                    code: atm_storage::AtmErrorCode::DaemonUnavailable,
+                    message: if team_context {
+                        team_scope::team_message(
+                            team,
+                            "skipped graft-receiver lease lookups: doctor budget exhausted",
+                        )
+                    } else {
+                        "skipped graft-receiver lease lookups: doctor budget exhausted".to_owned()
+                    },
+                    remediation: Some("Rerun `atm doctor` to inspect remaining leases.".to_owned()),
+                });
+                return None;
+            }
+            let lease = match runtime.graft_receiver_lease(
+                team,
+                &member.agent_name,
+                LEASE_LOOKUP_BUDGET.saturating_sub(lookup_started.elapsed()),
+            ) {
                 Ok(lease) => lease?,
                 Err(error) => {
-                    push_doctor_error(findings, DoctorSeverity::Error, error);
+                    push_doctor_error_for_team(
+                        findings,
+                        DoctorSeverity::Error,
+                        error,
+                        team_context.then_some(team),
+                    );
                     return None;
                 }
             };
@@ -560,6 +830,56 @@ fn inspect_runtime_doctor_sections(
     }
 }
 
+/// Build warnings from the live runtime status snapshot supplied by the daemon.
+pub fn runtime_condition_findings(
+    snapshot: &crate::protocol::RuntimeStatusSnapshot,
+) -> Vec<DoctorFinding> {
+    let now = crate::types::IsoTimestamp::now();
+    let mut findings: Vec<_> = snapshot
+        .members
+        .iter()
+        .filter(|observation| observation.state == crate::protocol::RuntimeMemberState::Blocked)
+        .map(|observation| {
+            let observed_at = observation
+                .state_changed_at
+                .or(observation.last_active_at)
+                .unwrap_or(now);
+            let age = now
+                .into_inner()
+                .signed_duration_since(observed_at.into_inner())
+                .num_seconds()
+                .max(0);
+            DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmErrorCode::MemberBlocked,
+                message: format!(
+                    "member {}@{} is blocked; observation age {}s",
+                    observation.member, observation.team, age
+                ),
+                remediation: Some(
+                    "<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt"
+                        .to_owned(),
+                ),
+            }
+        })
+        .collect();
+    if snapshot.write_source_preflight_stalls_total > 0 {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningObservabilityHealthDegraded,
+            message: format!(
+                "write source preflight has {} stalled bounded blocking job(s)",
+                snapshot.write_source_preflight_stalls_total
+            ),
+            remediation: Some(
+                "Inspect caller-supplied file/template paths and restart the daemon after resolving permanently blocked filesystem access."
+                    .to_owned(),
+            ),
+        });
+    }
+    findings
+}
+
 fn push_obsolete_identity_finding(
     config: Option<&config::AtmConfig>,
     config_report: &mut crate::boundary::ConfigDoctorReport,
@@ -627,6 +947,7 @@ fn resolved_doctor_team(
     query
         .team_override
         .clone()
+        .or_else(|| query.caller_team.clone())
         .or_else(|| config::resolve_team(None, config))
 }
 
@@ -668,68 +989,6 @@ fn summarize_doctor_findings(findings: &[DoctorFinding]) -> DoctorSummary {
         warning_count,
         error_count,
     }
-}
-
-fn load_member_roster(
-    runtime: &impl RetainedServiceRuntime,
-    team: &TeamName,
-    caller_identity: Option<&AgentName>,
-    live_cwd: Option<&Path>,
-    findings: &mut Vec<DoctorFinding>,
-) -> Option<MembersList> {
-    if let Err(error) = crate::address::validate_path_segment(team.as_str(), "team") {
-        push_doctor_error(findings, DoctorSeverity::Error, error);
-        return None;
-    }
-    let members = match runtime.load_team_roster(team) {
-        Ok(roster) => {
-            push_mixed_local_backend_warning(team, &roster, findings);
-            ordered_roster_member_summaries(&roster, caller_identity, live_cwd)
-        }
-        Err(error) => {
-            push_doctor_error(findings, DoctorSeverity::Error, error);
-            return None;
-        }
-    };
-
-    Some(MembersList {
-        team: team.clone(),
-        members,
-    })
-}
-
-fn push_mixed_local_backend_warning(
-    team: &TeamName,
-    roster: &[crate::boundary::RosterEntry],
-    findings: &mut Vec<DoctorFinding>,
-) {
-    let mut tmux = Vec::new();
-    let mut herdr = Vec::new();
-    for member in roster {
-        match local_message_received_backend(member) {
-            Some(crate::delivery_channel::LocalMessageReceivedBackend::Tmux { .. }) => {
-                tmux.push(member.agent_name.to_string())
-            }
-            Some(crate::delivery_channel::LocalMessageReceivedBackend::Herdr { .. }) => {
-                herdr.push(member.agent_name.to_string())
-            }
-            None => {}
-        }
-    }
-    if tmux.is_empty() || herdr.is_empty() {
-        return;
-    }
-    findings.push(DoctorFinding {
-        severity: DoctorSeverity::Warning,
-        code: AtmErrorCode::RosterMixedLocalBackend,
-        message: format!(
-            "team {team} has mixed local backends; tmux members: [{}]; Herdr members: [{}]",
-            tmux.join(", "), herdr.join(", ")
-        ),
-        remediation: Some(format!(
-            "Use `atm teams update-member {team} <member> --backend herdr` or `atm teams update-member {team} <member> --backend tmux --target %N` to select the intended backend."
-        )),
-    });
 }
 
 fn push_doctor_error(
@@ -804,6 +1063,7 @@ fn member_summary(
         tmux_pane_id: member.tmux_pane_id.clone(),
         backend: None,
         herdr_session: None,
+        alias: None,
         local_backend: None,
         home_dir: member.home_dir.clone(),
         live_cwd: match (caller_identity, live_cwd) {
@@ -819,16 +1079,25 @@ fn member_summary(
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::{
+        net::SocketAddr,
+        path::{Path, PathBuf},
+    };
 
     use super::{
         legacy_literal_ip_peer_reports, ordered_member_summaries, peer_config_doctor_report,
+        presence_findings, presence_findings_for_team,
     };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
-        DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
+        ClosedHerdrBreakerDoctor, ClosedHerdrEndpointDoctor, DoctorFinding, DoctorQuery,
+        DoctorReport, DoctorSeverity, DoctorStatus, HerdrBreakerDoctorReport,
+        HerdrBreakerDoctorState, HerdrDoctorState, HerdrEndpointObservation,
+        HerdrEndpointProvenance, HerdrMemberPresence, HerdrPresenceOutcome, HerdrTransportKind,
+        RuntimeDoctorPorts, run_doctor_with_runtime, run_doctor_with_runtime_ports,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -843,8 +1112,9 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
     use atm_storage::{
-        CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
-        PrivateKeyRef, TrustedPeer,
+        AgentType, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate,
+        PeerConfigStore, PrivateKeyRef, RosterHarness, RosterMemberKind, RosterSnapshot, TaskRow,
+        TaskState, TrustedPeer,
     };
 
     enum StubHealth {
@@ -879,29 +1149,313 @@ mod tests {
         }
     }
 
+    #[test]
+    fn presence_findings_preserve_roster_order_and_emit_one_infrastructure_notice() {
+        let finding = |message: &str| DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::HerdrAgentNotVisible,
+            message: message.to_owned(),
+            remediation: Some("inspect Herdr".to_owned()),
+        };
+        let member = |ordinal: usize, name: &str, outcome| HerdrMemberPresence {
+            ordinal,
+            name: AgentName::from_validated(name.to_owned()),
+            herdr_agent: Some(crate::HerdrAgentName::new(name).expect("valid Herdr test name")),
+            outcome,
+        };
+        let observation = |members| HerdrEndpointObservation {
+            session: None,
+            provenance: HerdrEndpointProvenance::HerdrDefault,
+            transport: HerdrTransportKind::Cli,
+            endpoint: None,
+            binary: None,
+            state: HerdrDoctorState::NotConfigured,
+            live_handoff: None,
+            members,
+            findings: Vec::new(),
+        };
+        let observations = vec![
+            observation(vec![
+                member(
+                    2,
+                    "third",
+                    HerdrPresenceOutcome::Finding {
+                        finding: finding("third finding"),
+                    },
+                ),
+                member(
+                    0,
+                    "first",
+                    HerdrPresenceOutcome::Infrastructure {
+                        code: AtmErrorCode::HerdrUnavailable,
+                        detail: "first endpoint unavailable".to_owned(),
+                    },
+                ),
+            ]),
+            observation(vec![
+                member(
+                    1,
+                    "second",
+                    HerdrPresenceOutcome::Finding {
+                        finding: finding("second finding"),
+                    },
+                ),
+                member(
+                    3,
+                    "fourth",
+                    HerdrPresenceOutcome::Infrastructure {
+                        code: AtmErrorCode::HerdrUnavailable,
+                        detail: "later endpoint unavailable".to_owned(),
+                    },
+                ),
+                member(4, "visible", HerdrPresenceOutcome::Visible),
+            ]),
+        ];
+
+        let findings = presence_findings(&observations);
+
+        assert_eq!(
+            findings
+                .iter()
+                .map(|finding| finding.message.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "second finding",
+                "third finding",
+                "Herdr presence probe skipped: first endpoint unavailable",
+            ]
+        );
+        assert_eq!(findings[2].severity, DoctorSeverity::Info);
+        assert_eq!(findings[2].code, AtmErrorCode::HerdrUnavailable);
+        let scoped = presence_findings_for_team(&observations, &"team-a".parse().expect("team"));
+        assert!(
+            scoped
+                .iter()
+                .all(|finding| finding.message.starts_with("team team-a: "))
+        );
+        let member_json =
+            serde_json::to_value(&observations[0].members[0]).expect("member presence serializes");
+        let mut member_keys = member_json
+            .as_object()
+            .expect("member presence is an object")
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        member_keys.sort_unstable();
+        assert_eq!(member_keys, vec!["herdr_agent", "name", "outcome"]);
+    }
+
+    #[test]
+    fn unique_name_c05_presence_serializes_the_effective_herdr_agent() {
+        let presence = HerdrMemberPresence {
+            ordinal: 0,
+            name: AgentName::from_validated("canonical-member"),
+            herdr_agent: Some(crate::HerdrAgentName::new("herdr-alias").expect("valid alias")),
+            outcome: HerdrPresenceOutcome::Visible,
+        };
+
+        let serialized = serde_json::to_value(presence).expect("presence serializes");
+
+        assert_eq!(serialized["name"], "canonical-member");
+        assert_eq!(serialized["herdr_agent"], "herdr-alias");
+    }
+
+    #[test]
+    fn herdr_member_presence_accepts_v1_1_payload_without_herdr_agent() {
+        let presence: HerdrMemberPresence = serde_json::from_value(serde_json::json!({
+            "name": "canonical-member",
+            "outcome": { "kind": "visible" }
+        }))
+        .expect("v1.1 payload remains readable");
+
+        assert_eq!(presence.name.as_str(), "canonical-member");
+        assert_eq!(presence.herdr_agent, None);
+        assert_eq!(presence.outcome, HerdrPresenceOutcome::Visible);
+    }
+
+    #[test]
+    fn herdr_endpoint_observation_accepts_v1_1_payload_without_transport() {
+        let current = HerdrEndpointObservation {
+            session: None,
+            provenance: HerdrEndpointProvenance::HerdrDefault,
+            transport: HerdrTransportKind::Socket,
+            endpoint: None,
+            binary: None,
+            state: HerdrDoctorState::NotConfigured,
+            live_handoff: None,
+            members: Vec::new(),
+            findings: Vec::new(),
+        };
+        let mut legacy = serde_json::to_value(current).expect("observation serializes");
+        legacy
+            .as_object_mut()
+            .expect("observation is an object")
+            .remove("transport");
+
+        let observation: HerdrEndpointObservation =
+            serde_json::from_value(legacy).expect("v1.1 payload remains readable");
+
+        assert_eq!(observation.transport, HerdrTransportKind::Cli);
+    }
+
+    #[test]
+    fn herdr_breaker_report_accepts_v1_2_payload_without_last_error_fields() {
+        let current = HerdrBreakerDoctorReport {
+            state: HerdrBreakerDoctorState::Open,
+            retry_after_ms: Some(1_000),
+            consecutive_failures: Some(2),
+            last_error_code: Some(AtmErrorCode::HerdrUnavailable),
+            last_error_detail: Some("Herdr server is not running".to_owned()),
+        };
+        let mut legacy = serde_json::to_value(current).expect("report serializes");
+        let legacy = legacy.as_object_mut().expect("report is an object");
+        legacy.remove("last_error_code");
+        legacy.remove("last_error_detail");
+
+        let report: HerdrBreakerDoctorReport =
+            serde_json::from_value(serde_json::Value::Object(legacy.clone()))
+                .expect("v1.2 payload remains readable");
+
+        assert_eq!(report.last_error_code, None);
+        assert_eq!(report.last_error_detail, None);
+    }
+
+    #[test]
+    fn herdr_endpoint_observation_accepts_v1_2_payload_without_findings() {
+        let current = HerdrEndpointObservation {
+            session: None,
+            provenance: HerdrEndpointProvenance::HerdrDefault,
+            transport: HerdrTransportKind::Socket,
+            endpoint: None,
+            binary: None,
+            state: HerdrDoctorState::NotConfigured,
+            live_handoff: None,
+            members: Vec::new(),
+            findings: vec![DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: AtmErrorCode::HerdrAgentNotVisible,
+                message: "target missing".to_owned(),
+                remediation: None,
+            }],
+        };
+        let mut legacy = serde_json::to_value(current).expect("observation serializes");
+        legacy
+            .as_object_mut()
+            .expect("observation is an object")
+            .remove("findings");
+
+        let observation: HerdrEndpointObservation =
+            serde_json::from_value(legacy).expect("v1.2 payload remains readable");
+
+        assert!(observation.findings.is_empty());
+    }
+
     struct UnusedMailStore;
     struct TestRosterStore {
         members: Vec<atm_storage::RosterMember>,
     }
     struct NoopNudgeTemplateOverrideStore;
 
+    struct OverrideFindingStore {
+        stale_kind: Option<String>,
+        disabled_kind: Option<crate::boundary::BuiltInNudgeTemplateKind>,
+        stale_list_calls: AtomicUsize,
+        typed_list_calls: AtomicUsize,
+        load_calls: AtomicUsize,
+    }
+
+    struct NoopRuntimeDoctor;
+
+    impl crate::boundary::sealed::Sealed for NoopRuntimeDoctor {}
+
+    impl crate::boundary::ConfigDoctor for NoopRuntimeDoctor {
+        fn inspect_config(&self) -> Result<crate::boundary::ConfigDoctorReport, AtmError> {
+            Ok(crate::boundary::ConfigDoctorReport::default())
+        }
+    }
+
+    impl crate::boundary::MailStoreDoctor for NoopRuntimeDoctor {
+        fn inspect_mail_store(&self) -> Result<crate::boundary::MailStoreDoctorReport, AtmError> {
+            Ok(crate::boundary::MailStoreDoctorReport::default())
+        }
+    }
+
+    impl crate::boundary::RosterStoreDoctor for NoopRuntimeDoctor {
+        fn inspect_roster_store(
+            &self,
+        ) -> Result<crate::boundary::RosterStoreDoctorReport, AtmError> {
+            Ok(crate::boundary::RosterStoreDoctorReport::default())
+        }
+    }
+
+    fn runtime_doctor_ports() -> RuntimeDoctorPorts {
+        RuntimeDoctorPorts {
+            config_doctor: Arc::new(NoopRuntimeDoctor),
+            mail_store_doctor: Arc::new(NoopRuntimeDoctor),
+            roster_store_doctor: Arc::new(NoopRuntimeDoctor),
+            herdr_breaker: Arc::new(ClosedHerdrBreakerDoctor),
+            herdr_endpoint: Arc::new(ClosedHerdrEndpointDoctor),
+        }
+    }
+
+    fn template_test_observability() -> StubObservability {
+        StubObservability {
+            health: StubHealth::Ok(AtmObservabilityHealth {
+                active_log_path: None,
+                logging_state: AtmObservabilityHealthState::Healthy,
+                query_state: Some(AtmObservabilityHealthState::Healthy),
+                maintenance: None,
+                diagnostic: None,
+                jsonl: Default::default(),
+                timeline: Default::default(),
+                degraded: Vec::new(),
+                detail: None,
+            }),
+        }
+    }
+
     impl atm_storage::contract::sealed::Sealed for UnusedMailStore {}
     impl atm_storage::contract::sealed::Sealed for TestRosterStore {}
 
     struct StubPeerConfigStore {
         failure: Option<AtmError>,
+        interfaces: Vec<HttpsInterface>,
+        peers: Vec<TrustedPeer>,
     }
 
     impl atm_storage::contract::sealed::Sealed for StubPeerConfigStore {}
 
     impl StubPeerConfigStore {
         fn healthy() -> Self {
-            Self { failure: None }
+            Self {
+                failure: None,
+                interfaces: vec![HttpsInterface {
+                    bind_addr: "127.0.0.1:43101".parse().expect("socket address"),
+                    advertise_host: "localhost".parse().expect("host name"),
+                    enabled: true,
+                }],
+                peers: vec![TrustedPeer {
+                    host: "peer.example".parse::<HostName>().expect("host name"),
+                    fingerprint: "a".repeat(64).parse().expect("fingerprint"),
+                    enabled: true,
+                    https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
+                }],
+            }
         }
 
         fn failing(error: AtmError) -> Self {
             Self {
                 failure: Some(error),
+                interfaces: Vec::new(),
+                peers: Vec::new(),
+            }
+        }
+
+        fn with_peer_config(interfaces: Vec<HttpsInterface>, peers: Vec<TrustedPeer>) -> Self {
+            Self {
+                failure: None,
+                interfaces,
+                peers,
             }
         }
 
@@ -912,18 +1466,14 @@ mod tests {
 
     impl PeerConfigStore for StubPeerConfigStore {
         fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
-            self.result(vec![HttpsInterface {
-                bind_addr: "127.0.0.1:43101".parse().expect("socket address"),
-                advertise_host: "localhost".parse().expect("host name"),
-                enabled: true,
-            }])
+            self.result(self.interfaces.clone())
         }
 
         fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), AtmError> {
             unreachable!("doctor test never mutates peer configuration")
         }
 
-        fn remove_interface(&self, _bind_addr: std::net::SocketAddr) -> Result<bool, AtmError> {
+        fn remove_interface(&self, _bind_addr: SocketAddr) -> Result<bool, AtmError> {
             unreachable!("doctor test never mutates peer configuration")
         }
 
@@ -943,14 +1493,7 @@ mod tests {
         }
 
         fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
-            self.result(vec![TrustedPeer {
-                host: "peer.example".parse::<HostName>().expect("host name"),
-                fingerprint: "sha256:peer"
-                    .parse::<CertificateFingerprint>()
-                    .expect("fingerprint"),
-                enabled: true,
-                https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
-            }])
+            self.result(self.peers.clone())
         }
 
         fn trusted_peer(&self, _host: &HostName) -> Result<Option<TrustedPeer>, AtmError> {
@@ -1009,23 +1552,126 @@ mod tests {
         fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
             Ok(atm_storage::RosterSnapshot {
                 team_name: team.clone(),
-                members: self.members.clone(),
+                members: self
+                    .members
+                    .iter()
+                    .filter(|member| &member.team_name == team)
+                    .cloned()
+                    .collect(),
                 refreshed_at: None,
             })
         }
 
         fn save_roster(&self, _roster: &atm_storage::RosterSnapshot) -> Result<(), AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
+            unreachable!("doctor tests do not mutate the roster store boundary")
         }
 
         fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
-            unreachable!("doctor tests do not touch the roster store boundary")
+            // Runtime construction hydrates the RAM roster from the durable
+            // store exactly once at startup, so a real durable store's
+            // `list_teams` is exercised here even though doctor itself never
+            // mutates rosters. Mirror that by returning the distinct team
+            // names present in the fixture data.
+            let mut teams: Vec<TeamName> = self
+                .members
+                .iter()
+                .map(|member| member.team_name.clone())
+                .collect();
+            teams.sort();
+            teams.dedup();
+            Ok(teams)
         }
     }
 
     impl atm_storage::contract::sealed::Sealed for NoopNudgeTemplateOverrideStore {}
+    impl atm_storage::contract::sealed::Sealed for OverrideFindingStore {}
+
+    impl crate::boundary::NudgeTemplateOverrideStore for OverrideFindingStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::StaleNudgeTemplateOverrideKind>, AtmError> {
+            self.stale_list_calls.fetch_add(1, Ordering::Relaxed);
+            Ok(self
+                .stale_kind
+                .clone()
+                .map(|kind| {
+                    vec![crate::boundary::StaleNudgeTemplateOverrideKind {
+                        kind,
+                        updated_at: crate::types::IsoTimestamp::now(),
+                    }]
+                })
+                .unwrap_or_default())
+        }
+
+        fn list_template_overrides(
+            &self,
+            team: &TeamName,
+        ) -> Result<Vec<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+            self.typed_list_calls.fetch_add(1, Ordering::Relaxed);
+            Ok(self.disabled_kind.map_or_else(Vec::new, |kind| {
+                vec![crate::boundary::TeamNudgeTemplateOverrideRow {
+                    team_name: team.clone(),
+                    kind,
+                    mode: crate::boundary::TeamNudgeTemplateOverrideMode::Disabled,
+                    updated_at: crate::types::IsoTimestamp::now(),
+                }]
+            }))
+        }
+
+        fn load_template_override(
+            &self,
+            team: &TeamName,
+            kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+            self.load_calls.fetch_add(1, Ordering::Relaxed);
+            Ok((self.disabled_kind == Some(kind)).then(|| {
+                crate::boundary::TeamNudgeTemplateOverrideRow {
+                    team_name: team.clone(),
+                    kind,
+                    mode: crate::boundary::TeamNudgeTemplateOverrideMode::Disabled,
+                    updated_at: crate::types::IsoTimestamp::now(),
+                }
+            }))
+        }
+
+        fn save_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+            _template_body: &str,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("doctor finding store is read-only")
+        }
+
+        fn disable_template_override(
+            &self,
+            _team: &TeamName,
+            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+        ) -> Result<crate::boundary::TeamNudgeTemplateOverrideRow, AtmError> {
+            unreachable!("doctor finding store is read-only")
+        }
+
+        fn clear_template_override(&self, _team: &TeamName, _kind: &str) -> Result<bool, AtmError> {
+            unreachable!("doctor finding store is read-only")
+        }
+    }
 
     impl crate::boundary::NudgeTemplateOverrideStore for NoopNudgeTemplateOverrideStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::StaleNudgeTemplateOverrideKind>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn list_template_overrides(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+            Ok(Vec::new())
+        }
+
         fn load_template_override(
             &self,
             _team: &TeamName,
@@ -1051,11 +1697,7 @@ mod tests {
             unreachable!("doctor tests do not touch the override-store boundary")
         }
 
-        fn clear_template_override(
-            &self,
-            _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
-        ) -> Result<bool, AtmError> {
+        fn clear_template_override(&self, _team: &TeamName, _kind: &str) -> Result<bool, AtmError> {
             unreachable!("doctor tests do not touch the override-store boundary")
         }
     }
@@ -1064,17 +1706,30 @@ mod tests {
         TestRosterStore {
             members: members
                 .iter()
-                .map(|member| atm_storage::RosterMember {
-                    team_name: TEST_TEAM.parse().expect("team"),
-                    agent_name: AgentName::from_validated(*member),
-                    member_kind: atm_storage::RosterMemberKind::Permanent,
-                    harness: atm_storage::RosterHarness::ClaudeCode,
-                    agent_type: atm_storage::contract::AgentType::default(),
-                    model: atm_storage::ModelName::default(),
-                    recipient_pane_id: None,
-                    metadata_json: serde_json::Map::new(),
-                })
+                .map(|member| roster_member(TEST_TEAM, member))
                 .collect(),
+        }
+    }
+
+    fn roster_store_for_teams(members: &[(&str, &str)]) -> TestRosterStore {
+        TestRosterStore {
+            members: members
+                .iter()
+                .map(|(team, member)| roster_member(team, member))
+                .collect(),
+        }
+    }
+
+    fn roster_member(team: &str, member: &str) -> atm_storage::RosterMember {
+        atm_storage::RosterMember {
+            team_name: team.parse().expect("team"),
+            agent_name: AgentName::from_validated(member),
+            member_kind: atm_storage::RosterMemberKind::Permanent,
+            harness: atm_storage::RosterHarness::ClaudeCode,
+            agent_type: atm_storage::contract::AgentType::default(),
+            model: atm_storage::ModelName::default(),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
         }
     }
 
@@ -1130,7 +1785,7 @@ mod tests {
             .with_graft_receiver_endpoint_store(store);
 
         let mut findings = Vec::new();
-        let report = super::graft_receivers_doctor_report(&runtime, &team, &mut findings);
+        let report = super::graft_receivers_doctor_report(&runtime, &team, false, &mut findings);
 
         assert!(findings.is_empty(), "{findings:#?}");
         assert_eq!(report.receivers.len(), 2);
@@ -1192,6 +1847,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1229,6 +1887,7 @@ mod tests {
                 tmux_pane_id: None,
                 backend: None,
                 herdr_session: None,
+                alias: None,
                 local_backend: None,
                 home_dir: PathBuf::from("/workspace").into(),
                 live_cwd: None,
@@ -1268,12 +1927,142 @@ mod tests {
     }
 
     fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {
+        test_runtime_from_store(roster_store(members))
+    }
+
+    fn test_runtime_from_store(store: TestRosterStore) -> LocalServiceRuntime {
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(store))
+            .expect("write-through roster fixture hydrates from the in-memory fake");
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            Arc::new(roster_store(members)),
+            roster,
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         )
+    }
+
+    fn test_runtime_with_override_store(
+        store: Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
+    ) -> LocalServiceRuntime {
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+            roster_store(&[TEST_SENDER]),
+        ))
+        .expect("write-through roster fixture");
+        LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(UnusedMailStore),
+            roster,
+            store,
+            Arc::new(crate::LocalFileNonClaudeOutbound::new()),
+        )
+    }
+
+    #[test]
+    fn doctor_reports_stale_task_override_row_with_clear_remediation() {
+        let paths = TestPaths::new();
+        let store = Arc::new(OverrideFindingStore {
+            stale_kind: Some("task".to_owned()),
+            disabled_kind: None,
+            stale_list_calls: AtomicUsize::new(0),
+            typed_list_calls: AtomicUsize::new(0),
+            load_calls: AtomicUsize::new(0),
+        });
+        let runtime = test_runtime_with_override_store(store.clone());
+        let report = run_doctor_with_runtime_ports(
+            query(&paths),
+            &template_test_observability(),
+            &runtime,
+            &runtime_doctor_ports(),
+            None,
+        )
+        .expect("doctor report");
+        let findings: Vec<_> = report
+            .findings
+            .into_iter()
+            .filter(|finding| finding.message.contains("stale_nudge_template_override"))
+            .collect();
+        assert_eq!(findings.len(), 1);
+        assert!(
+            findings[0]
+                .message
+                .contains("stale_nudge_template_override")
+        );
+        assert_eq!(
+            findings[0].remediation.as_deref(),
+            Some("atm teams clear-nudge-template --team test-team --kind task")
+        );
+        assert_eq!(store.stale_list_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(store.typed_list_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            store.load_calls.load(Ordering::Relaxed),
+            1,
+            "the post-send section performs its one unrelated delivery-template lookup"
+        );
+    }
+
+    #[test]
+    fn doctor_reports_disabled_task_reminder_override() {
+        let paths = TestPaths::new();
+        let store = Arc::new(OverrideFindingStore {
+            stale_kind: None,
+            disabled_kind: Some(crate::boundary::BuiltInNudgeTemplateKind::TaskReminder),
+            stale_list_calls: AtomicUsize::new(0),
+            typed_list_calls: AtomicUsize::new(0),
+            load_calls: AtomicUsize::new(0),
+        });
+        let runtime = test_runtime_with_override_store(store.clone());
+        let report = run_doctor_with_runtime_ports(
+            query(&paths),
+            &template_test_observability(),
+            &runtime,
+            &runtime_doctor_ports(),
+            None,
+        )
+        .expect("doctor report");
+        let findings: Vec<_> = report
+            .findings
+            .into_iter()
+            .filter(|finding| finding.message.contains("task_nudge_template_override"))
+            .collect();
+        assert_eq!(findings.len(), 1);
+        assert!(
+            findings[0]
+                .message
+                .contains("disabled_task_nudge_template_override")
+        );
+        assert!(findings[0].message.contains("task_reminder"));
+        assert_eq!(store.stale_list_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(store.typed_list_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(store.load_calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn doctor_reports_no_template_override_findings_for_empty_store() {
+        let paths = TestPaths::new();
+        let store = Arc::new(OverrideFindingStore {
+            stale_kind: None,
+            disabled_kind: None,
+            stale_list_calls: AtomicUsize::new(0),
+            typed_list_calls: AtomicUsize::new(0),
+            load_calls: AtomicUsize::new(0),
+        });
+        let runtime = test_runtime_with_override_store(store.clone());
+        let report = run_doctor_with_runtime_ports(
+            query(&paths),
+            &template_test_observability(),
+            &runtime,
+            &runtime_doctor_ports(),
+            None,
+        )
+        .expect("doctor report");
+        assert!(report.findings.iter().all(|finding| {
+            !finding.message.contains("stale_nudge_template_override")
+                && !finding
+                    .message
+                    .contains("disabled_task_nudge_template_override")
+        }));
+        assert_eq!(store.stale_list_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(store.typed_list_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(store.load_calls.load(Ordering::Relaxed), 1);
     }
 
     fn test_runtime(paths: &TestPaths) -> LocalServiceRuntime {
@@ -1365,6 +2154,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1374,6 +2166,137 @@ mod tests {
         assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert_eq!(report.findings[0].severity, DoctorSeverity::Info);
         assert_eq!(report.findings[0].code, AtmErrorCode::ObservabilityHealthOk);
+        assert_eq!(report.team_scope, "single");
+    }
+
+    #[test]
+    fn run_doctor_all_teams_projects_one_roster_per_canonical_team() {
+        let paths = TestPaths::new();
+        let runtime = test_runtime_from_store(roster_store_for_teams(&[
+            ("team-c", "member-c"),
+            ("team-a", "member-a"),
+            ("team-b", "member-b"),
+        ]));
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            all_teams: true,
+            ..DoctorQuery::default()
+        };
+
+        let report = run_doctor_with_runtime(query, &healthy_observability(&paths), &runtime)
+            .expect("all-team doctor report");
+
+        assert_eq!(report.team_scope, "all_teams");
+        assert!(report.member_roster.is_none());
+        assert_eq!(
+            report
+                .team_rosters
+                .iter()
+                .map(|roster| roster.team.as_str())
+                .collect::<Vec<_>>(),
+            ["team-a", "team-b", "team-c"]
+        );
+        assert!(
+            report
+                .team_rosters
+                .iter()
+                .all(|roster| roster.members.len() == 1)
+        );
+    }
+
+    #[test]
+    fn unique_name_f07_reports_legacy_effective_name_conflicts_for_the_scoped_team() {
+        let paths = TestPaths::new();
+        let mut store =
+            roster_store_for_teams(&[(TEST_TEAM, "local-member"), ("other", "remote-member")]);
+        for member in &mut store.members {
+            member.metadata_json.insert(
+                "alias".to_owned(),
+                serde_json::Value::String("shared-herdr-name".to_owned()),
+            );
+        }
+        let runtime = test_runtime_from_store(store);
+
+        let report =
+            run_doctor_with_runtime(query(&paths), &healthy_observability(&paths), &runtime)
+                .expect("doctor report");
+
+        let finding = report
+            .findings
+            .iter()
+            .find(|finding| finding.message.contains("shared-herdr-name"))
+            .expect("duplicate effective-name finding");
+        assert_eq!(finding.code, AtmErrorCode::WarningRosterDrift);
+        assert!(finding.message.contains("remote-member@other"));
+        assert!(
+            finding
+                .remediation
+                .as_deref()
+                .is_some_and(|remediation| remediation.contains("--alias"))
+        );
+    }
+
+    #[test]
+    fn all_teams_duplicate_name_warnings_preserve_team_context() {
+        let paths = TestPaths::new();
+        let mut store =
+            roster_store_for_teams(&[("team-a", "local-member"), ("team-b", "remote-member")]);
+        for member in &mut store.members {
+            member.metadata_json.insert(
+                "alias".to_owned(),
+                serde_json::Value::String("shared-herdr-name".to_owned()),
+            );
+        }
+        let runtime = test_runtime_from_store(store);
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            all_teams: true,
+            ..DoctorQuery::default()
+        };
+
+        let report = run_doctor_with_runtime(query, &healthy_observability(&paths), &runtime)
+            .expect("all-team doctor report");
+        let warnings = report
+            .findings
+            .iter()
+            .filter(|finding| finding.code == AtmErrorCode::WarningRosterDrift)
+            .map(|finding| finding.message.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings.iter().any(|message| {
+            message.starts_with("team team-a:") && message.contains("remote-member@team-b")
+        }));
+        assert!(warnings.iter().any(|message| {
+            message.starts_with("team team-b:") && message.contains("local-member@team-a")
+        }));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn run_doctor_without_team_falls_back_to_all_with_info_finding() {
+        let paths = TestPaths::new();
+        let runtime = test_runtime_from_store(roster_store_for_teams(&[
+            ("team-a", "member-a"),
+            ("team-b", "member-b"),
+        ]));
+        let _env = crate::test_support::EnvGuard::set_many([("ATM_TEAM", None)]);
+        let query = DoctorQuery {
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
+            ..DoctorQuery::default()
+        };
+
+        let report = run_doctor_with_runtime(query, &healthy_observability(&paths), &runtime)
+            .expect("fallback all-team doctor report");
+
+        assert_eq!(report.team_scope, "all_teams");
+        assert_eq!(report.team_rosters.len(), 2);
+        assert!(report.findings.iter().any(|finding| {
+            finding.severity == DoctorSeverity::Info && finding.message.contains("no team resolved")
+        }));
     }
 
     #[test]
@@ -1394,6 +2317,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1428,6 +2354,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1459,6 +2388,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Degraded),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: Some("query backlog".to_string()),
                 }),
             },
@@ -1487,6 +2419,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Unavailable),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: Some("logger unavailable".to_string()),
                 }),
             },
@@ -1546,6 +2481,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1576,6 +2514,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1606,6 +2547,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1636,6 +2580,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1676,11 +2623,15 @@ mod tests {
             HOME_DIR_METADATA_KEY.to_string(),
             serde_json::json!("/repo/roster"),
         );
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+            TestRosterStore {
+                members: vec![roster_member],
+            },
+        ))
+        .expect("write-through roster fixture hydrates from the in-memory fake");
         let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
-            Arc::new(TestRosterStore {
-                members: vec![roster_member],
-            }),
+            roster,
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
         );
@@ -1694,6 +2645,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1765,6 +2719,9 @@ mod tests {
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     maintenance: None,
                     diagnostic: None,
+                    jsonl: Default::default(),
+                    timeline: Default::default(),
+                    degraded: Vec::new(),
                     detail: None,
                 }),
             },
@@ -1789,6 +2746,9 @@ mod tests {
                 query_state: Some(AtmObservabilityHealthState::Healthy),
                 maintenance: None,
                 diagnostic: None,
+                jsonl: Default::default(),
+                timeline: Default::default(),
+                degraded: Vec::new(),
                 detail: None,
             }),
         }
@@ -1809,6 +2769,7 @@ mod tests {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
             team_override: None,
+            all_teams: false,
             caller_team: Some(TEST_TEAM.parse().expect("team")),
             caller_identity: Some(TEST_SENDER.parse().expect("identity")),
         };
@@ -1836,6 +2797,35 @@ mod tests {
 
     #[test]
     #[serial_test::serial(env)]
+    fn caller_team_precedes_ambient_team_for_doctor_scope() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        let _env = crate::test_support::EnvGuard::set_many([
+            ("ATM_TEAM", Some("config-resolved-team")),
+            ("ATM_IDENTITY", None),
+        ]);
+        let caller_team: TeamName = TEST_TEAM.parse().expect("caller team");
+        let report = run_doctor(
+            &paths,
+            DoctorQuery {
+                home_dir: paths.home_dir.clone(),
+                current_dir: paths.current_dir.clone(),
+                caller_team: Some(caller_team.clone()),
+                ..DoctorQuery::default()
+            },
+            &healthy_observability(&paths),
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.team_scope, "single");
+        assert_eq!(
+            report.member_roster.expect("caller roster").team,
+            caller_team
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
     fn team_override_is_reflected_in_client_context() {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
@@ -1846,6 +2836,7 @@ mod tests {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
             team_override: Some(override_team.parse().expect("team override")),
+            all_teams: false,
             caller_team: Some(TEST_TEAM.parse().expect("team")),
             caller_identity: Some(TEST_SENDER.parse().expect("identity")),
         };
@@ -1934,6 +2925,41 @@ mod tests {
     }
 
     #[test]
+    fn peer_config_doctor_warns_on_malformed_pins_and_literal_advertise_hosts() {
+        let store = StubPeerConfigStore::with_peer_config(
+            vec![HttpsInterface {
+                bind_addr: "0.0.0.0:43101".parse().expect("socket address"),
+                advertise_host: "192.168.128.82".parse().expect("literal IP host"),
+                enabled: true,
+            }],
+            vec![TrustedPeer {
+                host: "peer.example".parse().expect("host name"),
+                fingerprint: "sha256:test-peer".parse().expect("legacy fingerprint"),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
+            }],
+        );
+
+        let (_report, findings) = peer_config_doctor_report(&store);
+
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().all(|finding| {
+            finding.severity == DoctorSeverity::Warning
+                && finding.code == AtmErrorCode::PeerConfigValidationFailed
+        }));
+        assert!(findings.iter().any(|finding| {
+            finding
+                .message
+                .contains("malformed certificate fingerprint")
+        }));
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.message.contains("literal IP"))
+        );
+    }
+
+    #[test]
     fn peer_config_doctor_projects_configuration_failure_without_aborting() {
         let (report, findings) = peer_config_doctor_report(&StubPeerConfigStore::failing(
             AtmError::peer_config_validation("missing certificate reference"),
@@ -1947,6 +2973,186 @@ mod tests {
                 .as_ref()
                 .map(|finding| finding.code),
             Some(AtmErrorCode::PeerConfigValidationFailed)
+        );
+    }
+
+    #[test]
+    fn ax6_doctor_projects_all_roster_task_codes_and_team_counts() {
+        let team: TeamName = "ax6-doctor".parse().expect("team");
+        let worker: AgentName = "worker".parse().expect("worker");
+        let roster = RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "lead-one".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Lead,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "lead-two".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Lead,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "atm-daemon".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+                atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: worker.clone(),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                },
+            ],
+            refreshed_at: None,
+        };
+        let assigned_task = TaskRow {
+            position: None,
+            team: team.clone(),
+            task_id: "ax6-stalled".parse().expect("task"),
+            assignee: worker.clone(),
+            assigner: "assigner".parse().expect("agent"),
+            state: TaskState::Assigned,
+            assignment_message_id: atm_storage::AtmMessageId::new(),
+            description: "stalled".to_owned(),
+            assigned_at: atm_storage::IsoTimestamp::now(),
+            updated_at: atm_storage::IsoTimestamp::now(),
+            last_reminded_at: None,
+            reminder_count: atm_storage::TASK_STALLED_REMINDER_THRESHOLD,
+            lead_notified_count: 0,
+        };
+        let mut findings = Vec::new();
+        super::ax6::team_findings(&team, &roster, &[assigned_task], &mut findings);
+        let codes: Vec<_> = findings.iter().map(|finding| finding.code).collect();
+        assert!(codes.contains(&AtmErrorCode::RosterMultipleLeads));
+        assert!(codes.contains(&AtmErrorCode::RosterReservedName));
+        assert!(codes.contains(&AtmErrorCode::TaskStalled));
+        let stalled = findings
+            .iter()
+            .find(|finding| finding.code == AtmErrorCode::TaskStalled)
+            .expect("stalled task finding");
+        assert_eq!(
+            stalled.remediation.as_deref(),
+            Some(
+                "check the assignee or close the task: atm task close <task_id> completed --stdin"
+            )
+        );
+        let info = findings
+            .iter()
+            .find(|finding| finding.severity == DoctorSeverity::Info)
+            .expect("one team count finding");
+        assert!(info.message.contains("assigned:1"));
+        assert!(info.message.contains("active:0"));
+        assert_eq!(
+            findings
+                .iter()
+                .filter(|finding| finding.severity == DoctorSeverity::Info)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn ax6_doctor_reports_one_no_lead_warning_for_a_herdr_team() {
+        let team: TeamName = "ax6-herdr-no-lead".parse().expect("team");
+        let roster = RosterSnapshot {
+            team_name: team.clone(),
+            members: ["worker-one", "worker-two"]
+                .into_iter()
+                .map(|agent| atm_storage::RosterMember {
+                    team_name: team.clone(),
+                    agent_name: agent.parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::ClaudeCode,
+                    agent_type: AgentType::Worker,
+                    model: Default::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Default::default(),
+                })
+                .collect(),
+            refreshed_at: None,
+        };
+        let mut findings = Vec::new();
+
+        super::ax6::team_findings(&team, &roster, &[], &mut findings);
+
+        let no_lead: Vec<_> = findings
+            .iter()
+            .filter(|finding| finding.code == AtmErrorCode::RosterNoLead)
+            .collect();
+        assert_eq!(no_lead.len(), 1, "one aggregated warning per team");
+        assert_eq!(no_lead[0].severity, DoctorSeverity::Warning);
+        assert!(no_lead[0].message.contains("ax6-herdr-no-lead"));
+    }
+
+    #[test]
+    fn ax6_doctor_projects_blocked_runtime_code_with_age() {
+        let now = crate::types::IsoTimestamp::now();
+        let snapshot = crate::protocol::RuntimeStatusSnapshot {
+            liveness: crate::protocol::RuntimeLivenessState::Running,
+            readiness: crate::protocol::RuntimeReadinessState::Ready,
+            detail: None,
+            singleton_owner_pid: None,
+            degraded_ingest: false,
+            member_counts: Default::default(),
+            members: vec![crate::protocol::RuntimeMemberObservation {
+                team: "ax6-doctor".parse().expect("team"),
+                member: "blocked".parse().expect("member"),
+                state: crate::protocol::RuntimeMemberState::Blocked,
+                revision: Default::default(),
+                availability: crate::protocol::RuntimeObservationAvailability::Fresh,
+                last_observation_attempt_by: None,
+                last_observation_attempt_at: Some(now),
+                last_observed_by: None,
+                last_observed_at: Some(now),
+                session_id: None,
+                pid: None,
+                last_active_at: None,
+                state_changed_by: None,
+                state_changed_at: Some(now),
+                session_changed_by: None,
+                session_changed_at: None,
+            }],
+            graft_queue_handoff_failures_total: 0,
+            graft_queue_marker_clear_failures_total: 0,
+            bare_cli_queue_full_drops_total: 0,
+            queue_marker_set_failures_total: 0,
+            herdr_queue_last_tick_at: None,
+            queue_messages_drained_total: 0,
+            queue_drain_failures_total: 0,
+            blocking_core_bridge_stalls_total: 0,
+            write_source_preflight_stalls_total: 0,
+        };
+        let findings = super::runtime_condition_findings(&snapshot);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, AtmErrorCode::MemberBlocked);
+        assert!(findings[0].message.contains("blocked@ax6-doctor"));
+        assert!(
+            findings[0]
+                .remediation
+                .as_deref()
+                .unwrap_or_default()
+                .contains("interactive input")
         );
     }
 }

@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY1-QA-001>
+  a triage:Finding ;
+  triage:findingId "AY1-QA-001" ;
+  triage:title "AY.1 deliverable D5 half unmet: docs/architecture.md has no Herdr cross-reference" ;
+  triage:description "quality-mgr qa-pr1270-r1 (PR #1270, reviewed at d2fdd8b9a; blocking; req-qa + arch-qa, re-verified): sprint-AY.1 D5 says 'Update docs/architecture.md and mark the Windows deferral in AQ2-6 as superseded'. The AQ2-6 half is done. The docs/architecture.md half never landed: the PR diff does not touch docs/architecture.md and grep -i herdr in that file returns zero matches. docs/atm-herdr/architecture.md section 12 was updated, which satisfies only the crate-local half. Fix is a docs cross-reference from docs/architecture.md to the atm-herdr architecture/compatibility material; no code or boundary change. Full report: https://github.com/randlee/atm-core/pull/1270#issuecomment-5562672298" ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/architecture.md, docs/plans/phase-ay/sprint-AY.1-herdr-audit-docs.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T22:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY1 ;
+  triage:foundAt "2026-09-06T22:37:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY1-QA-001/AY1-0> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY1-QA-001/1> ;
+  triage:closedAt "2026-09-06T23:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY1-QA-001/AY1-0>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 0 ;
+  triage:snippet "Missing Herdr cross-reference section" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "2633e9e48" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/phase-ay/2633e9e48> .
+
+<urn:atm:triage:resolution/AY1-QA-001/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-06T23:20:00Z"^^xsd:dateTime ;
+  triage:fixCommit "1d208cb9f" ;
+  triage:fixBranch "feature/ay1-herdr-audit-docs" ;
+  triage:verifiedInRound "qa-pr1270-r2" ;
+  triage:resolutionNote "docs/architecture.md §1.4 'Herdr local steer backend' added at commit 1d208cb9f, cross-referencing docs/atm-herdr/architecture.md and docs/atm-herdr/requirements.md and noting the AQ2-6 Windows deferral is superseded. Confirmed closed independently by req-qa, arch-qa, and rust-qa-agent in qa-pr1270-r2, plus quality-mgr direct read of docs/architecture.md:137-146 at commit f0fe48736." .
+
+<urn:atm:triage:worktree/integrate/phase-ay/2633e9e48>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "2633e9e48" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/feature/ay1-herdr-audit-docs/be5800e79>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay1-herdr-audit-docs" ;
+  triage:branch "feature/ay1-herdr-audit-docs" ;
+  triage:headSha "be5800e79" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature/ay2-herdr-transport-seam/a35154291>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay2-herdr-transport-seam" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "a35154291" ;
+  triage:orderIndex 2 .

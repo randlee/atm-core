@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW-PROD-R2-001>
+  a triage:Finding ;
+  triage:findingId "AW-PROD-R2-001" ;
+  triage:title "/v1/diagnostics bounded-deadline timeout releases its ConcurrencyLimitLayer admission permit while the detached spawn_blocking query keeps running against the connection pool" ;
+  triage:description "arch-ctm, review-phase-aw-prod-readiness-r2 (NO-GO), relayed by fenix (01M1T2V58E7SP6TZC7Q098QY5Z onward); independently confirmed by quality-mgr at integrate/phase-aw@ac1088c82 by direct read of crates/atm-http-runtime/src/diagnostics_route.rs:103-118 and crates/atm-http-runtime/src/lib.rs:592-618. diagnostics_route.rs wraps `tokio::task::spawn_blocking(move || store.query(...))` in `tokio::time::timeout(state.query_deadline, query_future)`; on timeout it maps to SERVICE_UNAVAILABLE and returns immediately, but the underlying spawn_blocking task is NOT cancelled (spawn_blocking cannot be cancelled) -- it keeps running against the DiagnosticTimelineStore/connection pool until it finishes on its own. Independently confirmed: `with_auxiliary_admission` (lib.rs:602-616) applies `ConcurrencyLimitLayer::new(max_connections)` as the OUTER layer around the whole auxiliary router (health+diagnostics), and that layer releases its permit when the wrapped service's future completes -- which happens at the timeout, not when the detached blocking task actually finishes. Net effect: a client that hits the bounded deadline repeatedly can accumulate more concurrently-running diagnostics queries against the pool than max_connections ever intended to admit, defeating the admission control the deadline+limiter pair was built to provide. The existing test (diagnostics_route.rs:394-420, a_query_that_exceeds_its_deadline_is_reported_as_unavailable) only asserts the response status; it does not assert the permit count or that the orphaned worker is bounded. Not a legacy-daemon finding -- atm-http-runtime is the Tokio+Axum target architecture." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "step2_verdict" ;
+  triage:category "concurrency-admission" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AWProdReadinessR2 ;
+  triage:foundAt "2026-09-05T23:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PROD-R2-001/route-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW-PROD-R2-001/admission-1> ;
+  triage:triageRecordVersion "1" .
+
+# quality-mgr, 2026-09-06, qa-phase-aw-integration-review-r2 step 2: confirmed
+# via direct read, not relayed only. Fix direction (not yet designed by any
+# party): either bound the number of in-flight spawn_blocking jobs
+# independently of the request-future lifetime (e.g. a semaphore acquired
+# before spawn_blocking and released inside the blocking closure itself,
+# so the permit tracks the actual worker, not the HTTP response future), or
+# make the timeout best-effort-cooperative by having the blocking closure
+# check a cancellation flag between rows. Left to the fix-round implementer;
+# this record only certifies the defect.
+<urn:atm:triage:occurrence/AW-PROD-R2-001/route-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/diagnostics_route.rs" ;
+  triage:line 103 ;
+  triage:snippet "let query_future = tokio::task::spawn_blocking(move || store.query(&storage_query));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/ac1088c82> .
+
+<urn:atm:triage:occurrence/AW-PROD-R2-001/admission-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 615 ;
+  triage:snippet ".layer(tower::limit::ConcurrencyLimitLayer::new(max_connections))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-aw/ac1088c82> .
+
+<urn:atm:triage:worktree/integrate-phase-aw/ac1088c82>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-aw" ;
+  triage:branch "integrate/phase-aw" ;
+  triage:headSha "ac1088c82" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AW-PROD-R2-001/r1>
+  a triage:Resolution ;
+  triage:findingId "AW-PROD-R2-001" ;
+  triage:resolutionNote "quality-mgr phase-end gate @94e29a586, fenix ledger hygiene: run_bounded_diagnostics_query in diagnostics_route.rs holds a dedicated Tokio semaphore permit for the query's real lifetime via spawn_blocking (independently re-verified against current code this gate)." ;
+  triage:resolvedAt "2026-09-06T06:46:36Z"^^xsd:dateTime ;
+  triage:resolvedStatus "fixed" ;
+  triage:resolvedHeadSha "f1d2832747954" ;
+  triage:resolvedBranch "integrate/phase-aw" .

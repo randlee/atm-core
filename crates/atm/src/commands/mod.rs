@@ -9,6 +9,7 @@ pub(crate) mod caller_context;
 pub mod clear;
 pub mod compose;
 pub mod doctor;
+pub mod escalation;
 pub mod help;
 pub(crate) mod internal_heartbeat;
 pub(crate) mod internal_nudge;
@@ -26,6 +27,7 @@ pub mod send;
 pub(crate) mod send_fan_out;
 pub(crate) mod send_to;
 pub(crate) mod sender_roster;
+pub mod task;
 pub mod teams;
 pub mod templates;
 pub(crate) mod util;
@@ -35,6 +37,7 @@ pub use api::ApiCommand;
 pub use clear::ClearCommand;
 pub use compose::ComposeCommand;
 pub use doctor::DoctorCommand;
+pub use escalation::EscalationCommand;
 pub use help::HelpCommand;
 pub(crate) use internal_heartbeat::InternalHeartbeatCommand;
 pub(crate) use internal_nudge::InternalNudgeCommand;
@@ -48,6 +51,7 @@ pub use queue::QueueCommand;
 pub use read::ReadCommand;
 pub use search::SearchCommand;
 pub use send::SendCommand;
+pub use task::TaskCommand;
 pub use teams::TeamsCommand;
 pub use templates::TemplatesCommand;
 
@@ -123,6 +127,7 @@ enum Command {
     Clear(ClearCommand),
     Log(LogCommand),
     Doctor(DoctorCommand),
+    Escalation(EscalationCommand),
     Help(HelpCommand),
     #[command(hide = true)]
     InternalNudge(InternalNudgeCommand),
@@ -136,6 +141,7 @@ enum Command {
     Teams(TeamsCommand),
     Members(MembersCommand),
     Templates(TemplatesCommand),
+    Task(TaskCommand),
 }
 
 impl Command {
@@ -152,8 +158,9 @@ impl Command {
             Self::Search(command) => command.run(observability).await,
             Self::Ack(command) => command.run(observability).await,
             Self::Clear(command) => command.run(observability).await,
-            Self::Log(command) => command.run(observability),
+            Self::Log(command) => command.run(observability).await,
             Self::Doctor(command) => command.run(observability).await,
+            Self::Escalation(command) => command.run().await,
             Self::Help(command) => command.run(observability),
             Self::InternalNudge(command) => command.run(observability).await,
             Self::InternalHeartbeat(command) => command.run(observability).await,
@@ -163,6 +170,7 @@ impl Command {
             Self::Teams(command) => command.run(observability).await,
             Self::Members(command) => command.run(observability).await,
             Self::Templates(command) => command.run(observability).await,
+            Self::Task(command) => command.run(observability).await,
         }
     }
 }

@@ -768,13 +768,11 @@ fn handle_graft_receiver_connection(
     let event = request.event;
     let kind = request.kind;
     let rendered_nudge = request.rendered_nudge;
-    let message_body = request.message_body;
     let dispatch = BuiltInPostSendDispatch {
         target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
             recipient: event.recipient.clone(),
             recipient_team: event.recipient_team.clone(),
             rendered_nudge,
-            message_body,
         }),
         event,
         kind,
@@ -962,7 +960,6 @@ mod tests {
                 event,
                 kind: NudgeKind::Steer,
                 rendered_nudge: "<atm>test nudge</atm>".to_string(),
-                message_body: "full immutable body".to_string(),
             },
             DELIVER_CONNECT_DEADLINE,
             DELIVER_IO_DEADLINE,
@@ -983,6 +980,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: None,
         }
     }
@@ -1266,10 +1264,7 @@ mod tests {
         }
         let nudges = injector.nudges.lock().expect("nudges lock");
         assert_eq!(nudges.len(), 100);
-        assert_eq!(
-            nudges[0].body,
-            "<atm>test nudge</atm>\n\nfull immutable body"
-        );
+        assert_eq!(nudges[0].body, "<atm>test nudge</atm>");
         assert_eq!(
             read_snapshot(&snapshot).expect("snapshot").state,
             GraftSessionState::Listening
@@ -1720,7 +1715,7 @@ mod tests {
         // `atm-http-runtime`'s own replacement-router tests use to reach a
         // real SQLite-backed store: `atm-graft` may not depend on
         // `atm-storage-rusqlite` directly (repository boundary lint).
-        let store: Arc<Mutex<Arc<dyn atm_core::GraftReceiverEndpointStore + Send + Sync>>> =
+        let store: Arc<Mutex<Arc<dyn atm_core::AsyncGraftReceiverEndpointStore + Send + Sync>>> =
             Arc::new(Mutex::new(
                 atm_runtime_test_support::open_graft_receiver_endpoint_store(&db_path)
                     .expect("open sqlite-backed graft receiver endpoint store"),
@@ -1766,15 +1761,16 @@ mod tests {
 
         let team = TeamName::from_validated(TEST_TEAM);
         let agent = AgentName::from_validated(TEST_QA);
-        let lookup =
-            |store: &Arc<Mutex<Arc<dyn atm_core::GraftReceiverEndpointStore + Send + Sync>>>| {
-                store
-                    .lock()
-                    .expect("store")
-                    .lookup(&team, &agent)
-                    .ok()
-                    .flatten()
-            };
+        let lookup = |store: &Arc<
+            Mutex<Arc<dyn atm_core::AsyncGraftReceiverEndpointStore + Send + Sync>>,
+        >| {
+            store
+                .lock()
+                .expect("store")
+                .lookup(&team, &agent)
+                .ok()
+                .flatten()
+        };
         assert!(
             wait_until(Duration::from_secs(3), || lookup(&store).is_some()),
             "the initial announce must persist a lease before any daemon restart"

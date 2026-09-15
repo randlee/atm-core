@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-022>
+  a triage:Finding ;
+  triage:findingId "BB3-022" ;
+  triage:title "Two Python smoke-runner files exceed 1000 lines -- advisory, RULE-003's actual gate never scans Python" ;
+  triage:description "quality-mgr BB3-QA3-1789250000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1445#issuecomment-5648698551, 2026-09-12T21:08:20Z; BB3-QA3-M6), reviewed at 66be1d012. scripts/smoke/run_admission_capacity.py (2444 lines) and scripts/smoke/run_feature_smoke.py (1110 lines) both exceed 1000 lines, but confirmed .just/check_line_counts.py (the actual RULE-003 gate behind just lint lines, per project_rule003_authoritative_gate) only scans Rust crate src/**/*.rs, never Python -- so AC6 is unaffected. Advisory decomposition debt only, not a gate failure." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "maintainability" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/run_admission_capacity.py,scripts/smoke/run_feature_smoke.py" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:deferredNote "Advisory only -- no gate is failing. Consider decomposition in a future sweep if these files continue to grow. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1) for visibility, not a required fix in this round. cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) fixed this on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA; QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1). STILL OPEN, severity raised minor->blocking (BB3-QA4-1789262000, PR #1455 comment, 2026-09-12T23:24:52Z, per arch-qa's specialist-reviewer judgment as an architectural RULE-003 principle regardless of the Rust-only CI gate's scope; req-qa rated the same fact Minor, reported at the higher specialist severity): the split introduced a globals().update({{name: getattr(module, name) for name in module.__all__}}) immediately after import, plus module._PUBLIC_NAMESPACE = globals() handing the caller's own globals back to the split module so its functions indirect through a _public(name, fallback) lookup (12 call sites in admission_capacity_support.py alone) into the original file's namespace -- a re-export-everything-back shim creating circular runtime coupling, not a real module boundary. admission_capacity_support.py itself is 1659/1473 non-blank lines, over the 1000-line target that motivated the split. Next: replace the globals().update()/_PUBLIC_NAMESPACE circular-injection pattern in both split pairs with explicit function parameters or an injected context object, and split admission_capacity_support.py further so every resulting file is genuinely under 1000 lines. Cut on a new layer above fix/bb3-qa3-r4 (top of stack #1457). Corrected routing (fenix, 2026-09-12T23:32:13Z): the fix layer is fix/bb3-qa4-r5, cut from a7d4664d1 (feature/bb6-storage-prompt-handoffs, top of stack #1457) -- not directly above fix/bb3-qa3-r4. In the BB3-FIX-R5-1789264000 fence, closes on cipher's fix. cipher's BB3 R5 final push landed at fix/bb3-qa4-r5 @ 5da523f81 (parent merge-forward 16f2ab124), 2026-09-13T00:45:41Z, self-reported fresh just smoke fast 8/8, evidence archived outside tree, reports index unchanged. Fixed-pending-QA. Per cipher's task-close (relayed by fenix, 2026-09-13T00:52:35Z), this finding's fix landed at f6214af22. QA-R5 dispatched (BB3-QA-R5-1789273000) on PR #1463 @ 5da523f81, frozen, base ref for the diff 40ccd403e." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-022/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-022/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-022/3> ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "6" .
+
+<urn:atm:triage:occurrence/BB3-022/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "2444 lines; sibling run_feature_smoke.py is 1110 lines; both exceed 1000 lines but .just/check_line_counts.py's RULE-003 gate only scans Rust crate src/**/*.rs, never Python" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-022/1> .
+
+<urn:atm:triage:worktree/BB3-022/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1455, fix/bb3-qa3-r4" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB3-022/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/admission_capacity_support.py" ;
+  triage:line 1 ;
+  triage:snippet "routed to BB3-FIX-R5-1789264000 (cipher) on fix/bb3-qa4-r5, cut from a7d4664d1 (feature/bb6-storage-prompt-handoffs, top of stack #1457)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-022/2> .
+
+<urn:atm:triage:worktree/BB3-022/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5 (cut from a7d4664d1, feature/bb6-storage-prompt-handoffs, top of stack #1457)" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB3-022/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/admission_capacity_support.py" ;
+  triage:line 1 ;
+  triage:snippet "cipher's BB3 R5 final push; fixed-pending-QA at fix/bb3-qa4-r5 @ 5da523f81" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-022/3> .
+
+<urn:atm:triage:worktree/BB3-022/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/BB3-022/1>
+  a triage:Resolution ;
+  triage:resolutionNote "quality-mgr BB3-QA-R5-1789273000 (PR #1463 comment, 'Verified fixed (no residual action)', 2026-09-13T01:11:21Z): confirmed fully fixed and independently verified this round. Zero occurrences of globals().update( or _PUBLIC_NAMESPACE remain anywhere in the tree -- the circular re-export-everything-back shim is fully removed, replaced with explicit function parameters/an injected context object. Both split files now have genuine module boundaries and are under the 1000-line target: admission_capacity_support.py is 968 lines, feature_smoke_network_support.py is 145 lines. This record's prior carry-forward text describing the globals()/_PUBLIC_NAMESPACE coupling is now historical only; that defect is resolved. (Note: run_admission_capacity.py and run_feature_smoke.py themselves separately trend back over 1000 lines post-split -- tracked as its own new finding, BB3-026, not part of this closure.)" ;
+  triage:resolvedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .

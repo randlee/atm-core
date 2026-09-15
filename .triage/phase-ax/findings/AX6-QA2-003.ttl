@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AX6-QA2-003>
+  a triage:Finding ;
+  triage:findingId "AX6-QA2-003" ;
+  triage:title "RULE-011: run_atm() in crates/atm/tests/escalation_cli.rs spawns the CLI without an isolated ATM_CONFIG_HOME" ;
+  triage:description "AX.6 QA-2 (quality-mgr QA-AX6-R2-1788630712, PR #1204 report 2026-09-05T19:01Z, arch-qa ARCH-003) at head c3268df8a3dfa5c84f4465459c5d2ba86df1c857. run_atm() at crates/atm/tests/escalation_cli.rs:6-13 sets only ATM_HOME and ATM_LOG_DIR on the spawned atm subprocess and never an isolated ATM_CONFIG_HOME, contrary to docs/cross-platform-guidelines.md section Test Subprocess Isolation (RULE-011). The subprocess therefore sees the runner's real config home. This is the most likely root cause of the windows-latest CI failure at the same head (run 33982131673 job 101349967351): invalid_escalation_address_uses_validation_exit_code exits 5 (AtmErrorCode::MailboxLockTimeout) instead of the validation exit code 3, i.e. the CLI reached a mailbox/daemon path before argument validation on Windows; verify the causal link when fixing (validation must run before any daemon or mailbox access). Fix: give run_atm() a per-test isolated ATM_CONFIG_HOME (and any other variable the guideline lists) and confirm the Windows CI leg passes." ;
+  triage:phaseId "phase-ax" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-09-05T19:45:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closure confirmed by quality-mgr AX.6 QA-3 recheck (QA-AX6-R3-1788637011) at head 43e1d40b33357024dea87742b4f8a114e7fd4966; fixed by arch-ctm fix pass GO-AX6-FIX2-1788635243 (Completion c22). Report: PR #1204 comment 5554337367. Sprint verdict remains FAIL on AX6-QA3-001/002." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T19:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AX6 ;
+  triage:foundAt "2026-09-05T19:01:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-003/AX6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AX6-QA2-003/AX7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AX6-QA2-003/AX6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/escalation_cli.rs" ;
+  triage:line 7 ;
+  triage:snippet "Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:occursIn <urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857> .
+
+<urn:atm:triage:occurrence/AX6-QA2-003/AX7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/escalation_cli.rs" ;
+  triage:line 7 ;
+  triage:snippet "Command::new(env!(\"CARGO_BIN_EXE_atm\"))" ;
+  triage:status "inherited-fix" ;
+  triage:closed true ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e" ;
+  triage:occursIn <urn:atm:triage:worktree/AX7/d101fee2e> .
+
+<urn:atm:triage:worktree/AX6/c3268df8a3dfa5c84f4465459c5d2ba86df1c857>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX6" ;
+  triage:branch "feature/ax6-lead-notification-doctor" ;
+  triage:headSha "c3268df8a3dfa5c84f4465459c5d2ba86df1c857" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AX7/d101fee2e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AX7" ;
+  triage:branch "feature/ax7-herdr-dogfood-evidence" ;
+  triage:headSha "d101fee2e" ;
+  triage:orderIndex 7 .

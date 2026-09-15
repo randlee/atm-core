@@ -1,0 +1,14 @@
+FAIL  skills reported 7/7, PASS 7/7 (7 report messages); herdr doctor ok: no
+atm:    1.5.11 (prerelease/v1.5.11 @ 1768a2e75, prerelease-archive run 34291889519, ci run 34291891977)
+hermes: randlee/hermes-agent @ d45230aac
+hermes Hermes Agent v0.21.0 (2026.8.31) · upstream d45230aa | atm-daemon 1.5.11 | herdr 0.8.2
+herdr transport: socket ({'kind': 'unexpected_response', 'code': 'internal_failure', 'detail': 'Herdr socket server status must use the ping probe'}) (atm doctor --json .herdr.endpoints[].transport; bringup writes [herdr] transport="socket" to /root/.atm.toml)
+skill: atm-setup-environment agent: tester@testbed  tools: cli result: PASS   (6/6 steps) 
+skill: atm-setup-environment agent: hermes@testbed  tools: native+cli result: PASS   (6/6 steps) 
+skill: atm-smoke agent: tester@testbed  tools: cli result: PASS   (9/9 steps) 
+skill: atm-smoke agent: hermes@testbed  tools: native+cli result: PASS   (10/10 steps) 
+skill: atm-hermes-ready agent: tester@testbed  tools: cli result: PASS   (5/5 steps) 
+skill: atm-nudge-roundtrip agent: hermes@testbed  tools: native result: PASS   (5/5 steps) 
+skill: atm-nudge-roundtrip agent: tester@testbed  tools: cli result: PASS   (3/3 steps) 
+reports and logs: /Users/randlee/Documents/github/atm-hermes-testbed/.cache/results/20260909T001110Z
+the fixture is still running: docker exec hermes-testbed ... ; ./teardown.sh when done

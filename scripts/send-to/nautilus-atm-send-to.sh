@@ -22,7 +22,20 @@ fi
 
 message=$(tail -n 1 "$stderr_file" 2>/dev/null || true)
 [ -n "$message" ] || message="ATM Send-To failed (exit $status)"
-if command -v notify-send >/dev/null 2>&1; then
+# Test-only seam (same contract as atm-send-to.command): when set, replaces
+# the `notify-send` desktop notification below with a non-UI action so
+# .just/tests/test_send_to_surface.py never raises a real notification.
+# `none` suppresses it, `stderr` prints the notification text to stderr, and
+# any other value is run as `<command> "ATM Send-To" "$message"`. Production
+# launches never set this; the notify-send branch below stays the default.
+notifier=${ATM_SEND_TO_NOTIFIER:-}
+if [ -n "$notifier" ]; then
+    case "$notifier" in
+        none) ;;
+        stderr) printf 'ATM Send-To: %s\n' "$message" >&2 ;;
+        *) "$notifier" "ATM Send-To" "$message" >/dev/null 2>&1 || true ;;
+    esac
+elif command -v notify-send >/dev/null 2>&1; then
     notify-send "ATM Send-To" "$message" >/dev/null 2>&1 || true
 fi
 exit "$status"

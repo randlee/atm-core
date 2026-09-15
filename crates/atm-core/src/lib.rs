@@ -37,8 +37,11 @@ pub mod doctor;
 pub mod error;
 /// Stable ATM-owned error-code registry used by core and CLI layers.
 pub mod error_codes;
+pub mod escalation_admin;
 /// Thin graft-facing daemon client traits.
 pub mod graft;
+/// Pure doctor configuration decision derived from one roster snapshot.
+pub mod herdr_configured;
 /// Public ATM home and team-path resolution helpers.
 pub mod home;
 /// Internal identity resolution and hook lookup helpers.
@@ -58,6 +61,8 @@ pub(crate) mod model_registry;
 pub mod nudge_dispatch;
 /// Observability adapter traits and event payload types.
 pub mod observability;
+/// Runtime diagnostic counter contract consumed by health projections.
+pub mod observability_counters;
 /// Transport-neutral peer-wire policy vocabulary selected at daemon launch.
 pub mod peer_wire;
 /// Internal atomic persistence helpers for shared mutable state files.
@@ -97,6 +102,10 @@ pub mod send_to;
 pub(crate) mod service_runtime;
 /// Transitional legacy store adapters used by the retained service runtime.
 pub(crate) mod service_runtime_store;
+/// Deliver-then-close preflight helpers for task completion reports.
+pub mod task_close;
+/// Read-only query contracts for the closed `atm task` command set.
+pub mod task_query;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
 /// Pure resolution of template-declared workflow snapshots.
@@ -132,7 +141,10 @@ pub use api::{
     MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
 };
 pub use atm_storage::derive_ack_requirement;
-pub use atm_storage::{GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease};
+pub use atm_storage::{
+    AsyncGraftReceiverEndpointStore, GraftEndpointStoreError, GraftReceiverEndpointStore,
+    GraftReceiverLease,
+};
 pub use atm_storage::{TemplateFrontmatter, TemplateSha};
 pub use atm_temp::{
     AtmTemp, AtmTempError, EnvSource, ProcessEnvSource, resolve_atm_temp, send_to_staging_dir,
@@ -161,7 +173,7 @@ pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
 pub use config::types::GraftConfig;
 pub use delivery_channel::{
-    DeliveryChannel, GraftLeaseState, HerdrSession, LocalMessageReceivedBackend,
+    DeliveryChannel, GraftLeaseState, HerdrAgentName, HerdrSession, LocalMessageReceivedBackend,
     classify_delivery_channel, local_message_received_backend,
 };
 /// Canonical stable import path for the retained thin graft-facing client
@@ -170,7 +182,7 @@ pub use delivery_channel::{
 pub use graft::AtmGraftClient;
 pub use picker_projection::{
     PICKER_MEMBERS_SCHEMA_VERSION, PickerMember, PickerMemberStatus, PickerMembersProjection,
-    build_picker_members_projection,
+    build_picker_members_projection, build_picker_members_projection_from_runtime_status,
 };
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};

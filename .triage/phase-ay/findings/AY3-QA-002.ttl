@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY3-QA-002>
+  a triage:Finding ;
+  triage:findingId "AY3-QA-002" ;
+  triage:title "Boundary bundle not the first commit of AY.3 (P-E(a)/A2)" ;
+  triage:description "The sprint doc (sprint-AY.3-herdr-endpoint-doctor-config.md:82-88,106-110,135,470-473) and phase-ay-plan.md:994-999 require boundaries/atm-core/herdr-endpoint-doctor.toml and boundaries/atm-herdr/herdr-process-adapter.toml to land as the first commit. On feature/ay3 (52c1f2112..45701a81e, 19 commits) commit 1 is 44007297f (core contracts) and the TOML lands at commit 9 (ed94c1690). Verified by fenix: the order is arch-ctm's authoring order (author timestamps monotonic); gh stack sync force-pushes on the PR predate commits 4-19 and did not reorder. Content of the TOML is correct (boundary-guard). Process finding awaiting Rand's ruling: history rewrite vs recorded P-E(a)/A2 amendment." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-06T23:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY3 ;
+  triage:foundAt "2026-09-07T03:42:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY3-QA-002/AY3-1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY3-QA-002/1> ;
+  triage:deferredNote "Process finding awaiting Rand's ruling on history rewrite vs recorded P-E(a)/A2 amendment. Content integrity verified by boundary-guard; dispatch deferred pending policy decision." ;
+  triage:closedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY3-QA-002/AY3-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.3-herdr-endpoint-doctor-config.md" ;
+  triage:line 470 ;
+  triage:snippet "Boundary TOML ordering requirement specification (P-E(a)/A2 process definition)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:occursIn <urn:atm:triage:worktree/AY3/45701a81e> .
+
+<urn:atm:triage:worktree/AY3/45701a81e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "45701a81e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/AY3-QA-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T16:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "none (no code/content change -- process-deviation acceptance)" ;
+  triage:fixBranch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:verifiedInRound "ttl-reconcile-ay-r1" ;
+  triage:resolutionNote "Not a code fix -- closed as an accepted P-E(a)/A2 process deviation per Rand's ruling, relayed by fenix via team-lead message 01M1Y7MMHAFEKY8HBWRVKMPKV2. Ruling: the boundary TOML content itself is correct (already verified by boundary-guard in the original triage), and the commit-order deviation (boundary bundle landing as commit 9 of 19 rather than commit 1, per fenix's earlier author-timestamp/gh-stack-sync-force-push analysis) requires no history rewrite. Status set to 'closed' (not 'fixed') to reflect that this is a policy acceptance of the existing history, not a remediation of a defect. No content on feature/ay3-herdr-endpoint-doctor-config or integrate/phase-ay was changed as part of this closure." .
+
+<urn:atm:triage:worktree/integrate-phase-ay/1770ac80e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "1770ac80e" ;
+  triage:orderIndex 2 .

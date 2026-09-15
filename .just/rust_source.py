@@ -43,7 +43,24 @@ def code_mask(source: str) -> str:
                     break
                 else:
                     end += 1
-        elif source[index] in {'"', "'"}:
+        elif source[index] == "'":
+            if index + 1 < len(source) and source[index + 1] == "\\":
+                quote = source[index]
+                end = index + 1
+                while end < len(source):
+                    if source[end] == "\\":
+                        end += 2
+                    elif source[end] == quote:
+                        end += 1
+                        break
+                    else:
+                        end += 1
+            elif index + 2 < len(source) and source[index + 2] == "'":
+                end = index + 3
+            else:
+                index += 1
+                continue
+        elif source[index] == '"':
             quote = source[index]
             end = index + 1
             while end < len(source):

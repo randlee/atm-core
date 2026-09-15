@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-101>
+  a triage:Finding ;
+  triage:findingId "FTQ-101" ;
+  triage:title "concurrent_recipient_adds_do_not_exceed_scope_cap races on shared-cache in-memory SQLite" ;
+  triage:description "flaky-test-qa phase-ending critical review @ 9f5aef2fe. Finding: the test concurrent_recipient_adds_do_not_exceed_scope_cap races on a shared-cache in-memory SQLite connection; SQLITE_LOCKED is not retried, making the test intermittently flaky. Pre-existing on develop, not a Phase BA regression. fenix's ruling: fix on review-1 (cipher item 5): move to an on-disk WAL tempdir fixture with a 50x stress loop. Fixed at 92b34d11f, ACCEPTED by fenix." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-101/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-101/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/nudge_mode.rs" ;
+  triage:line 1 ;
+  triage:snippet "concurrent_recipient_adds_do_not_exceed_scope_cap races on shared-cache in-memory SQLite" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 92b34d11f (item 5, on-disk WAL tempdir fixture + 50x loop), ACCEPTED by fenix." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "92b34d11f" ;
+  triage:occursIn <urn:atm:triage:worktree/FTQ-101/1> .
+
+<urn:atm:triage:worktree/FTQ-101/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), above integrate/phase-ba" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "92b34d11f" ;
+  triage:orderIndex 7 .

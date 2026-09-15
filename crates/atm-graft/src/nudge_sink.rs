@@ -68,7 +68,6 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
             recipient,
             recipient_team,
             rendered_nudge,
-            message_body,
         }) = &dispatch.target
         else {
             return Err(AtmError::validation(
@@ -81,10 +80,9 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
                 "graft receive hook received an event for a different recipient",
             ));
         }
-        // The agent loop receives the canonical `<atm …>` payload followed by
-        // the exact immutable message body admitted with that event. Telegram's
-        // visible notice remains a separate plain-text rendering so it shows
-        // sender and subject without masquerading as a dispatch.
+        // The agent loop receives only the canonical `<atm …>` payload.
+        // Telegram's visible notice remains a separate plain-text rendering so
+        // it shows sender and subject without masquerading as a dispatch.
         let notice_text = format!(
             "📬 from {}\n{}",
             dispatch.event.source_address(),
@@ -93,7 +91,7 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
         self.deliver(HostNudge {
             event: dispatch.event.clone(),
             kind: dispatch.kind,
-            body: format!("{rendered_nudge}\n\n{message_body}"),
+            body: rendered_nudge.clone(),
             notice_text,
         })?;
         Ok(PostSendEmissionPath::GraftPort)
@@ -157,6 +155,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: None,
         }
     }
@@ -167,6 +166,15 @@ mod tests {
             agent: TEST_ARCH_CTM.parse().expect("agent"),
             state: GraftSessionState::Listening,
         }))
+    }
+
+    #[test]
+    fn graft_decodes_pre_1_8_event_without_task_transition() {
+        let fixture = serde_json::to_value(request_event()).expect("serialize 1.7-shaped event");
+        assert!(fixture.get("task_transition").is_none());
+        let decoded: PostSendHookEvent =
+            serde_json::from_value(fixture).expect("decode event without 1.8 field");
+        assert_eq!(decoded.task_transition, None);
     }
 
     #[test]
@@ -191,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn graft_nudge_sink_injects_rendered_xml_and_full_message_body() {
+    fn graft_nudge_sink_injects_only_the_rendered_template() {
         let injector = RecordingInjector::default();
         let sink = GraftReceiveHook {
             injector: &injector,
@@ -205,7 +213,6 @@ mod tests {
                 recipient: TEST_ARCH_CTM.parse().expect("recipient"),
                 recipient_team: TEST_TEAM.parse().expect("team"),
                 rendered_nudge: "<atm><action>read atm</action></atm>".to_string(),
-                message_body: "full immutable body".to_string(),
             }),
             kind: NudgeKind::Steer,
         };
@@ -218,10 +225,8 @@ mod tests {
 
         let nudges = injector.nudges.lock().expect("nudges");
         assert_eq!(nudges.len(), 1);
-        assert_eq!(
-            nudges[0].body,
-            "<atm><action>read atm</action></atm>\n\nfull immutable body"
-        );
+        assert_eq!(nudges[0].body, "<atm><action>read atm</action></atm>");
+        assert!(!nudges[0].body.contains("full immutable body"));
         assert_eq!(
             nudges[0].notice_text,
             "📬 from test-lead@test-team\nreview failing smoke lane"

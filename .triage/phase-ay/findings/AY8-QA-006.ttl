@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY8-QA-006>
+  a triage:Finding ;
+  triage:findingId "AY8-QA-006" ;
+  triage:title "Unnecessary pub(crate) field widening on HerdrClientConfig.binary_path and socket_path" ;
+  triage:description "crates/atm-herdr/src/transport.rs:21-22 widens binary_path and socket_path from private to pub(crate) solely so transport_socket.rs test module could build struct literals. Accessor methods already exist and are the only access pattern used elsewhere in production code. A test-only constructor helper would have avoided the widening. Minor hygiene violation; recommend struct literal building via accessor pattern or dedicated test constructor." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY8 ;
+  triage:foundAt "2026-09-07T04:54:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-006/ay8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY8-QA-006/ay8-2> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY8-QA-006/1> ;
+  triage:closedAt "2026-09-07T06:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY8-QA-006/ay8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport.rs" ;
+  triage:line 21 ;
+  triage:snippet "pub(crate) binary_path: Option<PathBuf>," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> .
+
+<urn:atm:triage:occurrence/AY8-QA-006/ay8-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/src/transport.rs" ;
+  triage:line 22 ;
+  triage:snippet "pub(crate) socket_path: Option<PathBuf>," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:occursIn <urn:atm:triage:worktree/ay8-26ea2806a> .
+
+<urn:atm:triage:worktree/ay8-696bc1061>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/feature/ay8-herdr-socket-transport" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "696bc1061" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ay8-26ea2806a>
+  a triage:WorktreeSnapshot ;
+  triage:path "qa-pr1280-r3" ;
+  triage:branch "feature/ay8-herdr-socket-transport" ;
+  triage:headSha "26ea2806a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/AY8-QA-006/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T06:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "fb697d14d" ;
+  triage:fixBranch "feature/ay8-herdr-socket-transport" ;
+  triage:verifiedInRound "qa-pr1280-r3" ;
+  triage:resolutionNote "transport.rs:20-23 now declares binary_path and socket_path as private struct fields (no pub(crate)); accessor methods binary_path()/socket_path() remain the only access pattern. Verified by direct read at pin 26ea2806a." .

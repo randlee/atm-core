@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agent-team-mail"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "anyhow",
@@ -18,6 +18,7 @@ dependencies = [
  "atm-storage",
  "chrono",
  "clap",
+ "libc",
  "sc-observability",
  "sc-observability-types",
  "serde",
@@ -27,6 +28,7 @@ dependencies = [
  "tempfile",
  "time",
  "tokio",
+ "toml",
  "tracing",
  "tracing-subscriber",
  "ulid",
@@ -34,7 +36,7 @@ dependencies = [
 
 [[package]]
 name = "agent-team-mail-core"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "async-trait",
  "atm-error",
@@ -182,7 +184,7 @@ dependencies = [
 
 [[package]]
 name = "atm-architecture"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "cargo_metadata",
  "quote",
@@ -193,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-daemon-bootstrap",
@@ -202,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon-bootstrap"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-herdr",
@@ -216,19 +218,19 @@ dependencies = [
  "chrono",
  "fs4",
  "peer-tls",
- "sc-observability",
- "sc-observability-types",
+ "serde",
  "serde_json",
  "serial_test",
  "tempfile",
  "tokio",
+ "toml",
  "tracing",
  "ulid",
 ]
 
 [[package]]
 name = "atm-daemon-client"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-http-runtime",
@@ -243,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "atm-error"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -251,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "atm-graft"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
@@ -266,18 +268,19 @@ dependencies = [
 
 [[package]]
 name = "atm-graft-python"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-graft",
  "pyo3",
+ "serde_json",
  "tempfile",
  "tokio",
 ]
 
 [[package]]
 name = "atm-herdr"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "serde_json",
@@ -286,14 +289,14 @@ dependencies = [
 
 [[package]]
 name = "atm-http-runtime"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
  "atm-herdr",
+ "atm-observability",
  "atm-runtime",
  "atm-runtime-test-support",
- "atm-storage",
  "axum",
  "base64",
  "fs4",
@@ -308,22 +311,28 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
+ "tracing-subscriber",
  "ulid",
  "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "atm-observability"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
+ "sc-observability",
  "sc-observability-types",
+ "serde_json",
+ "serial_test",
  "tempfile",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
 name = "atm-peer-tls-interop"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
@@ -334,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "atm-query-python"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "atm-storage",
  "atm-storage-rusqlite",
@@ -344,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "atm-runtime"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
@@ -357,7 +366,7 @@ dependencies = [
 
 [[package]]
 name = "atm-runtime-test-support"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
@@ -368,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "atm-storage"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "async-trait",
  "atm-error",
@@ -387,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "atm-storage-rusqlite"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "async-trait",
  "atm-storage",
@@ -398,18 +407,19 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
 name = "atm-storage-sqlserver-proof"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "atm-storage",
 ]
 
 [[package]]
 name = "atm-template-sc-compose"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
@@ -462,6 +472,7 @@ checksum = "31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90"
 dependencies = [
  "axum-core",
  "bytes",
+ "form_urlencoded",
  "futures-util",
  "http",
  "http-body",
@@ -477,6 +488,7 @@ dependencies = [
  "serde_core",
  "serde_json",
  "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tower",
@@ -594,9 +606,9 @@ checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
 name = "chacha20"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d524456ba66e72eb8b115ff89e01e497f8e6d11d78b70b1aa13c0fbd97540a81"
+checksum = "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
@@ -1471,7 +1483,7 @@ dependencies = [
 
 [[package]]
 name = "peer-tls"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "atm-storage",
  "rcgen",
@@ -1871,9 +1883,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.43"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "aws-lc-rs",
  "log",
@@ -1951,7 +1963,7 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-boundary"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -1959,7 +1971,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sc-lint-attributes",
- "sc-lint-directives 1.5.0",
+ "sc-lint-directives 1.6.0",
  "serde",
  "serde_json",
  "syn 2.0.119",
@@ -1978,7 +1990,7 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-directives"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "quote",
  "syn 2.0.119",

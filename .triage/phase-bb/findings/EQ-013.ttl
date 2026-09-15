@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-013>
+  a triage:Finding ;
+  triage:findingId "EQ-013" ;
+  triage:title "RUSTSEC-2026-0285: rustls 0.23.43 accepts TLS 1.3 handshake messages at the wrong encryption level -- reaches the daemon/peer mTLS path, already shipped in prerelease v1.5.18" ;
+  triage:description "fenix, 2026-09-14, found while gating the colima v1.5.18 evidence PR. `just lint`'s cargo-deny advisories check went red today on a new advisory: RUSTSEC-2026-0285 / GHSA-2mjx-qc3c-rqvc -- rustls 0.23.43 incorrectly accepts TLS 1.3 handshake messages across encryption level boundaries. Fix: `cargo update -p rustls` to >= 0.23.45 (lockfile-only, no source changes expected). This dependency reaches crates/atm-storage-rusqlite and atm-peer-tls-interop, i.e. the daemon/peer mTLS transport path -- not a dev-only or test-only dependency. Prerelease v1.5.18 (tag prerelease/v1.5.18, PR #1507) was already tagged/published before this advisory was disclosed, so it ships the vulnerable rustls version. Every open PR's `just lint` is red on this advisory until the fix lands on develop (confirmed independently by team-lead on PR #1509 before this finding was filed: git diff showed no lockfile change on that branch, and develop tip's own merge commit 38119b7c5 already failed the identical advisory check pre-fix). fenix is dispatching cipher on a lockfile-only small fix off develop now (branch fix/rustsec-2026-0285-rustls)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "security" ;
+  triage:severity "blocking" ;
+  triage:source "fenix, gating colima v1.5.18 evidence PR, 2026-09-14 (ATM message 01M2GDKB4Y4EHR75VNM4KW7K0N)" ;
+  triage:repeatable true ;
+  triage:sweepScope "Cargo.lock rustls pin (>= 0.23.45); crates/atm-storage-rusqlite and crates/atm-peer-tls-interop's TLS usage for any version-specific workaround already in place that the upgrade might change; confirm `cargo deny check advisories` passes clean after the bump; separately, decide whether prerelease v1.5.18 (already tagged/published with the vulnerable rustls) needs a re-cut patch prerelease once the fix lands, given the daemon/peer mTLS path is affected -- lockfile-only fix, no triage stack/QA dispatch needed per the small-fix workflow." ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-013/1> ;
+  triage:triageRecordVersion "2" ;
+  triage:fixNote "cipher's lockfile-only fix bumps rustls 0.23.43 -> 0.23.45, no source or unrelated-crate changes; fenix's acceptance check (cargo deny check advisories) confirmed clean. Landed via a44a7e3137824b77654fe27a2669cb6940c5241b on PR #1512, merged to develop at caa46f381ba10af34bf97e0301aebdcdc3daebda. Not re-cutting the already-tagged prerelease v1.5.18 (fenix's ruling: prerelease tags are immutable, every tested version gets its own patch) -- v1.5.19 is the next /prerelease target once EQ-009/010/012/013 are all confirmed on develop." .
+
+<urn:atm:triage:occurrence/EQ-013/1>
+  a triage:Occurrence ;
+  triage:file "Cargo.lock" ;
+  triage:line 1 ;
+  triage:snippet "rustls 0.23.43, RUSTSEC-2026-0285 / GHSA-2mjx-qc3c-rqvc (TLS 1.3 handshake messages accepted at the wrong encryption level); cargo-deny advisories check fails on every branch since 2026-09-14; reached via crates/atm-storage-rusqlite and crates/atm-peer-tls-interop (daemon/peer mTLS path); fix is cargo update -p rustls to >= 0.23.45" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "develop" ;
+  triage:headSha "caa46f381" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-013/1> .
+
+<urn:atm:triage:worktree/EQ-013/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "caa46f381" ;
+  triage:orderIndex 1 .

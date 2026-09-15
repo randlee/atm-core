@@ -1,0 +1,97 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY2-QA-006>
+  a triage:Finding ;
+  triage:findingId "AY2-QA-006" ;
+  triage:title "fake-herdr test binary not gated behind test-utils feature" ;
+  triage:description "The [[bin]] name = fake-herdr entry in crates/atm-herdr/Cargo.toml has test = false, bench = false but lacks required-features = [test-utils]. This causes the test utility binary to be compiled in ordinary cargo build/release builds, unlike the crate's existing #[cfg(feature = test-utils)] testing modules. Must add required-features gating and enable the feature in dev-dependencies or test-harness configuration." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "build-hygiene" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-herdr/Cargo.toml" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-06T23:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY2 ;
+  triage:foundAt "2026-09-06T23:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-006/AY2-F1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY2-QA-006/AY3-F1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-006/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY2-QA-006/2> ;
+  triage:closedAt "2026-09-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY2-QA-006/AY2-F1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/Cargo.toml" ;
+  triage:line 21 ;
+  triage:snippet "name = fake-herdr" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "6021aa630" ;
+  triage:occursIn <urn:atm:triage:worktree/AY2/9839b90c5> .
+
+<urn:atm:triage:occurrence/AY2-QA-006/AY3-F1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-herdr/Cargo.toml" ;
+  triage:line 21 ;
+  triage:snippet "name = fake-herdr" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "086319459" ;
+  triage:occursIn <urn:atm:triage:worktree/AY3/086319459> .
+
+<urn:atm:triage:worktree/integrate/phase-ay>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ay" ;
+  triage:branch "integrate/phase-ay" ;
+  triage:headSha "d084bb2ff" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AY2/9839b90c5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay2-herdr-transport-seam" ;
+  triage:branch "feature/ay2-herdr-transport-seam" ;
+  triage:headSha "9839b90c5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AY3/0b0bfa304>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "0b0bfa304" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/AY2-QA-006/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-06T23:45:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6021aa630" ;
+  triage:fixBranch "feature/ay2-herdr-transport-seam" ;
+  triage:verifiedInRound "qa-pr1269-r3" ;
+  triage:resolutionNote "On feature/ay2-herdr-transport-seam only (cipher): required-features = [\"test-utils\"] added to the fake-herdr [[bin]] entry. Confirmed by ruthless-boundary-qa and req-qa (crates/atm-herdr/Cargo.toml:20-25). Finding-level status stays fixed_partial pending merge-forward to feature/ay3-herdr-endpoint-doctor-config." .
+
+<urn:atm:triage:worktree/AY3/086319459>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:branch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:headSha "086319459" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:resolution/AY2-QA-006/2>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-06T23:55:00Z"^^xsd:dateTime ;
+  triage:fixCommit "086319459" ;
+  triage:fixBranch "feature/ay3-herdr-endpoint-doctor-config" ;
+  triage:verifiedInRound "qa-pr1269-r3" ;
+  triage:resolutionNote "feature/ay3-herdr-endpoint-doctor-config was rebased by gh stack sync onto #1269's current head, carrying feature/ay2-herdr-transport-seam's fix forward. Verified via git merge-base --is-ancestor origin/feature/ay2-herdr-transport-seam origin/feature/ay3-herdr-endpoint-doctor-config (YES at ay3 head 086319459) plus direct grep of ay3's Cargo.toml (required-features = [\"test-utils\"] present on fake-herdr [[bin]]). Finding-level status is now fixed." .

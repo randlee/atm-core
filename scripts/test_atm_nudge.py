@@ -278,16 +278,26 @@ class TestOverrideMode(unittest.TestCase):
         self.assertEqual(rc, 0)
         _, recipient, message = mock_nudge.call_args[0]
         self.assertEqual(recipient, TEST_AGENT)
-        self.assertIn(f"read atm --team {TEST_TEAM}", message)
+        self.assertIn("atm read", message)
 
 
 class TestBuildMessage(unittest.TestCase):
     def test_default_send_message_requests_assigned_task_execution(self):
         message = _MOD.build_message(TEST_TEAM, {})
-        self.assertIn(f"read atm --team {TEST_TEAM}", message)
+        self.assertIn("atm read", message)
         self.assertIn("execute the assigned task", message)
         self.assertIn('busy="after-current-task"', message)
         self.assertIn("<description></description>", message)
+
+    def test_default_send_message_targets_message_when_id_is_present(self):
+        message = _MOD.build_message(
+            TEST_TEAM,
+            {"message_id": "01JSENDTEST0000000000000000"},
+        )
+        self.assertIn(
+            "atm read --message-id 01JSENDTEST0000000000000000",
+            message,
+        )
 
     def test_send_message_includes_message_id_as_attribute_when_present(self):
         message = _MOD.build_message(

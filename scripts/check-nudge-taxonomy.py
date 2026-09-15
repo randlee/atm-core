@@ -86,8 +86,8 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
         "clear_nudge_template_command",
         "clear_nudge_template_executes_through_shared_override_boundary",
         "clear_nudge_template_override_deletes_row_and_reports_state",
-        "clear_nudge_template_override_with_store", "clear_pending_on_handoff",
-        "clear_pending_on_read", "ClearNudgeTemplate", "ClearNudgeTemplateCommand",
+        "clear_nudge_template_override_with_store", "rearm_pending_after_handoff",
+        "ClearNudgeTemplate", "ClearNudgeTemplateCommand",
         "ClearNudgeTemplateOverrideOutcome", "ClearNudgeTemplateOverrideRequest",
         "disable_nudge_template_command",
         "disable_nudge_template_executes_through_shared_override_boundary",
@@ -95,6 +95,7 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
         "disable_nudge_template_override_with_store", "DisableNudgeTemplate",
         "DisableNudgeTemplateCommand", "DisableNudgeTemplateOverrideOutcome",
         "DisableNudgeTemplateOverrideRequest", "DummyNudgeTemplateOverrideStore",
+        "disabled_task_nudge_template_override",
         "DummyPendingNudgeStore", "empty_nudge_template_body", "EmptyNudgeTemplateBody",
         "ensure_mail_message_states_nudge_columns", "ensure_team_nudge_template_override_columns",
         "ensure_team_nudge_template_override_columns_migrates_legacy_empty_rows_to_disabled",
@@ -134,10 +135,12 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
         "set_nudge_template_override_saves_row_through_boundary",
         "set_nudge_template_override_with_store", "SetNudgeTemplate", "SetNudgeTemplateCommand",
         "SetNudgeTemplateOverrideOutcome", "SetNudgeTemplateOverrideRequest",
+        "stale_nudge_template_override", "StaleNudgeTemplateOverrideKind",
         "spawn_host_nudge_helper", "SqliteNudgeTemplateOverrideStore", "SqlitePendingNudgeStore",
         "storage_and_nudge_router", "StorageAndNudgeRouter", "team_nudge_template_overrides",
         "TeamNudgeTemplateOverrideMode", "TeamNudgeTemplateOverrideRow", "TmuxNudgeSink",
-        "validate_nudge_template_body", "validate_nudge_template_override_team",
+        "validate_built_in_nudge_template_body", "validate_nudge_template_body",
+        "validate_nudge_template_override_team",
         "warn_host_nudge_result", "with_default_nudge_template_override_store", "with_nudge_mode",
         "with_pending_nudge_store",
     }
@@ -254,7 +257,7 @@ def find_violations(repo_root: Path) -> tuple[Violation, ...]:
         relative = Path(relative_path)
         test_source = is_test_source(relative)
         for line_number, line, in_test_module in iter_rust_lines(path):
-            if relative_path != "crates/atm-herdr/src/lib.rs":
+            if not str(relative_path).startswith("crates/atm-herdr/"):
                 for pattern in HERDR_WIRE_PATTERNS:
                     if pattern.search(line):
                         violations.append(

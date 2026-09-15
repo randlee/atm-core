@@ -27,6 +27,18 @@ required_variables:
   - action_owner
 optional_variables:
   - resolved_findings_md
+metadata:
+  type: qa-findings-report
+  tags:
+    - stage:qa
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint_id
+    state: qa-rejected
+    stage: qa
+    transition: rejected
+    iteration_variable: qa_pass
 ---
 # QA Findings Update
 

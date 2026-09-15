@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AW3-CI-007>
+  a triage:Finding ;
+  triage:findingId "AW3-CI-007" ;
+  triage:title "Test (windows-latest) fails at 95230ff18: default_jsonl_snapshot golden-bytes test compares against an include_str fixture that the Windows checkout converts to CRLF" ;
+  triage:description "PR #1182 at 95230ff18, Test (windows-latest): commands::log::tests::default_jsonl_snapshot_matches_the_pre_aw3_golden_bytes fails assertion left == right at log.rs:1107; the rendered bytes are LF and the include_str fixture crates/atm/tests/fixtures/log-jsonl-default.json comes back with CRLF because the Windows runner checks out with autocrlf and the repo has no .gitattributes. Same class as AW2-CI-004. Fix: add a .gitattributes entry pinning the fixture (or crates/atm/tests/fixtures/**) to eol=lf, or normalize carriage returns from the golden before comparing; keep the byte-exact intent for the LF form. Run cargo test -p agent-team-mail and full just lint before pushing." ;
+  triage:phaseId "phase-aw" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-05T06:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AW3 ;
+  triage:foundAt "2026-09-05T06:48:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AW3-CI-007/AW3-1> ;
+  triage:closedAt "2026-09-05T07:12:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+# HYGIENE FIX (phase-aw integration review, quality-mgr): Finding-level
+# triage:status was left at "open" after closure even though the Occurrence
+# was correctly flipped to "fixed" -- caught during the phase-ending
+# integration review. Corrected to "fixed"; closure evidence unchanged.
+
+# CLOSURE (qa-pr1182-r6, quality-mgr): arch-ctm's fix (55234e41b) strips '\r'
+# from the include_str! golden fixture before the byte-exact comparison
+# (crates/atm/src/commands/log.rs, +3/-1), same pattern as AW2-CI-004.
+# Independently confirmed: cargo test -p agent-team-mail -p atm-http-runtime
+# -p agent-team-mail-core at 55234e41b: all suites green (237, 566, 200,
+# 20, etc. passed across the workspace), 0 failed, no regressions.
+
+<urn:atm:triage:occurrence/AW3-CI-007/AW3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/log.rs" ;
+  triage:line 1107 ;
+  triage:snippet "assert_eq rendered bytes vs include_str golden fails on CRLF checkout" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/aw3-health-and-log-query" ;
+  triage:headSha "55234e41b" ;
+  triage:occursIn <urn:atm:triage:worktree/AW3/95230ff18> .
+
+<urn:atm:triage:worktree/AW3/95230ff18>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:branch "feature/aw2-sqlite-diagnostic-timeline" ;
+  triage:headSha "95230ff18" ;
+  triage:orderIndex 2 .

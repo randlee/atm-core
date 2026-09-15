@@ -41,7 +41,7 @@ pub(crate) fn resolve_target(
     target_address: Option<&AgentAddress>,
     actor: &AgentName,
     caller_team: &TeamName,
-    config: Option<&config::AtmConfig>,
+    _config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedTarget, AtmError> {
     let Some(target_address) = target_address else {
         return Ok(ResolvedTarget {
@@ -56,7 +56,7 @@ pub(crate) fn resolve_target(
         .cloned()
         .unwrap_or_else(|| caller_team.clone());
     Ok(ResolvedTarget {
-        agent: config::aliases::resolve_agent_name(target_address.agent(), config)?,
+        agent: target_address.agent().clone(),
         team,
         explicit: true,
     })
@@ -190,7 +190,6 @@ pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, At
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use std::io;
     use std::path::Path;
 
@@ -201,7 +200,6 @@ mod tests {
         rediscover_and_validate_source_paths, resolve_target,
     };
     use crate::config::AtmConfig;
-    use crate::roles::ROLE_TEAM_LEAD;
     use crate::test_support::{TEST_ORIGIN, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
 
@@ -249,12 +247,9 @@ mod tests {
     }
 
     #[test]
-    fn resolve_target_canonicalizes_alias_before_mailbox_lookup() {
-        let mut aliases = BTreeMap::new();
-        aliases.insert("tl".to_string(), ROLE_TEAM_LEAD.to_string());
+    fn resolve_target_forwards_a_valid_member_token_without_config_alias_resolution() {
         let config = AtmConfig {
             default_team: Some(TEST_TEAM.parse().expect("team")),
-            aliases,
             ..Default::default()
         };
 
@@ -265,29 +260,8 @@ mod tests {
             Some(&config),
         )
         .expect("target");
-        assert_eq!(target.agent, ROLE_TEAM_LEAD);
+        assert_eq!(target.agent, "tl");
         assert!(target.explicit);
-    }
-
-    #[test]
-    fn resolve_target_rejects_invalid_alias_target() {
-        let mut aliases = BTreeMap::new();
-        aliases.insert("tl".to_string(), "../bad-agent".to_string());
-        let config = AtmConfig {
-            default_team: Some(TEST_TEAM.parse().expect("team")),
-            aliases,
-            ..Default::default()
-        };
-
-        let error = resolve_target(
-            Some(&"tl".parse().expect("address")),
-            &TEST_SENDER.parse().expect("agent"),
-            &TEST_TEAM.parse().expect("team"),
-            Some(&config),
-        )
-        .expect_err("invalid alias target");
-
-        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 
     #[test]

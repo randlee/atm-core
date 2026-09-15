@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -17,6 +18,7 @@ class HermesAtmBoundaryLintTests(unittest.TestCase):
     def copy_fixture(self, destination: Path) -> None:
         root = JUST_DIR.parent
         for relative in (
+            "Cargo.toml",
             "boundaries/hermes-atm/runtime-composition.toml",
             "crates/hermes-atm/pyproject.toml",
             "crates/hermes-atm/src/hermes_atm",
@@ -49,7 +51,16 @@ class HermesAtmBoundaryLintTests(unittest.TestCase):
             root = Path(temp)
             self.copy_fixture(root)
             package = root / "crates/hermes-atm/pyproject.toml"
-            package.write_text(package.read_text(encoding="utf-8").replace('dependencies = ["atm-graft>=1.4,<1.5"]', 'dependencies = ["atm-graft>=1.4,<1.5", "atm-daemon"]'), encoding="utf-8")
+            original = package.read_text(encoding="utf-8")
+            match = re.search(r'dependencies = \[("atm-graft[^"]*")\]', original)
+            assert match is not None, "fixture pyproject.toml has no single-entry atm-graft dependencies list"
+            package.write_text(
+                original.replace(
+                    match.group(0),
+                    f'dependencies = [{match.group(1)}, "atm-daemon"]',
+                ),
+                encoding="utf-8",
+            )
             findings = collect_violations(root)
             self.assertTrue(any("forbidden package edge" in item.message for item in findings))
 

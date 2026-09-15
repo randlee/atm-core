@@ -1,11 +1,13 @@
 use std::fmt;
 use std::path::Path;
 
+use crate::boundary::TaskTransition;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, ResolvedRecipient, WarningEntry,
 };
+use crate::types::AgentName;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPlanDisposition {
     Persisted,
@@ -22,6 +24,8 @@ pub(crate) struct LogicalMessage {
     pub(crate) envelope: InboxMessage,
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
+    pub(crate) task_assignee: Option<AgentName>,
+    pub(crate) task_transition: Option<TaskTransition>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,6 +48,7 @@ impl LogicalMessage {
         envelope: InboxMessage,
         requires_ack: bool,
         is_ack: bool,
+        task_assignee: Option<AgentName>,
     ) -> Result<Self, LogicalMessageError> {
         let message_id = envelope
             .message_id
@@ -53,7 +58,14 @@ impl LogicalMessage {
             envelope,
             requires_ack,
             is_ack,
+            task_assignee,
+            task_transition: None,
         })
+    }
+
+    pub(crate) fn with_task_transition(mut self, task_transition: TaskTransition) -> Self {
+        self.task_transition = Some(task_transition);
+        self
     }
 
     pub(crate) fn message_id(&self) -> AtmMessageId {
@@ -66,12 +78,16 @@ pub(crate) fn logical_messages_from_persistence(
     requires_ack: bool,
     is_ack: bool,
 ) -> Result<Vec<LogicalMessage>, LogicalMessageError> {
-    let messages = vec![LogicalMessage::new(
+    let mut message = LogicalMessage::new(
         persistence.original_message.clone(),
         requires_ack,
         is_ack,
-    )?];
-    Ok(messages)
+        persistence.task_assignee.clone(),
+    )?;
+    if let Some(position) = persistence.queued_position {
+        message = message.with_task_transition(TaskTransition::Queued { position });
+    }
+    Ok(vec![message])
 }
 
 pub(crate) fn delivery_plan_disposition(

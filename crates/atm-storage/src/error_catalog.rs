@@ -128,6 +128,12 @@ const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
         AtmErrorCode::DaemonConnectionSaturated => {
             Some("Wait for the daemon to finish an in-flight request, then retry.")
         }
+        AtmErrorCode::BlockingBridgeDeadlineBeforeStart => Some(
+            "Wait for bounded blocking capacity to become available, then retry within a fresh request deadline.",
+        ),
+        AtmErrorCode::BlockingBridgeDeadlineAfterStart => Some(
+            "Inspect the stalled blocking operation and retry only after its bounded capacity recovers.",
+        ),
         AtmErrorCode::PeerWireModeInvalid => Some(
             "Use `mutual-tls` or `plaintext-test` with --peer-wire-security, then restart the daemon.",
         ),
@@ -166,6 +172,12 @@ const fn mailbox_guidance(code: AtmErrorCode) -> Option<&'static str> {
 const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
         AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::TaskNotFound
+        | AtmErrorCode::TaskAlreadyActive
+        | AtmErrorCode::TaskAlreadyClosed
+        | AtmErrorCode::TaskNotCounterparty
+        | AtmErrorCode::TaskStaleCounterparty
+        | AtmErrorCode::TaskMoveInvalid
         | AtmErrorCode::WorkflowQueryInvalid
         | AtmErrorCode::SearchLocalOnly
         | AtmErrorCode::LocalHttpCapabilityInvalid
@@ -218,12 +230,14 @@ const fn local_http_guidance(code: AtmErrorCode) -> Option<&'static str> {
 
 const fn observability_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
-        AtmErrorCode::ObservabilityEmitFailed
-        | AtmErrorCode::ObservabilityQueryFailed
-        | AtmErrorCode::ObservabilityFollowFailed
-        | AtmErrorCode::ObservabilityHealthFailed
-        | AtmErrorCode::ObservabilityBootstrapFailed => {
-            Some("Repair the observability backend or retry the operation later.")
+        AtmErrorCode::ObservabilityBootstrapFailed => {
+            Some("Check the retained-log directory and file permissions, then restart the daemon.")
+        }
+        AtmErrorCode::ObservabilityEmitFailed | AtmErrorCode::ObservabilityHealthFailed => Some(
+            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+        ),
+        AtmErrorCode::ObservabilityQueryFailed | AtmErrorCode::ObservabilityFollowFailed => {
+            Some("Check the retained-log path and permissions before retrying the log operation.")
         }
         AtmErrorCode::ObservabilityHealthOk => Some("No operator action is required."),
         _ => None,
@@ -249,6 +263,21 @@ const fn warning_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::WarningHookExecutionFailed => {
             Some("Inspect the warning context and correct the reported condition.")
         }
+        AtmErrorCode::RosterNoLead => {
+            Some("assign one lead: atm teams update-member <team> <member> --agent-type lead")
+        }
+        AtmErrorCode::RosterMultipleLeads => {
+            Some("keep one lead: atm teams update-member <team> <member> --agent-type <other type>")
+        }
+        AtmErrorCode::RosterReservedName => {
+            Some("rename the member: atm-daemon is reserved for daemon-originated messages")
+        }
+        AtmErrorCode::TaskStalled => Some(
+            "check the assignee or close the task: atm send <assignee> --task-complete <task_id> --stdin",
+        ),
+        AtmErrorCode::MemberBlocked => Some(
+            "<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt",
+        ),
         _ => None,
     }
 }

@@ -1,7 +1,7 @@
 ---
 title: Hermes Gateway Integration
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Hermes Gateway Integration
@@ -13,9 +13,8 @@ access, source edits, or a hand-written hook.
 
 ## Release Status
 
-Version `1.4.2` is currently available on TestPyPI. Production PyPI publication
-is pending. Use the TestPyPI command below until the production release is
-announced; then use the ordinary PyPI command instead.
+Install the `hermes-atm` wheel that matches your ATM release from the published
+package index. Do not pin this installed guide to an old TestPyPI-only build.
 
 `hermes-atm` supports CPython 3.11 through 3.14. It installs the matching
 typed `atm-graft` client as a dependency.
@@ -48,16 +47,7 @@ the receiver correctly fails closed instead of injecting the nudge.
 
 ## Install
 
-For the current TestPyPI release, run this with the gateway's Python:
-
-```bash
-python -m pip install --upgrade \
-  --index-url https://test.pypi.org/simple \
-  --extra-index-url https://pypi.org/simple \
-  "hermes-atm==1.4.2"
-```
-
-After production PyPI publication, install the current release with:
+Install the current published release with:
 
 ```bash
 python -m pip install --upgrade hermes-atm
@@ -75,6 +65,11 @@ atm teams update-member "$ATM_TEAM" "$ATM_IDENTITY" \
 
 Then run the package installer with that same gateway Python interpreter:
 
+The installer defaults to the `telegram` platform. For a headless Hermes
+gateway, `--platform api_server` is one supported example. The installer
+validates the requested platform against the public `Platform` members exposed
+by the installed Hermes gateway.
+
 ```bash
 python -m hermes_atm install \
   --profile "$HERMES_PROFILE" \
@@ -84,6 +79,7 @@ python -m hermes_atm install \
   --chat-id "$ATM_CHAT_ID" \
   --atm-home "$ATM_HOME" \
   --workspace-root "$ATM_WORKSPACE_ROOT" \
+  --platform telegram \
   --launch-agent-plist "$HERMES_GATEWAY_PLIST"
 ```
 
@@ -99,11 +95,13 @@ Reset the managed gateway once after installation. This loads the generated
 receiver and native-tools plugin and publishes the graft receiver record for
 the profile.
 
-The reset should expose exactly these native Hermes tools:
+The reset registers these native Hermes tools:
 
-- `atm_send` for ordinary mailbox delivery, with optional acknowledgement
-- `atm_read` for bounded, read-only message inspection
+- `atm_send` for ordinary mailbox delivery
+- `atm_read` to read a message; pass `peek=true` to inspect without marking it
+  read
 - `atm_list` for bounded mailbox metadata
+- `atm_ack` to acknowledge a message that requires acknowledgement
 
 The tools use the installed profile's identity, team, and workspace root; tool
 arguments cannot override them. Their results are structured success or error

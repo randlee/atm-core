@@ -43,6 +43,8 @@ pub(super) fn build_send_outcome(
         message_id,
         requires_ack,
         task_id,
+        task_complete: request.task_complete.clone(),
+        already_closed: persistence.already_closed,
         summary: Some(summary.to_string()),
         message: request.dry_run.then_some(body.to_string()),
         warnings: context.warnings.clone(),
@@ -87,11 +89,22 @@ pub(crate) fn prepare_send_context<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     runtime: &R,
-    request: &SendRequest,
+    request: &mut SendRequest,
 ) -> Result<SendExecutionContext, AtmError> {
     // This is the durable-admission half of the pipeline. A daemon must not
     // inspect caller workspace or hook configuration before a durable reply.
     let warnings = Vec::new();
+    if let Some((team, member)) = runtime.resolve_roster_member_at_ingress(
+        &request.caller_team,
+        &request.caller_identity,
+        true,
+    ) {
+        if member != request.caller_identity {
+            request.activity_observation = None;
+        }
+        request.caller_team = team;
+        request.caller_identity = member;
+    }
     let canonical_sender = request.caller_identity.clone();
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")
@@ -105,7 +118,15 @@ pub(crate) fn prepare_send_context<
             origin_timestamp: request.origin_timestamp.is_some(),
         },
     )?;
-    let recipient = resolve_recipient(target, &request.caller_team, None)?;
+    let mut recipient = resolve_recipient(target, &request.caller_team, None)?;
+    if let Some((team, member)) = runtime.resolve_roster_member_at_ingress(
+        &recipient.team,
+        &recipient.agent,
+        target.team().is_none(),
+    ) {
+        recipient.team = team;
+        recipient.agent = member;
+    }
     validate_non_self_recipient(
         &canonical_sender,
         &request.caller_team,

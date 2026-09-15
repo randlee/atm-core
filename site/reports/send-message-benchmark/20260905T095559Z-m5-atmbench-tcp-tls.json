@@ -1,0 +1,86 @@
+{
+  "baseline": {
+    "p50_floor": 13500.0,
+    "revision": 1
+  },
+  "binary_hashes": {
+    "atm": "c4b5a525271c14207bcf330a22683df8ca67857c87cc7fa24a41c8a0a513b760",
+    "atm-daemon": "cabc137fa8205322cc98fdf3e114c36e9755ec3b8629f509f8af9ff08e9fbba3"
+  },
+  "campaign_id": "20260905T095559Z-m5-atmbench",
+  "direct_sqlite_message_write": null,
+  "durability_after_restart": {
+    "expected_accepted_count": 314000,
+    "method": "isolated_sqlite_exact_count_after_restart",
+    "observed_mailbox_count": 314000,
+    "passed": true
+  },
+  "frames_per_connection": 8,
+  "generated_at": "2026-09-05T09:57:18.851567Z",
+  "host_label": "m5-atmbench",
+  "incomplete_reason": null,
+  "messages_admitted": 314000,
+  "messages_durable": 314000,
+  "messages_requested": 314000,
+  "metrics": {
+    "accepted_count": 314000,
+    "admissions_per_second": {
+      "max": 17483.701913078152,
+      "min": 11421.316217065614,
+      "p50": 16060.387208491042,
+      "p95": 16935.649376169953,
+      "p99": 17211.555839020974
+    },
+    "application_wire_bytes": {
+      "request": 266592640,
+      "response": 129374640,
+      "total": 395967280
+    },
+    "application_wire_bytes_per_second": {
+      "max": 22025093.4850002,
+      "min": 14410845.73688254,
+      "p50": 20257904.29491705,
+      "p95": 21353534.57298475,
+      "p99": 21682257.46820667
+    },
+    "connection_count": 39250,
+    "connections_per_second": {
+      "max": 2185.462739134769,
+      "min": 1427.6645271332018,
+      "p50": 2007.5484010613802,
+      "p95": 2116.956172021244,
+      "p99": 2151.4444798776217
+    },
+    "first_failure": null,
+    "interval_count": 314,
+    "interval_latency_ms": {
+      "max": 66.42808299511671,
+      "min": 0.742541000363417,
+      "p50": 18.53419800318079,
+      "p95": 47.51633400155697,
+      "p99": 59.953207994112745
+    },
+    "passed_interval_count": 314,
+    "request_frames_per_second": {
+      "max": 17483.701913078152,
+      "min": 11421.316217065614,
+      "p50": 16060.387208491042,
+      "p95": 16935.649376169953,
+      "p99": 17211.555839020974
+    },
+    "requested_count": 314000,
+    "response_count": 314000,
+    "time_to_send_1k_s": {
+      "max": 0.08755558299890254,
+      "min": 0.057196124995243736,
+      "p50": 0.06226500000047963,
+      "p95": 0.07618754100985825,
+      "p99": 0.08368741600133944
+    }
+  },
+  "os": "macos",
+  "schema_version": 4,
+  "source_revision": "02b0fbbced7b205766a1a1c38a67649c4019c202",
+  "status": "PASS",
+  "target": "tcp-tls"
+}

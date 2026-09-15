@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AY13-QA-002>
+  a triage:Finding ;
+  triage:findingId "AY13-QA-002" ;
+  triage:title "req-qa ATM-QA-001: sprint doc frontmatter status was 'draft' at PR #1300 head, not a per-sprint defect but a systemic AY-phase doc convention" ;
+  triage:description "quality-mgr qa-pr1300-r1 (PR #1300, AY.13 doctor team scope). req-qa flagged docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md frontmatter status: draft as a blocking gate-artifact gap at head 6189ad3f5/98ac5c7d2, on the premise that a doc's own closure field should read 'complete' before QA can PASS. fenix (atm-dev, 2026-09-07T17:08:57Z) clarified this is not sprint-specific: every merged AY-phase sprint doc carries a non-'complete' status value (e.g. 'dispatched') by design/convention in this phase, so it is not a defect unique to AY.13. Recorded here for traceability rather than as an ongoing blocking gate: future QA rounds in phase-ay should not re-raise bare 'status: draft/dispatched' as a blocking finding on its own; if the doc-status convention itself needs to change, that is a phase-level process decision, not a per-sprint fix." ;
+  triage:phaseId "phase-ay" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/plans/phase-ay/*.md frontmatter status field" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AY13 ;
+  triage:foundAt "2026-09-07T17:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY13-QA-002/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/AY13-QA-002/1> ;
+  triage:closedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AY13-QA-002/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md" ;
+  triage:line 12 ;
+  triage:snippet "status: draft" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:occursIn <urn:atm:triage:worktree/AY13-QA-002/98ac5c7d2> .
+
+<urn:atm:triage:worktree/AY13-QA-002/98ac5c7d2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ay13-doctor-team-scope" ;
+  triage:branch "feature/ay13-doctor-team-scope" ;
+  triage:headSha "98ac5c7d2" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:resolution/AY13-QA-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-07T17:40:00Z"^^xsd:dateTime ;
+  triage:fixCommit "e1b8c329d" ;
+  triage:fixBranch "integrate/phase-ay" ;
+  triage:verifiedInRound "qa-pr1300-r2" ;
+  triage:resolutionNote "fenix landed e1b8c329d on integrate/phase-ay (docs(phase-ay): AY.13/AY.14 rows in project-plan sprint table; sprint docs status dispatched). Verified directly: docs/plans/phase-ay/sprint-AY.13-doctor-team-scope.md frontmatter now reads status: dispatched, matching the phase's established convention for in-flight sprint docs (not 'complete', by design). Closing as a doc-level, phase-wide convention clarification rather than a per-sprint code defect; future rounds should not re-raise the bare status value as blocking." .

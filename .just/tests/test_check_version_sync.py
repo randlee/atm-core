@@ -20,6 +20,8 @@ from check_version_sync import success_message
 from check_version_sync import validate_release_version_lockstep
 from check_version_sync import KIT_RELEASE_ARTIFACTS
 from check_version_sync import replace_version_occurrences
+from check_version_sync import specifier_admits
+from check_version_sync import validate_python_dependency_pins
 from prerelease_tag import copy_tracked_files
 from prerelease_tag import sync_python_version
 
@@ -276,6 +278,63 @@ ManifestVersion: 1.3.2-beta-21-pre
             self.assertFalse((destination / "secret.txt").exists())
             self.assertTrue((destination / "link.txt").is_symlink())
             self.assertEqual(os.readlink(destination / "link.txt"), "target.txt")
+
+    def test_specifier_admits_evaluates_comma_separated_bounds(self) -> None:
+        self.assertTrue(specifier_admits("1.5.3", ">=1.5,<1.6"))
+        self.assertFalse(specifier_admits("1.5.3", ">=1.4,<1.5"))
+        self.assertTrue(specifier_admits("1.5.3", "==1.5.3"))
+        self.assertFalse(specifier_admits("1.5.3", "!=1.5.3"))
+
+    def _write_pyproject(self, path: Path, name: str, *, dynamic_version: bool, dependencies: list[str] | None = None) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lines = ["[project]", f'name = "{name}"']
+        if dynamic_version:
+            lines.append('dynamic = ["version"]')
+        else:
+            lines.append('version = "0.1.0"')
+        if dependencies is not None:
+            deps = ", ".join(f'"{dep}"' for dep in dependencies)
+            lines.append(f"dependencies = [{deps}]")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_validate_python_dependency_pins_rejects_stale_specifier(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self._write_pyproject(
+                repo_root / "crates/atm-graft-python/pyproject.toml",
+                "atm-graft",
+                dynamic_version=True,
+            )
+            self._write_pyproject(
+                repo_root / "crates/hermes-atm/pyproject.toml",
+                "hermes-atm",
+                dynamic_version=False,
+                dependencies=["atm-graft>=1.4,<1.5"],
+            )
+
+            with self.assertRaises(SystemExit) as error:
+                validate_python_dependency_pins(repo_root, "1.5.3")
+
+            message = str(error.exception)
+            self.assertIn("crates/hermes-atm/pyproject.toml", message)
+            self.assertIn("does not admit", message)
+
+    def test_validate_python_dependency_pins_accepts_tracking_specifier(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self._write_pyproject(
+                repo_root / "crates/atm-graft-python/pyproject.toml",
+                "atm-graft",
+                dynamic_version=True,
+            )
+            self._write_pyproject(
+                repo_root / "crates/hermes-atm/pyproject.toml",
+                "hermes-atm",
+                dynamic_version=False,
+                dependencies=["atm-graft>=1.5,<1.6"],
+            )
+
+            self.assertTrue(validate_python_dependency_pins(repo_root, "1.5.3"))
 
 
 if __name__ == "__main__":

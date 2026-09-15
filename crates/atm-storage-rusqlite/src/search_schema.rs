@@ -580,6 +580,8 @@ mod tests {
     use super::{SEARCH_DDL, SEARCH_SCHEMA_VERSION, ensure_schema, flatten_json_text};
     use crate::shared_db::SharedDbTarget;
 
+    const TEST_TEAM: &str = "ax6-search-test";
+
     #[test]
     fn json_flattening_is_key_sorted_and_array_stable() {
         assert_eq!(
@@ -604,14 +606,14 @@ mod tests {
                 [],
             )
             .expect("record version one schema");
+        let seed_search_projection = format!(
+            "INSERT INTO mail_message_search_documents(
+                 team, agent, message_key, message_at, body_text, from_agent
+             ) VALUES ('{TEST_TEAM}', 'arch-ctm', 'atm:needle', '2026-08-23T00:00:00Z',
+                       'columnsize migration needle', 'arch-ctm')"
+        );
         connection
-            .execute(
-                "INSERT INTO mail_message_search_documents(
-                     team, agent, message_key, message_at, body_text, from_agent
-                 ) VALUES ('atm-dev', 'arch-ctm', 'atm:needle', '2026-08-23T00:00:00Z',
-                           'columnsize migration needle', 'arch-ctm')",
-                [],
-            )
+            .execute(&seed_search_projection, [])
             .expect("seed legacy immediate search projection");
 
         ensure_schema(&connection, &target).expect("migrate version-one message FTS index");

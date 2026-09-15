@@ -117,8 +117,19 @@ class PhaseSource:
     branch: str | None
 
 
+def _normalise_phase(value: str) -> str:
+    """Return the case-insensitive phase token used by integration branches."""
+    phase = value.strip().lower()
+    return phase.removeprefix("phase-")
+
+
+def _accepted_phase_forms(value: str) -> str:
+    phase = _normalise_phase(value)
+    return f"accepted forms: {phase}, {phase.upper()}, phase-{phase}"
+
+
 def _integration_worktrees(repo_root: Path, phase_dir_name: str) -> list[tuple[Path, str]]:
-    """Return integration worktrees that own ``.sprints/<phase_dir_name>``."""
+    """Return integration worktrees for the requested phase only."""
     try:
         result = subprocess.run(
             ["git", "worktree", "list", "--porcelain"],
@@ -166,7 +177,11 @@ def _project_phase_from_ttl(ttl_dir: Path, fallback: str) -> str:
     return phases.pop() if len(phases) == 1 else f"phase-{fallback}"
 
 
-def resolve_phase_source(phase_local: str, requested_ttl_dir: str) -> PhaseSource:
+def resolve_phase_source(
+    phase_local: str,
+    requested_ttl_dir: str,
+    integration_root: str | Path | None = None,
+) -> PhaseSource:
     """Resolve a phase to its sole current ``integrate/phase-*`` worktree.
 
     Sprint worktrees are never a query source: their copied TTL can be stale.
@@ -182,15 +197,52 @@ def resolve_phase_source(phase_local: str, requested_ttl_dir: str) -> PhaseSourc
     if repo_root is None:
         raise RuntimeError("cannot locate repository root containing .triage")
 
-    candidates = _integration_worktrees(repo_root, requested.name)
+    if integration_root is not None:
+        explicit_root = Path(integration_root).resolve()
+        if explicit_root != repo_root:
+            repo_root = explicit_root
+        branch_result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        branch = branch_result.stdout.strip() or None
+        phase_name = (
+            branch.removeprefix("integrate/")
+            if branch and branch.startswith("integrate/phase-")
+            else _project_phase_from_ttl(requested, phase_local)
+        )
+        return PhaseSource(
+            root=repo_root,
+            ttl_dir=repo_root / ".sprints" / requested.name,
+            findings_dir=repo_root / ".triage" / phase_name / "findings",
+            branch=branch,
+        )
+
+    phase_tokens = {
+        _normalise_phase(phase_local),
+        _normalise_phase(requested.name),
+        _normalise_phase(_project_phase_from_ttl(requested, phase_local)),
+    }
+    if _normalise_phase(phase_local).endswith("ch"):
+        # AICH is the historical graph namespace for the plan phase AI.
+        phase_tokens.add(_normalise_phase(phase_local)[:-2])
+    candidates = [
+        (path, branch)
+        for path, branch in _integration_worktrees(repo_root, requested.name)
+        if _normalise_phase(branch.removeprefix("integrate/phase-")) in phase_tokens
+    ]
     if candidates:
         if len(candidates) != 1:
             names = ", ".join(f"{branch} ({path})" for path, branch in candidates)
             raise RuntimeError(
-                f"cannot determine one current integration source for {requested.name}: {names}"
+                f"cannot determine one current integration source for {requested.name} "
+                f"({_accepted_phase_forms(phase_local)}): {names}"
             )
         root, branch = candidates[0]
-        phase_name = branch.rsplit("/", 1)[-1]
+        phase_name = branch.removeprefix("integrate/")
         return PhaseSource(
             root=root,
             ttl_dir=root / ".sprints" / requested.name,
@@ -217,7 +269,8 @@ def resolve_phase_source(phase_local: str, requested_ttl_dir: str) -> PhaseSourc
             branch=None,
         )
     raise RuntimeError(
-        f"no integrate/phase-* worktree owns .sprints/{requested.name}; refusing stale branch data"
+        f"no integrate/phase-* worktree owns .sprints/{requested.name} "
+        f"({_accepted_phase_forms(phase_local)}); refusing stale branch data"
     )
 
 

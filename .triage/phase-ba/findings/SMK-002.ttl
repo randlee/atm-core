@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SMK-002>
+  a triage:Finding ;
+  triage:findingId "SMK-002" ;
+  triage:title "daemon-switch restart --yes refused on the default herdr socket endpoint shape" ;
+  triage:description "fenix (ATM 01M2ANEESW1KSCS1J697J8E8MA, 2026-09-12T11:18:37Z), found during 1.5.16 local smoke on rand-m5. daemon-switch `restart --yes` is REFUSED with HERDR_DOCTOR_UNREADABLE (\"native doctor restart fields were malformed\"). 1.5.16 doctor reports herdr.endpoints[0] with session=null, endpoint=\"$HOME/.config/herdr/herdr.sock\" (provenance herdr_default); the skill's herdr_restart_endpoints() name regex `[A-Za-z0-9_.-]+` rejects this shape because there is no session name for the default socket endpoint. Trust-store reloads therefore cannot use the daemon-switch skill; fenix worked around it with `launchctl kickstart -k` (testbed run.sh precedent) to restart the one managed service. Not verified whether 1.5.15 doctor emitted the same shape (may be pre-existing or a 1.5.16 regression). Recommend either doctor exposes a session name for the default socket endpoint, or the skill's validator accepts the socket-path form directly. Important (operator tooling); does not block 1.5.16 shipping since a manual restart path exists." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T11:18:37Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T11:18:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SMK-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SMK-002/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/daemon-switch/SKILL.md" ;
+  triage:line 1 ;
+  triage:snippet "herdr_restart_endpoints() name regex [A-Za-z0-9_.-]+ rejects the default socket endpoint's session=null shape; doctor gives no session name for herdr.endpoints[0] (endpoint=$HOME/.config/herdr/herdr.sock, provenance herdr_default) -- restart --yes fails HERDR_DOCTOR_UNREADABLE" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "f8fe826b0" ;
+  triage:occursIn <urn:atm:triage:worktree/SMK-002/1> .
+
+<urn:atm:triage:worktree/SMK-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "post-landing backlog: rand-m5 host, prerelease 1.5.16, doctor/skill validator mismatch" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "f8fe826b0" ;
+  triage:orderIndex 12 .
