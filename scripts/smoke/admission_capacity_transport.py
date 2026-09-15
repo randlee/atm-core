@@ -120,7 +120,7 @@ def start_capacity_daemon(
     if direct_peer_port := env.get(CAPACITY_DIRECT_PEER_PORT_ENV):
         command.extend(("--direct-peer-port", direct_peer_port))
     process = subprocess.Popen(command, cwd=home, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    output = DaemonOutputCapture.start(process)
+    output = DaemonOutputCapture.start(process, home / "daemon-output.log")
     try:
         await_daemon_ready(process, output)
     except (OSError, SmokeError) as error:

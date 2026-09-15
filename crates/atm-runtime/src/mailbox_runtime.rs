@@ -1453,6 +1453,30 @@ mod tests {
             assert!(error.cause().is_some());
         }
     }
+
+    #[test]
+    fn reader_deadline_error_exposes_safe_variant_stage_and_budget() {
+        let error = AtmError::from(ReadLaneError::DeadlineExpired {
+            stage: "running sqlite query",
+        });
+
+        assert_eq!(error.code(), AtmErrorCode::MailboxLockTimeout);
+        assert!(error.detail().contains("variant=deadline_expired"));
+        assert!(error.detail().contains("stage=running sqlite query"));
+        assert!(error.detail().contains("budget=request_deadline"));
+    }
+
+    #[test]
+    fn reader_storage_error_keeps_diagnostic_cause_out_of_public_detail() {
+        let error = AtmError::from(ReadLaneError::Storage {
+            code: AtmErrorCode::MailboxReadFailed,
+            message: "sqlite reader failed at /private/atm.db".to_owned(),
+            cause: Some("/private/atm.db".to_owned()),
+        });
+
+        assert!(!error.detail().contains("/private/atm.db"));
+        assert!(error.cause().is_some());
+    }
 }
 
 #[cfg(test)]

@@ -453,7 +453,28 @@ impl From<ReadLaneError> for AtmError {
             ReadLaneError::Unavailable { .. } => AtmErrorCode::DaemonUnavailable,
             ReadLaneError::Storage { code, .. } => *code,
         };
-        AtmError::new(code, "bounded mailbox reader lane request failed").with_cause(error)
+        // A reader-lane outcome crosses both the daemon log and local CLI
+        // boundary.  Keep the stable classification useful to an operator,
+        // but do not turn an adapter-supplied `message` or `cause` into
+        // public text.
+        let detail = match &error {
+            ReadLaneError::UnauthorizedScope => {
+                "bounded mailbox reader request failed: variant=unauthorized_scope stage=scope_check budget=not_started".to_owned()
+            }
+            ReadLaneError::Saturated { reason } => format!(
+                "bounded mailbox reader request failed: variant=saturated stage={reason} budget=not_started"
+            ),
+            ReadLaneError::DeadlineExpired { stage } => format!(
+                "bounded mailbox reader request failed: variant=deadline_expired stage={stage} budget=request_deadline"
+            ),
+            ReadLaneError::Unavailable { .. } => {
+                "bounded mailbox reader request failed: variant=unavailable stage=reader_lane budget=unavailable".to_owned()
+            }
+            ReadLaneError::Storage { code, .. } => format!(
+                "bounded mailbox reader request failed: variant=storage stage=reader_lane error_code={code}"
+            ),
+        };
+        AtmError::new(code, detail).with_cause(error)
     }
 }
 

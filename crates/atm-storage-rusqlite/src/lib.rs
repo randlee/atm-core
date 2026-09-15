@@ -1021,12 +1021,12 @@ mod tests {
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
         DecomposedMessageRecord, InstanceTag, MemberKey, MergedVarsJson, MessageSearchQuery,
-        MessageWriteOrigin, MoveTarget, QueuePosition, SearchAtom, SearchCountGroupBy,
-        SearchDeadline, SearchExpression, SearchFilters, SearchGroupBy, SearchGroupField,
-        SearchKey, SearchLimit, SearchMailboxSelection, SearchMetadataMatch, SearchValue,
-        SimpleAggregate, StorageFactory, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskOp,
-        TaskState, TemplateFirstSeen, TemplateFrontmatter, TemplateListFilter,
-        TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
+        MessageWriteOrigin, MoveTarget, QueuePosition, SearchAckState, SearchAtom,
+        SearchCountGroupBy, SearchDeadline, SearchExpression, SearchFilters, SearchGroupBy,
+        SearchGroupField, SearchKey, SearchLimit, SearchMailboxSelection, SearchMetadataMatch,
+        SearchReadState, SearchValue, SimpleAggregate, StorageFactory, TaskCloseOutcome, TaskEvent,
+        TaskEventKind, TaskOp, TaskState, TemplateFirstSeen, TemplateFrontmatter,
+        TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
         TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
     use chrono::Utc;
@@ -3514,6 +3514,119 @@ mod tests {
             count_for(atm_storage::MailboxBucket::History),
             1,
             "the SQL aggregate reports history independently"
+        );
+
+        let listed = backend
+            .async_mailbox_reader()
+            .list_matching_messages(
+                MailboxScope::new(team(), agent()),
+                MailboxListQuery {
+                    filters: SearchFilters {
+                        team: Some(team()),
+                        agent: Some(agent()),
+                        current_only: true,
+                        mailbox_selection: Some(SearchMailboxSelection::All),
+                        ..SearchFilters::default()
+                    },
+                    limit: None,
+                },
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader list");
+        let mut listed_buckets = [0_usize; 3];
+        for message in listed {
+            let bucket = if message.envelope.pending_ack_at.is_some()
+                && message.envelope.acknowledged_at.is_none()
+            {
+                1
+            } else if message.envelope.read {
+                2
+            } else {
+                0
+            };
+            listed_buckets[bucket] += 1;
+        }
+        assert_eq!(
+            [
+                count_for(atm_storage::MailboxBucket::Unread),
+                count_for(atm_storage::MailboxBucket::PendingAck),
+                count_for(atm_storage::MailboxBucket::History),
+            ],
+            listed_buckets,
+            "grouped SQL buckets match the same criteria reader list"
+        );
+    }
+
+    #[tokio::test]
+    async fn criteria_count_honors_unread_pending_sender_and_tag_filters() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut unread = message("atm:criteria-unread", "unread");
+        unread.envelope.from = "unread-sender".parse().expect("sender");
+        let mut pending = message("atm:criteria-pending", "pending");
+        pending.envelope.from = "pending-sender".parse().expect("sender");
+        pending.envelope.requires_ack = true;
+        pending.envelope.pending_ack_at = Some(IsoTimestamp::from_datetime(Utc::now()));
+        let tagged = message("atm:criteria-tagged", "tagged");
+        for record in [&unread, &pending, &tagged] {
+            store.save_message(record).expect("save message");
+        }
+        let template = template_registration('e');
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: tagged.message_key.clone(),
+                    template_sha: template.sha,
+                    vars: MergedVarsJson::default(),
+                    category: None,
+                    tags: instance_tags(&["eq016"]),
+                    content_format: Some("markdown".to_owned()),
+                    workflow: None,
+                },
+            })
+            .expect("decompose tagged message");
+        let reader = backend.async_mailbox_reader();
+        let count = |filters| async {
+            reader
+                .count_messages(
+                    MailboxScope::new(team(), agent()),
+                    filters,
+                    None,
+                    ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+                )
+                .await
+                .expect("criteria count")[0]
+                .count
+        };
+        let base = || SearchFilters {
+            team: Some(team()),
+            agent: Some(agent()),
+            current_only: true,
+            ..SearchFilters::default()
+        };
+
+        let mut unread_filter = base();
+        unread_filter.read_state = Some(SearchReadState::Unread);
+        assert_eq!(count(unread_filter).await, 3, "unread count is SQL-owned");
+
+        let mut pending_filter = base();
+        pending_filter.from_agent = Some("pending-sender".parse().expect("sender"));
+        pending_filter.ack_state = Some(SearchAckState::Pending);
+        assert_eq!(
+            count(pending_filter).await,
+            1,
+            "pending-ack count respects the sender filter"
+        );
+
+        let mut tag_filter = base();
+        tag_filter.tags = vec!["eq016".to_owned()];
+        assert_eq!(
+            count(tag_filter).await,
+            1,
+            "tag count uses the SQL filter generator"
         );
     }
 

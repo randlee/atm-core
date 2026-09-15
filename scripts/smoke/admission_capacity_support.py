@@ -63,6 +63,7 @@ from scripts.smoke.benchmark_account import (
 from scripts.smoke.benchmark_baselines import load_baselines
 from scripts.report_runtime import source_revision as _git_source_revision
 from scripts.smoke.benchmark_mtls import BenchmarkMtlsError, regenerate_mtls_identity
+from scripts.smoke.analyze_logs import analyze_log_text
 
 if os.name != "nt":
     import pwd
@@ -634,7 +635,7 @@ class ManagedDaemonLifecycle:
 
 
 class DaemonOutputCapture:
-    """Continuously drain daemon output and retain bounded diagnostic tails."""
+    """Continuously drain daemon output into an owned log and bounded tails."""
 
     def __init__(self) -> None:
         self.ready_lines: Queue[str | None] = Queue()
@@ -642,12 +643,19 @@ class DaemonOutputCapture:
         self._stderr_tail: list[str] = []
         self._lock = Lock()
         self._threads: tuple[Thread, ...] = ()
+        self._log_file: Path | None = None
 
     @classmethod
-    def start(cls, process: subprocess.Popen[str]) -> "DaemonOutputCapture":
+    def start(
+        cls, process: subprocess.Popen[str], log_file: Path | None = None,
+    ) -> "DaemonOutputCapture":
         if process.stdout is None or process.stderr is None:
             raise SmokeError("capacity daemon output streams were not captured")
         capture = cls()
+        if log_file is not None:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            log_file.touch(exist_ok=True)
+            capture._log_file = log_file
         stdout = Thread(
             target=capture._drain_stdout,
             args=(process.stdout,),
@@ -669,6 +677,9 @@ class DaemonOutputCapture:
         with self._lock:
             destination.append(line.rstrip("\n"))
             del destination[:-DAEMON_OUTPUT_TAIL_LINES]
+            if self._log_file is not None:
+                with self._log_file.open("a", encoding="utf-8") as output:
+                    output.write(line)
 
     def _drain_stdout(self, stream: Any) -> None:
         try:
@@ -682,12 +693,25 @@ class DaemonOutputCapture:
         for line in stream:
             self._append_tail(self._stderr_tail, line)
 
-    def evidence(self) -> dict[str, list[str]]:
+    def evidence(self) -> dict[str, Any]:
         with self._lock:
-            return {
+            evidence: dict[str, Any] = {
                 "stdout_tail": list(self._stdout_tail),
                 "stderr_tail": list(self._stderr_tail),
             }
+            if self._log_file is not None:
+                evidence["owned_daemon_log"] = self._log_file.name
+                text = self._log_file.read_text(encoding="utf-8", errors="replace")
+                analysis = analyze_log_text(text, [])
+                evidence["owned_daemon_log_tail"] = text.splitlines()[
+                    -DAEMON_OUTPUT_TAIL_LINES:
+                ]
+                evidence["log_analysis"] = {
+                    "warning_records": analysis.warning_records[-DAEMON_OUTPUT_TAIL_LINES:],
+                    "error_records": analysis.error_records[-DAEMON_OUTPUT_TAIL_LINES:],
+                    "passed": analysis.passed,
+                }
+            return evidence
 
     def join(self) -> None:
         for thread in self._threads:
@@ -756,23 +780,39 @@ def verify_durability_after_restart(
     )
     if result["exit_code"] != 0:
         detail = result["stderr"].strip() or result["stdout"].strip() or "no CLI output"
-        raise SmokeError(f"could not count durable benchmark mailbox through atm list: {detail}")
+        raise DurabilityCheckError(
+            f"could not count durable benchmark mailbox through atm list: {detail}", result,
+        )
     try:
         payload = json.loads(result["stdout"])
     except json.JSONDecodeError as error:
-        raise SmokeError("atm list returned malformed JSON for the durability count") from error
+        raise DurabilityCheckError(
+            "atm list returned malformed JSON for the durability count", result,
+        ) from error
     bucket_counts = payload.get("bucket_counts") if isinstance(payload, dict) else None
     if not isinstance(bucket_counts, dict):
-        raise SmokeError("atm list returned no mailbox bucket counts for durability")
+        raise DurabilityCheckError(
+            "atm list returned no mailbox bucket counts for durability", result,
+        )
     buckets = tuple(bucket_counts.get(name) for name in ("unread", "pending_ack", "history"))
     if not all(isinstance(value, int) and value >= 0 for value in buckets):
-        raise SmokeError("atm list returned invalid mailbox bucket counts for durability")
+        raise DurabilityCheckError(
+            "atm list returned invalid mailbox bucket counts for durability", result,
+        )
     observed = sum(buckets)
     return {
         "expected_accepted_count": expected_accepted_count,
         "observed_mailbox_count": observed,
         "passed": observed == expected_accepted_count,
     }
+
+
+class DurabilityCheckError(SmokeError):
+    """A failed public durability read with its redacted CLI capture."""
+
+    def __init__(self, message: str, command_capture: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.command_capture = command_capture
 
 
 def run_lifecycle_phase(
@@ -790,8 +830,7 @@ def run_lifecycle_phase(
         subprocess.TimeoutExpired,
     ) as error:
         finished_wall = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        evidence.setdefault("lifecycle", {}).setdefault(phase, []).append(
-            {
+        record: dict[str, Any] = {
                 "status": "failed",
                 "started_at": started_wall,
                 "finished_at": finished_wall,
@@ -799,7 +838,9 @@ def run_lifecycle_phase(
                 "cause": str(error),
                 "recovery": LIFECYCLE_RECOVERY[phase],
             }
-        )
+        if isinstance(error, DurabilityCheckError):
+            record["cli_capture"] = error.command_capture
+        evidence.setdefault("lifecycle", {}).setdefault(phase, []).append(record)
         raise SmokeError(
             f"benchmark {phase} phase failed: {error}; recovery: {LIFECYCLE_RECOVERY[phase]}"
         ) from error

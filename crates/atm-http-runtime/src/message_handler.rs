@@ -783,6 +783,16 @@ pub(crate) fn error_response(error: AtmError) -> Response {
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     };
+    if error.code() == AtmErrorCode::MailboxLockTimeout {
+        // `ReadLaneError` has already reduced this to a stable, safe detail.
+        // Record it before HTTP redacts the diagnostic cause so the owned
+        // daemon log and local CLI identify the same exhausted reader budget.
+        tracing::error!(
+            error_code = %error.code(),
+            detail = %error.message(),
+            "mailbox reader request deadline expired"
+        );
+    }
     // Preserve the public code/message contract while redacting diagnostic
     // causes before serializing through the untrusted HTTP boundary.
     let body = HttpErrorBody::from(&error);
