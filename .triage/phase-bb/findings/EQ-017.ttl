@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-017>
+  a triage:Finding ;
+  triage:findingId "EQ-017" ;
+  triage:title "CLI command-error log events carry error_code but drop the failure text -- message is always null" ;
+  triage:description "fenix, 2026-09-15, colima container evidence (v1.5.20 closeout). A CLI command error writes a retained log event with \"message\": null even though a real error occurred. Example: /root/.atm/logs/atm.log.jsonl at 2026-09-15T03:42:28.497Z -- level Error, target atm.command, fields.code ATM_MESSAGE_VALIDATION_FAILED, message null. The CLI stderr for the same failure was 'invalid message id: localhost' (crates/atm-core/src/read/request.rs:162). Root-caused (team-lead, 2026-09-15): crates/atm/src/main.rs::map_command_event (line 686) hardcodes `message: None` on the LogEvent unconditionally, and build_command_event_fields (lines 647-659) only copies `event.command` and `event.error_code` into the fields map -- `event.error_message` (populated correctly upstream by CliObservability::report_fatal_error / retained_error_message in crates/atm/src/observability.rs) is never copied anywhere, so the failure text is silently dropped between CommandEvent construction and the persisted LogEvent. This is the same authoritative-log rule as EQ-016 (Rand, 2026-09-14: the log must carry the failure text) but a distinct code path -- EQ-016 fixed only the storage-side bounded mailbox reader lane; this is the CLI-side ScObservabilityAdapter command-error event mapping in atm/src/main.rs, unaffected by that fix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:source "fenix, colima container evidence, atm 1.5.20, relayed 2026-09-15 (ATM message 01M2HKQQT17V2G1HW3EKEYTS4T); root-caused by team-lead same day" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm/src/main.rs::map_command_event and build_command_event_fields -- copy event.error_message into the LogEvent (either the top-level `message` field or a `fields[\"message\"]` entry) whenever it is Some, matching the authoritative-error-and-failure-evidence rule. Check for the same drop pattern anywhere else a CommandEvent's error_message is mapped into a persisted LogEvent outside this one CLI adapter." ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-15T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-017/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/EQ-017/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 686 ;
+  triage:snippet "message: None, -- hardcoded in map_command_event; build_command_event_fields (line 647) never inserts event.error_message into fields either. Evidence: /root/.atm/logs/atm.log.jsonl @ 2026-09-15T03:42:28.497Z, level Error, target atm.command, fields.code ATM_MESSAGE_VALIDATION_FAILED, message null; CLI stderr for same failure was 'invalid message id: localhost'." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "e993ae617" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-017/1> .
+
+<urn:atm:triage:worktree/EQ-017/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "e993ae617" ;
+  triage:orderIndex 1 .
