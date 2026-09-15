@@ -49,6 +49,10 @@ name = "broken_pipe"
 path = "tests/broken_pipe.rs"
 
 [[test]]
+name = "command_error_log"
+path = "tests/command_error_log.rs"
+
+[[test]]
 name = "task_ledger_cli"
 path = "tests/task_ledger_cli.rs"
 
