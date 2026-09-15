@@ -1851,6 +1851,27 @@ class AdmissionCapacityTests(unittest.TestCase):
         reap.assert_called_once_with(process)
         output.join.assert_called_once_with()
 
+    def test_failed_daemon_readiness_carries_owned_log_evidence(self):
+        process = mock.Mock()
+        output = mock.Mock()
+        output.evidence.return_value = {
+            "owned_daemon_log_tail": ["ATM_DAEMON_READY", "fatal config failure"],
+        }
+        with (
+            mock.patch.object(TRANSPORT.subprocess, "Popen", return_value=process),
+            mock.patch.object(TRANSPORT.DaemonOutputCapture, "start", return_value=output),
+            mock.patch.object(TRANSPORT, "await_daemon_ready", side_effect=RUNNER.SmokeError("not ready")),
+            mock.patch.object(TRANSPORT, "reap_owned_daemon"),
+            mock.patch.object(TRANSPORT, "require_clean_host_daemon_state"),
+        ):
+            with self.assertRaises(TRANSPORT.DaemonStartError) as raised:
+                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {}, "mutual-tls")
+
+        self.assertEqual(
+            raised.exception.daemon_output["owned_daemon_log_tail"][-1],
+            "fatal config failure",
+        )
+
     def test_capacity_daemon_launches_the_shipped_binary_with_explicit_peer_wire_and_port(self):
         process = mock.Mock()
         process.stdout = mock.Mock()

@@ -853,6 +853,8 @@ def run_lifecycle_phase(
         if isinstance(error, DurabilityCheckError):
             record["cli_capture"] = error.command_capture
             record["doctor_capture"] = error.doctor_capture
+        if daemon_output := getattr(error, "daemon_output", None):
+            record["daemon_output"] = daemon_output
         evidence.setdefault("lifecycle", {}).setdefault(phase, []).append(record)
         raise SmokeError(
             f"benchmark {phase} phase failed: {error}; recovery: {LIFECYCLE_RECOVERY[phase]}"
