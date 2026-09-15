@@ -1437,7 +1437,11 @@ mod tests {
                 AtmErrorCode::DaemonConnectionSaturated,
             ),
             (
-                ReadLaneError::DeadlineExpired { stage: "test" },
+                ReadLaneError::DeadlineExpired {
+                    stage: "test",
+                    budget_ms: 3_000,
+                    elapsed_ms: 3_000,
+                },
                 AtmErrorCode::MailboxLockTimeout,
             ),
             (
@@ -1458,12 +1462,15 @@ mod tests {
     fn reader_deadline_error_exposes_safe_variant_stage_and_budget() {
         let error = AtmError::from(ReadLaneError::DeadlineExpired {
             stage: "running sqlite query",
+            budget_ms: 3_000,
+            elapsed_ms: 2_997,
         });
 
         assert_eq!(error.code(), AtmErrorCode::MailboxLockTimeout);
         assert!(error.detail().contains("variant=deadline_expired"));
         assert!(error.detail().contains("stage=running sqlite query"));
-        assert!(error.detail().contains("budget=request_deadline"));
+        assert!(error.detail().contains("budget_ms=3000"));
+        assert!(error.detail().contains("elapsed_ms=2997"));
     }
 
     #[test]

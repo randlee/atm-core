@@ -1899,7 +1899,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             capture = RUNNER.DaemonOutputCapture()
             capture._log_file = Path(directory) / "daemon-output.log"
-            capture._log_file.touch()
+            capture._log_output = capture._log_file.open("w", encoding="utf-8", buffering=1)
             capture._append_tail(capture._stdout_tail, '{"level":"INFO","message":"ready"}\n')
             capture._append_tail(capture._stderr_tail, '{"level":"WARN","message":"slow reader"}\n')
             capture._append_tail(capture._stderr_tail, '{"level":"ERROR","message":"reader failed"}\n')
@@ -1912,11 +1912,13 @@ class AdmissionCapacityTests(unittest.TestCase):
             self.assertFalse(evidence["log_analysis"]["passed"])
             self.assertEqual(len(evidence["log_analysis"]["warning_records"]), 1)
             self.assertEqual(len(evidence["log_analysis"]["error_records"]), 1)
+            capture.join()
 
     def test_failed_durability_read_retains_redacted_cli_output_in_lifecycle_evidence(self):
         result = {"exit_code": 5, "stdout": "", "stderr": "ATM_MAILBOX_LOCK_TIMEOUT"}
+        doctor = {"exit_code": 0, "stdout": "{\"summary\":{\"status\":\"healthy\"}}", "stderr": ""}
         evidence: dict[str, object] = {"lifecycle": {}}
-        with mock.patch.object(SUPPORT, "command_result", return_value=result):
+        with mock.patch.object(SUPPORT, "command_result", side_effect=[result, doctor]):
             with self.assertRaisesRegex(RUNNER.SmokeError, "could not count durable"):
                 RUNNER.run_lifecycle_phase(
                     evidence,
@@ -1935,6 +1937,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         capture = evidence["lifecycle"]["durability"][0]["cli_capture"]
         self.assertEqual(capture["exit_code"], 5)
         self.assertEqual(capture["stderr"], "ATM_MAILBOX_LOCK_TIMEOUT")
+        self.assertEqual(evidence["lifecycle"]["durability"][0]["doctor_capture"], doctor)
 
 
 if __name__ == "__main__":

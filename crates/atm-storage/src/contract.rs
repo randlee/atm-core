@@ -402,6 +402,8 @@ pub enum ReadLaneError {
     },
     DeadlineExpired {
         stage: &'static str,
+        budget_ms: u64,
+        elapsed_ms: u64,
     },
     Unavailable {
         message: String,
@@ -422,8 +424,15 @@ impl fmt::Display for ReadLaneError {
             Self::Saturated { reason } => {
                 write!(formatter, "mailbox reader lane is saturated: {reason}")
             }
-            Self::DeadlineExpired { stage } => {
-                write!(formatter, "mailbox reader deadline expired while {stage}")
+            Self::DeadlineExpired {
+                stage,
+                budget_ms,
+                elapsed_ms,
+            } => {
+                write!(
+                    formatter,
+                    "mailbox reader deadline expired while {stage} (budget_ms={budget_ms} elapsed_ms={elapsed_ms})"
+                )
             }
             Self::Unavailable { message } => {
                 write!(formatter, "mailbox reader lane is unavailable: {message}")
@@ -464,8 +473,12 @@ impl From<ReadLaneError> for AtmError {
             ReadLaneError::Saturated { reason } => format!(
                 "bounded mailbox reader request failed: variant=saturated stage={reason} budget=not_started"
             ),
-            ReadLaneError::DeadlineExpired { stage } => format!(
-                "bounded mailbox reader request failed: variant=deadline_expired stage={stage} budget=request_deadline"
+            ReadLaneError::DeadlineExpired {
+                stage,
+                budget_ms,
+                elapsed_ms,
+            } => format!(
+                "bounded mailbox reader request failed: variant=deadline_expired stage={stage} budget_ms={budget_ms} elapsed_ms={elapsed_ms}"
             ),
             ReadLaneError::Unavailable { .. } => {
                 "bounded mailbox reader request failed: variant=unavailable stage=reader_lane budget=unavailable".to_owned()
