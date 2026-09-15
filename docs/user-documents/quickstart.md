@@ -1,7 +1,7 @@
 ---
 title: Quickstart
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Quickstart
@@ -57,17 +57,19 @@ not rely on direct database access or private files under `~/.atm/`.
 
 If the installed ATM binary is at:
 
-- `~/.local/atm/1.4.3/bin/atm`
+- `~/.local/atm/1.6.0/bin/atm`
 
 then the installed long-form doc entrypoint is:
 
-- `~/.local/atm/1.4.3/share/doc/atm/README.md`
+- `~/.local/atm/1.6.0/share/doc/atm/README.md`
 
 ## Next Documents
 
 - identity and caller resolution: [Identity And Team](./identity-and-team.md)
 - queue inspection and message handling: [Mailbox Workflows](./mailbox-workflows.md)
 - diagnostics: [Doctor And Log](./doctor-and-log.md)
+- durable task lifecycle: [Tasks](./tasks.md)
+- native-IPC Herdr members: [Herdr Integration](./herdr.md)
 - shell-ready examples: [examples/quickstart/](./examples/quickstart/)
 
 Return to the [ATM User Guide](./README.md).

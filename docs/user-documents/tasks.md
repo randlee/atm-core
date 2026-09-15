@@ -1,25 +1,32 @@
 ---
 title: Tasks
 audience: end-user
+reviewed_for_release: 1.6.0
 ---
 
 # Tasks
 
-ATM task mail tracks one durable task for an assignee through three states:
-`assigned`, `active`, and `complete`. Sending mail with `--task-id` creates or
-updates an assigned task; it never requires acknowledgement. The assignee
-makes it active with `atm task start`; an assignee cannot activate a second task
+ATM task mail tracks one durable task for an assignee through `assigned`,
+`active`, and `complete` state (with a `completed`, `refused`, or `cancelled`
+close outcome). `atm task assign` creates or updates an assigned task with
+deferred notification; it never requires acknowledgement. The assignee makes
+it active with `atm task start`; an assignee cannot activate a second task
 while another task is active.
 
-The assignee or the assigner closes an open task by sending its completion to
-the assignee:
+The assignee or assigner closes an open task with its typed outcome and a
+reason or report source:
 
 ```sh
-atm send cipher --task-complete t-42 --stdin
+atm task close t-42 completed "implementation and verification complete"
+atm task close t-42 refused --stdin
+atm task close t-42 cancelled "superseded by a different task"
 ```
 
-Completion is valid from either `assigned` or `active`. Completing an assigned
-task closes it directly; task-linked mail never enters the pending-ack queue.
+Closing is valid from either `assigned` or `active`; closing an assigned task
+does not require a prior start. The retained `atm send <recipient> --task-id
+<id> --task-complete --stdin` spelling remains a compatibility completion
+surface, but use `atm task close` for a typed outcome. Task-linked mail never
+enters the pending-ack queue.
 
 Inspect the durable task ledger with either of these surfaces:
 
@@ -31,6 +38,9 @@ atm task events t-42
 atm task events t-42 --limit 50
 atm task events t-42 --all
 atm task events t-42 --json
+atm task move t-42 --head
+atm task move t-42 --before t-99
+atm task move t-42 --end
 ```
 
 `atm task list --json` returns the caller's open task rows; `--all` includes
@@ -38,7 +48,7 @@ every team member without truncation. Both commands default to 200 rows and
 accept `--limit N` or `--all`; events retain the most recent rows and display
 them in sequence order. When a limit drops rows, ATM prints
 `N more rows omitted (--all)` on stderr. `atm task events <id> --json` returns
-that task's append-only events. An unknown task id
+that task's append-only events and prompt-handoff audit entries. An unknown task id
 prints the event header only (or `[]` as JSON) and succeeds. See ADR-062 for
 the task tables and audit/replay contract.
 
@@ -77,5 +87,8 @@ SEQ  AT                        EVENT      FROM      TO        ACTOR    DETAIL
 2    2026-09-05T10:12:40Z      started    assigned  active    cipher   -
 3    2026-09-05T10:13:40Z      reminded   active    active    atm-daemon emitted
 ```
+
+`atm task move` reorders only the caller's open queue; select exactly one of
+`--head`, `--before <other-task-id>`, or `--end`.
 
 Return to the [ATM User Guide](./README.md).

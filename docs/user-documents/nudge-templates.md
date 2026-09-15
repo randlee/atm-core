@@ -1,7 +1,7 @@
 ---
 title: Nudge Templates
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Nudge Templates
@@ -45,6 +45,11 @@ ATM ships exactly eleven built-in template kinds:
 kinds; their durable state and event audit are defined in ADR-062. The
 `acknowledge` form is an intentionally compact acknowledgement nudge.
 
+`task_queued` is informational. `task_ready` and `task_reminder` tell an
+assignee to read and act on the task; `task_started`, `task_complete`, and
+`task_closed` record the transition for the receiving mailbox. Use [Tasks](./tasks.md)
+for the CLI lifecycle and outcomes.
+
 ## Supported Placeholders
 
 Built-in template rendering supports exactly these placeholders:
@@ -54,9 +59,16 @@ Built-in template rendering supports exactly these placeholders:
 - `{{message_id}}`
 - `{{description}}`
 - `{{task_id}}`
+- `{{position}}`
+- `{{attempt}}`
+- `{{assignee}}`
+- `{{outcome}}`
+- `{{by}}`
 
 There is no Jinja evaluation, no conditionals, and no template-side branching.
-ATM performs direct placeholder substitution only.
+ATM performs direct placeholder substitution only. Task-specific values are
+populated by the corresponding queued, reminder, started, complete, or closed
+transition; a value not applicable to that transition is empty.
 
 ## Precedence
 
@@ -84,7 +96,12 @@ atm teams disable-nudge-template --team atm-dev --kind delivery_ack
 atm teams clear-nudge-template --team atm-dev --kind delivery_ack
 ```
 
-## Default XML Bodies
+## Default ATM Wire Bodies
+
+These `.xml` examples are ATM's XML-shaped nudge wire syntax, not documents
+for a generic XML parser. In particular, task markers such as `ready` are bare
+ATM attributes because that is the exact emitted wire form. Keep template
+bodies in the supported ATM syntax shown here.
 
 Delivery without required acknowledgement:
 

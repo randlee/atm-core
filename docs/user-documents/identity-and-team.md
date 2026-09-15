@@ -1,7 +1,7 @@
 ---
 title: Identity And Team
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Identity And Team
@@ -83,5 +83,6 @@ Additional machine-readable examples live in
 [examples/identity/](./examples/identity/).
 
 For queue workflows, continue to [Mailbox Workflows](./mailbox-workflows.md).
+For an alias that resolves to a canonical identity, see [Herdr Integration](./herdr.md).
 
 Return to the [ATM User Guide](./README.md).
