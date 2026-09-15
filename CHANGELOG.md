@@ -2,6 +2,75 @@
 
 ## Unreleased
 
+## 1.6.0
+
+- Phase AX: nudge templates on every backend (Herdr renders the built-in
+  templates instead of injecting fixed wake text, `atm queue` gets its own
+  template class) plus task-state tracking (a task-tagged message can no
+  longer be double-acked, `atm task start`/reminder cycle/lead notification
+  and `atm doctor` task-state surfacing) (Phase AX, #1253)
+- Phase AY: native-IPC transport cutover for Herdr -- the six-operation
+  client moves from a per-nudge CLI process to Herdr's native IPC (Unix
+  socket on macOS/Linux, named pipe on Windows), with the CLI retained as a
+  bounded fallback (`herdr.transport = "cli"`) and `atm doctor` showing the
+  active transport and a sanitized endpoint (Phase AY, #1308)
+- Phase BB: the two task-family nudge kinds are replaced with six
+  per-transition kinds, so every task transition (assigned, started,
+  reminded, completed, refused, cancelled) is visible in the recipient's
+  prompt line, plus `atm task start` for the assignee (Phase BB, #1482)
+- fix(storage): mailbox selection and counts for `atm list --all --json
+  bucket_counts` moved into SQL -- fixes a bounded-reader-lane failure
+  counting large sqlite mailboxes (888k+ messages) and, more broadly, `atm
+  read`/`atm list` timing out against the live daemon for mailboxes over
+  roughly 1.5k messages (EQ-016, #1519)
+- fix(observability): CLI command-error log events now persist the actual
+  failure text instead of always writing `message: null` alongside the
+  error code (EQ-017, #1522)
+- fix(smoke): procedure links on every smoke/colima report now resolve from
+  a browser (EQ-005, #1492)
+- fix(bench): benchmark and admission-capacity scripts no longer touch
+  sqlite3 directly, asserting via the `atm` CLI/doctor JSON instead
+  (EQ-006, #1506)
+- fix(peer): `atm peer trust replace`/`add` no longer report failure (exit
+  4) for a write that actually persisted while the daemon was offline
+  (EQ-007, #1504)
+- fix(task): `atm task assign` by a non-assigner now refuses instead of
+  silently no-opping while reporting success (EQ-008, #1505)
+- fix(release): the prerelease-install `daemon-switch` step now supplies
+  `--service`, which `release/publish-artifacts.toml`'s post-install
+  command categorically required (EQ-009, #1508)
+- fix(storage): fixed a concurrent schema-migration race on
+  `decomposed_messages` view creation -- was both an intermittent Windows
+  CI failure and a real Linux daemon-startup failure (EQ-010, #1509)
+- fix(cli): `atm` exits quietly on a broken stdout pipe (SIGPIPE) instead
+  of panicking (EQ-012, #1510)
+- fix(security): RUSTSEC-2026-0285 -- rustls 0.23.43 -> 0.23.45, closing a
+  TLS 1.3 handshake wrong-encryption-level acceptance on the daemon/peer
+  mTLS path (EQ-013, #1512)
+- fix(lint): allowlist the `libc` dependency EQ-012 introduced so
+  `manifest-dependency-allowlist` boundaries lint passes again (EQ-014,
+  #1513)
+- fix(herdr): resolve session `"default"` to the default server socket
+  (#1343); preserve doctor error detail (#1348); route socket doctor
+  through ping (#1353); diagnose unresolvable Herdr nudge targets and carry
+  the breaker cause in `atm doctor` (#1363)
+- fix(doctor): preserve escalation recipient addresses (#1358)
+- fix(roster): scope unique-name collision checks to the writing team
+  (#1341); validate only written name deltas (#1359)
+- fix(daemon): singleton guards, no test runtime-home override (#1325)
+- fix(hermes-atm): read nudge injection platform from hook config (#1327)
+- fix(graft): nudge carries the rendered template only (#1283); native
+  `atm_read` marks the message read (#1287); await graft receiver lookups
+  through the reader pool (#1261); persist before the received hook and
+  report handoff acceptance on graft reads, keeping the hook inside the
+  request budget (#1290); bound the reader-pool interrupt test on
+  execution, not queue latency (#1401)
+- fix: restore native loopback reliability (#1299); read `mutation_applied`
+  means the handoff was accepted, per ADR-059 (#1278)
+- chore: dispatch templates push and check status through `gh stack`
+  (#1288); centralize prerelease/release tooling across #1349, #1354,
+  #1367, #1370, #1372, #1374
+
 ## 1.5.0
 
 - Phase AV mailbox-read serialization fix: dedicated reader lanes for mailbox
