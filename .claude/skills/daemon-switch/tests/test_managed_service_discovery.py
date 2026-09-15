@@ -6,6 +6,7 @@ import argparse
 from contextlib import redirect_stderr
 import importlib.util
 import io
+import os
 from pathlib import Path
 import plistlib
 import subprocess
@@ -66,6 +67,12 @@ class ManagedServiceDiscoveryTests(unittest.TestCase):
                     "com.atm.daemon.crosshost-smoke": fixture.resolve(),
                 }.get(label)
 
+            # os.getuid does not exist on Windows; supply one there so the
+            # launchctl domain lookup runs on every CI runner. POSIX keeps the
+            # real uid, which the plist ownership check compares against.
+            uid = mock.patch.object(os, "getuid", new=getattr(os, "getuid", lambda: 501), create=True)
+            uid.start()
+            self.addCleanup(uid.stop)
             candidates = SERVICE._macos_candidates(selector, loaded, root)
             self.assertEqual(
                 SERVICE._unique_service(candidates, selector),
